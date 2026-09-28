@@ -28,13 +28,27 @@ const boolish = z
   .optional()
   .transform((v) => v === "true");
 
+/** Treat empty/whitespace-only strings as unset so defaults apply. */
+/** Coerce to int, but let empty strings fall through to the default. */
+const portNumber = z.preprocess(
+  (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+  z.coerce.number().int().positive().default(4000)
+);
+
+/** Let empty strings fall through to enum defaults (e.g. NODE_ENV=). */
+const envEnum = <T extends readonly [string, ...string[]]>(values: T) =>
+  z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.enum(values)
+  );
+
 const schema = z
   .object({
     // ── Runtime ───────────────────────────────────────────────
-    NODE_ENV: z
-      .enum(["development", "test", "production"])
-      .default("development"),
-    PORT: z.coerce.number().int().positive().default(4000),
+    NODE_ENV: envEnum(["development", "test", "production"]).default(
+      "development"
+    ),
+    PORT: portNumber,
     HOST: z.string().default("0.0.0.0"),
     LOG_LEVEL: z
       .enum(["fatal", "error", "warn", "info", "debug", "trace"])
