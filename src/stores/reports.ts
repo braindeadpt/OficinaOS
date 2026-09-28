@@ -1,4 +1,5 @@
 import type {
+  CashReportDTO,
   InsightsReportDTO,
   OperationsReportDTO,
   PartsConsumptionReportDTO,
@@ -11,8 +12,10 @@ import i18n from "@/i18n";
 import api, { getErrorMessage } from "@/lib/api";
 
 interface ReportsState {
+  cash: { data?: CashReportDTO; loading: boolean; error?: string };
   customFrom: string | null;
   customTo: string | null;
+  fetchCash: () => Promise<void>;
   fetchInsights: () => Promise<void>;
   fetchOperations: () => Promise<void>;
   fetchPartsConsumption: () => Promise<void>;
@@ -41,6 +44,7 @@ function queryParams(state: ReportsState): string {
 
 export const useReportsStore = create<ReportsState>((set, get) => ({
   range: "30d",
+  cash: { loading: false },
   customFrom: null,
   customTo: null,
   revenue: { loading: false },
@@ -130,6 +134,22 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
       set({
         partsConsumption: {
           ...get().partsConsumption,
+          loading: false,
+          error: getErrorMessage(err, i18n.t("errors.fetch_reports")),
+        },
+      });
+    }
+  },
+
+  fetchCash: async () => {
+    set({ cash: { ...get().cash, loading: true, error: undefined } });
+    try {
+      const res = await api.get("/reports/cash");
+      set({ cash: { data: res.data as CashReportDTO, loading: false } });
+    } catch (err: unknown) {
+      set({
+        cash: {
+          ...get().cash,
           loading: false,
           error: getErrorMessage(err, i18n.t("errors.fetch_reports")),
         },

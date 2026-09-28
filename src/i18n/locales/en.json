@@ -1342,7 +1342,22 @@
     "noTrend": "—",
     "partsConsumptionScopeAll": "Includes repair-job parts and POS accessory sales.",
     "partsConsumptionScopeJobs": "Repair-job parts only.",
-    "partsConsumptionEmpty": "No parts consumed in this period."
+    "partsConsumptionEmpty": "No parts consumed in this period.",
+    "cash": "Cash report",
+    "cashAmount": "Amount",
+    "cashByMethod": "By payment method",
+    "cashByUser": "By user",
+    "cashCashTotal": "Cash",
+    "cashEmpty": "No payments recorded today",
+    "cashLargestPayment": "Largest payment: {{amount}} ({{method}}) by {{userName}} at the {{location}}",
+    "cashLocationJob": "job",
+    "cashLocationPos": "counter (POS)",
+    "cashMethod": "Method",
+    "cashPaymentCount": "Payments",
+    "cashPayments": "Payments",
+    "cashTotalCollected": "Total collected",
+    "cashTransferTotal": "Card & transfer",
+    "cashUser": "User"
   },
   "repair_modal": {
     "title": "Add New Service",

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useCan } from "@/hooks/use-can";
 import { useReportsStore } from "@/stores/reports";
+import CashTab from "./cash-tab";
 import InsightsTab from "./insights-tab";
 import OperationsTab from "./operations-tab";
 import PartsConsumptionTab from "./parts-consumption-tab";
@@ -16,13 +17,20 @@ const RANGE_OPTIONS: { key: TimeRangePreset; label: string }[] = [
   { key: "year", label: "reports.year" },
 ];
 
-type TabKey = "revenue" | "operations" | "returns" | "insights" | "parts";
+type TabKey =
+  | "revenue"
+  | "cash"
+  | "operations"
+  | "returns"
+  | "insights"
+  | "parts";
 
 export default function ReportsPage() {
   const { t } = useTranslation();
   const range = useReportsStore((s) => s.range);
   const setRange = useReportsStore((s) => s.setRange);
   const fetchRevenue = useReportsStore((s) => s.fetchRevenue);
+  const fetchCash = useReportsStore((s) => s.fetchCash);
   const fetchOperations = useReportsStore((s) => s.fetchOperations);
   const fetchInsights = useReportsStore((s) => s.fetchInsights);
   const fetchReturns = useReportsStore((s) => s.fetchReturns);
@@ -37,6 +45,9 @@ export default function ReportsPage() {
     const tabs: TabKey[] = [];
     if (canViewShop) {
       tabs.push("revenue");
+    }
+    if (canViewShop) {
+      tabs.push("cash");
     }
     if (canViewSelf) {
       tabs.push("operations");
@@ -64,6 +75,9 @@ export default function ReportsPage() {
     if (activeTab === "revenue") {
       fetchRevenue();
     }
+    if (activeTab === "cash") {
+      fetchCash();
+    }
     if (activeTab === "operations") {
       fetchOperations();
     }
@@ -80,6 +94,7 @@ export default function ReportsPage() {
     activeTab,
     range,
     fetchRevenue,
+    fetchCash,
     fetchOperations,
     fetchInsights,
     fetchReturns,
@@ -170,6 +185,7 @@ export default function ReportsPage() {
       )}
 
       {activeTab === "revenue" && <RevenueTab />}
+      {activeTab === "cash" && <CashTab />}
       {activeTab === "operations" && <OperationsTab />}
       {activeTab === "returns" && <ReturnsTab />}
       {activeTab === "insights" && <InsightsTab />}

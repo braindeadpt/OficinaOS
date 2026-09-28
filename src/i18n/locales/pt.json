@@ -1342,7 +1342,22 @@
     "noTrend": "—",
     "partsConsumptionScopeAll": "Inclui peças de reparação e vendas de acessórios no POS.",
     "partsConsumptionScopeJobs": "Apenas peças de reparação.",
-    "partsConsumptionEmpty": "Sem peças consumidas neste período."
+    "partsConsumptionEmpty": "Sem peças consumidas neste período.",
+    "cash": "Caixa",
+    "cashAmount": "Valor",
+    "cashByMethod": "Por método de pagamento",
+    "cashByUser": "Por utilizador",
+    "cashCashTotal": "Numerário",
+    "cashEmpty": "Sem pagamentos registados hoje",
+    "cashLargestPayment": "Maior pagamento: {{amount}} ({{method}}) por {{userName}} no {{location}}",
+    "cashLocationJob": "job",
+    "cashLocationPos": "balcão (POS)",
+    "cashMethod": "Método",
+    "cashPaymentCount": "Pagamentos",
+    "cashPayments": "Pagamentos",
+    "cashTotalCollected": "Total cobrado",
+    "cashTransferTotal": "Cartão e transferência",
+    "cashUser": "Utilizador"
   },
   "repair_modal": {
     "title": "Adicionar novo serviço",

@@ -149,3 +149,41 @@ export interface PartsConsumptionReportDTO {
   summary: PartsConsumptionSummary;
   topParts: PartConsumptionRow[];
 }
+
+export interface CashMethodRow {
+  amount: number;
+  count: number;
+  method: string;
+}
+
+export interface CashUserRow {
+  count: number;
+  name: string;
+  total: number;
+}
+
+export interface CashLargestPayment {
+  amount: number;
+  location: "JOB" | "POS";
+  method: string;
+  userName: string;
+}
+
+export interface CashReportSummary {
+  /** Payments made in physical cash (method CASH). */
+  cashTotal: number;
+  paymentCount: number;
+  totalCollected: number;
+  /** Card + transfer + other non-cash methods combined. */
+  transferTotal: number;
+  userCount: number;
+}
+
+export interface CashReportDTO {
+  byMethod: CashMethodRow[];
+  byUser: CashUserRow[];
+  /** ISO timestamp of the shop-local day start used to bucket the report. */
+  date: string;
+  largestPayment: CashLargestPayment | null;
+  summary: CashReportSummary;
+}

@@ -1342,7 +1342,22 @@
     "noTrend": "—",
     "partsConsumptionScopeAll": "يشمل قطع الإصلاحات ومبيعات ملحقات نقطة البيع.",
     "partsConsumptionScopeJobs": "قطع الإصلاحات فقط.",
-    "partsConsumptionEmpty": "لا توجد قطع مستهلكة في هذه الفترة."
+    "partsConsumptionEmpty": "لا توجد قطع مستهلكة في هذه الفترة.",
+    "cash": "الصندوق",
+    "cashAmount": "المبلغ",
+    "cashByMethod": "حسب طريقة الدفع",
+    "cashByUser": "حسب المستخدم",
+    "cashCashTotal": "نقدا",
+    "cashEmpty": "لا توجد مدفوعات مسجلة اليوم",
+    "cashLargestPayment": "أكبر دفعة: {{amount}} ({{method}}) بواسطة {{userName}} في {{location}}",
+    "cashLocationJob": "التذكرة",
+    "cashLocationPos": "الكاونتر (POS)",
+    "cashMethod": "الطريقة",
+    "cashPaymentCount": "المدفوعات",
+    "cashPayments": "المدفوعات",
+    "cashTotalCollected": "الإجمالي المحصل",
+    "cashTransferTotal": "بطاقة وتحويل",
+    "cashUser": "المستخدم"
   },
   "repair_modal": {
     "title": "إضافة خدمة جديدة",
