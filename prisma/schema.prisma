@@ -84,6 +84,13 @@ enum RepairCategory {
   OTHER
 }
 
+enum MovementType {
+  PURCHASE
+  CONSUMPTION
+  RETURN
+  ADJUSTMENT
+}
+
 enum NotifyChannel {
   WHATSAPP
   IN_APP
@@ -164,6 +171,7 @@ model User {
   jobParts             JobPart[]
   jobRepairs           JobRepair[]
   paymentsCreated      Payment[]   @relation("PaymentCreatedBy")
+  stockMovementsCreated StockMovement[] @relation("StockMovementCreatedBy")
   salesCreated         Sale[]      @relation("SaleCreatedBy")
   auditLogs            AuditLog[]
   conversations        AiConversation[]
@@ -500,6 +508,7 @@ model PartsCatalog {
 
   jobParts JobPart[]
   saleItems SaleItem[]
+  stockMovements StockMovement[]
 
   @@index([name])
   @@index([category])
@@ -535,6 +544,35 @@ model JobPart {
 
   @@index([jobId])
   @@map("job_parts")
+}
+
+// ─────────────────────────────────────────────
+// STOCK MOVEMENTS
+// Append-only ledger of every stock change: PURCHASE (manual intake),
+// CONSUMPTION (job part usage), RETURN (line removal restores stock)
+// and ADJUSTMENT (manual correction). quantity is the signed delta;
+// balanceAfter snapshots the part stock right after the movement.
+// ─────────────────────────────────────────────
+
+model StockMovement {
+  id     String       @id @default(cuid())
+  partId String
+  part   PartsCatalog @relation(fields: [partId], references: [id], onDelete: Restrict)
+
+  type        MovementType
+  quantity    Int // signed delta: positive in, negative out
+  balanceAfter Int
+  unitCost    Decimal? @db.Decimal(10, 2)
+  supplier    String?
+  reference   String?
+  note        String?  @db.Text
+
+  createdById String
+  createdBy   User     @relation("StockMovementCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now()) @db.Timestamptz
+
+  @@index([partId, createdAt])
+  @@map("stock_movements")
 }
 
 // ─────────────────────────────────────────────

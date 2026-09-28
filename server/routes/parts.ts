@@ -1,6 +1,7 @@
 import { AppError } from "@shared/errors/app-error.js";
 import {
   createPartSchema,
+  createStockMovementSchema,
   listPartsQuerySchema,
   togglePartStatusSchema,
   updatePartSchema,
@@ -15,6 +16,13 @@ import {
   toggleActive,
   update as updatePart,
 } from "../services/parts-catalog.service.js";
+import {
+  listMovementsQuerySchema,
+  listByPart as listStockMovements,
+  recordAdjustment,
+  recordPurchase,
+} from "../services/stock-movement.service.js";
+import { getUserId } from "../utils/request.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
 // biome-ignore lint/suspicious/useAwait: FastifyPluginAsync requires async
@@ -157,6 +165,72 @@ export const partsRoutes: FastifyPluginAsync = async (app) => {
       if (!result) {
         throw new AppError("PART_NOT_FOUND");
       }
+      return reply.send(result);
+    }
+  );
+
+  app.post(
+    "/:id/stock-movements",
+    {
+      preHandler: [requirePermission({ parts: ["manageCatalog"] })],
+      schema: {
+        tags: ["parts"],
+        summary: "Record a manual stock movement (purchase or adjustment)",
+        params: {
+          type: "object",
+          properties: { id: { type: "string" } },
+          required: ["id"],
+        },
+        body: { type: "object", additionalProperties: true },
+      },
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const parsed = createStockMovementSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new AppError("VALIDATION_ERROR", {
+          errors: resolveZodErrors(
+            parsed.error.flatten().fieldErrors,
+            req.locale
+          ),
+        });
+      }
+      const userId = getUserId(req);
+      const { intent } = req.body as { intent?: string };
+
+      const result =
+        intent === "ADJUSTMENT"
+          ? await recordAdjustment(app.prisma, id, parsed.data, userId)
+          : await recordPurchase(app.prisma, id, parsed.data, userId);
+
+      if (!result) {
+        throw new AppError("PART_NOT_FOUND");
+      }
+      return reply.status(201).send(result);
+    }
+  );
+
+  app.get(
+    "/:id/stock-movements",
+    {
+      schema: {
+        tags: ["parts"],
+        summary: "Stock movement history for a part",
+        params: {
+          type: "object",
+          properties: { id: { type: "string" } },
+          required: ["id"],
+        },
+        querystring: { type: "object", additionalProperties: true },
+      },
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const parsed = listMovementsQuerySchema.safeParse(req.query);
+      if (!parsed.success) {
+        throw new AppError("VALIDATION_ERROR");
+      }
+      const result = await listStockMovements(app.prisma, id, parsed.data);
       return reply.send(result);
     }
   );

@@ -1738,5 +1738,19 @@
     "DELIVERED": "Entregue",
     "RETURNED": "Devolvido",
     "CANCELLED": "Cancelado"
-  }
+  },
+  "parts_movements_title": "Movimentos de stock",
+  "parts_movements_empty": "Ainda não há movimentos registados",
+  "parts_movements_balance": "Saldo",
+  "parts_movement_purchase": "Compra",
+  "parts_movement_consumption": "Usada em reparação",
+  "parts_movement_return": "Devolvida ao stock",
+  "parts_movement_adjustment": "Ajuste",
+  "parts_record_purchase": "Registar compra",
+  "parts_purchase_quantity": "Quantidade recebida",
+  "parts_purchase_unit_cost": "Custo unitário",
+  "parts_purchase_supplier": "Fornecedor",
+  "parts_purchase_new_stock": "Novo nível de stock",
+  "parts_purchase_recorded": "Compra registada",
+  "parts_purchase_failed": "Falha ao registar a compra"
 }

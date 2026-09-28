@@ -8,6 +8,7 @@ import {
   findJobById,
   findPartWithJob,
 } from "../repositories/job-part.repository.js";
+import { createStockMovement } from "../repositories/stock-movement.repository.js";
 import { assertJobMutable } from "../utils/job-mutations.js";
 import { createAuditLog } from "./audit.service.js";
 import { alertLowStock } from "./low-stock.service.js";
@@ -29,17 +30,28 @@ export async function add(
 
   const totalCost = input.unitPrice * input.quantity;
 
-  // Catalog parts decrement stock atomically: the conditional updateMany
-  // guards against overselling when two jobs consume the last unit.
+  // Catalog parts decrement stock atomically: the conditional raw update
+  // guards against overselling when two jobs consume the last unit, and
+  // RETURNING exposes the exact balance for the movement ledger.
   const result = await prisma.$transaction(async (tx) => {
     if (input.partId) {
-      const updated = await tx.partsCatalog.updateMany({
-        where: { id: input.partId, stockQuantity: { gte: input.quantity } },
-        data: { stockQuantity: { decrement: input.quantity } },
-      });
-      if (updated.count === 0) {
+      const decremented = await tx.$queryRaw<{ stock_quantity: number }[]>`
+        UPDATE "parts_catalog"
+        SET "stockQuantity" = "stockQuantity" - ${input.quantity}
+        WHERE "id" = ${input.partId} AND "stockQuantity" >= ${input.quantity}
+        RETURNING "stockQuantity"
+      `;
+      if (decremented.length === 0) {
         return { error: "INSUFFICIENT_STOCK" as const };
       }
+
+      await createStockMovement(tx, {
+        balanceAfter: decrementedReader(decremented),
+        createdById: userId,
+        partId: input.partId,
+        quantity: -input.quantity,
+        type: "CONSUMPTION",
+      });
     }
 
     const created = await createPartRepo(tx, {
@@ -96,9 +108,17 @@ export async function remove(
     await deletePartById(tx, partId);
     // Restore stock for catalog parts consumed by this line.
     if (part.partId) {
-      await tx.partsCatalog.update({
+      const updated = await tx.partsCatalog.update({
         where: { id: part.partId },
         data: { stockQuantity: { increment: part.quantity } },
+        select: { stockQuantity: true },
+      });
+      await createStockMovement(tx, {
+        balanceAfter: updated.stockQuantity,
+        createdById: userId,
+        partId: part.partId,
+        quantity: part.quantity,
+        type: "RETURN",
       });
     }
     await createAuditLog(tx, {
@@ -110,4 +130,11 @@ export async function remove(
   });
 
   return true;
+}
+
+function decrementedReader(
+  rows: Array<{ stock_quantity: number | string }>
+): number {
+  const first = rows[0]?.stock_quantity;
+  return typeof first === "string" ? Number.parseInt(first, 10) : (first ?? 0);
 }

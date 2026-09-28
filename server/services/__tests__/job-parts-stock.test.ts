@@ -17,9 +17,13 @@ function mockPrisma() {
       delete: vi.fn(),
     },
     partsCatalog: {
-      update: vi.fn().mockResolvedValue({}),
+      update: vi.fn().mockResolvedValue({ stockQuantity: 8 }),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
+    stockMovement: {
+      create: vi.fn().mockResolvedValue({}),
+    },
+    $queryRaw: vi.fn().mockResolvedValue([{ stock_quantity: 8 }]),
     $transaction: vi.fn(async (callback) => callback(mock)),
   };
   return mock as unknown as PrismaClient;
@@ -55,9 +59,15 @@ describe("stock atomicity", () => {
       "user-1"
     );
 
-    expect(prisma.partsCatalog.updateMany).toHaveBeenCalledWith({
-      where: { id: "catalog-1", stockQuantity: { gte: 2 } },
-      data: { stockQuantity: { decrement: 2 } },
+    // Conditional atomic decrement via raw UPDATE ... RETURNING
+    expect(prisma.$queryRaw).toHaveBeenCalled();
+    expect(prisma.stockMovement.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        balanceAfter: 8,
+        partId: "catalog-1",
+        quantity: -2,
+        type: "CONSUMPTION",
+      }),
     });
   });
 
@@ -80,13 +90,12 @@ describe("stock atomicity", () => {
       "user-1"
     );
 
-    expect(prisma.partsCatalog.updateMany).not.toHaveBeenCalled();
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
+    expect(prisma.stockMovement.create).not.toHaveBeenCalled();
   });
 
   it("returns INSUFFICIENT_STOCK and creates nothing when stock is short", async () => {
-    (
-      prisma.partsCatalog.updateMany as ReturnType<typeof vi.fn>
-    ).mockResolvedValue({ count: 0 });
+    (prisma.$queryRaw as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 
     const result = await add(
       prisma,
@@ -104,7 +113,7 @@ describe("stock atomicity", () => {
 
     expect(result).toEqual({ error: "INSUFFICIENT_STOCK" });
     expect(prisma.jobPart.create).not.toHaveBeenCalled();
-    expect(prisma.partsCatalog.updateMany).toHaveBeenCalled();
+    expect(prisma.stockMovement.create).not.toHaveBeenCalled();
   });
 
   it("restores stock when a consumed catalog part line is removed", async () => {
@@ -122,6 +131,15 @@ describe("stock atomicity", () => {
     expect(prisma.partsCatalog.update).toHaveBeenCalledWith({
       where: { id: "catalog-1" },
       data: { stockQuantity: { increment: 3 } },
+      select: { stockQuantity: true },
+    });
+    expect(prisma.stockMovement.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        balanceAfter: 8,
+        partId: "catalog-1",
+        quantity: 3,
+        type: "RETURN",
+      }),
     });
   });
 

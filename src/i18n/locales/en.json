@@ -1738,5 +1738,19 @@
     "DELIVERED": "Delivered",
     "RETURNED": "Returned",
     "CANCELLED": "Cancelled"
-  }
+  },
+  "parts_movements_title": "Stock movements",
+  "parts_movements_empty": "No movements recorded yet",
+  "parts_movements_balance": "Balance",
+  "parts_movement_purchase": "Purchase",
+  "parts_movement_consumption": "Used in repair",
+  "parts_movement_return": "Returned to stock",
+  "parts_movement_adjustment": "Adjustment",
+  "parts_record_purchase": "Record purchase",
+  "parts_purchase_quantity": "Quantity received",
+  "parts_purchase_unit_cost": "Unit cost",
+  "parts_purchase_supplier": "Supplier",
+  "parts_purchase_new_stock": "New stock level",
+  "parts_purchase_recorded": "Purchase recorded",
+  "parts_purchase_failed": "Failed to record purchase"
 }

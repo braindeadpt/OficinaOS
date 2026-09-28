@@ -4,6 +4,8 @@ import type { PartsCatalog } from "@shared/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import AddPartModal from "@/components/modules/parts/add-part-modal";
+import RecordPurchaseDialog from "@/components/modules/parts/record-purchase-dialog";
+import StockMovementsDialog from "@/components/modules/parts/stock-movements-dialog";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { LowStockBadge } from "@/components/ui/low-stock-badge";
@@ -134,6 +136,8 @@ function DesktopPartRow({
   onCancelDelete,
   onShowConfirm,
   onShowDelete,
+  onShowMovements,
+  onShowPurchase,
   onEdit,
   part,
   showCost,
@@ -152,6 +156,8 @@ function DesktopPartRow({
   onCancelDelete: () => void;
   onShowConfirm: (id: string) => void;
   onShowDelete: (id: string) => void;
+  onShowMovements: (part: PartsCatalog) => void;
+  onShowPurchase: (part: PartsCatalog) => void;
   onEdit: (part: PartsCatalog) => void;
   part: PartsCatalog;
   showCost: boolean;
@@ -246,6 +252,22 @@ function DesktopPartRow({
         {!isConfirming && deletingId !== part.id && (
           <div className="flex items-center gap-1">
             <button
+              aria-label={t("parts_movements_title")}
+              className="flex h-11 w-11 items-center justify-center rounded-xl text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-primary"
+              onClick={() => onShowMovements(part)}
+              type="button"
+            >
+              <Icon name="history" size="sm" />
+            </button>
+            <button
+              aria-label={t("parts_record_purchase")}
+              className="flex h-11 w-11 items-center justify-center rounded-xl text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-primary"
+              onClick={() => onShowPurchase(part)}
+              type="button"
+            >
+              <Icon name="shopping_cart" size="sm" />
+            </button>
+            <button
               aria-label={t("edit_part")}
               className="flex h-11 w-11 items-center justify-center rounded-xl text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-primary"
               onClick={() => onEdit(part)}
@@ -286,6 +308,8 @@ function MobilePartCard({
   onCancelDelete,
   onShowConfirm,
   onShowDelete,
+  onShowMovements,
+  onShowPurchase,
   onEdit,
   part,
   showCost,
@@ -300,6 +324,8 @@ function MobilePartCard({
   onCancelDelete: () => void;
   onShowConfirm: (id: string) => void;
   onShowDelete: (id: string) => void;
+  onShowMovements: (part: PartsCatalog) => void;
+  onShowPurchase: (part: PartsCatalog) => void;
   onEdit: (part: PartsCatalog) => void;
   part: PartsCatalog;
   showCost: boolean;
@@ -393,6 +419,22 @@ function MobilePartCard({
         {deletingId !== part.id && !isConfirming && (
           <>
             <button
+              aria-label={t("parts_movements_title")}
+              className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl font-bold text-on-surface-variant text-xs transition-all hover:bg-surface-container-high hover:text-primary"
+              onClick={() => onShowMovements(part)}
+              type="button"
+            >
+              <Icon name="history" size="sm" />
+            </button>
+            <button
+              aria-label={t("parts_record_purchase")}
+              className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl font-bold text-on-surface-variant text-xs transition-all hover:bg-surface-container-high hover:text-primary"
+              onClick={() => onShowPurchase(part)}
+              type="button"
+            >
+              <Icon name="shopping_cart" size="sm" />
+            </button>
+            <button
               aria-label={t("edit_part")}
               className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl font-bold text-on-surface-variant text-xs transition-all hover:bg-surface-container-high hover:text-primary"
               onClick={() => onEdit(part)}
@@ -460,6 +502,36 @@ function RestockFilterPill({
       </span>
       {t("parts_needs_restock_filter")}
     </button>
+  );
+}
+
+function PartsExtraDialogs({
+  movementsPart,
+  purchasePart,
+  setMovementsPart,
+  setPurchasePart,
+}: {
+  movementsPart: PartsCatalog | null;
+  purchasePart: PartsCatalog | null;
+  setMovementsPart: (part: PartsCatalog | null) => void;
+  setPurchasePart: (part: PartsCatalog | null) => void;
+}) {
+  return (
+    <>
+      {movementsPart && (
+        <StockMovementsDialog
+          onClose={() => setMovementsPart(null)}
+          partId={movementsPart.id}
+          partName={movementsPart.name}
+        />
+      )}
+      {purchasePart && (
+        <RecordPurchaseDialog
+          onClose={() => setPurchasePart(null)}
+          part={purchasePart}
+        />
+      )}
+    </>
   );
 }
 
@@ -534,6 +606,8 @@ function PartsDesktopTable({
   onCancelDelete,
   onShowConfirm,
   onShowDelete,
+  onShowMovements,
+  onShowPurchase,
   onDelete,
   onSort,
   onToggle,
@@ -552,6 +626,8 @@ function PartsDesktopTable({
   onCancelDelete: () => void;
   onShowConfirm: (id: string) => void;
   onShowDelete: (id: string) => void;
+  onShowMovements: (part: PartsCatalog) => void;
+  onShowPurchase: (part: PartsCatalog) => void;
   onDelete: (part: PartsCatalog) => void;
   onSort: (field: SortField) => void;
   onToggle: (part: PartsCatalog) => void;
@@ -660,6 +736,8 @@ function PartsDesktopTable({
                   onEdit={onEdit}
                   onShowConfirm={onShowConfirm}
                   onShowDelete={onShowDelete}
+                  onShowMovements={onShowMovements}
+                  onShowPurchase={onShowPurchase}
                   onToggle={onToggle}
                   part={part}
                   showCost={showCost}
@@ -765,6 +843,8 @@ export default function PartsCatalogPage() {
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [confirmingPartId, setConfirmingPartId] = useState<string | null>(null);
   const [deletingPartId, setDeletingPartId] = useState<string | null>(null);
+  const [movementsPart, setMovementsPart] = useState<PartsCatalog | null>(null);
+  const [purchasePart, setPurchasePart] = useState<PartsCatalog | null>(null);
   const [toast, setToast] = useState<{
     isError: boolean;
     message: string;
@@ -1094,6 +1174,8 @@ export default function PartsCatalogPage() {
               onEdit={handleEditPart}
               onShowConfirm={setConfirmingPartId}
               onShowDelete={setDeletingPartId}
+              onShowMovements={setMovementsPart}
+              onShowPurchase={setPurchasePart}
               onSort={toggleSort}
               onToggle={handleToggleActive}
               parts={sorted}
@@ -1131,6 +1213,8 @@ export default function PartsCatalogPage() {
                   onEdit={handleEditPart}
                   onShowConfirm={setConfirmingPartId}
                   onShowDelete={setDeletingPartId}
+                  onShowMovements={setMovementsPart}
+                  onShowPurchase={setPurchasePart}
                   onToggle={handleToggleActive}
                   part={part}
                   showCost={canViewCost}
@@ -1177,6 +1261,13 @@ export default function PartsCatalogPage() {
           onSubmit={handleEditSubmit}
         />
       )}
+
+      <PartsExtraDialogs
+        movementsPart={movementsPart}
+        purchasePart={purchasePart}
+        setMovementsPart={setMovementsPart}
+        setPurchasePart={setPurchasePart}
+      />
 
       {toast && (
         <ToastNotification isError={toast.isError} message={toast.message} />

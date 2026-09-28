@@ -1738,5 +1738,19 @@
     "DELIVERED": "تم التوصيل",
     "RETURNED": "عاد",
     "CANCELLED": "تم الإلغاء"
-  }
+  },
+  "parts_movements_title": "حركات المخزون",
+  "parts_movements_empty": "لا توجد حركات مسجلة بعد",
+  "parts_movements_balance": "الرصيد",
+  "parts_movement_purchase": "شراء",
+  "parts_movement_consumption": "مستخدمة في إصلاح",
+  "parts_movement_return": "أعيدت إلى المخزون",
+  "parts_movement_adjustment": "تسوية",
+  "parts_record_purchase": "تسجيل شراء",
+  "parts_purchase_quantity": "الكمية المستلمة",
+  "parts_purchase_unit_cost": "تكلفة الوحدة",
+  "parts_purchase_supplier": "المورّد",
+  "parts_purchase_new_stock": "مستوى المخزون الجديد",
+  "parts_purchase_recorded": "تم تسجيل الشراء",
+  "parts_purchase_failed": "فشل تسجيل الشراء"
 }

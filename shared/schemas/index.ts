@@ -110,12 +110,14 @@ export {
 } from "./notification.schema";
 export type {
   CreatePartInput,
+  CreateStockMovementInput,
   ListPartsQueryInput,
   TogglePartStatusInput,
   UpdatePartInput,
 } from "./parts-catalog.schema";
 export {
   createPartSchema,
+  createStockMovementSchema,
   listPartsQuerySchema,
   togglePartStatusSchema,
   updatePartSchema,
