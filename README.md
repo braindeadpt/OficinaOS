@@ -35,7 +35,15 @@ Browser (PC, tablet, telemóvel na rede da loja)
 
 Uma máquina corre o servidor e a base de dados; todos os outros dispositivos acedem pelo browser. Funciona sem internet para o uso principal — AI e WhatsApp são opcionais.
 
-## Instalação com Docker (recomendado)
+## Instalação
+
+### Instalação fácil (Windows) ⭐
+
+Descarrega o ZIP (**Code → Download ZIP**), extrai e faz **duplo clique em `INSTALAR.bat`** — instala o Docker se faltar, gera as passwords e arranca tudo sozinho. Uso diário: `INICIAR.bat` / `PARAR.bat`.
+
+Guia passo a passo completo: **[INSTALL.md](./INSTALL.md)**
+
+### Docker manual (recomendado para Linux/Mac)
 
 Requisitos: [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows/Mac) ou Docker Engine (Linux). Nada mais precisa de ser instalado na máquina.
 
