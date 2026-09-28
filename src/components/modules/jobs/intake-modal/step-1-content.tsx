@@ -647,6 +647,20 @@ export default function Step1Content(props: Step1Props) {
               />
             </div>
             <div className="sm:col-span-2">
+              <label className={labelCls} htmlFor="device-imei">
+                {t("intake.imei")}
+              </label>
+              <input
+                className={inputCls}
+                id="device-imei"
+                inputMode="numeric"
+                onChange={(e) => update("imei", e.target.value)}
+                placeholder={t("intake.imei_placeholder")}
+                type="text"
+                value={form.imei}
+              />
+            </div>
+            <div className="sm:col-span-2">
               <PhotoUploadZone
                 isCapturing={isCapturing}
                 isNative={isNative}

@@ -61,9 +61,9 @@ export default function TopBar() {
             alt=""
             aria-hidden="true"
             className="h-6 w-6"
-            height="24"
+            height={24}
             src="/logo-mark.svg"
-            width="24"
+            width={24}
           />
           <span className="font-black font-headline text-on-surface text-sm uppercase tracking-tighter">
             OficinaOS

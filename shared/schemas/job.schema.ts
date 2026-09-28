@@ -1,4 +1,5 @@
 import { JobStatus, PartCategory, RepairCategory } from "@shared/constants";
+import { imeiField } from "@shared/utils/imei";
 import { z } from "zod";
 
 const repairCategoryValues = Object.values(RepairCategory) as [
@@ -27,6 +28,7 @@ export const createJobSchema = z.object({
   deviceBrandId: z.string().optional(),
   deviceModel: z.string().min(1, { error: "validations.enter_model" }),
   color: z.string().optional(),
+  imei: imeiField,
   reportedProblem: z.string().min(1, { error: "validations.describe_problem" }),
   conditionNotes: z.string().optional(),
   estimatedCost: z
@@ -55,6 +57,7 @@ export const updateJobSchema = z.object({
   depositAmount: z.number().min(0).max(99_999_999.99).nullable().optional(),
   technicianId: z.string().cuid().nullable().optional(),
   color: z.string().optional(),
+  imei: imeiField,
 });
 
 export const transitionStatusSchema = z
@@ -138,6 +141,7 @@ export const jobListQuerySchema = z.object({
   status: z.enum(jobStatusValues).optional(),
   technicianId: z.string().optional(),
   search: z.string().optional(),
+  imei: imeiField,
 });
 
 export type UpdateJobInput = z.infer<typeof updateJobSchema>;

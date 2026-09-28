@@ -51,7 +51,8 @@ export default function JobsPage() {
         (j) =>
           j.id.toLowerCase().includes(q) ||
           j.customer.toLowerCase().includes(q) ||
-          j.device.toLowerCase().includes(q)
+          j.device.toLowerCase().includes(q) ||
+          (j.imei ?? "").toLowerCase().includes(q)
       );
     }
 

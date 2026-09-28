@@ -27,27 +27,43 @@ export async function add(
 
   const totalCost = input.unitPrice * input.quantity;
 
-  const jobPart = await createPartRepo(prisma, {
-    category: input.category,
-    job: { connect: { id: jobId } },
-    part: input.partId ? { connect: { id: input.partId } } : undefined,
-    partName: input.partName,
-    quantity: input.quantity,
-    supplier: input.supplier ?? null,
-    totalCost,
-    unitPrice: input.unitPrice,
-    createdBy: { connect: { id: userId } },
+  // Catalog parts decrement stock atomically: the conditional updateMany
+  // guards against overselling when two jobs consume the last unit.
+  const result = await prisma.$transaction(async (tx) => {
+    if (input.partId) {
+      const updated = await tx.partsCatalog.updateMany({
+        where: { id: input.partId, stockQuantity: { gte: input.quantity } },
+        data: { stockQuantity: { decrement: input.quantity } },
+      });
+      if (updated.count === 0) {
+        return { error: "INSUFFICIENT_STOCK" as const };
+      }
+    }
+
+    const created = await createPartRepo(tx, {
+      category: input.category,
+      job: { connect: { id: jobId } },
+      part: input.partId ? { connect: { id: input.partId } } : undefined,
+      partName: input.partName,
+      quantity: input.quantity,
+      supplier: input.supplier ?? null,
+      totalCost,
+      unitPrice: input.unitPrice,
+      createdBy: { connect: { id: userId } },
+    });
+
+    await createAuditLog(tx, {
+      action: AuditAction.PART_ADDED,
+      jobId,
+      metadata: { partId: input.partId, totalCost },
+      toValue: `${input.partName} x${input.quantity}`,
+      userId,
+    });
+
+    return created;
   });
 
-  await createAuditLog(prisma, {
-    action: AuditAction.PART_ADDED,
-    jobId,
-    metadata: { partId: input.partId, totalCost },
-    toValue: `${input.partName} x${input.quantity}`,
-    userId,
-  });
-
-  return jobPart;
+  return result;
 }
 
 export async function remove(
@@ -67,6 +83,13 @@ export async function remove(
 
   await prisma.$transaction(async (tx) => {
     await deletePartById(tx, partId);
+    // Restore stock for catalog parts consumed by this line.
+    if (part.partId) {
+      await tx.partsCatalog.update({
+        where: { id: part.partId },
+        data: { stockQuantity: { increment: part.quantity } },
+      });
+    }
     await createAuditLog(tx, {
       action: AuditAction.PART_REMOVED,
       fromValue: `${part.partName} x${part.quantity}`,

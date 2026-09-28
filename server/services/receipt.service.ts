@@ -36,6 +36,7 @@ export async function renderReceiptHtml(
   prisma: DbClient,
   job: {
     jobCode: string;
+    imei?: string | null;
     customer: { name: string; phone: string };
     device: { brand: { name: string }; model: string };
     reportedProblem: string;
@@ -96,7 +97,7 @@ export async function renderReceiptHtml(
 <table><tr><td>Job</td><td style="text-align:right">${esc(job.jobCode)}</td></tr>
 <tr><td>Customer</td><td style="text-align:right">${esc(job.customer.name)}</td></tr>
 <tr><td>Phone</td><td style="text-align:right">${esc(job.customer.phone)}</td></tr>
-<tr><td>Device</td><td style="text-align:right">${esc(job.device.brand.name)} ${esc(job.device.model)}</td></tr></table>
+<tr><td>Device</td><td style="text-align:right">${esc(job.device.brand.name)} ${esc(job.device.model)}</td></tr>${job.imei ? `<tr><td>IMEI</td><td style="text-align:right">${esc(job.imei)}</td></tr>` : ""}</table>
 <div class="sep"></div>
 <p style="text-align:left"><strong>Problem:</strong> ${esc(job.reportedProblem)}</p>
 <div class="sep"></div>

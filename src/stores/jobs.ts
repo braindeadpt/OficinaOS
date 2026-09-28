@@ -55,6 +55,7 @@ interface JobsState {
     deviceBrandId?: string;
     deviceModel: string;
     color?: string;
+    imei?: string;
     reportedProblem: string;
     conditionNotes?: string;
     estimatedCost: number;

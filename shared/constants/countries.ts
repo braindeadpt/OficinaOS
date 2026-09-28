@@ -6,6 +6,7 @@ export const COUNTRY_DIAL_CODES: Record<string, string> = {
   DE: "49",
   TN: "216",
   MA: "212",
+  PT: "351",
 };
 
 export const COUNTRIES = [
@@ -16,4 +17,5 @@ export const COUNTRIES = [
   { code: "DE", label: "DE — Germany" },
   { code: "TN", label: "TN — Tunisia" },
   { code: "MA", label: "MA — Morocco" },
+  { code: "PT", label: "PT — Portugal" },
 ] as const;

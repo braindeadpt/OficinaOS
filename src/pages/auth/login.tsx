@@ -369,9 +369,9 @@ export default function LoginPage() {
             alt=""
             aria-hidden="true"
             className="h-9 w-9"
-            height="36"
+            height={36}
             src="/logo-mark.svg"
-            width="36"
+            width={36}
           />
           <div>
             <h1 className="font-bold font-headline text-lg text-on-surface tracking-tight">
