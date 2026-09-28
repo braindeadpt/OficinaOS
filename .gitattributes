@@ -1,0 +1,4 @@
+# Batch files precisam de CRLF no Windows (labels/goto falham com LF)
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
