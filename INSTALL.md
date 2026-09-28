@@ -2,6 +2,27 @@
 
 Guia para Windows. Demora ~10 minutos na primeira vez.
 
+## Requisitos
+
+| Requisito | Detalhe |
+|---|---|
+| **PC** | Windows 10/11 **64-bit** — o PC que fica ligado na loja |
+| **RAM** | 4 GB livres (o Docker usa ~1.5 GB) |
+| **Disco** | ~5 GB livres (Docker + app + base de dados) |
+| **Permissões** | Administrador, só durante a instalação do Docker |
+| **Internet** | Só na **primeira instalação** — depois funciona offline na rede local |
+| **Docker** | Instalado automaticamente pelo `INSTALAR.bat` — não precisas de saber o que é |
+| **Outros dispositivos** | **Nada** — só um browser |
+
+## Cenários de uso
+
+| Cenário | Como funciona |
+|---|---|
+| **1. Um só PC** (o mais simples) | Instalas no PC do balcão e usas `http://localhost:4000` nesse mesmo PC |
+| **2. PC-servidor + vários dispositivos** | O mesmo PC corre a app; tablets, telemóveis e outros PCs abrem `http://<IP>:4000` no browser — sem instalar nada. ⚠️ A app só funciona enquanto esse PC estiver ligado |
+| **3. Máquina dedicada** | Um mini-PC ou NAS com Docker sempre ligado corre a app; todos acedem por browser. Ideal para não depender do PC do balcão |
+| **4. Acesso pela internet** | Exige domínio + HTTPS (reverse proxy tipo Caddy) e cuidados extra de segurança/RGPD. **Não recomendado** para começar — os cenários 1–3 chegam para uso em loja |
+
 ## 1. Descarregar
 
 1. Vai a **github.com/braindeadpt/OficinaOS**
