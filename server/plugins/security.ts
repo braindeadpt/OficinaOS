@@ -30,6 +30,8 @@ function generateNonce(): string {
 const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   const env = loadEnv();
   const IS_PROD = env.NODE_ENV === "production";
+  // HTTPS on the public origin gates TLS-only headers and cookie flags.
+  const IS_HTTPS = (env.APP_URL ?? "").startsWith("https://");
 
   // ── Layer 1: Security Headers ──────────────────────────────────────────
   // Nonce-based CSP: generate a unique nonce per request and set the
@@ -63,6 +65,7 @@ const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         `object-src 'none'`,
         `base-uri 'self'`,
         `form-action 'self'`,
+        ...(IS_HTTPS ? ["upgrade-insecure-requests"] : []),
       ].join(";")
     );
 
@@ -71,8 +74,11 @@ const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   await app.register(helmet, {
     contentSecurityPolicy: false,
-    // LAN HTTP deployment (no TLS): HSTS must stay off
-    hsts: false,
+    // HSTS only makes sense (and must only be sent) over HTTPS. Plain-HTTP
+    // LAN deployments without a TLS terminator must not receive the header.
+    hsts: IS_HTTPS
+      ? { maxAge: 31_536_000, includeSubDomains: true, preload: true }
+      : false,
   });
 
   // ── Layer 2: CORS ───────────────────────────────────────────────────────
@@ -131,12 +137,13 @@ const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   await app.register(csrf, {
     cookieOpts: {
-      // LAN HTTP deployment (no TLS): Secure cookies would be dropped
-      // by the browser; SameSite=Lax suffices for same-origin use.
-      sameSite: "lax",
+      // HTTPS deployments (incl. the Android Capacitor WebView, which is
+      // cross-site against the public origin) need SameSite=None; Secure.
+      // Plain-HTTP LAN deployments use Lax so the cookie is actually stored.
+      sameSite: IS_HTTPS ? "none" : "lax",
       httpOnly: true,
       path: "/",
-      secure: false,
+      secure: IS_HTTPS,
       signed: IS_PROD,
     },
   });

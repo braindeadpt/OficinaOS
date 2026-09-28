@@ -16,7 +16,8 @@ import { sendPasswordResetEmail } from "./email.js";
 export function createAuth(prisma: PrismaClient) {
   const env = loadEnv();
   const { apiUrl, trustedOrigins } = resolveUrls(env);
-  const isProd = env.NODE_ENV === "production";
+  // HTTPS on the public origin => Secure cookies; plain-HTTP LAN stays Lax.
+  const isHttps = (env.APP_URL ?? apiUrl).startsWith("https://");
 
   return betterAuth({
     baseURL: apiUrl,
@@ -24,10 +25,14 @@ export function createAuth(prisma: PrismaClient) {
     secret: env.BETTER_AUTH_SECRET,
     trustedOrigins,
     advanced: {
-      // LAN HTTP deployment (no TLS): Secure cookies would be dropped
-      // by the browser; SameSite=Lax suffices for same-origin use.
-      useSecureCookies: false,
-      defaultCookieAttributes: { sameSite: "lax", httpOnly: true },
+      // Cookie security follows the public origin's scheme instead of a
+      // hardcoded value: HTTPS (public deploy, incl. Android Capacitor's
+      // cross-site WebView) -> Secure + SameSite=None; plain-HTTP LAN ->
+      // Lax without Secure so the browser actually stores the cookie.
+      useSecureCookies: isHttps,
+      defaultCookieAttributes: isHttps
+        ? { sameSite: "none", secure: true, httpOnly: true }
+        : { sameSite: "lax", httpOnly: true },
     },
     database: prismaAdapter(prisma, {
       provider: "postgresql",
