@@ -213,6 +213,16 @@ export default function JobDetailPage() {
 
         {/* Spec-sheet: estimated cost & delivery */}
         <div className="mt-6 grid grid-cols-2 gap-x-8 gap-y-5 sm:grid-cols-3">
+          {job.imei && (
+            <div>
+              <p className="font-label text-[11px] text-on-surface-variant uppercase tracking-widest">
+                IMEI
+              </p>
+              <p className="mt-0.5 font-bold font-headline text-lg text-on-surface">
+                {job.imei}
+              </p>
+            </div>
+          )}
           <div>
             <p className="font-label text-[11px] text-on-surface-variant uppercase tracking-widest">
               {t("intake.estimated_cost")}

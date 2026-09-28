@@ -13,9 +13,11 @@ import { Role } from "@shared/constants/roles";
 import { AppError } from "@shared/errors/app-error.js";
 import type {
   CreateJobInput,
+  IntakeRepairItem,
   JobListQueryInput,
   UpdateJobInput,
 } from "@shared/schemas/job.schema";
+import { normalizeImei } from "@shared/utils/imei";
 import {
   findMany as auditFindMany,
   findManyWithInclude as auditFindManyWithInclude,
@@ -43,6 +45,7 @@ import {
   update as jobUpdate,
 } from "../repositories/job.repository.js";
 import { findShopSettingsUnique } from "../repositories/settings.repository.js";
+import type { DbClient } from "../repositories/types.js";
 import { generateJobCode } from "../utils/job-code.js";
 import { assertJobMutable } from "../utils/job-mutations.js";
 import { createAuditLog } from "./audit.service.js";
@@ -115,9 +118,43 @@ export function computeFinalCost(job: {
   return repairsSum + partsSum;
 }
 
-export async function list(prisma: PrismaClient, query: JobListQueryInput) {
-  const { cursor, limit, search, status, technicianId } = query;
+async function seedJobRepairs(
+  prisma: DbClient,
+  jobId: string,
+  repairs: IntakeRepairItem[],
+  userId: string
+): Promise<void> {
+  const repairIds = repairs
+    .map((r) => r.repairId)
+    .filter((id): id is string => id != null);
+  const uniqueRepairIds = new Set(repairIds);
+  if (uniqueRepairIds.size !== repairIds.length) {
+    throw new AppError("DUPLICATE_REPAIR");
+  }
+  await createJobRepairs(
+    prisma,
+    repairs.map((repair) => ({
+      category: repair.category as RepairCategory,
+      createdById: userId,
+      jobId,
+      price: repair.price,
+      repairId: repair.repairId ?? null,
+      repairName: repair.repairName,
+    }))
+  );
+  for (const repair of repairs) {
+    await createAuditLog(prisma, {
+      action: AuditAction.REPAIR_ADDED,
+      jobId,
+      metadata: { repairId: repair.repairId },
+      toValue: `${repair.repairName} — ${repair.price}`,
+      userId,
+    });
+  }
+}
 
+function buildJobListWhere(query: JobListQueryInput): Prisma.JobWhereInput {
+  const { imei, search, status, technicianId } = query;
   const where: Prisma.JobWhereInput = {};
   if (status) {
     where.status = status as Prisma.EnumJobStatusFilter<"Job">;
@@ -133,8 +170,20 @@ export async function list(prisma: PrismaClient, query: JobListQueryInput) {
         device: { brand: { name: { contains: search, mode: "insensitive" } } },
       },
       { device: { model: { contains: search, mode: "insensitive" } } },
+      // Allow pasting an IMEI straight into the general search box.
+      { imei: { contains: normalizeImei(search), mode: "insensitive" } },
     ];
   }
+  if (imei) {
+    where.imei = { endsWith: normalizeImei(imei) };
+  }
+  return where;
+}
+
+export async function list(prisma: PrismaClient, query: JobListQueryInput) {
+  const { cursor, limit } = query;
+
+  const where = buildJobListWhere(query);
   if (cursor) {
     where.id = { lt: cursor };
   }
@@ -267,6 +316,7 @@ export async function create(
         conditionNotes: input.conditionNotes ?? null,
         createdBy: { connect: { id: userId } },
         customer: { connect: { id: customer.id } },
+        imei: input.imei ? normalizeImei(input.imei) : null,
         depositAmount: input.depositAmount ?? null,
         device: { connect: { id: device.id } },
         estimatedCost: input.estimatedCost,
@@ -287,33 +337,7 @@ export async function create(
     );
 
     if (input.repairs && input.repairs.length > 0) {
-      const repairIds = input.repairs
-        .map((r) => r.repairId)
-        .filter((id): id is string => id != null);
-      const uniqueRepairIds = new Set(repairIds);
-      if (uniqueRepairIds.size !== repairIds.length) {
-        throw new AppError("DUPLICATE_REPAIR");
-      }
-      await createJobRepairs(
-        tx,
-        input.repairs.map((repair) => ({
-          category: repair.category as RepairCategory,
-          createdById: userId,
-          jobId: created.id,
-          price: repair.price,
-          repairId: repair.repairId ?? null,
-          repairName: repair.repairName,
-        }))
-      );
-      for (const repair of input.repairs) {
-        await createAuditLog(tx, {
-          action: AuditAction.REPAIR_ADDED,
-          jobId: created.id,
-          metadata: { repairId: repair.repairId },
-          toValue: `${repair.repairName} — ${repair.price}`,
-          userId,
-        });
-      }
+      await seedJobRepairs(tx, created.id, input.repairs, userId);
     }
 
     await createAuditLog(tx, {
@@ -344,6 +368,44 @@ export async function create(
   return { ...(fullJob ?? job), finalCost: computeFinalCost(fullJob ?? job) };
 }
 
+const UPDATE_SPECIAL_FIELDS = new Set([
+  "depositAmount",
+  "estimatedDate",
+  "imei",
+  "technicianId",
+]);
+
+function hasNonSpecialFieldChanges(input: UpdateJobInput): boolean {
+  return Object.keys(input).some((k) => !UPDATE_SPECIAL_FIELDS.has(k));
+}
+
+function buildJobUpdateData(input: UpdateJobInput): Prisma.JobUpdateInput {
+  const { depositAmount, estimatedDate, imei, technicianId, ...rest } = input;
+  const data: Prisma.JobUpdateInput = { ...rest };
+
+  if (imei !== undefined) {
+    data.imei = imei ? normalizeImei(imei) : null;
+  }
+
+  if (estimatedDate === null) {
+    data.estimatedDate = null;
+  } else if (estimatedDate) {
+    data.estimatedDate = new Date(estimatedDate);
+  }
+
+  if (depositAmount === null) {
+    data.depositAmount = null;
+  }
+
+  if (technicianId === null) {
+    data.technician = { disconnect: true };
+  } else if (technicianId) {
+    data.technician = { connect: { id: technicianId } };
+  }
+
+  return data;
+}
+
 export async function update(
   prisma: PrismaClient,
   id: string,
@@ -366,24 +428,9 @@ export async function update(
     }
   }
 
-  const { depositAmount, estimatedDate, technicianId, ...rest } = input;
-  const data: Prisma.JobUpdateInput = { ...rest };
+  const data = buildJobUpdateData(input);
 
-  if (estimatedDate === null) {
-    data.estimatedDate = null;
-  } else if (estimatedDate) {
-    data.estimatedDate = new Date(estimatedDate);
-  }
-
-  if (depositAmount === null) {
-    data.depositAmount = null;
-  }
-
-  if (technicianId === null) {
-    data.technician = { disconnect: true };
-  } else if (technicianId) {
-    data.technician = { connect: { id: technicianId } };
-  }
+  const { technicianId } = input;
 
   const updated = await jobUpdate(prisma, id, data, JOB_INCLUDE);
 
@@ -409,7 +456,7 @@ export async function update(
       note: "Cost fields updated",
       userId,
     });
-  } else if (Object.keys(rest).length > 0 || technicianId !== undefined) {
+  } else if (hasNonSpecialFieldChanges(input) || technicianId !== undefined) {
     await createAuditLog(prisma, {
       action: AuditAction.JOB_UPDATED,
       jobId: id,

@@ -22,6 +22,7 @@ export interface IntakeFormData {
   deposit: string;
   estimatedCost: string;
   estimatedDelivery: string;
+  imei: string;
   isWarrantyReturn: boolean;
   model: string;
   modelId: string;
@@ -37,6 +38,7 @@ export const INITIAL_FORM: IntakeFormData = {
   brandId: "",
   color: "",
   conditionNotes: "",
+  imei: "",
   customerEmail: "",
   customerId: "",
   customerName: "",

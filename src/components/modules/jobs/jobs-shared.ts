@@ -9,6 +9,7 @@ export interface JobRow {
   deviceIcon?: string;
   deviceSpec?: string;
   id: string;
+  imei?: string;
   rawJob?: Job;
   status: JobStatusType;
   technician?: string;
@@ -75,6 +76,7 @@ export function jobToRow(job: Job): JobRow {
     device: job.device ? `${brandName} ${job.device.model}` : "",
     deviceIcon: DEVICE_ICONS[deviceType] ?? deviceType,
     deviceSpec: job.device?.model ?? "",
+    imei: job.imei ?? undefined,
     rawJob: job,
     status: job.status,
     technician: job.technician?.name,

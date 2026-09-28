@@ -277,6 +277,9 @@ model Job {
   deviceId String
   device   Device  @relation(fields: [deviceId], references: [id], onDelete: Restrict)
   color    String?
+  // IMEI/serial captured at intake (nullable — shops may not always record it).
+  // 15 digits for IMEI; VarChar(16) tolerates 16-digit MEID with check digit.
+  imei     String? @db.VarChar(16)
 
   reportedProblem String    @db.Text
   conditionNotes  String?   @db.Text
@@ -330,6 +333,7 @@ model Job {
   @@index([createdAt])
   @@index([status, createdAt])
   @@index([status, estimatedDate])
+  @@index([imei])
   @@map("jobs")
 }
 

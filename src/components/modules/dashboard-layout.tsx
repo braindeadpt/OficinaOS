@@ -35,6 +35,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           deviceBrandId: data.brandId || undefined,
           deviceModel: data.model,
           color: data.color || undefined,
+          imei: data.imei || undefined,
           reportedProblem: data.reportedProblem,
           conditionNotes: data.conditionNotes || undefined,
           estimatedCost: Number.parseFloat(data.estimatedCost) || 0,
