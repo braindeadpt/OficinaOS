@@ -304,6 +304,13 @@ describe("FRONT_DESK role", () => {
   it("has NO session access", () => {
     expect(frontDeskRole.statements).not.toHaveProperty("session");
   });
+
+  it("has full payments access", () => {
+    const { payments } = frontDeskRole.statements as {
+      payments: readonly string[];
+    };
+    expect(payments).toEqual(["view", "create", "delete"]);
+  });
 });
 
 // ---------------------------------------------------------------------------

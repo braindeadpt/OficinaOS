@@ -102,6 +102,15 @@ export const ERRORS = {
   // ── Business Logic ─────────────────────────────────────────────────────
   INVALID_CUSTOMER: { status: 400, message: "errors.invalid_customer" },
   INSUFFICIENT_STOCK: { status: 409, message: "errors.insufficient_stock" },
+  INVALID_PAYMENT_AMOUNT: {
+    status: 400,
+    message: "errors.invalid_payment_amount",
+  },
+  PAYMENT_EXCEEDS_BALANCE: {
+    status: 409,
+    message: "errors.payment_exceeds_balance",
+  },
+  PAYMENT_NOT_FOUND: { status: 404, message: "errors.payment_not_found" },
   INVALID_WARRANTY_REFERENCE: {
     status: 400,
     message: "errors.invalid_warranty_reference",

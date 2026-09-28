@@ -50,6 +50,7 @@ import { generateJobCode } from "../utils/job-code.js";
 import { assertJobMutable } from "../utils/job-mutations.js";
 import { createAuditLog } from "./audit.service.js";
 import { notify } from "./notification-dispatch.js";
+import { computeJobBalance } from "./payment.service.js";
 
 export interface NotifyContext {
   prisma: PrismaClient;
@@ -101,6 +102,7 @@ const JOB_INCLUDE = {
   },
   partsUsed: true,
   partsWaiting: true,
+  payments: { select: { amount: true } },
   photos: true,
   repairs: true,
   technician: { select: { id: true, name: true, username: true } },
@@ -217,7 +219,8 @@ export async function getById(prisma: PrismaClient, id: string) {
   }
 
   const finalCost = computeFinalCost(job);
-  return { ...job, finalCost };
+  const { balanceDue, paidTotal } = computeJobBalance(job);
+  return { ...job, balanceDue, finalCost, paidTotal };
 }
 
 export async function getMetrics(prisma: PrismaClient) {

@@ -41,7 +41,12 @@ export async function renderReceiptHtml(
     device: { brand: { name: string }; model: string };
     reportedProblem: string;
     estimatedCost: number | { toNumber: () => number };
+    depositAmount?: number | { toNumber: () => number } | null;
     createdAt: Date;
+    payments?: Array<{
+      amount: number | { toNumber: () => number };
+      method: string;
+    }>;
     partsUsed: Array<{
       partName: string;
       quantity: number;
@@ -67,11 +72,16 @@ export async function renderReceiptHtml(
 
   const partsUsed = job.partsUsed ?? [];
   const repairs = job.repairs ?? [];
+  const payments = job.payments ?? [];
 
   const partsTotal = partsUsed.reduce((s, p) => s + toNum(p.totalCost), 0);
   const repairsTotal = repairs.reduce((s, r) => s + toNum(r.price), 0);
   const finalCost = partsTotal + repairsTotal;
   const displayCost = finalCost > 0 ? finalCost : toNum(job.estimatedCost);
+  const deposit = job.depositAmount ? toNum(job.depositAmount) : 0;
+  const paidTotal = payments.reduce((s, p) => s + toNum(p.amount), 0) + deposit;
+  const balanceDue = Math.max(0, finalCost - paidTotal);
+  const hasPayments = paidTotal > 0;
 
   return `<!doctype html>
 <html lang="en">
@@ -104,7 +114,22 @@ export async function renderReceiptHtml(
 ${
   hideCosts
     ? ""
-    : `<table><tr><td><strong>Total</strong></td><td style="text-align:right">${fmtDzd(displayCost)}</td></tr></table><div class="sep"></div>`
+    : `<table><tr><td><strong>Total</strong></td><td style="text-align:right">${fmtDzd(displayCost)}</td></tr></table>${
+        hasPayments
+          ? `<table>${
+              deposit > 0
+                ? `<tr><td>Paid (deposit)</td><td style="text-align:right">${fmtDzd(deposit)}</td></tr>`
+                : ""
+            }${payments
+              .map(
+                (p) =>
+                  `<tr><td>Paid (${esc(p.method)})</td><td style="text-align:right">${fmtDzd(p.amount)}</td></tr>`
+              )
+              .join(
+                ""
+              )}<tr><td><strong>Balance due</strong></td><td style="text-align:right"><strong>${fmtDzd(balanceDue)}</strong></td></tr></table>`
+          : ""
+      }<div class="sep"></div>`
 }
 ${qrImg}
 <p style="text-align:center;font-size:10px;color:#555">Scan QR to track your repair</p>

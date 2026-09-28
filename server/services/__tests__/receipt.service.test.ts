@@ -227,4 +227,51 @@ describe("renderReceiptHtml", () => {
     expect(html).toContain("8,500");
     expect(html).toContain("Total");
   });
+
+  it("shows balance due line when payments exist", async () => {
+    const job = {
+      ...baseJob,
+      partsUsed: [{ partName: "Screen", quantity: 1, totalCost: 5000 }],
+      repairs: [{ repairName: "Fix", price: 3000 }],
+      payments: [{ amount: 3000, method: "CASH" }],
+    };
+    const html = await renderReceiptHtml(makePrisma(), job, "https://x.y");
+    expect(html).toContain("Balance due");
+    expect(html).toContain("5,000");
+    expect(html).toContain("Paid (CASH)");
+  });
+
+  it("includes deposit as part of the paid total", async () => {
+    const job = {
+      ...baseJob,
+      depositAmount: 1500,
+      repairs: [{ repairName: "Fix", price: 3000 }],
+      payments: [],
+    };
+    const html = await renderReceiptHtml(makePrisma(), job, "https://x.y");
+    expect(html).toContain("Paid (deposit)");
+    expect(html).toContain("Balance due");
+    expect(html).toContain("1,500");
+  });
+
+  it("shows no payments section when nothing was paid", async () => {
+    const job = {
+      ...baseJob,
+      repairs: [{ repairName: "Fix", price: 3000 }],
+      payments: [],
+    };
+    const html = await renderReceiptHtml(makePrisma(), job, "https://x.y");
+    expect(html).not.toContain("Balance due");
+    expect(html).toContain("3,000");
+  });
+
+  it("escapes payment method labels", async () => {
+    const job = {
+      ...baseJob,
+      payments: [{ amount: 100, method: "<b>X</b>" }],
+    };
+    const html = await renderReceiptHtml(makePrisma(), job, "https://x.y");
+    expect(html).not.toContain("<b>X</b>");
+    expect(html).toContain("&lt;b&gt;");
+  });
 });

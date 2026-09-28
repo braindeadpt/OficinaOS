@@ -120,6 +120,8 @@ export {
   togglePartStatusSchema,
   updatePartSchema,
 } from "./parts-catalog.schema";
+export type { AddPaymentInput } from "./payment.schema";
+export { addPaymentSchema } from "./payment.schema";
 export type { JobIdParamInput } from "./receipt.schema";
 export { jobIdParamSchema } from "./receipt.schema";
 export type {

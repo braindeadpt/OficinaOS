@@ -18,15 +18,25 @@ export type Job = Prisma.JobGetPayload<{
     };
     partsWaiting: true;
     partsUsed: true;
+    payments: { select: { amount: true } };
     repairs: true;
   };
-}>;
+}> & {
+  // Server-computed fields (see job.service getById)
+  balanceDue?: number;
+  finalCost?: number;
+  paidTotal?: number;
+  margin?: number;
+};
 export type JobPhoto = Prisma.JobPhotoGetPayload<Record<string, never>>;
 export type JobNote = Prisma.JobNoteGetPayload<{
   include: { createdBy: { select: { id: true; name: true; username: true } } };
 }>;
 export type JobPart = Prisma.JobPartGetPayload<Record<string, never>>;
 export type JobRepair = Prisma.JobRepairGetPayload<Record<string, never>>;
+export type Payment = Prisma.PaymentGetPayload<{
+  include: { createdBy: { select: { id: true; name: true; username: true } } };
+}>;
 export type PartsCatalog = Prisma.PartsCatalogGetPayload<Record<string, never>>;
 export type RepairCatalog = Prisma.RepairCatalogGetPayload<
   Record<string, never>

@@ -47,6 +47,8 @@ export const statement = {
 
   customers: ["view", "create", "edit"] as const,
 
+  payments: ["view", "create", "delete"] as const,
+
   repairs: ["viewCatalog", "manageCatalog"] as const,
 
   reports: ["viewSelf", "viewShop", "viewMargin"] as const,
@@ -117,6 +119,8 @@ export const ownerRole = ac.newRole({
     "overridePrice",
   ],
   customers: ["view", "create", "edit"],
+
+  payments: ["view", "create", "delete"],
   repairs: ["viewCatalog", "manageCatalog"],
   reports: ["viewSelf", "viewShop", "viewMargin"],
   settings: ["view", "edit"],
@@ -151,6 +155,7 @@ export const technicianRole = ac.newRole({
     "overridePrice",
   ],
   customers: ["view", "create"],
+  payments: ["view"],
   repairs: ["viewCatalog", "manageCatalog"],
   reports: ["viewSelf"],
   notifications: ["read"],
@@ -170,6 +175,7 @@ export const frontDeskRole = ac.newRole({
   jobStatus: ["DELIVERED", "RETURNED", "CANCELLED"],
   // No parts
   customers: ["view", "create", "edit"],
+  payments: ["view", "create", "delete"],
   // No repairs
   // No reports
   // No settings
