@@ -67,7 +67,7 @@
     "vite": "^8.0.8",
     "vitest": "^4.1.4"
   },
-  "name": "reparilo",
+  "name": "oficinaos",
   "scripts": {
     "dev": "concurrently -n frontend,server -c blue,green \"vite\" \"bun run --watch server/index.ts\"",
     "dev:front": "vite",

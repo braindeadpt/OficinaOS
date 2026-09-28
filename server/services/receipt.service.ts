@@ -55,7 +55,7 @@ export async function renderReceiptHtml(
   options?: { hideCosts?: boolean }
 ): Promise<string> {
   const settings = await findShopSettingsUnique(prisma);
-  const shopName = esc(settings?.shopName ?? "Reparilo");
+  const shopName = esc(settings?.shopName ?? "OficinaOS");
   const qrBuf = await generateTrackingQr(job.jobCode, baseUrl);
   const qrImg = qrBuf
     ? `<div class="qr"><img src="data:image/png;base64,${qrBuf.toString("base64")}" alt="QR Code" /></div>`
@@ -133,7 +133,7 @@ export async function renderLabelHtml(
   options?: { hideCosts?: boolean; noAutoPrint?: boolean }
 ): Promise<string> {
   const settings = await findShopSettingsUnique(prisma);
-  const shopName = esc(settings?.shopName || "Reparilo");
+  const shopName = esc(settings?.shopName || "OficinaOS");
   const logoHtml = settings?.logoPath
     ? `<img src="${esc(settings.logoPath)}" alt="${shopName}" style="max-height:4mm;max-width:100%;" />`
     : shopName;

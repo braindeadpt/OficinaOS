@@ -4,7 +4,7 @@ import { renderLabelHtml, renderReceiptHtml } from "../receipt.service.js";
 
 const QR_BASE64_RE = /<img[^>]+src="data:image\/png;base64,[A-Za-z0-9+/=]+"/;
 
-function makePrisma(shopName = "Reparilo Test Shop"): PrismaClient {
+function makePrisma(shopName = "OficinaOS Test Shop"): PrismaClient {
   return {
     shopSettings: {
       findUnique: vi.fn().mockResolvedValue({ id: "default", shopName }),
@@ -98,14 +98,14 @@ describe("renderLabelHtml", () => {
     expect(html).toContain("&quot;");
   });
 
-  it("falls back to 'Reparilo' when shopName is empty", async () => {
+  it("falls back to 'OficinaOS' when shopName is empty", async () => {
     const prisma = {
       shopSettings: {
         findUnique: vi.fn().mockResolvedValue(null),
       },
     } as unknown as PrismaClient;
     const html = await renderLabelHtml(prisma, baseJob, "https://x.y");
-    expect(html).toContain("Reparilo");
+    expect(html).toContain("OficinaOS");
   });
 
   it("renders logo image when logoPath is set", async () => {

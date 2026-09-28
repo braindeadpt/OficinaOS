@@ -47,7 +47,7 @@ export async function sendEmail({
   }
 
   const env = loadEnv();
-  const from = env.EMAIL_FROM || `"Reparilo" <noreply@reparilo.com>`;
+  const from = env.EMAIL_FROM || `"OficinaOS" <noreply@oficinaos.com>`;
 
   await getTransporter().sendMail({ from, to, subject, text, html });
 }
@@ -65,7 +65,7 @@ export async function sendPasswordResetEmail(
 
   await sendEmail({
     to,
-    subject: "Reset your Reparilo password",
+    subject: "Reset your OficinaOS password",
     text: `Click the link below to reset your password:\n\n${resetUrl}\n\nIf you didn't request this, you can ignore this email.`,
     html: `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto">

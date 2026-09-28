@@ -309,7 +309,7 @@ export async function testNotification(prisma: DbClient, templateId: string) {
     templateVars: {
       customerName: "Test",
       jobCode: "TEST-001",
-      shopName: shop?.shopName ?? "Reparilo",
+      shopName: shop?.shopName ?? "OficinaOS",
     },
   });
 }

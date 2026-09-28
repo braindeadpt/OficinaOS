@@ -16,9 +16,7 @@ This code applies to all project spaces, including:
 
 ## Reporting
 
-If you experience or witness behavior that violates the Contributor Covenant, please report it privately to:
-
-**`security@reparilo.shop`**
+If you experience or witness behavior that violates the Contributor Covenant, please report it privately to the maintainer ([@braindeadpt](https://github.com/braindeadpt)) via GitHub private message or by opening a private security advisory on this repository.
 
 All reports are handled confidentially. Please include:
 
@@ -31,7 +29,7 @@ You can also report problems directly to GitHub using their [abuse reporting too
 
 ## Enforcement
 
-Reparilo is solo-maintained. The maintainer is responsible for reviewing reports and deciding on a response, which may include:
+OficinaOS is maintained on a best-effort basis. The maintainer is responsible for reviewing reports and deciding on a response, which may include:
 
 - a private warning
 - a request to edit or delete content

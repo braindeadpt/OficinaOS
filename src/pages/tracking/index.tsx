@@ -84,7 +84,7 @@ function LookupForm({
       <nav className="sticky top-0 z-50 w-full bg-background">
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4">
           <span className="font-bold font-headline text-2xl text-primary-container tracking-tight">
-            Reparilo
+            OficinaOS
           </span>
           <LanguageSwitcher />
         </div>
@@ -219,7 +219,7 @@ function LookupForm({
       <footer className="mt-auto w-full bg-surface-container-high py-8">
         <div className="flex w-full flex-col items-center gap-2 text-center">
           <span className="font-body text-on-surface-variant text-xs tracking-wider">
-            © {new Date().getFullYear()} Reparilo.{" "}
+            © {new Date().getFullYear()} OficinaOS.{" "}
             {t("tracking_all_rights_reserved")}
           </span>
         </div>
@@ -570,7 +570,7 @@ function StatusView({
       <footer className="mt-auto w-full bg-surface-container-high py-8">
         <div className="flex w-full flex-col items-center gap-2 text-center">
           <span className="font-body text-on-surface-variant text-xs tracking-wider">
-            © {new Date().getFullYear()} Reparilo.{" "}
+            © {new Date().getFullYear()} OficinaOS.{" "}
             {t("tracking_all_rights_reserved")}
           </span>
         </div>
@@ -761,7 +761,7 @@ export default function TrackingPage() {
         <nav className="sticky top-0 z-50 w-full bg-background">
           <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4">
             <span className="font-bold font-headline text-2xl text-primary-container tracking-tight">
-              Reparilo
+              OficinaOS
             </span>
             <LanguageSwitcher />
           </div>
@@ -799,7 +799,7 @@ export default function TrackingPage() {
         <nav className="sticky top-0 z-50 w-full bg-background">
           <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4">
             <span className="font-bold font-headline text-2xl text-primary-container tracking-tight">
-              Reparilo
+              OficinaOS
             </span>
             <LanguageSwitcher />
           </div>

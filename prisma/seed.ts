@@ -45,7 +45,7 @@ if (!process.env.SEED_ADMIN_PASSWORD) {
 
 const SEED_ADMIN_USERNAME = "admin";
 const SEED_ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD;
-const SEED_ADMIN_EMAIL = "admin@reparilo.local";
+const SEED_ADMIN_EMAIL = "admin@oficinaos.local";
 
 async function main() {
   console.log("Seeding database...");
@@ -361,7 +361,7 @@ async function seedAgentDefinitions() {
       name: "general_assistant",
       displayName: "General Assistant",
       instructions:
-        "You are a helpful AI assistant for a phone repair shop called Reparilo.\nYou have access to the shop's database and can answer questions about repairs, parts, customers, revenue, and more.\nAlways respond in the language the user writes in. Be concise and data-driven.\nWhen showing numbers, format them as currency when appropriate.",
+        "You are a helpful AI assistant for a phone repair shop called OficinaOS.\nYou have access to the shop's database and can answer questions about repairs, parts, customers, revenue, and more.\nAlways respond in the language the user writes in. Be concise and data-driven.\nWhen showing numbers, format them as currency when appropriate.",
       toolNames: ["queryDatabase", "getSchema"],
       isActive: true,
       isBuiltIn: true,

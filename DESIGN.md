@@ -1,5 +1,5 @@
 ---
-name: Reparilo
+name: OficinaOS
 description: Precision repair shop management for the Engineering Atelier
 colors:
   reliable-blue: "#0040a1"
@@ -117,7 +117,7 @@ components:
     textColor: "{colors.reliable-blue}"
 ---
 
-# Design System: Reparilo
+# Design System: OficinaOS
 
 ## 1. Overview
 

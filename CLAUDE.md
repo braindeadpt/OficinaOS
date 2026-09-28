@@ -1,6 +1,8 @@
-# Reparilo — Repair Shop Management System
+# OficinaOS — Repair Shop Management System
 
-Single-location mobile phone repair shop management. Web + Android (Capacitor). Trilingual (AR/FR/EN).
+Single-location mobile phone repair shop management. Web + Android (Capacitor). Quadrilingual (PT-PT / EN / FR / AR-RTL).
+
+**Fork of [Reparilo](https://github.com/cranknet/reparilo)** (upstream remote: `upstream`) — Portuguese-market adaptation. The upstream license does not cover the "Reparilo" name, so this distribution is branded **OficinaOS**. Never reintroduce "Reparilo" in user-facing strings; referencing the upstream project name in docs/attribution is fine.
 
 # Guidelines
 
@@ -70,11 +72,11 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ## General Rules
 
-- `AGENTS.md` and `GEMINI.md` are symlinks to `CLAUDE.md` — edit only `CLAUDE.md`
+- `AGENTS.md` and `GEMINI.md` mirror `CLAUDE.md` (upstream uses symlinks; on Windows they are plain files — keep them in sync when editing this file)
 - The project uses ultracite for code quality and formatting. use bun run check or bun run fix to fix any lint warnings.
 - For Impeccable detector use bunx impeccable --json "File".
 - The project uses Bun for package management and runtime. Use `bun install`, `bun add`, `bun run`, and `bunx` instead of pnpm/npm/npx.
-- Add locale keys to en.json and use bun run sync-locales to sync and auto-translate other languages files.
+- Add locale keys to `src/i18n/locales/en.json`, then run `bun run sync-locales` to sync/auto-translate, then `python scripts/fix-pt-pt.py` to normalize pt.json to European Portuguese (Google Translate output leans pt-BR).
 - Never suppress lint warnings — always apply best practices
 - Explain tasks, errors, and solutions in plain English with minimal jargon
 - When I bring you an issue, your job is not to fix it directly. Instead, open a brief discussion: ask clarifying questions, explore the problem space, and propose industry best-practice solutions. Always lean toward the approach that reflects current standards, and walk me through the reasoning so we decide together.
@@ -86,6 +88,13 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 - Create Prisma manual migrations after every schema change
 - Use the Postgres URL from `.env` for DB access
+
+## Deployment & LAN/HTTP patches
+
+- Production deployment target: `docker compose up -d` (Postgres 16 + Bun app on port 4000). See `README.md`.
+- This fork relaxes upstream's HTTPS-only assumptions for trusted-LAN HTTP use: no `upgrade-insecure-requests` in CSP, no HSTS, non-`Secure` session cookies, `localhost` added to allowed origins. Relevant files: `server/plugins/security.ts`, `server/lib/auth.ts`.
+- If you pull from `upstream` (`git pull upstream main`), re-check those files — upstream may reintroduce HTTPS-only headers that blank the page on LAN HTTP.
+- The DB credentials inside `docker-compose.yml` (`reparilo` user/db) are internal-only and intentionally unchanged — renaming them would orphan the existing Docker volume.
 
 ## QA & Dev
 

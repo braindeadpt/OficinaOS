@@ -61,7 +61,7 @@ export default function TopBar() {
             build_circle
           </span>
           <span className="font-black font-headline text-on-surface text-sm uppercase tracking-tighter">
-            Reparilo
+            OficinaOS
           </span>
         </div>
         <div className="group relative hidden w-full max-w-xs md:block md:w-96">

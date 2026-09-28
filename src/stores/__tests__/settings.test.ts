@@ -116,7 +116,7 @@ describe("useSettingsStore", () => {
     it("populates shopSettings", async () => {
       const shopData = {
         id: "shop-1",
-        shopName: "Reparilo",
+        shopName: "OficinaOS",
         address: "123 Main St",
         phone: "555-0100",
         currency: "USD",
@@ -144,7 +144,7 @@ describe("useSettingsStore", () => {
     it("calls API put and updates store", async () => {
       const updated = {
         id: "shop-1",
-        shopName: "Reparilo Pro",
+        shopName: "OficinaOS Pro",
         address: "456 Oak Ave",
         phone: "555-0200",
         currency: "EUR",
@@ -153,7 +153,7 @@ describe("useSettingsStore", () => {
 
       const result = await act(() =>
         useSettingsStore.getState().saveShopSettings({
-          shopName: "Reparilo Pro",
+          shopName: "OficinaOS Pro",
           address: "456 Oak Ave",
           phone: "555-0200",
           currency: "EUR",
@@ -163,7 +163,7 @@ describe("useSettingsStore", () => {
       expect(result).toEqual(updated);
       expect(useSettingsStore.getState().shopSettings).toEqual(updated);
       expect(mockPut).toHaveBeenCalledWith("/settings/shop", {
-        shopName: "Reparilo Pro",
+        shopName: "OficinaOS Pro",
         address: "456 Oak Ave",
         phone: "555-0200",
         currency: "EUR",

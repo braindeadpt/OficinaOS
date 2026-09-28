@@ -256,7 +256,7 @@ function createMockUser(role: RoleType) {
     id: `user-${role.toLowerCase()}`,
     name: `Test ${role}`,
     username: `test-${role.toLowerCase()}`,
-    email: `test-${role.toLowerCase()}@reparilo.test`,
+    email: `test-${role.toLowerCase()}@oficinaos.test`,
     role,
     isActive: true,
     mustChangePassword: false,

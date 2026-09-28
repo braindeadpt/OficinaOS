@@ -4,10 +4,9 @@
 
 **Please do not report security vulnerabilities through public GitHub issues, discussions, or pull requests.**
 
-Instead, use one of the following private channels:
+Use GitHub's [Private Vulnerability Reporting](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability) on this repository (Security → Report a vulnerability).
 
-1. **Preferred:** Use GitHub's [Private Vulnerability Reporting](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability) on this repository (Security → Report a vulnerability).
-2. **Alternative:** Email `security@reparilo.shop`.
+If the vulnerability also affects upstream, consider reporting it to the original author at [cranknet/reparilo](https://github.com/cranknet/reparilo) as well.
 
 Please include:
 
@@ -18,7 +17,7 @@ Please include:
 
 ## What to expect
 
-Reparilo is solo-maintained. I'll do my best on the following timelines but cannot guarantee them:
+OficinaOS is maintained on a best-effort basis. We'll do our best on the following timelines but cannot guarantee them:
 
 | Stage                  | Target                                    |
 | ---------------------- | ----------------------------------------- |
@@ -33,7 +32,7 @@ If you don't get an acknowledgement within a week, please send a polite follow-u
 
 In scope:
 
-- The Reparilo application code in this repository (server, frontend, mobile)
+- The OficinaOS application code in this repository (server, frontend, mobile)
 - Authentication, session handling, CSRF, file upload, and authorization flows
 - SQL injection, XSS, SSRF, or other injection vulnerabilities in our code
 - Insecure defaults in `.env.example` or the seed script

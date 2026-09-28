@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: "com.reparilo.app",
-  appName: "Reparilo",
+  appId: "com.oficinaos.app",
+  appName: "OficinaOS",
   webDir: "dist",
   server: {
     androidScheme: "https",

@@ -10,7 +10,7 @@ import { logger } from "../utils/logger.js";
 import { sendPasswordResetEmail } from "./email.js";
 
 /**
- * Creates a Better Auth instance configured for Reparilo.
+ * Creates a Better Auth instance configured for OficinaOS.
  * Must be called after Prisma is initialized.
  */
 export function createAuth(prisma: PrismaClient) {

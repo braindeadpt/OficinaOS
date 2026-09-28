@@ -71,7 +71,7 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
 
   // In-memory lockout store: jobCode → { failures, lockedUntil }
   // NOTE: This is per-process state — it will NOT be shared across multiple
-  // server instances. For Reparilo's single-location deployment (one server)
+  // server instances. For OficinaOS's single-location deployment (one server)
   // this is acceptable. If multi-instance deployment is ever needed, this
   // should be replaced with a Redis or DB-backed store.
   // TODO: Migrate to Redis/DB-backed store for multi-instance support.

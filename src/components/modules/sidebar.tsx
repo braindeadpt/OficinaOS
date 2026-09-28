@@ -111,7 +111,7 @@ export default function Sidebar() {
     <aside className="fixed start-0 top-0 z-40 hidden h-screen w-64 flex-col bg-surface-container-low p-4 lg:flex">
       <div className="mb-8 px-2 py-6">
         <h1 className="font-black font-headline text-primary text-xl tracking-tight">
-          Reparilo
+          OficinaOS
         </h1>
         <p className="font-medium text-on-surface-variant text-xs tracking-wide">
           {t("app_tagline")}

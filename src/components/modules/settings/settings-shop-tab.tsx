@@ -110,7 +110,7 @@ export default function SettingsShopTab({
                 setShopForm((f) => ({ ...f, shopName: e.target.value }));
                 onDirtyChange(true);
               }}
-              placeholder="Reparilo"
+              placeholder="OficinaOS"
               required
               type="text"
               value={shopForm.shopName}
@@ -238,7 +238,7 @@ export default function SettingsShopTab({
                 setShopForm((f) => ({ ...f, receiptFooter: e.target.value }));
                 onDirtyChange(true);
               }}
-              placeholder="Thanks for choosing Reparilo!"
+              placeholder="Thanks for choosing OficinaOS!"
               type="text"
               value={shopForm.receiptFooter}
             />

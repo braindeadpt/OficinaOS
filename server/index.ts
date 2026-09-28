@@ -59,7 +59,7 @@ if (!IS_PROD) {
     openapi: {
       openapi: "3.0.3",
       info: {
-        title: "Reparilo API",
+        title: "OficinaOS API",
         description: "Repair shop management system API",
         version: "1.0.0",
       },
@@ -218,7 +218,7 @@ try {
   await app.listen({ port: env.PORT, host: env.HOST });
   app.log.info(
     { env: env.NODE_ENV, trustProxy: Boolean(env.TRUST_PROXY ?? IS_PROD) },
-    `Reparilo server running on ${env.HOST}:${env.PORT}`
+    `OficinaOS server running on ${env.HOST}:${env.PORT}`
   );
 } catch (err) {
   app.log.error(err);

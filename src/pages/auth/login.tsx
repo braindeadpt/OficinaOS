@@ -375,7 +375,7 @@ export default function LoginPage() {
           </div>
           <div>
             <h1 className="font-bold font-headline text-lg text-on-surface tracking-tight">
-              Reparilo
+              OficinaOS
             </h1>
             <p className="font-label font-medium text-on-surface-variant/60 text-xs uppercase tracking-widest">
               {t("app_tagline")}
