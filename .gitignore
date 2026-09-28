@@ -31,8 +31,6 @@ coverage/
 .aider*
 skills-lock.json
 opencode.json
-AGENTS.md
-GEMINI.md
 src/CLAUDE.md
 
 # Agent-generated planning artifacts and Spec Kit output
