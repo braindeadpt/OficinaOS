@@ -348,7 +348,7 @@ describe("list", () => {
     const findManyCall = (prisma.job.findMany as ReturnType<typeof vi.fn>).mock
       .calls[0];
     expect(findManyCall[0].where.OR).toBeDefined();
-    expect(findManyCall[0].where.OR).toHaveLength(4);
+    expect(findManyCall[0].where.OR).toHaveLength(5);
   });
 
   it("sets nextCursor when more results exist", async () => {
