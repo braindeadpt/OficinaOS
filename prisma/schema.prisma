@@ -1,4 +1,4 @@
-// Reparilo — Prisma Schema
+// OficinaOS — Prisma Schema
 // Version: 4.0 — Production-ready
 // Database: PostgreSQL 17
 // All DateTime fields use @db.Timestamptz for timezone safety.
