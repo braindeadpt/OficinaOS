@@ -1132,6 +1132,8 @@
   "part_status_changed": "تم تحديث حالة الجزء",
   "part_updated_successfully": "تم تحديث الجزء بنجاح",
   "parts_inventory": "مخزون القطع",
+  "parts_low_stock_badge": "إعادة تعبئة",
+  "parts_needs_restock_filter": "يحتاج إعادة تعبئة",
   "parts_inventory_desc": "إدارة وتتبع مخزون القطع",
   "pipeline_done_desc": "تم فحص الجودة وجاهز للتسليم",
   "pipeline_hold_desc": "بانتظار رد الزبون",

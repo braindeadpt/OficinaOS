@@ -1,4 +1,5 @@
 import { Role } from "@shared/constants/roles";
+import { isLowStock } from "@shared/utils/stock-level";
 import type { FastifyInstance } from "fastify";
 import type { DbClient } from "../repositories/types.js";
 import { notify } from "../services/notification-dispatch.js";
@@ -33,9 +34,13 @@ export async function alertLowStock(
       where: { id: partId },
     });
     if (
-      !part?.isActive ||
-      part.reorderLevel <= 0 ||
-      part.stockQuantity > part.reorderLevel
+      !(
+        part?.isActive &&
+        isLowStock({
+          reorderLevel: part.reorderLevel,
+          stockQuantity: part.stockQuantity,
+        })
+      )
     ) {
       return false;
     }

@@ -1132,6 +1132,8 @@
   "part_status_changed": "Part status updated",
   "part_updated_successfully": "Part updated successfully",
   "parts_inventory": "Parts Inventory",
+  "parts_low_stock_badge": "Restock",
+  "parts_needs_restock_filter": "Needs restock",
   "parts_inventory_desc": "Manage and track your parts inventory",
   "pipeline_done_desc": "Quality checked and ready",
   "pipeline_hold_desc": "Waiting for customer response",

@@ -1132,6 +1132,8 @@
   "part_status_changed": "Statut de la pièce mis à jour",
   "part_updated_successfully": "Pièce mise à jour avec succès",
   "parts_inventory": "Inventaire des pièces",
+  "parts_low_stock_badge": "Réappro.",
+  "parts_needs_restock_filter": "À réapprovisionner",
   "parts_inventory_desc": "Gérer et suivre votre inventaire de pièces",
   "pipeline_done_desc": "Contrôle qualité effectué, prêt",
   "pipeline_hold_desc": "En attente de réponse du client",

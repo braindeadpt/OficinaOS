@@ -53,6 +53,7 @@ export const listPartsQuerySchema = z.object({
   search: z.string().optional(),
   category: z.string().optional(),
   isActive: z.coerce.boolean().optional(),
+  needsRestock: z.coerce.boolean().optional(),
 });
 
 export const togglePartStatusSchema = z.object({
