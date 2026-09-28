@@ -47,6 +47,13 @@ enum PartCategory {
   OTHER
 }
 
+enum PaymentMethod {
+  CASH
+  CARD
+  TRANSFER
+  OTHER
+}
+
 enum FaultCategory {
   WORKMANSHIP
   DEFECTIVE_PART
@@ -102,6 +109,8 @@ enum AuditAction {
   PHOTO_ADDED
   PHOTO_REMOVED
   JOB_UPDATED
+  PAYMENT_ADDED
+  PAYMENT_DELETED
   WARRANTY_RETURN_CREATED
   NOTIFICATION_SENT
   USER_SIGN_IN
@@ -154,6 +163,7 @@ model User {
   notes                JobNote[]
   jobParts             JobPart[]
   jobRepairs           JobRepair[]
+  paymentsCreated      Payment[]   @relation("PaymentCreatedBy")
   auditLogs            AuditLog[]
   conversations        AiConversation[]
   sessions             Session[]
@@ -312,6 +322,7 @@ model Job {
 
   photos             JobPhoto[]
   notes              JobNote[]
+  payments           Payment[]
   partsUsed          JobPart[]
   partsWaiting       JobPartsWaiting[]
   repairs            JobRepair[]
@@ -492,6 +503,32 @@ model JobRepair {
   @@unique([jobId, repairId])
   @@index([jobId])
   @@map("job_repairs")
+}
+
+// ─────────────────────────────────────────────
+// PAYMENTS
+// Multiple partial payments per job; job balance due is
+// computed as (parts + repairs) - deposit - sum(payments.amount).
+// amount snapshotted at time of recording.
+// ─────────────────────────────────────────────
+
+model Payment {
+  id    String @id @default(cuid())
+  jobId String
+  job   Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  method    PaymentMethod
+  amount    Decimal        @db.Decimal(10, 2)
+  reference String?
+  note      String?        @db.Text
+
+  createdById String
+  createdBy   User     @relation("PaymentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now()) @db.Timestamptz
+
+  @@index([jobId])
+  @@index([jobId, createdAt])
+  @@map("payments")
 }
 
 // ─────────────────────────────────────────────

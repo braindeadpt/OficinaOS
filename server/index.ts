@@ -22,6 +22,7 @@ import { healthRoutes } from "./routes/health.js";
 import { jobRoutes } from "./routes/jobs.js";
 import { notificationsRoutes } from "./routes/notifications.js";
 import { partsRoutes } from "./routes/parts.js";
+import { paymentRoutes } from "./routes/payments.js";
 import { receiptRoutes } from "./routes/receipts.js";
 import { repairCatalogRoutes } from "./routes/repairs.js";
 import { reportsRoutes } from "./routes/reports.js";
@@ -136,6 +137,7 @@ app.addHook("onReady", async () => {
 
 app.register(healthRoutes);
 app.register(jobRoutes, { prefix: "/api/jobs" });
+app.register(paymentRoutes, { prefix: "/api/payments" });
 app.register(receiptRoutes, { prefix: "/api/receipts" });
 app.register(partsRoutes, { prefix: "/api/parts" });
 app.register(repairCatalogRoutes, { prefix: "/api/repairs" });

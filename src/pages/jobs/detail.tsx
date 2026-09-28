@@ -8,6 +8,7 @@ import EditCustomerDialog from "@/components/modules/customers/edit-customer-dia
 import CostSummary from "@/components/modules/jobs/cost-summary";
 import JobNotesSection from "@/components/modules/jobs/job-notes-section";
 import JobPartsSection from "@/components/modules/jobs/job-parts-section";
+import JobPaymentsSection from "@/components/modules/jobs/job-payments-section";
 import JobPhotosSection from "@/components/modules/jobs/job-photos-section";
 import JobRepairsSection from "@/components/modules/jobs/job-repairs-section";
 import JobReturnsHistorySection from "@/components/modules/jobs/job-returns-history-section";
@@ -25,6 +26,10 @@ function fmt(n: number, currency: string): string {
     return `${formatCurrency(n, currency)} ${currency}`;
   }
   return formatCurrency(n, currency);
+}
+
+function toNum(v: unknown): number {
+  return typeof v === "number" ? v : Number(v ?? 0);
 }
 
 export default function JobDetailPage() {
@@ -161,18 +166,19 @@ export default function JobDetailPage() {
   }
 
   const partsTotal = (job.partsUsed ?? []).reduce(
-    (s, p) =>
-      s + (typeof p.totalCost === "number" ? p.totalCost : Number(p.totalCost)),
+    (s, p) => s + toNum(p.totalCost),
     0
   );
   const repairsTotal = (job.repairs ?? []).reduce(
-    (s, r) => s + (typeof r.price === "number" ? r.price : Number(r.price)),
+    (s, r) => s + toNum(r.price),
     0
   );
-  const deposit =
-    typeof job.depositAmount === "number"
-      ? job.depositAmount
-      : Number(job.depositAmount ?? 0);
+  const deposit = toNum(job.depositAmount);
+  const paidTotal = toNum(job.paidTotal);
+  const balanceDue = Math.max(
+    0,
+    partsTotal + repairsTotal - deposit - paidTotal
+  );
   const finalCost = partsTotal + repairsTotal - deposit;
   const jobMargin = (job as Record<string, unknown>).margin as
     | number
@@ -377,6 +383,15 @@ export default function JobDetailPage() {
         </div>
       </div>
 
+      {/* ── Payments ── */}
+      <div className="mt-8 rounded-2xl bg-surface-container p-6">
+        <JobPaymentsSection
+          balanceDue={balanceDue}
+          jobId={job.id}
+          onChanged={() => fetchJob()}
+        />
+      </div>
+
       {/* ── Waiting parts ── */}
       <div className="mt-8 rounded-2xl bg-surface-container p-6">
         <JobWaitingPartsSection job={job} onChanged={() => fetchJob()} />
@@ -396,9 +411,11 @@ export default function JobDetailPage() {
 
       <div className="mt-8">
         <CostSummary
+          balanceDue={balanceDue}
           deposit={deposit}
           finalCost={finalCost}
           margin={jobMargin}
+          paidTotal={paidTotal}
           partsTotal={partsTotal}
           repairsTotal={repairsTotal}
         />

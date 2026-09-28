@@ -5,6 +5,7 @@ import type {
   JobPart,
   JobPartsWaiting,
   JobRepair,
+  Payment,
 } from "@shared/types";
 import { create } from "zustand";
 import i18n from "@/i18n";
@@ -31,6 +32,10 @@ interface JobsState {
       supplier?: string;
     }
   ) => Promise<JobPart>;
+  addPayment: (
+    jobId: string,
+    data: { method: string; amount: number; reference?: string; note?: string }
+  ) => Promise<Payment>;
   addRepair: (
     jobId: string,
     data: {
@@ -83,6 +88,9 @@ interface JobsState {
   }) => Promise<void>;
   fetchMetrics: () => Promise<void>;
   fetchNotes: (jobId: string) => Promise<JobNote[]>;
+  fetchPayments: (
+    jobId: string
+  ) => Promise<{ paidTotal: number; payments: Payment[] }>;
   isCreatingJob: boolean;
   isLoadingJobs: boolean;
   isLoadingMetrics: boolean;
@@ -90,6 +98,7 @@ interface JobsState {
   metrics: JobMetrics | null;
   nextCursor: string | null;
   removePart: (jobId: string, partId: string) => Promise<void>;
+  removePayment: (jobId: string, paymentId: string) => Promise<void>;
   removeRepair: (jobId: string, repairId: string) => Promise<void>;
   removeWaitingPart: (jobId: string, waitingId: string) => Promise<void>;
   totalCount: number;
@@ -351,6 +360,41 @@ export const useJobsStore = create<JobsState>((set) => ({
         i18n.t("errors.remove_waiting_part")
       );
       set({ error: message });
+    }
+  },
+
+  fetchPayments: async (jobId) => {
+    set({ error: null });
+    try {
+      const res = await api.get(`/payments/${jobId}/payments`);
+      return res.data as { paidTotal: number; payments: Payment[] };
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, i18n.t("errors.fetch_payments"));
+      set({ error: message });
+      throw new Error(message);
+    }
+  },
+
+  addPayment: async (jobId, data) => {
+    set({ error: null });
+    try {
+      const res = await api.post(`/payments/${jobId}/payments`, data);
+      return res.data as Payment;
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, i18n.t("errors.add_payment"));
+      set({ error: message });
+      throw new Error(message);
+    }
+  },
+
+  removePayment: async (jobId, paymentId) => {
+    set({ error: null });
+    try {
+      await api.delete(`/payments/${jobId}/payments/${paymentId}`);
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, i18n.t("errors.remove_payment"));
+      set({ error: message });
+      throw new Error(message);
     }
   },
 

@@ -7,9 +7,11 @@ function fmt(n: number): string {
 }
 
 interface CostSummaryProps {
+  balanceDue?: number;
   deposit: number;
   finalCost: number;
   margin?: number;
+  paidTotal?: number;
   partsTotal: number;
   repairsTotal: number;
 }
@@ -20,6 +22,8 @@ export default function CostSummary({
   partsTotal,
   repairsTotal,
   margin,
+  paidTotal,
+  balanceDue,
 }: CostSummaryProps) {
   const { t } = useTranslation();
   return (
@@ -66,6 +70,30 @@ export default function CostSummary({
             </span>
           </div>
         </div>
+        {paidTotal !== undefined && paidTotal > 0 && (
+          <div className="mt-2 flex items-baseline justify-between">
+            <span className="font-label text-[11px] text-on-surface-variant uppercase tracking-widest">
+              {t("payments.paid_total")}
+            </span>
+            <span className="font-body font-medium text-primary text-sm">
+              -{fmt(paidTotal)}
+            </span>
+          </div>
+        )}
+        {balanceDue !== undefined && (
+          <div className="mt-2 flex items-baseline justify-between">
+            <span className="font-label text-[11px] text-on-surface-variant uppercase tracking-widest">
+              {t("payments.balance_due")}
+            </span>
+            <span
+              className={`font-extrabold font-headline text-lg tracking-tight ${
+                balanceDue > 0 ? "text-error" : "text-primary"
+              }`}
+            >
+              {fmt(balanceDue)}
+            </span>
+          </div>
+        )}
         {margin !== undefined && (
           <div className="mt-5 pt-3">
             <div className="flex items-baseline justify-between">
