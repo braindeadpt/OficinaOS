@@ -109,13 +109,21 @@ export default function Sidebar() {
 
   return (
     <aside className="fixed start-0 top-0 z-40 hidden h-screen w-64 flex-col bg-surface-container-low p-4 lg:flex">
-      <div className="mb-8 px-2 py-6">
-        <h1 className="font-black font-headline text-primary text-xl tracking-tight">
-          OficinaOS
-        </h1>
-        <p className="font-medium text-on-surface-variant text-xs tracking-wide">
-          {t("app_tagline")}
-        </p>
+      <div className="mb-8 flex items-center gap-3 px-2 py-6">
+        <img
+          alt=""
+          aria-hidden="true"
+          className="h-10 w-10 shrink-0"
+          src="/logo-mark.svg"
+        />
+        <div>
+          <h1 className="font-black font-headline text-primary text-xl tracking-tight">
+            OficinaOS
+          </h1>
+          <p className="font-medium text-on-surface-variant text-xs tracking-wide">
+            {t("app_tagline")}
+          </p>
+        </div>
       </div>
 
       <nav className="flex-1 space-y-1.5">

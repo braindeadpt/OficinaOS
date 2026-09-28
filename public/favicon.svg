@@ -1,1 +1,23 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#1e40af"/><text x="16" y="23" font-family="system-ui,sans-serif" font-size="20" font-weight="bold" fill="white" text-anchor="middle">R</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0056d2"/>
+      <stop offset="1" stop-color="#0040a1"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="7" fill="url(#g)"/>
+  <g transform="translate(16 16)">
+    <circle r="7" fill="none" stroke="#ffffff" stroke-width="4"/>
+    <g fill="#ffffff">
+      <rect x="-1.7" y="-11" width="3.4" height="4" rx="0.8"/>
+      <rect x="-1.7" y="-11" width="3.4" height="4" rx="0.8" transform="rotate(45)"/>
+      <rect x="-1.7" y="-11" width="3.4" height="4" rx="0.8" transform="rotate(90)"/>
+      <rect x="-1.7" y="-11" width="3.4" height="4" rx="0.8" transform="rotate(135)"/>
+      <rect x="-1.7" y="-11" width="3.4" height="4" rx="0.8" transform="rotate(180)"/>
+      <rect x="-1.7" y="-11" width="3.4" height="4" rx="0.8" transform="rotate(225)"/>
+      <rect x="-1.7" y="-11" width="3.4" height="4" rx="0.8" transform="rotate(270)"/>
+      <rect x="-1.7" y="-11" width="3.4" height="4" rx="0.8" transform="rotate(315)"/>
+    </g>
+    <circle r="2.4" fill="#fbbf24"/>
+  </g>
+</svg>

@@ -365,14 +365,12 @@ export default function LoginPage() {
     <main className="flex min-h-dvh w-full flex-col bg-background font-body text-on-surface antialiased">
       <header className="flex shrink-0 items-center justify-between border-outline-variant/30 border-b px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-            <span
-              aria-hidden="true"
-              className="material-symbols-outlined text-lg text-on-primary"
-            >
-              precision_manufacturing
-            </span>
-          </div>
+          <img
+            alt=""
+            aria-hidden="true"
+            className="h-9 w-9"
+            src="/logo-mark.svg"
+          />
           <div>
             <h1 className="font-bold font-headline text-lg text-on-surface tracking-tight">
               OficinaOS

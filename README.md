@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="public/logo.svg" alt="OficinaOS" width="280" />
+</p>
+
 # OficinaOS
 
 Sistema de gestão para oficinas de reparação de telemóveis — loja única, self-hosted, sem faturação. Regista a receção do equipamento, acompanha a reparação e entrega ao cliente, tudo numa única app acessível pelo browser.

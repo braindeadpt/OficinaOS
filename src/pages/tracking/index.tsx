@@ -83,9 +83,17 @@ function LookupForm({
     <div className="flex min-h-dvh flex-col bg-background">
       <nav className="sticky top-0 z-50 w-full bg-background">
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4">
-          <span className="font-bold font-headline text-2xl text-primary-container tracking-tight">
-            OficinaOS
-          </span>
+          <div className="flex items-center gap-2.5">
+            <img
+              alt=""
+              aria-hidden="true"
+              className="h-8 w-8"
+              src="/logo-mark.svg"
+            />
+            <span className="font-bold font-headline text-2xl text-primary-container tracking-tight">
+              OficinaOS
+            </span>
+          </div>
           <LanguageSwitcher />
         </div>
       </nav>
@@ -760,9 +768,17 @@ export default function TrackingPage() {
       <div className="flex min-h-dvh flex-col bg-background">
         <nav className="sticky top-0 z-50 w-full bg-background">
           <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4">
-            <span className="font-bold font-headline text-2xl text-primary-container tracking-tight">
-              OficinaOS
-            </span>
+            <div className="flex items-center gap-2.5">
+              <img
+                alt=""
+                aria-hidden="true"
+                className="h-8 w-8"
+                src="/logo-mark.svg"
+              />
+              <span className="font-bold font-headline text-2xl text-primary-container tracking-tight">
+                OficinaOS
+              </span>
+            </div>
             <LanguageSwitcher />
           </div>
         </nav>
@@ -798,9 +814,17 @@ export default function TrackingPage() {
       <div aria-busy="true" className="flex min-h-dvh flex-col bg-background">
         <nav className="sticky top-0 z-50 w-full bg-background">
           <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4">
-            <span className="font-bold font-headline text-2xl text-primary-container tracking-tight">
-              OficinaOS
-            </span>
+            <div className="flex items-center gap-2.5">
+              <img
+                alt=""
+                aria-hidden="true"
+                className="h-8 w-8"
+                src="/logo-mark.svg"
+              />
+              <span className="font-bold font-headline text-2xl text-primary-container tracking-tight">
+                OficinaOS
+              </span>
+            </div>
             <LanguageSwitcher />
           </div>
         </nav>
