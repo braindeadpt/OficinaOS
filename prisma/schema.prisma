@@ -806,6 +806,7 @@ model Verification {
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt  DateTime @db.Timestamptz
   createdAt  DateTime @default(now()) @db.Timestamptz
+  updatedAt  DateTime @default(now()) @db.Timestamptz
 
   @@index([identifier])
   @@index([userId])
