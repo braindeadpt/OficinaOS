@@ -114,7 +114,9 @@ export default function Sidebar() {
           alt=""
           aria-hidden="true"
           className="h-10 w-10 shrink-0"
+          height={40}
           src="/logo-mark.svg"
+          width={40}
         />
         <div>
           <h1 className="font-black font-headline text-primary text-xl tracking-tight">

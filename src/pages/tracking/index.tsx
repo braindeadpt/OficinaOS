@@ -88,7 +88,9 @@ function LookupForm({
               alt=""
               aria-hidden="true"
               className="h-8 w-8"
+              height={32}
               src="/logo-mark.svg"
+              width={32}
             />
             <span className="font-bold font-headline text-2xl text-primary-container tracking-tight">
               OficinaOS
@@ -773,7 +775,9 @@ export default function TrackingPage() {
                 alt=""
                 aria-hidden="true"
                 className="h-8 w-8"
+                height={32}
                 src="/logo-mark.svg"
+                width={32}
               />
               <span className="font-bold font-headline text-2xl text-primary-container tracking-tight">
                 OficinaOS
@@ -819,7 +823,9 @@ export default function TrackingPage() {
                 alt=""
                 aria-hidden="true"
                 className="h-8 w-8"
+                height={32}
                 src="/logo-mark.svg"
+                width={32}
               />
               <span className="font-bold font-headline text-2xl text-primary-container tracking-tight">
                 OficinaOS
