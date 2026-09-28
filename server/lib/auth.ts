@@ -16,7 +16,6 @@ import { sendPasswordResetEmail } from "./email.js";
 export function createAuth(prisma: PrismaClient) {
   const env = loadEnv();
   const { apiUrl, trustedOrigins } = resolveUrls(env);
-  const isProd = env.NODE_ENV === "production";
 
   return betterAuth({
     baseURL: apiUrl,
