@@ -311,6 +311,13 @@ describe("FRONT_DESK role", () => {
     };
     expect(payments).toEqual(["view", "create", "delete"]);
   });
+
+  it("has view and create sales access", () => {
+    const { sales } = frontDeskRole.statements as {
+      sales: readonly string[];
+    };
+    expect(sales).toEqual(["view", "create"]);
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -62,6 +62,12 @@ const MORE_ITEMS: NavItem[] = [
     to: "/parts",
   },
   {
+    icon: "point_of_sale",
+    labelKey: "pos.nav_label",
+    perm: { sales: ["view"] },
+    to: "/pos",
+  },
+  {
     icon: "undo",
     labelKey: "returns_nav_label",
     perm: { returns: ["viewSelf"] },

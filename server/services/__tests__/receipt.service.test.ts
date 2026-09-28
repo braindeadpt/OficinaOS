@@ -1,6 +1,10 @@
 import type { PrismaClient } from "@generated/client";
 import { describe, expect, it, vi } from "vitest";
-import { renderLabelHtml, renderReceiptHtml } from "../receipt.service.js";
+import {
+  renderLabelHtml,
+  renderReceiptHtml,
+  renderSaleReceiptHtml,
+} from "../receipt.service.js";
 
 const QR_BASE64_RE = /<img[^>]+src="data:image\/png;base64,[A-Za-z0-9+/=]+"/;
 
@@ -273,5 +277,105 @@ describe("renderReceiptHtml", () => {
     const html = await renderReceiptHtml(makePrisma(), job, "https://x.y");
     expect(html).not.toContain("<b>X</b>");
     expect(html).toContain("&lt;b&gt;");
+  });
+});
+
+describe("renderSaleReceiptHtml", () => {
+  const baseSale = {
+    saleCode: "SALE-2026-000001",
+    createdAt: new Date("2026-09-28T12:00:00Z"),
+    customer: null,
+    createdBy: { name: "Diana" },
+    items: [
+      { name: "iPhone 14 Screen", quantity: 1, lineTotal: 3500 },
+      { name: "Tempered glass", quantity: 2, lineTotal: 1000 },
+    ],
+    payments: [{ amount: 4500, method: "CASH" }],
+    total: 4500,
+  };
+
+  it("renders sale code, items, total and payment method", async () => {
+    const html = await renderSaleReceiptHtml(
+      makePrisma("POS Shop"),
+      baseSale,
+      "https://x.y"
+    );
+    expect(html).toContain("POS Shop");
+    expect(html).toContain("SALE-2026-000001");
+    expect(html).toContain("iPhone 14 Screen ×1");
+    expect(html).toContain("4,500");
+    expect(html).toContain("Paid (CASH)");
+    expect(html).toContain("Served by");
+  });
+
+  it("shows customer row only when a customer is linked", async () => {
+    const withCustomer = {
+      ...baseSale,
+      customer: { name: "John", phone: "+1555000111" },
+    };
+    const html = await renderSaleReceiptHtml(
+      makePrisma(),
+      withCustomer,
+      "https://x.y"
+    );
+    expect(html).toContain("John");
+    const plain = await renderSaleReceiptHtml(
+      makePrisma(),
+      baseSale,
+      "https://x.y"
+    );
+    expect(plain).not.toContain("Customer");
+  });
+
+  it("renders multiple payment lines with references", async () => {
+    const multi = {
+      ...baseSale,
+      payments: [
+        { amount: 2000, method: "CASH" },
+        { amount: 2500, method: "CARD", reference: "tx-77" },
+      ],
+    };
+    const html = await renderSaleReceiptHtml(
+      makePrisma(),
+      multi,
+      "https://x.y"
+    );
+    expect(html).toContain("Paid (CASH)");
+    expect(html).toContain("Paid (CARD · tx-77)");
+    expect(html).toContain("2,000");
+    expect(html).toContain("2,500");
+  });
+
+  it("escapes user-supplied item names and footer", async () => {
+    const prisma = {
+      shopSettings: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "default",
+          shopName: "Shop",
+          receiptFooter: "<b>Thanks</b>",
+        }),
+      },
+    } as unknown as PrismaClient;
+    const sale = {
+      ...baseSale,
+      items: [{ name: "<script>x</script>", quantity: 1, lineTotal: 10 }],
+    };
+    const html = await renderSaleReceiptHtml(prisma, sale, "https://x.y");
+    expect(html).not.toContain("<script>x</script>");
+    expect(html).toContain("&lt;b&gt;Thanks&lt;/b&gt;");
+  });
+
+  it("includes receipt footer when set", async () => {
+    const prisma = {
+      shopSettings: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "default",
+          shopName: "Shop",
+          receiptFooter: "Warranty 30 days",
+        }),
+      },
+    } as unknown as PrismaClient;
+    const html = await renderSaleReceiptHtml(prisma, baseSale, "https://x.y");
+    expect(html).toContain("Warranty 30 days");
   });
 });

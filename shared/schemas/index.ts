@@ -138,6 +138,8 @@ export {
 } from "./repair-catalog.schema";
 export type { ReportsQueryInput } from "./reports.schema";
 export { reportsQuerySchema } from "./reports.schema";
+export type { CreateSaleInput } from "./sale.schema";
+export { createSaleSchema } from "./sale.schema";
 export type {
   UpdateAiSettingsInput,
   UpdateNotificationTemplateInput,

@@ -164,6 +164,7 @@ model User {
   jobParts             JobPart[]
   jobRepairs           JobRepair[]
   paymentsCreated      Payment[]   @relation("PaymentCreatedBy")
+  salesCreated         Sale[]      @relation("SaleCreatedBy")
   auditLogs            AuditLog[]
   conversations        AiConversation[]
   sessions             Session[]
@@ -214,6 +215,7 @@ model Customer {
   updatedAt DateTime @updatedAt @db.Timestamptz
 
   jobs Job[]
+  sales Sale[]
 
   @@index([email])
   @@map("customers")
@@ -267,6 +269,81 @@ model JobCounter {
   lastSeq Int @default(0)
 
   @@map("job_counters")
+}
+
+// ─────────────────────────────────────────────────
+// SALE COUNTER (POS)
+// year is the natural key; sequential SALE codes.
+// ─────────────────────────────────────────────────
+
+model SaleCounter {
+  year    Int @id
+  lastSeq Int @default(0)
+
+  @@map("sale_counters")
+}
+
+// ─────────────────────────────────────────────────
+// SALE (POS — counter sales without a repair job)
+// Items and payments are snapshotted at checkout.
+// total = sum(lineTotal of items); payments are the
+// applied amounts and must sum to total.
+// ─────────────────────────────────────────────────
+
+model Sale {
+  id       String @id @default(cuid())
+  saleCode String @unique
+
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  total Decimal @db.Decimal(10, 2)
+
+  createdById String
+  createdBy   User     @relation("SaleCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now()) @db.Timestamptz
+
+  items    SaleItem[]
+  payments SalePayment[]
+
+  @@index([createdAt])
+  @@index([customerId])
+  @@index([createdById])
+  @@map("sales")
+}
+
+model SaleItem {
+  id     String @id @default(cuid())
+  saleId String
+  sale   Sale   @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  partId String?
+  part   PartsCatalog? @relation(fields: [partId], references: [id], onDelete: SetNull)
+
+  // Snapshotted at checkout.
+  name      String
+  category  PartCategory
+  unitPrice Decimal         @db.Decimal(10, 2)
+  quantity  Int
+  lineTotal Decimal         @db.Decimal(10, 2)
+
+  @@index([saleId])
+  @@index([partId])
+  @@map("sale_items")
+}
+
+model SalePayment {
+  id     String @id @default(cuid())
+  saleId String
+  sale   Sale   @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  method    PaymentMethod
+  amount    Decimal        @db.Decimal(10, 2)
+  reference String?
+  createdAt DateTime       @default(now()) @db.Timestamptz
+
+  @@index([saleId])
+  @@map("sale_payments")
 }
 
 // ─────────────────────────────────────────────
@@ -422,6 +499,7 @@ model PartsCatalog {
   updatedAt     DateTime     @updatedAt @db.Timestamptz
 
   jobParts JobPart[]
+  saleItems SaleItem[]
 
   @@index([name])
   @@index([category])
