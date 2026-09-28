@@ -1,6 +1,7 @@
 import type {
   InsightsReportDTO,
   OperationsReportDTO,
+  PartsConsumptionReportDTO,
   ReturnsReportDTO,
   RevenueReportDTO,
   TimeRangePreset,
@@ -14,10 +15,16 @@ interface ReportsState {
   customTo: string | null;
   fetchInsights: () => Promise<void>;
   fetchOperations: () => Promise<void>;
+  fetchPartsConsumption: () => Promise<void>;
   fetchReturns: () => Promise<void>;
   fetchRevenue: () => Promise<void>;
   insights: { data?: InsightsReportDTO; loading: boolean; error?: string };
   operations: { data?: OperationsReportDTO; loading: boolean; error?: string };
+  partsConsumption: {
+    data?: PartsConsumptionReportDTO;
+    loading: boolean;
+    error?: string;
+  };
   range: TimeRangePreset;
   returns: { data?: ReturnsReportDTO; loading: boolean; error?: string };
   revenue: { data?: RevenueReportDTO; loading: boolean; error?: string };
@@ -38,6 +45,7 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
   customTo: null,
   revenue: { loading: false },
   operations: { loading: false },
+  partsConsumption: { loading: false },
   insights: { loading: false },
   returns: { loading: false },
 
@@ -94,6 +102,34 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
       set({
         insights: {
           ...get().insights,
+          loading: false,
+          error: getErrorMessage(err, i18n.t("errors.fetch_reports")),
+        },
+      });
+    }
+  },
+
+  fetchPartsConsumption: async () => {
+    set({
+      partsConsumption: {
+        ...get().partsConsumption,
+        loading: true,
+        error: undefined,
+      },
+    });
+    try {
+      const q = queryParams(get());
+      const res = await api.get(`/reports/parts-consumption${q}`);
+      set({
+        partsConsumption: {
+          data: res.data as PartsConsumptionReportDTO,
+          loading: false,
+        },
+      });
+    } catch (err: unknown) {
+      set({
+        partsConsumption: {
+          ...get().partsConsumption,
           loading: false,
           error: getErrorMessage(err, i18n.t("errors.fetch_reports")),
         },

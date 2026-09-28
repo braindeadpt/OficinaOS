@@ -138,6 +138,32 @@ export function groupJobRepairs(
   });
 }
 
+export function groupJobPartsForConsumption(
+  prisma: DbClient,
+  where: Prisma.JobPartWhereInput
+) {
+  return prisma.jobPart.groupBy({
+    by: ["partName", "category"],
+    where,
+    _count: { _all: true },
+    _avg: { unitPrice: true },
+    _sum: { quantity: true, totalCost: true },
+  });
+}
+
+export function groupSaleItemsForConsumption(
+  prisma: DbClient,
+  where: Prisma.SaleItemWhereInput
+) {
+  return prisma.saleItem.groupBy({
+    by: ["name", "category"],
+    where,
+    _count: { _all: true },
+    _avg: { unitPrice: true },
+    _sum: { quantity: true, lineTotal: true },
+  });
+}
+
 export function findAuditLogsForStatus(
   prisma: DbClient,
   where: AuditLogWhereInput,

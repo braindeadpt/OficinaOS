@@ -1328,7 +1328,21 @@
     "ttr_31_60d": "31 à 60 jours",
     "ttr_61_90d": "61 à 90 jours",
     "ttr_90d_plus": "90+ jours",
-    "warrantyCostFootnote": "Exclut le coût de la main d'œuvre (non suivi)"
+    "warrantyCostFootnote": "Exclut le coût de la main d'œuvre (non suivi)",
+    "parts": "Pièces",
+    "partsConsumed": "Pièces consommées",
+    "distinctParts": "Pièces distinctes",
+    "topParts": "Top pièces utilisées",
+    "partName": "Pièce",
+    "qtyUsed": "Qté",
+    "trend": "Tendance vs précédent",
+    "usageLines": "Lignes d'usage",
+    "avgUnitCost": "Coût unit. moyen",
+    "totalCost": "Coût total",
+    "noTrend": "—",
+    "partsConsumptionScopeAll": "Inclut les pièces des réparations et les ventes d'accessoires au POS.",
+    "partsConsumptionScopeJobs": "Pièces des réparations uniquement.",
+    "partsConsumptionEmpty": "Aucune pièce consommée sur cette période."
   },
   "repair_modal": {
     "title": "Ajouter un nouveau service",

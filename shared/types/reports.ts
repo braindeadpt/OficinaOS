@@ -123,3 +123,29 @@ export interface ReturnsReportDTO {
   summary: ReturnsSummary;
   ttrDistribution: TtrDistributionRow[];
 }
+
+export interface PartConsumptionRow {
+  avgUnitCost: number;
+  category: string;
+  partId: string | null;
+  partName: string;
+  quantity: number;
+  /** Percentage change of quantity vs the previous equivalent period. */
+  quantityChangePercent?: number;
+  totalCost: number;
+  usageCount: number;
+}
+
+export interface PartsConsumptionSummary {
+  distinctParts: number;
+  totalCost: number;
+  totalQuantity: number;
+  totalQuantityChangePercent?: number;
+}
+
+export interface PartsConsumptionReportDTO {
+  /** True when POS accessory sales (sale_items) are aggregated too. */
+  includePosSales: boolean;
+  summary: PartsConsumptionSummary;
+  topParts: PartConsumptionRow[];
+}

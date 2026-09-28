@@ -5,6 +5,7 @@ import { useCan } from "@/hooks/use-can";
 import { useReportsStore } from "@/stores/reports";
 import InsightsTab from "./insights-tab";
 import OperationsTab from "./operations-tab";
+import PartsConsumptionTab from "./parts-consumption-tab";
 import ReturnsTab from "./returns-tab";
 import RevenueTab from "./revenue-tab";
 
@@ -15,7 +16,7 @@ const RANGE_OPTIONS: { key: TimeRangePreset; label: string }[] = [
   { key: "year", label: "reports.year" },
 ];
 
-type TabKey = "revenue" | "operations" | "returns" | "insights";
+type TabKey = "revenue" | "operations" | "returns" | "insights" | "parts";
 
 export default function ReportsPage() {
   const { t } = useTranslation();
@@ -25,10 +26,12 @@ export default function ReportsPage() {
   const fetchOperations = useReportsStore((s) => s.fetchOperations);
   const fetchInsights = useReportsStore((s) => s.fetchInsights);
   const fetchReturns = useReportsStore((s) => s.fetchReturns);
+  const fetchPartsConsumption = useReportsStore((s) => s.fetchPartsConsumption);
 
   const canViewShop = useCan({ reports: ["viewShop"] });
   const canViewSelf = useCan({ reports: ["viewSelf"] });
   const canViewReturns = useCan({ returns: ["viewSelf"] });
+  const canViewPartsCost = useCan({ parts: ["viewCost"] });
 
   const visibleTabs = useMemo<TabKey[]>(() => {
     const tabs: TabKey[] = [];
@@ -44,8 +47,11 @@ export default function ReportsPage() {
     if (canViewShop) {
       tabs.push("insights");
     }
+    if (canViewPartsCost) {
+      tabs.push("parts");
+    }
     return tabs;
-  }, [canViewShop, canViewSelf, canViewReturns]);
+  }, [canViewShop, canViewSelf, canViewReturns, canViewPartsCost]);
 
   const [activeTab, setActiveTab] = useState<TabKey | null>(
     visibleTabs[0] ?? null
@@ -67,6 +73,9 @@ export default function ReportsPage() {
     if (activeTab === "returns") {
       fetchReturns();
     }
+    if (activeTab === "parts") {
+      fetchPartsConsumption();
+    }
   }, [
     activeTab,
     range,
@@ -74,6 +83,7 @@ export default function ReportsPage() {
     fetchOperations,
     fetchInsights,
     fetchReturns,
+    fetchPartsConsumption,
   ]);
 
   useEffect(() => {
@@ -163,6 +173,7 @@ export default function ReportsPage() {
       {activeTab === "operations" && <OperationsTab />}
       {activeTab === "returns" && <ReturnsTab />}
       {activeTab === "insights" && <InsightsTab />}
+      {activeTab === "parts" && <PartsConsumptionTab />}
     </div>
   );
 }
