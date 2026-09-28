@@ -5,6 +5,7 @@ import { initReactI18next } from "react-i18next";
 import ar from "./locales/ar.json";
 import en from "./locales/en.json";
 import fr from "./locales/fr.json";
+import pt from "./locales/pt.json";
 
 const i18n = i18next.use(LanguageDetector).use(initReactI18next);
 
@@ -26,6 +27,7 @@ i18n.init({
     en: { translation: en },
     ar: { translation: ar },
     fr: { translation: fr },
+    pt: { translation: pt },
   },
   fallbackLng: "en",
   detection: {

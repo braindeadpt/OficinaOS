@@ -3,7 +3,11 @@ import path from "node:path";
 
 const LOCALES_DIR = path.join(process.cwd(), "src/i18n/locales");
 const EN_PATH = path.join(LOCALES_DIR, "en.json");
-const TARGET_LANGS = ["ar", "fr"];
+const TARGET_LANGS = ["ar", "fr", "pt"];
+
+// Google Translate target codes when they differ from the locale filename
+// (e.g. "pt" locale file should translate to European Portuguese, not pt-BR)
+const GOOGLE_TARGET_OVERRIDE: Record<string, string> = { pt: "pt-PT" };
 
 interface TranslationMap {
   [key: string]: string | TranslationMap;
@@ -163,7 +167,7 @@ export async function syncKeys(
       reporter.info(`Translating new key: "${key}" for ${lang}...`);
       const translatedValue = await translateText(
         String(sourceValue),
-        lang,
+        GOOGLE_TARGET_OVERRIDE[lang] ?? lang,
         reporter
       );
       if (hasComplexIcuSyntax(String(sourceValue))) {
