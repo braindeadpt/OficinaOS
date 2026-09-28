@@ -56,9 +56,18 @@ if not exist .env (
     echo        Ficheiro .env ja existe — mantido.
 )
 
-REM ── 3. Construir e arrancar ────────────────────────────────────────────
-echo [3/4] A instalar o OficinaOS (primeira vez demora ~5 min)...
-docker compose up -d --build
+REM ── 3. Arrancar: imagem pronta (rapido) ou build local (fallback) ──────
+echo [3/4] A instalar o OficinaOS...
+set "COMPOSE_FILE=docker-compose.app.yml"
+docker compose -f docker-compose.app.yml pull >nul 2>&1
+if errorlevel 1 (
+    set "COMPOSE_FILE=docker-compose.yml"
+    echo        Imagem indisponivel — a construir localmente (~5 min)...
+    docker compose up -d --build
+) else (
+    echo        Imagem pronta descarregada. A arrancar...
+    docker compose -f docker-compose.app.yml up -d
+)
 if errorlevel 1 (
     echo.
     echo  ERRO: a instalacao falhou. Corre "docker compose logs" para ver o erro.
@@ -69,7 +78,7 @@ if errorlevel 1 (
 REM ── 4. Utilizador admin + dados iniciais (seed e idempotente) ──────────
 echo [4/4] A preparar a base de dados...
 timeout /t 8 /nobreak >nul
-docker compose exec -T app bun run db:seed >nul 2>&1
+docker compose -f %COMPOSE_FILE% exec -T app bun run db:seed >nul 2>&1
 
 REM ── Fim ────────────────────────────────────────────────────────────────
 echo.

@@ -13,7 +13,8 @@ if errorlevel 1 (
     docker info >nul 2>&1
     if errorlevel 1 goto esperar
 )
-docker compose up -d >nul
+docker compose -f docker-compose.app.yml up -d >nul 2>&1
+if errorlevel 1 docker compose up -d >nul 2>&1
 if errorlevel 1 (
     echo ERRO ao iniciar. Se nunca instalaste, corre primeiro o INSTALAR.bat
     pause

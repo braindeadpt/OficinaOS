@@ -1,0 +1,37 @@
+# docker-compose.app.yml — deployment com imagem pré-construída (GHCR).
+# Usado pelo INSTALAR.bat: pull em segundos, sem build local.
+# Para desenvolvimento/build local usa docker-compose.yml.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: reparilo
+      POSTGRES_PASSWORD: reparilo
+      POSTGRES_DB: reparilo
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reparilo -d reparilo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    image: ghcr.io/braindeadpt/oficinaos:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "4000:4000"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://reparilo:reparilo@db:5432/reparilo
+    volumes:
+      - uploads:/app/uploads
+
+volumes:
+  pgdata:
+  uploads:
