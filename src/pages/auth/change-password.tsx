@@ -9,6 +9,8 @@ export default function ChangePasswordPage() {
   const navigate = useNavigate();
   const logout = useAuthStore((s) => s.logout);
 
+  const currentUsername = useAuthStore((s) => s.user?.username) ?? "";
+  const [username, setUsername] = useState(currentUsername);
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -32,12 +34,24 @@ export default function ChangePasswordPage() {
       return;
     }
 
+    const trimmedUsername = username.trim();
+
     setLoading(true);
     try {
-      await api.post("/auth/change-password", { oldPassword, newPassword });
+      await api.post("/auth/change-password", {
+        oldPassword,
+        newPassword,
+        ...(trimmedUsername && trimmedUsername !== currentUsername
+          ? { username: trimmedUsername }
+          : {}),
+      });
       useAuthStore.setState((state) => ({
         user: state.user
-          ? { ...state.user, mustChangePassword: false }
+          ? {
+              ...state.user,
+              mustChangePassword: false,
+              username: trimmedUsername || state.user.username,
+            }
           : state.user,
         isAuthenticated: true,
         isLoading: false,
@@ -77,6 +91,31 @@ export default function ChangePasswordPage() {
         )}
 
         <form className="space-y-5" onSubmit={handleSubmit}>
+          <div className="space-y-1.5">
+            <label
+              className="block font-extrabold text-on-surface-variant text-xs uppercase tracking-wide"
+              htmlFor="username"
+            >
+              {t("auth_username")}
+            </label>
+            <div className="group relative">
+              <span className="material-symbols-outlined absolute start-4 top-1/2 -translate-y-1/2 text-on-surface-variant transition-colors group-focus-within:text-primary">
+                person
+              </span>
+              <input
+                autoComplete="username"
+                className="w-full rounded-xl bg-surface-container-highest py-3.5 ps-12 pe-4 font-medium transition-all placeholder:text-outline-variant focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary/20"
+                id="username"
+                name="username"
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder={t("auth_username_placeholder")}
+                required
+                type="text"
+                value={username}
+              />
+            </div>
+          </div>
+
           <div className="space-y-1.5">
             <label
               className="block font-extrabold text-on-surface-variant text-xs uppercase tracking-wide"

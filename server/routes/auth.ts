@@ -19,6 +19,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
           properties: {
             oldPassword: { type: "string" },
             newPassword: { type: "string", minLength: 8 },
+            username: { type: "string", minLength: 3, maxLength: 50 },
           },
         },
       },
@@ -41,13 +42,14 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
-      const { oldPassword, newPassword } = parsed.data;
+      const { oldPassword, newPassword, username } = parsed.data;
 
       const result = await changePasswordService(
         app.prisma,
         session.user.id,
         oldPassword,
-        newPassword
+        newPassword,
+        username
       );
 
       return reply.send(result);

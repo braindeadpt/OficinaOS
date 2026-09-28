@@ -16,7 +16,8 @@ $ip = (Get-NetIPAddress -AddressFamily IPv4 |
 
 if (-not $ip) { $ip = "localhost" }
 
-$adminPass = New-Secret 20
+# Credencial inicial fixa — a app obriga a definir novo user + password no 1o login
+$adminPass = "braindead"
 
 $envContent = @"
 # OficinaOS — gerado automaticamente pelo instalador. NAO partilhar.

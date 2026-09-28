@@ -61,7 +61,7 @@ docker compose up -d --build
 docker compose exec app bun run db:seed   # só na 1ª vez
 ```
 
-Depois abre `http://<IP-da-máquina>:4000` (ex.: `http://192.168.1.33:4000`) e inicia sessão com **username `admin`** e a `SEED_ADMIN_PASSWORD` que definiste — a app obriga a trocar a palavra-passe no primeiro login.
+Depois abre `http://<IP-da-máquina>:4000` (ex.: `http://192.168.1.33:4000`) e inicia sessão com **`admin` / `braindead`** — a app obriga a definir novo utilizador e nova palavra-passe no primeiro login.
 
 ### Comandos Docker
 

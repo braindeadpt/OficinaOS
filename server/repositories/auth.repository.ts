@@ -28,3 +28,21 @@ export function updateMustChangePassword(
     data: { mustChangePassword: value },
   });
 }
+
+export function findUserByUsername(prisma: DbClient, username: string) {
+  return prisma.user.findFirst({
+    where: { username },
+    select: { id: true },
+  });
+}
+
+export function updateUsername(
+  prisma: DbClient,
+  userId: string,
+  username: string
+) {
+  return prisma.user.update({
+    where: { id: userId },
+    data: { username },
+  });
+}

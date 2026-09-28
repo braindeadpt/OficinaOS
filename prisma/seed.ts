@@ -39,12 +39,10 @@ const auth = betterAuth({
   plugins: [username()],
 });
 
-if (!process.env.SEED_ADMIN_PASSWORD) {
-  throw new Error("SEED_ADMIN_PASSWORD env var is required");
-}
-
 const SEED_ADMIN_USERNAME = "admin";
-const SEED_ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD;
+// Default seed password — the app forces a username + password change on
+// first login, so this value is only a bootstrap credential.
+const SEED_ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD || "braindead";
 const SEED_ADMIN_EMAIL = "admin@oficinaos.local";
 
 async function main() {

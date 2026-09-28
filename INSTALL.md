@@ -22,11 +22,10 @@ Guia para Windows. Demora ~10 minutos na primeira vez.
 
 ## 3. Primeiro login
 
-Os dados de acesso aparecem no ecrã no fim da instalação e ficam guardados no ficheiro **`PRIMEIRO-LOGIN.txt`**:
-
 - **Utilizador:** `admin`
-- **Palavra-passe:** gerada automaticamente (ver o ficheiro)
-- A app **obriga a trocar a palavra-passe** no primeiro acesso
+- **Palavra-passe:** `braindead`
+
+No primeiro acesso a app **obriga a definir um novo nome de utilizador e uma nova palavra-passe** — escolhe os teus e guarda-os. Depois disso, `admin`/`braindead` deixa de funcionar.
 
 ## 4. Uso diário
 

@@ -26,6 +26,12 @@ export const createUserSchema = z.object({
 export const changePasswordSchema = z.object({
   oldPassword: z.string().min(1, { error: "validations.required" }),
   newPassword: passwordPolicy,
+  username: z
+    .string()
+    .min(3, { error: "validations.username_min" })
+    .max(50)
+    .regex(/^[a-zA-Z0-9_]+$/, { error: "validations.username_pattern" })
+    .optional(),
 });
 
 export const updateProfileSchema = z.object({
