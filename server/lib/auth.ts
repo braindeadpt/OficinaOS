@@ -24,12 +24,10 @@ export function createAuth(prisma: PrismaClient) {
     secret: env.BETTER_AUTH_SECRET,
     trustedOrigins,
     advanced: {
-      // Prod serves the Android WebView (origin https://localhost) cross-site
-      // against https://reparilo.shop, so the session cookie must be
-      // SameSite=None; Secure. Dev is same-origin via the Vite proxy.
-      defaultCookieAttributes: isProd
-        ? { sameSite: "none", secure: true, httpOnly: true }
-        : { sameSite: "lax", httpOnly: true },
+      // LAN HTTP deployment (no TLS): Secure cookies would be dropped
+      // by the browser; SameSite=Lax suffices for same-origin use.
+      useSecureCookies: false,
+      defaultCookieAttributes: { sameSite: "lax", httpOnly: true },
     },
     database: prismaAdapter(prisma, {
       provider: "postgresql",

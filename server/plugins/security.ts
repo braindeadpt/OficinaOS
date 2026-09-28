@@ -63,7 +63,6 @@ const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         `object-src 'none'`,
         `base-uri 'self'`,
         `form-action 'self'`,
-        ...(IS_PROD ? ["upgrade-insecure-requests"] : []),
       ].join(";")
     );
 
@@ -72,9 +71,8 @@ const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   await app.register(helmet, {
     contentSecurityPolicy: false,
-    hsts: IS_PROD
-      ? { maxAge: 31_536_000, includeSubDomains: true, preload: true }
-      : false,
+    // LAN HTTP deployment (no TLS): HSTS must stay off
+    hsts: false,
   });
 
   // ── Layer 2: CORS ───────────────────────────────────────────────────────
@@ -133,14 +131,12 @@ const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   await app.register(csrf, {
     cookieOpts: {
-      // Prod is cross-site for the Capacitor Android WebView (origin
-      // https://localhost → API https://reparilo.shop), so the cookie must
-      // be SameSite=None; Secure to be sent on cross-site mutations.
-      // Dev is same-origin via the Vite proxy, so Lax is sufficient.
-      sameSite: IS_PROD ? "none" : "lax",
+      // LAN HTTP deployment (no TLS): Secure cookies would be dropped
+      // by the browser; SameSite=Lax suffices for same-origin use.
+      sameSite: "lax",
       httpOnly: true,
       path: "/",
-      secure: IS_PROD,
+      secure: false,
       signed: IS_PROD,
     },
   });
