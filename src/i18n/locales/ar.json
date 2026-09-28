@@ -1048,6 +1048,7 @@
   "noti_type_job_returned": "عاد",
   "noti_type_job_cancelled": "تم الإلغاء",
   "noti_type_warranty_return": "عودة الضمان",
+  "noti_type_part_low_stock": "مخزون منخفض",
   "noti_undo_mark_all": "تراجع",
   "notification_cancelled": "تم إلغاء الإشعار",
   "notification_deleted": "تم حذف الإشعار",

@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@generated/client";
 import { AuditAction } from "@generated/client";
 import type { AddJobPartInput } from "@shared/schemas/job.schema";
+import { getAppInstance } from "../jobs/app-registry.js";
 import {
   createPart as createPartRepo,
   deletePartById,
@@ -9,6 +10,7 @@ import {
 } from "../repositories/job-part.repository.js";
 import { assertJobMutable } from "../utils/job-mutations.js";
 import { createAuditLog } from "./audit.service.js";
+import { alertLowStock } from "./low-stock.service.js";
 
 export async function add(
   prisma: PrismaClient,
@@ -51,6 +53,15 @@ export async function add(
       unitPrice: input.unitPrice,
       createdBy: { connect: { id: userId } },
     });
+
+    // Alert OWNERs when this consumption pushed a catalog part to its
+    // reorder level. Runs inside the same tx and swallows its own errors.
+    if (input.partId) {
+      const app = getAppInstance();
+      if (app) {
+        await alertLowStock(app, input.partId, tx);
+      }
+    }
 
     await createAuditLog(tx, {
       action: AuditAction.PART_ADDED,

@@ -42,6 +42,10 @@ const TYPE_CONFIG: Record<string, { icon: string; labelKey: string }> = {
     icon: "autorenew",
     labelKey: "noti_type_warranty_return",
   },
+  part_low_stock: {
+    icon: "inventory",
+    labelKey: "noti_type_part_low_stock",
+  },
 };
 
 function formatRelativeTime(

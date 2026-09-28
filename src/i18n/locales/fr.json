@@ -1048,6 +1048,7 @@
   "noti_type_job_returned": "Retourné",
   "noti_type_job_cancelled": "Annulé",
   "noti_type_warranty_return": "Retour sous garantie",
+  "noti_type_part_low_stock": "Stock faible",
   "noti_undo_mark_all": "Défaire",
   "notification_cancelled": "Notification annulée",
   "notification_deleted": "Notification supprimée",
