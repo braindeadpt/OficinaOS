@@ -7,6 +7,7 @@ import swaggerUi from "@fastify/swagger-ui";
 import websocket from "@fastify/websocket";
 import Fastify from "fastify";
 import { loadEnv } from "./config/env.js";
+import { setAppInstance } from "./jobs/app-registry.js";
 import { startOverdueScheduler } from "./jobs/overdue-scheduler.js";
 import authPlugin from "./plugins/auth.js";
 import { localePlugin } from "./plugins/locale.js";
@@ -27,8 +28,10 @@ import { receiptRoutes } from "./routes/receipts.js";
 import { repairCatalogRoutes } from "./routes/repairs.js";
 import { reportsRoutes } from "./routes/reports.js";
 import { returnClaimsRoutes } from "./routes/return-claims.js";
+import { saleRoutes } from "./routes/sales.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { usersRoutes } from "./routes/users.js";
+import { startLowStockScheduler } from "./services/low-stock.service.js";
 import { cleanupReadNotifications } from "./services/notification-inapp.service.js";
 import { startOutboxWorker } from "./services/notification-outbox.service.js";
 import { initValidationI18n } from "./utils/resolve-validation-messages.js";
@@ -116,7 +119,9 @@ await app.register(websocketPlugin);
   wsBroadcast
 );
 
+setAppInstance(app);
 const stopOverdue = startOverdueScheduler(app);
+const stopLowStock = startLowStockScheduler(app);
 const stopOutboxWorker = startOutboxWorker(app.prisma);
 const CLEANUP_INTERVAL_MS = 15 * 60 * 1000;
 const cleanupHandle = setInterval(() => {
@@ -149,6 +154,7 @@ app.register(settingsRoutes, { prefix: "/api/settings" });
 app.register(dashboardRoutes, { prefix: "/api/dashboard" });
 app.register(aiRoutes, { prefix: "/api/ai" });
 app.register(reportsRoutes, { prefix: "/api/reports" });
+app.register(saleRoutes, { prefix: "/api/sales" });
 app.register(returnClaimsRoutes, { prefix: "/api/return-claims" });
 
 if (IS_PROD) {
@@ -209,6 +215,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, async () => {
     app.log.info(`Received ${signal}, shutting down...`);
     stopOverdue();
+    stopLowStock();
     stopOutboxWorker();
     clearInterval(cleanupHandle);
     await app.close();

@@ -17,9 +17,13 @@ function mockPrisma() {
       delete: vi.fn(),
     },
     partsCatalog: {
-      update: vi.fn().mockResolvedValue({}),
+      update: vi.fn().mockResolvedValue({ stockQuantity: 9 }),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
+    stockMovement: {
+      create: vi.fn().mockResolvedValue({}),
+    },
+    $queryRaw: vi.fn().mockResolvedValue([{ stock_quantity: 9 }]),
     $transaction: vi.fn(async (callback) => callback(mock)),
   };
   return mock as unknown as PrismaClient;

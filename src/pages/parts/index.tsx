@@ -4,8 +4,11 @@ import type { PartsCatalog } from "@shared/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import AddPartModal from "@/components/modules/parts/add-part-modal";
+import RecordPurchaseDialog from "@/components/modules/parts/record-purchase-dialog";
+import StockMovementsDialog from "@/components/modules/parts/stock-movements-dialog";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
+import { LowStockBadge } from "@/components/ui/low-stock-badge";
 import { useCan } from "@/hooks/use-can";
 import { useDebounce } from "@/hooks/use-debounce";
 import { formatDzd } from "@/lib/format";
@@ -133,6 +136,8 @@ function DesktopPartRow({
   onCancelDelete,
   onShowConfirm,
   onShowDelete,
+  onShowMovements,
+  onShowPurchase,
   onEdit,
   part,
   showCost,
@@ -151,6 +156,8 @@ function DesktopPartRow({
   onCancelDelete: () => void;
   onShowConfirm: (id: string) => void;
   onShowDelete: (id: string) => void;
+  onShowMovements: (part: PartsCatalog) => void;
+  onShowPurchase: (part: PartsCatalog) => void;
   onEdit: (part: PartsCatalog) => void;
   part: PartsCatalog;
   showCost: boolean;
@@ -195,11 +202,17 @@ function DesktopPartRow({
         </td>
       )}
       <td className="px-5 py-4">
-        <span
-          className={`rounded-full px-2.5 py-1 font-bold text-xs ${statusBadgeCls}`}
-        >
-          {isActive ? t("active") : t("inactive")}
-        </span>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span
+            className={`rounded-full px-2.5 py-1 font-bold text-xs ${statusBadgeCls}`}
+          >
+            {isActive ? t("active") : t("inactive")}
+          </span>
+          <LowStockBadge
+            reorderLevel={part.reorderLevel}
+            stockQuantity={part.stockQuantity}
+          />
+        </div>
       </td>
       <td className="px-5 py-4">
         {isConfirming && (
@@ -238,6 +251,22 @@ function DesktopPartRow({
         )}
         {!isConfirming && deletingId !== part.id && (
           <div className="flex items-center gap-1">
+            <button
+              aria-label={t("parts_movements_title")}
+              className="flex h-11 w-11 items-center justify-center rounded-xl text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-primary"
+              onClick={() => onShowMovements(part)}
+              type="button"
+            >
+              <Icon name="history" size="sm" />
+            </button>
+            <button
+              aria-label={t("parts_record_purchase")}
+              className="flex h-11 w-11 items-center justify-center rounded-xl text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-primary"
+              onClick={() => onShowPurchase(part)}
+              type="button"
+            >
+              <Icon name="shopping_cart" size="sm" />
+            </button>
             <button
               aria-label={t("edit_part")}
               className="flex h-11 w-11 items-center justify-center rounded-xl text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-primary"
@@ -279,6 +308,8 @@ function MobilePartCard({
   onCancelDelete,
   onShowConfirm,
   onShowDelete,
+  onShowMovements,
+  onShowPurchase,
   onEdit,
   part,
   showCost,
@@ -293,6 +324,8 @@ function MobilePartCard({
   onCancelDelete: () => void;
   onShowConfirm: (id: string) => void;
   onShowDelete: (id: string) => void;
+  onShowMovements: (part: PartsCatalog) => void;
+  onShowPurchase: (part: PartsCatalog) => void;
   onEdit: (part: PartsCatalog) => void;
   part: PartsCatalog;
   showCost: boolean;
@@ -326,11 +359,17 @@ function MobilePartCard({
         </span>
       </div>
       <div className="mb-3 flex items-center justify-between">
-        <span
-          className={`rounded-full px-2.5 py-1 font-bold text-xs ${statusBadgeCls}`}
-        >
-          {isActive ? t("active") : t("inactive")}
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span
+            className={`rounded-full px-2.5 py-1 font-bold text-xs ${statusBadgeCls}`}
+          >
+            {isActive ? t("active") : t("inactive")}
+          </span>
+          <LowStockBadge
+            reorderLevel={part.reorderLevel}
+            stockQuantity={part.stockQuantity}
+          />
+        </div>
         {showCost && (
           <span className="font-bold font-mono text-primary text-sm">
             {formatDzd(Number(part.defaultPrice))} {t("currency_dzd")}
@@ -380,6 +419,22 @@ function MobilePartCard({
         {deletingId !== part.id && !isConfirming && (
           <>
             <button
+              aria-label={t("parts_movements_title")}
+              className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl font-bold text-on-surface-variant text-xs transition-all hover:bg-surface-container-high hover:text-primary"
+              onClick={() => onShowMovements(part)}
+              type="button"
+            >
+              <Icon name="history" size="sm" />
+            </button>
+            <button
+              aria-label={t("parts_record_purchase")}
+              className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl font-bold text-on-surface-variant text-xs transition-all hover:bg-surface-container-high hover:text-primary"
+              onClick={() => onShowPurchase(part)}
+              type="button"
+            >
+              <Icon name="shopping_cart" size="sm" />
+            </button>
+            <button
               aria-label={t("edit_part")}
               className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl font-bold text-on-surface-variant text-xs transition-all hover:bg-surface-container-high hover:text-primary"
               onClick={() => onEdit(part)}
@@ -416,6 +471,67 @@ function MobilePartCard({
         )}
       </div>
     </div>
+  );
+}
+
+function RestockFilterPill({
+  active,
+  onToggle,
+  t,
+}: {
+  active: boolean;
+  onToggle: () => void;
+  t: (key: string) => string;
+}) {
+  return (
+    <button
+      aria-pressed={active}
+      className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-4 py-2.5 font-bold text-xs uppercase tracking-wide transition-all ${
+        active
+          ? "bg-error text-on-error"
+          : "bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest"
+      }`}
+      onClick={onToggle}
+      type="button"
+    >
+      <span
+        aria-hidden="true"
+        className="material-symbols-outlined text-[16px]"
+      >
+        warning
+      </span>
+      {t("parts_needs_restock_filter")}
+    </button>
+  );
+}
+
+function PartsExtraDialogs({
+  movementsPart,
+  purchasePart,
+  setMovementsPart,
+  setPurchasePart,
+}: {
+  movementsPart: PartsCatalog | null;
+  purchasePart: PartsCatalog | null;
+  setMovementsPart: (part: PartsCatalog | null) => void;
+  setPurchasePart: (part: PartsCatalog | null) => void;
+}) {
+  return (
+    <>
+      {movementsPart && (
+        <StockMovementsDialog
+          onClose={() => setMovementsPart(null)}
+          partId={movementsPart.id}
+          partName={movementsPart.name}
+        />
+      )}
+      {purchasePart && (
+        <RecordPurchaseDialog
+          onClose={() => setPurchasePart(null)}
+          part={purchasePart}
+        />
+      )}
+    </>
   );
 }
 
@@ -490,6 +606,8 @@ function PartsDesktopTable({
   onCancelDelete,
   onShowConfirm,
   onShowDelete,
+  onShowMovements,
+  onShowPurchase,
   onDelete,
   onSort,
   onToggle,
@@ -508,6 +626,8 @@ function PartsDesktopTable({
   onCancelDelete: () => void;
   onShowConfirm: (id: string) => void;
   onShowDelete: (id: string) => void;
+  onShowMovements: (part: PartsCatalog) => void;
+  onShowPurchase: (part: PartsCatalog) => void;
   onDelete: (part: PartsCatalog) => void;
   onSort: (field: SortField) => void;
   onToggle: (part: PartsCatalog) => void;
@@ -616,6 +736,8 @@ function PartsDesktopTable({
                   onEdit={onEdit}
                   onShowConfirm={onShowConfirm}
                   onShowDelete={onShowDelete}
+                  onShowMovements={onShowMovements}
+                  onShowPurchase={onShowPurchase}
                   onToggle={onToggle}
                   part={part}
                   showCost={showCost}
@@ -715,11 +837,14 @@ export default function PartsCatalogPage() {
   const [activeFilter, setActiveFilter] = useState<PartCategoryType | "ALL">(
     "ALL"
   );
+  const [needsRestockFilter, setNeedsRestockFilter] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingPart, setEditingPart] = useState<PartsCatalog | null>(null);
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [confirmingPartId, setConfirmingPartId] = useState<string | null>(null);
   const [deletingPartId, setDeletingPartId] = useState<string | null>(null);
+  const [movementsPart, setMovementsPart] = useState<PartsCatalog | null>(null);
+  const [purchasePart, setPurchasePart] = useState<PartsCatalog | null>(null);
   const [toast, setToast] = useState<{
     isError: boolean;
     message: string;
@@ -737,8 +862,9 @@ export default function PartsCatalogPage() {
     () => ({
       search: debouncedSearch || undefined,
       category: activeFilter === "ALL" ? undefined : activeFilter,
+      needsRestock: needsRestockFilter || undefined,
     }),
-    [debouncedSearch, activeFilter]
+    [debouncedSearch, activeFilter, needsRestockFilter]
   );
 
   useEffect(() => {
@@ -874,7 +1000,7 @@ export default function PartsCatalogPage() {
   const showSearchEmpty =
     sorted.length === 0 &&
     !isLoading &&
-    (search !== "" || activeFilter !== "ALL");
+    (search !== "" || activeFilter !== "ALL" || needsRestockFilter);
   const showEmptyCatalog =
     totalCount === 0 && !isLoading && search === "" && activeFilter === "ALL";
   const hasMore = nextCursor !== null && !isLoading;
@@ -883,8 +1009,9 @@ export default function PartsCatalogPage() {
     loadMoreParts({
       search: debouncedSearch || undefined,
       category: activeFilter === "ALL" ? undefined : activeFilter,
+      needsRestock: needsRestockFilter || undefined,
     });
-  }, [loadMoreParts, debouncedSearch, activeFilter]);
+  }, [loadMoreParts, debouncedSearch, activeFilter, needsRestockFilter]);
 
   const metricGridCols = canViewCost
     ? "grid-cols-2 sm:grid-cols-4"
@@ -974,6 +1101,13 @@ export default function PartsCatalogPage() {
               t={t}
             />
           </div>
+          <div className="mt-2">
+            <RestockFilterPill
+              active={needsRestockFilter}
+              onToggle={() => setNeedsRestockFilter((v) => !v)}
+              t={t}
+            />
+          </div>
           {activeFilter !== "ALL" && (
             <div className="mt-2 flex items-center gap-2">
               <span className="rounded-full bg-primary px-3 py-1 font-bold text-on-primary text-xs uppercase">
@@ -1018,6 +1152,7 @@ export default function PartsCatalogPage() {
             onClick={() => {
               setSearch("");
               setActiveFilter("ALL");
+              setNeedsRestockFilter(false);
             }}
             type="button"
           >
@@ -1039,6 +1174,8 @@ export default function PartsCatalogPage() {
               onEdit={handleEditPart}
               onShowConfirm={setConfirmingPartId}
               onShowDelete={setDeletingPartId}
+              onShowMovements={setMovementsPart}
+              onShowPurchase={setPurchasePart}
               onSort={toggleSort}
               onToggle={handleToggleActive}
               parts={sorted}
@@ -1076,6 +1213,8 @@ export default function PartsCatalogPage() {
                   onEdit={handleEditPart}
                   onShowConfirm={setConfirmingPartId}
                   onShowDelete={setDeletingPartId}
+                  onShowMovements={setMovementsPart}
+                  onShowPurchase={setPurchasePart}
                   onToggle={handleToggleActive}
                   part={part}
                   showCost={canViewCost}
@@ -1122,6 +1261,13 @@ export default function PartsCatalogPage() {
           onSubmit={handleEditSubmit}
         />
       )}
+
+      <PartsExtraDialogs
+        movementsPart={movementsPart}
+        purchasePart={purchasePart}
+        setMovementsPart={setMovementsPart}
+        setPurchasePart={setPurchasePart}
+      />
 
       {toast && (
         <ToastNotification isError={toast.isError} message={toast.message} />

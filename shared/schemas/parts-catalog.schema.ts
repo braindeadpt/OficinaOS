@@ -53,11 +53,30 @@ export const listPartsQuerySchema = z.object({
   search: z.string().optional(),
   category: z.string().optional(),
   isActive: z.coerce.boolean().optional(),
+  needsRestock: z.coerce.boolean().optional(),
 });
 
 export const togglePartStatusSchema = z.object({
   isActive: z.boolean(),
 });
+
+export const createStockMovementSchema = z.object({
+  /** Signed delta for adjustments; positive count for purchases. */
+  quantity: z
+    .number()
+    .int()
+    .min(-10_000)
+    .max(10_000)
+    .refine((v) => v !== 0, { error: "validations.valid_quantity" }),
+  unitCost: z.number().min(0).max(99_999_999.99).optional(),
+  supplier: z.string().trim().max(120).optional(),
+  reference: z.string().trim().max(120).optional(),
+  note: z.string().trim().max(500).optional(),
+});
+
+export type CreateStockMovementInput = z.infer<
+  typeof createStockMovementSchema
+>;
 
 export type CreatePartInput = z.infer<typeof createPartSchema>;
 export type UpdatePartInput = z.infer<typeof updatePartSchema>;

@@ -54,6 +54,14 @@ export type JobPartsWaiting = Prisma.JobPartsWaitingGetPayload<
   Record<string, never>
 >;
 export type JobCounter = Prisma.JobCounterGetPayload<Record<string, never>>;
+export type Sale = Prisma.SaleGetPayload<{
+  include: {
+    items: true;
+    payments: true;
+    customer: { select: { id: true; name: true; phone: true } };
+    createdBy: { select: { id: true; name: true } };
+  };
+}>;
 export type NotificationOutbox = Prisma.NotificationOutboxGetPayload<
   Record<string, never>
 >;

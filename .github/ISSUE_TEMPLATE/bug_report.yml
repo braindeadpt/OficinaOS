@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a defect in Reparilo
+description: Report a defect in OficinaOS
 labels: ["bug"]
 body:
   - type: markdown
@@ -7,7 +7,7 @@ body:
       value: |
         Thanks for taking the time to file a bug report. Please fill in as much as you can — vague reports are hard to act on and often get closed without a fix.
 
-        **If this is a security issue, do not file it here.** Use [GitHub Security Advisories](https://github.com/cranknet/reparilo/security/advisories/new) or email `security@reparilo.shop`.
+        **If this is a security issue, do not file it here.** Use [Private Vulnerability Reporting](https://github.com/braindeadpt/OficinaOS/security/advisories/new) — see [SECURITY.md](https://github.com/braindeadpt/OficinaOS/blob/main/SECURITY.md).
 
   - type: textarea
     id: summary
@@ -77,6 +77,7 @@ body:
       label: Locale in use
       multiple: true
       options:
+        - Português (pt-PT)
         - English (en)
         - French (fr)
         - Arabic (ar)

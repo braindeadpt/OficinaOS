@@ -136,6 +136,88 @@ ${qrImg}
 </body></html>`;
 }
 
+interface SaleReceiptItem {
+  lineTotal: number | { toNumber: () => number };
+  name: string;
+  quantity: number;
+}
+
+interface SaleReceiptPayment {
+  amount: number | { toNumber: () => number };
+  method: string;
+  reference?: string | null;
+}
+
+/**
+ * Thermal-printer friendly POS receipt for counter sales (no repair job).
+ */
+export async function renderSaleReceiptHtml(
+  prisma: DbClient,
+  sale: {
+    saleCode: string;
+    createdAt: Date;
+    customer?: { name: string; phone: string } | null;
+    createdBy: { name: string };
+    items: SaleReceiptItem[];
+    payments: SaleReceiptPayment[];
+    total: number | { toNumber: () => number };
+  },
+  baseUrl: string
+): Promise<string> {
+  const settings = await findShopSettingsUnique(prisma);
+  const shopName = esc(settings?.shopName ?? "OficinaOS");
+  const qrBuf = await generateTrackingQr(sale.saleCode, baseUrl);
+  const qrImg = qrBuf
+    ? `<div class="qr"><img src="data:image/png;base64,${qrBuf.toString("base64")}" alt="QR Code" /></div>`
+    : "";
+
+  const date = new Date(sale.createdAt).toLocaleString();
+  const rows = sale.items
+    .map(
+      (i) =>
+        `<tr><td>${esc(i.name)} ×${i.quantity}</td><td style="text-align:right">${fmtDzd(i.lineTotal)}</td></tr>`
+    )
+    .join("");
+  const payRows = sale.payments
+    .map(
+      (p) =>
+        `<tr><td>Paid (${esc(p.method)}${p.reference ? ` · ${esc(p.reference)}` : ""})</td><td style="text-align:right">${fmtDzd(p.amount)}</td></tr>`
+    )
+    .join("");
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sale ${esc(sale.saleCode)}</title>
+<style>
+  body{font-family:monospace;margin:0 auto;max-width:280px;padding:8px;font-size:12px}
+  h1{text-align:center;font-size:16px;margin:0 0 4px}
+  p{text-align:center;margin:0 0 8px;color:#555}
+  table{width:100%;border-collapse:collapse;margin:4px 0}
+  .sep{border-top:1px dashed #000;margin:8px 0}
+  .total td{font-weight:bold;border-top:1px solid #000}
+  .qr{text-align:center;margin:8px 0}
+  .qr img{width:120px}
+  @media print{body{margin:0;max-width:none}}
+</style>
+</head>
+<body>
+<h1>${shopName}</h1>
+<p>${date}</p>
+<div class="sep"></div>
+<table><tr><td>Sale</td><td style="text-align:right">${esc(sale.saleCode)}</td></tr>
+${sale.customer ? `<tr><td>Customer</td><td style="text-align:right">${esc(sale.customer.name)}</td></tr>` : ""}
+<tr><td>Served by</td><td style="text-align:right">${esc(sale.createdBy.name)}</td></tr></table>
+<div class="sep"></div>
+<table>${rows}</table>
+<div class="sep"></div>
+<table><tr class="total"><td>Total</td><td style="text-align:right">${fmtDzd(sale.total)}</td></tr>${payRows}</table>
+${settings?.receiptFooter ? `<div class="sep"></div><p style="text-align:left">${esc(settings.receiptFooter)}</p>` : ""}
+${qrImg}
+</body></html>`;
+}
+
 export async function renderLabelHtml(
   prisma: PrismaClient,
   job: {

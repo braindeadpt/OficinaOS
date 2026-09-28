@@ -16,6 +16,8 @@ function mockPrisma() {
       findUnique: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      // Field-reference sentinel for column-to-column comparisons
+      fields: { reorderLevel: "partsCatalog.reorderLevel" },
     },
   } as unknown as PrismaClient;
 }
@@ -94,6 +96,38 @@ describe("list", () => {
       prisma.partsCatalog.findMany as ReturnType<typeof vi.fn>
     ).mock.calls[0];
     expect(findManyCall[0].where.isActive).toBe(true);
+  });
+
+  it("filters parts needing restock via column comparison", async () => {
+    (
+      prisma.partsCatalog.findMany as ReturnType<typeof vi.fn>
+    ).mockResolvedValue([]);
+    (prisma.partsCatalog.count as ReturnType<typeof vi.fn>).mockResolvedValue(
+      0
+    );
+
+    await list(prisma, {
+      category: undefined,
+      cursor: undefined,
+      isActive: undefined,
+      limit: 10,
+      needsRestock: true,
+      search: undefined,
+    });
+
+    const findManyCall = (
+      prisma.partsCatalog.findMany as ReturnType<typeof vi.fn>
+    ).mock.calls[0];
+    // Column-to-column comparison (stockQuantity <= reorderLevel) plus the
+    // "a reorder level is configured" guard.
+    expect(findManyCall[0].where.AND).toEqual([
+      { reorderLevel: { gt: 0 } },
+      {
+        stockQuantity: {
+          lte: prisma.partsCatalog.fields.reorderLevel,
+        },
+      },
+    ]);
   });
 
   it("searches by name", async () => {

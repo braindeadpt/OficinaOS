@@ -158,6 +158,12 @@ async function seedNotificationTemplates() {
       isDefault: true,
     },
     {
+      name: "part_low_stock",
+      channel: "IN_APP" as const,
+      body: "Low stock: {{partName}} — {{partQuantity}} left (reorder level: {{partReorderLevel}})",
+      isDefault: true,
+    },
+    {
       name: "return_claim_resolved",
       channel: "IN_APP" as const,
       body: "Return claim resolved for job {{jobCode}}: {{outcome}}",

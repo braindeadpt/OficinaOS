@@ -1,4 +1,4 @@
-// Reparilo — Prisma Schema
+// OficinaOS — Prisma Schema
 // Version: 4.0 — Production-ready
 // Database: PostgreSQL 17
 // All DateTime fields use @db.Timestamptz for timezone safety.
@@ -84,6 +84,13 @@ enum RepairCategory {
   OTHER
 }
 
+enum MovementType {
+  PURCHASE
+  CONSUMPTION
+  RETURN
+  ADJUSTMENT
+}
+
 enum NotifyChannel {
   WHATSAPP
   IN_APP
@@ -164,6 +171,8 @@ model User {
   jobParts             JobPart[]
   jobRepairs           JobRepair[]
   paymentsCreated      Payment[]   @relation("PaymentCreatedBy")
+  stockMovementsCreated StockMovement[] @relation("StockMovementCreatedBy")
+  salesCreated         Sale[]      @relation("SaleCreatedBy")
   auditLogs            AuditLog[]
   conversations        AiConversation[]
   sessions             Session[]
@@ -214,6 +223,7 @@ model Customer {
   updatedAt DateTime @updatedAt @db.Timestamptz
 
   jobs Job[]
+  sales Sale[]
 
   @@index([email])
   @@map("customers")
@@ -267,6 +277,81 @@ model JobCounter {
   lastSeq Int @default(0)
 
   @@map("job_counters")
+}
+
+// ─────────────────────────────────────────────────
+// SALE COUNTER (POS)
+// year is the natural key; sequential SALE codes.
+// ─────────────────────────────────────────────────
+
+model SaleCounter {
+  year    Int @id
+  lastSeq Int @default(0)
+
+  @@map("sale_counters")
+}
+
+// ─────────────────────────────────────────────────
+// SALE (POS — counter sales without a repair job)
+// Items and payments are snapshotted at checkout.
+// total = sum(lineTotal of items); payments are the
+// applied amounts and must sum to total.
+// ─────────────────────────────────────────────────
+
+model Sale {
+  id       String @id @default(cuid())
+  saleCode String @unique
+
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  total Decimal @db.Decimal(10, 2)
+
+  createdById String
+  createdBy   User     @relation("SaleCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now()) @db.Timestamptz
+
+  items    SaleItem[]
+  payments SalePayment[]
+
+  @@index([createdAt])
+  @@index([customerId])
+  @@index([createdById])
+  @@map("sales")
+}
+
+model SaleItem {
+  id     String @id @default(cuid())
+  saleId String
+  sale   Sale   @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  partId String?
+  part   PartsCatalog? @relation(fields: [partId], references: [id], onDelete: SetNull)
+
+  // Snapshotted at checkout.
+  name      String
+  category  PartCategory
+  unitPrice Decimal         @db.Decimal(10, 2)
+  quantity  Int
+  lineTotal Decimal         @db.Decimal(10, 2)
+
+  @@index([saleId])
+  @@index([partId])
+  @@map("sale_items")
+}
+
+model SalePayment {
+  id     String @id @default(cuid())
+  saleId String
+  sale   Sale   @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  method    PaymentMethod
+  amount    Decimal        @db.Decimal(10, 2)
+  reference String?
+  createdAt DateTime       @default(now()) @db.Timestamptz
+
+  @@index([saleId])
+  @@map("sale_payments")
 }
 
 // ─────────────────────────────────────────────
@@ -416,10 +501,14 @@ model PartsCatalog {
   stockQuantity Int          @default(0)
   reorderLevel  Int          @default(0)
   isActive      Boolean      @default(true)
+  // Set when an OWNER low-stock alert fires; gates re-alerts (24h window).
+  lastLowStockAlertAt DateTime? @db.Timestamptz
   createdAt     DateTime     @default(now()) @db.Timestamptz
   updatedAt     DateTime     @updatedAt @db.Timestamptz
 
   jobParts JobPart[]
+  saleItems SaleItem[]
+  stockMovements StockMovement[]
 
   @@index([name])
   @@index([category])
@@ -455,6 +544,35 @@ model JobPart {
 
   @@index([jobId])
   @@map("job_parts")
+}
+
+// ─────────────────────────────────────────────
+// STOCK MOVEMENTS
+// Append-only ledger of every stock change: PURCHASE (manual intake),
+// CONSUMPTION (job part usage), RETURN (line removal restores stock)
+// and ADJUSTMENT (manual correction). quantity is the signed delta;
+// balanceAfter snapshots the part stock right after the movement.
+// ─────────────────────────────────────────────
+
+model StockMovement {
+  id     String       @id @default(cuid())
+  partId String
+  part   PartsCatalog @relation(fields: [partId], references: [id], onDelete: Restrict)
+
+  type        MovementType
+  quantity    Int // signed delta: positive in, negative out
+  balanceAfter Int
+  unitCost    Decimal? @db.Decimal(10, 2)
+  supplier    String?
+  reference   String?
+  note        String?  @db.Text
+
+  createdById String
+  createdBy   User     @relation("StockMovementCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now()) @db.Timestamptz
+
+  @@index([partId, createdAt])
+  @@map("stock_movements")
 }
 
 // ─────────────────────────────────────────────

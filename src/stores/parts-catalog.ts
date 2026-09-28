@@ -19,6 +19,7 @@ interface PartsCatalogState {
     search?: string;
     category?: string;
     isActive?: boolean;
+    needsRestock?: boolean;
   }) => Promise<void>;
   isLoading: boolean;
   isLoadingMore: boolean;
@@ -26,6 +27,7 @@ interface PartsCatalogState {
     search?: string;
     category?: string;
     isActive?: boolean;
+    needsRestock?: boolean;
   }) => Promise<void>;
   nextCursor: string | null;
   parts: PartsCatalog[];

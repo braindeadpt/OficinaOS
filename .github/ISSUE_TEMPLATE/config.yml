@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security vulnerability
-    url: https://github.com/cranknet/reparilo/security/advisories/new
+    url: https://github.com/braindeadpt/OficinaOS/security/advisories/new
     about: Please report security issues privately via GitHub Security Advisories, not as a public issue. See SECURITY.md for details.
   - name: Question or discussion
-    url: https://github.com/cranknet/reparilo/discussions
+    url: https://github.com/braindeadpt/OficinaOS/discussions
     about: For general questions, ideas, or help, please open a discussion instead of an issue.

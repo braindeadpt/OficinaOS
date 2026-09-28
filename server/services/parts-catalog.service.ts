@@ -16,7 +16,7 @@ import {
 } from "../repositories/part.repository.js";
 
 export async function list(prisma: PrismaClient, query: ListPartsQueryInput) {
-  const { category, cursor, isActive, limit, search } = query;
+  const { category, cursor, isActive, limit, needsRestock, search } = query;
 
   const where: Prisma.PartsCatalogWhereInput = {};
   if (category) {
@@ -27,6 +27,14 @@ export async function list(prisma: PrismaClient, query: ListPartsQueryInput) {
   }
   if (search) {
     where.name = { contains: search, mode: "insensitive" };
+  }
+  if (needsRestock) {
+    // Same threshold as the owner low-stock alert (see shared/utils/stock-level):
+    // a configured reorder level with stock at or below it.
+    where.AND = [
+      { reorderLevel: { gt: 0 } },
+      { stockQuantity: { lte: prisma.partsCatalog.fields.reorderLevel } },
+    ];
   }
   if (cursor) {
     where.id = { lt: cursor };

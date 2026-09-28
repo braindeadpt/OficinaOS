@@ -111,6 +111,12 @@ export const ERRORS = {
     message: "errors.payment_exceeds_balance",
   },
   PAYMENT_NOT_FOUND: { status: 404, message: "errors.payment_not_found" },
+  SALE_NOT_FOUND: { status: 404, message: "errors.sale_not_found" },
+  SALE_ITEM_REQUIRED: { status: 400, message: "errors.sale_item_required" },
+  SALE_PAYMENT_MISMATCH: {
+    status: 400,
+    message: "errors.sale_payment_mismatch",
+  },
   INVALID_WARRANTY_REFERENCE: {
     status: 400,
     message: "errors.invalid_warranty_reference",

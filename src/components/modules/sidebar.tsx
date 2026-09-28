@@ -42,6 +42,12 @@ const NAV_ITEMS: NavItem[] = [
     perm: { parts: ["viewCatalog"] },
   },
   {
+    icon: "point_of_sale",
+    labelKey: "pos.nav_label",
+    to: "/pos",
+    perm: { sales: ["view"] },
+  },
+  {
     icon: "menu_book",
     labelKey: "repair_services",
     to: "/repairs",

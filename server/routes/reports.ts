@@ -3,6 +3,8 @@ import { reportsQuerySchema } from "@shared/schemas/reports.schema.js";
 import type { FastifyPluginAsync } from "fastify";
 import { dashboardScope } from "../middlewares/dashboard-scope.js";
 import { requirePermission } from "../middlewares/rbac.js";
+import { cashReport } from "../services/cash-report.service.js";
+import { partsConsumptionReport } from "../services/parts-consumption.service.js";
 import {
   insightsReport,
   operationsReport,
@@ -110,6 +112,51 @@ export const reportsRoutes: FastifyPluginAsync = async (app) => {
       const range = resolveRange(q.range, q.from, q.to, scope.shopTz);
 
       return await insightsReport(app.prisma, scope, range);
+    }
+  );
+
+  app.get(
+    "/parts-consumption",
+    {
+      preHandler: [requirePermission({ parts: ["viewCost"] }), dashboardScope],
+      schema: {
+        tags: ["reports"],
+        summary: "Parts consumption report (jobs + POS sales) with trends",
+      },
+    },
+    async (req) => {
+      // biome-ignore lint/style/noNonNullAssertion: set by dashboardScope preHandler
+      const scope = req.dashboardScope!;
+      const parsed = reportsQuerySchema.safeParse(req.query);
+      if (!parsed.success) {
+        throw new AppError("VALIDATION_ERROR", {
+          issues: parsed.error.issues,
+        });
+      }
+      const q = parsed.data;
+      const range = resolveRange(q.range, q.from, q.to, scope.shopTz);
+
+      return await partsConsumptionReport(app.prisma, scope, range, true);
+    }
+  );
+
+  app.get(
+    "/cash",
+    {
+      preHandler: [
+        requirePermission({ reports: ["viewShop"] }),
+        dashboardScope,
+      ],
+      schema: {
+        tags: ["reports"],
+        summary:
+          "Daily cash-up report (today, shop-local): payments by method and by user",
+      },
+    },
+    async (req) => {
+      // biome-ignore lint/style/noNonNullAssertion: set by dashboardScope preHandler
+      const scope = req.dashboardScope!;
+      return await cashReport(app.prisma, scope, scope.shopTz);
     }
   );
 

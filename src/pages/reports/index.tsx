@@ -3,8 +3,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useCan } from "@/hooks/use-can";
 import { useReportsStore } from "@/stores/reports";
+import CashTab from "./cash-tab";
 import InsightsTab from "./insights-tab";
 import OperationsTab from "./operations-tab";
+import PartsConsumptionTab from "./parts-consumption-tab";
 import ReturnsTab from "./returns-tab";
 import RevenueTab from "./revenue-tab";
 
@@ -15,25 +17,37 @@ const RANGE_OPTIONS: { key: TimeRangePreset; label: string }[] = [
   { key: "year", label: "reports.year" },
 ];
 
-type TabKey = "revenue" | "operations" | "returns" | "insights";
+type TabKey =
+  | "revenue"
+  | "cash"
+  | "operations"
+  | "returns"
+  | "insights"
+  | "parts";
 
 export default function ReportsPage() {
   const { t } = useTranslation();
   const range = useReportsStore((s) => s.range);
   const setRange = useReportsStore((s) => s.setRange);
   const fetchRevenue = useReportsStore((s) => s.fetchRevenue);
+  const fetchCash = useReportsStore((s) => s.fetchCash);
   const fetchOperations = useReportsStore((s) => s.fetchOperations);
   const fetchInsights = useReportsStore((s) => s.fetchInsights);
   const fetchReturns = useReportsStore((s) => s.fetchReturns);
+  const fetchPartsConsumption = useReportsStore((s) => s.fetchPartsConsumption);
 
   const canViewShop = useCan({ reports: ["viewShop"] });
   const canViewSelf = useCan({ reports: ["viewSelf"] });
   const canViewReturns = useCan({ returns: ["viewSelf"] });
+  const canViewPartsCost = useCan({ parts: ["viewCost"] });
 
   const visibleTabs = useMemo<TabKey[]>(() => {
     const tabs: TabKey[] = [];
     if (canViewShop) {
       tabs.push("revenue");
+    }
+    if (canViewShop) {
+      tabs.push("cash");
     }
     if (canViewSelf) {
       tabs.push("operations");
@@ -44,8 +58,11 @@ export default function ReportsPage() {
     if (canViewShop) {
       tabs.push("insights");
     }
+    if (canViewPartsCost) {
+      tabs.push("parts");
+    }
     return tabs;
-  }, [canViewShop, canViewSelf, canViewReturns]);
+  }, [canViewShop, canViewSelf, canViewReturns, canViewPartsCost]);
 
   const [activeTab, setActiveTab] = useState<TabKey | null>(
     visibleTabs[0] ?? null
@@ -58,6 +75,9 @@ export default function ReportsPage() {
     if (activeTab === "revenue") {
       fetchRevenue();
     }
+    if (activeTab === "cash") {
+      fetchCash();
+    }
     if (activeTab === "operations") {
       fetchOperations();
     }
@@ -67,13 +87,18 @@ export default function ReportsPage() {
     if (activeTab === "returns") {
       fetchReturns();
     }
+    if (activeTab === "parts") {
+      fetchPartsConsumption();
+    }
   }, [
     activeTab,
     range,
     fetchRevenue,
+    fetchCash,
     fetchOperations,
     fetchInsights,
     fetchReturns,
+    fetchPartsConsumption,
   ]);
 
   useEffect(() => {
@@ -160,9 +185,11 @@ export default function ReportsPage() {
       )}
 
       {activeTab === "revenue" && <RevenueTab />}
+      {activeTab === "cash" && <CashTab />}
       {activeTab === "operations" && <OperationsTab />}
       {activeTab === "returns" && <ReturnsTab />}
       {activeTab === "insights" && <InsightsTab />}
+      {activeTab === "parts" && <PartsConsumptionTab />}
     </div>
   );
 }
