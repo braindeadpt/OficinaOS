@@ -185,6 +185,10 @@ describe("list", () => {
     (
       prisma.partsCatalog.findMany as ReturnType<typeof vi.fn>
     ).mockResolvedValue([]);
+    // The list is sorted by name, so the cursor resolves to a name first.
+    (
+      prisma.partsCatalog.findUnique as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({ id: "100", name: "Screen iPhone 14" });
 
     const result = await list(prisma, {
       category: undefined,
@@ -196,6 +200,54 @@ describe("list", () => {
 
     expect(result.totalCount).toBeNull();
     expect(prisma.partsCatalog.count).not.toHaveBeenCalled();
+  });
+
+  it("pages on the name it was sorted by, not on id", async () => {
+    (
+      prisma.partsCatalog.findMany as ReturnType<typeof vi.fn>
+    ).mockResolvedValue([]);
+    (
+      prisma.partsCatalog.findUnique as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({ id: "100", name: "Screen iPhone 14" });
+
+    await list(prisma, {
+      category: undefined,
+      cursor: "100",
+      isActive: undefined,
+      limit: 10,
+      search: undefined,
+    });
+
+    const call = (prisma.partsCatalog.findMany as ReturnType<typeof vi.fn>).mock
+      .calls[0][0];
+    expect(call.orderBy).toEqual([{ name: "asc" }, { id: "asc" }]);
+    expect(call.where.AND).toEqual([
+      {
+        OR: [
+          { name: { gt: "Screen iPhone 14" } },
+          { name: "Screen iPhone 14", id: { gt: "100" } },
+        ],
+      },
+    ]);
+  });
+
+  it("rejects a cursor whose part no longer exists", async () => {
+    (
+      prisma.partsCatalog.findMany as ReturnType<typeof vi.fn>
+    ).mockResolvedValue([]);
+    (
+      prisma.partsCatalog.findUnique as ReturnType<typeof vi.fn>
+    ).mockResolvedValue(null);
+
+    await expect(
+      list(prisma, {
+        category: undefined,
+        cursor: "gone",
+        isActive: undefined,
+        limit: 10,
+        search: undefined,
+      })
+    ).rejects.toThrow("errors.invalid_cursor");
   });
 });
 

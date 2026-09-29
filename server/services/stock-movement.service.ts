@@ -6,8 +6,14 @@ import {
   countStockMovements,
   createStockMovement,
   findManyStockMovements,
+  findStockMovementSortKey,
   findStockMovementUnique,
 } from "../repositories/stock-movement.repository.js";
+import {
+  keysetOrderBy,
+  requireKeysetCursor,
+  withKeyset,
+} from "../utils/keyset.js";
 
 export const listMovementsQuerySchema = z.object({
   cursor: z.string().optional(),
@@ -72,12 +78,24 @@ export async function listByPart(
     ...(query.type ? { type: query.type } : {}),
   };
 
+  // Sorted by createdAt, so a page must resume on createdAt too — paging on id
+  // alone would re-emit rows the caller already has and skip others.
+  const pageWhere = query.cursor
+    ? withKeyset(
+        where,
+        requireKeysetCursor(
+          await findStockMovementSortKey(prisma, query.cursor),
+          "createdAt"
+        ),
+        "createdAt",
+        "desc"
+      )
+    : where;
+
   const movements = await findManyStockMovements(
     prisma,
-    where,
-    {
-      createdAt: "desc",
-    },
+    pageWhere,
+    keysetOrderBy("createdAt", "desc"),
     limit + 1
   );
   const totalCount = await countStockMovements(prisma, where);

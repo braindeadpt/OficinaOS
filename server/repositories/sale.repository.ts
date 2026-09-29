@@ -49,19 +49,10 @@ export function findSaleById(prisma: DbClient, id: string) {
   });
 }
 
-export function listSales(
-  prisma: DbClient,
-  where: Prisma.SaleWhereInput,
-  take: number
-) {
-  return prisma.sale.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    take,
-    include: {
-      items: { select: { name: true, quantity: true } },
-      payments: true,
-      createdBy: { select: { name: true } },
-    },
+/** Sort key of a row, for resolving a keyset cursor back to its position. */
+export function findSaleSortKey(prisma: DbClient, id: string) {
+  return prisma.sale.findUnique({
+    where: { id },
+    select: { id: true, createdAt: true },
   });
 }

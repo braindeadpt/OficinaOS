@@ -11,7 +11,9 @@ export function createStockMovement(
 export function findManyStockMovements(
   prisma: DbClient,
   where: Prisma.StockMovementWhereInput,
-  orderBy: Prisma.StockMovementOrderByWithRelationInput,
+  orderBy:
+    | Prisma.StockMovementOrderByWithRelationInput
+    | Prisma.StockMovementOrderByWithRelationInput[],
   take: number
 ) {
   return prisma.stockMovement.findMany({
@@ -26,6 +28,14 @@ export function findManyStockMovements(
 
 export function findStockMovementUnique(prisma: DbClient, id: string) {
   return prisma.stockMovement.findUnique({ where: { id } });
+}
+
+/** Sort key of a row, for resolving a keyset cursor back to its position. */
+export function findStockMovementSortKey(prisma: DbClient, id: string) {
+  return prisma.stockMovement.findUnique({
+    where: { id },
+    select: { id: true, createdAt: true },
+  });
 }
 
 export function countStockMovements(

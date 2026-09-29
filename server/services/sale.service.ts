@@ -6,7 +6,13 @@ import {
   createSale,
   decrementStock,
   findCatalogPartsByIds,
+  findSaleSortKey,
 } from "../repositories/sale.repository.js";
+import {
+  keysetOrderBy,
+  requireKeysetCursor,
+  withKeyset,
+} from "../utils/keyset.js";
 import { generateSaleCode } from "../utils/sale-code.js";
 import { alertLowStock } from "./low-stock.service.js";
 
@@ -120,10 +126,24 @@ export async function list(
   query: { cursor?: string; limit?: number }
 ) {
   const limit = query.limit ?? 20;
+  // Sorted by createdAt, so a page must resume on createdAt too — paging on id
+  // alone would re-emit rows the caller already has and skip others.
+  const where = query.cursor
+    ? withKeyset(
+        {},
+        requireKeysetCursor(
+          await findSaleSortKey(prisma, query.cursor),
+          "createdAt"
+        ),
+        "createdAt",
+        "desc"
+      )
+    : {};
+
   const sales = await prisma.sale.findMany({
-    orderBy: { createdAt: "desc" },
+    orderBy: keysetOrderBy("createdAt", "desc"),
     take: limit + 1,
-    ...(query.cursor ? { where: { id: { lt: query.cursor } } } : {}),
+    where,
     include: {
       items: { select: { name: true, quantity: true } },
       payments: true,

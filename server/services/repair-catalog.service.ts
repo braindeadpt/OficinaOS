@@ -11,9 +11,15 @@ import {
   create as createRepair,
   deleteRepair as deleteRepairRepo,
   findMany as findManyRepairs,
+  findSortKey as findRepairSortKey,
   findUnique as findRepairUnique,
   update as updateRepair,
 } from "../repositories/repair.repository.js";
+import {
+  keysetOrderBy,
+  requireKeysetCursor,
+  withKeyset,
+} from "../utils/keyset.js";
 
 export async function list(prisma: PrismaClient, query: ListRepairsQueryInput) {
   const { cursor, limit, search, category, isActive } = query;
@@ -28,12 +34,21 @@ export async function list(prisma: PrismaClient, query: ListRepairsQueryInput) {
   if (search) {
     where.name = { contains: search, mode: "insensitive" };
   }
+  // The list is sorted by name, so a page must resume on name too — paging on
+  // id alone would re-emit rows the caller already has and skip others.
+  let pageWhere = where;
   if (cursor) {
-    where.id = { lt: cursor };
+    const sortKey = await findRepairSortKey(prisma, cursor);
+    pageWhere = withKeyset(
+      where,
+      requireKeysetCursor(sortKey, "name"),
+      "name",
+      "asc"
+    );
   }
 
   const [repairs, totalCount] = await Promise.all([
-    findManyRepairs(prisma, where, { name: "asc" }, limit + 1),
+    findManyRepairs(prisma, pageWhere, keysetOrderBy("name", "asc"), limit + 1),
     cursor ? Promise.resolve(null) : countRepairs(prisma, where),
   ]);
 

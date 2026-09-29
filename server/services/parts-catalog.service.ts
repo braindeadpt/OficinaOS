@@ -11,9 +11,15 @@ import {
   create as createPart,
   deletePart as deletePartRepo,
   findMany as findManyParts,
+  findSortKey as findPartSortKey,
   findUnique as findPartUnique,
   update as updatePart,
 } from "../repositories/part.repository.js";
+import {
+  keysetOrderBy,
+  requireKeysetCursor,
+  withKeyset,
+} from "../utils/keyset.js";
 
 export async function list(prisma: PrismaClient, query: ListPartsQueryInput) {
   const { category, cursor, isActive, limit, needsRestock, search } = query;
@@ -36,12 +42,21 @@ export async function list(prisma: PrismaClient, query: ListPartsQueryInput) {
       { stockQuantity: { lte: prisma.partsCatalog.fields.reorderLevel } },
     ];
   }
+  // The list is sorted by name, so a page must resume on name too — paging on
+  // id alone would re-emit rows the caller already has and skip others.
+  let pageWhere = where;
   if (cursor) {
-    where.id = { lt: cursor };
+    const sortKey = await findPartSortKey(prisma, cursor);
+    pageWhere = withKeyset(
+      where,
+      requireKeysetCursor(sortKey, "name"),
+      "name",
+      "asc"
+    );
   }
 
   const [parts, totalCount] = await Promise.all([
-    findManyParts(prisma, where, { name: "asc" }, limit + 1),
+    findManyParts(prisma, pageWhere, keysetOrderBy("name", "asc"), limit + 1),
     cursor ? Promise.resolve(null) : countParts(prisma, where),
   ]);
 
