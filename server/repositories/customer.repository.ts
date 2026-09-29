@@ -56,6 +56,13 @@ export async function count(prisma: DbClient, where: CustomerWhereInput) {
   return await prisma.customer.count({ where });
 }
 
+export async function groupByConsent(prisma: DbClient) {
+  return await prisma.customer.groupBy({
+    _count: { _all: true },
+    by: ["whatsappConsent"],
+  });
+}
+
 export async function search(
   prisma: DbClient,
   where: CustomerWhereInput,

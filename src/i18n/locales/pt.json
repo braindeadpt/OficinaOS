@@ -469,6 +469,8 @@
   "customers_consent_filter": "Consentimento WhatsApp",
   "customers_consent_opted_in": "Com opt-in (WhatsApp)",
   "customers_consent_opted_out": "Sem opt-in",
+  "customers_optin_rate": "Taxa de opt-in WhatsApp",
+  "customers_optin_breakdown": "{{optedIn}} com opt-in · {{optedOut}} ainda sem",
   "customers_export_optin_since": "Opt-in desde",
   "customers_export_name": "Nome",
   "customers_export_failed": "Falha ao exportar. Tente novamente.",

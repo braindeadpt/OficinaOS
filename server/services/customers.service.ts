@@ -9,6 +9,7 @@ import {
   count as customerCount,
   findMany as customerFindMany,
   findUnique as customerFindUnique,
+  groupByConsent as customerGroupByConsent,
   search as customerSearch,
   update as customerUpdate,
   upsert as customerUpsert,
@@ -96,7 +97,7 @@ export async function list(
     where.id = { lt: cursor };
   }
 
-  const [customers, totalCount] = await Promise.all([
+  const [customers, totalCount, consentGroups] = await Promise.all([
     customerFindMany(
       prisma,
       where,
@@ -105,6 +106,7 @@ export async function list(
       limit + 1
     ),
     cursor ? Promise.resolve(null) : customerCount(prisma, where),
+    cursor ? Promise.resolve([]) : customerGroupByConsent(prisma),
   ]);
 
   let nextCursor: string | null = null;
@@ -115,7 +117,17 @@ export async function list(
     }
   }
 
-  return { customers, nextCursor, totalCount };
+  // Global opt-in overview (unfiltered): powers the consent-rate card.
+  const consentSummary = { optedIn: 0, optedOut: 0 };
+  for (const group of Array.isArray(consentGroups) ? consentGroups : []) {
+    if (group.whatsappConsent) {
+      consentSummary.optedIn += group._count._all;
+    } else {
+      consentSummary.optedOut += group._count._all;
+    }
+  }
+
+  return { consentSummary, customers, nextCursor, totalCount };
 }
 
 export async function search(

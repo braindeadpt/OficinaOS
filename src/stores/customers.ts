@@ -34,8 +34,14 @@ interface CustomerListItem {
   whatsappConsentAt?: string | null;
 }
 
+interface ConsentSummary {
+  optedIn: number;
+  optedOut: number;
+}
+
 interface CustomersState {
   clearError: () => void;
+  consentSummary: ConsentSummary;
   currentCustomer: CustomerDetail | null;
   customers: CustomerListItem[];
   error: string | null;
@@ -64,6 +70,7 @@ interface CustomersState {
 }
 
 export const useCustomersStore = create<CustomersState>((set) => ({
+  consentSummary: { optedIn: 0, optedOut: 0 },
   customers: [],
   currentCustomer: null,
   error: null,
@@ -121,11 +128,13 @@ export const useCustomersStore = create<CustomersState>((set) => ({
       }
       const res = await api.get("/customers", { params });
       const data = res.data as {
+        consentSummary?: ConsentSummary;
         customers: CustomerListItem[];
         nextCursor: string | null;
         totalCount: number;
       };
       set({
+        consentSummary: data.consentSummary ?? { optedIn: 0, optedOut: 0 },
         customers: data.customers,
         nextCursor: data.nextCursor,
         totalCount: data.totalCount,
