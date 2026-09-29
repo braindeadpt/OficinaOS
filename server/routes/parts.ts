@@ -17,6 +17,7 @@ import {
   update as updatePart,
 } from "../services/parts-catalog.service.js";
 import { restockForecast } from "../services/restock-forecast.service.js";
+import { suggestRestock } from "../services/restock-suggestion.service.js";
 import {
   listMovementsQuerySchema,
   listByPart as listStockMovements,
@@ -51,6 +52,30 @@ export const partsRoutes: FastifyPluginAsync = async (app) => {
       }
       const result = await listParts(app.prisma, parsed.data);
       return reply.send(result);
+    }
+  );
+
+  app.get(
+    "/:id/restock-suggestion",
+    {
+      schema: {
+        tags: ["parts"],
+        summary:
+          "Restock suggestion from the movement ledger's average consumption",
+        params: {
+          type: "object",
+          properties: { id: { type: "string" } },
+          required: ["id"],
+        },
+      },
+    },
+    async (req) => {
+      const { id } = req.params as { id: string };
+      const suggestion = await suggestRestock(app.prisma, id);
+      if (!suggestion) {
+        throw new AppError("PART_NOT_FOUND");
+      }
+      return suggestion;
     }
   );
 

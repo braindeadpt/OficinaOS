@@ -1108,6 +1108,12 @@
     "title": "POS de balcão",
     "total": "Total",
     "in_cart_short": "no carrinho",
+    "restock_days_left": " · faltam {{days}} dias",
+    "restock_days_left_one": " · falta {{days}} dia",
+    "restock_days_left_other": " · faltam {{days}} dias",
+    "restock_no_data": "Sem consumos registados — repor pelo nível de reabastecimento",
+    "restock_suggestion": "Média {{avg}}/dia ({{days}}d) · sugerido {{qty}} para repor",
+    "restock_title": "Sugestão de reposição",
     "max_stock_reached": "Sem mais unidades em stock"
   },
   "payments": {

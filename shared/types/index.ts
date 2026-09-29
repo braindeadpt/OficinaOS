@@ -38,6 +38,20 @@ export type Payment = Prisma.PaymentGetPayload<{
   include: { createdBy: { select: { id: true; name: true; username: true } } };
 }>;
 export type PartsCatalog = Prisma.PartsCatalogGetPayload<Record<string, never>>;
+
+export interface RestockSuggestion {
+  /** Average units consumed per day over the trailing window. */
+  avgDailyConsumption: number;
+  /** Days until stock runs out at the average rate; null without data. */
+  daysOfStockLeft: number | null;
+  recentConsumedTotal: number;
+  reorderPoint: number;
+  soldOutNow: boolean;
+  stockQuantity: number;
+  suggestedQuantity: number;
+  supplier: string | null;
+  windowDays: number;
+}
 export type RepairCatalog = Prisma.RepairCatalogGetPayload<
   Record<string, never>
 >;

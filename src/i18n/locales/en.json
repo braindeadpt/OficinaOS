@@ -1108,6 +1108,12 @@
     "title": "Counter POS",
     "total": "Total",
     "in_cart_short": "in cart",
+    "restock_days_left": " · {{days}} left",
+    "restock_days_left_one": " · {{days}} day left",
+    "restock_days_left_other": " · {{days}} days left",
+    "restock_no_data": "No consumption data yet — restock per reorder level",
+    "restock_suggestion": "Avg {{avg}}/day ({{days}}d) · suggest {{qty}} to reorder",
+    "restock_title": "Restock hint",
     "max_stock_reached": "No more units in stock"
   },
   "payments": {
