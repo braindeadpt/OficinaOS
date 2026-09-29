@@ -95,7 +95,7 @@ export default function CashCloseCard({
             {t("reports.cashCountedCash")}
           </label>
           <input
-            className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface focus:ring-2 focus:ring-primary"
+            className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface"
             id="cash-counted-cash"
             inputMode="decimal"
             min="0"
@@ -112,7 +112,7 @@ export default function CashCloseCard({
             {t("reports.cashCountedNonCash")}
           </label>
           <input
-            className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface focus:ring-2 focus:ring-primary"
+            className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface"
             id="cash-counted-noncash"
             inputMode="decimal"
             min="0"
@@ -129,7 +129,7 @@ export default function CashCloseCard({
             {t("reports.cashCountedTotal")}
           </label>
           <input
-            className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface focus:ring-2 focus:ring-primary"
+            className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface"
             id="cash-counted-total"
             inputMode="decimal"
             onChange={(e) => setCountedTotal(e.target.value)}
@@ -158,7 +158,7 @@ export default function CashCloseCard({
           {t("reports.cashCloseNote")}
         </label>
         <textarea
-          className="min-h-20 w-full rounded-xl bg-surface-container-highest p-3 text-on-surface focus:ring-2 focus:ring-primary"
+          className="min-h-20 w-full rounded-xl bg-surface-container-highest p-3 text-on-surface"
           id="cash-close-note"
           maxLength={2000}
           onChange={(e) => setNote(e.target.value)}

@@ -54,7 +54,7 @@ export default function UnifiedJobsFilter({
           </span>
           <input
             aria-label={t("search")}
-            className="min-h-[44px] w-full rounded-lg bg-surface-container-low py-2 ps-10 pe-3 font-body text-on-surface text-sm transition-all placeholder:text-outline focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary"
+            className="min-h-[44px] w-full rounded-lg bg-surface-container-low py-2 ps-10 pe-3 font-body text-on-surface text-sm transition-all placeholder:text-outline focus:bg-surface-container-lowest"
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder={t("search_jobs")}
             type="search"

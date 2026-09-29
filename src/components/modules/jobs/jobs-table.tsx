@@ -98,10 +98,7 @@ export default function JobsTable({
                     </Link>
                   </td>
                   <td className="p-4">
-                    <Link
-                      className="block rounded-xl focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
-                      to={`/jobs/${jobId}`}
-                    >
+                    <Link className="block rounded-xl" to={`/jobs/${jobId}`}>
                       <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-surface-container-high">
                           <span className="material-symbols-outlined text-lg text-secondary lg:text-xl">

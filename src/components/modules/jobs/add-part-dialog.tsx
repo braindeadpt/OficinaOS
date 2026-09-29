@@ -221,7 +221,7 @@ export default function AddPartDialog({
           {mode === "catalog" && !form.partId && (
             <div className="mb-4">
               <input
-                className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface placeholder:text-outline focus:ring-2 focus:ring-primary"
+                className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface placeholder:text-outline"
                 onChange={(e) => setCatalogSearch(e.target.value)}
                 placeholder={t("jobs_parts_search_placeholder")}
                 type="text"
@@ -291,7 +291,7 @@ export default function AddPartDialog({
                 {t("jobs_parts_part_name")}
               </label>
               <input
-                className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface focus:ring-2 focus:ring-primary disabled:opacity-50"
+                className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface disabled:opacity-50"
                 disabled={!!form.partId}
                 id="add-part-name"
                 onChange={(e) =>
@@ -311,7 +311,7 @@ export default function AddPartDialog({
                   {t("jobs_parts_category")}
                 </label>
                 <select
-                  className="h-12 w-full appearance-none rounded-xl bg-surface-container-highest px-4 text-on-surface focus:ring-2 focus:ring-primary"
+                  className="h-12 w-full appearance-none rounded-xl bg-surface-container-highest px-4 text-on-surface"
                   id="add-part-category"
                   onChange={(e) =>
                     setForm((p) => ({ ...p, category: e.target.value }))
@@ -336,7 +336,7 @@ export default function AddPartDialog({
                   {t("jobs_parts_unit_price")}
                 </label>
                 <input
-                  className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface focus:ring-2 focus:ring-primary"
+                  className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface"
                   id="add-part-price"
                   inputMode="decimal"
                   min="0"
@@ -355,7 +355,7 @@ export default function AddPartDialog({
                   {t("jobs_parts_quantity")}
                 </label>
                 <input
-                  className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface focus:ring-2 focus:ring-primary"
+                  className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface"
                   id="add-part-qty"
                   inputMode="numeric"
                   min="1"
@@ -376,7 +376,7 @@ export default function AddPartDialog({
                 {t("jobs_parts_supplier")}
               </label>
               <input
-                className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface placeholder:text-outline focus:ring-2 focus:ring-primary"
+                className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface placeholder:text-outline"
                 id="add-part-supplier"
                 onChange={(e) =>
                   setForm((p) => ({ ...p, supplier: e.target.value }))

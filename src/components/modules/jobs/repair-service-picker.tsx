@@ -65,7 +65,7 @@ export default function RepairServicePicker({
           search
         </span>
         <input
-          className="h-11 w-full rounded-xl bg-surface-container-highest ps-9 pe-4 font-body text-on-surface text-sm outline-none transition-all placeholder:text-outline focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary"
+          className="h-11 w-full rounded-xl bg-surface-container-highest ps-9 pe-4 font-body text-on-surface text-sm transition-all placeholder:text-outline focus:bg-surface-container-lowest"
           onChange={(e) => {
             setQuery(e.target.value);
             setOpen(true);

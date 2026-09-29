@@ -110,7 +110,7 @@ export default function JobCancelDialog({
           {t("job_cancel_dialog_reason_label")}
         </label>
         <textarea
-          className="w-full resize-none rounded-xl bg-surface-container-highest p-4 text-on-surface text-sm placeholder:text-outline focus:ring-2 focus:ring-error"
+          className="w-full resize-none rounded-xl bg-surface-container-highest p-4 text-on-surface text-sm placeholder:text-outline"
           disabled={submitting}
           id="cancel-reason"
           maxLength={500}

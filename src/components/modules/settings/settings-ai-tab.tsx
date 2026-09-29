@@ -222,7 +222,7 @@ function AgentForm({
             {t("ai_defs_display_name")}
           </label>
           <input
-            className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/20"
+            className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm transition-all"
             id="agent-display-name"
             onChange={(e) =>
               setForm((f) => ({ ...f, displayName: e.target.value }))
@@ -240,7 +240,7 @@ function AgentForm({
             {t("ai_defs_name")}
           </label>
           <input
-            className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
+            className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm transition-all disabled:opacity-60"
             disabled={isEdit}
             id="agent-name"
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -263,7 +263,7 @@ function AgentForm({
             {t("ai_defs_model")}
           </label>
           <input
-            className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/20"
+            className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm transition-all"
             id="agent-model"
             onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
             placeholder={t("ai_defs_model_placeholder")}
@@ -281,7 +281,7 @@ function AgentForm({
             {t("ai_defs_temperature")}
           </label>
           <input
-            className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/20"
+            className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm transition-all"
             id="agent-temperature"
             max="2"
             min="0"
@@ -307,7 +307,7 @@ function AgentForm({
           {t("ai_defs_instructions")}
         </label>
         <textarea
-          className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/20"
+          className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm transition-all"
           id="agent-instructions"
           onChange={(e) =>
             setForm((f) => ({ ...f, instructions: e.target.value }))
@@ -406,7 +406,7 @@ function AgentForm({
           {t("ai_defs_keywords")}
         </label>
         <input
-          className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/20"
+          className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm transition-all"
           id="agent-keywords"
           onChange={(e) =>
             setForm((f) => ({ ...f, handoffKeywords: e.target.value }))
@@ -427,7 +427,7 @@ function AgentForm({
           {t("ai_defs_vector_store_id")}
         </label>
         <input
-          className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/20"
+          className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm transition-all"
           id="agent-vector-store"
           onChange={(e) =>
             setForm((f) => ({ ...f, vectorStoreId: e.target.value }))
@@ -733,7 +733,7 @@ export default function SettingsAiTab({
                 </span>
               </label>
               <input
-                className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/20"
+                className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm transition-all"
                 id="ai-endpoint"
                 onChange={(e) => {
                   setAiForm((f) => ({ ...f, endpointUrl: e.target.value }));
@@ -757,7 +757,7 @@ export default function SettingsAiTab({
               </label>
               <div className="relative">
                 <input
-                  className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 pe-12 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/20"
+                  className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 pe-12 text-sm transition-all"
                   id="ai-key"
                   onChange={(e) => {
                     setAiForm((f) => ({ ...f, apiKey: e.target.value }));
@@ -799,7 +799,7 @@ export default function SettingsAiTab({
             </label>
             <div className="relative">
               <select
-                className="w-full cursor-pointer appearance-none rounded-xl border-none bg-surface-container-lowest px-4 py-3 pe-10 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/20"
+                className="w-full cursor-pointer appearance-none rounded-xl border-none bg-surface-container-lowest px-4 py-3 pe-10 text-sm transition-all"
                 id="ai-model"
                 onChange={(e) => {
                   setAiForm((f) => ({ ...f, model: e.target.value }));

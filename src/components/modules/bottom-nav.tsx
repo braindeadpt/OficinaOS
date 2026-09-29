@@ -89,9 +89,6 @@ const MORE_ITEMS: NavItem[] = [
 
 const ACTIVE_FONT_SETTINGS = '"FILL" 1, "wght" 700, "GRAD" 0, "opsz" 24';
 
-const FOCUS_VISIBLE =
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
-
 function MoreSheetProfile({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
   const role = useAuthStore((s) => s.role);
@@ -161,7 +158,7 @@ function MoreSheetProfile({ onClose }: { onClose: () => void }) {
               ? t("auth_sign_out_confirm")
               : t("auth_sign_out_instead")
           }
-          className={`flex shrink-0 items-center justify-center rounded-xl px-2 py-2 transition-[color,background-color] duration-200 ${FOCUS_VISIBLE} ${
+          className={`flex shrink-0 items-center justify-center rounded-xl px-2 py-2 transition-[color,background-color] duration-200 ${
             logoutPending
               ? "font-semibold text-on-error-container"
               : "text-on-surface-variant active:bg-surface-container-high active:text-on-surface"
@@ -199,7 +196,7 @@ function NavTab({
   return (
     <NavLink
       className={({ isActive }) =>
-        `flex min-h-[44px] min-w-0 flex-1 flex-col items-center rounded-xl px-1 py-1.5 transition-[color,background-color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 ${
+        `flex min-h-[44px] min-w-0 flex-1 flex-col items-center rounded-xl px-1 py-1.5 transition-[color,background-color] duration-200 ${
           isActive
             ? "bg-primary/10 text-primary"
             : "text-on-surface-variant active:bg-surface-container-high active:text-primary"
@@ -248,7 +245,7 @@ function FabButton({
       type="button"
     >
       <span
-        className={`-mt-7 flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-transform duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 active:scale-95 motion-reduce:active:scale-100 ${
+        className={`-mt-7 flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-transform duration-150 active:scale-95 motion-reduce:active:scale-100 ${
           disabled
             ? "bg-surface-container-highest opacity-50"
             : "bg-primary text-on-primary"
@@ -330,7 +327,7 @@ export default function BottomNav() {
     <button
       aria-expanded={moreSheetOpen}
       aria-label={t("more")}
-      className={`flex min-h-[44px] min-w-0 flex-1 flex-col items-center rounded-xl px-1 py-1.5 transition-[color,background-color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 ${
+      className={`flex min-h-[44px] min-w-0 flex-1 flex-col items-center rounded-xl px-1 py-1.5 transition-[color,background-color] duration-200 ${
         isMoreActive || moreSheetOpen
           ? "bg-primary/10 text-primary"
           : "text-on-surface-variant active:bg-surface-container-high active:text-primary"
@@ -378,7 +375,7 @@ export default function BottomNav() {
               {visibleMoreItems.map(({ icon, labelKey, to }) => (
                 <NavLink
                   className={({ isActive }) =>
-                    `flex min-h-[48px] items-center gap-3 rounded-xl px-3 py-3 transition-[color,background-color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 ${
+                    `flex min-h-[48px] items-center gap-3 rounded-xl px-3 py-3 transition-[color,background-color] duration-200 ${
                       isActive
                         ? "bg-primary/10 font-semibold text-primary"
                         : "text-on-surface-variant active:bg-surface-container-high active:text-primary"

@@ -181,7 +181,7 @@ export default function ResetPasswordPage() {
               </span>
               <input
                 autoComplete="new-password"
-                className="w-full rounded-xl bg-surface-container-highest py-3.5 ps-12 pe-14 font-medium text-on-surface transition-colors placeholder:text-on-surface-variant/40 focus-visible:bg-surface-container-lowest focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className="w-full rounded-xl bg-surface-container-highest py-3.5 ps-12 pe-14 font-medium text-on-surface transition-colors placeholder:text-on-surface-variant/40 focus-visible:bg-surface-container-lowest"
                 id="new-password"
                 name="new-password"
                 onChange={(e) => {
@@ -198,7 +198,7 @@ export default function ResetPasswordPage() {
                     ? t("auth_hide_password")
                     : t("auth_show_password")
                 }
-                className="absolute end-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-lg text-on-surface-variant/40 transition-colors hover:bg-surface-container-high hover:text-on-surface-variant focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className="absolute end-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-lg text-on-surface-variant/40 transition-colors hover:bg-surface-container-high hover:text-on-surface-variant"
                 onClick={() => {
                   setShowPassword((v) => !v);
                 }}
@@ -230,7 +230,7 @@ export default function ResetPasswordPage() {
               </span>
               <input
                 autoComplete="new-password"
-                className="w-full rounded-xl bg-surface-container-highest py-3.5 ps-12 pe-4 font-medium text-on-surface transition-colors placeholder:text-on-surface-variant/40 focus-visible:bg-surface-container-lowest focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className="w-full rounded-xl bg-surface-container-highest py-3.5 ps-12 pe-4 font-medium text-on-surface transition-colors placeholder:text-on-surface-variant/40 focus-visible:bg-surface-container-lowest"
                 id="confirm-password"
                 name="confirm-password"
                 onChange={(e) => {
@@ -245,7 +245,7 @@ export default function ResetPasswordPage() {
           </div>
 
           <button
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 font-bold font-headline text-on-primary text-sm uppercase tracking-wider transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 active:bg-primary/80 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 font-bold font-headline text-on-primary text-sm uppercase tracking-wider transition-colors hover:bg-primary/90 active:bg-primary/80 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={loading}
             type="submit"
           >

@@ -75,7 +75,7 @@ export default function JobWaitingPartsSection({
         <div className="mb-3 flex flex-col gap-2 sm:flex-row">
           <input
             aria-label={t("jobs_waiting_parts_part_name")}
-            className="flex-1 rounded-lg bg-surface-container-highest px-3 py-2 text-on-surface text-sm placeholder:text-on-surface-variant/50 focus:ring-2 focus:ring-primary/30"
+            className="flex-1 rounded-lg bg-surface-container-highest px-3 py-2 text-on-surface text-sm placeholder:text-on-surface-variant/50"
             onChange={(e) => setPartName(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && canEdit && partName.trim() && !adding) {
@@ -88,7 +88,7 @@ export default function JobWaitingPartsSection({
           />
           <input
             aria-label={t("jobs_waiting_parts_supplier")}
-            className="flex-1 rounded-lg bg-surface-container-highest px-3 py-2 text-on-surface text-sm placeholder:text-on-surface-variant/50 focus:ring-2 focus:ring-primary/30"
+            className="flex-1 rounded-lg bg-surface-container-highest px-3 py-2 text-on-surface text-sm placeholder:text-on-surface-variant/50"
             onChange={(e) => setSupplier(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && canEdit && partName.trim() && !adding) {

@@ -66,7 +66,7 @@ export default function StatusChangeReasonDialog({
           })}
         </h2>
         <textarea
-          className="w-full resize-none rounded-xl bg-surface-container-highest p-4 text-on-surface text-sm placeholder:text-outline focus:ring-2 focus:ring-primary"
+          className="w-full resize-none rounded-xl bg-surface-container-highest p-4 text-on-surface text-sm placeholder:text-outline"
           maxLength={500}
           onChange={(e) => setReason(e.target.value)}
           placeholder={t("jobs_status_change_reason_placeholder")}

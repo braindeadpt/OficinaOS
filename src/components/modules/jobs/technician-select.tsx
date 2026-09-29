@@ -73,8 +73,8 @@ export default function TechnicianSelect({
 
   const selectClass =
     size === "sm"
-      ? "rounded-lg border border-outline-variant bg-surface-container-low px-2 py-1 font-body text-xs text-on-surface focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-      : "rounded-lg border border-outline-variant bg-surface-container-low px-3 py-1.5 font-body text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
+      ? "rounded-lg border border-outline-variant bg-surface-container-low px-2 py-1 font-body text-xs text-on-surface focus:border-primary"
+      : "rounded-lg border border-outline-variant bg-surface-container-low px-3 py-1.5 font-body text-sm text-on-surface focus:border-primary";
 
   return (
     <div className="flex flex-col gap-0.5">

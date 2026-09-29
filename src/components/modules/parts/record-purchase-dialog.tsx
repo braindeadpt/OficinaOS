@@ -85,7 +85,7 @@ export default function RecordPurchaseDialog({
                 {t("parts_purchase_quantity")}
               </label>
               <input
-                className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface focus:ring-2 focus:ring-primary"
+                className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface"
                 id="purchase-qty"
                 inputMode="numeric"
                 min="1"
@@ -103,7 +103,7 @@ export default function RecordPurchaseDialog({
                   {t("parts_purchase_unit_cost")}
                 </label>
                 <input
-                  className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface focus:ring-2 focus:ring-primary"
+                  className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface"
                   id="purchase-cost"
                   inputMode="decimal"
                   min="0"
@@ -121,7 +121,7 @@ export default function RecordPurchaseDialog({
                   {t("parts_purchase_supplier")}
                 </label>
                 <input
-                  className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface focus:ring-2 focus:ring-primary"
+                  className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface"
                   id="purchase-supplier"
                   onChange={(e) => setSupplier(e.target.value)}
                   type="text"
@@ -137,7 +137,7 @@ export default function RecordPurchaseDialog({
                 {t("payments.reference")}
               </label>
               <input
-                className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface focus:ring-2 focus:ring-primary"
+                className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface"
                 id="purchase-reference"
                 onChange={(e) => setReference(e.target.value)}
                 placeholder={t("payments.reference_placeholder")}
@@ -153,7 +153,7 @@ export default function RecordPurchaseDialog({
                 {t("payments.note")}
               </label>
               <textarea
-                className="w-full rounded-xl bg-surface-container-highest px-4 py-3 text-on-surface focus:ring-2 focus:ring-primary"
+                className="w-full rounded-xl bg-surface-container-highest px-4 py-3 text-on-surface"
                 id="purchase-note"
                 onChange={(e) => setNote(e.target.value)}
                 rows={2}

@@ -60,7 +60,7 @@ export default function RepairFilters({
           search
         </span>
         <input
-          className="w-full rounded-xl bg-surface-container-high py-2.5 ps-10 font-body text-on-surface text-sm outline-none placeholder:text-on-surface-variant/60 focus:bg-surface-container-lowest focus:ring-1 focus:ring-primary/20"
+          className="w-full rounded-xl bg-surface-container-high py-2.5 ps-10 font-body text-on-surface text-sm placeholder:text-on-surface-variant/60 focus:bg-surface-container-lowest"
           onChange={(e) => setLocalQuery(e.target.value)}
           placeholder={t("search_repairs")}
           type="text"
@@ -85,7 +85,7 @@ export default function RepairFilters({
         <div className="relative sm:hidden">
           <select
             aria-label={t("filter_by_category")}
-            className="h-10 w-full appearance-none rounded-xl border-none bg-surface-container-highest px-4 pe-10 text-on-surface text-sm outline-none focus:ring-2 focus:ring-primary/20"
+            className="h-10 w-full appearance-none rounded-xl border-none bg-surface-container-highest px-4 pe-10 text-on-surface text-sm"
             onChange={(e) =>
               onCategoryChange(
                 e.target.value === "ALL"
@@ -131,7 +131,7 @@ export default function RepairFilters({
         </span>
         <select
           aria-label={t("sort_by")}
-          className="rounded-xl bg-surface-container-highest px-3 py-2 font-headline font-medium text-on-surface text-xs uppercase tracking-wide outline-none transition-colors focus:bg-surface-container"
+          className="rounded-xl bg-surface-container-highest px-3 py-2 font-headline font-medium text-on-surface text-xs uppercase tracking-wide transition-colors focus:bg-surface-container"
           onChange={(e) => onSortChange(e.target.value as SortOption)}
           value={activeSort}
         >

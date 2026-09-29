@@ -76,7 +76,7 @@ export default function TopBar() {
         <div className="relative" ref={dropdownRef}>
           <button
             aria-label={t("notifications")}
-            className="relative flex min-h-11 min-w-11 items-center justify-center rounded-xl text-on-surface-variant transition-colors hover:bg-surface-container hover:text-primary focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            className="relative flex min-h-11 min-w-11 items-center justify-center rounded-xl text-on-surface-variant transition-colors hover:bg-surface-container hover:text-primary"
             onClick={handleToggleAlerts}
             type="button"
           >

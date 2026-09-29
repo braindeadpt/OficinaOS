@@ -129,7 +129,7 @@ export default function PosPage() {
         {/* Catalog browser */}
         <div className="lg:col-span-2">
           <input
-            className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface placeholder:text-outline focus:ring-2 focus:ring-primary"
+            className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface placeholder:text-outline"
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t("pos.search_placeholder")}
             type="text"

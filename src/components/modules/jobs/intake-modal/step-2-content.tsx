@@ -79,7 +79,7 @@ export default function Step2Content({
             </label>
             <div className="flex items-center gap-2">
               <input
-                className="h-12 w-full max-w-[160px] rounded-xl bg-surface-container-highest px-4 text-on-surface transition-all focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary"
+                className="h-12 w-full max-w-[160px] rounded-xl bg-surface-container-highest px-4 text-on-surface transition-all focus:bg-surface-container-lowest"
                 id="estimated-cost"
                 inputMode="decimal"
                 min="0"
@@ -100,7 +100,7 @@ export default function Step2Content({
             </label>
             <div className="flex items-center gap-2">
               <input
-                className="h-12 w-full max-w-[160px] rounded-xl bg-surface-container-highest px-4 text-on-surface transition-all focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary"
+                className="h-12 w-full max-w-[160px] rounded-xl bg-surface-container-highest px-4 text-on-surface transition-all focus:bg-surface-container-lowest"
                 id="deposit"
                 inputMode="decimal"
                 min="0"
@@ -122,7 +122,7 @@ export default function Step2Content({
             {t("intake.delivery_date")}
           </label>
           <input
-            className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface transition-all focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary"
+            className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface transition-all focus:bg-surface-container-lowest"
             id="delivery-date"
             onChange={(e) => update("estimatedDelivery", e.target.value)}
             type="date"

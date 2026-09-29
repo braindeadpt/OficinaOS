@@ -50,7 +50,7 @@ function ItemForm({
       }}
     >
       <textarea
-        className="rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-1 ring-outline-variant focus:ring-2 focus:ring-primary"
+        className="rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm ring-1 ring-outline-variant"
         onChange={(e) => setContent(e.target.value)}
         placeholder={placeholder}
         rows={3}
@@ -64,7 +64,7 @@ function ItemForm({
           {t("ai_tags_label")}
         </label>
         <input
-          className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-1 ring-outline-variant focus:ring-2 focus:ring-primary"
+          className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm ring-1 ring-outline-variant"
           id={tagsId}
           onChange={(e) => setTags(e.target.value)}
           placeholder={t("ai_tags_placeholder")}

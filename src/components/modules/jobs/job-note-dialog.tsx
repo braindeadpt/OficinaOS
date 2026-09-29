@@ -92,7 +92,7 @@ export default function JobNoteDialog({
           {t("job_note_dialog_title")}
         </h2>
         <textarea
-          className="w-full resize-none rounded-xl bg-surface-container-highest p-4 text-on-surface text-sm placeholder:text-outline focus:ring-2 focus:ring-primary"
+          className="w-full resize-none rounded-xl bg-surface-container-highest p-4 text-on-surface text-sm placeholder:text-outline"
           disabled={submitting}
           maxLength={500}
           onChange={(e) => setNote(e.target.value)}

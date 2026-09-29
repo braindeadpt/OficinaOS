@@ -204,7 +204,7 @@ function ToolCallAccordion({ toolCalls }: { toolCalls: ToolCallEvent[] }) {
   return (
     <div className="ms-13 w-fit overflow-hidden rounded-lg border border-outline-variant bg-surface-container-low text-xs">
       <button
-        className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-surface-container-high focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-surface-container-high"
         onClick={() => setIsOpen((prev) => !prev)}
         type="button"
       >
@@ -301,7 +301,7 @@ const MessageExtras = React.memo(function MessageExtras({
                   </span>
                 )}
               <button
-                className="rounded-lg border border-outline-variant px-3 py-1 font-medium text-on-surface-variant text-xs transition-colors hover:bg-surface-container-high focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                className="rounded-lg border border-outline-variant px-3 py-1 font-medium text-on-surface-variant text-xs transition-colors hover:bg-surface-container-high"
                 onClick={() => onRetry(message.id)}
                 type="button"
               >
@@ -347,7 +347,7 @@ function AgentSwitchDialog({
         </p>
         <div className="flex justify-end gap-2">
           <button
-            className="rounded-xl px-4 py-2 font-bold text-on-surface-variant text-sm transition-colors hover:bg-surface-container-highest focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            className="rounded-xl px-4 py-2 font-bold text-on-surface-variant text-sm transition-colors hover:bg-surface-container-highest"
             onClick={onCancel}
             type="button"
           >
@@ -394,7 +394,7 @@ function NewConversationDialog({
         </p>
         <div className="flex justify-end gap-2">
           <button
-            className="rounded-xl px-4 py-2 font-bold text-on-surface-variant text-sm transition-colors hover:bg-surface-container-highest focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            className="rounded-xl px-4 py-2 font-bold text-on-surface-variant text-sm transition-colors hover:bg-surface-container-highest"
             onClick={onCancel}
             type="button"
           >
@@ -946,7 +946,7 @@ function ChatInterface({ agentEnabled = true }: ChatInterfaceProps) {
         <div className="flex min-w-0 items-center gap-2">
           <button
             aria-label={t("ai_agent_open_panel")}
-            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl text-on-surface-variant transition-colors hover:bg-surface-container-highest focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 lg:hidden"
+            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl text-on-surface-variant transition-colors hover:bg-surface-container-highest lg:hidden"
             onClick={() => setMobileSheetOpen(true)}
             type="button"
           >
@@ -967,7 +967,7 @@ function ChatInterface({ agentEnabled = true }: ChatInterfaceProps) {
           {hasMessages && (
             <button
               aria-label={t("ai_agent_copy_conversation")}
-              className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-on-surface-variant transition-colors hover:bg-surface-container-highest hover:text-primary focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+              className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-on-surface-variant transition-colors hover:bg-surface-container-highest hover:text-primary"
               onClick={handleCopyConversation}
               type="button"
             >
@@ -1064,7 +1064,7 @@ function ChatInterface({ agentEnabled = true }: ChatInterfaceProps) {
             </label>
             <input
               autoComplete="off"
-              className="flex-1 rounded-xl bg-surface-container-high px-4 py-2.5 text-on-surface text-sm outline-none placeholder:text-on-surface-variant/50 focus:ring-2 focus:ring-primary/20"
+              className="flex-1 rounded-xl bg-surface-container-high px-4 py-2.5 text-on-surface text-sm placeholder:text-on-surface-variant/50"
               disabled={isTyping || !agentEnabled}
               id="agent-chat-input"
               name="agentChatInput"

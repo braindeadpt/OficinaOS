@@ -142,7 +142,7 @@ export default function JobRepairsSection({
               </div>
               <div className="flex items-center gap-1">
                 <input
-                  className="w-28 rounded-xl border-none bg-surface-container-lowest px-3 py-2 font-body text-on-surface text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                  className="w-28 rounded-xl border-none bg-surface-container-lowest px-3 py-2 font-body text-on-surface text-sm"
                   min="0"
                   onChange={(e) => setPrice(e.target.value)}
                   step="0.01"

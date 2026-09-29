@@ -109,7 +109,7 @@ export default function NotificationsPage() {
           ] as const
         ).map(([key, label, count]) => (
           <button
-            className={`min-h-16 rounded-2xl px-4 text-start transition-colors focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 ${
+            className={`min-h-16 rounded-2xl px-4 text-start transition-colors ${
               mode === key
                 ? "bg-primary-fixed text-primary"
                 : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container"

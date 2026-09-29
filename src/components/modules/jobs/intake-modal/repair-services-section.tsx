@@ -57,7 +57,7 @@ export default function RepairServicesSection({
               <div className="flex items-center gap-1">
                 <input
                   aria-label={t("repair_price", { name: repair.repairName })}
-                  className="min-h-[44px] w-28 rounded-lg bg-surface-container-lowest px-2 py-1 text-end font-body text-on-surface text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                  className="min-h-[44px] w-28 rounded-lg bg-surface-container-lowest px-2 py-1 text-end font-body text-on-surface text-sm"
                   min="0"
                   onChange={(e) => onPriceChange(idx, Number(e.target.value))}
                   step="0.01"
