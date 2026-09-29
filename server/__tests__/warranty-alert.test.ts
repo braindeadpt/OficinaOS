@@ -130,6 +130,7 @@ describe("Warranty return notification", () => {
 
   it("calls notify when warranty return is created", async () => {
     mocks.createJob.mockResolvedValue({
+      customer: { name: "Test", phone: "+1234567890" },
       id: "job-1",
       isWarrantyReturn: true,
       jobCode: "RPR-001",
@@ -155,9 +156,49 @@ describe("Warranty return notification", () => {
     expect(mocks.notify).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        context: { jobCode: "RPR-001" },
+        context: {
+          customerName: "Test",
+          jobCode: "RPR-001",
+          recipientPhone: "+1234567890",
+        },
         eventName: "warranty_return_created",
         jobId: "job-1",
+        recipients: { role: "OWNER" },
+      })
+    );
+  });
+
+  it("still notifies in-app when the created job has no customer attached", async () => {
+    mocks.createJob.mockResolvedValue({
+      customer: null,
+      id: "job-3",
+      isWarrantyReturn: true,
+      jobCode: "RPR-003",
+    });
+
+    const { app } = buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/jobs",
+      payload: {
+        reportedProblem: "Broken again",
+        deviceBrand: "Apple",
+        deviceModel: "iPhone 15",
+        estimatedCost: 5000,
+        customerName: "Test",
+        customerPhone: "+1234567890",
+        isWarrantyReturn: true,
+        warrantyForJobId: "original-job",
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(mocks.notify).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        context: { jobCode: "RPR-003" },
+        eventName: "warranty_return_created",
+        jobId: "job-3",
         recipients: { role: "OWNER" },
       })
     );
