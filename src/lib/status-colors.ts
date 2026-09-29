@@ -1,42 +1,65 @@
 import type { JobStatusType } from "@shared/constants";
 
-export const STATUS_DOT_COLORS: Record<JobStatusType, string> = {
-  INTAKE: "bg-secondary",
-  WAITING_FOR_PARTS: "bg-tertiary",
-  IN_REPAIR: "bg-primary",
-  ON_HOLD: "bg-error",
-  DONE: "bg-on-secondary-container",
-  DELIVERED: "bg-on-secondary-container",
-  RETURNED: "bg-outline-variant",
-  CANCELLED: "bg-outline-variant",
+/**
+ * Single source of truth for job status colour.
+ *
+ * Every surface that renders a status (badge, chip, dot) reads from this one
+ * record per status, so a status can never appear in two different colours in
+ * two places. This replaced four separate maps that had drifted apart: On Hold
+ * was a red dot but a grey badge, and Returned was exactly the other way round.
+ *
+ * `container` is the surface + on-surface pair from DESIGN.md §5 "Chips".
+ * `dot` is the solid form of that same colour family — it cannot be derived
+ * from the container, because the neutral containers (On Hold, Delivered,
+ * Cancelled) are deliberately the same surface while meaning different things,
+ * and a dot is the only status signal in the dashboard lists.
+ */
+export interface StatusTone {
+  container: string;
+  dot: string;
+}
+
+export const STATUS_TONES: Record<JobStatusType, StatusTone> = {
+  INTAKE: {
+    container: "bg-secondary-container text-on-secondary-container",
+    dot: "bg-secondary",
+  },
+  WAITING_FOR_PARTS: {
+    container: "bg-tertiary-fixed text-on-tertiary-fixed-variant",
+    dot: "bg-tertiary",
+  },
+  IN_REPAIR: {
+    container: "bg-primary/10 text-primary",
+    dot: "bg-primary",
+  },
+  ON_HOLD: {
+    container: "bg-surface-container-high text-on-surface-variant",
+    dot: "bg-outline-variant",
+  },
+  DONE: {
+    container: "bg-primary-fixed text-on-primary-fixed-variant",
+    dot: "bg-primary",
+  },
+  DELIVERED: {
+    container: "bg-surface-container text-on-surface-variant",
+    dot: "bg-on-secondary-container",
+  },
+  RETURNED: {
+    container: "bg-error-container text-on-error-container",
+    dot: "bg-error",
+  },
+  CANCELLED: {
+    container: "bg-surface-container-high text-on-surface-variant line-through",
+    dot: "bg-outline",
+  },
 };
 
-export const STATUS_CHIP_STYLES: Record<JobStatusType, string> = {
-  INTAKE: "bg-secondary-container text-on-secondary-container",
-  WAITING_FOR_PARTS: "bg-tertiary-fixed text-on-tertiary-fixed-variant",
-  IN_REPAIR: "bg-primary/10 text-primary",
-  ON_HOLD: "bg-error-container text-on-error-container",
-  DONE: "bg-on-secondary-container/10 text-on-secondary-container",
-  DELIVERED: "bg-on-secondary-container/10 text-on-secondary-container",
-  RETURNED: "bg-outline-variant/20 text-on-surface-variant",
-  CANCELLED: "bg-outline-variant/20 text-on-surface-variant",
-};
+/** Surface + text classes for a status badge or chip. */
+export function statusContainerClass(status: JobStatusType): string {
+  return STATUS_TONES[status].container;
+}
 
-export const STATUS_BADGE_STYLES: Record<JobStatusType, string> = {
-  INTAKE: "bg-secondary-container text-on-secondary-container",
-  WAITING_FOR_PARTS: "bg-tertiary-fixed text-on-tertiary-fixed-variant",
-  IN_REPAIR: "bg-primary/10 text-primary",
-  ON_HOLD: "bg-surface-container-high text-on-surface-variant",
-  DONE: "bg-primary-fixed text-on-primary-fixed-variant",
-  DELIVERED: "bg-surface-container text-on-surface-variant",
-  RETURNED: "bg-error-container text-on-error-container",
-  CANCELLED: "bg-surface-container-high text-on-surface-variant line-through",
-};
-
-export const STATUS_COLORS: Record<string, string> = {
-  IN_REPAIR: "bg-primary",
-  WAITING_FOR_PARTS: "bg-tertiary",
-  INTAKE: "bg-secondary",
-  TESTING: "bg-outline-variant",
-  DONE: "bg-on-secondary-container",
-};
+/** Solid background class for a status dot. */
+export function statusDotClass(status: JobStatusType): string {
+  return STATUS_TONES[status].dot;
+}

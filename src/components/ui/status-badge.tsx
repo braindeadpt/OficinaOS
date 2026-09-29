@@ -1,6 +1,6 @@
 import type { JobStatusType } from "@shared/constants";
 import { useTranslation } from "react-i18next";
-import { STATUS_BADGE_STYLES } from "@/lib/status-colors";
+import { statusContainerClass } from "@/lib/status-colors";
 
 type BadgeSize = "sm" | "md";
 
@@ -24,7 +24,7 @@ export function StatusBadge({ status, size }: StatusBadgeProps) {
       className={[
         "inline-flex items-center whitespace-nowrap rounded-full uppercase tracking-wider",
         size ? SIZE_CLASSES[size] : DEFAULT_SIZE_CLASSES,
-        STATUS_BADGE_STYLES[status],
+        statusContainerClass(status),
       ].join(" ")}
     >
       {t(`status.${status}`)}
