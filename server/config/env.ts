@@ -2,6 +2,7 @@ import { z } from "zod";
 
 const PLACEHOLDER_PATTERNS = [/change-?me/i, /placeholder/i, /example/i];
 const LOCALHOST_REGEX = /localhost|127\.0\.0\.1/;
+const GITHUB_REPO_REGEX = /^[\w.-]+\/[\w.-]+$/;
 
 const secretString = (minLength = 32) =>
   z
@@ -80,6 +81,13 @@ const schema = z
 
     // ── Seeding (optional) ────────────────────────────────────
     SEED_ADMIN_PASSWORD: z.string().optional(),
+
+    // ── In-app feedback → GitHub issues (optional) ───────────
+    GITHUB_FEEDBACK_TOKEN: z.string().optional(),
+    GITHUB_FEEDBACK_REPO: z
+      .string()
+      .regex(GITHUB_REPO_REGEX, "must be owner/repo")
+      .default("braindeadpt/OficinaOS"),
 
     // ── Timezone ──────────────────────────────────────────────
     TZ: z.string().optional(),

@@ -668,7 +668,9 @@
     "clear_payment_on_delivery": "Failed to cancel the paid-on-delivery mark",
     "pod_already_marked": "Job is already marked as paid on delivery",
     "pod_not_marked": "Job is not marked as paid on delivery",
-    "no_payment_due": "There is no outstanding balance to collect"
+    "no_payment_due": "There is no outstanding balance to collect",
+    "feedback_not_configured": "Problem reports are not configured on this installation. Please contact your administrator.",
+    "feedback_failed": "Could not send the report. Please try again later."
   },
   "failed_to_create_part": "Failed to create part",
   "failed_to_delete_part": "Failed to delete part",
@@ -1881,5 +1883,18 @@
     "stock_count": "{{quantity}} in stock",
     "stock_low": "{{quantity}} in stock · reorder",
     "title": "Command palette"
+  },
+  "report_problem": {
+    "title": "Report a problem",
+    "description_label": "What happened?",
+    "description_placeholder": "Describe the problem in your own words — what you did, what you expected, what happened.",
+    "contact_label": "Contact (optional)",
+    "contact_placeholder": "Phone or email, if we need to reach you",
+    "auto_attach": "The current page, app version and recent errors are attached automatically.",
+    "submit": "Send report",
+    "cancel": "Cancel",
+    "success": "Report sent — thank you! (issue #{{number}})",
+    "error": "Could not send the report. Please try again or contact the administrator.",
+    "error_description_required": "Please describe the problem (at least 10 characters)."
   }
 }

@@ -19,6 +19,7 @@ import { authRoutes } from "./routes/auth.js";
 import { customersRoutes } from "./routes/customers.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
 import { devicesRoutes } from "./routes/devices.js";
+import { feedbackRoutes } from "./routes/feedback.js";
 import { healthRoutes } from "./routes/health.js";
 import { jobRoutes } from "./routes/jobs.js";
 import { notificationsRoutes } from "./routes/notifications.js";
@@ -82,6 +83,7 @@ if (!IS_PROD) {
         { name: "reports", description: "Reports" },
         { name: "receipts", description: "Receipts and labels" },
         { name: "returns", description: "Return claims" },
+        { name: "feedback", description: "In-app problem reports" },
         { name: "health", description: "Health check" },
       ],
       components: {
@@ -156,6 +158,7 @@ app.register(aiRoutes, { prefix: "/api/ai" });
 app.register(reportsRoutes, { prefix: "/api/reports" });
 app.register(saleRoutes, { prefix: "/api/sales" });
 app.register(returnClaimsRoutes, { prefix: "/api/return-claims" });
+app.register(feedbackRoutes, { prefix: "/api/feedback" });
 
 if (IS_PROD) {
   const distRoot = path.resolve("dist");

@@ -668,7 +668,9 @@
     "clear_payment_on_delivery": "Échec de l'annulation du marquage payé à la livraison",
     "pod_already_marked": "Le ticket est déjà marqué comme payé à la livraison",
     "pod_not_marked": "Le ticket n'est pas marqué comme payé à la livraison",
-    "no_payment_due": "Il n'y a pas de solde à encaisser"
+    "no_payment_due": "Il n'y a pas de solde à encaisser",
+    "feedback_not_configured": "Les rapports de problèmes ne sont pas configurés sur cette installation. ",
+    "feedback_failed": "Impossible d'envoyer le rapport. "
   },
   "failed_to_create_part": "Échec de la création de la pièce",
   "failed_to_delete_part": "Échec de la suppression de la pièce",
@@ -1881,5 +1883,18 @@
     "stock_count": "{{quantity}} en stock",
     "stock_low": "{{quantity}} en stock · à réapprovisionner",
     "title": "Palette de commandes"
+  },
+  "report_problem": {
+    "title": "Signaler un problème",
+    "description_label": "Ce qui s'est passé?",
+    "description_placeholder": "Décrivez le problème dans vos propres mots : ce que vous avez fait, ce à quoi vous vous attendiez, ce qui s'est passé.",
+    "contact_label": "Contact (facultatif)",
+    "contact_placeholder": "Téléphone ou e-mail, si nous devons vous joindre",
+    "auto_attach": "La page actuelle, la version de l'application et les erreurs récentes sont automatiquement jointes.",
+    "submit": "Envoyer le rapport",
+    "cancel": "Annuler",
+    "success": "Rapport envoyé — merci ! (n° {{number}})",
+    "error": "Impossible d'envoyer le rapport. ",
+    "error_description_required": "Veuillez décrire le problème (au moins 10 caractères)."
   }
 }

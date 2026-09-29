@@ -8,7 +8,10 @@ import { Toaster } from "sonner";
 import App from "./app";
 import { ErrorBoundary } from "./components/error-boundary";
 import i18n from "./i18n";
+import { installErrorBuffer } from "./lib/error-buffer";
 import "./app.css";
+
+installErrorBuffer();
 
 const rootElement = document.getElementById("root");
 if (!rootElement) {

@@ -148,6 +148,11 @@ export const ERRORS = {
     status: 403,
     message: "errors.builtin_agent_delete",
   },
+  FEEDBACK_NOT_CONFIGURED: {
+    status: 503,
+    message: "errors.feedback_not_configured",
+  },
+  FEEDBACK_FAILED: { status: 502, message: "errors.feedback_failed" },
 
   // ── Server ─────────────────────────────────────────────────────────────
   INTERNAL_ERROR: { status: 500, message: "errors.internal_error" },

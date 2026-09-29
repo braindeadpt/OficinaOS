@@ -668,7 +668,9 @@
     "clear_payment_on_delivery": "Falha ao cancelar a marcação de pago na entrega",
     "pod_already_marked": "O job já está marcado como pago na entrega",
     "pod_not_marked": "O job não está marcado como pago na entrega",
-    "no_payment_due": "Não há saldo em dívida a cobrar"
+    "no_payment_due": "Não há saldo em dívida a cobrar",
+    "feedback_not_configured": "Os relatórios de problemas não estão configurados nesta instalação. Entre em contacto com o seu administrador.",
+    "feedback_failed": "Não foi possível enviar o relatório. Por favor, tente novamente mais tarde."
   },
   "failed_to_create_part": "Falha ao criar peça",
   "failed_to_delete_part": "Falha ao eliminar peça",
@@ -1413,7 +1415,7 @@
     "cashReopen": "Reabrir dia",
     "cashReopenCount": "Reaberto {{count}}× — assinaturas anteriores foram limpas",
     "cashSignature": "Assinatura do responsável",
-    "cashSignatureAlt": "Assinatura desenhada do responsável",
+    "cashSignatureAlt": "Assinatura depalavra-passeda do responsável",
     "cashTotalCollected": "Total cobrado",
     "cashTransferTotal": "Cartão e transferência",
     "cashUser": "Utilizador"
@@ -1881,5 +1883,18 @@
     "stock_count": "{{quantity}} em stock",
     "stock_low": "{{quantity}} em stock · a repor",
     "title": "Paleta de comandos"
+  },
+  "report_problem": {
+    "title": "Informar um problema",
+    "description_label": "O que aconteceu?",
+    "description_placeholder": "Descreva o problema por palavras suas – o que fez, o que esperava, o que aconteceu.",
+    "contact_label": "Contacto (opcional)",
+    "contact_placeholder": "Telefone ou email, se precisarmos de entrar em contacto consigo",
+    "auto_attach": "A página atual, a versão da aplicação e os erros recentes são anexados automaticamente.",
+    "submit": "Enviar relatório",
+    "cancel": "Cancelar",
+    "success": "Relatório enviado — obrigado! (n.º {{number}})",
+    "error": "Não foi possível enviar o relatório. Tente novamente ou contacte o administrador.",
+    "error_description_required": "Descreva o problema (pelo menos 10 caracteres)."
   }
 }

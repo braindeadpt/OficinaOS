@@ -7,6 +7,7 @@ import { useWs } from "@/hooks/use-ws";
 import { useAlertsStore } from "@/stores/alerts";
 import { useCommandPaletteStore } from "@/stores/command-palette";
 import { useUiStore } from "@/stores/ui";
+import ReportProblemModal from "./feedback/report-problem-modal";
 import LanguageToggle from "./language-toggle";
 
 export default function TopBar() {
@@ -14,6 +15,9 @@ export default function TopBar() {
   const [showAlerts, setShowAlerts] = useState(false);
   const canCreateJob = useCan({ jobs: ["create"] });
   const openIntakeModal = useUiStore((s) => s.openIntakeModal);
+  const reportModalOpen = useUiStore((s) => s.reportModalOpen);
+  const openReportModal = useUiStore((s) => s.openReportModal);
+  const closeReportModal = useUiStore((s) => s.closeReportModal);
   const openCommandPalette = useCommandPaletteStore((s) => s.open);
   const shortcutLabel = useShortcutLabel();
   const alerts = useAlertsStore((s) => s.alerts);
@@ -93,6 +97,15 @@ export default function TopBar() {
         </button>
       </div>
       <div className="flex items-center gap-2 md:gap-3">
+        <button
+          aria-label={t("report_problem.title")}
+          className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-on-surface-variant transition-colors hover:bg-surface-container hover:text-primary"
+          onClick={openReportModal}
+          title={t("report_problem.title")}
+          type="button"
+        >
+          <span className="material-symbols-outlined">bug_report</span>
+        </button>
         <LanguageToggle />
         <div className="relative" ref={dropdownRef}>
           <button
@@ -159,6 +172,7 @@ export default function TopBar() {
           {t("new_checkin")}
         </Button>
       </div>
+      <ReportProblemModal onClose={closeReportModal} open={reportModalOpen} />
     </header>
   );
 }

@@ -189,5 +189,7 @@ export const routeSecurity: [string, RouteSecurityOverride][] = [
   // A streaming completion is by far the most expensive request the API serves.
   ["/api/ai/chat/stream", { rateLimit: { max: 10, timeWindow: "1 minute" } }],
   ["/api/ai", { rateLimit: { max: 30, timeWindow: "1 minute" } }],
+  // Each report opens a public GitHub issue — keep the budget small.
+  ["/api/feedback", { rateLimit: { max: 5, timeWindow: "15 minutes" } }],
   ["/api/*", {}],
 ];
