@@ -138,12 +138,14 @@ function receiptStrings(locale?: string): ReceiptStrings {
   return RECEIPT_STRINGS[locale ?? ""] ?? RECEIPT_STRINGS.pt;
 }
 
-function shopHeaderHtml(settings: {
-  address?: string | null;
-  logoPath?: string | null;
-  phone?: string | null;
-  shopName?: string | null;
-}): string {
+function shopHeaderHtml(
+  settings: {
+    address?: string | null;
+    logoPath?: string | null;
+    phone?: string | null;
+    shopName?: string | null;
+  } | null
+): string {
   const shopName = esc(settings?.shopName ?? "OficinaOS");
   const logoImg = settings?.logoPath
     ? `<div style="text-align:center"><img src="${esc(settings.logoPath)}" alt="${shopName}" style="max-height:14mm;max-width:60mm" /></div>`
