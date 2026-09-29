@@ -136,6 +136,14 @@ export const ERRORS = {
   NO_SHOP_PHONE: { status: 400, message: "errors.no_shop_phone" },
   JOB_CODE_OVERFLOW: { status: 500, message: "errors.job_code_overflow" },
   OUTBOX_NOT_QUEUED: { status: 409, message: "errors.outbox_not_queued" },
+  CASH_SESSION_ALREADY_CLOSED: {
+    status: 409,
+    message: "errors.cash_session_already_closed",
+  },
+  CASH_SESSION_NOT_CLOSED: {
+    status: 409,
+    message: "errors.cash_session_not_closed",
+  },
   BUILTIN_AGENT_DELETE: {
     status: 403,
     message: "errors.builtin_agent_delete",

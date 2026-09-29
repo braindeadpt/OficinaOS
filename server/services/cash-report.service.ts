@@ -1,7 +1,7 @@
 import type { PrismaClient } from "@generated/client";
 import { Role } from "@shared/constants/roles";
 import type { Scope } from "@shared/types/dashboard";
-import type { CashReportDTO } from "@shared/types/reports";
+import type { CashReportDTO, CashSessionDTO } from "@shared/types/reports";
 import type { DbClient } from "../repositories/types.js";
 import { todayRange, toMoney } from "../utils/time-range.js";
 
@@ -29,7 +29,7 @@ function creatorName(u: CreatorInfo): string {
  * own createdBy. Technician scope reduces the report to the caller's own
  * collections.
  */
-export async function cashReport(
+export async function computeCashReport(
   prisma: PrismaClient,
   scope: Scope,
   shopTz: string,
@@ -172,4 +172,44 @@ export async function cashReport(
       userCount: byUser.length,
     },
   };
+}
+
+/**
+ * Views over the cash session: while OPEN the day shows live figures and
+ * can be closed; once CLOSED the frozen close-time snapshot wins, the
+ * counted totals and the divergence become authoritative, and the day is
+ * read-only until an explicit reopen.
+ */
+export function enrichWithCashSession(
+  session: CashSessionDTO,
+  liveReport: CashReportDTO
+): CashSessionDTO & {
+  liveReport: CashReportDTO;
+  report: CashReportDTO;
+} {
+  if (session.status === "CLOSED") {
+    return {
+      ...session,
+      report: session.report,
+      liveReport,
+    };
+  }
+  // OPEN: live ledger everywhere, empty snapshot placeholder.
+  return {
+    ...session,
+    report: liveReport,
+    liveReport,
+  };
+}
+
+/**
+ * Backwards-compatible daily cash-up report (no formal session envelope).
+ */
+export function cashReport(
+  prisma: PrismaClient,
+  scope: Scope,
+  shopTz: string,
+  now: Date = new Date()
+): Promise<CashReportDTO> {
+  return computeCashReport(prisma, scope, shopTz, now);
 }

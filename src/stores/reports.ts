@@ -1,5 +1,7 @@
+import type { CloseCashSessionInput } from "@shared/schemas/cash-session.schema";
 import type {
   CashReportDTO,
+  CashSessionDTO,
   InsightsReportDTO,
   OperationsReportDTO,
   PartsConsumptionReportDTO,
@@ -13,9 +15,16 @@ import api, { getErrorMessage } from "@/lib/api";
 
 interface ReportsState {
   cash: { data?: CashReportDTO; loading: boolean; error?: string };
+  cashSession: {
+    data?: CashSessionDTO & { liveReport: CashReportDTO };
+    loading: boolean;
+    error?: string;
+  };
+  closeCashSession: (input: CloseCashSessionInput) => Promise<void>;
   customFrom: string | null;
   customTo: string | null;
   fetchCash: () => Promise<void>;
+  fetchCashSession: () => Promise<void>;
   fetchInsights: () => Promise<void>;
   fetchOperations: () => Promise<void>;
   fetchPartsConsumption: () => Promise<void>;
@@ -29,6 +38,7 @@ interface ReportsState {
     error?: string;
   };
   range: TimeRangePreset;
+  reopenCashSession: () => Promise<void>;
   returns: { data?: ReturnsReportDTO; loading: boolean; error?: string };
   revenue: { data?: RevenueReportDTO; loading: boolean; error?: string };
   setCustomRange: (from: string, to: string) => void;
@@ -45,6 +55,7 @@ function queryParams(state: ReportsState): string {
 export const useReportsStore = create<ReportsState>((set, get) => ({
   range: "30d",
   cash: { loading: false },
+  cashSession: { loading: false },
   customFrom: null,
   customTo: null,
   revenue: { loading: false },
@@ -150,6 +161,62 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
       set({
         cash: {
           ...get().cash,
+          loading: false,
+          error: getErrorMessage(err, i18n.t("errors.fetch_reports")),
+        },
+      });
+    }
+  },
+
+  fetchCashSession: async () => {
+    set({
+      cashSession: { ...get().cashSession, loading: true, error: undefined },
+    });
+    try {
+      const res = await api.get("/reports/cash/session");
+      set({
+        cashSession: {
+          data: res.data as CashSessionDTO & { liveReport: CashReportDTO },
+          loading: false,
+        },
+      });
+    } catch (err: unknown) {
+      set({
+        cashSession: {
+          ...get().cashSession,
+          loading: false,
+          error: getErrorMessage(err, i18n.t("errors.fetch_reports")),
+        },
+      });
+    }
+  },
+
+  closeCashSession: async (input: CloseCashSessionInput) => {
+    const res = await api.post("/reports/cash/close", input);
+    set({
+      cashSession: {
+        data: res.data as CashSessionDTO & { liveReport: CashReportDTO },
+        loading: false,
+      },
+    });
+  },
+
+  reopenCashSession: async () => {
+    set({
+      cashSession: { ...get().cashSession, loading: true, error: undefined },
+    });
+    try {
+      const res = await api.post("/reports/cash/reopen");
+      set({
+        cashSession: {
+          data: res.data as CashSessionDTO & { liveReport: CashReportDTO },
+          loading: false,
+        },
+      });
+    } catch (err: unknown) {
+      set({
+        cashSession: {
+          ...get().cashSession,
           loading: false,
           error: getErrorMessage(err, i18n.t("errors.fetch_reports")),
         },
