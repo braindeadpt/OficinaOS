@@ -31,7 +31,7 @@ if exist "C:\Program Files\Docker\Docker\Docker Desktop.exe" (
 )
 set /a TENT=0
 :esperar_docker
-timeout /t 5 /nobreak >nul
+ping -n 6 127.0.0.1 >nul
 set /a TENT+=1
 docker info >nul 2>&1
 if not errorlevel 1 goto docker_pronto
@@ -54,7 +54,7 @@ if errorlevel 1 (
 REM Esperar que a app responda antes de abrir o browser
 set /a TENT=0
 :esperar_app
-timeout /t 3 /nobreak >nul
+ping -n 4 127.0.0.1 >nul
 set /a TENT+=1
 curl -sf --max-time 3 http://localhost:4000/health >nul 2>&1
 if not errorlevel 1 goto app_pronta

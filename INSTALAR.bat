@@ -65,7 +65,7 @@ if exist "C:\Program Files\Docker\Docker\Docker Desktop.exe" (
 )
 set /a TENT=0
 :esperar_docker
-timeout /t 5 /nobreak >nul
+ping -n 6 127.0.0.1 >nul
 set /a TENT+=1
 docker info >nul 2>&1
 if not errorlevel 1 goto docker_ok
@@ -125,7 +125,7 @@ REM ── Esperar que a app responda (migrations + primeiro arranque) ───
 echo        A aguardar que a aplicacao arranque...
 set /a TENT=0
 :esperar_app
-timeout /t 5 /nobreak >nul
+ping -n 6 127.0.0.1 >nul
 set /a TENT+=1
 curl -sf --max-time 3 http://localhost:4000/health >nul 2>&1
 if not errorlevel 1 goto app_pronta
@@ -143,7 +143,7 @@ REM ── 4. Utilizador admin + dados iniciais (seed e idempotente) ───�
 echo [4/4] A criar o utilizador inicial...
 docker compose -f %COMPOSE_FILE% exec -T app bun run db:seed
 if errorlevel 1 (
-    timeout /t 10 /nobreak >nul
+    ping -n 11 127.0.0.1 >nul
     docker compose -f %COMPOSE_FILE% exec -T app bun run db:seed
 )
 if errorlevel 1 (
