@@ -16,6 +16,7 @@ import {
   isMutation,
   MUTATION_METHODS,
   matchRoute,
+  mergeRouteConfig,
   routeSecurity,
 } from "../config/route-security.js";
 
@@ -176,18 +177,13 @@ const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       }
     }
 
-    // Merge config map overrides into route config
-    const mergedConfig: Record<string, unknown> = {
-      ...DEFAULT_SECURITY,
-      ...override,
-    };
-
-    // Handle rateLimit: false explicitly (disable rate limit for this route)
-    if (override?.rateLimit === false) {
-      mergedConfig.rateLimit = false;
-    }
-
-    routeOptions.config = { ...routeOptions.config, ...mergedConfig };
+    // Route-declared config wins over the central map, merged key by key:
+    // a route that pins its own rateLimit keeps it, while still inheriting
+    // everything else (csrf, allowSensitiveKeys) from the map.
+    routeOptions.config = mergeRouteConfig(
+      routeOptions.config as Record<string, unknown> | undefined,
+      override
+    );
   });
 
   // ── Layer 6: Request Sanitization ───────────────────────────────────────

@@ -157,12 +157,6 @@ export const aiRoutes: FastifyPluginAsync = async (app) => {
         body: { type: "object", additionalProperties: true },
         produces: ["text/event-stream"],
       },
-      config: {
-        rateLimit: {
-          max: 10,
-          timeWindow: 60_000,
-        },
-      },
     },
     async (req, reply) => {
       const parsed = chatMessageSchema.safeParse(req.body);

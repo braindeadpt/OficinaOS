@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SECURITY,
   matchRoute,
+  mergeRouteConfig,
   type RouteSecurityOverride,
   routeSecurity,
 } from "../../server/config/route-security.js";
@@ -87,6 +88,56 @@ describe("matchRoute", () => {
     expect(
       matchRoute("/api/auth/sign-up/email", routeSecurity)?.allowSensitiveKeys
     ).toBe(true);
+  });
+});
+
+describe("mergeRouteConfig", () => {
+  /** The effective config a route ends up with, as the onRoute hook builds it. */
+  const effective = (url: string, routeConfig?: Record<string, unknown>) =>
+    mergeRouteConfig(routeConfig, matchRoute(url, routeSecurity));
+
+  it("applies the central map when a route declares no config", () => {
+    const merged = effective("/api/jobs");
+    expect(merged.rateLimit).toEqual({ max: 30, timeWindow: "1 minute" });
+    expect(merged.allowSensitiveKeys).toBe(false);
+  });
+
+  it("keeps the strict limit on the public job lookup", () => {
+    // Regression: the generic /api/jobs rule used to overwrite this, handing
+    // an unauthenticated endpoint 30 attempts/min instead of 10 per 15 min.
+    const rateLimit = effective("/api/jobs/lookup").rateLimit as {
+      keyGenerator: (req: { ip: string }) => string;
+      max: number;
+      timeWindow: string;
+    };
+    expect(rateLimit.max).toBe(10);
+    expect(rateLimit.timeWindow).toBe("15 minutes");
+    expect(rateLimit.keyGenerator({ ip: "10.0.0.1" })).toBe("10.0.0.1");
+  });
+
+  it("keeps the strict limit on AI streaming", () => {
+    expect(effective("/api/ai/chat/stream").rateLimit).toEqual({
+      max: 10,
+      timeWindow: "1 minute",
+    });
+  });
+
+  it("does not let a route-declared rateLimit be discarded", () => {
+    const declared = { max: 5, timeWindow: "1 hour" };
+    const merged = effective("/api/jobs", { rateLimit: declared });
+    expect(merged.rateLimit).toBe(declared);
+  });
+
+  it("still inherits non-overridden keys from the map", () => {
+    const merged = effective("/api/auth/sign-in/email", {
+      rateLimit: { max: 1, timeWindow: "1 hour" },
+    });
+    expect(merged.rateLimit).toEqual({ max: 1, timeWindow: "1 hour" });
+    expect(merged.allowSensitiveKeys).toBe(true);
+  });
+
+  it("honours an explicit rateLimit:false from the map", () => {
+    expect(effective("/health").rateLimit).toBe(false);
   });
 });
 
