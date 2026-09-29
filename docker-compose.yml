@@ -27,7 +27,36 @@ services:
       DATABASE_URL: postgresql://reparilo:reparilo@db:5432/reparilo
     volumes:
       - uploads:/app/uploads
+      - backups-heartbeat:/backups-status
+
+  db-backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGUSER: reparilo
+      PGPASSWORD: reparilo
+      PGDATABASE: reparilo
+      BACKUP_DIR: /backups
+      RETENTION_DAYS: "14"
+      HEARTBEAT_DIR: /backups-status
+    volumes:
+      - backups:/backups
+      - backups-heartbeat:/backups-status
+      - ./scripts/db-backup.sh:/scripts/run-backup.sh:ro
+      - ./scripts/db-restore.sh:/scripts/run-restore.sh:ro
+    # Daily backup loop: one dump right after start, then every 24h.
+    entrypoint: [
+      "sh", "-c",
+      "apk add --no-cache bash >/dev/null 2>&1 || true; while true; do /scripts/run-backup.sh || echo '[db-backup] failed, retrying tomorrow'; sleep 86400; done"
+    ]
 
 volumes:
   pgdata:
   uploads:
+  backups:
+  backups-heartbeat:

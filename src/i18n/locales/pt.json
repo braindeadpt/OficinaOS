@@ -1778,5 +1778,11 @@
   "parts_purchase_supplier": "Fornecedor",
   "parts_purchase_new_stock": "Novo nível de stock",
   "parts_purchase_recorded": "Compra registada",
-  "parts_purchase_failed": "Falha ao registar a compra"
+  "parts_purchase_failed": "Falha ao registar a compra",
+  "backups_title": "Backups da base de dados",
+  "backups_missing": "Backups não detetados - o sidecar db-backup ainda não correu",
+  "backups_last": "{count} cópia(s) em disco - a última há {hours}h",
+  "backups_stale": "Backup atrasado - verifica o contentor db-backup",
+  "backups_fresh": "Backups a correr normalmente",
+  "backups_nightly": "Backup automático diário com retenção de 14 dias"
 }

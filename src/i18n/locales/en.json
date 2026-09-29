@@ -1778,5 +1778,11 @@
   "parts_purchase_supplier": "Supplier",
   "parts_purchase_new_stock": "New stock level",
   "parts_purchase_recorded": "Purchase recorded",
-  "parts_purchase_failed": "Failed to record purchase"
+  "parts_purchase_failed": "Failed to record purchase",
+  "backups_title": "Database backups",
+  "backups_missing": "Backups not detected - the db-backup sidecar has not run yet",
+  "backups_last": "{count} dump(s) on disk - last one {hours}h ago",
+  "backups_stale": "Backup overdue - check the db-backup container",
+  "backups_fresh": "Backups running normally",
+  "backups_nightly": "Automatic daily backup with 14-day retention"
 }
