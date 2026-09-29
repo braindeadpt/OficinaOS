@@ -1778,5 +1778,11 @@
   "parts_purchase_supplier": "Fournisseur",
   "parts_purchase_new_stock": "Nouveau niveau de stock",
   "parts_purchase_recorded": "Achat enregistré",
-  "parts_purchase_failed": "Échec de l'enregistrement de l'achat"
+  "parts_purchase_failed": "Échec de l'enregistrement de l'achat",
+  "backups_title": "Sauvegardes de la base de données",
+  "backups_missing": "Aucune sauvegarde détectée - le sidecar db-backup n'a pas encore tourné",
+  "backups_last": "{count} sauvegarde(s) sur disque - la dernière il y a {hours}h",
+  "backups_stale": "Sauvegarde en retard - vérifiez le conteneur db-backup",
+  "backups_fresh": "Sauvegardes en cours normales",
+  "backups_nightly": "Sauvegarde quotidienne automatique avec rétention de 14 jours"
 }

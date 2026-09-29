@@ -1,9 +1,77 @@
 import { COUNTRIES, CURRENCIES } from "@shared/constants";
 import type { FormEvent } from "react";
-import { useEffect, useImperativeHandle, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
+import api from "@/lib/api";
 import { getPhonePlaceholder } from "@/lib/phone-formats";
 import { useSettingsStore } from "@/stores/settings";
+
+interface BackupStatus {
+  dumpCount: number;
+  hoursAgo: number | null;
+  lastBackupAt: string | null;
+  stale: boolean;
+}
+
+function BackupStatusCard() {
+  const { t } = useTranslation();
+  const [status, setStatus] = useState<BackupStatus | null>(null);
+
+  const fetchStatus = useCallback(async () => {
+    try {
+      const res = await api.get("/settings/backups/status");
+      setStatus(res.data as BackupStatus);
+    } catch {
+      setStatus(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStatus();
+  }, [fetchStatus]);
+
+  return (
+    <div className="rounded-xl border border-outline-variant bg-surface-container-low p-4">
+      <div className="flex items-center gap-2">
+        <span
+          aria-hidden="true"
+          className="material-symbols-outlined text-[20px]"
+        >
+          settings_backup_restore
+        </span>
+        <h3 className="font-bold font-headline text-on-surface text-sm">
+          {t("backups_title")}
+        </h3>
+        <span
+          className={`ml-auto h-2.5 w-2.5 rounded-full ${
+            status && !status.stale && status.lastBackupAt
+              ? "bg-primary"
+              : "bg-error"
+          }`}
+        />
+      </div>
+      <p className="mt-2 font-body text-on-surface-variant text-sm">
+        {status?.lastBackupAt
+          ? t("backups_last", {
+              count: status.dumpCount,
+              hours: status.hoursAgo ?? 0,
+            })
+          : t("backups_missing")}
+      </p>
+      {status?.stale && status.lastBackupAt && (
+        <p className="mt-1 font-label text-error text-xs">
+          {t("backups_stale")}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export interface SettingsShopTabHandle {
   requestSubmit: () => void;
@@ -245,6 +313,8 @@ export default function SettingsShopTab({
           </div>
         </div>
       </div>
+
+      <BackupStatusCard />
     </form>
   );
 }

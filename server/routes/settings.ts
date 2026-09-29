@@ -6,6 +6,7 @@ import {
 } from "@shared/schemas/settings.schema";
 import type { FastifyPluginAsync } from "fastify";
 import { requirePermission } from "../middlewares/rbac.js";
+import { getBackupStatus } from "../services/backup-status.service.js";
 import {
   getAiSettings,
   getShopSettings,
@@ -40,6 +41,17 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       const ai = await getAiSettings(app.prisma);
       return reply.send(ai);
     }
+  );
+
+  app.get(
+    "/backups/status",
+    {
+      schema: {
+        tags: ["settings"],
+        summary: "Database backup status from the backup sidecar",
+      },
+    },
+    async (_req, reply) => reply.send(await getBackupStatus())
   );
 
   app.put(
