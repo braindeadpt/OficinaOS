@@ -6,6 +6,7 @@ import {
   findManyNotificationTemplatesByName,
   findManyUsers,
 } from "../repositories/notification.repository.js";
+import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import { logger } from "../utils/logger.js";
 import { queueNotification } from "./notification-outbox.service.js";
@@ -143,14 +144,37 @@ const HANDLERS: Record<NotifyChannel, ChannelHandler> = {
 const DEFAULT_IN_APP_BODY =
   "{{eventName}}{{if jobCode}} — Job {{jobCode}}{{endif}}";
 
+/**
+ * Production dispatch supplies the real shop name (ShopSettings) so
+ * template signatures like {{if shopName}} — {{shopName}}{{endif}}
+ * render for every channel without relying on testNotification.
+ * Event contexts may still override it explicitly.
+ */
+async function resolveShopName(prisma: DbClient): Promise<string> {
+  try {
+    const shop = await findShopSettingsUnique(prisma);
+    return shop?.shopName ?? "";
+  } catch (err) {
+    // Notifications are best-effort: never block dispatch on a
+    // settings lookup failure (e.g. row not seeded yet).
+    logger.warn({ err }, "failed to resolve shopName for notification");
+    return "";
+  }
+}
+
 function buildTemplateVars(
-  context: NotifyEvent["context"]
+  context: NotifyEvent["context"],
+  shopName: string
 ): Record<string, string> {
   const vars: Record<string, string> = {};
   for (const [k, v] of Object.entries(context)) {
     if (v !== undefined) {
       vars[k] = v;
     }
+  }
+  // Context-provided shopName (if any) wins over the settings value.
+  if (shopName && vars.shopName === undefined) {
+    vars.shopName = shopName;
   }
   return vars;
 }
@@ -177,7 +201,8 @@ export async function notify(
     event.eventName
   );
 
-  const templateVars = buildTemplateVars(event.context);
+  const shopName = await resolveShopName(app.prisma);
+  const templateVars = buildTemplateVars(event.context, shopName);
   const inAppBody = resolveInAppBody(templates);
 
   await HANDLERS.IN_APP.handle(app.prisma, app, event, {
