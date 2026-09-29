@@ -1,3 +1,4 @@
+import type { RepairCategoryType } from "@shared/constants";
 import type { RepairCatalog } from "@shared/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -7,11 +8,11 @@ import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useModalEffects } from "@/hooks/use-modal-effects";
-import type { RepairCategory } from "./repair-table";
+import { REPAIR_CATEGORY_ICONS } from "@/lib/category-display";
 
 export interface RepairFormData {
   basePrice: string;
-  category: RepairCategory;
+  category: RepairCategoryType;
   name: string;
 }
 
@@ -31,25 +32,13 @@ interface AddRepairModalProps {
 }
 
 const REPAIR_CATEGORIES: {
-  icon: string;
-  key: RepairCategory;
+  key: RepairCategoryType;
   labelKey: string;
 }[] = [
-  {
-    icon: "build",
-    key: "HARDWARE",
-    labelKey: "repair_category.HARDWARE",
-  },
-  {
-    icon: "terminal",
-    key: "SOFTWARE",
-    labelKey: "repair_category.SOFTWARE",
-  },
-  {
-    icon: "troubleshoot",
-    key: "DIAGNOSTIC",
-    labelKey: "repair_category.DIAGNOSTIC",
-  },
+  { key: "HARDWARE", labelKey: "repair_category.HARDWARE" },
+  { key: "SOFTWARE", labelKey: "repair_category.SOFTWARE" },
+  { key: "DIAGNOSTIC", labelKey: "repair_category.DIAGNOSTIC" },
+  { key: "OTHER", labelKey: "repair_category.OTHER" },
 ];
 
 function isDirty(
@@ -59,7 +48,7 @@ function isDirty(
   if (editingRepair) {
     return (
       form.name !== editingRepair.name ||
-      form.category !== (editingRepair.category as RepairCategory) ||
+      form.category !== (editingRepair.category as RepairCategoryType) ||
       Number.parseFloat(form.basePrice) !==
         Number.parseFloat(String(editingRepair.defaultPrice))
     );
@@ -85,7 +74,7 @@ export default function AddRepairModal({
     if (editingRepair) {
       return {
         name: editingRepair.name,
-        category: editingRepair.category as RepairCategory,
+        category: editingRepair.category as RepairCategoryType,
         basePrice: String(editingRepair.defaultPrice),
       };
     }
@@ -101,7 +90,7 @@ export default function AddRepairModal({
     if (editingRepair) {
       setForm({
         name: editingRepair.name,
-        category: editingRepair.category as RepairCategory,
+        category: editingRepair.category as RepairCategoryType,
         basePrice: String(editingRepair.defaultPrice),
       });
     } else {
@@ -239,7 +228,7 @@ export default function AddRepairModal({
                   >
                     <Icon
                       className="me-1 -mt-0.5 inline align-middle"
-                      name={cat.icon}
+                      name={REPAIR_CATEGORY_ICONS[cat.key].icon}
                       size="sm"
                     />
                     {t(cat.labelKey)}

@@ -1,18 +1,14 @@
+import type { RepairCategoryType } from "@shared/constants";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { REPAIR_CATEGORY_BAR_COLORS } from "@/lib/category-display";
 import type { RepairItem } from "./repair-table";
 
-const FALLBACK_CATEGORIES = [
-  { color: "bg-primary", key: "HARDWARE", pct: 65 },
-  { color: "bg-tertiary", key: "SOFTWARE", pct: 20 },
-  { color: "bg-secondary", key: "DIAGNOSTIC", pct: 15 },
+const FALLBACK_CATEGORIES: { key: RepairCategoryType; pct: number }[] = [
+  { key: "HARDWARE", pct: 65 },
+  { key: "SOFTWARE", pct: 20 },
+  { key: "DIAGNOSTIC", pct: 15 },
 ];
-
-const CATEGORY_COLORS: Record<string, string> = {
-  HARDWARE: "bg-primary",
-  SOFTWARE: "bg-tertiary",
-  DIAGNOSTIC: "bg-secondary",
-};
 
 interface CategoryHealthProps {
   repairs?: RepairItem[];
@@ -35,8 +31,7 @@ export default function CategoryHealth({ repairs }: CategoryHealthProps) {
     }
     return Object.entries(counts)
       .map(([key, count]) => ({
-        color: CATEGORY_COLORS[key] ?? "bg-primary",
-        key,
+        key: key as RepairCategoryType,
         pct: Math.round((count / total) * 100),
       }))
       .sort((a, b) => b.pct - a.pct);
@@ -68,7 +63,7 @@ export default function CategoryHealth({ repairs }: CategoryHealthProps) {
             </div>
             <div className="h-2 w-full overflow-hidden rounded-full bg-surface-container-highest">
               <div
-                className={`h-full rounded-full ${cat.color} transition-all duration-700`}
+                className={`h-full rounded-full ${REPAIR_CATEGORY_BAR_COLORS[cat.key]} transition-all duration-700`}
                 style={{ width: `${cat.pct}%` }}
               />
             </div>

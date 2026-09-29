@@ -1,25 +1,44 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { useSettingsStore } from "@/stores/settings";
+import { useSettingsStore } from "@/stores/settings"; /**
+ * The four states an outbox row can be in. A row in any other state (a value
+ * added by a newer worker, say) falls back to a neutral badge and shows its
+ * raw status rather than rendering an empty pill.
+ */
+
+const OUTBOX_STATUSES = ["CANCELLED", "FAILED", "QUEUED", "SENT"] as const;
+type OutboxStatus = (typeof OUTBOX_STATUSES)[number];
+
+const OUTBOX_COLORS: Record<OutboxStatus, string> = {
+  CANCELLED: "bg-surface-container-high text-on-surface-variant",
+  FAILED: "bg-error/10 text-error",
+  QUEUED: "bg-tertiary-fixed text-on-tertiary-fixed-variant",
+  SENT: "bg-success/10 text-success",
+};
+
+const OUTBOX_LABELS: Record<OutboxStatus, string> = {
+  CANCELLED: "status_cancelled",
+  FAILED: "status_failed",
+  QUEUED: "status_queued",
+  SENT: "status_sent",
+};
+
+function isOutboxStatus(status: string): status is OutboxStatus {
+  return (OUTBOX_STATUSES as readonly string[]).includes(status);
+}
 
 function StatusBadge({ status }: { status: string }) {
   const { t } = useTranslation();
-  const colors: Record<string, string> = {
-    CANCELLED: "bg-surface-container-high text-on-surface-variant",
-    FAILED: "bg-error/10 text-error",
-    QUEUED: "bg-tertiary-fixed text-on-tertiary-fixed-variant",
-    SENT: "bg-success/10 text-success",
-  };
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 font-semibold text-xs ${colors[status] ?? "bg-surface-container-high text-on-surface-variant"}`}
+      className={`inline-flex items-center rounded-full px-2 py-0.5 font-semibold text-xs ${
+        isOutboxStatus(status)
+          ? OUTBOX_COLORS[status]
+          : "bg-surface-container-high text-on-surface-variant"
+      }`}
     >
-      {status === "QUEUED" && t("status_queued")}
-      {status === "SENT" && t("status_sent")}
-      {status === "FAILED" && t("status_failed")}
-      {status === "CANCELLED" && t("status_cancelled")}
-      {!["QUEUED", "SENT", "FAILED", "CANCELLED"].includes(status) && status}
+      {isOutboxStatus(status) ? t(OUTBOX_LABELS[status]) : status}
     </span>
   );
 }

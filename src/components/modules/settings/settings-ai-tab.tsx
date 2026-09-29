@@ -14,15 +14,21 @@ import { useModalEffects } from "@/hooks/use-modal-effects";
 import api from "@/lib/api";
 import { useSettingsStore } from "@/stores/settings";
 
-const TEST_BUTTON_CLASSES: Record<string, string> = {
-  success: "bg-success text-on-success",
+type TestStatus = "idle" | "loading" | "success" | "fail";
+
+const TEST_BUTTON_CLASSES: Record<TestStatus, string> = {
   fail: "bg-error text-on-error",
+  idle: "bg-surface-container text-on-surface-variant hover:bg-surface-container-high",
+  loading:
+    "bg-surface-container text-on-surface-variant hover:bg-surface-container-high",
+  success: "bg-success text-on-success",
 };
 
-const TEST_ICON: Record<string, string> = {
+const TEST_ICON: Record<TestStatus, string> = {
+  fail: "error",
+  idle: "network_check",
   loading: "progress_activity",
   success: "check_circle",
-  fail: "error",
 };
 
 function getCreativityLabel(value: number, t: (key: string) => string): string {
@@ -550,9 +556,7 @@ export default function SettingsAiTab({
   const [aiFormInitial, setAiFormInitial] = useState(aiForm);
   const [showApiKey, setShowApiKey] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [testStatus, setTestStatus] = useState<
-    "idle" | "loading" | "success" | "fail"
-  >("idle");
+  const [testStatus, setTestStatus] = useState<TestStatus>("idle");
 
   const [agents, setAgents] = useState<AgentDefinition[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(true);
@@ -877,7 +881,7 @@ export default function SettingsAiTab({
 
         <div className="flex items-center gap-4">
           <button
-            className={`flex min-h-11 items-center gap-2 rounded-xl px-6 py-3 font-bold text-sm transition-all ${TEST_BUTTON_CLASSES[testStatus] ?? "bg-surface-container text-on-surface-variant hover:bg-surface-container-high"}`}
+            className={`flex min-h-11 items-center gap-2 rounded-xl px-6 py-3 font-bold text-sm transition-all ${TEST_BUTTON_CLASSES[testStatus]}`}
             disabled={isTesting}
             onClick={handleTestConnection}
             type="button"
@@ -885,7 +889,7 @@ export default function SettingsAiTab({
             <span
               className={`material-symbols-outlined text-[18px] ${isTesting ? "animate-spin" : ""}`}
             >
-              {TEST_ICON[testStatus] ?? "network_check"}
+              {TEST_ICON[testStatus]}
             </span>
             {isTesting ? t("testing_connection") : t("test_connection")}
           </button>

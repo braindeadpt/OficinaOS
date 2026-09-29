@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
+import { REPAIR_CATEGORY_TONES } from "@/lib/category-display";
 import type { RepairItem } from "./repair-table";
-import { CATEGORY_COLORS } from "./repair-table";
 
 interface RepairMobileCardProps {
   onEdit: (item: RepairItem) => void;
@@ -50,7 +50,7 @@ export default function RepairMobileCard({
             </span>
           )}
           <span
-            className={`rounded-full px-2 py-0.5 font-medium text-xs uppercase ${CATEGORY_COLORS[repair.category]}`}
+            className={`rounded-full px-2 py-0.5 font-medium text-xs uppercase ${REPAIR_CATEGORY_TONES[repair.category]}`}
           >
             {t(`repair_category.${repair.category}`)}
           </span>

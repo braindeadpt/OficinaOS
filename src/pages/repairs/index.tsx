@@ -1,3 +1,4 @@
+import type { RepairCategoryType } from "@shared/constants";
 import type { RepairCatalog } from "@shared/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -8,51 +9,25 @@ import DeleteRepairDialog from "@/components/modules/repairs/delete-repair-dialo
 import type { SortOption } from "@/components/modules/repairs/repair-filters";
 import RepairFilters from "@/components/modules/repairs/repair-filters";
 import RepairMobileCard from "@/components/modules/repairs/repair-mobile-card";
-import type {
-  RepairCategory,
-  RepairItem,
-} from "@/components/modules/repairs/repair-table";
+import type { RepairItem } from "@/components/modules/repairs/repair-table";
 import RepairTable from "@/components/modules/repairs/repair-table";
 import { Button } from "@/components/ui/button";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
+import {
+  REPAIR_CATEGORY_ICONS,
+  REPAIR_CATEGORY_PREFIXES,
+} from "@/lib/category-display";
 import { useRepairCatalogStore } from "@/stores/repair-catalog";
 
-const CATEGORY_ICONS: Record<
-  string,
-  { icon: string; iconBg: string; iconColor: string }
-> = {
-  HARDWARE: {
-    icon: "build",
-    iconBg: "bg-primary-fixed",
-    iconColor: "text-primary",
-  },
-  SOFTWARE: {
-    icon: "terminal",
-    iconBg: "bg-secondary-fixed",
-    iconColor: "text-secondary",
-  },
-  DIAGNOSTIC: {
-    icon: "troubleshoot",
-    iconBg: "bg-tertiary-fixed",
-    iconColor: "text-tertiary",
-  },
-};
-
-const CATEGORY_PREFIXES: Record<string, string> = {
-  HARDWARE: "HW",
-  SOFTWARE: "SW",
-  DIAGNOSTIC: "DG",
-};
-
 function toRepairItem(r: RepairCatalog): RepairItem {
-  const cat = r.category as string;
-  const display = CATEGORY_ICONS[cat] ?? CATEGORY_ICONS.HARDWARE;
-  const prefix = CATEGORY_PREFIXES[cat] ?? "HW";
+  const cat = r.category as RepairCategoryType;
+  const display = REPAIR_CATEGORY_ICONS[cat];
+  const prefix = REPAIR_CATEGORY_PREFIXES[cat];
   return {
     id: r.id,
     code: `REP-${prefix}-${r.id.slice(-3).toUpperCase()}`,
     name: r.name,
-    category: cat as RepairCategory,
+    category: cat,
     basePrice:
       typeof r.defaultPrice === "number"
         ? r.defaultPrice
@@ -156,9 +131,9 @@ export default function RepairsPage() {
     toggleRepairActive,
     clearError,
   } = useRepairCatalogStore();
-  const [activeCategory, setActiveCategory] = useState<RepairCategory | "ALL">(
-    "ALL"
-  );
+  const [activeCategory, setActiveCategory] = useState<
+    RepairCategoryType | "ALL"
+  >("ALL");
   const [activeSort, setActiveSort] = useState<SortOption>("recently_added");
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
@@ -248,7 +223,7 @@ export default function RepairsPage() {
 
   const { avgPrice, topCategory } = useMemo(() => {
     if (repairItems.length === 0) {
-      return { avgPrice: 0, topCategory: "HARDWARE" as RepairCategory };
+      return { avgPrice: 0, topCategory: "HARDWARE" as RepairCategoryType };
     }
     const avg = Math.round(
       repairItems.reduce((sum, r) => sum + r.basePrice, 0) / repairItems.length
@@ -262,7 +237,7 @@ export default function RepairsPage() {
     );
     const top = Object.entries(counts).sort(
       ([, a], [, b]) => b - a
-    )[0]?.[0] as RepairCategory;
+    )[0]?.[0] as RepairCategoryType;
     return { avgPrice: avg, topCategory: top };
   }, [repairItems]);
 

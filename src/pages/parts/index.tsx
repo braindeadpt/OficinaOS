@@ -13,6 +13,7 @@ import { LowStockBadge } from "@/components/ui/low-stock-badge";
 import { useCan } from "@/hooks/use-can";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
+import { PART_CATEGORY_TONES } from "@/lib/category-display";
 import { usePartsCatalogStore } from "@/stores/parts-catalog";
 
 type SortField = "name" | "category" | "defaultPrice" | "supplier";
@@ -23,19 +24,6 @@ interface AddPartForm {
   name: string;
   supplier: string;
 }
-
-const CATEGORY_COLORS: Record<string, string> = {
-  BATTERY: "bg-tertiary-fixed text-on-tertiary-fixed-variant",
-  BUTTON: "bg-secondary-container text-on-secondary-container",
-  CAMERA: "bg-primary-fixed text-on-primary-fixed",
-  CHARGING_PORT: "bg-secondary-fixed text-on-secondary-fixed-variant",
-  HOUSING: "bg-surface-container-high text-on-surface-variant",
-  MICROPHONE: "bg-secondary-container text-on-secondary-container",
-  MOTHERBOARD: "bg-error-container text-on-error-container",
-  OTHER: "bg-surface-container-high text-on-surface-variant",
-  SCREEN: "bg-primary-fixed text-on-primary-fixed",
-  SPEAKER: "bg-tertiary-fixed text-on-tertiary-fixed-variant",
-};
 
 const CATEGORIES: (PartCategoryType | "ALL")[] = [
   "ALL",
@@ -186,7 +174,7 @@ function DesktopPartRow({
       </td>
       <td className="px-5 py-4">
         <span
-          className={`rounded-full px-2.5 py-1 font-bold text-xs uppercase ${CATEGORY_COLORS[part.category] ?? "bg-surface-container-high text-on-surface-variant"}`}
+          className={`rounded-full px-2.5 py-1 font-bold text-xs uppercase ${PART_CATEGORY_TONES[part.category]}`}
         >
           {t(`part_category.${part.category}`)}
         </span>
@@ -356,7 +344,7 @@ function MobilePartCard({
           </span>
         </div>
         <span
-          className={`shrink-0 rounded-full px-2.5 py-1 font-bold text-xs uppercase ${CATEGORY_COLORS[part.category] ?? "bg-surface-container-high text-on-surface-variant"}`}
+          className={`shrink-0 rounded-full px-2.5 py-1 font-bold text-xs uppercase ${PART_CATEGORY_TONES[part.category]}`}
         >
           {t(`part_category.${part.category}`)}
         </span>

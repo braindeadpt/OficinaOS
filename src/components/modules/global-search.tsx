@@ -240,7 +240,7 @@ export default function GlobalSearch() {
         aria-expanded={showPanel}
         aria-label={t("search")}
         autoComplete="off"
-        className="w-full rounded-full border-none bg-surface-container-high py-2 ps-10 pe-4 text-sm transition-all group-focus-within:pe-4"
+        className="w-full rounded-full border-none bg-surface-container-high py-2 ps-10 pe-20 text-sm transition-all group-focus-within:pe-4"
         id={inputId}
         onBlur={() => setFocused(false)}
         onChange={(e) => {
@@ -260,9 +260,10 @@ export default function GlobalSearch() {
       />
 
       {/*
-       * Advertises the shortcut. The padding on the input expands on
-       * focus-within, so the hint occupies real space only while it is idle
-       * and never overlaps typed text.
+       * Advertises the shortcut. It only shows while the field is idle and
+       * empty, and the input reserves pe-20 for it so the placeholder can
+       * never run underneath; on focus-within the padding collapses back to
+       * pe-4 because by then the hint is gone and the text wants the room.
        */}
       {!focused && query.length === 0 && (
         <kbd className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 rounded-md bg-surface-container-highest px-1.5 py-0.5 font-mono text-[10px] text-on-surface-variant tracking-wide">

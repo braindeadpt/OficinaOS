@@ -1,6 +1,6 @@
+import type { RepairCategoryType } from "@shared/constants";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { RepairCategory } from "./repair-table";
 
 export type SortOption =
   | "recently_added"
@@ -9,19 +9,20 @@ export type SortOption =
   | "az";
 
 interface RepairFiltersProps {
-  activeCategory: RepairCategory | "ALL";
+  activeCategory: RepairCategoryType | "ALL";
   activeSort: SortOption;
-  onCategoryChange: (category: RepairCategory | "ALL") => void;
+  onCategoryChange: (category: RepairCategoryType | "ALL") => void;
   onSearchChange: (query: string) => void;
   onSortChange: (sort: SortOption) => void;
   searchQuery: string;
 }
 
-const CATEGORIES: (RepairCategory | "ALL")[] = [
+const CATEGORIES: (RepairCategoryType | "ALL")[] = [
   "ALL",
   "HARDWARE",
   "SOFTWARE",
   "DIAGNOSTIC",
+  "OTHER",
 ];
 
 const SORT_OPTIONS: { key: SortOption; labelKey: string }[] = [
@@ -90,7 +91,7 @@ export default function RepairFilters({
               onCategoryChange(
                 e.target.value === "ALL"
                   ? "ALL"
-                  : (e.target.value as RepairCategory)
+                  : (e.target.value as RepairCategoryType)
               )
             }
             value={activeCategory}

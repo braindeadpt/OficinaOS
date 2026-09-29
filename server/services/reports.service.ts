@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@generated/client";
 import { AuditAction, type JobStatus } from "@generated/client";
+import type { FaultCategory } from "@generated/enums";
 import { Role } from "@shared/constants/roles";
 import type { Scope } from "@shared/types/dashboard";
 import type {
@@ -692,7 +693,7 @@ async function computeByRepairType(
 
   const repairMap = new Map<
     string,
-    { repairName: string; count: number; faults: Map<string, number> }
+    { repairName: string; count: number; faults: Map<FaultCategory, number> }
   >();
   const repairIds = new Set(
     repairFaultRows.map((r) => r.claimedJobRepairId).filter(Boolean) as string[]
@@ -708,7 +709,7 @@ async function computeByRepairType(
     for (const row of repairFaultRows) {
       const id = row.claimedJobRepairId as string;
       const name = repairNameMap.get(id) ?? "Unknown";
-      const fault = row.faultCategory as string;
+      const fault = row.faultCategory as FaultCategory;
       const cnt = typeof row._count === "object" ? (row._count._all ?? 0) : 0;
 
       let entry = repairMap.get(id);
@@ -788,7 +789,7 @@ export async function returnsReport(
   const byFaultCategory = faultRows
     .filter((r) => r.faultCategory !== null)
     .map((r) => ({
-      faultCategory: r.faultCategory as string,
+      faultCategory: r.faultCategory as FaultCategory,
       count: typeof r._count === "object" ? (r._count._all ?? 0) : 0,
     }))
     .sort((a, b) => b.count - a.count);

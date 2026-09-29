@@ -1,20 +1,22 @@
 import { useTranslation } from "react-i18next";
 
+type AlertVariant = "error" | "secondary" | "tertiary";
+
 interface Alert {
   description: string;
   icon: string;
   id: string;
   title: string;
-  variant: "error" | "secondary" | "tertiary";
+  variant: AlertVariant;
 }
 
-const ALERT_STYLES: Record<string, string> = {
+const ALERT_STYLES: Record<AlertVariant, string> = {
   error: "bg-error-container text-on-error-container",
   secondary: "bg-secondary-container text-on-secondary-container",
   tertiary: "bg-tertiary-container text-on-tertiary-container",
 };
 
-const ALERT_ICON_COLORS: Record<string, string> = {
+const ALERT_ICON_COLORS: Record<AlertVariant, string> = {
   error: "text-error",
   secondary: "text-secondary",
   tertiary: "text-tertiary",

@@ -1,3 +1,5 @@
+import type { FaultCategory } from "@generated/enums";
+
 export type TimeRangePreset = "7d" | "30d" | "month" | "year";
 
 export interface RevenueSummary {
@@ -91,7 +93,7 @@ export interface ReturnsSummary {
 
 export interface FaultCategoryRow {
   count: number;
-  faultCategory: string;
+  faultCategory: FaultCategory;
 }
 
 export interface ReturnByRepairRow {
