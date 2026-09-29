@@ -2,6 +2,9 @@ import type { FormEvent } from "react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { useJobsStore } from "@/stores/jobs";
 
 export default function QuickIntakeForm() {
@@ -56,87 +59,47 @@ export default function QuickIntakeForm() {
 
       {expanded && (
         <form className="space-y-4 px-6 pb-6" onSubmit={handleSubmit}>
-          <div>
-            <label
-              className="mb-1 block font-bold text-on-surface-variant text-xs uppercase tracking-wide"
-              htmlFor="quick-intake-customer"
-            >
-              {t("front_desk.customer_name")}
-            </label>
-            <input
-              className="w-full rounded-xl border-none bg-surface-container-highest px-4 py-3 transition-all focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary"
-              id="quick-intake-customer"
+          <Field label={t("front_desk.customer_name")} required>
+            <Input
               onChange={(e) => setCustomerName(e.target.value)}
               placeholder={t("front_desk.customer_name_placeholder")}
               required
               type="text"
               value={customerName}
             />
-          </div>
+          </Field>
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label
-                className="mb-1 block font-bold text-on-surface-variant text-xs uppercase tracking-wide"
-                htmlFor="quick-intake-phone"
-              >
-                {t("front_desk.phone")}
-              </label>
-              <input
-                className="w-full rounded-xl border-none bg-surface-container-highest px-4 py-3 transition-all focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary"
-                id="quick-intake-phone"
+            <Field label={t("front_desk.phone")} required>
+              <Input
                 onChange={(e) => setCustomerPhone(e.target.value)}
                 placeholder={t("front_desk.phone_placeholder")}
                 required
                 type="tel"
                 value={customerPhone}
               />
-            </div>
-            <div>
-              <label
-                className="mb-1 block font-bold text-on-surface-variant text-xs uppercase tracking-wide"
-                htmlFor="quick-intake-brand"
-              >
-                {t("front_desk.device_brand")}
-              </label>
-              <input
-                className="w-full rounded-xl border-none bg-surface-container-highest px-4 py-3 transition-all focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary"
-                id="quick-intake-brand"
+            </Field>
+            <Field label={t("front_desk.device_brand")} required>
+              <Input
                 onChange={(e) => setDeviceBrand(e.target.value)}
                 placeholder={t("front_desk.device_brand_placeholder")}
                 required
                 type="text"
                 value={deviceBrand}
               />
-            </div>
+            </Field>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label
-                className="mb-1 block font-bold text-on-surface-variant text-xs uppercase tracking-wide"
-                htmlFor="quick-intake-model"
-              >
-                {t("front_desk.device_model")}
-              </label>
-              <input
-                className="w-full rounded-xl border-none bg-surface-container-highest px-4 py-3 transition-all focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary"
-                id="quick-intake-model"
+            <Field label={t("front_desk.device_model")} required>
+              <Input
                 onChange={(e) => setDeviceModel(e.target.value)}
                 placeholder={t("front_desk.device_model_placeholder")}
                 required
                 type="text"
                 value={deviceModel}
               />
-            </div>
-            <div>
-              <label
-                className="mb-1 block font-bold text-on-surface-variant text-xs uppercase tracking-wide"
-                htmlFor="quick-intake-cost"
-              >
-                {t("front_desk.estimated_cost")}
-              </label>
-              <input
-                className="w-full rounded-xl border-none bg-surface-container-highest px-4 py-3 transition-all focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary"
-                id="quick-intake-cost"
+            </Field>
+            <Field label={t("front_desk.estimated_cost")}>
+              <Input
                 min={0}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -149,25 +112,17 @@ export default function QuickIntakeForm() {
                 type="number"
                 value={estimatedCost}
               />
-            </div>
+            </Field>
           </div>
-          <div>
-            <label
-              className="mb-1 block font-bold text-on-surface-variant text-xs uppercase tracking-wide"
-              htmlFor="quick-intake-issue"
-            >
-              {t("front_desk.issue_description")}
-            </label>
-            <textarea
-              className="w-full rounded-xl border-none bg-surface-container-highest px-4 py-3 transition-all focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary"
-              id="quick-intake-issue"
+          <Field label={t("front_desk.issue_description")} required>
+            <Textarea
               onChange={(e) => setReportedProblem(e.target.value)}
               placeholder={t("front_desk.issue_placeholder")}
               required
               rows={3}
               value={reportedProblem}
             />
-          </div>
+          </Field>
           <Button
             className="mt-2 w-full"
             disabled={isCreating}

@@ -1,10 +1,64 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import api, { type ApiError } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth";
 
 const PASSWORD_POLICY = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+
+/** Form fields the server can report a validation error against. */
+type ChangePasswordField =
+  | "confirmPassword"
+  | "newPassword"
+  | "oldPassword"
+  | "username";
+
+const SERVER_FIELD_NAMES: readonly ChangePasswordField[] = [
+  "username",
+  "oldPassword",
+  "newPassword",
+];
+
+/**
+ * Split a failed change-password response into per-field messages and a single
+ * form-level message. Field errors used to be flattened into one banner that
+ * showed only the first problem, so a user with a weak password and a mismatched
+ * confirmation only ever learned about one of them.
+ */
+export function splitApiErrors(
+  apiErr: ApiError,
+  fallbackMessage: string
+): {
+  fieldErrors: Partial<Record<ChangePasswordField, string>>;
+  formError: string | null;
+} {
+  const serverErrors = (
+    apiErr.details as { errors?: Record<string, string[]> } | undefined
+  )?.errors;
+
+  const fieldErrors: Partial<Record<ChangePasswordField, string>> = {};
+  let formError: string | null = null;
+
+  for (const [field, messages] of Object.entries(serverErrors ?? {})) {
+    const message = messages?.[0];
+    if (!message) {
+      continue;
+    }
+    if ((SERVER_FIELD_NAMES as readonly string[]).includes(field)) {
+      fieldErrors[field as ChangePasswordField] = message;
+    } else if (!formError) {
+      formError = message;
+    }
+  }
+
+  if (!formError) {
+    formError = apiErr.code ? apiErr.message : fallbackMessage;
+  }
+
+  return { fieldErrors, formError };
+}
 
 export default function ChangePasswordPage() {
   const { t } = useTranslation();
@@ -18,6 +72,9 @@ export default function ChangePasswordPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<
+    Partial<Record<ChangePasswordField, string>>
+  >({});
   const [showOld, setShowOld] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -25,14 +82,15 @@ export default function ChangePasswordPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setFieldErrors({});
 
     if (newPassword !== confirmPassword) {
-      setError(t("auth_password_mismatch"));
+      setFieldErrors({ confirmPassword: t("auth_password_mismatch") });
       return;
     }
 
     if (!PASSWORD_POLICY.test(newPassword)) {
-      setError(t("auth_password_requirements"));
+      setFieldErrors({ newPassword: t("auth_password_requirements") });
       return;
     }
 
@@ -60,16 +118,12 @@ export default function ChangePasswordPage() {
       }));
       navigate("/", { replace: true });
     } catch (err: unknown) {
-      const apiErr = err as ApiError;
-      const fieldErrors = (
-        apiErr.details as { errors?: Record<string, string[]> } | undefined
-      )?.errors;
-      const firstFieldError =
-        fieldErrors && Object.values(fieldErrors).flat()[0];
-      const message =
-        firstFieldError ??
-        (apiErr.code ? apiErr.message : t("auth_change_password_error"));
-      setError(message);
+      const { fieldErrors: next, formError } = splitApiErrors(
+        err as ApiError,
+        t("auth_change_password_error")
+      );
+      setFieldErrors(next);
+      setError(formError);
     } finally {
       setLoading(false);
     }
@@ -98,58 +152,31 @@ export default function ChangePasswordPage() {
         )}
 
         <form className="space-y-5" onSubmit={handleSubmit}>
-          <div className="space-y-1.5">
-            <label
-              className="block font-extrabold text-on-surface-variant text-xs uppercase tracking-wide"
-              htmlFor="username"
-            >
-              {t("auth_username")}
-            </label>
-            <div className="group relative">
-              <span className="material-symbols-outlined absolute start-4 top-1/2 -translate-y-1/2 text-on-surface-variant transition-colors group-focus-within:text-primary">
-                person
-              </span>
-              <input
-                autoComplete="username"
-                className="w-full rounded-xl bg-surface-container-highest py-3.5 ps-12 pe-4 font-medium transition-all placeholder:text-outline-variant focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary/20"
-                id="username"
-                name="username"
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder={t("auth_username_placeholder")}
-                required
-                type="text"
-                value={username}
-              />
-            </div>
-          </div>
+          <Field
+            error={fieldErrors.username}
+            label={t("auth_username")}
+            required
+          >
+            <Input
+              autoComplete="username"
+              className="font-medium placeholder:text-outline-variant"
+              iconStart="person"
+              name="username"
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder={t("auth_username_placeholder")}
+              required
+              type="text"
+              value={username}
+            />
+          </Field>
 
-          <div className="space-y-1.5">
-            <label
-              className="block font-extrabold text-on-surface-variant text-xs uppercase tracking-wide"
-              htmlFor="oldPassword"
-            >
-              {t("auth_current_password")}
-            </label>
-            <div className="group relative">
-              <span className="material-symbols-outlined absolute start-4 top-1/2 -translate-y-1/2 text-on-surface-variant transition-colors group-focus-within:text-primary">
-                lock
-              </span>
-              <input
-                autoComplete="current-password"
-                className="w-full rounded-xl bg-surface-container-highest py-3.5 ps-12 pe-12 font-medium transition-all placeholder:text-outline-variant focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary/20"
-                id="oldPassword"
-                name="oldPassword"
-                onChange={(e) => setOldPassword(e.target.value)}
-                placeholder={t("auth_password_placeholder")}
-                required
-                type={showOld ? "text" : "password"}
-                value={oldPassword}
-              />
+          <Field
+            endAdornment={
               <button
                 aria-label={
                   showOld ? t("auth_hide_password") : t("auth_show_password")
                 }
-                className="absolute end-4 top-1/2 -translate-y-1/2 text-outline-variant transition-colors hover:text-primary"
+                className="absolute end-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl text-outline-variant transition-colors hover:text-primary"
                 onClick={() => setShowOld((v) => !v)}
                 type="button"
               >
@@ -157,36 +184,31 @@ export default function ChangePasswordPage() {
                   {showOld ? "visibility_off" : "visibility"}
                 </span>
               </button>
-            </div>
-          </div>
+            }
+            error={fieldErrors.oldPassword}
+            label={t("auth_current_password")}
+            required
+          >
+            <Input
+              autoComplete="current-password"
+              className="pe-12 font-medium placeholder:text-outline-variant"
+              iconStart="lock"
+              name="oldPassword"
+              onChange={(e) => setOldPassword(e.target.value)}
+              placeholder={t("auth_password_placeholder")}
+              required
+              type={showOld ? "text" : "password"}
+              value={oldPassword}
+            />
+          </Field>
 
-          <div className="space-y-1.5">
-            <label
-              className="block font-extrabold text-on-surface-variant text-xs uppercase tracking-wide"
-              htmlFor="newPassword"
-            >
-              {t("auth_new_password")}
-            </label>
-            <div className="group relative">
-              <span className="material-symbols-outlined absolute start-4 top-1/2 -translate-y-1/2 text-on-surface-variant transition-colors group-focus-within:text-primary">
-                key
-              </span>
-              <input
-                autoComplete="new-password"
-                className="w-full rounded-xl bg-surface-container-highest py-3.5 ps-12 pe-12 font-medium transition-all placeholder:text-outline-variant focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary/20"
-                id="newPassword"
-                name="newPassword"
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder={t("auth_password_placeholder")}
-                required
-                type={showNew ? "text" : "password"}
-                value={newPassword}
-              />
+          <Field
+            endAdornment={
               <button
                 aria-label={
                   showNew ? t("auth_hide_password") : t("auth_show_password")
                 }
-                className="absolute end-4 top-1/2 -translate-y-1/2 text-outline-variant transition-colors hover:text-primary"
+                className="absolute end-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl text-outline-variant transition-colors hover:text-primary"
                 onClick={() => setShowNew((v) => !v)}
                 type="button"
               >
@@ -194,41 +216,34 @@ export default function ChangePasswordPage() {
                   {showNew ? "visibility_off" : "visibility"}
                 </span>
               </button>
-            </div>
-            <p className="text-on-surface-variant text-xs">
-              {t("auth_password_requirements")}
-            </p>
-          </div>
+            }
+            error={fieldErrors.newPassword}
+            hint={t("auth_password_requirements")}
+            label={t("auth_new_password")}
+            required
+          >
+            <Input
+              autoComplete="new-password"
+              className="pe-12 font-medium placeholder:text-outline-variant"
+              iconStart="key"
+              name="newPassword"
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder={t("auth_password_placeholder")}
+              required
+              type={showNew ? "text" : "password"}
+              value={newPassword}
+            />
+          </Field>
 
-          <div className="space-y-1.5">
-            <label
-              className="block font-extrabold text-on-surface-variant text-xs uppercase tracking-wide"
-              htmlFor="confirmPassword"
-            >
-              {t("auth_confirm_new_password")}
-            </label>
-            <div className="group relative">
-              <span className="material-symbols-outlined absolute start-4 top-1/2 -translate-y-1/2 text-on-surface-variant transition-colors group-focus-within:text-primary">
-                key
-              </span>
-              <input
-                autoComplete="new-password"
-                className="w-full rounded-xl bg-surface-container-highest py-3.5 ps-12 pe-12 font-medium transition-all placeholder:text-outline-variant focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary/20"
-                id="confirmPassword"
-                name="confirmPassword"
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder={t("auth_password_placeholder")}
-                required
-                type={showConfirm ? "text" : "password"}
-                value={confirmPassword}
-              />
+          <Field
+            endAdornment={
               <button
                 aria-label={
                   showConfirm
                     ? t("auth_hide_password")
                     : t("auth_show_password")
                 }
-                className="absolute end-4 top-1/2 -translate-y-1/2 text-outline-variant transition-colors hover:text-primary"
+                className="absolute end-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl text-outline-variant transition-colors hover:text-primary"
                 onClick={() => setShowConfirm((v) => !v)}
                 type="button"
               >
@@ -236,8 +251,23 @@ export default function ChangePasswordPage() {
                   {showConfirm ? "visibility_off" : "visibility"}
                 </span>
               </button>
-            </div>
-          </div>
+            }
+            error={fieldErrors.confirmPassword}
+            label={t("auth_confirm_new_password")}
+            required
+          >
+            <Input
+              autoComplete="new-password"
+              className="pe-12 font-medium placeholder:text-outline-variant"
+              iconStart="key"
+              name="confirmPassword"
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder={t("auth_password_placeholder")}
+              required
+              type={showConfirm ? "text" : "password"}
+              value={confirmPassword}
+            />
+          </Field>
 
           <button
             className="atelier-gradient flex w-full items-center justify-center gap-2 rounded-xl py-4 font-bold font-headline text-on-primary shadow-lg shadow-primary/20 transition-all hover:scale-[1.01] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"

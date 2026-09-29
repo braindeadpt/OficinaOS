@@ -1,9 +1,10 @@
 import type { FormEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { INPUT_CLS, LABEL_CLS } from "@/components/modules/profile/shared";
 import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icon";
+import { Input } from "@/components/ui/input";
 
 const RE_UPPERCASE = /[A-Z]/;
 const RE_DIGIT = /[0-9]/;
@@ -127,30 +128,15 @@ export function PasswordForm({
       )}
 
       <div className="space-y-5">
-        <div>
-          <label className={LABEL_CLS} htmlFor="current-password">
-            {t("profile_current_password")}
-          </label>
-          <div className="relative">
-            <input
-              autoComplete="current-password"
-              className={INPUT_CLS}
-              id="current-password"
-              onChange={(e) => {
-                onFormChange({ ...form, currentPassword: e.target.value });
-                onDirtyChange(true);
-              }}
-              placeholder="••••••••"
-              type={showCurrentPassword ? "text" : "password"}
-              value={form.currentPassword}
-            />
+        <Field
+          endAdornment={
             <button
               aria-label={
                 showCurrentPassword
                   ? t("profile_hide_password")
                   : t("profile_show_password")
               }
-              className="absolute end-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-md text-on-surface-variant transition-colors hover:bg-surface-container-high"
+              className="absolute end-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl text-on-surface-variant transition-colors hover:bg-surface-container-high"
               onClick={() => setShowCurrentPassword(!showCurrentPassword)}
               type="button"
             >
@@ -159,18 +145,47 @@ export function PasswordForm({
                 size="sm"
               />
             </button>
-          </div>
-        </div>
+          }
+          label={t("profile_current_password")}
+        >
+          <Input
+            autoComplete="current-password"
+            className="pe-12"
+            onChange={(e) => {
+              onFormChange({ ...form, currentPassword: e.target.value });
+              onDirtyChange(true);
+            }}
+            placeholder="••••••••"
+            type={showCurrentPassword ? "text" : "password"}
+            value={form.currentPassword}
+          />
+        </Field>
 
         <div>
-          <label className={LABEL_CLS} htmlFor="new-password">
-            {t("profile_new_password")}
-          </label>
-          <div className="relative">
-            <input
+          <Field
+            endAdornment={
+              <button
+                aria-label={
+                  showNewPassword
+                    ? t("profile_hide_password")
+                    : t("profile_show_password")
+                }
+                className="absolute end-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl text-on-surface-variant transition-colors hover:bg-surface-container-high"
+                onClick={() => setShowNewPassword(!showNewPassword)}
+                type="button"
+              >
+                <Icon
+                  name={showNewPassword ? "visibility" : "visibility_off"}
+                  size="sm"
+                />
+              </button>
+            }
+            hint={form.newPassword ? undefined : t("profile_password_criteria")}
+            label={t("profile_new_password")}
+          >
+            <Input
               autoComplete="new-password"
-              className={INPUT_CLS}
-              id="new-password"
+              className="pe-12"
               onChange={(e) => {
                 onFormChange({ ...form, newPassword: e.target.value });
                 onDirtyChange(true);
@@ -185,27 +200,7 @@ export function PasswordForm({
               type={showNewPassword ? "text" : "password"}
               value={form.newPassword}
             />
-            <button
-              aria-label={
-                showNewPassword
-                  ? t("profile_hide_password")
-                  : t("profile_show_password")
-              }
-              className="absolute end-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-md text-on-surface-variant transition-colors hover:bg-surface-container-high"
-              onClick={() => setShowNewPassword(!showNewPassword)}
-              type="button"
-            >
-              <Icon
-                name={showNewPassword ? "visibility" : "visibility_off"}
-                size="sm"
-              />
-            </button>
-          </div>
-          {!form.newPassword && (
-            <p className="mt-1.5 text-on-surface-variant text-xs">
-              {t("profile_password_criteria")}
-            </p>
-          )}
+          </Field>
           {form.newPassword && (
             <div
               aria-label={t(
@@ -232,15 +227,12 @@ export function PasswordForm({
           )}
         </div>
 
-        <div>
-          <label className={LABEL_CLS} htmlFor="confirm-password">
-            {t("profile_confirm_password")}
-          </label>
-          <input
-            aria-invalid={confirmMismatch}
+        <Field
+          error={confirmMismatch ? t("profile_password_mismatch") : undefined}
+          label={t("profile_confirm_password")}
+        >
+          <Input
             autoComplete="new-password"
-            className={INPUT_CLS}
-            id="confirm-password"
             onBlur={handleConfirmBlur}
             onChange={(e) => {
               onFormChange({ ...form, confirmPassword: e.target.value });
@@ -253,16 +245,7 @@ export function PasswordForm({
             type="password"
             value={form.confirmPassword}
           />
-          {confirmMismatch && (
-            <p
-              aria-live="polite"
-              className="mt-1.5 font-bold text-error text-xs"
-              role="alert"
-            >
-              {t("profile_password_mismatch")}
-            </p>
-          )}
-        </div>
+        </Field>
       </div>
 
       <div className="flex justify-end">

@@ -16,9 +16,6 @@ export interface SessionItem {
   userAgent: string | null;
 }
 
-export const INPUT_CLS =
-  "w-full rounded-lg border-none bg-surface-container-lowest px-4 py-3 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/20";
-
 export const LABEL_CLS =
   "block font-bold text-xs text-on-surface-variant uppercase tracking-wider mb-2";
 

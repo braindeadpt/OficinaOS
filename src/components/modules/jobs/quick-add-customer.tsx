@@ -1,5 +1,7 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { useCreateCustomer } from "@/hooks/use-create-customer";
 
 export interface CustomerFormData {
@@ -16,9 +18,6 @@ interface QuickAddCustomerProps {
   onAdd: (data: CreatedCustomerData) => void;
   onClose: () => void;
 }
-
-const labelCls =
-  "mb-2 ms-1 block font-bold font-label text-xs uppercase tracking-wide text-on-surface-variant";
 
 export default function QuickAddCustomer({
   onAdd,
@@ -117,77 +116,46 @@ export default function QuickAddCustomer({
 
         <div>
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <div className="group md:col-span-2">
-              <label className={labelCls} htmlFor="qa-name">
-                {t("intake.full_name")} *
-              </label>
-              <div className="relative flex items-center">
-                <span className="material-symbols-outlined absolute start-4 text-lg text-outline">
-                  person
-                </span>
-                <input
-                  aria-invalid={!!fieldErrors.name}
-                  className={`h-[52px] w-full rounded-xl border-none ps-12 pe-4 font-body text-on-surface text-sm transition-all placeholder:text-outline/50 focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary/20 ${fieldErrors.name ? "bg-surface-container-lowest ring-2 ring-error" : "bg-surface-container-highest"}`}
-                  disabled={isCreating}
-                  id="qa-name"
-                  onChange={(e) => update("name", e.target.value)}
-                  placeholder={t("intake.full_name_placeholder")}
-                  type="text"
-                  value={form.name}
-                />
-              </div>
-              {fieldErrors.name && (
-                <p className="ms-1 mt-1 font-label font-medium text-error text-xs">
-                  {fieldErrors.name}
-                </p>
-              )}
-            </div>
+            <Field
+              className="md:col-span-2"
+              error={fieldErrors.name}
+              label={t("intake.full_name")}
+              required
+            >
+              <Input
+                className="font-body placeholder:text-outline/50"
+                disabled={isCreating}
+                iconStart="person"
+                onChange={(e) => update("name", e.target.value)}
+                placeholder={t("intake.full_name_placeholder")}
+                type="text"
+                value={form.name}
+              />
+            </Field>
 
-            <div className="group">
-              <label className={labelCls} htmlFor="qa-phone">
-                {t("intake.phone")} *
-              </label>
-              <div className="relative flex items-center">
-                <span className="material-symbols-outlined absolute start-4 text-lg text-outline">
-                  phone
-                </span>
-                <input
-                  aria-invalid={!!fieldErrors.phone}
-                  className={`h-[52px] w-full rounded-xl border-none ps-12 pe-4 font-body text-on-surface text-sm transition-all placeholder:text-outline/50 focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary/20 ${fieldErrors.phone ? "bg-surface-container-lowest ring-2 ring-error" : "bg-surface-container-highest"}`}
-                  disabled={isCreating}
-                  id="qa-phone"
-                  onChange={(e) => update("phone", e.target.value)}
-                  placeholder="+351..."
-                  type="tel"
-                  value={form.phone}
-                />
-              </div>
-              {fieldErrors.phone && (
-                <p className="ms-1 mt-1 font-label font-medium text-error text-xs">
-                  {fieldErrors.phone}
-                </p>
-              )}
-            </div>
+            <Field error={fieldErrors.phone} label={t("intake.phone")} required>
+              <Input
+                className="font-body placeholder:text-outline/50"
+                disabled={isCreating}
+                iconStart="phone"
+                onChange={(e) => update("phone", e.target.value)}
+                placeholder="+351..."
+                type="tel"
+                value={form.phone}
+              />
+            </Field>
 
-            <div className="group">
-              <label className={labelCls} htmlFor="qa-email">
-                {t("intake.email")}
-              </label>
-              <div className="relative flex items-center">
-                <span className="material-symbols-outlined absolute start-4 text-lg text-outline">
-                  mail
-                </span>
-                <input
-                  className="h-[52px] w-full rounded-xl border-none bg-surface-container-highest ps-12 pe-4 font-body text-on-surface text-sm transition-all placeholder:text-outline/50 focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary/20"
-                  disabled={isCreating}
-                  id="qa-email"
-                  onChange={(e) => update("email", e.target.value)}
-                  placeholder="email@example.com"
-                  type="email"
-                  value={form.email}
-                />
-              </div>
-            </div>
+            <Field label={t("intake.email")}>
+              <Input
+                className="font-body placeholder:text-outline/50"
+                disabled={isCreating}
+                iconStart="mail"
+                onChange={(e) => update("email", e.target.value)}
+                placeholder="email@example.com"
+                type="email"
+                value={form.email}
+              />
+            </Field>
           </div>
 
           <div className="mt-8 flex justify-end">
