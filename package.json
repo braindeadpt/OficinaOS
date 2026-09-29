@@ -96,6 +96,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "check": "ultracite check",
+    "check-primitives": "bun run scripts/check-primitives.ts",
     "fix": "ultracite fix",
     "prepare": "husky"
   },
