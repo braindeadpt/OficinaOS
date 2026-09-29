@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import api from "@/lib/api";
+import { downloadCsv } from "@/lib/export-csv";
 
 interface StockMovement {
   balanceAfter: number;
@@ -49,6 +51,7 @@ export default function StockMovementsDialog({
   const { t } = useTranslation();
   const [movements, setMovements] = useState<StockMovement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
 
   const fetchMovements = useCallback(async () => {
     try {
@@ -64,6 +67,67 @@ export default function StockMovementsDialog({
   useEffect(() => {
     fetchMovements();
   }, [fetchMovements]);
+
+  const handleExportCsv = useCallback(async () => {
+    setIsExporting(true);
+    try {
+      // Walk every page: the export must contain the full history,
+      // not just the first 30 rows shown in the dialog.
+      const all: StockMovement[] = [];
+      let cursor: string | undefined;
+      let hasMore = true;
+      while (hasMore) {
+        const res = await api.get(`/parts/${partId}/stock-movements`, {
+          params: { limit: 100, ...(cursor ? { cursor } : {}) },
+        });
+        const { movements: page, nextCursor } = res.data;
+        all.push(...page);
+        cursor = nextCursor ?? undefined;
+        hasMore = Boolean(nextCursor);
+      }
+
+      // Ledger convention: oldest first (the dialog shows newest first).
+      const chronological = [...all].reverse();
+      const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      const slug = partName
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+
+      downloadCsv(
+        `stock-movements-${slug || "part"}-${stamp}.csv`,
+        [
+          t("parts_movements_export_date"),
+          t("parts_movements_export_type"),
+          t("parts_purchase_quantity"),
+          t("parts_movements_balance"),
+          t("parts_purchase_unit_cost"),
+          t("parts_purchase_supplier"),
+          t("parts_purchase_reference"),
+          t("parts_movements_export_user"),
+          t("parts_movements_export_note"),
+        ],
+        chronological.map((m) => [
+          m.createdAt,
+          t(`parts_movement_${m.type.toLowerCase()}`),
+          m.quantity,
+          m.balanceAfter,
+          m.unitCost,
+          m.supplier,
+          m.reference,
+          m.createdBy?.name ?? m.createdBy?.username ?? "",
+          m.note,
+        ])
+      );
+      toast.success(t("parts_movements_export_done"));
+    } catch {
+      toast.error(t("parts_movements_export_failed"));
+    } finally {
+      setIsExporting(false);
+    }
+  }, [partId, partName, t]);
 
   return (
     <div
@@ -87,13 +151,27 @@ export default function StockMovementsDialog({
               {partName}
             </p>
           </div>
-          <button
-            className="flex h-10 w-10 items-center justify-center rounded-full text-outline hover:bg-surface-container-high"
-            onClick={onClose}
-            type="button"
-          >
-            <span className="material-symbols-outlined">close</span>
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              aria-label={t("parts_movements_export")}
+              className="flex h-10 w-10 items-center justify-center rounded-full text-outline hover:bg-surface-container-high disabled:opacity-50"
+              disabled={isExporting || (!isLoading && movements.length === 0)}
+              onClick={handleExportCsv}
+              title={t("parts_movements_export")}
+              type="button"
+            >
+              <span aria-hidden="true" className="material-symbols-outlined">
+                {isExporting ? "progress_activity" : "download"}
+              </span>
+            </button>
+            <button
+              className="flex h-10 w-10 items-center justify-center rounded-full text-outline hover:bg-surface-container-high"
+              onClick={onClose}
+              type="button"
+            >
+              <span className="material-symbols-outlined">close</span>
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">

@@ -1786,5 +1786,13 @@
   "backups_last": "{count} dump(s) on disk - last one {hours}h ago",
   "backups_stale": "Backup overdue - check the db-backup container",
   "backups_fresh": "Backups running normally",
-  "backups_nightly": "Automatic daily backup with 14-day retention"
+  "backups_nightly": "Automatic daily backup with 14-day retention",
+  "parts_movements_export": "Export CSV",
+  "parts_movements_export_date": "Date",
+  "parts_movements_export_type": "Type",
+  "parts_movements_export_user": "User",
+  "parts_movements_export_note": "Note",
+  "parts_movements_export_done": "History exported",
+  "parts_movements_export_failed": "Failed to export the history",
+  "parts_purchase_reference": "Reference"
 }
