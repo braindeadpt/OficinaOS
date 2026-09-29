@@ -244,7 +244,7 @@ Stateful surfaces that signal interaction readiness.
 - **Icons:** Positioned at inline-start or inline-end, color transitions from Outline (#737785) to Primary on parent focus.
 
 ### Navigation
-Sidebar at 256px fixed left (or right in RTL), visible at lg (1024px). Mobile uses top bar + bottom nav.
+Sidebar at 256px fixed left, visible at lg (1024px). Mobile uses top bar + bottom nav.
 
 - **Sidebar:** Workspace (#f1f4fa) background, 16px padding
 - **Nav Items:** 12px padding, rounded-lg (0.75rem), Muted Ink text at rest

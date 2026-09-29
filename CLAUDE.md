@@ -1,6 +1,6 @@
 # OficinaOS — Repair Shop Management System
 
-Single-location mobile phone repair shop management. Web + Android (Capacitor). Quadrilingual (PT-PT / EN / FR / AR-RTL).
+Single-location mobile phone repair shop management. Web + Android (Capacitor). Trilingual (PT-PT / EN / FR).
 
 **Fork of [Reparilo](https://github.com/cranknet/reparilo)** (upstream remote: `upstream`) — Portuguese-market adaptation. The upstream license does not cover the "Reparilo" name, so this distribution is branded **OficinaOS**. Never reintroduce "Reparilo" in user-facing strings; referencing the upstream project name in docs/attribution is fine.
 

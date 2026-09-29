@@ -32,9 +32,11 @@ const files = (over: Record<string, string | null> = {}) => {
   return { ...base, ...over };
 };
 
+const PATH_SEP = /[\\/]/;
+
 function mockFs(state: Record<string, string | null>, dumps: string[] = []) {
   mocks.readFile.mockImplementation((p: string) => {
-    const name = String(p).split("/").pop() ?? "";
+    const name = String(p).split(PATH_SEP).pop() ?? "";
     const v = state[name] ?? null;
     return v === null
       ? Promise.reject(new Error("ENOENT"))

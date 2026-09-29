@@ -80,7 +80,6 @@ body:
         - Português (pt-PT)
         - English (en)
         - French (fr)
-        - Arabic (ar)
         - Not sure / not relevant
     validations:
       required: true
