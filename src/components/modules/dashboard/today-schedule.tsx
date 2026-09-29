@@ -1,12 +1,13 @@
+import type { JobStatusType } from "@shared/constants";
 import { useTranslation } from "react-i18next";
-import { STATUS_COLORS } from "@/lib/status-colors";
+import { statusDotClass } from "@/lib/status-colors";
 
 interface ScheduleItem {
   customerName: string;
   device: string;
   id: string;
   repairType: string;
-  status: string;
+  status: JobStatusType;
   time: string;
 }
 
@@ -36,7 +37,7 @@ export default function TodaySchedule({ items }: TodayScheduleProps) {
               <div className="flex items-start gap-3">
                 <span
                   aria-hidden="true"
-                  className={`mt-1 h-3 w-3 rounded-full ${STATUS_COLORS[item.status] ?? "bg-outline-variant"}`}
+                  className={`mt-1 h-3 w-3 rounded-full ${statusDotClass(item.status)}`}
                 />
                 <div>
                   <p className="font-black text-primary text-xs">{item.time}</p>

@@ -1,12 +1,11 @@
 import type { FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  INPUT_CLS,
-  LABEL_CLS,
-  LANGUAGE_OPTIONS,
-} from "@/components/modules/profile/shared";
+import { LANGUAGE_OPTIONS } from "@/components/modules/profile/shared";
 import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icon";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 
 interface PersonalFormProps {
   error?: string;
@@ -47,74 +46,53 @@ export function PersonalForm({
           </div>
         )}
         <div className="grid grid-cols-1 gap-x-8 gap-y-5 md:grid-cols-2">
-          <div>
-            <label className={LABEL_CLS} htmlFor="profile-name">
-              {t("profile_name")}
-            </label>
-            <input
-              className={INPUT_CLS}
-              id="profile-name"
+          <Field label={t("profile_name")}>
+            <Input
               onChange={(e) => onChange("name", e.target.value)}
               type="text"
               value={form.name}
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className={LABEL_CLS} htmlFor="profile-username">
-              {t("username")}
-            </label>
-            <input
-              className={INPUT_CLS}
-              id="profile-username"
+          <Field label={t("username")}>
+            <Input
               onChange={(e) => onChange("username", e.target.value)}
               type="text"
               value={form.username}
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className={LABEL_CLS} htmlFor="profile-email">
-              {t("email")}
-            </label>
-            <input
-              className={INPUT_CLS}
-              id="profile-email"
+          <Field label={t("email")}>
+            <Input
               onChange={(e) => onChange("email", e.target.value)}
               type="email"
               value={form.email}
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className={LABEL_CLS} htmlFor="profile-language">
-              {t("profile_language")}
-            </label>
-            <div className="relative">
-              <select
-                className="w-full cursor-pointer appearance-none rounded-lg border-none bg-surface-container-lowest px-4 py-3 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/20"
-                id="profile-language"
-                onChange={(e) => onChange("language", e.target.value)}
-                value={form.language}
-              >
-                {LANGUAGE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+          <Field
+            endAdornment={
               <Icon
-                className="pointer-events-none absolute end-4 top-3.5 text-on-surface-variant"
+                className="pointer-events-none absolute end-4 top-1/2 -translate-y-1/2 text-on-surface-variant"
                 name="expand_more"
                 size="sm"
               />
-            </div>
-            {languageChanged && (
-              <p className="mt-1.5 text-on-surface-variant text-xs">
-                {t("profile_language_preview")}
-              </p>
-            )}
-          </div>
+            }
+            hint={languageChanged ? t("profile_language_preview") : undefined}
+            label={t("profile_language")}
+          >
+            <Select
+              className="pe-12"
+              onChange={(e) => onChange("language", e.target.value)}
+              value={form.language}
+            >
+              {LANGUAGE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
         </div>
       </form>
 

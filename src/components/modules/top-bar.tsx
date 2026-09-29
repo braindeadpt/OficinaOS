@@ -5,11 +5,11 @@ import { useCan } from "@/hooks/use-can";
 import { useWs } from "@/hooks/use-ws";
 import { useAlertsStore } from "@/stores/alerts";
 import { useUiStore } from "@/stores/ui";
+import GlobalSearch from "./global-search";
 import LanguageToggle from "./language-toggle";
 
 export default function TopBar() {
   const { t } = useTranslation();
-  const [search, setSearch] = useState("");
   const [showAlerts, setShowAlerts] = useState(false);
   const canCreateJob = useCan({ jobs: ["create"] });
   const openIntakeModal = useUiStore((s) => s.openIntakeModal);
@@ -69,18 +69,7 @@ export default function TopBar() {
             OficinaOS
           </span>
         </div>
-        <div className="group relative hidden w-full max-w-xs md:block md:w-96">
-          <span className="material-symbols-outlined absolute start-3 top-1/2 -translate-y-1/2 text-on-surface-variant transition-colors group-focus-within:text-primary">
-            search
-          </span>
-          <input
-            className="w-full rounded-full border-none bg-surface-container-high py-2 ps-10 pe-4 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/20"
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t("search")}
-            type="text"
-            value={search}
-          />
-        </div>
+        <GlobalSearch />
       </div>
       <div className="flex items-center gap-2 md:gap-3">
         <LanguageToggle />

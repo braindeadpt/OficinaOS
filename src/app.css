@@ -64,6 +64,9 @@
   --radius-xl: 1rem;
   --radius-2xl: 1.5rem;
   --radius-full: 9999px;
+
+  /* "Ambient Float" — DESIGN.md §4. Tinted with primary, never pure gray. */
+  --shadow-premium: 0 8px 40px rgb(0 64 161 / 0.06);
 }
 
 .material-symbols-outlined {
@@ -166,6 +169,14 @@ input:focus-visible,
 [role="option"]:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
+}
+
+/*
+ * Error affordance for any control marked aria-invalid (set by <Field>).
+ * Suppressed while focused so the primary focus ring is never doubled up.
+ */
+[aria-invalid="true"]:not(:focus) {
+  box-shadow: 0 0 0 2px var(--color-error);
 }
 
 @supports not (min-height: 100dvh) {

@@ -1,6 +1,6 @@
 import type { JobStatusType } from "@shared/constants";
 import { useTranslation } from "react-i18next";
-import { STATUS_DOT_COLORS } from "@/lib/status-colors";
+import { statusDotClass } from "@/lib/status-colors";
 
 interface RecentIntake {
   device: string;
@@ -80,7 +80,7 @@ export default function TodayOverview({
               >
                 <div className="flex items-center gap-3">
                   <div
-                    className={`h-2.5 w-2.5 rounded-full ${STATUS_DOT_COLORS[intake.status] ?? "bg-primary"}`}
+                    className={`h-2.5 w-2.5 rounded-full ${statusDotClass(intake.status)}`}
                   />
                   <div>
                     <p className="font-medium text-sm">{intake.device}</p>

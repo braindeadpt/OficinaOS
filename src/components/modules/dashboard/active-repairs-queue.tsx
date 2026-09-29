@@ -1,7 +1,7 @@
 import type { JobStatusType } from "@shared/constants";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
-import { STATUS_CHIP_STYLES, STATUS_DOT_COLORS } from "@/lib/status-colors";
+import { statusContainerClass, statusDotClass } from "@/lib/status-colors";
 
 interface RepairJob {
   completedAt?: string;
@@ -56,10 +56,10 @@ export default function ActiveRepairsQueue({ jobs }: ActiveRepairsQueueProps) {
                     </p>
                   </div>
                   <span
-                    className={`flex items-center gap-1.5 rounded-full px-3 py-1 font-bold font-label text-xs uppercase ${STATUS_CHIP_STYLES[job.status] ?? "bg-primary/10 text-primary"}`}
+                    className={`flex items-center gap-1.5 rounded-full px-3 py-1 font-bold font-label text-xs uppercase ${statusContainerClass(job.status)}`}
                   >
                     <span
-                      className={`inline-block h-2 w-2 rounded-full ${STATUS_DOT_COLORS[job.status] ?? "bg-primary"}`}
+                      className={`inline-block h-2 w-2 rounded-full ${statusDotClass(job.status)}`}
                     />
                     {t(`status.${job.status}`)}
                   </span>

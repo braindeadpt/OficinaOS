@@ -1,6 +1,8 @@
 import type { Customer } from "@shared/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { useModalEffects } from "@/hooks/use-modal-effects";
 import { useCustomersStore } from "@/stores/customers";
 
@@ -136,16 +138,8 @@ export default function EditCustomerDialog({
 
         <div className="flex-1 overflow-y-auto p-6">
           <div className="space-y-4">
-            <div>
-              <label
-                className="mb-1.5 block font-bold font-label text-on-surface-variant text-xs uppercase tracking-wide"
-                htmlFor="edit-customer-name"
-              >
-                {t("customer_edit_name")}
-              </label>
-              <input
-                className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface focus:ring-2 focus:ring-primary"
-                id="edit-customer-name"
+            <Field label={t("customer_edit_name")}>
+              <Input
                 onChange={(e) =>
                   setForm((p) => ({ ...p, name: e.target.value }))
                 }
@@ -153,36 +147,21 @@ export default function EditCustomerDialog({
                 type="text"
                 value={form.name}
               />
-            </div>
+            </Field>
 
-            <div>
-              <label
-                className="mb-1.5 block font-bold font-label text-on-surface-variant text-xs uppercase tracking-wide"
-                htmlFor="edit-customer-phone"
-              >
-                {t("customer_edit_phone")}
-              </label>
-              <input
-                className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface focus:ring-2 focus:ring-primary"
-                id="edit-customer-phone"
+            <Field label={t("customer_edit_phone")}>
+              <Input
                 onChange={(e) =>
                   setForm((p) => ({ ...p, phone: e.target.value }))
                 }
                 type="tel"
                 value={form.phone}
               />
-            </div>
+            </Field>
 
-            <div>
-              <label
-                className="mb-1.5 block font-bold font-label text-on-surface-variant text-xs uppercase tracking-wide"
-                htmlFor="edit-customer-email"
-              >
-                {t("customer_edit_email")}
-              </label>
-              <input
-                className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface placeholder:text-outline focus:ring-2 focus:ring-primary"
-                id="edit-customer-email"
+            <Field label={t("customer_edit_email")}>
+              <Input
+                className="placeholder:text-outline"
                 onChange={(e) =>
                   setForm((p) => ({ ...p, email: e.target.value }))
                 }
@@ -190,16 +169,12 @@ export default function EditCustomerDialog({
                 type="email"
                 value={form.email}
               />
-            </div>
+            </Field>
 
-            <label
-              className="flex items-start gap-2.5"
-              htmlFor="edit-customer-consent"
-            >
+            <Field horizontal label={t("add_customer_modal.whatsapp_consent")}>
               <input
                 checked={form.whatsappConsent}
-                className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
-                id="edit-customer-consent"
+                className="mt-0.5 h-5 w-5 shrink-0 accent-primary"
                 onChange={(e) =>
                   setForm((p) => ({
                     ...p,
@@ -208,10 +183,7 @@ export default function EditCustomerDialog({
                 }
                 type="checkbox"
               />
-              <span className="font-body text-on-surface-variant text-sm">
-                {t("add_customer_modal.whatsapp_consent")}
-              </span>
-            </label>
+            </Field>
           </div>
         </div>
 

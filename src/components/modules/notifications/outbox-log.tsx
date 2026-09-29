@@ -8,7 +8,7 @@ function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
     CANCELLED: "bg-surface-container-high text-on-surface-variant",
     FAILED: "bg-error/10 text-error",
-    QUEUED: "bg-warning-container text-on-warning-container",
+    QUEUED: "bg-tertiary-fixed text-on-tertiary-fixed-variant",
     SENT: "bg-success/10 text-success",
   };
   return (
