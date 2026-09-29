@@ -1863,17 +1863,23 @@
   "command_palette": {
     "close": "Fechar paleta de comandos",
     "group_actions": "Acções",
+    "group_customers": "Clientes",
+    "group_jobs": "Reparações",
     "group_pages": "Páginas",
-    "group_records": "Registos",
+    "group_parts": "Peças",
+    "group_repairs": "Serviços",
     "hint_navigate": "navegar",
     "hint_run": "executar",
     "hint_toggle": "abrir ou fechar",
-    "no_records": "Nenhum job ou cliente encontrado",
+    "no_records": "Nenhum registo encontrado",
     "no_results": "Sem resultados para «{{query}}»",
     "open": "Abrir paleta de comandos",
+    "out_of_stock": "Esgotado",
     "placeholder": "Pesquisar ou escrever um comando…",
     "search_error": "Não foi possível pesquisar",
     "searching": "A procurar…",
+    "stock_count": "{{quantity}} em stock",
+    "stock_low": "{{quantity}} em stock · a repor",
     "title": "Paleta de comandos"
   }
 }

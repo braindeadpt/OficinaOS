@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import {
   type ReactNode,
   useCallback,
@@ -9,11 +10,14 @@ import {
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { can } from "@/hooks/use-can";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 import { useModalEffects } from "@/hooks/use-modal-effects";
 import { useShortcutLabel } from "@/hooks/use-shortcut-label";
 import { buildCommands, filterCommands } from "@/lib/command-items";
 import {
   isSearchable,
+  type SearchPartResult,
   type SearchResult,
   searchGlobal,
 } from "@/lib/global-search";
@@ -24,6 +28,13 @@ import { useUiStore } from "@/stores/ui";
 const DEBOUNCE_MS = 200;
 
 const NAV_KEYS = new Set(["ArrowDown", "ArrowUp", "Home", "End"]);
+
+const RECORD_GROUP_LABEL: Record<SearchResult["kind"], string> = {
+  customer: "command_palette.group_customers",
+  job: "command_palette.group_jobs",
+  part: "command_palette.group_parts",
+  repair: "command_palette.group_repairs",
+};
 
 type LoadState = "error" | "idle" | "loading" | "ready";
 
@@ -72,6 +83,13 @@ export default function CommandPalette() {
   const role = useAuthStore((s) => s.role);
   const logout = useAuthStore((s) => s.logout);
   const openIntakeModal = useUiStore((s) => s.openIntakeModal);
+  const fmt = useFormatCurrency();
+
+  // A reader who may not open a catalogue should neither be shown its rows
+  // nor have the request made: a 403 in the log tells them rows exist that
+  // they are not allowed to see.
+  const canSeeParts = can(role, { parts: ["viewCatalog"] });
+  const canSeeRepairs = can(role, { repairs: ["viewCatalog"] });
 
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -150,7 +168,10 @@ export default function CommandPalette() {
       const requestId = requestIdRef.current;
       setState("loading");
 
-      searchGlobal(query, controller.signal)
+      searchGlobal(query, {
+        signal: controller.signal,
+        sources: { parts: canSeeParts, repairs: canSeeRepairs },
+      })
         .then((found) => {
           if (requestId !== requestIdRef.current) {
             return;
@@ -167,7 +188,7 @@ export default function CommandPalette() {
     }, DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  }, [isOpen, query, showRecords]);
+  }, [canSeeParts, canSeeRepairs, isOpen, query, showRecords]);
 
   const total = matched.length + (showRecords ? results.length : 0);
 
@@ -257,6 +278,18 @@ export default function CommandPalette() {
 
   const actionCommands = matched.filter((c) => c.kind === "action");
   const pageCommands = matched.filter((c) => c.kind === "page");
+
+  // One group per record type, in the order a technician reaches for them: the
+  // job they are typing, the person who called, the part they need, the
+  // service to quote. Empty groups are dropped rather than rendered empty.
+  const recordGroups = (["job", "customer", "part", "repair"] as const)
+    .map((kind) => ({
+      kind,
+      labelKey: RECORD_GROUP_LABEL[kind],
+      rows: results.filter((r) => r.kind === kind),
+    }))
+    .filter((group) => group.rows.length > 0);
+
   let rowIndex = -1;
   const optionId = (index: number) => `command-palette-option-${index}`;
 
@@ -387,24 +420,27 @@ export default function CommandPalette() {
             </p>
           )}
 
-          {showRecords && results.length > 0 && (
-            <CommandGroup label={t("command_palette.group_records")}>
-              {results.map((record) => {
+          {recordGroups.map((group) => (
+            <CommandGroup key={group.kind} label={t(group.labelKey)}>
+              {group.rows.map((record) => {
                 rowIndex += 1;
                 return (
                   <RecordRow
                     active={rowIndex === activeIndex}
+                    fmt={fmt}
                     id={optionId(rowIndex)}
                     index={rowIndex}
                     key={`${record.kind}-${record.id}`}
                     onHover={setActiveIndex}
                     onSelect={runAt}
                     record={record}
+                    subtitle={recordSubtitle(record, t)}
+                    tOutOfStock={t("command_palette.out_of_stock")}
                   />
                 );
               })}
             </CommandGroup>
-          )}
+          ))}
         </div>
 
         <div className="flex items-center gap-4 border-outline-variant border-t px-4 py-2 text-[11px] text-on-surface-variant">
@@ -508,21 +544,62 @@ function CommandRow({
   );
 }
 
+const RECORD_ICON: Record<SearchResult["kind"], string> = {
+  customer: "person",
+  job: "build",
+  part: "inventory_2",
+  repair: "menu_book",
+};
+
+function partStockLabel(record: SearchPartResult, t: TFunction): string {
+  if (record.stockQuantity === 0) {
+    return t("command_palette.out_of_stock");
+  }
+  if (record.lowStock) {
+    return t("command_palette.stock_low", { quantity: record.stockQuantity });
+  }
+  return t("command_palette.stock_count", { quantity: record.stockQuantity });
+}
+
+/**
+ * Written here rather than in the search module so that changing the language
+ * under an open palette re-renders the rows in the new one, instead of leaving
+ * the wording the results were fetched with.
+ */
+export function recordSubtitle(record: SearchResult, t: TFunction): string {
+  if (record.kind === "part") {
+    return [partStockLabel(record, t), record.supplier]
+      .filter(Boolean)
+      .join(" · ");
+  }
+  if (record.kind === "repair") {
+    return t(`repair_category.${record.category}`);
+  }
+  return record.subtitle;
+}
+
 function RecordRow({
   active,
+  fmt,
   id,
   index,
   onHover,
   onSelect,
   record,
+  subtitle,
+  tOutOfStock,
 }: {
   active: boolean;
+  fmt: (value: number) => string;
   id: string;
   index: number;
   onHover: (index: number) => void;
   onSelect: (index: number) => void;
   record: SearchResult;
+  subtitle: string;
+  tOutOfStock: string;
 }) {
+  const isCatalog = record.kind === "part" || record.kind === "repair";
   return (
     <button
       aria-selected={active}
@@ -538,19 +615,30 @@ function RecordRow({
         aria-hidden="true"
         className="material-symbols-outlined text-on-surface-variant"
       >
-        {record.kind === "job" ? "build" : "person"}
+        {RECORD_ICON[record.kind]}
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate font-bold text-on-surface text-sm">
           {record.title}
         </span>
-        {record.subtitle && (
+        {subtitle && (
           <span className="block truncate text-on-surface-variant text-xs">
-            {record.subtitle}
+            {subtitle}
           </span>
         )}
       </span>
       {record.kind === "job" && <StatusBadge status={record.status} />}
+      {/* Worth flagging before anyone quotes a part that is not on the shelf. */}
+      {record.kind === "part" && record.stockQuantity <= 0 && (
+        <span className="shrink-0 rounded-full bg-error-container px-2 py-0.5 font-semibold text-on-error-container text-xs">
+          {tOutOfStock}
+        </span>
+      )}
+      {isCatalog && (
+        <span className="shrink-0 font-mono text-on-surface text-xs tabular-nums">
+          {fmt(record.unitPrice)}
+        </span>
+      )}
     </button>
   );
 }
