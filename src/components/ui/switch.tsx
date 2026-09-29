@@ -6,6 +6,7 @@ interface SwitchProps {
   disabled?: boolean;
   id?: string;
   onChange: (checked: boolean) => void;
+  title?: string;
 }
 
 export function Switch({
@@ -16,6 +17,7 @@ export function Switch({
   disabled = false,
   id,
   onChange,
+  title,
 }: SwitchProps) {
   return (
     <div className="flex min-h-[44px] min-w-[44px] items-center justify-center">
@@ -44,6 +46,7 @@ export function Switch({
           }
         }}
         role="switch"
+        title={title}
         type="button"
       >
         <span

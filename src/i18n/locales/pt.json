@@ -457,6 +457,7 @@
   "customer_consent_optin_toast": "Consentimento WhatsApp concedido a {{name}}",
   "customer_consent_revoke_toast": "Consentimento WhatsApp revogado a {{name}}",
   "customer_consent_toggle_aria": "Alternar consentimento WhatsApp de {{name}}",
+  "customer_consent_optin_since": "Com opt-in desde {{date}}",
   "customer_email": "Email",
   "customer_jobs": "Histórico de reparações",
   "customer_name_label": "Nome",
