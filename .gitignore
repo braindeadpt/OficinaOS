@@ -17,6 +17,7 @@ android/
 .playwright-mcp/
 .stitch.worktrees/
 .worktrees/
+.freebuff/
 coverage/
 .DS_Store
 
