@@ -1,0 +1,105 @@
+name: Weekly dependency audit
+
+# Weekly security sweep. The PR CI already runs `bun audit --audit-level=critical`
+# on every change; this job watches the advisory database over time and reports
+# NEW critical vulnerabilities that appear between releases.
+on:
+  schedule:
+    # Every Monday 09:00 UTC (10:00 Lisbon summer, 09:00 winter)
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: weekly-dependency-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: bun audit (weekly)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.13
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Audit dependencies (critical and high)
+        id: audit
+        run: |
+          set +e
+          bun audit --audit-level=high > audit-output.txt 2>&1
+          EXIT_CODE=$?
+          set -e
+          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+          cat audit-output.txt
+          exit 0 # the issue step decides whether this is a failure
+
+      - name: Open issue on new critical or high vulnerabilities
+        if: steps.audit.outputs.exit_code != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs");
+            const report = fs.readFileSync("audit-output.txt", "utf8").trim();
+
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "security,dependencies",
+              per_page: 100,
+            });
+
+            // One open tracking issue at a time; update it instead of spamming.
+            const existing = issues[0];
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              "## 🔒 Nova auditoria semanal encontrou vulnerabilidades",
+              "",
+              "`bun audit --audit-level=high` falhou na varredura semanal.",
+              "",
+              "### Saída do auditor",
+              "",
+              "```text",
+              report.slice(0, 60000),
+              "```",
+              "",
+              ` corrida: ${runUrl}`,
+              "",
+              "_Atualizado automaticamente pela última varredura semanal._",
+            ].join("\n");
+
+            if (existing) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body,
+              });
+              core.notice(`Updated tracking issue #${existing.number}`);
+              return;
+            }
+
+            const { data: created } = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: "🔒 Vulnerabilidades críticas/altas detetadas pelo bun audit",
+              body,
+              labels: ["security", "dependencies"],
+            });
+            core.notice(`Created tracking issue #${created.number}`);
+
+      - name: Fail visibly when critical vulnerabilities are present
+        if: steps.audit.outputs.exit_code != '0'
+        run: |
+          echo "::error::bun audit found new high or critical vulnerabilities — see the open security issue."
+          cat audit-output.txt
+          exit 1
