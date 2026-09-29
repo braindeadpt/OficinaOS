@@ -227,7 +227,6 @@ async function seedNotificationTemplates() {
   console.log("Notification templates seeded.");
 }
 
-
 async function seedAgentDefinitions() {
   const agents = [
     {
