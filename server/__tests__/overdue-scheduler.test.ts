@@ -57,6 +57,32 @@ describe("startOverdueScheduler", () => {
     stop();
   });
 
+  it("passes customer name and phone so WhatsApp template vars render", async () => {
+    mockFindMany.mockResolvedValue([
+      {
+        customer: { name: "Ana Silva", phone: "+351910000001" },
+        id: "j1",
+        jobCode: "RPR-001",
+      },
+    ]);
+
+    const stop = startOverdueScheduler(mockApp);
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(mocks.notify).toHaveBeenCalledWith(mockApp, {
+      context: {
+        customerName: "Ana Silva",
+        jobCode: "RPR-001",
+        recipientPhone: "+351910000001",
+      },
+      eventName: "job_overdue",
+      jobId: "j1",
+      recipients: { role: "OWNER" },
+    });
+
+    stop();
+  });
+
   it("deduplicates already-alerted jobs on second tick", async () => {
     mockFindMany
       .mockResolvedValueOnce([{ id: "j1", jobCode: "RPR-001" }])
