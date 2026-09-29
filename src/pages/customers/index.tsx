@@ -5,6 +5,7 @@ import AddCustomerModal from "@/components/modules/customers/add-customer-modal"
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useCustomersStore } from "@/stores/customers";
 
@@ -142,14 +143,18 @@ function MobileCustomerCard({
 export default function CustomersPage() {
   const { t } = useTranslation();
   const [search, setSearch] = useState("");
+  const [consentFilter, setConsentFilter] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
   const debouncedSearch = useDebounce(search, 300);
   const { customers, isLoading, totalCount, fetchCustomers } =
     useCustomersStore();
 
   useEffect(() => {
-    fetchCustomers(debouncedSearch.trim() || undefined);
-  }, [debouncedSearch, fetchCustomers]);
+    fetchCustomers(
+      debouncedSearch.trim() || undefined,
+      consentFilter || undefined
+    );
+  }, [debouncedSearch, consentFilter, fetchCustomers]);
 
   const customersWithJobs = useMemo(
     () => customers.filter((c) => (c._count?.jobs ?? 0) > 0).length,
@@ -157,8 +162,12 @@ export default function CustomersPage() {
   );
 
   const hasCustomers = customers.length > 0 || isLoading;
-  const showSearchEmpty = customers.length === 0 && !isLoading && search !== "";
-  const showEmptyCatalog = totalCount === 0 && !isLoading && search === "";
+  const showSearchEmpty =
+    customers.length === 0 &&
+    !isLoading &&
+    (search !== "" || consentFilter !== "");
+  const showEmptyCatalog =
+    totalCount === 0 && !isLoading && search === "" && consentFilter === "";
 
   return (
     <>
@@ -207,14 +216,28 @@ export default function CustomersPage() {
       )}
 
       {!showEmptyCatalog && (
-        <div className="mb-5">
-          <Input
-            iconStart="search"
-            id="customers-search"
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t("search_customers_placeholder")}
-            value={search}
-          />
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row">
+          <div className="flex-1">
+            <Input
+              iconStart="search"
+              id="customers-search"
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t("search_customers_placeholder")}
+              value={search}
+            />
+          </div>
+          <div className="sm:w-56">
+            <Select
+              aria-label={t("customers_consent_filter")}
+              id="customers-consent-filter"
+              onChange={(e) => setConsentFilter(e.target.value)}
+              value={consentFilter}
+            >
+              <option value="">{t("customers_consent_all")}</option>
+              <option value="true">{t("customers_consent_opted_in")}</option>
+              <option value="false">{t("customers_consent_opted_out")}</option>
+            </Select>
+          </div>
         </div>
       )}
 
@@ -238,7 +261,10 @@ export default function CustomersPage() {
           </p>
           <button
             className="mt-5 min-h-11 rounded-xl bg-surface-container-high px-5 font-bold text-on-surface-variant text-sm transition-colors hover:bg-surface-container-highest"
-            onClick={() => setSearch("")}
+            onClick={() => {
+              setSearch("");
+              setConsentFilter("");
+            }}
             type="button"
           >
             {t("clear_filters")}
@@ -276,7 +302,10 @@ export default function CustomersPage() {
       <AddCustomerModal
         onClose={() => setShowAddModal(false)}
         onSuccess={() => {
-          fetchCustomers(debouncedSearch.trim() || undefined);
+          fetchCustomers(
+            debouncedSearch.trim() || undefined,
+            consentFilter || undefined
+          );
         }}
         open={showAddModal}
       />

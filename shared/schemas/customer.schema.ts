@@ -27,6 +27,8 @@ export const updateCustomerSchema = z.object({
 export type UpdateCustomerInput = z.infer<typeof updateCustomerSchema>;
 
 export const customerListQuerySchema = z.object({
+  /** Filter by WhatsApp opt-in state: "true" = consented, "false" = not. */
+  consent: z.enum(["true", "false"]).optional(),
   cursor: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   search: z.string().optional(),

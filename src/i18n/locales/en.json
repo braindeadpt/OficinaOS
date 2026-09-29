@@ -460,6 +460,10 @@
   "customers": "Customers",
   "customers_desc": "Browse and manage your customer directory",
   "customers_with_jobs": "With Jobs",
+  "customers_consent_all": "All customers",
+  "customers_consent_filter": "WhatsApp consent",
+  "customers_consent_opted_in": "Opted in (WhatsApp)",
+  "customers_consent_opted_out": "Opted out",
   "dashboard": "Dashboard",
   "dashboard_greeting": "Welcome back, {{name}}",
   "dashboard_page": {

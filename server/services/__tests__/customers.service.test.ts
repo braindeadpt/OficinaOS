@@ -170,6 +170,59 @@ describe("list", () => {
     expect(findManyCall[0].where.OR).toBeDefined();
     expect(findManyCall[0].where.OR).toHaveLength(2);
   });
+
+  it("filters by whatsappConsent true for GDPR campaign lists", async () => {
+    (prisma.customer.findMany as ReturnType<typeof vi.fn>).mockResolvedValue(
+      []
+    );
+    (prisma.customer.count as ReturnType<typeof vi.fn>).mockResolvedValue(0);
+
+    await list(prisma, {
+      consent: "true",
+      cursor: undefined,
+      limit: 10,
+      search: undefined,
+    });
+
+    const findManyCall = (prisma.customer.findMany as ReturnType<typeof vi.fn>)
+      .mock.calls[0];
+    expect(findManyCall[0].where.whatsappConsent).toBe(true);
+  });
+
+  it("filters by whatsappConsent false (includes never-asked customers)", async () => {
+    (prisma.customer.findMany as ReturnType<typeof vi.fn>).mockResolvedValue(
+      []
+    );
+    (prisma.customer.count as ReturnType<typeof vi.fn>).mockResolvedValue(0);
+
+    await list(prisma, {
+      consent: "false",
+      cursor: undefined,
+      limit: 10,
+      search: undefined,
+    });
+
+    const findManyCall = (prisma.customer.findMany as ReturnType<typeof vi.fn>)
+      .mock.calls[0];
+    expect(findManyCall[0].where.whatsappConsent).toBe(false);
+  });
+
+  it("does not filter by consent when unset", async () => {
+    (prisma.customer.findMany as ReturnType<typeof vi.fn>).mockResolvedValue(
+      []
+    );
+    (prisma.customer.count as ReturnType<typeof vi.fn>).mockResolvedValue(0);
+
+    await list(prisma, {
+      cursor: undefined,
+      limit: 10,
+      search: undefined,
+    });
+
+    const findManyCall = (prisma.customer.findMany as ReturnType<typeof vi.fn>)
+      .mock.calls[0];
+    expect(findManyCall[0].where).not.toHaveProperty("whatsappConsent");
+  });
 });
 
 describe("search", () => {
