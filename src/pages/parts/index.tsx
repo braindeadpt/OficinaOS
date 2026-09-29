@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import AddPartModal from "@/components/modules/parts/add-part-modal";
 import RecordPurchaseDialog from "@/components/modules/parts/record-purchase-dialog";
+import RestockForecastDialog from "@/components/modules/parts/restock-forecast-dialog";
 import StockMovementsDialog from "@/components/modules/parts/stock-movements-dialog";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
@@ -510,11 +511,15 @@ function PartsExtraDialogs({
   purchasePart,
   setMovementsPart,
   setPurchasePart,
+  setShowForecast,
+  showForecast,
 }: {
   movementsPart: PartsCatalog | null;
   purchasePart: PartsCatalog | null;
   setMovementsPart: (part: PartsCatalog | null) => void;
   setPurchasePart: (part: PartsCatalog | null) => void;
+  setShowForecast: (show: boolean) => void;
+  showForecast: boolean;
 }) {
   return (
     <>
@@ -531,7 +536,41 @@ function PartsExtraDialogs({
           part={purchasePart}
         />
       )}
+      {showForecast && (
+        <RestockForecastDialogWrapper
+          onClose={() => setShowForecast(false)}
+          setPurchasePart={setPurchasePart}
+        />
+      )}
     </>
+  );
+}
+
+function RestockForecastDialogWrapper({
+  onClose,
+  setPurchasePart,
+}: {
+  onClose: () => void;
+  setPurchasePart: (part: PartsCatalog | null) => void;
+}) {
+  const { fetchPartById } = usePartsCatalogStore();
+
+  const handleBuySuggestion = useCallback(
+    async (partId: string) => {
+      const part = await fetchPartById(partId);
+      if (part) {
+        onClose();
+        setPurchasePart(part);
+      }
+    },
+    [fetchPartById, onClose, setPurchasePart]
+  );
+
+  return (
+    <RestockForecastDialog
+      onBuySuggestion={handleBuySuggestion}
+      onClose={onClose}
+    />
   );
 }
 
@@ -845,6 +884,7 @@ export default function PartsCatalogPage() {
   const [deletingPartId, setDeletingPartId] = useState<string | null>(null);
   const [movementsPart, setMovementsPart] = useState<PartsCatalog | null>(null);
   const [purchasePart, setPurchasePart] = useState<PartsCatalog | null>(null);
+  const [showForecast, setShowForecast] = useState(false);
   const [toast, setToast] = useState<{
     isError: boolean;
     message: string;
@@ -1098,12 +1138,25 @@ export default function PartsCatalogPage() {
               t={t}
             />
           </div>
-          <div className="mt-2">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             <RestockFilterPill
               active={needsRestockFilter}
               onToggle={() => setNeedsRestockFilter((v) => !v)}
               t={t}
             />
+            <button
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full bg-surface-container-high px-4 py-2.5 font-bold text-on-surface-variant text-xs uppercase tracking-wide transition-colors hover:bg-surface-container-highest"
+              onClick={() => setShowForecast(true)}
+              type="button"
+            >
+              <span
+                aria-hidden="true"
+                className="material-symbols-outlined text-[16px]"
+              >
+                trending_down
+              </span>
+              {t("parts_restock_forecast")}
+            </button>
           </div>
           {activeFilter !== "ALL" && (
             <div className="mt-2 flex items-center gap-2">
@@ -1264,6 +1317,8 @@ export default function PartsCatalogPage() {
         purchasePart={purchasePart}
         setMovementsPart={setMovementsPart}
         setPurchasePart={setPurchasePart}
+        setShowForecast={setShowForecast}
+        showForecast={showForecast}
       />
 
       {toast && (

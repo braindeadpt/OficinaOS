@@ -187,3 +187,24 @@ export interface CashReportDTO {
   largestPayment: CashLargestPayment | null;
   summary: CashReportSummary;
 }
+
+export interface RestockForecastRow {
+  /** Average units consumed per day over the analysis window (0 = no usage). */
+  avgDailyUsage: number;
+  /** Days until stock hits zero at the average rate; null without usage. */
+  daysLeft: number | null;
+  partId: string;
+  partName: string;
+  reorderLevel: number;
+  stockQuantity: number;
+  /** Units to buy to reach the restock target (always > 0 on returned rows). */
+  suggestedQuantity: number;
+  supplier: string | null;
+}
+
+export interface RestockForecastDTO {
+  rows: RestockForecastRow[];
+  summary: { partsAtRisk: number; totalSuggestedQuantity: number };
+  /** Analysis window in days (consumption sampled over this period). */
+  windowDays: number;
+}

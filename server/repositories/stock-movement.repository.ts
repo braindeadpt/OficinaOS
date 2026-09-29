@@ -44,3 +44,14 @@ export function countStockMovements(
 ) {
   return prisma.stockMovement.count({ where });
 }
+
+export function groupConsumedQuantity(
+  prisma: DbClient,
+  where: Prisma.StockMovementWhereInput
+) {
+  return prisma.stockMovement.groupBy({
+    by: ["partId"],
+    where,
+    _sum: { quantity: true },
+  });
+}
