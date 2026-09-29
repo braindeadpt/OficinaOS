@@ -8,6 +8,7 @@ export const createCustomerSchema = z.object({
     .or(z.literal("")),
   name: z.string().min(1, { error: "validations.enter_name" }),
   phone: z.string().min(1, { error: "validations.enter_phone" }),
+  whatsappConsent: z.boolean().optional(),
 });
 
 export type CreateCustomerInput = z.infer<typeof createCustomerSchema>;
@@ -20,6 +21,7 @@ export const updateCustomerSchema = z.object({
     .email({ error: "validations.email" })
     .or(z.literal(""))
     .optional(),
+  whatsappConsent: z.boolean().optional(),
 });
 
 export type UpdateCustomerInput = z.infer<typeof updateCustomerSchema>;

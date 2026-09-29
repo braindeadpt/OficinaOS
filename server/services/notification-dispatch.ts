@@ -1,5 +1,6 @@
 import type { NotifyChannel } from "@generated/client";
 import type { RoleType } from "@shared/constants/roles.js";
+import { findCustomerByPhone } from "../repositories/customer.repository.js";
 import {
   createManyAndReturnInAppNotifications,
   findManyNotificationTemplatesByName,
@@ -111,6 +112,15 @@ const whatsAppHandler: ChannelHandler = {
     if (!phone) {
       logger.warn(
         `[notify] WHATSAPP handler: no recipientPhone for event ${event.eventName} — skipping`
+      );
+      return;
+    }
+    // Consent gate at enqueue time: customers who did not opt in never
+    // even enter the outbox. The outbox re-checks at send time.
+    const customer = await findCustomerByPhone(prisma, phone);
+    if (!customer?.whatsappConsent) {
+      logger.info(
+        `[notify] WHATSAPP handler: no WhatsApp consent for ${phone} on ${event.eventName} — skipping`
       );
       return;
     }

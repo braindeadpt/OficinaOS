@@ -20,6 +20,10 @@ export async function findUnique(prisma: DbClient, id: string) {
   return await prisma.customer.findUnique({ where: { id } });
 }
 
+export async function findCustomerByPhone(prisma: DbClient, phone: string) {
+  return await prisma.customer.findUnique({ where: { phone } });
+}
+
 export async function findUniqueWithJobs(prisma: DbClient, id: string) {
   return await prisma.customer.findUnique({
     where: { id },

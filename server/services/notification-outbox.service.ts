@@ -1,5 +1,6 @@
 import { OutboxStatus } from "@generated/client";
 import { AppError } from "@shared/errors/app-error.js";
+import { findCustomerByPhone } from "../repositories/customer.repository.js";
 import {
   createOutboxEntry,
   findManyOutboxEntries,
@@ -12,6 +13,29 @@ import type { DbClient } from "../repositories/types.js";
 import { logger } from "../utils/logger.js";
 import { renderTemplate } from "./notification-renderer.js";
 import { decryptWhatsAppConfig, sendWhatsApp } from "./notification-sender.js";
+
+/**
+ * WhatsApp consent gate. Only customers who opted in may receive messages;
+ * the shop's own phone is always allowed (test notifications, shop contact).
+ * Returns null when the send must be skipped, with a human-readable reason.
+ */
+export async function assertWhatsAppConsent(
+  prisma: DbClient,
+  phone: string,
+  shopPhone: string | null
+): Promise<string | null> {
+  if (shopPhone && phone.trim() === shopPhone.trim()) {
+    return null; // shop's own number — test notifications and replies
+  }
+  const customer = await findCustomerByPhone(prisma, phone);
+  if (!customer) {
+    return "no customer record for this phone";
+  }
+  if (!customer.whatsappConsent) {
+    return "customer has not granted WhatsApp consent";
+  }
+  return null;
+}
 
 interface OutboxEntry {
   channel: string;
@@ -88,14 +112,68 @@ async function handleRetry(
   }
 }
 
+async function markSent(prisma: DbClient, entryId: string): Promise<void> {
+  try {
+    await updateOutboxEntry(
+      prisma,
+      { id: entryId },
+      {
+        error: null,
+        sentAt: new Date(),
+        status: OutboxStatus.SENT,
+      }
+    );
+  } catch (dbErr) {
+    logger.error(
+      { err: dbErr, entryId },
+      "Outbox: failed to mark entry as SENT after successful send"
+    );
+  }
+}
+
+/**
+ * Cancels an outbox entry blocked by the consent gate, recording why.
+ * Returns true when the entry was blocked (caller must skip sending).
+ */
+async function cancelIfConsentMissing(
+  prisma: DbClient,
+  entry: OutboxEntry,
+  shopPhone: string | null
+): Promise<boolean> {
+  const consentError = await assertWhatsAppConsent(
+    prisma,
+    entry.recipientPhone,
+    shopPhone
+  );
+  if (!consentError) {
+    return false;
+  }
+  await updateOutboxEntry(
+    prisma,
+    { id: entry.id },
+    {
+      error: `Blocked: ${consentError}`,
+      status: OutboxStatus.CANCELLED,
+    }
+  );
+  return true;
+}
+
 async function processEntry(
   prisma: DbClient,
   entry: OutboxEntry,
   config: { apiToken: string; businessId: string; phoneNumberId: string },
-  countryCode: string
+  countryCode: string,
+  shopPhone: string | null
 ): Promise<void> {
   try {
     if (entry.channel === "WHATSAPP") {
+      // Consent is the law here: without it the entry is cancelled (not
+      // retried) and the reason lands in the outbox error column.
+      const blocked = await cancelIfConsentMissing(prisma, entry, shopPhone);
+      if (blocked) {
+        return;
+      }
       const result = await sendWhatsApp(
         config,
         entry.recipientPhone,
@@ -103,22 +181,7 @@ async function processEntry(
         countryCode
       );
       if (result.success) {
-        try {
-          await updateOutboxEntry(
-            prisma,
-            { id: entry.id },
-            {
-              error: null,
-              sentAt: new Date(),
-              status: OutboxStatus.SENT,
-            }
-          );
-        } catch (dbErr) {
-          logger.error(
-            { err: dbErr, entryId: entry.id },
-            "Outbox: failed to mark entry as SENT after successful send"
-          );
-        }
+        await markSent(prisma, entry.id);
       } else {
         try {
           await handleRetry(
@@ -197,7 +260,13 @@ export async function processOutbox(prisma: DbClient): Promise<void> {
     const countryCode = shopSettings?.countryCode ?? "PT";
 
     for (const entry of pending) {
-      await processEntry(prisma, entry, config, countryCode);
+      await processEntry(
+        prisma,
+        entry,
+        config,
+        countryCode,
+        shopSettings?.phone ?? null
+      );
     }
   } finally {
     isProcessing = false;

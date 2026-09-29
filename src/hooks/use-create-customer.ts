@@ -13,6 +13,7 @@ interface CreateCustomerInput {
   email?: string;
   name: string;
   phone: string;
+  whatsappConsent?: boolean;
 }
 
 export function useCreateCustomer() {

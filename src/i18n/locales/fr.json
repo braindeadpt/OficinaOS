@@ -21,7 +21,9 @@
     "discard_title": "Supprimer les modifications ?",
     "discard_desc": "Vous avez des modifications non enregistrées qui seront perdues.",
     "keep_editing": "Continuer à éditer",
-    "discard": "Jeter"
+    "discard": "Jeter",
+    "whatsapp_consent": "Recevoir les mises à jour WhatsApp de ma réparation",
+    "whatsapp_consent_hint": "Uniquement pour les états de réparation. Modifiable à tout moment."
   },
   "add_new_part": "Ajouter une pièce",
   "add_part_modal": {

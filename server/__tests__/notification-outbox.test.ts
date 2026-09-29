@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   createOutboxEntry: vi.fn(),
+  findCustomerByPhone: vi.fn(),
   findManyOutboxEntries: vi.fn(),
   findShopSettingsUnique: vi.fn(),
   updateOutboxEntry: vi.fn(),
@@ -31,6 +32,10 @@ vi.mock("../repositories/notification.repository.js", () => ({
 
 vi.mock("../repositories/settings.repository.js", () => ({
   findShopSettingsUnique: mocks.findShopSettingsUnique,
+}));
+
+vi.mock("../repositories/customer.repository.js", () => ({
+  findCustomerByPhone: mocks.findCustomerByPhone,
 }));
 
 const prisma = {} as any;
@@ -117,6 +122,10 @@ describe("processOutbox", () => {
     });
     mocks.sendWhatsApp.mockResolvedValue({ success: true });
     mocks.updateOutboxEntry.mockResolvedValue({ id: "out-1" });
+    mocks.findCustomerByPhone.mockResolvedValue({
+      phone: "05551234567",
+      whatsappConsent: true,
+    });
 
     await processOutbox(prisma);
 
@@ -138,6 +147,10 @@ describe("processOutbox", () => {
       "05551234567",
       "Hello Ahmed, job RPR-001 is ready.",
       "PT"
+    );
+    expect(mocks.findCustomerByPhone).toHaveBeenCalledWith(
+      prisma,
+      "05551234567"
     );
     expect(mocks.updateOutboxEntry).toHaveBeenCalledWith(
       prisma,
@@ -175,6 +188,10 @@ describe("processOutbox", () => {
     mocks.sendWhatsApp.mockResolvedValue({
       success: false,
       error: "WhatsApp API 403: Invalid token",
+    });
+    mocks.findCustomerByPhone.mockResolvedValue({
+      phone: "05551234567",
+      whatsappConsent: true,
     });
 
     await processOutbox(prisma);
