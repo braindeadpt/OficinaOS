@@ -389,6 +389,8 @@ export default function JobDetailPage() {
           balanceDue={balanceDue}
           jobId={job.id}
           onChanged={() => fetchJob()}
+          paymentOnDeliveryMethod={job.paymentOnDeliveryMethod ?? null}
+          status={job.status}
         />
       </div>
 

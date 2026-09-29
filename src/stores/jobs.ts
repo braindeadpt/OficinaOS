@@ -51,6 +51,7 @@ interface JobsState {
     supplier?: string
   ) => Promise<JobPartsWaiting>;
   clearError: () => void;
+  clearPaymentOnDelivery: (jobId: string) => Promise<void>;
   createJob: (data: {
     customerEmail?: string;
     customerId?: string;
@@ -95,6 +96,7 @@ interface JobsState {
   isLoadingJobs: boolean;
   isLoadingMetrics: boolean;
   jobs: Job[];
+  markPaymentOnDelivery: (jobId: string, method: string) => Promise<void>;
   metrics: JobMetrics | null;
   nextCursor: string | null;
   removePart: (jobId: string, partId: string) => Promise<void>;
@@ -382,6 +384,34 @@ export const useJobsStore = create<JobsState>((set) => ({
       return res.data as Payment;
     } catch (err: unknown) {
       const message = getErrorMessage(err, i18n.t("errors.add_payment"));
+      set({ error: message });
+      throw new Error(message);
+    }
+  },
+
+  markPaymentOnDelivery: async (jobId, method) => {
+    set({ error: null });
+    try {
+      await api.post(`/jobs/${jobId}/payment-on-delivery`, { method });
+    } catch (err: unknown) {
+      const message = getErrorMessage(
+        err,
+        i18n.t("errors.mark_payment_on_delivery")
+      );
+      set({ error: message });
+      throw new Error(message);
+    }
+  },
+
+  clearPaymentOnDelivery: async (jobId) => {
+    set({ error: null });
+    try {
+      await api.delete(`/jobs/${jobId}/payment-on-delivery`);
+    } catch (err: unknown) {
+      const message = getErrorMessage(
+        err,
+        i18n.t("errors.clear_payment_on_delivery")
+      );
       set({ error: message });
       throw new Error(message);
     }

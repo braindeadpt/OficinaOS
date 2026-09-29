@@ -643,7 +643,12 @@
     "update_repair": "Failed to update repair",
     "user_not_found": "User not found",
     "username_exists": "Username already exists",
-    "validation_error": "Validation failed"
+    "validation_error": "Validation failed",
+    "mark_payment_on_delivery": "Failed to mark job as paid on delivery",
+    "clear_payment_on_delivery": "Failed to cancel the paid-on-delivery mark",
+    "pod_already_marked": "Job is already marked as paid on delivery",
+    "pod_not_marked": "Job is not marked as paid on delivery",
+    "no_payment_due": "There is no outstanding balance to collect"
   },
   "failed_to_create_part": "Failed to create part",
   "failed_to_delete_part": "Failed to delete part",
@@ -1113,7 +1118,13 @@
     "reference_placeholder": "e.g. transaction ID or receipt no.",
     "remaining_after": "After this payment",
     "remove": "Remove payment",
-    "section_title": "Payments"
+    "section_title": "Payments",
+    "pod_marked": "Will collect {{amount}} ({{method}}) at delivery",
+    "pod_record_now": "Record now",
+    "pod_cancel": "Cancel mark",
+    "pod_hint": "Paid on delivery — record automatically when handing the device back",
+    "pod_method_label": "Payment method",
+    "pod_mark": "Mark as paid on delivery"
   },
   "part_category": {
     "SCREEN": "Screen",

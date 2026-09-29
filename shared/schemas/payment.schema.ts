@@ -17,3 +17,20 @@ export const addPaymentSchema = z.object({
 });
 
 export type AddPaymentInput = z.infer<typeof addPaymentSchema>;
+
+// One-click "paid on delivery": the method is chosen when marking the job;
+// the payment itself is recorded automatically at delivery.
+export const paymentOnDeliveryMethodSchema = z.enum([
+  PaymentMethod.CASH,
+  PaymentMethod.CARD,
+  PaymentMethod.TRANSFER,
+  PaymentMethod.OTHER,
+]);
+
+export type PaymentOnDeliveryMethodType = z.infer<
+  typeof paymentOnDeliveryMethodSchema
+>;
+
+export const paymentOnDeliverySchema = z.object({
+  method: paymentOnDeliveryMethodSchema,
+});

@@ -643,7 +643,12 @@
     "update_repair": "Falha ao atualizar a reparação",
     "user_not_found": "Utilizador não encontrado",
     "username_exists": "O nome de utilizador já existe",
-    "validation_error": "Falha na validação"
+    "validation_error": "Falha na validação",
+    "mark_payment_on_delivery": "Falha ao marcar o job como pago na entrega",
+    "clear_payment_on_delivery": "Falha ao cancelar a marcação de pago na entrega",
+    "pod_already_marked": "O job já está marcado como pago na entrega",
+    "pod_not_marked": "O job não está marcado como pago na entrega",
+    "no_payment_due": "Não há saldo em dívida a cobrar"
   },
   "failed_to_create_part": "Falha ao criar peça",
   "failed_to_delete_part": "Falha ao eliminar peça",
@@ -1113,7 +1118,13 @@
     "reference_placeholder": "ex.: ID de transação ou nº de recibo",
     "remaining_after": "Depois deste pagamento",
     "remove": "Remover pagamento",
-    "section_title": "Pagamentos"
+    "section_title": "Pagamentos",
+    "pod_marked": "Vai cobrar {{amount}} ({{method}}) na entrega",
+    "pod_record_now": "Registar agora",
+    "pod_cancel": "Cancelar marcação",
+    "pod_hint": "Pago na entrega — regista automaticamente ao entregar",
+    "pod_method_label": "Método de pagamento",
+    "pod_mark": "Marcar pago na entrega"
   },
   "part_category": {
     "SCREEN": "Ecrã",
