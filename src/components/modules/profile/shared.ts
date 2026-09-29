@@ -23,7 +23,7 @@ export const LABEL_CLS =
   "block font-bold text-xs text-on-surface-variant uppercase tracking-wider mb-2";
 
 export const LANGUAGE_OPTIONS = [
+  { value: "pt", label: "Português" },
   { value: "en", label: "English" },
   { value: "fr", label: "Français" },
-  { value: "ar", label: "العربية" },
 ];

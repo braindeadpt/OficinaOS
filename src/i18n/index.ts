@@ -2,7 +2,6 @@ import { RTL_LANGUAGES } from "@shared/constants";
 import i18next from "i18next";
 import LanguageDetector from "i18next-browser-languagedetector";
 import { initReactI18next } from "react-i18next";
-import ar from "./locales/ar.json";
 import en from "./locales/en.json";
 import fr from "./locales/fr.json";
 import pt from "./locales/pt.json";
@@ -25,11 +24,10 @@ function applyDocumentDirection(lng: string) {
 i18n.init({
   resources: {
     en: { translation: en },
-    ar: { translation: ar },
     fr: { translation: fr },
     pt: { translation: pt },
   },
-  fallbackLng: "en",
+  fallbackLng: "pt",
   detection: {
     order: ["localStorage", "navigator"],
     caches: ["localStorage"],

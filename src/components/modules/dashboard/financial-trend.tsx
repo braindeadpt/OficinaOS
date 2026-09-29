@@ -21,10 +21,10 @@ export default function FinancialTrend({ data }: FinancialTrendProps) {
     : Math.max(...data.flatMap((d) => [d.revenue, d.cost]), 1);
 
   const LOCALES: Record<string, string> = {
-    ar: "ar-DZ",
-    fr: "fr-DZ",
+    en: "en-US",
+    fr: "fr-FR",
   };
-  const DEFAULT_LOCALE = "en-US";
+  const DEFAULT_LOCALE = "pt-PT";
 
   const formatDay = (dateStr: string) => {
     const d = new Date(`${dateStr}T00:00:00`);

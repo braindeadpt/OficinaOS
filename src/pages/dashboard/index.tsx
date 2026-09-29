@@ -26,13 +26,13 @@ const EMPTY_PIPELINE: Record<JobStatusType, number> = {
 };
 
 function resolveLocale(lang: string): string {
-  if (lang === "ar") {
-    return "ar-DZ";
-  }
   if (lang === "fr") {
-    return "fr-DZ";
+    return "fr-FR";
   }
-  return "en-US";
+  if (lang === "en") {
+    return "en-US";
+  }
+  return "pt-PT";
 }
 
 function usePrevMonthName(): string {

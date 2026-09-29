@@ -97,13 +97,13 @@ export default function ProfilePage() {
   );
 
   const detectLanguage = useCallback((): string => {
-    if (i18n.language.startsWith("ar")) {
-      return "ar";
-    }
     if (i18n.language.startsWith("fr")) {
       return "fr";
     }
-    return "en";
+    if (i18n.language.startsWith("en")) {
+      return "en";
+    }
+    return "pt";
   }, [i18n.language]);
 
   const personalFormDefault = useMemo(
