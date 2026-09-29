@@ -27,10 +27,10 @@ type PrimitiveTag = (typeof PRIMITIVE_TAGS)[number];
  * it. Drive every number to zero to retire the corresponding rule.
  */
 const BUDGET: Record<PrimitiveTag, number> = {
-  input: 88,
-  label: 84,
-  select: 14,
-  textarea: 16,
+  input: 78,
+  label: 71,
+  select: 13,
+  textarea: 15,
 };
 
 interface Offence {

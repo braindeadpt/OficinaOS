@@ -9,7 +9,14 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Field } from "@/components/ui/field";
+import { Icon } from "@/components/ui/icon";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { useModalEffects } from "@/hooks/use-modal-effects";
 import api from "@/lib/api";
 import { useSettingsStore } from "@/stores/settings";
@@ -154,7 +161,7 @@ function AgentRow({
   );
 }
 
-function AgentForm({
+export function AgentForm({
   initial,
   isEdit,
   onCancel,
@@ -220,16 +227,8 @@ function AgentForm({
   return (
     <form className="space-y-5" onSubmit={handleSubmit}>
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <div className="space-y-2">
-          <label
-            className="block font-semibold text-on-surface text-sm"
-            htmlFor="agent-display-name"
-          >
-            {t("ai_defs_display_name")}
-          </label>
-          <input
-            className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm transition-all"
-            id="agent-display-name"
+        <Field label={t("ai_defs_display_name")} required>
+          <Input
             onChange={(e) =>
               setForm((f) => ({ ...f, displayName: e.target.value }))
             }
@@ -237,58 +236,31 @@ function AgentForm({
             required
             value={form.displayName}
           />
-        </div>
-        <div className="space-y-2">
-          <label
-            className="block font-semibold text-on-surface text-sm"
-            htmlFor="agent-name"
-          >
-            {t("ai_defs_name")}
-          </label>
-          <input
-            className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm transition-all disabled:opacity-60"
+        </Field>
+        <Field hint={t("ai_defs_name_help")} label={t("ai_defs_name")} required>
+          <Input
             disabled={isEdit}
-            id="agent-name"
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             placeholder={t("ai_defs_name_placeholder")}
             required
             value={form.name}
           />
-          <p className="text-on-surface-variant text-xs">
-            {t("ai_defs_name_help")}
-          </p>
-        </div>
+        </Field>
       </div>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <div className="space-y-2">
-          <label
-            className="block font-semibold text-on-surface text-sm"
-            htmlFor="agent-model"
-          >
-            {t("ai_defs_model")}
-          </label>
-          <input
-            className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm transition-all"
-            id="agent-model"
+        <Field hint={t("ai_defs_model_help")} label={t("ai_defs_model")}>
+          <Input
             onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
             placeholder={t("ai_defs_model_placeholder")}
             value={form.model}
           />
-          <p className="text-on-surface-variant text-xs">
-            {t("ai_defs_model_help")}
-          </p>
-        </div>
-        <div className="space-y-2">
-          <label
-            className="block font-semibold text-on-surface text-sm"
-            htmlFor="agent-temperature"
-          >
-            {t("ai_defs_temperature")}
-          </label>
-          <input
-            className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm transition-all"
-            id="agent-temperature"
+        </Field>
+        <Field
+          hint={t("ai_defs_temperature_help")}
+          label={t("ai_defs_temperature")}
+        >
+          <Input
             max="2"
             min="0"
             onChange={(e) =>
@@ -299,22 +271,14 @@ function AgentForm({
             type="number"
             value={form.temperature}
           />
-          <p className="text-on-surface-variant text-xs">
-            {t("ai_defs_temperature_help")}
-          </p>
-        </div>
+        </Field>
       </div>
 
-      <div className="space-y-2">
-        <label
-          className="block font-semibold text-on-surface text-sm"
-          htmlFor="agent-instructions"
-        >
-          {t("ai_defs_instructions")}
-        </label>
-        <textarea
-          className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm transition-all"
-          id="agent-instructions"
+      <Field
+        hint={t("ai_defs_instructions_help")}
+        label={t("ai_defs_instructions")}
+      >
+        <Textarea
           onChange={(e) =>
             setForm((f) => ({ ...f, instructions: e.target.value }))
           }
@@ -322,38 +286,24 @@ function AgentForm({
           rows={5}
           value={form.instructions}
         />
-        <p className="text-on-surface-variant text-xs">
-          {t("ai_defs_instructions_help")}
-        </p>
-      </div>
+      </Field>
 
       <div className="rounded-2xl bg-surface-container-low p-5">
-        <div className="flex items-center justify-between">
-          <span className="font-semibold text-on-surface text-sm">
-            {t("ai_defs_active")}
-          </span>
-          <button
-            aria-checked={form.isActive}
-            aria-label={t("ai_defs_active")}
-            className="relative h-6 w-11 rounded-full transition-colors"
-            onClick={() => setForm((f) => ({ ...f, isActive: !f.isActive }))}
-            role="switch"
-            style={{
-              backgroundColor: form.isActive
-                ? "var(--color-primary)"
-                : "var(--color-outline-variant)",
-            }}
-            type="button"
-          >
-            <span
-              className="absolute top-0.5 h-5 w-5 rounded-full bg-on-primary shadow-sm transition-all"
-              style={{ insetInlineStart: form.isActive ? "22px" : "2px" }}
-            />
-          </button>
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <Label htmlFor="agent-active">{t("ai_defs_active")}</Label>
+            <p className="mt-1 text-on-surface-variant text-xs">
+              {t("ai_defs_active_desc")}
+            </p>
+          </div>
+          <Switch
+            checked={form.isActive}
+            id="agent-active"
+            onChange={(checked) =>
+              setForm((f) => ({ ...f, isActive: checked }))
+            }
+          />
         </div>
-        <p className="mt-1 text-on-surface-variant text-xs">
-          {t("ai_defs_active_desc")}
-        </p>
       </div>
 
       <div className="rounded-2xl bg-surface-container-low p-5">
@@ -362,18 +312,12 @@ function AgentForm({
         </h4>
         <div className="mt-3 space-y-2">
           {LOCAL_TOOLS.map((tool) => (
-            <label
-              className="flex cursor-pointer items-center gap-3"
-              key={tool}
-            >
-              <input
+            <Field horizontal key={tool} label={tool}>
+              <Checkbox
                 checked={form.toolNames.includes(tool)}
-                className="h-4 w-4 rounded accent-primary"
                 onChange={() => toggleLocalTool(tool)}
-                type="checkbox"
               />
-              <span className="text-on-surface text-sm">{tool}</span>
-            </label>
+            </Field>
           ))}
         </div>
       </div>
@@ -384,64 +328,43 @@ function AgentForm({
         </h4>
         <div className="mt-3 space-y-2">
           {HOSTED_TOOLS.map((tool) => (
-            <label
-              className="flex cursor-pointer items-center gap-3"
+            <Field
+              horizontal
               key={tool}
-            >
-              <input
-                checked={form.enabledHostedTools.includes(tool)}
-                className="h-4 w-4 rounded accent-primary"
-                onChange={() => toggleHostedTool(tool)}
-                type="checkbox"
-              />
-              <span className="text-on-surface text-sm">
-                {tool === "web_search"
+              label={
+                tool === "web_search"
                   ? t("ai_defs_hosted_web_search")
-                  : t("ai_defs_hosted_file_search")}
-              </span>
-            </label>
+                  : t("ai_defs_hosted_file_search")
+              }
+            >
+              <Checkbox
+                checked={form.enabledHostedTools.includes(tool)}
+                onChange={() => toggleHostedTool(tool)}
+              />
+            </Field>
           ))}
         </div>
       </div>
 
-      <div className="space-y-2">
-        <label
-          className="block font-semibold text-on-surface text-sm"
-          htmlFor="agent-keywords"
-        >
-          {t("ai_defs_keywords")}
-        </label>
-        <input
-          className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm transition-all"
-          id="agent-keywords"
+      <Field hint={t("ai_defs_keywords_help")} label={t("ai_defs_keywords")}>
+        <Input
           onChange={(e) =>
             setForm((f) => ({ ...f, handoffKeywords: e.target.value }))
           }
           placeholder={t("ai_defs_keywords_placeholder")}
           value={form.handoffKeywords}
         />
-        <p className="text-on-surface-variant text-xs">
-          {t("ai_defs_keywords_help")}
-        </p>
-      </div>
+      </Field>
 
-      <div className="space-y-2">
-        <label
-          className="block font-semibold text-on-surface text-sm"
-          htmlFor="agent-vector-store"
-        >
-          {t("ai_defs_vector_store_id")}
-        </label>
-        <input
-          className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm transition-all"
-          id="agent-vector-store"
+      <Field label={t("ai_defs_vector_store_id")}>
+        <Input
           onChange={(e) =>
             setForm((f) => ({ ...f, vectorStoreId: e.target.value }))
           }
           placeholder={t("ai_defs_vector_store_placeholder")}
           value={form.vectorStoreId}
         />
-      </div>
+      </Field>
 
       <div className="flex items-center justify-end gap-3">
         <button
@@ -726,19 +649,12 @@ export default function SettingsAiTab({
         </div>
         <div className="rounded-2xl bg-surface-container-low p-5">
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <div className="space-y-2">
-              <label
-                className="block font-semibold text-on-surface text-sm"
-                htmlFor="ai-endpoint"
-              >
-                {t("ai_endpoint_label")}
-                <span aria-hidden="true" className="ms-0.5 text-error">
-                  *
-                </span>
-              </label>
-              <input
-                className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm transition-all"
-                id="ai-endpoint"
+            <Field
+              hint={t("ai_endpoint_hint")}
+              label={t("ai_endpoint_label")}
+              required
+            >
+              <Input
                 onChange={(e) => {
                   setAiForm((f) => ({ ...f, endpointUrl: e.target.value }));
                   onDirtyChange(true);
@@ -748,29 +664,9 @@ export default function SettingsAiTab({
                 type="url"
                 value={aiForm.endpointUrl}
               />
-              <p className="text-on-surface-variant text-xs">
-                {t("ai_endpoint_hint")}
-              </p>
-            </div>
-            <div className="space-y-2">
-              <label
-                className="block font-semibold text-on-surface text-sm"
-                htmlFor="ai-key"
-              >
-                {t("ai_key_label")}
-              </label>
-              <div className="relative">
-                <input
-                  className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 pe-12 text-sm transition-all"
-                  id="ai-key"
-                  onChange={(e) => {
-                    setAiForm((f) => ({ ...f, apiKey: e.target.value }));
-                    onDirtyChange(true);
-                  }}
-                  placeholder="sk-••••••••••••••"
-                  type={showApiKey ? "text" : "password"}
-                  value={aiForm.apiKey}
-                />
+            </Field>
+            <Field
+              endAdornment={
                 <button
                   aria-label={
                     showApiKey
@@ -785,26 +681,29 @@ export default function SettingsAiTab({
                     {showApiKey ? "visibility_off" : "visibility"}
                   </span>
                 </button>
-              </div>
-              <p className="text-on-surface-variant text-xs">
-                {t("ai_key_hint")}
-              </p>
-            </div>
+              }
+              hint={t("ai_key_hint")}
+              label={t("ai_key_label")}
+            >
+              <Input
+                className="pe-12"
+                onChange={(e) => {
+                  setAiForm((f) => ({ ...f, apiKey: e.target.value }));
+                  onDirtyChange(true);
+                }}
+                placeholder="sk-••••••••••••••"
+                type={showApiKey ? "text" : "password"}
+                value={aiForm.apiKey}
+              />
+            </Field>
           </div>
         </div>
 
         <div className="rounded-2xl bg-surface-container-low p-5">
-          <div className="space-y-2">
-            <label
-              className="block font-semibold text-on-surface text-sm"
-              htmlFor="ai-model"
-            >
-              {t("analytical_model")}
-            </label>
+          <Field label={t("analytical_model")}>
             <div className="relative">
-              <select
-                className="w-full cursor-pointer appearance-none rounded-xl border-none bg-surface-container-lowest px-4 py-3 pe-10 text-sm transition-all"
-                id="ai-model"
+              <Select
+                className="pe-12"
                 onChange={(e) => {
                   setAiForm((f) => ({ ...f, model: e.target.value }));
                   onDirtyChange(true);
@@ -816,14 +715,14 @@ export default function SettingsAiTab({
                     {t(m.labelKey)}
                   </option>
                 ))}
-              </select>
-              <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-on-surface-variant">
-                <span className="material-symbols-outlined text-[20px]">
-                  expand_more
-                </span>
-              </span>
+              </Select>
+              <Icon
+                className="pointer-events-none absolute end-4 top-1/2 -translate-y-1/2 text-on-surface-variant"
+                name="expand_more"
+                size="sm"
+              />
             </div>
-          </div>
+          </Field>
           <button
             aria-expanded={showAdvanced}
             className="mt-4 flex items-center gap-2 text-on-surface-variant text-sm transition-colors hover:text-primary"
@@ -839,19 +738,13 @@ export default function SettingsAiTab({
           </button>
           {showAdvanced && (
             <div className="mt-4 space-y-4 pt-2">
-              <div className="flex items-center justify-between">
-                <label
-                  className="font-semibold text-on-surface text-sm"
-                  htmlFor="ai-temp"
-                >
-                  {t("ai_creativity_label")}
-                </label>
+              <div className="flex items-center justify-between gap-3">
+                <Label htmlFor="ai-temp">{t("ai_creativity_label")}</Label>
                 <span className="font-mono font-semibold text-primary text-sm">
                   {aiForm.temperature.toFixed(1)}
                 </span>
               </div>
               <input
-                aria-labelledby="ai-temp"
                 aria-valuetext={getCreativityLabel(aiForm.temperature, t)}
                 className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-outline-variant/30 accent-primary"
                 id="ai-temp"
