@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Can } from "@/components/modules/can";
-import { formatCurrency } from "@/lib/format";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 import { useJobsStore } from "@/stores/jobs";
 import AddPartDialog from "./add-part-dialog";
 
@@ -13,15 +13,12 @@ interface JobPartsSectionProps {
   onChanged?: () => void;
 }
 
-function fmt(n: number): string {
-  return formatCurrency(n);
-}
-
 export default function JobPartsSection({
   job,
   onChanged,
 }: JobPartsSectionProps) {
   const { t } = useTranslation();
+  const fmt = useFormatCurrency();
   const removePart = useJobsStore((s) => s.removePart);
   const addPart = useJobsStore((s) => s.addPart);
   const [showAddDialog, setShowAddDialog] = useState(false);

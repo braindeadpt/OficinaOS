@@ -79,9 +79,6 @@ const NAV_ITEMS: NavItem[] = [
   },
 ];
 
-const FOCUS_VISIBLE =
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
-
 export default function Sidebar() {
   const { t } = useTranslation();
   const role = useAuthStore((s) => s.role);
@@ -138,7 +135,7 @@ export default function Sidebar() {
         {navItems.map(({ icon, labelKey, to }) => (
           <NavLink
             className={({ isActive }) =>
-              `flex items-center gap-3 rounded-lg px-3 py-3 transition-all duration-200 ${FOCUS_VISIBLE} ${
+              `flex items-center gap-3 rounded-lg px-3 py-3 transition-all duration-200 ${
                 isActive
                   ? "translate-x-1 bg-surface-container-lowest font-semibold text-primary shadow-sm rtl:-translate-x-1"
                   : "text-on-surface-variant hover:bg-surface-container hover:text-primary"
@@ -157,7 +154,7 @@ export default function Sidebar() {
 
       <div className="mt-auto shrink-0 space-y-3">
         <button
-          className={`flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-bold text-on-primary transition-all duration-200 active:scale-[0.98] ${FOCUS_VISIBLE} ${canCreateJob ? "" : "cursor-not-allowed opacity-50"}`}
+          className={`flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-bold text-on-primary transition-all duration-200 active:scale-[0.98] ${canCreateJob ? "" : "cursor-not-allowed opacity-50"}`}
           disabled={!canCreateJob}
           onClick={() => openIntakeModal()}
           type="button"
@@ -168,43 +165,41 @@ export default function Sidebar() {
           <span>{t("new_checkin")}</span>
         </button>
 
-        <NavLink
-          className={({ isActive }) =>
-            `flex items-center gap-3 rounded-lg px-3 py-3 transition-all duration-200 ${FOCUS_VISIBLE} ${
-              isActive
-                ? "translate-x-1 bg-surface-container-lowest font-semibold text-primary shadow-sm rtl:-translate-x-1"
-                : "text-on-surface-variant hover:bg-surface-container hover:text-primary"
-            }`
-          }
-          to="/profile"
-        >
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary font-bold text-on-primary text-sm">
-            {getInitials(userName)}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate font-bold text-on-surface text-sm">
-              {userName}
-            </p>
-            <p className="truncate text-on-surface-variant text-xs">
-              {t(ROLE_LABELS[role])}
-            </p>
-          </div>
+        <div className="flex items-center gap-1">
+          <NavLink
+            className={({ isActive }) =>
+              `flex min-w-0 flex-1 items-center gap-3 rounded-lg px-3 py-3 transition-all duration-200 ${
+                isActive
+                  ? "translate-x-1 bg-surface-container-lowest font-semibold text-primary shadow-sm rtl:-translate-x-1"
+                  : "text-on-surface-variant hover:bg-surface-container hover:text-primary"
+              }`
+            }
+            to="/profile"
+          >
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary font-bold text-on-primary text-sm">
+              {getInitials(userName)}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-bold text-on-surface text-sm">
+                {userName}
+              </p>
+              <p className="truncate text-on-surface-variant text-xs">
+                {t(ROLE_LABELS[role])}
+              </p>
+            </div>
+          </NavLink>
           <button
             aria-label={
               logoutPending
                 ? t("auth_sign_out_confirm")
                 : t("auth_sign_out_instead")
             }
-            className={`flex items-center justify-center rounded-xl px-3 py-3 transition-all duration-200 ${FOCUS_VISIBLE} ${
+            className={`flex shrink-0 items-center justify-center rounded-xl px-3 py-3 transition-all duration-200 ${
               logoutPending
                 ? "bg-error-container font-medium text-on-error-container text-xs"
                 : "text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
             }`}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              handleLogoutClick();
-            }}
+            onClick={handleLogoutClick}
             title={
               logoutPending
                 ? t("auth_sign_out_confirm")
@@ -223,7 +218,7 @@ export default function Sidebar() {
               </span>
             )}
           </button>
-        </NavLink>
+        </div>
       </div>
     </aside>
   );

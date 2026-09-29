@@ -86,7 +86,7 @@ function SignInForm({
           </span>
           <input
             autoComplete="username"
-            className="w-full rounded-xl bg-surface-container-highest py-3.5 ps-12 pe-4 font-medium text-on-surface transition-colors placeholder:text-on-surface-variant/40 focus-visible:bg-surface-container-lowest focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="w-full rounded-xl bg-surface-container-highest py-3.5 ps-12 pe-4 font-medium text-on-surface transition-colors placeholder:text-on-surface-variant/40 focus-visible:bg-surface-container-lowest"
             id="username"
             maxLength={128}
             name="username"
@@ -117,7 +117,7 @@ function SignInForm({
           </span>
           <input
             autoComplete="current-password"
-            className="w-full rounded-xl bg-surface-container-highest py-3.5 ps-12 pe-14 font-medium text-on-surface transition-colors placeholder:text-on-surface-variant/40 focus-visible:bg-surface-container-lowest focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="w-full rounded-xl bg-surface-container-highest py-3.5 ps-12 pe-14 font-medium text-on-surface transition-colors placeholder:text-on-surface-variant/40 focus-visible:bg-surface-container-lowest"
             id="password"
             name="password"
             onChange={(e) => {
@@ -132,7 +132,7 @@ function SignInForm({
             aria-label={
               showPassword ? t("auth_hide_password") : t("auth_show_password")
             }
-            className="absolute end-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-lg text-on-surface-variant/40 transition-colors hover:bg-surface-container-high hover:text-on-surface-variant focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="absolute end-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-lg text-on-surface-variant/40 transition-colors hover:bg-surface-container-high hover:text-on-surface-variant"
             onClick={() => {
               setShowPassword((v) => !v);
             }}
@@ -170,7 +170,7 @@ function SignInForm({
           </span>
         </label>
         <button
-          className="min-h-[44px] rounded font-label font-semibold text-primary text-xs uppercase tracking-wider transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          className="min-h-[44px] rounded font-label font-semibold text-primary text-xs uppercase tracking-wider transition-colors hover:text-primary/80"
           onClick={onForgotPassword}
           type="button"
         >
@@ -179,7 +179,7 @@ function SignInForm({
       </div>
 
       <button
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 font-bold font-headline text-on-primary text-sm uppercase tracking-wider transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 active:bg-primary/80 disabled:cursor-not-allowed disabled:opacity-50"
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 font-bold font-headline text-on-primary text-sm uppercase tracking-wider transition-colors hover:bg-primary/90 active:bg-primary/80 disabled:cursor-not-allowed disabled:opacity-50"
         disabled={loading}
         type="submit"
       >
@@ -240,7 +240,7 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
           {t("auth_reset_sent_desc")}
         </p>
         <button
-          className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-surface-container-highest py-3 font-bold font-headline text-on-surface text-sm uppercase tracking-wider transition-colors hover:bg-surface-container-high focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-surface-container-highest py-3 font-bold font-headline text-on-surface text-sm uppercase tracking-wider transition-colors hover:bg-surface-container-high"
           onClick={onBack}
           type="button"
         >
@@ -294,7 +294,7 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
           </span>
           <input
             autoComplete="email"
-            className="w-full rounded-xl bg-surface-container-highest py-3.5 ps-12 pe-4 font-medium text-on-surface transition-colors placeholder:text-on-surface-variant/40 focus-visible:bg-surface-container-lowest focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="w-full rounded-xl bg-surface-container-highest py-3.5 ps-12 pe-4 font-medium text-on-surface transition-colors placeholder:text-on-surface-variant/40 focus-visible:bg-surface-container-lowest"
             id="reset-email"
             maxLength={254}
             name="email"
@@ -309,14 +309,14 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
         </div>
       </div>
       <button
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 font-bold font-headline text-on-primary text-sm uppercase tracking-wider transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 active:bg-primary/80 disabled:cursor-not-allowed disabled:opacity-50"
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 font-bold font-headline text-on-primary text-sm uppercase tracking-wider transition-colors hover:bg-primary/90 active:bg-primary/80 disabled:cursor-not-allowed disabled:opacity-50"
         disabled={submitting}
         type="submit"
       >
         {submitting ? t("auth_sending_reset") : t("auth_send_reset")}
       </button>
       <button
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-surface-container-highest py-3 font-bold font-headline text-on-surface text-sm uppercase tracking-wider transition-colors hover:bg-surface-container-high focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-surface-container-highest py-3 font-bold font-headline text-on-surface text-sm uppercase tracking-wider transition-colors hover:bg-surface-container-high"
         onClick={onBack}
         type="button"
       >

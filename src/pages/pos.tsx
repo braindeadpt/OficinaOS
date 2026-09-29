@@ -4,15 +4,10 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Can } from "@/components/modules/can";
 import RestockHint from "@/components/pos/restock-hint";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 import type { ApiError } from "@/lib/api";
-import { formatCurrency } from "@/lib/format";
 import { usePartsCatalogStore } from "@/stores/parts-catalog";
 import { useSalesStore } from "@/stores/sales";
-import { useSettingsStore } from "@/stores/settings";
-
-function fmt(n: number, currency: string): string {
-  return formatCurrency(n, currency);
-}
 
 let payUid = 0;
 function nextPayUid(): string {
@@ -22,7 +17,7 @@ function nextPayUid(): string {
 
 export default function PosPage() {
   const { t } = useTranslation();
-  const currency = useSettingsStore((s) => s.shopSettings?.currency ?? "EUR");
+  const fmt = useFormatCurrency();
   const {
     cart,
     cartTotal,
@@ -134,7 +129,7 @@ export default function PosPage() {
         {/* Catalog browser */}
         <div className="lg:col-span-2">
           <input
-            className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface placeholder:text-outline focus:ring-2 focus:ring-primary"
+            className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface placeholder:text-outline"
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t("pos.search_placeholder")}
             type="text"
@@ -171,7 +166,7 @@ export default function PosPage() {
                     {p.name}
                   </span>
                   <span className="mt-auto pt-2 font-bold text-primary text-sm">
-                    {fmt(Number(p.defaultPrice ?? 0), currency)}
+                    {fmt(Number(p.defaultPrice ?? 0))}
                   </span>
                   <span className="font-label text-on-surface-variant text-xs">
                     {t("pos.stock_label")}: {soldOut ? 0 : available}
@@ -240,7 +235,7 @@ export default function PosPage() {
                     {line.name}
                   </p>
                   <p className="font-label text-on-surface-variant text-xs">
-                    {fmt(line.unitPrice, currency)}
+                    {fmt(line.unitPrice)}
                   </p>
                 </div>
                 <div className="flex items-center gap-1">
@@ -292,7 +287,7 @@ export default function PosPage() {
               {t("pos.total")}
             </span>
             <span className="font-extrabold font-headline text-primary text-xl">
-              {fmt(cartTotal, currency)}
+              {fmt(cartTotal)}
             </span>
           </div>
 
@@ -408,7 +403,7 @@ export default function PosPage() {
                 {t("pos.checkout")}
               </h2>
               <p className="font-label text-on-surface-variant text-xs">
-                {t("pos.total")}: {fmt(cartTotal, currency)}
+                {t("pos.total")}: {fmt(cartTotal)}
               </p>
             </div>
 
@@ -464,8 +459,7 @@ export default function PosPage() {
                       key={p.uid}
                     >
                       <span>
-                        {t(`payment_method.${p.method}`)} ·{" "}
-                        {fmt(p.amount, currency)}
+                        {t(`payment_method.${p.method}`)} · {fmt(p.amount)}
                       </span>
                       <button
                         className="text-on-surface-variant hover:text-error"
@@ -492,7 +486,7 @@ export default function PosPage() {
                 <span
                   className={`font-extrabold font-headline ${remaining === 0 ? "text-primary" : "text-error"}`}
                 >
-                  {fmt(remaining, currency)}
+                  {fmt(remaining)}
                 </span>
               </div>
             </div>

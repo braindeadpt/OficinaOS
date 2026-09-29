@@ -45,7 +45,7 @@ export default function QuickIntakeForm() {
     <div className="overflow-hidden rounded-xl bg-surface-container-lowest shadow-premium">
       <button
         aria-expanded={expanded}
-        className="flex min-h-16 w-full items-center justify-between bg-primary-fixed/60 p-6 text-start transition-colors hover:bg-primary-fixed focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+        className="flex min-h-16 w-full items-center justify-between bg-primary-fixed/60 p-6 text-start transition-colors hover:bg-primary-fixed"
         onClick={() => setExpanded(!expanded)}
         type="button"
       >

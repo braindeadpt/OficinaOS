@@ -1,10 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { Can } from "@/components/modules/can";
-import { formatCurrency } from "@/lib/format";
-
-function fmt(n: number): string {
-  return formatCurrency(n);
-}
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 
 interface CostSummaryProps {
   balanceDue?: number;
@@ -26,6 +22,7 @@ export default function CostSummary({
   balanceDue,
 }: CostSummaryProps) {
   const { t } = useTranslation();
+  const fmt = useFormatCurrency();
   return (
     <div className="rounded-2xl bg-surface-container p-6">
       <h2 className="mb-5 font-bold font-headline text-base text-on-surface">

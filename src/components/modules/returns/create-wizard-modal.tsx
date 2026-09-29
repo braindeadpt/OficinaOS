@@ -159,7 +159,7 @@ export default function CreateWizardModal({
                 {t("returns_wizard_reason_label")}
               </span>
               <textarea
-                className="min-h-[80px] w-full rounded-xl border-none bg-surface-container-highest px-4 py-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className="min-h-[80px] w-full rounded-xl border-none bg-surface-container-highest px-4 py-3 text-sm"
                 onChange={(e) => setReason(e.target.value)}
                 placeholder={t("returns_wizard_reason_placeholder")}
                 value={reason}

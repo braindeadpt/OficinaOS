@@ -102,7 +102,7 @@ export default function StatusChangeMenu({
         <textarea
           aria-describedby={error ? "status-change-reason-error" : undefined}
           aria-invalid={!!error}
-          className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 font-body text-on-surface text-sm outline-none transition-all focus:ring-2 focus:ring-primary/20"
+          className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 font-body text-on-surface text-sm transition-all"
           disabled={loading}
           id="status-change-reason"
           onChange={(e) => setReason(e.target.value)}

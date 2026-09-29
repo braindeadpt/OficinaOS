@@ -111,7 +111,7 @@ function AlertItemRow({ alert, onDelete, onNavigate }: AlertItemRowProps) {
       {hasJob ? (
         <button
           aria-label={labelParts.join(", ")}
-          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl transition-colors focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
+          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl transition-colors"
           onClick={() => onNavigate(alert.job?.id ?? "")}
           type="button"
         >
@@ -135,7 +135,7 @@ function AlertItemRow({ alert, onDelete, onNavigate }: AlertItemRowProps) {
       <div className="min-w-0 flex-1">
         {hasJob ? (
           <button
-            className="min-h-6 rounded-md transition-colors hover:bg-surface-container-high focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
+            className="min-h-6 rounded-md transition-colors hover:bg-surface-container-high"
             onClick={() => onNavigate(alert.job?.id ?? "")}
             type="button"
           >

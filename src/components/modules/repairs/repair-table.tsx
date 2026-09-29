@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { formatCurrency } from "@/lib/format";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 
 export type RepairCategory = "HARDWARE" | "SOFTWARE" | "DIAGNOSTIC";
 
@@ -37,6 +37,7 @@ export default function RepairTable({
   togglingId,
 }: RepairTableProps) {
   const { t } = useTranslation();
+  const fmt = useFormatCurrency();
 
   return (
     <div className="overflow-hidden rounded-2xl bg-surface-container-low">
@@ -107,7 +108,7 @@ export default function RepairTable({
                 </td>
                 <td className="p-4">
                   <span className="font-mono font-semibold text-sm">
-                    {formatCurrency(repair.basePrice)}
+                    {fmt(repair.basePrice)}
                   </span>
                 </td>
                 <td className="p-4">

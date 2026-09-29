@@ -132,7 +132,7 @@ export default function TemplateEditor({
                 {t("notifications_template_name")}
               </label>
               <input
-                className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface focus:ring-2 focus:ring-primary"
+                className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface"
                 id="tpl-name"
                 onChange={(e) => setName(e.target.value)}
                 type="text"
@@ -148,7 +148,7 @@ export default function TemplateEditor({
                 {t("notifications_channel")}
               </label>
               <select
-                className="h-12 w-full appearance-none rounded-xl bg-surface-container-highest px-4 text-on-surface focus:ring-2 focus:ring-primary"
+                className="h-12 w-full appearance-none rounded-xl bg-surface-container-highest px-4 text-on-surface"
                 id="tpl-channel"
                 onChange={(e) => setChannel(e.target.value as "WHATSAPP")}
                 value={channel}
@@ -165,7 +165,7 @@ export default function TemplateEditor({
                 {t("notifications_template_body")}
               </label>
               <textarea
-                className="min-h-[120px] w-full rounded-xl bg-surface-container-highest p-4 text-on-surface focus:ring-2 focus:ring-primary"
+                className="min-h-[120px] w-full rounded-xl bg-surface-container-highest p-4 text-on-surface"
                 id="tpl-body"
                 onChange={(e) => setBody(e.target.value)}
                 ref={textareaRef}

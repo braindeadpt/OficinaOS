@@ -16,7 +16,7 @@ export default function ClaimsFilters({ value, onChange }: Props) {
   ) => onChange({ ...value, [key]: v, page: 1 });
 
   const selectCls =
-    "rounded-xl border-none bg-surface-container-highest px-4 py-3.5 text-sm outline-none transition-all focus:bg-surface-container-lowest focus-visible:ring-2 focus-visible:ring-primary";
+    "rounded-xl border-none bg-surface-container-highest px-4 py-3.5 text-sm transition-all focus:bg-surface-container-lowest";
 
   return (
     <div className="mb-5 flex flex-wrap items-end gap-3">

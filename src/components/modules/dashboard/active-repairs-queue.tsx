@@ -38,7 +38,7 @@ export default function ActiveRepairsQueue({ jobs }: ActiveRepairsQueueProps) {
         <div className="space-y-4">
           {jobs.map((job) => (
             <Link
-              className="block overflow-hidden rounded-xl bg-surface-container-lowest shadow-premium transition-colors hover:bg-surface-container-low focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
+              className="block overflow-hidden rounded-xl bg-surface-container-lowest shadow-premium transition-colors hover:bg-surface-container-low"
               key={job.id}
               to={`/jobs/${job.id}`}
             >

@@ -2,8 +2,8 @@ import { PAYMENT_METHODS } from "@shared/constants";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 import type { ApiError } from "@/lib/api";
-import { formatCurrency } from "@/lib/format";
 import { useJobsStore } from "@/stores/jobs";
 
 interface AddPaymentDialogProps {
@@ -22,6 +22,7 @@ export default function AddPaymentDialog({
   onAdded,
 }: AddPaymentDialogProps) {
   const { t } = useTranslation();
+  const fmt = useFormatCurrency();
   const [method, setMethod] = useState("CASH");
   const [amount, setAmount] = useState("");
   const [reference, setReference] = useState("");
@@ -134,7 +135,7 @@ export default function AddPaymentDialog({
                 {t("payments.method")}
               </label>
               <select
-                className="h-12 w-full appearance-none rounded-xl bg-surface-container-highest px-4 text-on-surface focus:ring-2 focus:ring-primary"
+                className="h-12 w-full appearance-none rounded-xl bg-surface-container-highest px-4 text-on-surface"
                 id="payment-method"
                 onChange={(e) => setMethod(e.target.value)}
                 value={method}
@@ -155,7 +156,7 @@ export default function AddPaymentDialog({
                 {t("payments.amount")}
               </label>
               <input
-                className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface focus:ring-2 focus:ring-primary"
+                className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface"
                 id="payment-amount"
                 inputMode="decimal"
                 max={balanceDue}
@@ -166,9 +167,9 @@ export default function AddPaymentDialog({
                 value={amount}
               />
               <p className="mt-1 font-label text-on-surface-variant text-xs">
-                {t("payments.balance_due_label")}: {formatCurrency(balanceDue)}{" "}
-                · {t("payments.remaining_after")}:{" "}
-                {formatCurrency(Math.max(0, remainingAfter))}
+                {t("payments.balance_due_label")}: {fmt(balanceDue)} ·{" "}
+                {t("payments.remaining_after")}:{" "}
+                {fmt(Math.max(0, remainingAfter))}
               </p>
             </div>
 
@@ -180,7 +181,7 @@ export default function AddPaymentDialog({
                 {t("payments.reference")}
               </label>
               <input
-                className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface placeholder:text-outline focus:ring-2 focus:ring-primary"
+                className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface placeholder:text-outline"
                 id="payment-reference"
                 onChange={(e) => setReference(e.target.value)}
                 placeholder={t("payments.reference_placeholder")}
@@ -197,7 +198,7 @@ export default function AddPaymentDialog({
                 {t("payments.note")}
               </label>
               <textarea
-                className="w-full rounded-xl bg-surface-container-highest px-4 py-3 text-on-surface placeholder:text-outline focus:ring-2 focus:ring-primary"
+                className="w-full rounded-xl bg-surface-container-highest px-4 py-3 text-on-surface placeholder:text-outline"
                 id="payment-note"
                 onChange={(e) => setNote(e.target.value)}
                 rows={2}

@@ -128,7 +128,7 @@ export default function ChannelSettings({
                 </span>
               </div>
               <input
-                className="min-h-11 w-full rounded-xl bg-surface-container px-4 py-2.5 text-on-surface text-sm outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary"
+                className="min-h-11 w-full rounded-xl bg-surface-container px-4 py-2.5 text-on-surface text-sm focus:bg-surface-container-lowest"
                 id="wa-business-id"
                 onChange={(e) =>
                   setWhatsAppForm((f) => ({
@@ -159,7 +159,7 @@ export default function ChannelSettings({
                 </span>
               </div>
               <input
-                className="min-h-11 w-full rounded-xl bg-surface-container px-4 py-2.5 text-on-surface text-sm outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary"
+                className="min-h-11 w-full rounded-xl bg-surface-container px-4 py-2.5 text-on-surface text-sm focus:bg-surface-container-lowest"
                 id="wa-phone-id"
                 onChange={(e) =>
                   setWhatsAppForm((f) => ({
@@ -191,7 +191,7 @@ export default function ChannelSettings({
               </div>
               <input
                 autoComplete="off"
-                className="min-h-11 w-full rounded-xl bg-surface-container px-4 py-2.5 text-on-surface text-sm outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary"
+                className="min-h-11 w-full rounded-xl bg-surface-container px-4 py-2.5 text-on-surface text-sm focus:bg-surface-container-lowest"
                 id="wa-api-token"
                 onChange={(e) =>
                   setWhatsAppForm((f) => ({ ...f, apiToken: e.target.value }))

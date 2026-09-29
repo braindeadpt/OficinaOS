@@ -53,6 +53,9 @@ jobs:
       - name: Lint
         run: bun run check
 
+      - name: Form control ratchet
+        run: bun run check-primitives
+
       - name: Typecheck
         run: bun run typecheck
 

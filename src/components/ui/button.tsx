@@ -54,7 +54,7 @@ export function Button({
   return (
     <button
       className={[
-        "flex items-center justify-center gap-2 rounded-xl font-bold font-headline transition-all focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60",
+        "flex items-center justify-center gap-2 rounded-xl font-bold font-headline transition-all disabled:cursor-not-allowed disabled:opacity-60",
         VARIANT_CLASSES[variant],
         iconOnly ? "aspect-square min-h-11 min-w-11 p-0" : SIZE_CLASSES[size],
         className,

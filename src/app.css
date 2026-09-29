@@ -161,12 +161,22 @@ h3,
   }
 }
 
-button:focus-visible,
-a:focus-visible,
-select:focus-visible,
-textarea:focus-visible,
-input:focus-visible,
-[role="option"]:focus-visible {
+/*
+ * One focus indicator for the whole app.
+ *
+ * This used to be a hand-listed set of elements, while 51 files carried their
+ * own focus:ring-* or focus-visible:outline-* utilities. Those mixed two
+ * mechanisms on the same element, and the most common form pattern was
+ * `outline-none` plus `focus:ring-primary/20`, which suppressed the native
+ * outline and left a 20%-opacity ring as the only affordance. Anything not in
+ * the list, such as a div with tabIndex, got no indicator at all.
+ *
+ * Scoping to :focus-visible keeps it keyboard-only, so a mouse click does not
+ * leave a ring behind, and it covers every focusable element including custom
+ * roles. An element that must show something else (a destructive action in
+ * red, say) can still set outline-color on top of this.
+ */
+:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }

@@ -18,7 +18,7 @@ export default function LanguageToggle() {
       aria-label={t("language_switch_to", {
         lang: getNextLang(normalizedLang).toUpperCase(),
       })}
-      className="min-h-[40px] min-w-[40px] rounded-full bg-surface-container-high px-3 py-1.5 font-label font-semibold text-on-surface-variant text-xs uppercase tracking-wide transition-colors hover:bg-primary/10 hover:text-primary focus-visible:ring-2 focus-visible:ring-primary/30"
+      className="min-h-[40px] min-w-[40px] rounded-full bg-surface-container-high px-3 py-1.5 font-label font-semibold text-on-surface-variant text-xs uppercase tracking-wide transition-colors hover:bg-primary/10 hover:text-primary"
       onClick={() => {
         i18n.changeLanguage(getNextLang(normalizedLang));
       }}

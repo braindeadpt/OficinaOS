@@ -17,13 +17,9 @@ import StatusHistoryTimeline from "@/components/modules/jobs/status-history-time
 import StatusPopover from "@/components/modules/jobs/status-popover";
 import TechnicianSelect from "@/components/modules/jobs/technician-select";
 import CreateWizardModal from "@/components/modules/returns/create-wizard-modal";
-import { formatCurrency } from "@/lib/format";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 import { useJobsStore } from "@/stores/jobs";
 import { useSettingsStore } from "@/stores/settings";
-
-function fmt(n: number, currency: string): string {
-  return formatCurrency(n, currency);
-}
 
 function toNum(v: unknown): number {
   return typeof v === "number" ? v : Number(v ?? 0);
@@ -32,7 +28,7 @@ function toNum(v: unknown): number {
 export default function JobDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { t } = useTranslation();
-  const currency = useSettingsStore((s) => s.shopSettings?.currency ?? "EUR");
+  const fmt = useFormatCurrency();
   const [job, setJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -234,8 +230,7 @@ export default function JobDetailPage() {
               {fmt(
                 typeof job.estimatedCost === "number"
                   ? job.estimatedCost
-                  : Number(job.estimatedCost ?? 0),
-                currency
+                  : Number(job.estimatedCost ?? 0)
               )}
             </p>
           </div>

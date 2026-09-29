@@ -132,7 +132,7 @@ function LookupForm({
                     aria-label={t("tracking_input_placeholder")}
                     autoCapitalize="off"
                     autoComplete="off"
-                    className="h-16 w-full rounded-xl bg-surface-container-highest px-6 font-medium text-lg outline-none transition-all placeholder:text-on-surface-variant/40 focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary/20"
+                    className="h-16 w-full rounded-xl bg-surface-container-highest px-6 font-medium text-lg transition-all placeholder:text-on-surface-variant/40 focus:bg-surface-container-lowest"
                     onChange={(e) => setCode(e.target.value)}
                     placeholder={t("tracking_input_placeholder")}
                     spellCheck={false}
@@ -151,7 +151,7 @@ function LookupForm({
                     aria-describedby="phone4-help"
                     aria-label={t("tracking_phone4_placeholder")}
                     autoComplete="off"
-                    className="h-16 w-full rounded-xl bg-surface-container-highest px-6 font-medium text-lg outline-none transition-all placeholder:text-on-surface-variant/40 focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary/20"
+                    className="h-16 w-full rounded-xl bg-surface-container-highest px-6 font-medium text-lg transition-all placeholder:text-on-surface-variant/40 focus:bg-surface-container-lowest"
                     inputMode="numeric"
                     maxLength={4}
                     onChange={(e) =>
@@ -420,7 +420,7 @@ function StatusView({
       <nav className="sticky top-0 z-50 w-full bg-background">
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4">
           <button
-            className="flex min-h-11 items-center gap-2 rounded-lg px-3 py-2 font-medium text-on-surface-variant text-sm transition-colors hover:bg-surface-container-high focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2"
+            className="flex min-h-11 items-center gap-2 rounded-lg px-3 py-2 font-medium text-on-surface-variant text-sm transition-colors hover:bg-surface-container-high"
             onClick={onBack}
             type="button"
           >
@@ -532,7 +532,7 @@ function StatusView({
                     })}
                   </span>
                   <button
-                    className="ml-2 rounded-lg px-3 py-2 text-primary text-xs transition-colors hover:bg-surface-container-high focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                    className="ml-2 rounded-lg px-3 py-2 text-primary text-xs transition-colors hover:bg-surface-container-high"
                     onClick={onRefresh}
                     type="button"
                   >
@@ -541,7 +541,7 @@ function StatusView({
                 </div>
                 {data.shopPhone && (
                   <a
-                    className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3 font-semibold text-on-primary text-sm transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2"
+                    className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3 font-semibold text-on-primary text-sm transition-opacity hover:opacity-90"
                     href={`tel:${data.shopPhone}`}
                   >
                     <span className="material-symbols-outlined text-sm">

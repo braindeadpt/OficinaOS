@@ -153,7 +153,7 @@ function PanelHeader({
           search
         </span>
         <input
-          className="w-full rounded-xl bg-surface-container-lowest py-2 ps-9 pe-3 text-sm outline-none placeholder:text-on-surface-variant/50 focus:ring-2 focus:ring-primary/30"
+          className="w-full rounded-xl bg-surface-container-lowest py-2 ps-9 pe-3 text-sm placeholder:text-on-surface-variant/50"
           onChange={(e) => {
             onSearchChange(e.target.value);
           }}

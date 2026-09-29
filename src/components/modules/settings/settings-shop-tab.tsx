@@ -231,7 +231,7 @@ export default function SettingsShopTab({
               </span>
             </label>
             <input
-              className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/20"
+              className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm transition-all"
               id="shop-name"
               onChange={(e) => {
                 setShopForm((f) => ({ ...f, shopName: e.target.value }));
@@ -251,7 +251,7 @@ export default function SettingsShopTab({
               {t("shop_phone")}
             </label>
             <input
-              className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/20"
+              className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm transition-all"
               id="shop-phone"
               onChange={(e) => {
                 setShopForm((f) => ({ ...f, phone: e.target.value }));
@@ -271,7 +271,7 @@ export default function SettingsShopTab({
             {t("shop_address")}
           </label>
           <textarea
-            className="w-full resize-none rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/20"
+            className="w-full resize-none rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm transition-all"
             id="shop-address"
             onChange={(e) => {
               setShopForm((f) => ({ ...f, address: e.target.value }));
@@ -297,7 +297,7 @@ export default function SettingsShopTab({
             </label>
             <div className="relative">
               <select
-                className="w-full cursor-pointer appearance-none rounded-xl border-none bg-surface-container-lowest px-4 py-3 pe-10 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/20"
+                className="w-full cursor-pointer appearance-none rounded-xl border-none bg-surface-container-lowest px-4 py-3 pe-10 text-sm transition-all"
                 id="shop-country-code"
                 onChange={(e) => {
                   setShopForm((f) => ({
@@ -330,7 +330,7 @@ export default function SettingsShopTab({
             </label>
             <div className="relative">
               <select
-                className="w-full cursor-pointer appearance-none rounded-xl border-none bg-surface-container-lowest px-4 py-3 pe-10 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/20"
+                className="w-full cursor-pointer appearance-none rounded-xl border-none bg-surface-container-lowest px-4 py-3 pe-10 text-sm transition-all"
                 id="shop-currency"
                 onChange={(e) => {
                   setShopForm((f) => ({ ...f, currency: e.target.value }));
@@ -359,7 +359,7 @@ export default function SettingsShopTab({
               {t("receipt_footer")}
             </label>
             <input
-              className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/20"
+              className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm transition-all"
               id="shop-receipt"
               onChange={(e) => {
                 setShopForm((f) => ({ ...f, receiptFooter: e.target.value }));

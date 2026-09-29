@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Can } from "@/components/modules/can";
 import AddPaymentDialog from "@/components/modules/jobs/add-payment-dialog";
-import { formatCurrency } from "@/lib/format";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 import { useJobsStore } from "@/stores/jobs";
 
 const POD_METHODS = ["CASH", "CARD", "TRANSFER", "OTHER"] as const;
@@ -30,6 +30,7 @@ export default function JobPaymentsSection({
   status,
 }: JobPaymentsSectionProps) {
   const { t } = useTranslation();
+  const fmt = useFormatCurrency();
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -139,7 +140,7 @@ export default function JobPaymentsSection({
         <span
           className={`font-extrabold font-headline text-lg ${balanceDue > 0 ? "text-error" : "text-primary"}`}
         >
-          {formatCurrency(balanceDue)}
+          {fmt(balanceDue)}
         </span>
       </div>
 
@@ -153,7 +154,7 @@ export default function JobPaymentsSection({
           </span>
           <span className="flex-1 font-body font-semibold text-on-primary-container text-sm">
             {t("payments.pod_marked", {
-              amount: formatCurrency(balanceDue),
+              amount: fmt(balanceDue),
               method: t(`payment_method.${paymentOnDeliveryMethod}`),
             })}
           </span>
@@ -231,8 +232,7 @@ export default function JobPaymentsSection({
               </span>
               <div className="min-w-0 flex-1">
                 <p className="font-body font-semibold text-on-surface text-sm">
-                  {formatCurrency(Number(p.amount))} ·{" "}
-                  {t(`payment_method.${p.method}`)}
+                  {fmt(Number(p.amount))} · {t(`payment_method.${p.method}`)}
                 </p>
                 {p.reference && (
                   <p className="truncate font-label text-on-surface-variant text-xs">

@@ -72,7 +72,7 @@ export default function AlertList({
       <div className="mb-4 flex items-center justify-end">
         {unreadCount > 0 && (
           <button
-            className="flex min-h-11 items-center gap-2 rounded-xl px-4 py-2 font-semibold text-primary text-sm transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
+            className="flex min-h-11 items-center gap-2 rounded-xl px-4 py-2 font-semibold text-primary text-sm transition-colors hover:bg-primary/10"
             onClick={onMarkAllRead}
             type="button"
           >
@@ -92,7 +92,7 @@ export default function AlertList({
         {FILTER_OPTIONS.map((opt) => (
           <button
             aria-selected={filter === opt.key}
-            className={`whitespace-nowrap rounded-full px-4 py-2 font-semibold text-sm transition-colors focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 ${
+            className={`whitespace-nowrap rounded-full px-4 py-2 font-semibold text-sm transition-colors ${
               filter === opt.key
                 ? "bg-primary text-on-primary"
                 : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high"

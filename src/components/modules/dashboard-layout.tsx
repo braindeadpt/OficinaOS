@@ -8,6 +8,7 @@ import IntakeModal from "@/components/modules/jobs/intake-modal";
 import PrintPreviewDialog from "@/components/modules/jobs/print-preview-dialog";
 import Sidebar from "@/components/modules/sidebar";
 import TopBar from "@/components/modules/top-bar";
+import { ShopSettingsProvider } from "@/components/providers/shop-settings-provider";
 import api from "@/lib/api";
 import { useJobsStore } from "@/stores/jobs";
 import { useUiStore } from "@/stores/ui";
@@ -66,19 +67,21 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   );
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-background text-on-background">
-      <Sidebar />
-      <TopBar />
-      <main className="min-h-screen p-4 pt-20 pb-24 md:p-8 md:pt-24 md:pb-24 lg:ms-64 lg:pb-8">
-        {children}
-      </main>
-      <BottomNav />
-      <IntakeModal
-        onClose={closeIntakeModal}
-        onSubmit={handleIntakeSubmit}
-        open={intakeModalOpen}
-      />
-      <PrintPreviewDialog />
-    </div>
+    <ShopSettingsProvider>
+      <div className="min-h-screen overflow-x-hidden bg-background text-on-background">
+        <Sidebar />
+        <TopBar />
+        <main className="min-h-screen p-4 pt-20 pb-24 md:p-8 md:pt-24 md:pb-24 lg:ms-64 lg:pb-8">
+          {children}
+        </main>
+        <BottomNav />
+        <IntakeModal
+          onClose={closeIntakeModal}
+          onSubmit={handleIntakeSubmit}
+          open={intakeModalOpen}
+        />
+        <PrintPreviewDialog />
+      </div>
+    </ShopSettingsProvider>
   );
 }

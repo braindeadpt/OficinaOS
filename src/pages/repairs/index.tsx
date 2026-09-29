@@ -14,7 +14,7 @@ import type {
 } from "@/components/modules/repairs/repair-table";
 import RepairTable from "@/components/modules/repairs/repair-table";
 import { Button } from "@/components/ui/button";
-import { formatCurrency } from "@/lib/format";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 import { useRepairCatalogStore } from "@/stores/repair-catalog";
 
 const CATEGORY_ICONS: Record<
@@ -144,6 +144,7 @@ function RepairListLoading() {
 
 export default function RepairsPage() {
   const { t } = useTranslation();
+  const fmt = useFormatCurrency();
   const {
     repairs,
     isLoading,
@@ -320,7 +321,7 @@ export default function RepairsPage() {
                 {t("avg_price")}
               </span>
               <span className="block font-extrabold font-mono text-primary text-xl tracking-tight">
-                {formatCurrency(avgPrice)}
+                {fmt(avgPrice)}
               </span>
             </div>
           </div>

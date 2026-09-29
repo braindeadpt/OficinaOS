@@ -59,7 +59,7 @@ export default function RenameDialog({
           {t("ai_history_rename_title")}
         </h3>
         <input
-          className="mb-5 w-full rounded-xl bg-surface-container-lowest px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+          className="mb-5 w-full rounded-xl bg-surface-container-lowest px-4 py-3 text-sm"
           onChange={(e) => {
             setTitle(e.target.value);
           }}

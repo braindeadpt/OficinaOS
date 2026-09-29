@@ -229,7 +229,7 @@ export default function StatusPopover({ job, onChanged }: StatusPopoverProps) {
               <textarea
                 aria-describedby={error ? "status-reason-error" : undefined}
                 aria-invalid={!!error}
-                className="w-full resize-none rounded-xl bg-surface-container-highest px-4 py-3 font-body text-on-surface text-sm placeholder:text-outline focus:ring-2 focus:ring-primary/20"
+                className="w-full resize-none rounded-xl bg-surface-container-highest px-4 py-3 font-body text-on-surface text-sm placeholder:text-outline"
                 disabled={loading}
                 id="status-reason"
                 onChange={(e) => setReason(e.target.value)}

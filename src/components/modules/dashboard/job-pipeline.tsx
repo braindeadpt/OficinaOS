@@ -33,7 +33,7 @@ export default function JobPipeline({
       <div className="space-y-3">
         {PIPELINE_ITEMS_ACCENT.map(({ status, color, descriptionKey }) => (
           <button
-            className={`flex min-h-16 w-full cursor-pointer items-center justify-between rounded-xl p-3 text-start transition-all hover:bg-surface-container focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 ${
+            className={`flex min-h-16 w-full cursor-pointer items-center justify-between rounded-xl p-3 text-start transition-all hover:bg-surface-container ${
               status === JobStatus.IN_REPAIR
                 ? "bg-surface-container-highest"
                 : ""

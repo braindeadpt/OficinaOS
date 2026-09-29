@@ -366,14 +366,14 @@ export default function TechnicianKanban() {
             <div className="mt-4">
               {targetStatus === JobStatus.ON_HOLD ? (
                 <textarea
-                  className="min-h-[100px] w-full rounded-xl bg-surface-container-high p-3 font-medium text-on-surface text-sm ring-1 ring-surface-container-highest focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="min-h-[100px] w-full rounded-xl bg-surface-container-high p-3 font-medium text-on-surface text-sm ring-1 ring-surface-container-highest"
                   onChange={(e) => setHoldReason(e.target.value)}
                   placeholder={t("tech_dashboard.hold_reason_placeholder")}
                   value={holdReason}
                 />
               ) : (
                 <input
-                  className="w-full rounded-xl bg-surface-container-high p-3 font-medium text-on-surface text-sm ring-1 ring-surface-container-highest focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full rounded-xl bg-surface-container-high p-3 font-medium text-on-surface text-sm ring-1 ring-surface-container-highest"
                   onChange={(e) => setLaborHours(e.target.value)}
                   placeholder={t("tech_dashboard.labor_hours_placeholder")}
                   step="0.1"

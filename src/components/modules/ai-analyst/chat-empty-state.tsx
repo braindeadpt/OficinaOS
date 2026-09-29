@@ -76,7 +76,7 @@ export default function ChatEmptyState({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             {QUICK_PROMPTS.map((prompt) => (
               <button
-                className="flex min-h-24 items-start gap-3 rounded-2xl bg-surface-container-lowest p-4 text-start transition-colors hover:bg-surface-container-high focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
+                className="flex min-h-24 items-start gap-3 rounded-2xl bg-surface-container-lowest p-4 text-start transition-colors hover:bg-surface-container-high"
                 key={prompt.key}
                 onClick={() => {
                   onSendMessage(t(prompt.textKey));
