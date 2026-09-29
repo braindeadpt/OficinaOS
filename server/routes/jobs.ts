@@ -56,6 +56,11 @@ import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 const JOB_CODE_RE = /^[A-Za-z0-9-]+$/;
 const PHONE4_RE = /^\d{4}$/;
 
+// Failed-lookup lockout: five misses on one job code block further guesses
+// on it for an hour, enough to make enumerating phone suffixes impractical.
+const LOCKOUT_THRESHOLD = 5;
+const LOCKOUT_DURATION_MS = 60 * 60 * 1000;
+
 interface LockoutEntry {
   failures: number;
   lockedUntil: number;
@@ -64,8 +69,8 @@ interface LockoutEntry {
 function trackFailedAttempt(lockouts: Map<string, LockoutEntry>, code: string) {
   const existing = lockouts.get(code) ?? { failures: 0, lockedUntil: 0 };
   existing.failures += 1;
-  if (existing.failures >= 5) {
-    existing.lockedUntil = Date.now() + 60 * 60 * 1000;
+  if (existing.failures >= LOCKOUT_THRESHOLD) {
+    existing.lockedUntil = Date.now() + LOCKOUT_DURATION_MS;
   }
   lockouts.set(code, existing);
 }
@@ -88,7 +93,9 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
     () => {
       const now = Date.now();
       for (const [key, val] of codeLockouts) {
-        if (val.lockedUntil > 0 && val.lockedUntil <= now) {
+        // Expired locks and still-unlocked failures both age out: keeping the
+        // latter forever would let one abandoned code pin memory indefinitely.
+        if (val.lockedUntil <= now) {
           codeLockouts.delete(key);
         }
       }

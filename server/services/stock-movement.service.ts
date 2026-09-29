@@ -6,8 +6,14 @@ import {
   countStockMovements,
   createStockMovement,
   findManyStockMovements,
+  findStockMovementSortKey,
   findStockMovementUnique,
 } from "../repositories/stock-movement.repository.js";
+import {
+  keysetOrderBy,
+  requireKeysetCursor,
+  withKeyset,
+} from "../utils/keyset.js";
 
 export const listMovementsQuerySchema = z.object({
   cursor: z.string().optional(),
@@ -72,12 +78,24 @@ export async function listByPart(
     ...(query.type ? { type: query.type } : {}),
   };
 
+  // Sorted by createdAt, so a page must resume on createdAt too — paging on id
+  // alone would re-emit rows the caller already has and skip others.
+  const pageWhere = query.cursor
+    ? withKeyset(
+        where,
+        requireKeysetCursor(
+          await findStockMovementSortKey(prisma, query.cursor),
+          "createdAt"
+        ),
+        "createdAt",
+        "desc"
+      )
+    : where;
+
   const movements = await findManyStockMovements(
     prisma,
-    where,
-    {
-      createdAt: "desc",
-    },
+    pageWhere,
+    keysetOrderBy("createdAt", "desc"),
     limit + 1
   );
   const totalCount = await countStockMovements(prisma, where);
@@ -103,26 +121,33 @@ export async function recordAdjustment(
 ) {
   const part = await prisma.partsCatalog.findUnique({
     where: { id: partId },
-    select: { id: true, stockQuantity: true },
+    select: { id: true },
   });
   if (!part) {
     return null;
   }
 
-  const newStock = part.stockQuantity + input.quantity;
-  if (newStock < 0) {
-    throw new AppError("INSUFFICIENT_STOCK");
-  }
-
   return prisma.$transaction(async (tx) => {
-    const updated = await tx.partsCatalog.update({
-      where: { id: partId },
-      data: { stockQuantity: newStock },
-      select: { stockQuantity: true },
-    });
+    // Atomic signed delta: the WHERE re-checks the balance inside the UPDATE
+    // itself, so two concurrent adjustments can never both act on the same
+    // stale read (the previous read-then-write let the second one silently
+    // overwrite the first), and stock can never drop below zero.
+    const updated = await tx.$queryRaw<
+      Array<{ stockQuantity: number | string }>
+    >`
+      UPDATE "parts_catalog"
+      SET "stockQuantity" = "stockQuantity" + ${input.quantity}
+      WHERE "id" = ${partId}
+        AND "stockQuantity" + ${input.quantity} >= 0
+      RETURNING "stockQuantity"
+    `;
+    if (updated.length === 0) {
+      throw new AppError("INSUFFICIENT_STOCK");
+    }
+    const balanceAfter = stockBalanceReader(updated);
 
     const movement = await createStockMovement(tx, {
-      balanceAfter: updated.stockQuantity,
+      balanceAfter,
       createdById: userId,
       note: input.note ?? null,
       partId,
@@ -131,8 +156,16 @@ export async function recordAdjustment(
       type: "ADJUSTMENT",
     });
 
-    return { movement, stockQuantity: updated.stockQuantity };
+    return { movement, stockQuantity: balanceAfter };
   });
+}
+
+/** Reads the balance out of a RETURNING row, whatever type the driver chose. */
+function stockBalanceReader(
+  rows: Array<{ stockQuantity: number | string }>
+): number {
+  const first = rows[0]?.stockQuantity;
+  return typeof first === "string" ? Number.parseInt(first, 10) : (first ?? 0);
 }
 
 export function getMovement(prisma: PrismaClient, id: string) {

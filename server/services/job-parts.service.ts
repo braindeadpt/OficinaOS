@@ -35,7 +35,9 @@ export async function add(
   // RETURNING exposes the exact balance for the movement ledger.
   const result = await prisma.$transaction(async (tx) => {
     if (input.partId) {
-      const decremented = await tx.$queryRaw<{ stock_quantity: number }[]>`
+      const decremented = await tx.$queryRaw<
+        Array<{ stockQuantity: number | string }>
+      >`
         UPDATE "parts_catalog"
         SET "stockQuantity" = "stockQuantity" - ${input.quantity}
         WHERE "id" = ${input.partId} AND "stockQuantity" >= ${input.quantity}
@@ -133,8 +135,12 @@ export async function remove(
 }
 
 function decrementedReader(
-  rows: Array<{ stock_quantity: number | string }>
+  rows: Array<{ stockQuantity: number | string }>
 ): number {
-  const first = rows[0]?.stock_quantity;
+  // RETURNING echoes the column as written in the query — "stockQuantity",
+  // camelCase and quoted — not the snake_case alias an earlier draft assumed.
+  // Reading "stock_quantity" here silently yielded undefined, so every
+  // CONSUMPTION movement was recorded with balanceAfter 0.
+  const first = rows[0]?.stockQuantity;
   return typeof first === "string" ? Number.parseInt(first, 10) : (first ?? 0);
 }

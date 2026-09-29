@@ -1,35 +1,52 @@
 import { AppError } from "@shared/errors/app-error.js";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   listByPart,
   recordAdjustment,
   recordPurchase,
 } from "../stock-movement.service.js";
 
+/**
+ * The raw adjustment UPDATE returns its row only when the conditional WHERE
+ * admitted it; an empty array means the guard rejected the delta.
+ */
 function makePrisma(stockQuantity = 5) {
+  const current = { value: stockQuantity };
   const prisma = {
+    current,
     partsCatalog: {
       findUnique: vi.fn().mockResolvedValue({
         id: "part-1",
-        stockQuantity,
       }),
       update: vi.fn().mockImplementation(({ data }) => {
-        // Handles both { increment } (purchase) and absolute set (adjustment)
-        if (typeof data.stockQuantity === "number") {
-          return Promise.resolve({ stockQuantity: data.stockQuantity });
-        }
         const inc = data.stockQuantity?.increment ?? 0;
-        return Promise.resolve({
-          stockQuantity: stockQuantity + inc,
-        });
+        current.value += inc;
+        return Promise.resolve({ stockQuantity: current.value });
       }),
+      // Mirrors the service's atomic UPDATE: applies the signed delta only
+      // when the running balance would stay non-negative. SQL param order is
+      // (delta, partId, delta).
+      $queryRaw: vi
+        .fn()
+        .mockImplementation(
+          (_segments: TemplateStringsArray, ...params: unknown[]) => {
+            const delta = params[0] as number;
+            if (current.value + delta < 0) {
+              return Promise.resolve([]);
+            }
+            current.value += delta;
+            return Promise.resolve([{ stockQuantity: current.value }]);
+          }
+        ),
     },
     stockMovement: {
       create: vi.fn().mockResolvedValue({ id: "mov-1" }),
       findMany: vi.fn().mockResolvedValue([]),
       count: vi.fn().mockResolvedValue(0),
     },
-    $transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(prisma)),
+    $transaction: vi.fn(async (fn: (tx: unknown) => unknown) =>
+      fn({ ...prisma, $queryRaw: prisma.partsCatalog.$queryRaw })
+    ),
   };
   return prisma as unknown as any;
 }
@@ -105,11 +122,41 @@ describe("recordAdjustment", () => {
     ).rejects.toThrow(AppError);
     expect(prisma.stockMovement.create).not.toHaveBeenCalled();
   });
+
+  it("applies the delta atomically instead of writing a stale absolute value", async () => {
+    // Regression: the adjustment used to read the balance outside the
+    // transaction and write that number back, so a concurrent change between
+    // the read and the write was silently overwritten.
+    const prisma = makePrisma(5);
+    await recordAdjustment(prisma, "part-1", { quantity: -2 }, "user-1");
+
+    const [segments, ...params] = prisma.partsCatalog.$queryRaw.mock.calls[0];
+    const sql = segments.join("?");
+    expect(sql).toContain('stockQuantity" + ?');
+    expect(sql).toContain("+ ? >= 0");
+    expect(params[0]).toBe(-2);
+    expect(params[1]).toBe("part-1");
+    // No absolute write outside the conditional UPDATE.
+    expect(prisma.partsCatalog.update).not.toHaveBeenCalled();
+  });
+
+  it("does not mutate the stored balance when the guard rejects", async () => {
+    const prisma = makePrisma(4);
+    await expect(
+      recordAdjustment(prisma, "part-1", { quantity: -9 }, "user-1")
+    ).rejects.toThrow("errors.insufficient_stock");
+    expect(prisma.current.value).toBe(4);
+  });
 });
 
 describe("listByPart", () => {
+  let prisma: ReturnType<typeof makePrisma>;
+
+  beforeEach(() => {
+    prisma = makePrisma(5);
+  });
+
   it("returns movements with cursor when more exist", async () => {
-    const prisma = makePrisma(5);
     const rows = Array.from({ length: 4 }, (_, i) => ({ id: `m${i + 1}` }));
     prisma.stockMovement.findMany.mockResolvedValue(rows);
     prisma.stockMovement.count.mockResolvedValue(4);
@@ -119,5 +166,14 @@ describe("listByPart", () => {
     expect(result.movements).toHaveLength(3);
     expect(result.nextCursor).toBe("m4");
     expect(result.totalCount).toBe(4);
+  });
+
+  it("pages on createdAt with an id tiebreak", async () => {
+    prisma.stockMovement.findMany.mockResolvedValue([]);
+
+    await listByPart(prisma, "part-1", { limit: 3 });
+
+    const call = prisma.stockMovement.findMany.mock.calls[0][0];
+    expect(call.orderBy).toEqual([{ createdAt: "desc" }, { id: "desc" }]);
   });
 });

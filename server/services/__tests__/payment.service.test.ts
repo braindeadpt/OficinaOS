@@ -10,18 +10,28 @@ function makePrisma() {
     amount: 1000,
   });
   const paymentDelete = vi.fn().mockResolvedValue({});
+  const jobUpdate = vi.fn().mockResolvedValue({});
   return {
     auditCreate,
     paymentCreate,
     paymentDelete,
-    job: { findUnique: vi.fn() },
+    jobUpdate,
+    job: { findUnique: vi.fn(), update: jobUpdate },
     payment: {
       create: paymentCreate,
       delete: paymentDelete,
       findUnique: vi.fn(),
     },
+    $queryRaw: vi.fn().mockResolvedValue([{ id: "job-1" }]),
     $transaction: vi.fn(async (fn: (tx: unknown) => unknown) =>
       fn({
+        // The transaction re-reads the balance under the FOR UPDATE lock, so
+        // it needs the same aggregates the outer pre-check used.
+        job: {
+          findUnique: vi.fn().mockResolvedValue(activeJob),
+          update: jobUpdate,
+        },
+        $queryRaw: vi.fn().mockResolvedValue([{ id: "job-1" }]),
         auditLog: { create: auditCreate },
         payment: { create: paymentCreate, delete: paymentDelete },
       })
@@ -177,6 +187,72 @@ describe("add payment", () => {
       "user-1"
     );
     expect(result).toMatchObject({ id: "pay-1" });
+  });
+
+  it("revalidates the balance inside the transaction, after the row lock", async () => {
+    // Regression: the balance was only checked before the transaction, so two
+    // concurrent payments could both validate against the same stale figure
+    // and overpay the job.
+    const prisma = makePrisma();
+    prisma.job.findUnique.mockResolvedValue(activeJob);
+    // The locked re-read sees a payment that landed in the meantime, leaving
+    // less balance than the pre-transaction check believed.
+    const freshJob = {
+      ...activeJob,
+      payments: [
+        { amount: { toNumber: () => 1000 } },
+        { amount: { toNumber: () => 3000 } },
+      ],
+    };
+    prisma.$transaction.mockImplementation(
+      async (fn: (tx: unknown) => unknown) =>
+        fn({
+          $queryRaw: vi.fn().mockResolvedValue([{ id: "job-1" }]),
+          job: { findUnique: vi.fn().mockResolvedValue(freshJob) },
+          auditLog: { create: prisma.auditCreate },
+          payment: { create: prisma.paymentCreate },
+        })
+    );
+
+    const result = await add(
+      prisma,
+      "job-1",
+      { amount: 1000, method: "CASH" },
+      "user-1"
+    );
+
+    // 3500 due - 3000 seen under the lock leaves 500 < 1000 requested.
+    expect(result).toMatchObject({
+      error: "PAYMENT_EXCEEDS_BALANCE",
+      balanceDue: 500,
+    });
+    expect(prisma.paymentCreate).not.toHaveBeenCalled();
+  });
+
+  it("locks the job row before re-reading the balance", async () => {
+    const prisma = makePrisma();
+    prisma.job.findUnique.mockResolvedValue(activeJob);
+    // Capture the tx the service actually receives.
+    const txHolder: { current?: Record<string, unknown> } = {};
+    prisma.$transaction.mockImplementation(
+      (fn: (t: Record<string, unknown>) => unknown) => {
+        const captured = {
+          $queryRaw: vi.fn().mockResolvedValue([{ id: "job-1" }]),
+          job: { findUnique: vi.fn().mockResolvedValue(activeJob) },
+          auditLog: { create: prisma.auditCreate },
+          payment: { create: prisma.paymentCreate },
+        };
+        txHolder.current = captured;
+        return Promise.resolve(fn(captured));
+      }
+    );
+
+    await add(prisma, "job-1", { amount: 500, method: "CASH" }, "user-1");
+
+    const tx = txHolder.current;
+    const queryRaw = tx?.$queryRaw as ReturnType<typeof vi.fn> | undefined;
+    const call = queryRaw?.mock.calls[0];
+    expect(call?.[0].join("?")).toContain("FOR UPDATE");
   });
 });
 

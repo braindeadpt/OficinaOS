@@ -94,6 +94,7 @@
     "cap:copy": "cap copy",
     "test": "vitest run",
     "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
     "check": "ultracite check",
     "fix": "ultracite fix",
     "prepare": "husky"

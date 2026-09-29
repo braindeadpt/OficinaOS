@@ -29,6 +29,10 @@ const signInKeyGenerator = (req: FastifyRequest): string => {
   return `signin:ip:${req.ip}`;
 };
 
+// Public customer tracking is unauthenticated, so it gets the strictest
+// budget in the app and always keys on the caller's IP.
+const lookupKeyGenerator = (req: FastifyRequest): string => req.ip;
+
 export const DEFAULT_SECURITY: RouteSecurityOverride = {
   rateLimit: { max: 100, timeWindow: "1 minute" },
   allowSensitiveKeys: false,
@@ -50,6 +54,35 @@ export function matchRoute(
     }
   }
   return;
+}
+
+/**
+ * Resolves a route's effective security config: the central map supplies the
+ * baseline, and a config declared on the route itself wins key by key.
+ *
+ * This is the step that used to discard route-level rate limits — the map was
+ * spread last, so a route pinning a stricter budget silently inherited the
+ * looser parent rule. Keeping it exported and tested is what makes that
+ * regression visible.
+ *
+ * Security limits belong in `routeSecurity` so there is a single place to
+ * audit; a route-level override is the more specific author intent.
+ */
+export function mergeRouteConfig(
+  routeConfig: Record<string, unknown> | undefined,
+  override: RouteSecurityOverride | undefined
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = {
+    ...DEFAULT_SECURITY,
+    ...override,
+  };
+
+  // Handle rateLimit: false explicitly (disable rate limit for this route)
+  if (override?.rateLimit === false) {
+    merged.rateLimit = false;
+  }
+
+  return { ...merged, ...routeConfig };
 }
 
 function routeMatchesPattern(url: string, pattern: string): boolean {
@@ -141,7 +174,20 @@ export const routeSecurity: [string, RouteSecurityOverride][] = [
       allowSensitiveKeys: true,
     },
   ],
+  // More specific patterns must precede their parent, since the first match wins.
+  [
+    "/api/jobs/lookup",
+    {
+      rateLimit: {
+        keyGenerator: lookupKeyGenerator,
+        max: 10,
+        timeWindow: "15 minutes",
+      },
+    },
+  ],
   ["/api/jobs", { rateLimit: { max: 30, timeWindow: "1 minute" } }],
+  // A streaming completion is by far the most expensive request the API serves.
+  ["/api/ai/chat/stream", { rateLimit: { max: 10, timeWindow: "1 minute" } }],
   ["/api/ai", { rateLimit: { max: 30, timeWindow: "1 minute" } }],
   ["/api/*", {}],
 ];

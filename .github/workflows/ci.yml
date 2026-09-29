@@ -54,7 +54,7 @@ jobs:
         run: bun run check
 
       - name: Typecheck
-        run: bunx tsc --noEmit
+        run: bun run typecheck
 
       - name: Test
         run: bun run test
