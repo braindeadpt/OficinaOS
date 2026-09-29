@@ -82,6 +82,75 @@ Este fork inclui patches para funcionar em HTTP simples dentro de uma rede local
 - Se expuseres a app fora da rede da loja, **usa HTTPS** (reverse proxy com TLS) — a configuração HTTP é só para LAN privada
 - Se o IP da máquina mudar, atualiza `APP_URL` no `.env` e corre `docker compose up -d`
 
+## Backups e teste de restore (sidecar db-backup)
+
+O compose traz um sidecar `db-backup` que faz dump diário do PostgreSQL (retenção de 14 dias, configurável com `RETENTION_DAYS`) e, com o destino remoto activo, copia cada dump para object storage e verifica o restore semanalmente. Estado visível em **Definições → Loja → Backups**.
+
+### Teste de restore numa base de dados real (procedimento local)
+
+O ciclo completo — dump → wipe → restore → dados intactos — pode ser reproduzido na tua máquina com Docker em ~5 minutos:
+
+```bash
+git clone https://github.com/braindeadpt/OficinaOS.git
+cd OficinaOS
+cp .env.example .env    # segredos não são necessários para este teste
+
+# Sobe a base de dados e o sidecar de backups
+# (o sidecar faz um dump no arranque e depois a cada 24h)
+docker compose up -d db db-backup
+
+# Tabela de prova com dados conhecidos
+docker compose exec db psql -U reparilo -d reparilo \
+  -c "CREATE TABLE restore_probe (id serial primary key, marker text);" \
+  -c "INSERT INTO restore_probe (marker) VALUES ('marcador-pre-backup');"
+
+# Backup que já inclui a tabela de prova
+docker compose exec db-backup /scripts/run-backup.sh
+
+# Destrói os dados (DROP SCHEMA) e restaura o dump
+docker compose exec db psql -U reparilo -d reparilo \
+  -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+docker compose exec db-backup /scripts/run-restore.sh \
+  "$(docker compose exec -T db-backup sh -c 'ls -1t /backups/oficinaos-*.sql.gz | head -1')"
+
+# Confirma que o marcador sobreviveu ao ciclo
+docker compose exec db psql -U reparilo -d reparilo \
+  -c "SELECT count(*) FROM restore_probe WHERE marker = 'marcador-pre-backup';"
+# → deve devolver 1
+```
+
+> ⚠️ **Nunca apontes o restore para uma base de dados com dados reais** — `run-restore.sh` substitui tudo. O script pausa 10 s antes de destruir dados, a menos que `RESTORE_AUTO_CONFIRM=1` esteja definido (usado pela CI).
+
+### Cópia off-site (object storage via rclone)
+
+No `.env` da instalação, activa o segundo destino e configura o remote do rclone por env-vars (S3, B2, GCS, MinIO…):
+
+```bash
+BACKUP_REMOTE_ENABLED=true
+BACKUP_RCLONE_REMOTE=s3:oficinaos-backups        # ou gcs:…, b2:…
+RCLONE_CONFIG_S3_TYPE=s3
+RCLONE_CONFIG_S3_ACCESS_KEY_ID=...
+RCLONE_CONFIG_S3_SECRET_ACCESS_KEY=...
+# RCLONE_CONFIG_S3_ENDPOINT=...                  # só para MinIO/R2
+```
+
+O que acontece no sidecar, por backup diário:
+
+1. Dump local + retenção (como sempre);
+2. `rclone copyto` do dump para o bucket + heartbeat `last-remote-copy.txt`;
+3. Passa a retenção remota (`--min-age 14d`);
+4. Uma vez por semana (`RESTORE_CHECK_INTERVAL_DAYS`, default 7): descarrega o dump mais recente do bucket e restaura-o na base de dados descartável `restore_check` — **a base de dados live nunca é tocada**. O resultado fica no heartbeat `last-restore-check.txt`.
+
+Falha da cópia remota ou da verificação nunca invalida o dump local; os indicadores da UI (cópia remota / restore verificado) ficam "atrasados" a vermelho até a próxima execução bem-sucedida. O job **DB backup/restore round-trip** da CI exercita esta cadeia completa contra um endpoint S3 real em cada PR.
+
+### Restore manual (desastre)
+
+```bash
+docker compose exec -T db-backup /scripts/run-restore.sh oficinaos-<stamp>.sql.gz
+```
+
+O script lista os ficheiros disponíveis com `docker compose exec db-backup ls -1t /backups`. Em produção, confirma sempre o nome do ficheiro antes do Enter — o restore substitui a base de dados inteira.
+
 ## Configuração
 
 Todas as variáveis de ambiente estão documentadas no [`.env.example`](./.env.example). Em produção o servidor recusa arrancar se faltarem segredos obrigatórios.

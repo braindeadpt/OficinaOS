@@ -107,25 +107,77 @@ jobs:
           psql --host=localhost --username=reparilo --dbname=reparilo_test \
             --command="CREATE TABLE backup_probe (id serial primary key, marker text);" \
             --command="INSERT INTO backup_probe (marker) VALUES ('round-trip-marker');"
-      - name: Backup
+      - name: Start S3-compatible object store (rclone serve s3)
+        run: |
+          curl -s https://rclone.org/install.sh | sudo bash
+          rclone version
+          mkdir -p /tmp/offsite-store
+          # Background server: detach stdin/stdout/stderr so the step can
+          # finish while the server keeps running.
+          nohup rclone serve s3 /tmp/offsite-store \
+            --addr 127.0.0.1:9000 \
+            --auth-key minio,miniosecret \
+            > /tmp/rclone-s3.log 2>&1 < /dev/null &
+          sleep 2
+          echo "--- serve s3 log ---"
+          cat /tmp/rclone-s3.log
+          pgrep -fa "rclone serve" || { echo "server died at boot"; exit 1; }
+          export RCLONE_CONFIG_MINIO_TYPE=s3 \
+            RCLONE_CONFIG_MINIO_ACCESS_KEY_ID=minio \
+            RCLONE_CONFIG_MINIO_SECRET_ACCESS_KEY=miniosecret \
+            RCLONE_CONFIG_MINIO_ENDPOINT=http://127.0.0.1:9000 \
+            RCLONE_CONFIG_MINIO_FORCE_PATH_STYLE=true
+          # Bounded readiness probe: never hang the step.
+          timeout 60 bash -c '
+            until rclone lsd minio: --contimeout 2s --timeout 5s --retries 1 \
+              >/dev/null 2>&1; do sleep 2; done
+          ' || {
+            echo "--- probe failed, server log: ---"
+            tail -30 /tmp/rclone-s3.log
+            exit 1
+          }
+          timeout 30 rclone mkdir minio:oficinaos-backups \
+            --contimeout 2s --timeout 5s --retries 1
+          {
+            echo "RCLONE_CONFIG_MINIO_TYPE=s3"
+            echo "RCLONE_CONFIG_MINIO_ACCESS_KEY_ID=minio"
+            echo "RCLONE_CONFIG_MINIO_SECRET_ACCESS_KEY=miniosecret"
+            echo "RCLONE_CONFIG_MINIO_ENDPOINT=http://127.0.0.1:9000"
+            echo "RCLONE_CONFIG_MINIO_FORCE_PATH_STYLE=true"
+            echo "BACKUP_RCLONE_REMOTE=minio:oficinaos-backups"
+          } >> "$GITHUB_ENV"
+          echo "object store ready"
+      - name: Backup with off-site copy and restore verification
         run: |
           BACKUP_DIR=/tmp/backups HEARTBEAT_DIR=/tmp/heartbeat \
+            BACKUP_REMOTE_ENABLED=true \
+            RESTORE_CHECK_SCRIPT="$PWD/scripts/db-restore-check.sh" \
             PGHOST=localhost PGUSER=reparilo PGDATABASE=reparilo_test \
             bash scripts/db-backup.sh
           test -f /tmp/heartbeat/last-backup.txt
           echo "heartbeat: $(cat /tmp/heartbeat/last-backup.txt)"
+          # Second destination: object stored in MinIO with its own heartbeat.
+          test -f /tmp/heartbeat/last-remote-copy.txt
+          echo "remote copy: $(cat /tmp/heartbeat/last-remote-copy.txt)"
+          rclone lsf minio:oficinaos-backups --include 'oficinaos-*.sql.gz'
+          # Weekly restore verification ran against the remote copy.
+          test -f /tmp/heartbeat/last-restore-check.txt
+          echo "restore check: $(cat /tmp/heartbeat/last-restore-check.txt)"
       - name: Wipe the database
         run: |
           psql --host=localhost --username=reparilo --dbname=reparilo_test \
             --set=ON_ERROR_STOP=1 \
             --command="DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
-      - name: Restore and verify
+      - name: Restore from the off-site copy and verify
         run: |
+          # Re-download from the object store: proves the off-site copy is
+          # usable end-to-end, not just the local dump.
+          rclone copy "minio:oficinaos-backups" /tmp/offsite --include 'oficinaos-*.sql.gz'
           RESTORE_AUTO_CONFIRM=1 BACKUP_DIR=/tmp/backups \
             PGHOST=localhost PGUSER=reparilo PGDATABASE=reparilo_test \
-            bash scripts/db-restore.sh "$(ls -1t /tmp/backups/oficinaos-*.sql.gz | head -1)"
+            bash scripts/db-restore.sh "$(ls -1t /tmp/offsite/oficinaos-*.sql.gz | head -1)"
           COUNT=$(psql --host=localhost --username=reparilo --dbname=reparilo_test \
             --tuples-only --no-align \
             --command="SELECT count(*) FROM backup_probe WHERE marker = 'round-trip-marker';")
-          echo "probe rows after restore: $COUNT"
+          echo "probe rows after off-site restore: $COUNT"
           [ "$COUNT" = "1" ]
