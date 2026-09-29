@@ -6,21 +6,36 @@ import AddPaymentDialog from "@/components/modules/jobs/add-payment-dialog";
 import { formatCurrency } from "@/lib/format";
 import { useJobsStore } from "@/stores/jobs";
 
+const POD_METHODS = ["CASH", "CARD", "TRANSFER", "OTHER"] as const;
+const POD_HIDDEN_STATUSES = new Set([
+  "DONE",
+  "DELIVERED",
+  "CANCELLED",
+  "RETURNED",
+]);
+
 interface JobPaymentsSectionProps {
   balanceDue: number;
   jobId: string;
   onChanged: () => void;
+  paymentOnDeliveryMethod: string | null;
+  status: string;
 }
 
 export default function JobPaymentsSection({
   balanceDue,
   jobId,
   onChanged,
+  paymentOnDeliveryMethod,
+  status,
 }: JobPaymentsSectionProps) {
   const { t } = useTranslation();
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [podMethod, setPodMethod] = useState<string>("CASH");
+  const [podBusy, setPodBusy] = useState(false);
+  const [podError, setPodError] = useState<string | undefined>();
 
   const fetchPayments = useCallback(async () => {
     try {
@@ -55,6 +70,48 @@ export default function JobPaymentsSection({
     onChanged();
   }, [fetchPayments, onChanged]);
 
+  const handleMarkPod = useCallback(async () => {
+    setPodBusy(true);
+    setPodError(undefined);
+    try {
+      await useJobsStore.getState().markPaymentOnDelivery(jobId, podMethod);
+      onChanged();
+    } catch (err: unknown) {
+      setPodError(
+        err instanceof Error
+          ? err.message
+          : t("errors.mark_payment_on_delivery")
+      );
+    } finally {
+      setPodBusy(false);
+    }
+  }, [jobId, podMethod, onChanged, t]);
+
+  const handleUnmarkPod = useCallback(async () => {
+    setPodBusy(true);
+    setPodError(undefined);
+    try {
+      await useJobsStore.getState().clearPaymentOnDelivery(jobId);
+      onChanged();
+    } catch (err: unknown) {
+      setPodError(
+        err instanceof Error
+          ? err.message
+          : t("errors.clear_payment_on_delivery")
+      );
+    } finally {
+      setPodBusy(false);
+    }
+  }, [jobId, onChanged, t]);
+
+  const canMarkPod =
+    !paymentOnDeliveryMethod &&
+    balanceDue > 0 &&
+    !POD_HIDDEN_STATUSES.has(status);
+
+  const showMarkedBanner =
+    !!paymentOnDeliveryMethod && !["CANCELLED", "RETURNED"].includes(status);
+
   return (
     <div>
       <div className="flex items-center justify-between">
@@ -86,12 +143,91 @@ export default function JobPaymentsSection({
         </span>
       </div>
 
+      {showMarkedBanner && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-primary-container px-4 py-3">
+          <span
+            aria-hidden="true"
+            className="material-symbols-outlined text-[18px] text-on-primary-container"
+          >
+            bolt
+          </span>
+          <span className="flex-1 font-body font-semibold text-on-primary-container text-sm">
+            {t("payments.pod_marked", {
+              amount: formatCurrency(balanceDue),
+              method: t(`payment_method.${paymentOnDeliveryMethod}`),
+            })}
+          </span>
+          {balanceDue > 0 && (
+            <button
+              className="min-h-[36px] rounded-lg bg-surface-container-lowest px-3 font-bold text-primary text-xs transition-colors hover:bg-surface-container-low"
+              onClick={() => setShowAddDialog(true)}
+              type="button"
+            >
+              {t("payments.pod_record_now")}
+            </button>
+          )}
+          <Can perm={{ payments: ["delete"] }}>
+            <button
+              className="min-h-[36px] rounded-lg px-3 font-bold text-error text-xs transition-colors hover:bg-error/10"
+              disabled={podBusy}
+              onClick={handleUnmarkPod}
+              type="button"
+            >
+              {t("payments.pod_cancel")}
+            </button>
+          </Can>
+        </div>
+      )}
+
+      <Can perm={{ payments: ["create"] }}>
+        {canMarkPod && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-primary-container/40 px-4 py-3">
+            <span
+              aria-hidden="true"
+              className="material-symbols-outlined text-[18px] text-primary"
+            >
+              bolt
+            </span>
+            <span className="flex-1 font-body text-on-surface text-sm">
+              {t("payments.pod_hint")}
+            </span>
+            <select
+              aria-label={t("payments.pod_method_label")}
+              className="min-h-[36px] rounded-lg border border-outline-variant bg-surface-container-lowest px-2 text-on-surface text-sm"
+              onChange={(e) => setPodMethod(e.target.value)}
+              value={podMethod}
+            >
+              {POD_METHODS.map((m) => (
+                <option key={m} value={m}>
+                  {t(`payment_method.${m}`)}
+                </option>
+              ))}
+            </select>
+            <button
+              className="inline-flex min-h-[36px] items-center gap-1 rounded-lg bg-primary px-3 font-bold text-on-primary text-xs transition-colors hover:bg-primary/90 disabled:opacity-50"
+              disabled={podBusy}
+              onClick={handleMarkPod}
+              type="button"
+            >
+              <span className="material-symbols-outlined text-[16px]">
+                how_to_reg
+              </span>
+              {t("payments.pod_mark")}
+            </button>
+          </div>
+        )}
+      </Can>
+
+      {podError && (
+        <p className="mt-2 font-label text-error text-xs">{podError}</p>
+      )}
+
       {!isLoading && payments.length > 0 && (
         <ul className="mt-3 divide-y divide-outline-variant">
           {payments.map((p) => (
             <li className="flex items-center gap-3 py-2.5" key={p.id}>
               <span className="material-symbols-outlined text-[18px] text-on-surface-variant">
-                payments
+                {p.method === "CASH" ? "local_atm" : "payments"}
               </span>
               <div className="min-w-0 flex-1">
                 <p className="font-body font-semibold text-on-surface text-sm">

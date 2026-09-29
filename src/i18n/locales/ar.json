@@ -643,7 +643,12 @@
     "update_repair": "فشل في تحديث الإصلاح",
     "user_not_found": "لم يتم العثور على المستخدم",
     "username_exists": "اسم المستخدم موجود بالفعل",
-    "validation_error": "فشل التحقق من الصحة"
+    "validation_error": "فشل التحقق من الصحة",
+    "mark_payment_on_delivery": "فشل في وضع علامة على التذكرة كمدفوعة عند التسليم",
+    "clear_payment_on_delivery": "فشل في إلغاء علامة الدفع عند التسليم",
+    "pod_already_marked": "التذكرة معلمة بالفعل كمدفوعة عند التسليم",
+    "pod_not_marked": "التذكرة غير معلمة كمدفوعة عند التسليم",
+    "no_payment_due": "لا يوجد رصيد مستحق للتحصيل"
   },
   "failed_to_create_part": "فشل في إنشاء الجزء",
   "failed_to_delete_part": "فشل في حذف الجزء",
@@ -1113,7 +1118,13 @@
     "reference_placeholder": "مثال: معرّف المعاملة أو رقم الإيصال",
     "remaining_after": "بعد هذه الدفعة",
     "remove": "إزالة الدفعة",
-    "section_title": "الدفعات"
+    "section_title": "الدفعات",
+    "pod_marked": "سيتم تحصيل {{amount}} ({{method}}) عند التسليم",
+    "pod_record_now": "سجل الآن",
+    "pod_cancel": "إلغاء العلامة",
+    "pod_hint": "مدفوع عند التسليم — سجل تلقائيا عند التسليم",
+    "pod_method_label": "طريقة الدفع",
+    "pod_mark": "علّم كمدفوع عند التسليم"
   },
   "part_category": {
     "SCREEN": "شاشة",

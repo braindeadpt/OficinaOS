@@ -643,7 +643,12 @@
     "update_repair": "Échec de la mise à jour de la réparation",
     "user_not_found": "Utilisateur introuvable",
     "username_exists": "Le nom d'utilisateur existe déjà",
-    "validation_error": "Échec de la validation"
+    "validation_error": "Échec de la validation",
+    "mark_payment_on_delivery": "Échec du marquage du ticket comme payé à la livraison",
+    "clear_payment_on_delivery": "Échec de l'annulation du marquage payé à la livraison",
+    "pod_already_marked": "Le ticket est déjà marqué comme payé à la livraison",
+    "pod_not_marked": "Le ticket n'est pas marqué comme payé à la livraison",
+    "no_payment_due": "Il n'y a pas de solde à encaisser"
   },
   "failed_to_create_part": "Échec de la création de la pièce",
   "failed_to_delete_part": "Échec de la suppression de la pièce",
@@ -1113,7 +1118,13 @@
     "reference_placeholder": "ex. ID de transaction ou nº de reçu",
     "remaining_after": "Après ce paiement",
     "remove": "Supprimer le paiement",
-    "section_title": "Paiements"
+    "section_title": "Paiements",
+    "pod_marked": "Encaissera {{amount}} ({{method}}) à la livraison",
+    "pod_record_now": "Enregistrer maintenant",
+    "pod_cancel": "Annuler le marquage",
+    "pod_hint": "Payé à la livraison — enregistrer automatiquement à la remise",
+    "pod_method_label": "Moyen de paiement",
+    "pod_mark": "Marquer payé à la livraison"
   },
   "part_category": {
     "SCREEN": "Écran",

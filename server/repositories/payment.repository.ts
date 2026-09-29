@@ -8,6 +8,7 @@ export function findJobWithPayments(prisma: DbClient, jobId: string) {
       id: true,
       status: true,
       depositAmount: true,
+      paymentOnDeliveryMethod: true,
       payments: {
         select: { amount: true },
         orderBy: { createdAt: "asc" as const },

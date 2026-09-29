@@ -50,7 +50,10 @@ import { generateJobCode } from "../utils/job-code.js";
 import { assertJobMutable } from "../utils/job-mutations.js";
 import { createAuditLog } from "./audit.service.js";
 import { notify } from "./notification-dispatch.js";
-import { computeJobBalance } from "./payment.service.js";
+import {
+  computeJobBalance,
+  settlePaymentOnDelivery,
+} from "./payment.service.js";
 
 export interface NotifyContext {
   prisma: PrismaClient;
@@ -612,6 +615,16 @@ export async function transitionStatus(
     }).catch(() => {
       /* fire-and-forget */
     });
+  }
+
+  // One-click paid-on-delivery: record the outstanding balance now that
+  // the job reached DELIVERED. Best-effort — never blocks the transition.
+  if (newStatus === JobStatus.DELIVERED) {
+    try {
+      await settlePaymentOnDelivery(prisma, id, userId);
+    } catch {
+      // surfaced via the payments section; delivery must not fail
+    }
   }
 
   return { ...updated, finalCost: computeFinalCost(updated) };

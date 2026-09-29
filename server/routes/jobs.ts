@@ -10,7 +10,8 @@ import {
   transitionStatusSchema,
   updateJobSchema,
 } from "@shared/schemas/job.schema";
-import type { FastifyPluginAsync, FastifyRequest } from "fastify";
+import { paymentOnDeliverySchema } from "@shared/schemas/payment.schema";
+import type { FastifyPluginAsync } from "fastify";
 import { requirePermission } from "../middlewares/rbac.js";
 import {
   computeMargin,
@@ -45,6 +46,10 @@ import {
   remove as removeWaitingPart,
 } from "../services/job-waiting-parts.service.js";
 import { notify } from "../services/notification-dispatch.js";
+import {
+  clearPaymentOnDelivery,
+  setPaymentOnDelivery,
+} from "../services/payment.service.js";
 import { getRole, getUserId } from "../utils/request.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
@@ -95,8 +100,8 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
     cleanupInterval.unref();
   }
 
-  // Public: no auth — used by customer self-tracking page
-  // Per-IP rate limit: 10 attempts / 15 min (generous for shared NAT)
+  // Public: no auth — used by customer self-tracking page.
+  // Rate limit lives in config/route-security.ts (10 per 15 min, per IP).
   app.get("/lookup", {
     schema: {
       tags: ["jobs"],
@@ -111,13 +116,6 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     preHandler: [],
-    config: {
-      rateLimit: {
-        max: 10,
-        timeWindow: 15 * 60 * 1000, // 15 min
-        keyGenerator: (req: FastifyRequest) => (req.ip as string) ?? "unknown",
-      },
-    },
     handler: async (req, reply) => {
       const { code, phone4 } = req.query as {
         code?: string;
@@ -427,6 +425,75 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
       }
       throwIfError(result);
       return reply.send(result);
+    }
+  );
+
+  // ── Paid-on-delivery (one click) ──
+  app.post(
+    "/:id/payment-on-delivery",
+    {
+      schema: {
+        tags: ["jobs"],
+        summary:
+          "Mark job as paid-on-delivery with a chosen method; payment auto-records at DELIVERED",
+        params: {
+          type: "object",
+          properties: { id: { type: "string" } },
+          required: ["id"],
+        },
+        body: { type: "object", additionalProperties: true },
+      },
+      preHandler: [requirePermission({ payments: ["create"] })],
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const parsed = paymentOnDeliverySchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new AppError("VALIDATION_ERROR", {
+          errors: resolveZodErrors(
+            parsed.error.flatten().fieldErrors,
+            req.locale
+          ),
+        });
+      }
+      const userId = getUserId(req);
+      const result = await setPaymentOnDelivery(
+        app.prisma,
+        id,
+        parsed.data.method,
+        userId
+      );
+      if (!result) {
+        throw new AppError("JOB_NOT_FOUND");
+      }
+      throwIfError(result);
+      return reply.status(201).send(result);
+    }
+  );
+
+  app.delete(
+    "/:id/payment-on-delivery",
+    {
+      schema: {
+        tags: ["jobs"],
+        summary: "Clear the paid-on-delivery mark on a job",
+        params: {
+          type: "object",
+          properties: { id: { type: "string" } },
+          required: ["id"],
+        },
+      },
+      preHandler: [requirePermission({ payments: ["delete"] })],
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const userId = getUserId(req);
+      const result = await clearPaymentOnDelivery(app.prisma, id, userId);
+      if (!result) {
+        throw new AppError("JOB_NOT_FOUND");
+      }
+      throwIfError(result);
+      return reply.status(204).send();
     }
   );
 

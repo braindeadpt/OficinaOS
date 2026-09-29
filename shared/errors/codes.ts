@@ -111,6 +111,15 @@ export const ERRORS = {
     message: "errors.payment_exceeds_balance",
   },
   PAYMENT_NOT_FOUND: { status: 404, message: "errors.payment_not_found" },
+  PAYMENT_ON_DELIVERY_ALREADY_MARKED: {
+    status: 409,
+    message: "errors.pod_already_marked",
+  },
+  PAYMENT_ON_DELIVERY_NOT_MARKED: {
+    status: 409,
+    message: "errors.pod_not_marked",
+  },
+  NO_PAYMENT_DUE: { status: 409, message: "errors.no_payment_due" },
   SALE_NOT_FOUND: { status: 404, message: "errors.sale_not_found" },
   SALE_ITEM_REQUIRED: { status: 400, message: "errors.sale_item_required" },
   SALE_PAYMENT_MISMATCH: {

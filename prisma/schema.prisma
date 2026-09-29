@@ -164,23 +164,23 @@ model User {
   createdAt           DateTime  @default(now()) @db.Timestamptz
   updatedAt           DateTime  @updatedAt @db.Timestamptz
 
-  assignedJobs         Job[]               @relation("AssignedTechnician")
-  createdJobs          Job[]               @relation("CreatedBy")
-  updatedJobs          Job[]               @relation("UpdatedBy")
-  notes                JobNote[]
-  jobParts             JobPart[]
-  jobRepairs           JobRepair[]
-  paymentsCreated      Payment[]   @relation("PaymentCreatedBy")
-  stockMovementsCreated StockMovement[] @relation("StockMovementCreatedBy")
-  salesCreated         Sale[]      @relation("SaleCreatedBy")
-  auditLogs            AuditLog[]
-  conversations        AiConversation[]
-  sessions             Session[]
-  accounts             Account[]
-  verifications        Verification[]
-  inAppNotifications   InAppNotification[]
-  returnClaimsOpened   ReturnClaim[]       @relation("ReturnClaimOpenedBy")
-  returnClaimsResolved ReturnClaim[]       @relation("ReturnClaimResolvedBy")
+  assignedJobs          Job[]               @relation("AssignedTechnician")
+  createdJobs           Job[]               @relation("CreatedBy")
+  updatedJobs           Job[]               @relation("UpdatedBy")
+  notes                 JobNote[]
+  jobParts              JobPart[]
+  jobRepairs            JobRepair[]
+  paymentsCreated       Payment[]           @relation("PaymentCreatedBy")
+  stockMovementsCreated StockMovement[]     @relation("StockMovementCreatedBy")
+  salesCreated          Sale[]              @relation("SaleCreatedBy")
+  auditLogs             AuditLog[]
+  conversations         AiConversation[]
+  sessions              Session[]
+  accounts              Account[]
+  verifications         Verification[]
+  inAppNotifications    InAppNotification[]
+  returnClaimsOpened    ReturnClaim[]       @relation("ReturnClaimOpenedBy")
+  returnClaimsResolved  ReturnClaim[]       @relation("ReturnClaimResolvedBy")
 
   @@map("users")
 }
@@ -222,7 +222,7 @@ model Customer {
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 
-  jobs Job[]
+  jobs  Job[]
   sales Sale[]
 
   @@index([email])
@@ -331,9 +331,9 @@ model SaleItem {
   // Snapshotted at checkout.
   name      String
   category  PartCategory
-  unitPrice Decimal         @db.Decimal(10, 2)
+  unitPrice Decimal      @db.Decimal(10, 2)
   quantity  Int
-  lineTotal Decimal         @db.Decimal(10, 2)
+  lineTotal Decimal      @db.Decimal(10, 2)
 
   @@index([saleId])
   @@index([partId])
@@ -346,9 +346,9 @@ model SalePayment {
   sale   Sale   @relation(fields: [saleId], references: [id], onDelete: Cascade)
 
   method    PaymentMethod
-  amount    Decimal        @db.Decimal(10, 2)
+  amount    Decimal       @db.Decimal(10, 2)
   reference String?
-  createdAt DateTime       @default(now()) @db.Timestamptz
+  createdAt DateTime      @default(now()) @db.Timestamptz
 
   @@index([saleId])
   @@map("sale_payments")
@@ -389,6 +389,10 @@ model Job {
 
   actualLaborHours Decimal? @db.Decimal(10, 2)
   holdReason       String?  @db.Text
+
+  // One-click "paid on delivery": method chosen when marking (null = not
+  // marked); the Payment row is created automatically on DELIVERED.
+  paymentOnDeliveryMethod String?
 
   lastOverdueAlertAt DateTime? @db.Timestamptz
 
@@ -493,21 +497,21 @@ model JobPartsWaiting {
 // ─────────────────────────────────────────────
 
 model PartsCatalog {
-  id            String       @id @default(cuid())
-  name          String
-  category      PartCategory
-  defaultPrice  Decimal      @db.Decimal(10, 2)
-  supplier      String?
-  stockQuantity Int          @default(0)
-  reorderLevel  Int          @default(0)
-  isActive      Boolean      @default(true)
+  id                  String       @id @default(cuid())
+  name                String
+  category            PartCategory
+  defaultPrice        Decimal      @db.Decimal(10, 2)
+  supplier            String?
+  stockQuantity       Int          @default(0)
+  reorderLevel        Int          @default(0)
+  isActive            Boolean      @default(true)
   // Set when an OWNER low-stock alert fires; gates re-alerts (24h window).
-  lastLowStockAlertAt DateTime? @db.Timestamptz
-  createdAt     DateTime     @default(now()) @db.Timestamptz
-  updatedAt     DateTime     @updatedAt @db.Timestamptz
+  lastLowStockAlertAt DateTime?    @db.Timestamptz
+  createdAt           DateTime     @default(now()) @db.Timestamptz
+  updatedAt           DateTime     @updatedAt @db.Timestamptz
 
-  jobParts JobPart[]
-  saleItems SaleItem[]
+  jobParts       JobPart[]
+  saleItems      SaleItem[]
   stockMovements StockMovement[]
 
   @@index([name])
@@ -559,13 +563,13 @@ model StockMovement {
   partId String
   part   PartsCatalog @relation(fields: [partId], references: [id], onDelete: Restrict)
 
-  type        MovementType
-  quantity    Int // signed delta: positive in, negative out
+  type         MovementType
+  quantity     Int // signed delta: positive in, negative out
   balanceAfter Int
-  unitCost    Decimal? @db.Decimal(10, 2)
-  supplier    String?
-  reference   String?
-  note        String?  @db.Text
+  unitCost     Decimal?     @db.Decimal(10, 2)
+  supplier     String?
+  reference    String?
+  note         String?      @db.Text
 
   createdById String
   createdBy   User     @relation("StockMovementCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
@@ -636,9 +640,9 @@ model Payment {
   job   Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   method    PaymentMethod
-  amount    Decimal        @db.Decimal(10, 2)
+  amount    Decimal       @db.Decimal(10, 2)
   reference String?
-  note      String?        @db.Text
+  note      String?       @db.Text
 
   createdById String
   createdBy   User     @relation("PaymentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
