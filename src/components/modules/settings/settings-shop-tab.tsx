@@ -12,10 +12,21 @@ import api from "@/lib/api";
 import { getPhonePlaceholder } from "@/lib/phone-formats";
 import { useSettingsStore } from "@/stores/settings";
 
+interface RemoteBackupStatus {
+  lastRemoteCopyAt: string | null;
+  lastRestoreCheckAt: string | null;
+  remoteCopyHoursAgo: number | null;
+  remoteCopyStale: boolean;
+  restoreCheckDaysAgo: number | null;
+  restoreCheckStale: boolean;
+}
+
 interface BackupStatus {
   dumpCount: number;
   hoursAgo: number | null;
   lastBackupAt: string | null;
+  remote: RemoteBackupStatus;
+  remoteConfigured: boolean;
   stale: boolean;
 }
 
@@ -69,6 +80,54 @@ function BackupStatusCard() {
           {t("backups_stale")}
         </p>
       )}
+
+      {status?.remoteConfigured && <RemoteBackupRows remote={status.remote} />}
+    </div>
+  );
+}
+
+function RemoteBackupRows({ remote }: { remote: RemoteBackupStatus }) {
+  const { t } = useTranslation();
+  return (
+    <div className="mt-3 space-y-1 border-outline-variant border-t pt-2">
+      <p className="flex items-center gap-1.5 font-label text-on-surface-variant text-xs">
+        <span
+          aria-hidden="true"
+          className={`material-symbols-outlined text-[14px] ${
+            remote.remoteCopyStale ? "text-error" : "text-primary"
+          }`}
+        >
+          cloud_upload
+        </span>
+        {t("backups_remote_copy", {
+          hours: remote.remoteCopyHoursAgo ?? 0,
+        })}
+        {remote.remoteCopyStale && (
+          <span className="font-bold text-error">
+            {t("backups_remote_stale")}
+          </span>
+        )}
+      </p>
+      <p className="flex items-center gap-1.5 font-label text-on-surface-variant text-xs">
+        <span
+          aria-hidden="true"
+          className={`material-symbols-outlined text-[14px] ${
+            remote.restoreCheckStale ? "text-error" : "text-primary"
+          }`}
+        >
+          fact_check
+        </span>
+        {remote.lastRestoreCheckAt
+          ? t("backups_restore_check", {
+              count: remote.restoreCheckDaysAgo ?? 0,
+            })
+          : t("backups_restore_check_never")}
+        {remote.restoreCheckStale && (
+          <span className="font-bold text-error">
+            {t("backups_restore_check_stale")}
+          </span>
+        )}
+      </p>
     </div>
   );
 }
