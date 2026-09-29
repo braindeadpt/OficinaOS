@@ -1,91 +1,12 @@
 import { ROLE_LABELS } from "@shared/constants";
-import type { PermissionCheck } from "@shared/permissions";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { NavLink, useLocation } from "react-router";
 import { can, useCan } from "@/hooks/use-can";
+import { BOTTOM_NAV_PRIMARY, NAV_ITEMS } from "@/lib/navigation";
 import { getInitials } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth";
 import { useUiStore } from "@/stores/ui";
-
-interface NavItem {
-  icon: string;
-  labelKey: string;
-  perm: PermissionCheck;
-  to: string;
-}
-
-const NAV_ITEMS: NavItem[] = [
-  {
-    icon: "dashboard",
-    labelKey: "dashboard",
-    perm: { jobs: ["view"] },
-    to: "/",
-  },
-  {
-    icon: "build",
-    labelKey: "jobs",
-    perm: { jobs: ["view"] },
-    to: "/jobs",
-  },
-  {
-    icon: "settings",
-    labelKey: "settings",
-    perm: { settings: ["view"] },
-    to: "/settings",
-  },
-];
-
-const MORE_ITEMS: NavItem[] = [
-  {
-    icon: "auto_awesome",
-    labelKey: "ai_agent_title",
-    perm: { ai: ["access"] },
-    to: "/ai-analyst",
-  },
-  {
-    icon: "people",
-    labelKey: "customers",
-    perm: { customers: ["view"] },
-    to: "/customers",
-  },
-  {
-    icon: "menu_book",
-    labelKey: "repair_services",
-    perm: { repairs: ["viewCatalog"] },
-    to: "/repairs",
-  },
-  {
-    icon: "inventory_2",
-    labelKey: "parts_inventory",
-    perm: { parts: ["viewCatalog"] },
-    to: "/parts",
-  },
-  {
-    icon: "point_of_sale",
-    labelKey: "pos.nav_label",
-    perm: { sales: ["view"] },
-    to: "/pos",
-  },
-  {
-    icon: "undo",
-    labelKey: "returns_nav_label",
-    perm: { returns: ["viewSelf"] },
-    to: "/returns",
-  },
-  {
-    icon: "notifications",
-    labelKey: "notifications",
-    perm: { notifications: ["read"] },
-    to: "/notifications",
-  },
-  {
-    icon: "analytics",
-    labelKey: "reports.label",
-    perm: { reports: ["viewSelf"] },
-    to: "/reports",
-  },
-];
 
 const ACTIVE_FONT_SETTINGS = '"FILL" 1, "wght" 700, "GRAD" 0, "opsz" 24';
 
@@ -278,14 +199,12 @@ export default function BottomNav() {
   const closeMoreSheet = useUiStore((s) => s.closeMoreSheet);
   const location = useLocation();
 
-  const visibleNavItems = NAV_ITEMS.filter(
+  const visibleItems = NAV_ITEMS.filter(
     (item) => item.perm && can(role, item.perm)
   );
-  const visibleNavItemsByPath = new Map(
-    visibleNavItems.map((item) => [item.to, item])
-  );
-  const visibleMoreItems = MORE_ITEMS.filter(
-    (item) => item.perm && can(role, item.perm)
+  // Everything the registry knows that is not pinned to the bottom bar.
+  const visibleMoreItems = visibleItems.filter(
+    (item) => !BOTTOM_NAV_PRIMARY.includes(item.to)
   );
   const isMoreActive = visibleMoreItems.some(
     (item) => item.to === location.pathname
@@ -319,6 +238,9 @@ export default function BottomNav() {
     return null;
   }
 
+  const visibleNavItemsByPath = new Map(
+    visibleItems.map((item) => [item.to, item])
+  );
   const dashboardItem = visibleNavItemsByPath.get("/");
   const jobsItem = visibleNavItemsByPath.get("/jobs");
   const settingsItem = visibleNavItemsByPath.get("/settings");
