@@ -9,6 +9,7 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, vars?: Record<string, unknown>) =>
       vars ? `${key}:${JSON.stringify(vars)}` : key,
+    i18n: { language: "en" },
   }),
 }));
 
@@ -88,5 +89,61 @@ describe("ConsentToggle", () => {
     expect(toast.success).toHaveBeenCalledWith(
       expect.stringContaining("customer_consent_revoke_toast")
     );
+  });
+
+  it("shows opt-in date tooltip for consented customers", () => {
+    render(
+      <ConsentToggle
+        customer={{
+          ...customer,
+          whatsappConsent: true,
+          whatsappConsentAt: "2026-09-01T10:30:00.000Z",
+        }}
+      />
+    );
+
+    expect(screen.getByRole("switch").getAttribute("title")).toContain(
+      "customer_consent_optin_since"
+    );
+  });
+
+  it("shows no tooltip when consent has no recorded date", () => {
+    render(<ConsentToggle customer={{ ...customer, whatsappConsent: true }} />);
+
+    expect(screen.getByRole("switch").getAttribute("title")).toBeNull();
+  });
+
+  it("shows tooltip right after opt-in using the server timestamp", async () => {
+    mockUpdate.mockResolvedValue({
+      whatsappConsentAt: "2026-09-01T10:30:00.000Z",
+    });
+    render(<ConsentToggle customer={customer} />);
+
+    fireEvent.click(screen.getByRole("switch"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("switch").getAttribute("title")).toContain(
+        "customer_consent_optin_since"
+      );
+    });
+  });
+
+  it("removes tooltip after revoke", async () => {
+    mockUpdate.mockResolvedValue({ whatsappConsentAt: null });
+    render(
+      <ConsentToggle
+        customer={{
+          ...customer,
+          whatsappConsent: true,
+          whatsappConsentAt: "2026-09-01T10:30:00.000Z",
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("switch"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("switch").getAttribute("title")).toBeNull();
+    });
   });
 });

@@ -47,6 +47,7 @@ function DesktopCustomersTable({
     name: string;
     phone: string;
     whatsappConsent?: boolean;
+    whatsappConsentAt?: string | null;
   }[];
   isLoading: boolean;
   t: (key: string, options?: Record<string, unknown>) => string;
@@ -124,6 +125,7 @@ function MobileCustomerCard({
     name: string;
     phone: string;
     whatsappConsent?: boolean;
+    whatsappConsentAt?: string | null;
   };
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
