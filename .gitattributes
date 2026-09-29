@@ -2,3 +2,5 @@
 *.bat text eol=crlf
 *.cmd text eol=crlf
 *.ps1 text eol=crlf
+# Shell scripts correm em containers Linux — shebang com CRLF rebenta
+*.sh text eol=lf

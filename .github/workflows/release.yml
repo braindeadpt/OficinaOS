@@ -19,7 +19,9 @@ jobs:
           mkdir -p bundle/scripts
           cp INSTALAR.bat INICIAR.bat PARAR.bat \
              docker-compose.app.yml .env.example INSTALL.md bundle/
-          cp scripts/gerar-env.ps1 bundle/scripts/
+          cp scripts/gerar-env.ps1 scripts/db-backup.sh \
+             scripts/db-restore.sh scripts/db-restore-check.sh \
+             bundle/scripts/
           cd bundle && zip -r ../oficinaos-install.zip . && cd ..
 
       - name: Create GitHub release

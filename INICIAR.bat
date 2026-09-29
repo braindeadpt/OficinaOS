@@ -5,38 +5,65 @@ title OficinaOS
 cd /d "%~dp0"
 
 echo A iniciar o OficinaOS...
+
+REM Ja esta a correr?
+curl -sf --max-time 3 http://localhost:4000/health >nul 2>&1
+if not errorlevel 1 (
+    echo O OficinaOS ja esta a correr.
+    start "" "http://localhost:4000"
+    exit /b 0
+)
+
 REM Docker pode estar instalado mas fora do PATH desta sessao
 set "PATH=%PATH%;C:\Program Files\Docker\Docker\resources\bin"
 docker info >nul 2>&1
+if not errorlevel 1 goto docker_pronto
+
+where docker >nul 2>&1
 if errorlevel 1 (
-    where docker >nul 2>&1
-    if errorlevel 1 (
-        echo ERRO: Docker Desktop nao esta instalado. Corre primeiro o INSTALAR.bat
-        pause
-        exit /b 1
-    )
-    echo O Docker esta parado. A iniciar o Docker Desktop...
-    start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
-    set /a TENT=0
-    :esperar
-    timeout /t 5 /nobreak >nul
-    set /a TENT+=1
-    docker info >nul 2>&1
-    if not errorlevel 1 goto docker_pronto
-    if !TENT! LSS 72 goto esperar
-    echo ERRO: o Docker Desktop nao arrancou. Abre-o manualmente e tenta de novo.
+    echo ERRO: Docker Desktop nao esta instalado. Corre primeiro o INSTALAR.bat
     pause
     exit /b 1
-    :docker_pronto
 )
-REM Atualiza para a imagem mais recente (ignorado se offline)
+echo O Docker esta parado. A iniciar o Docker Desktop...
+if exist "C:\Program Files\Docker\Docker\Docker Desktop.exe" (
+    start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
+)
+set /a TENT=0
+:esperar_docker
+timeout /t 5 /nobreak >nul
+set /a TENT+=1
+docker info >nul 2>&1
+if not errorlevel 1 goto docker_pronto
+if !TENT! LSS 48 goto esperar_docker
+echo ERRO: o Docker Desktop nao arrancou. Abre-o manualmente e tenta de novo.
+pause
+exit /b 1
+
+:docker_pronto
+echo A verificar atualizacoes...
 docker compose -f docker-compose.app.yml pull >nul 2>&1
-docker compose -f docker-compose.app.yml up -d >nul 2>&1
-if errorlevel 1 docker compose up -d >nul 2>&1
+docker compose -f docker-compose.app.yml up -d
+if errorlevel 1 docker compose up -d
 if errorlevel 1 (
     echo ERRO ao iniciar. Se nunca instalaste, corre primeiro o INSTALAR.bat
     pause
     exit /b 1
 )
+
+REM Esperar que a app responda antes de abrir o browser
+set /a TENT=0
+:esperar_app
+timeout /t 3 /nobreak >nul
+set /a TENT+=1
+curl -sf --max-time 3 http://localhost:4000/health >nul 2>&1
+if not errorlevel 1 goto app_pronta
+if !TENT! LSS 30 goto esperar_app
+echo A app ainda nao respondeu — pode estar a atualizar a base de dados.
+echo Espera 1 minuto e abre http://localhost:4000 manualmente.
+pause
+exit /b 0
+
+:app_pronta
 start "" "http://localhost:4000"
 exit /b 0
