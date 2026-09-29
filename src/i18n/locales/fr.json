@@ -1108,6 +1108,12 @@
     "title": "POS comptoir",
     "total": "Total",
     "in_cart_short": "au panier",
+    "restock_days_left": " · {{days}} jours restants",
+    "restock_days_left_one": " · {{days}} jour restant",
+    "restock_days_left_other": " · {{days}} jours restants",
+    "restock_no_data": "Aucune consommation enregistrée — réappro selon le niveau défini",
+    "restock_suggestion": "Moyenne {{avg}}/jour ({{days}}j) · suggéré {{qty}} à commander",
+    "restock_title": "Suggestion de réappro",
     "max_stock_reached": "Plus d'unites en stock"
   },
   "payments": {

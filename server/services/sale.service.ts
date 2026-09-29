@@ -8,6 +8,7 @@ import {
   findCatalogPartsByIds,
   findSaleSortKey,
 } from "../repositories/sale.repository.js";
+import { createStockMovement } from "../repositories/stock-movement.repository.js";
 import {
   keysetOrderBy,
   requireKeysetCursor,
@@ -75,6 +76,23 @@ export async function create(
     }
 
     const saleCode = await generateSaleCode(tx);
+
+    // Ledger entry per catalog line: POS consumption feeds the same
+    // ledger as repair consumption, powering restock analytics.
+    for (const item of items) {
+      if (!item.partId) {
+        continue;
+      }
+      const part = catalogById.get(item.partId);
+      await createStockMovement(tx, {
+        // Best-effort post-decrement balance from the pre-read snapshot.
+        balanceAfter: part ? part.stockQuantity - item.quantity : 0,
+        createdById: userId,
+        partId: item.partId,
+        quantity: -item.quantity,
+        type: "CONSUMPTION",
+      });
+    }
 
     const created = await createSale(tx, {
       saleCode,

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Can } from "@/components/modules/can";
+import RestockHint from "@/components/pos/restock-hint";
 import type { ApiError } from "@/lib/api";
 import { formatCurrency } from "@/lib/format";
 import { usePartsCatalogStore } from "@/stores/parts-catalog";
@@ -181,6 +182,7 @@ export default function PosPage() {
                       </span>
                     )}
                   </span>
+                  {soldOut && <RestockHint partId={p.id} />}
                 </button>
               );
             })}

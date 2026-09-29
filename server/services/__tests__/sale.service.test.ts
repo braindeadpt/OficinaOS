@@ -23,6 +23,9 @@ function makePrisma(
       findMany: vi.fn().mockResolvedValue(catalogParts),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
+    stockMovement: {
+      create: vi.fn().mockResolvedValue({}),
+    },
     sale: {
       create: vi
         .fn()
@@ -131,6 +134,41 @@ describe("create sale", () => {
       "part-1",
       prisma
     );
+  });
+
+  it("writes a CONSUMPTION ledger entry per catalog line", async () => {
+    const prisma = makePrisma([{ id: "part-1", stockQuantity: 10 }]);
+
+    await create(prisma, makeApp(), baseInput, "user-1");
+
+    expect(prisma.stockMovement.create).toHaveBeenCalledWith({
+      data: {
+        balanceAfter: 8,
+        createdById: "user-1",
+        partId: "part-1",
+        quantity: -2,
+        type: "CONSUMPTION",
+      },
+    });
+  });
+
+  it("skips ledger entries for ad-hoc items", async () => {
+    const prisma = makePrisma([]);
+    const input = {
+      items: [
+        {
+          category: "OTHER" as const,
+          name: "Screen protector",
+          quantity: 1,
+          unitPrice: 500,
+        },
+      ],
+      payments: [{ amount: 500, method: "CASH" as const }],
+    };
+
+    await create(prisma, makeApp(), input, "user-1");
+
+    expect(prisma.stockMovement.create).not.toHaveBeenCalled();
   });
 });
 
