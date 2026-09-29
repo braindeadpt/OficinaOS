@@ -29,8 +29,8 @@ export default function ChangePasswordPage() {
       return;
     }
 
-    if (newPassword.length < 8) {
-      setError(t("auth_password_min_length"));
+    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(newPassword)) {
+      setError(t("auth_password_requirements"));
       return;
     }
 
@@ -59,9 +59,14 @@ export default function ChangePasswordPage() {
       navigate("/", { replace: true });
     } catch (err: unknown) {
       const apiErr = err as ApiError;
-      const message = apiErr.code
-        ? apiErr.message
-        : t("auth_change_password_error");
+      const fieldErrors = (
+        apiErr.details as { errors?: Record<string, string[]> } | undefined
+      )?.errors;
+      const firstFieldError =
+        fieldErrors && Object.values(fieldErrors).flat()[0];
+      const message =
+        firstFieldError ??
+        (apiErr.code ? apiErr.message : t("auth_change_password_error"));
       setError(message);
     } finally {
       setLoading(false);
@@ -188,6 +193,9 @@ export default function ChangePasswordPage() {
                 </span>
               </button>
             </div>
+            <p className="text-on-surface-variant text-xs">
+              {t("auth_password_requirements")}
+            </p>
           </div>
 
           <div className="space-y-1.5">
