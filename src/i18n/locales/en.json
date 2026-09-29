@@ -21,7 +21,9 @@
     "discard_title": "Discard changes?",
     "discard_desc": "You have unsaved changes that will be lost.",
     "keep_editing": "Keep editing",
-    "discard": "Discard"
+    "discard": "Discard",
+    "whatsapp_consent": "Send me WhatsApp status updates about my repair",
+    "whatsapp_consent_hint": "Only used for repair status updates. You can change this at any time."
   },
   "add_new_part": "Add New Part",
   "add_part_modal": {

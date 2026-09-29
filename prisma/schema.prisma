@@ -215,12 +215,15 @@ model Account {
 // ─────────────────────────────────────────────
 
 model Customer {
-  id        String   @id @default(cuid())
-  name      String
-  phone     String   @unique
-  email     String?
-  createdAt DateTime @default(now()) @db.Timestamptz
-  updatedAt DateTime @updatedAt @db.Timestamptz
+  id                String    @id @default(cuid())
+  name              String
+  phone             String    @unique
+  email             String?
+  // WhatsApp status updates are only sent when the customer opted in.
+  whatsappConsent   Boolean   @default(false)
+  whatsappConsentAt DateTime? @db.Timestamptz
+  createdAt         DateTime  @default(now()) @db.Timestamptz
+  updatedAt         DateTime  @updatedAt @db.Timestamptz
 
   jobs  Job[]
   sales Sale[]

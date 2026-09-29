@@ -15,6 +15,7 @@ interface FormData {
   email: string;
   name: string;
   phone: string;
+  whatsappConsent: boolean;
 }
 
 export default function EditCustomerDialog({
@@ -28,6 +29,7 @@ export default function EditCustomerDialog({
     email: customer.email ?? "",
     name: customer.name,
     phone: customer.phone,
+    whatsappConsent: customer.whatsappConsent ?? false,
   });
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -45,6 +47,7 @@ export default function EditCustomerDialog({
       email: customer.email ?? "",
       name: customer.name,
       phone: customer.phone,
+      whatsappConsent: customer.whatsappConsent ?? false,
     });
     setSubmitError(null);
   }, [open, customer]);
@@ -72,6 +75,9 @@ export default function EditCustomerDialog({
       }
       if ((form.email.trim() || null) !== (customer.email ?? null)) {
         data.email = form.email.trim();
+      }
+      if (form.whatsappConsent !== (customer.whatsappConsent ?? false)) {
+        data.whatsappConsent = String(form.whatsappConsent);
       }
 
       if (Object.keys(data).length === 0) {
@@ -185,6 +191,27 @@ export default function EditCustomerDialog({
                 value={form.email}
               />
             </div>
+
+            <label
+              className="flex items-start gap-2.5"
+              htmlFor="edit-customer-consent"
+            >
+              <input
+                checked={form.whatsappConsent}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                id="edit-customer-consent"
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p,
+                    whatsappConsent: e.target.checked,
+                  }))
+                }
+                type="checkbox"
+              />
+              <span className="font-body text-on-surface-variant text-sm">
+                {t("add_customer_modal.whatsapp_consent")}
+              </span>
+            </label>
           </div>
         </div>
 

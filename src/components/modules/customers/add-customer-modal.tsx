@@ -17,6 +17,7 @@ const INITIAL_FORM = {
   email: "",
   name: "",
   phone: "",
+  whatsappConsent: false,
 };
 
 type FieldErrors = Partial<Record<keyof typeof INITIAL_FORM, string>>;
@@ -25,7 +26,8 @@ function isDirty(form: typeof INITIAL_FORM): boolean {
   return (
     form.name !== INITIAL_FORM.name ||
     form.phone !== INITIAL_FORM.phone ||
-    form.email !== INITIAL_FORM.email
+    form.email !== INITIAL_FORM.email ||
+    form.whatsappConsent !== INITIAL_FORM.whatsappConsent
   );
 }
 
@@ -100,6 +102,7 @@ export default function AddCustomerModal({
         name: form.name.trim(),
         phone: form.phone.trim(),
         email: form.email.trim() || undefined,
+        whatsappConsent: form.whatsappConsent || undefined,
       });
       setForm(INITIAL_FORM);
       onSuccess();
@@ -198,6 +201,27 @@ export default function AddCustomerModal({
               />
             </div>
           </div>
+
+          <label
+            className="flex items-start gap-2.5 px-1"
+            htmlFor="add-customer-consent"
+          >
+            <input
+              checked={form.whatsappConsent}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+              id="add-customer-consent"
+              onChange={(e) =>
+                setForm((p) => ({
+                  ...p,
+                  whatsappConsent: e.target.checked,
+                }))
+              }
+              type="checkbox"
+            />
+            <span className="font-body text-on-surface-variant text-sm">
+              {t("add_customer_modal.whatsapp_consent")}
+            </span>
+          </label>
         </div>
 
         {createError && (

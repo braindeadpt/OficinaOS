@@ -21,7 +21,9 @@
     "discard_title": "Descartar alterações?",
     "discard_desc": "Tem alterações não guardadas que serão perdidas.",
     "keep_editing": "Continue a editar",
-    "discard": "Descartar"
+    "discard": "Descartar",
+    "whatsapp_consent": "Quero receber atualizações por WhatsApp sobre a reparação",
+    "whatsapp_consent_hint": "Usado apenas para estados da reparação. Pode alterar quando quiser."
   },
   "add_new_part": "Adicionar nova peça",
   "add_part_modal": {

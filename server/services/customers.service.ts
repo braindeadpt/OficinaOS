@@ -25,11 +25,19 @@ export async function create(prisma: PrismaClient, input: CreateCustomerInput) {
   if (email) {
     updateData.email = email;
   }
+  if (input.whatsappConsent !== undefined) {
+    // Timestamp records when consent was (re)granted; revocation keeps the
+    // flag change but the timestamp only moves on opt-in.
+    updateData.whatsappConsent = input.whatsappConsent;
+    updateData.whatsappConsentAt = input.whatsappConsent ? new Date() : null;
+  }
 
   return await customerUpsert(prisma, { phone: input.phone }, updateData, {
     email,
     name: input.name,
     phone: input.phone,
+    whatsappConsent: input.whatsappConsent ?? false,
+    whatsappConsentAt: input.whatsappConsent ? new Date() : null,
   });
 }
 
@@ -52,6 +60,10 @@ export async function update(
   }
   if (data.email !== undefined) {
     updateData.email = data.email?.trim() || null;
+  }
+  if (data.whatsappConsent !== undefined) {
+    updateData.whatsappConsent = data.whatsappConsent;
+    updateData.whatsappConsentAt = data.whatsappConsent ? new Date() : null;
   }
 
   if (Object.keys(updateData).length === 0) {

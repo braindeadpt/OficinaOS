@@ -47,7 +47,12 @@ interface CustomersState {
   totalCount: number;
   updateCustomer: (
     id: string,
-    data: { name?: string; phone?: string; email?: string }
+    data: {
+      email?: string;
+      name?: string;
+      phone?: string;
+      whatsappConsent?: boolean;
+    }
   ) => Promise<Customer>;
 }
 
