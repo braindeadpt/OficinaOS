@@ -77,7 +77,7 @@ export async function list(
   prisma: PrismaClient,
   query: CustomerListQueryInput
 ) {
-  const { cursor, limit, search } = query;
+  const { consent, cursor, limit, search } = query;
 
   const where: Prisma.CustomerWhereInput = {};
   if (search) {
@@ -85,6 +85,12 @@ export async function list(
       { name: { contains: search, mode: "insensitive" } },
       { phone: { contains: search, mode: "insensitive" } },
     ];
+  }
+  // GDPR campaign/audit support: list only opted-in (or only opted-out)
+  // customers. whatsappConsent defaults to false in the schema, so the
+  // "false" filter naturally includes everyone who was never asked.
+  if (consent !== undefined) {
+    where.whatsappConsent = consent === "true";
   }
   if (cursor) {
     where.id = { lt: cursor };

@@ -460,6 +460,10 @@
   "customers": "Clients",
   "customers_desc": "Parcourez et gérez votre annuaire clients",
   "customers_with_jobs": "Avec des emplois",
+  "customers_consent_all": "Tous les clients",
+  "customers_consent_filter": "Consentement WhatsApp",
+  "customers_consent_opted_in": "Ayant accepté (WhatsApp)",
+  "customers_consent_opted_out": "Ayant refusé",
   "dashboard": "Tableau de bord",
   "dashboard_greeting": "Bon retour, {{name}}",
   "dashboard_page": {

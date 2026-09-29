@@ -38,7 +38,7 @@ interface CustomersState {
   customers: CustomerListItem[];
   error: string | null;
   fetchCustomer: (id: string) => Promise<void>;
-  fetchCustomers: (search?: string) => Promise<void>;
+  fetchCustomers: (search?: string, consent?: string) => Promise<void>;
   isLoading: boolean;
   isLoadingCustomer: boolean;
   isUpdating: boolean;
@@ -66,12 +66,15 @@ export const useCustomersStore = create<CustomersState>((set) => ({
   nextCursor: null,
   totalCount: 0,
 
-  fetchCustomers: async (search) => {
+  fetchCustomers: async (search, consent) => {
     set({ isLoading: true });
     try {
       const params: Record<string, unknown> = { limit: 50 };
       if (search) {
         params.search = search;
+      }
+      if (consent) {
+        params.consent = consent;
       }
       const res = await api.get("/customers", { params });
       const data = res.data as {

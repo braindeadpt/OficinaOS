@@ -460,6 +460,10 @@
   "customers": "Clientes",
   "customers_desc": "Navegue e gerencie o seu diretório de clientes",
   "customers_with_jobs": "Com reparações",
+  "customers_consent_all": "Todos os clientes",
+  "customers_consent_filter": "Consentimento WhatsApp",
+  "customers_consent_opted_in": "Com opt-in (WhatsApp)",
+  "customers_consent_opted_out": "Sem opt-in",
   "dashboard": "Painel",
   "dashboard_greeting": "Bem-vindo de volta, {{name}}",
   "dashboard_page": {
