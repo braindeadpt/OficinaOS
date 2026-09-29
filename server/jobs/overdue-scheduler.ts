@@ -9,7 +9,11 @@ const RE_ALERT_MS = 24 * 60 * 60 * 1000;
 async function processOverdueJobs(app: FastifyInstance): Promise<void> {
   const cutoff = new Date(Date.now() - RE_ALERT_MS);
   const overdue = await app.prisma.job.findMany({
-    select: { id: true, jobCode: true },
+    select: {
+      customer: { select: { name: true, phone: true } },
+      id: true,
+      jobCode: true,
+    },
     where: {
       estimatedDate: { lt: new Date() },
       status: { notIn: INACTIVE_STATUSES },
@@ -27,7 +31,11 @@ async function processOverdueJobs(app: FastifyInstance): Promise<void> {
     const batchResults = await Promise.allSettled(
       batch.map((job) =>
         notify(app, {
-          context: { jobCode: job.jobCode },
+          context: {
+            customerName: job.customer?.name,
+            jobCode: job.jobCode,
+            recipientPhone: job.customer?.phone,
+          },
           eventName: "job_overdue",
           jobId: job.id,
           recipients: { role: Role.OWNER },

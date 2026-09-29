@@ -169,51 +169,66 @@ async function seedNotificationTemplates() {
       isDefault: true,
     },
     {
+      // WHATSAPP bodies only reference vars the dispatch actually
+      // provides (customerName, jobCode). shopName is rendered via the
+      // renderer's {{if}} conditional because it is optional in the
+      // notify context — testNotification supplies it, production
+      // dispatch may not, and a bare "{{shopName}}" would leak through
+      // or render as an empty gap.
       name: "job_created",
       channel: "WHATSAPP" as const,
-      body: "Hello {{customerName}}, your repair {{jobCode}} has been registered at {{shopName}}. You can track it at {{shopName}}/tracking/{{jobCode}}",
+      body: "Hello {{customerName}}, your repair {{jobCode}} has been registered. We will keep you updated at every step.{{if shopName}} — {{shopName}}{{endif}}",
       isDefault: true,
     },
     {
       name: "job_done",
       channel: "WHATSAPP" as const,
-      body: "Hello {{customerName}}, your device {{jobCode}} repair is complete and ready for pickup at {{shopName}}.",
+      body: "Good news, {{customerName}}! Your device {{jobCode}} is repaired and ready for pickup.{{if shopName}} — {{shopName}}{{endif}}",
       isDefault: true,
     },
     {
       name: "job_in_repair",
       channel: "WHATSAPP" as const,
-      body: "Hello {{customerName}}, your device {{jobCode}} is now being repaired at {{shopName}}.",
+      body: "Hello {{customerName}}, your device {{jobCode}} is now being repaired.{{if shopName}} — {{shopName}}{{endif}}",
       isDefault: true,
     },
     {
       name: "job_waiting_parts",
       channel: "WHATSAPP" as const,
-      body: "Hello {{customerName}}, we are waiting for parts for your device {{jobCode}} at {{shopName}}.",
+      body: "Hello {{customerName}}, your device {{jobCode}} is waiting for parts. We will let you know as soon as they arrive.{{if shopName}} — {{shopName}}{{endif}}",
       isDefault: true,
     },
     {
       name: "job_delivered",
       channel: "WHATSAPP" as const,
-      body: "Hello {{customerName}}, your device {{jobCode}} has been delivered. Thank you for choosing {{shopName}}!",
+      body: "Hello {{customerName}}, your device {{jobCode}} has been delivered. Thank you for trusting us!{{if shopName}} — {{shopName}}{{endif}}",
       isDefault: true,
     },
     {
       name: "job_on_hold",
       channel: "WHATSAPP" as const,
-      body: "Hello {{customerName}}, your device {{jobCode}} repair has been put on hold at {{shopName}}.",
+      body: "Hello {{customerName}}, the repair of your device {{jobCode}} is on hold. Please contact us for details.{{if shopName}} — {{shopName}}{{endif}}",
       isDefault: true,
     },
     {
       name: "job_returned",
       channel: "WHATSAPP" as const,
-      body: "Hello {{customerName}}, your device {{jobCode}} has been returned at {{shopName}}.",
+      body: "Hello {{customerName}}, your device {{jobCode}} has been returned.{{if shopName}} — {{shopName}}{{endif}}",
       isDefault: true,
     },
     {
       name: "job_cancelled",
       channel: "WHATSAPP" as const,
-      body: "Hello {{customerName}}, your repair {{jobCode}} has been cancelled at {{shopName}}.",
+      body: "Hello {{customerName}}, your repair {{jobCode}} has been cancelled.{{if shopName}} — {{shopName}}{{endif}}",
+      isDefault: true,
+    },
+    {
+      // Delayed-job notice ("job-delayed"). The overdue scheduler sends
+      // this to the customer's WhatsApp with consent gating handled by
+      // the dispatch pipeline.
+      name: "job_overdue",
+      channel: "WHATSAPP" as const,
+      body: "Hello {{customerName}}, your repair {{jobCode}} is taking longer than expected. Our team is on it and we will update you shortly.{{if shopName}} — {{shopName}}{{endif}}",
       isDefault: true,
     },
   ];
