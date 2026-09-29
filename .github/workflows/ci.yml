@@ -97,7 +97,7 @@ jobs:
         with:
           bun-version: 1.3.13
       - name: Apply migrations
-        run: bunx prisma migrate deploy
+        run: bun run db:migrate-deploy
         env:
           DATABASE_URL: postgresql://reparilo:reparilo_test@localhost:5432/reparilo_test
       - name: Seed data to verify on restore
