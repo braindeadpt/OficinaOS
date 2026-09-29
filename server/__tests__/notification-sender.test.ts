@@ -31,7 +31,7 @@ describe("sendWhatsApp", () => {
   it("returns success when API responds 200", async () => {
     mocks.fetch.mockResolvedValue({ ok: true, status: 200 });
 
-    const result = await sendWhatsApp(validConfig, "0555123456", "Hello");
+    const result = await sendWhatsApp(validConfig, "0912345678", "Hello");
 
     expect(result).toEqual({ success: true });
     expect(mocks.fetch).toHaveBeenCalledWith(
@@ -45,14 +45,14 @@ describe("sendWhatsApp", () => {
     );
   });
 
-  it("formats Algerian phone numbers with 213 prefix", async () => {
+  it("formats Portuguese phone numbers with 351 prefix", async () => {
     mocks.fetch.mockResolvedValue({ ok: true, status: 200 });
 
-    await sendWhatsApp(validConfig, "0555123456", "Hello");
+    await sendWhatsApp(validConfig, "0912345678", "Hello");
 
     const call = mocks.fetch.mock.calls[0];
     const body = JSON.parse(call[1].body);
-    expect(body.to).toBe("+213555123456");
+    expect(body.to).toBe("+351912345678");
   });
 
   it("passes international numbers as-is", async () => {
@@ -72,7 +72,7 @@ describe("sendWhatsApp", () => {
       text: vi.fn().mockResolvedValue("Unauthorized"),
     });
 
-    const result = await sendWhatsApp(validConfig, "0555123456", "Hello");
+    const result = await sendWhatsApp(validConfig, "0912345678", "Hello");
 
     expect(result.success).toBe(false);
     expect(result.error).toContain("WhatsApp API 401");
@@ -99,7 +99,7 @@ describe("sendWhatsApp", () => {
   it("returns error on network failure", async () => {
     mocks.fetch.mockRejectedValue(new Error("Network timeout"));
 
-    const result = await sendWhatsApp(validConfig, "0555123456", "Hello");
+    const result = await sendWhatsApp(validConfig, "0912345678", "Hello");
 
     expect(result).toEqual({ success: false, error: "Network timeout" });
   });
@@ -107,7 +107,7 @@ describe("sendWhatsApp", () => {
   it("returns error on unknown thrown value", async () => {
     mocks.fetch.mockRejectedValue("not an error");
 
-    const result = await sendWhatsApp(validConfig, "0555123456", "Hello");
+    const result = await sendWhatsApp(validConfig, "0912345678", "Hello");
 
     expect(result).toEqual({ success: false, error: "Unknown error" });
   });

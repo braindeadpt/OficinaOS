@@ -24,9 +24,12 @@ function esc(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function fmtDzd(v: number | { toNumber: () => number }): string {
+function fmtMoney(
+  v: number | { toNumber: () => number },
+  currency = "EUR"
+): string {
   const n = typeof v === "number" ? v : v.toNumber();
-  return `${n.toLocaleString("en-DZ")} DZD`;
+  return `${n.toLocaleString("en-US")} ${currency}`;
 }
 
 const toNum = (v: number | { toNumber: () => number }) =>
@@ -61,6 +64,7 @@ export async function renderReceiptHtml(
   options?: { hideCosts?: boolean }
 ): Promise<string> {
   const settings = await findShopSettingsUnique(prisma);
+  const currency = settings?.currency ?? "EUR";
   const shopName = esc(settings?.shopName ?? "OficinaOS");
   const qrBuf = await generateTrackingQr(job.jobCode, baseUrl);
   const qrImg = qrBuf
@@ -114,20 +118,20 @@ export async function renderReceiptHtml(
 ${
   hideCosts
     ? ""
-    : `<table><tr><td><strong>Total</strong></td><td style="text-align:right">${fmtDzd(displayCost)}</td></tr></table>${
+    : `<table><tr><td><strong>Total</strong></td><td style="text-align:right">${fmtMoney(displayCost, currency)}</td></tr></table>${
         hasPayments
           ? `<table>${
               deposit > 0
-                ? `<tr><td>Paid (deposit)</td><td style="text-align:right">${fmtDzd(deposit)}</td></tr>`
+                ? `<tr><td>Paid (deposit)</td><td style="text-align:right">${fmtMoney(deposit, currency)}</td></tr>`
                 : ""
             }${payments
               .map(
                 (p) =>
-                  `<tr><td>Paid (${esc(p.method)})</td><td style="text-align:right">${fmtDzd(p.amount)}</td></tr>`
+                  `<tr><td>Paid (${esc(p.method)})</td><td style="text-align:right">${fmtMoney(p.amount, currency)}</td></tr>`
               )
               .join(
                 ""
-              )}<tr><td><strong>Balance due</strong></td><td style="text-align:right"><strong>${fmtDzd(balanceDue)}</strong></td></tr></table>`
+              )}<tr><td><strong>Balance due</strong></td><td style="text-align:right"><strong>${fmtMoney(balanceDue, currency)}</strong></td></tr></table>`
           : ""
       }<div class="sep"></div>`
 }
@@ -165,6 +169,7 @@ export async function renderSaleReceiptHtml(
   baseUrl: string
 ): Promise<string> {
   const settings = await findShopSettingsUnique(prisma);
+  const currency = settings?.currency ?? "EUR";
   const shopName = esc(settings?.shopName ?? "OficinaOS");
   const qrBuf = await generateTrackingQr(sale.saleCode, baseUrl);
   const qrImg = qrBuf
@@ -175,13 +180,13 @@ export async function renderSaleReceiptHtml(
   const rows = sale.items
     .map(
       (i) =>
-        `<tr><td>${esc(i.name)} ×${i.quantity}</td><td style="text-align:right">${fmtDzd(i.lineTotal)}</td></tr>`
+        `<tr><td>${esc(i.name)} ×${i.quantity}</td><td style="text-align:right">${fmtMoney(i.lineTotal, currency)}</td></tr>`
     )
     .join("");
   const payRows = sale.payments
     .map(
       (p) =>
-        `<tr><td>Paid (${esc(p.method)}${p.reference ? ` · ${esc(p.reference)}` : ""})</td><td style="text-align:right">${fmtDzd(p.amount)}</td></tr>`
+        `<tr><td>Paid (${esc(p.method)}${p.reference ? ` · ${esc(p.reference)}` : ""})</td><td style="text-align:right">${fmtMoney(p.amount, currency)}</td></tr>`
     )
     .join("");
 
@@ -212,7 +217,7 @@ ${sale.customer ? `<tr><td>Customer</td><td style="text-align:right">${esc(sale.
 <div class="sep"></div>
 <table>${rows}</table>
 <div class="sep"></div>
-<table><tr class="total"><td>Total</td><td style="text-align:right">${fmtDzd(sale.total)}</td></tr>${payRows}</table>
+<table><tr class="total"><td>Total</td><td style="text-align:right">${fmtMoney(sale.total, currency)}</td></tr>${payRows}</table>
 ${settings?.receiptFooter ? `<div class="sep"></div><p style="text-align:left">${esc(settings.receiptFooter)}</p>` : ""}
 ${qrImg}
 </body></html>`;
@@ -241,6 +246,7 @@ export async function renderLabelHtml(
   options?: { hideCosts?: boolean; noAutoPrint?: boolean }
 ): Promise<string> {
   const settings = await findShopSettingsUnique(prisma);
+  const currency = settings?.currency ?? "EUR";
   const shopName = esc(settings?.shopName || "OficinaOS");
   const logoHtml = settings?.logoPath
     ? `<img src="${esc(settings.logoPath)}" alt="${shopName}" style="max-height:4mm;max-width:100%;" />`
@@ -267,7 +273,7 @@ export async function renderLabelHtml(
   );
   const finalCost = partsTotal + repairsTotal;
   const displayCost = finalCost > 0 ? finalCost : toNum(job.estimatedCost);
-  const price = hideCosts ? "" : fmtDzd(displayCost);
+  const price = hideCosts ? "" : fmtMoney(displayCost, currency);
 
   return `<!doctype html>
 <html lang="en">

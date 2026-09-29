@@ -135,7 +135,7 @@ describe("AddCustomerModal", () => {
       email: null,
       id: "cust-1",
       name: "John",
-      phone: "+2135551234",
+      phone: "+351912345678",
     });
     render(<AddCustomerModal {...defaultProps} />);
 
@@ -143,7 +143,7 @@ describe("AddCustomerModal", () => {
       target: { value: "John" },
     });
     fireEvent.change(screen.getByLabelText("add_customer_modal.phone"), {
-      target: { value: "+2135551234" },
+      target: { value: "+351912345678" },
     });
 
     fireEvent.click(
@@ -153,7 +153,7 @@ describe("AddCustomerModal", () => {
     await waitFor(() => {
       expect(mockCreate).toHaveBeenCalledWith({
         name: "John",
-        phone: "+2135551234",
+        phone: "+351912345678",
         email: undefined,
       });
     });
@@ -167,7 +167,7 @@ describe("AddCustomerModal", () => {
       email: "john@example.com",
       id: "cust-1",
       name: "John",
-      phone: "+2135551234",
+      phone: "+351912345678",
     });
     render(<AddCustomerModal {...defaultProps} />);
 
@@ -175,7 +175,7 @@ describe("AddCustomerModal", () => {
       target: { value: "John" },
     });
     fireEvent.change(screen.getByLabelText("add_customer_modal.phone"), {
-      target: { value: "+2135551234" },
+      target: { value: "+351912345678" },
     });
     fireEvent.change(screen.getByLabelText("add_customer_modal.email"), {
       target: { value: "john@example.com" },
@@ -188,7 +188,7 @@ describe("AddCustomerModal", () => {
     await waitFor(() => {
       expect(mockCreate).toHaveBeenCalledWith({
         name: "John",
-        phone: "+2135551234",
+        phone: "+351912345678",
         email: "john@example.com",
       });
     });

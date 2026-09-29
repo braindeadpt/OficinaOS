@@ -133,16 +133,16 @@ describe("getShopSettings", () => {
       prisma.shopSettings.findUnique as ReturnType<typeof vi.fn>
     ).mockResolvedValue({
       address: "123 Main St",
-      currency: "DZD",
+      currency: "EUR",
       id: "default",
-      phone: "+2135551234",
+      phone: "+351912345678",
       shopName: "TechFix Repair",
     });
 
     const result = await getShopSettings(prisma);
 
     expect(result).toHaveProperty("shopName", "TechFix Repair");
-    expect(result).toHaveProperty("currency", "DZD");
+    expect(result).toHaveProperty("currency", "EUR");
   });
 });
 

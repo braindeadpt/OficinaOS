@@ -58,7 +58,7 @@ vi.mock("sonner", () => ({
 }));
 
 vi.mock("@/lib/format", () => ({
-  formatDzd: (n: number) => n.toLocaleString(),
+  formatCurrency: (n: number) => n.toLocaleString(),
 }));
 
 vi.mock("@/components/modules/can", () => ({

@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import RepairServicePicker from "@/components/modules/jobs/repair-service-picker";
-import { formatDzd } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
 import { useJobsStore } from "@/stores/jobs";
 
 interface JobRepairsSectionProps {
@@ -149,7 +149,7 @@ export default function JobRepairsSection({
                   value={price}
                 />
                 <span className="font-label text-on-surface-variant text-xs">
-                  {t("currency_dzd")}
+                  {t("currency_eur")}
                 </span>
               </div>
               <button
@@ -235,7 +235,7 @@ export default function JobRepairsSection({
               </div>
               <div className="flex items-center gap-2">
                 <span className="font-bold font-headline text-on-surface text-xs">
-                  {formatDzd(Number(repair.price))} {t("currency_dzd")}
+                  {formatCurrency(Number(repair.price))}
                 </span>
                 {!isTerminal && (
                   <RemoveRepairButton

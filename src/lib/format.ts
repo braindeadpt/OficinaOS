@@ -3,9 +3,6 @@ export function formatCurrency(
   currency = "EUR",
   locale = "pt-PT"
 ): string {
-  if (currency === "DZD" && locale === "fr-DZ") {
-    return value.toLocaleString("fr-DZ");
-  }
   return value.toLocaleString(locale, {
     style: "currency",
     currency,
@@ -13,6 +10,3 @@ export function formatCurrency(
     maximumFractionDigits: 2,
   });
 }
-
-/** @deprecated Use formatCurrency instead */
-export const formatDzd = formatCurrency;

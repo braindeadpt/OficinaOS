@@ -1,9 +1,9 @@
 import { useTranslation } from "react-i18next";
 import { Can } from "@/components/modules/can";
-import { formatDzd } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
 
 function fmt(n: number): string {
-  return `${formatDzd(n)} DZD`;
+  return formatCurrency(n);
 }
 
 interface CostSummaryProps {

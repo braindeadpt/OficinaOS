@@ -7,7 +7,7 @@ describe("Select", () => {
   it("renders a select element", () => {
     render(
       <Select>
-        <option value="DZD">DZD</option>
+        <option value="EUR">EUR</option>
       </Select>
     );
     expect(screen.getByRole("combobox")).toBeInTheDocument();

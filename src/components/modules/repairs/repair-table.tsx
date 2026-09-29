@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { formatDzd } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
 
 export type RepairCategory = "HARDWARE" | "SOFTWARE" | "DIAGNOSTIC";
 
@@ -107,7 +107,7 @@ export default function RepairTable({
                 </td>
                 <td className="p-4">
                   <span className="font-mono font-semibold text-sm">
-                    {formatDzd(repair.basePrice)} DZD
+                    {formatCurrency(repair.basePrice)}
                   </span>
                 </td>
                 <td className="p-4">

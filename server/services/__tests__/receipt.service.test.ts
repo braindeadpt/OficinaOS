@@ -18,7 +18,7 @@ function makePrisma(shopName = "OficinaOS Test Shop"): PrismaClient {
 
 const baseJob = {
   jobCode: "JOB-0042",
-  customer: { name: "John Doe", phone: "+213555000000" },
+  customer: { name: "John Doe", phone: "+351912345678" },
   device: { brand: { name: "iPhone" }, model: "13 Pro" },
   reportedProblem: "Cracked screen",
   estimatedCost: 8500,
@@ -152,7 +152,7 @@ describe("renderReceiptHtml", () => {
     expect(html).toContain("Test Shop");
     expect(html).toContain("JOB-0042");
     expect(html).toContain("John Doe");
-    expect(html).toContain("+213555000000");
+    expect(html).toContain("+351912345678");
     expect(html).toContain("iPhone");
     expect(html).toContain("13 Pro");
     expect(html).toContain("Cracked screen");

@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { LowStockBadge } from "@/components/ui/low-stock-badge";
 import { useCan } from "@/hooks/use-can";
 import { useDebounce } from "@/hooks/use-debounce";
-import { formatDzd } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
 import { usePartsCatalogStore } from "@/stores/parts-catalog";
 
 type SortField = "name" | "category" | "defaultPrice" | "supplier";
@@ -197,7 +197,7 @@ function DesktopPartRow({
       {showCost && (
         <td className="px-5 py-4">
           <span className="font-mono font-semibold text-sm">
-            {formatDzd(Number(part.defaultPrice))} {t("currency_dzd")}
+            {formatCurrency(Number(part.defaultPrice))}
           </span>
         </td>
       )}
@@ -372,7 +372,7 @@ function MobilePartCard({
         </div>
         {showCost && (
           <span className="font-bold font-mono text-primary text-sm">
-            {formatDzd(Number(part.defaultPrice))} {t("currency_dzd")}
+            {formatCurrency(Number(part.defaultPrice))}
           </span>
         )}
       </div>
@@ -1064,10 +1064,7 @@ export default function PartsCatalogPage() {
                   {t("inventory_value")}
                 </p>
                 <p className="mt-1 font-extrabold font-headline text-2xl text-on-surface">
-                  {catalogValue > 0 ? formatDzd(catalogValue) : "0"}
-                </p>
-                <p className="mt-0.5 text-on-surface-variant text-xs">
-                  {t("currency_dzd")}
+                  {formatCurrency(catalogValue)}
                 </p>
               </div>
             )}

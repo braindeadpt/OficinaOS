@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Can } from "@/components/modules/can";
-import { formatDzd } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
 import { useJobsStore } from "@/stores/jobs";
 import AddPartDialog from "./add-part-dialog";
 
@@ -14,7 +14,7 @@ interface JobPartsSectionProps {
 }
 
 function fmt(n: number): string {
-  return `${formatDzd(n)} DZD`;
+  return formatCurrency(n);
 }
 
 export default function JobPartsSection({

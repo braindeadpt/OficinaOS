@@ -90,7 +90,7 @@ export default function Step2Content({
                 value={form.estimatedCost}
               />
               <span className="font-label text-on-surface-variant text-sm">
-                {t("currency_dzd")}
+                {t("currency_eur")}
               </span>
             </div>
           </div>
@@ -111,7 +111,7 @@ export default function Step2Content({
                 value={form.deposit}
               />
               <span className="font-label text-on-surface-variant text-sm">
-                {t("currency_dzd")}
+                {t("currency_eur")}
               </span>
             </div>
           </div>

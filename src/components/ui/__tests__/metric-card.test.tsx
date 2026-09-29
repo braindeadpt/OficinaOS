@@ -24,11 +24,11 @@ describe("MetricCard", () => {
         detail=""
         icon="payments"
         label="Revenue"
-        unit="DZD"
+        unit="EUR"
         value="452k"
       />
     );
-    expect(screen.getByText("DZD")).toBeInTheDocument();
+    expect(screen.getByText("EUR")).toBeInTheDocument();
   });
 
   it("renders children slot", () => {

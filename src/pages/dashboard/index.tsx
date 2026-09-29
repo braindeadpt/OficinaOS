@@ -217,7 +217,7 @@ function MetricsGrid({
         iconColor="text-on-secondary-container"
         label={t("revenue_this_month")}
         labelTooltip={t("dashboard_page.revenue_tooltip")}
-        unit={t("currency_dzd")}
+        unit={t("currency_eur")}
         value={data ? String(data.revenueThisMonth) : "--"}
       >
         {data && data.revenueThisMonth > 0 && (

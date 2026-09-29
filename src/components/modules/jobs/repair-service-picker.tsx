@@ -1,7 +1,7 @@
 import type { RepairCatalog } from "@shared/types";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { formatDzd } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
 import { useRepairCatalogStore } from "@/stores/repair-catalog";
 
 interface RepairServicePickerProps {
@@ -109,8 +109,7 @@ export default function RepairServicePicker({
                           </p>
                           <p className="font-label text-on-surface-variant text-xs">
                             {t(`repair_category.${r.category}`)} ·{" "}
-                            {formatDzd(Number(r.defaultPrice))}{" "}
-                            {t("currency_dzd")}
+                            {formatCurrency(Number(r.defaultPrice))}
                           </p>
                         </div>
                         {alreadySelected && (

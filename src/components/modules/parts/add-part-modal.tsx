@@ -266,7 +266,7 @@ export default function AddPartModal({
               </Label>
               <div className="relative">
                 <span className="absolute start-4 top-1/2 -translate-y-1/2 font-mono text-on-surface-variant text-sm">
-                  {t("currency_dzd")}
+                  {t("currency_eur")}
                 </span>
                 <Input
                   aria-describedby={

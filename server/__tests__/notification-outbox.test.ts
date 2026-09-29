@@ -109,7 +109,7 @@ describe("processOutbox", () => {
         whatsappBusinessId: "biz-1",
         whatsappPhoneNumberId: "phone-1",
       })
-      .mockResolvedValueOnce({ countryCode: "DZ" });
+      .mockResolvedValueOnce({ countryCode: "PT" });
     mocks.decryptWhatsAppConfig.mockReturnValue({
       apiToken: "decrypted-token",
       businessId: "biz-1",
@@ -137,7 +137,7 @@ describe("processOutbox", () => {
       },
       "05551234567",
       "Hello Ahmed, job RPR-001 is ready.",
-      "DZ"
+      "PT"
     );
     expect(mocks.updateOutboxEntry).toHaveBeenCalledWith(
       prisma,
@@ -166,7 +166,7 @@ describe("processOutbox", () => {
         whatsappBusinessId: "biz-1",
         whatsappPhoneNumberId: "phone-1",
       })
-      .mockResolvedValueOnce({ countryCode: "DZ" });
+      .mockResolvedValueOnce({ countryCode: "PT" });
     mocks.decryptWhatsAppConfig.mockReturnValue({
       apiToken: "decrypted-token",
       businessId: "biz-1",

@@ -65,7 +65,7 @@ export default function RepairServicesSection({
                   value={repair.price}
                 />
                 <span className="font-label text-on-surface-variant text-xs">
-                  {t("currency_dzd")}
+                  {t("currency_eur")}
                 </span>
               </div>
               <button

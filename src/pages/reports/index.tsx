@@ -140,7 +140,7 @@ export default function ReportsPage() {
             {t("reports.title")}
           </h1>
           <p className="mt-1 text-on-surface-variant text-sm">
-            DZD /{" "}
+            {t("currency_eur")} /{" "}
             {t(
               RANGE_OPTIONS.find((option) => option.key === range)?.label ??
                 "reports.30d"

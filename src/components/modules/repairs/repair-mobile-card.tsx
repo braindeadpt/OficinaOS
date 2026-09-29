@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { formatDzd } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
 import type { RepairItem } from "./repair-table";
 import { CATEGORY_COLORS } from "./repair-table";
 
@@ -58,7 +58,7 @@ export default function RepairMobileCard({
       <div className="flex items-end justify-between pt-3">
         <div className="flex items-center gap-2">
           <span className="font-mono font-semibold text-primary text-sm">
-            {formatDzd(repair.basePrice)} DZD
+            {formatCurrency(repair.basePrice)}
           </span>
         </div>
       </div>

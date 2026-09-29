@@ -14,7 +14,7 @@ import type {
 } from "@/components/modules/repairs/repair-table";
 import RepairTable from "@/components/modules/repairs/repair-table";
 import { Button } from "@/components/ui/button";
-import { formatDzd } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
 import { useRepairCatalogStore } from "@/stores/repair-catalog";
 
 const CATEGORY_ICONS: Record<
@@ -320,10 +320,7 @@ export default function RepairsPage() {
                 {t("avg_price")}
               </span>
               <span className="block font-extrabold font-mono text-primary text-xl tracking-tight">
-                {formatDzd(avgPrice)}{" "}
-                <span className="font-medium text-on-surface-variant text-sm">
-                  DZD
-                </span>
+                {formatCurrency(avgPrice)}
               </span>
             </div>
           </div>

@@ -22,9 +22,6 @@ import { useJobsStore } from "@/stores/jobs";
 import { useSettingsStore } from "@/stores/settings";
 
 function fmt(n: number, currency: string): string {
-  if (currency === "DZD") {
-    return `${formatCurrency(n, currency)} ${currency}`;
-  }
   return formatCurrency(n, currency);
 }
 

@@ -90,7 +90,7 @@ export function formatPhone(phone: string, countryCode?: string): string {
   const dialCode =
     countryCode && COUNTRY_DIAL_CODES[countryCode]
       ? COUNTRY_DIAL_CODES[countryCode]
-      : "213";
+      : "351";
   if (digits.startsWith("0")) {
     return `+${dialCode}${digits.slice(1)}`;
   }
