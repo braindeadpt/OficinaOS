@@ -6,7 +6,7 @@
 
 Sistema de gestão para oficinas de reparação de telemóveis — loja única, self-hosted, sem faturação. Regista a receção do equipamento, acompanha a reparação e entrega ao cliente, tudo numa única app acessível pelo browser.
 
-**Quatro idiomas incluídos: Português (PT-PT), English, Français, العربية (RTL).**
+**Três idiomas incluídos: Português (PT-PT), English, Français.**
 
 > **Fork de [Reparilo](https://github.com/cranknet/reparilo)** por Bechar Gherbi — adaptado para o público português, com português europeu completo e deployment Docker pronto para rede local. O nome foi alterado conforme exigido pela licença do projeto original.
 
@@ -39,7 +39,9 @@ Uma máquina corre o servidor e a base de dados; todos os outros dispositivos ac
 
 ### Instalação fácil (Windows) ⭐
 
-Descarrega o ZIP (**Code → Download ZIP**), extrai e faz **duplo clique em `INSTALAR.bat`** — instala o Docker se faltar, gera as passwords e arranca tudo sozinho. Uso diário: `INICIAR.bat` / `PARAR.bat`.
+Descarrega o **[instalador ZIP](https://github.com/braindeadpt/OficinaOS/releases/latest/download/oficinaos-install.zip)**, extrai e faz **duplo clique em `INSTALAR.bat`** — instala o Docker se faltar, gera as passwords e arranca tudo sozinho. Uso diário: `INICIAR.bat` / `PARAR.bat` (o `INICIAR.bat` atualiza a app automaticamente).
+
+> O ZIP da release contém só os ficheiros de instalação. Para o código completo: **Code → Download ZIP** (sempre a versão mais recente de `main`).
 
 Guia passo a passo completo: **[INSTALL.md](./INSTALL.md)**
 
@@ -115,7 +117,7 @@ bun run db:studio    # Prisma Studio
 
 ## Traduções e i18n
 
-Os locales ficam em `src/i18n/locales/` (`en`, `pt`, `fr`, `ar`). Fluxo para strings novas:
+Os locales ficam em `src/i18n/locales/` (`pt`, `en`, `fr`). Fluxo para strings novas:
 
 1. Adiciona a key em `src/i18n/locales/en.json`
 2. `bun run sync-locales` — sincroniza e auto-traduz os outros locales

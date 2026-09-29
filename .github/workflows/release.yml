@@ -1,0 +1,31 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Package installer & publish release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build installer bundle
+        run: |
+          mkdir -p bundle/scripts
+          cp INSTALAR.bat INICIAR.bat PARAR.bat \
+             docker-compose.app.yml .env.example INSTALL.md bundle/
+          cp scripts/gerar-env.ps1 bundle/scripts/
+          cd bundle && zip -r ../oficinaos-install.zip . && cd ..
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" oficinaos-install.zip \
+            --title "OficinaOS ${{ github.ref_name }}" \
+            --generate-notes

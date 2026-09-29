@@ -85,7 +85,7 @@ Type prefixes we use: `feat`, `fix`, `docs`, `chore`, `test`, `refactor`, `perf`
 
 - One concern per PR. Smaller PRs get reviewed and merged faster.
 - Reference the issue it closes: `Closes #123`.
-- Include screenshots or short clips for any UI change. Test in all four locales (PT, EN, FR, AR) if your change touches text or layout — RTL surprises are common.
+- Include screenshots or short clips for any UI change. Test in all three locales (PT, EN, FR) if your change touches text or layout.
 - For database changes, include the generated migration file and call out any data backfill needed.
 - Don't bump unrelated dependencies in the same PR.
 

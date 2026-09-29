@@ -25,9 +25,10 @@ Guia para Windows. Demora ~10 minutos na primeira vez.
 
 ## 1. Descarregar
 
-1. Vai a **github.com/braindeadpt/OficinaOS**
-2. Botão verde **Code** → **Download ZIP**
-3. Extrai o ZIP para uma pasta, ex.: `C:\OficinaOS`
+1. Descarrega o instalador: **[oficinaos-install.zip](https://github.com/braindeadpt/OficinaOS/releases/latest/download/oficinaos-install.zip)** — este link descarrega sempre a versão mais recente
+2. Extrai o ZIP para uma pasta, ex.: `C:\OficinaOS`
+
+> Alternativa: na página do GitHub, botão verde **Code → Download ZIP** dá o código completo (mais pesado — usa-o só se o instalador falhar).
 
 ## 2. Instalar
 

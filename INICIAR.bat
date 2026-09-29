@@ -13,6 +13,8 @@ if errorlevel 1 (
     docker info >nul 2>&1
     if errorlevel 1 goto esperar
 )
+REM Atualiza para a imagem mais recente (ignorado se offline)
+docker compose -f docker-compose.app.yml pull >nul 2>&1
 docker compose -f docker-compose.app.yml up -d >nul 2>&1
 if errorlevel 1 docker compose up -d >nul 2>&1
 if errorlevel 1 (

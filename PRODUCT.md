@@ -5,7 +5,7 @@
 product
 
 ## Users
-Shop owners and technicians at a single-location mobile phone repair shop in Portugal. They use the system on tablets and desktops on a busy shop floor — potentially with greasy hands, under bright fluorescent lighting. EUR currency. Quadrilingual — European Portuguese is the primary locale (pt, en, fr, ar with RTL). The job to be done: track repairs end-to-end (intake → diagnosis → repair → delivery), manage parts inventory, handle customers, and analyze business performance via AI.
+Shop owners and technicians at a single-location mobile phone repair shop in Portugal. They use the system on tablets and desktops on a busy shop floor — potentially with greasy hands, under bright fluorescent lighting. EUR currency. Trilingual — European Portuguese is the primary locale (pt, en, fr). The job to be done: track repairs end-to-end (intake → diagnosis → repair → delivery), manage parts inventory, handle customers, and analyze business performance via AI.
 
 ## Product Purpose
 A precision repair-shop management system that gives shop owners calm control over every job, from intake to delivery. Success means a technician can log a repair, find the right part, and hand the device back to the customer without switching apps or squinting at tiny text. Speed and clarity on a busy shop floor are the measures of quality.
@@ -27,6 +27,5 @@ A precision repair-shop management system that gives shop owners calm control ov
 ## Accessibility & Inclusion
 - **Touch targets**: Minimum 44×44px for all interactive elements (shop floor tablet use)
 - **Contrast**: WCAG AA compliance in both light and dark modes
-- **RTL**: Full Arabic RTL support via `dir="rtl"` attribute and logical CSS properties
 - **Motion**: Respect `prefers-reduced-motion` — reduce/disable transitions
 - **Color blindness**: Status indicators never rely on color alone; always paired with text or icon
