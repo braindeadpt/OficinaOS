@@ -1859,5 +1859,21 @@
   "parts_forecast_no_usage": "sem consumo ainda",
   "parts_forecast_suggested": "Sugerido",
   "parts_forecast_empty": "Tudo em ordem - nenhuma peça precisa de reposição",
-  "parts_forecast_buy": "Registar compra"
+  "parts_forecast_buy": "Registar compra",
+  "command_palette": {
+    "close": "Fechar paleta de comandos",
+    "group_actions": "Acções",
+    "group_pages": "Páginas",
+    "group_records": "Registos",
+    "hint_navigate": "navegar",
+    "hint_run": "executar",
+    "hint_toggle": "abrir ou fechar",
+    "no_records": "Nenhum job ou cliente encontrado",
+    "no_results": "Sem resultados para «{{query}}»",
+    "open": "Abrir paleta de comandos",
+    "placeholder": "Pesquisar ou escrever um comando…",
+    "search_error": "Não foi possível pesquisar",
+    "searching": "A procurar…",
+    "title": "Paleta de comandos"
+  }
 }

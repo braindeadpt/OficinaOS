@@ -1859,5 +1859,21 @@
   "parts_forecast_no_usage": "no usage yet",
   "parts_forecast_suggested": "Suggested",
   "parts_forecast_empty": "All good - no parts need restocking right now",
-  "parts_forecast_buy": "Record purchase"
+  "parts_forecast_buy": "Record purchase",
+  "command_palette": {
+    "close": "Close command palette",
+    "group_actions": "Actions",
+    "group_pages": "Pages",
+    "group_records": "Records",
+    "hint_navigate": "navigate",
+    "hint_run": "run",
+    "hint_toggle": "open or close",
+    "no_records": "No jobs or customers found",
+    "no_results": "No results for “{{query}}”",
+    "open": "Open command palette",
+    "placeholder": "Search or type a command…",
+    "search_error": "Could not search",
+    "searching": "Searching…",
+    "title": "Command palette"
+  }
 }

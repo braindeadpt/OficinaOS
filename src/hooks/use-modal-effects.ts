@@ -12,22 +12,28 @@ if (import.meta.hot) {
 export function useModalEffects(
   open: boolean,
   onClose: () => void,
-  dialogRef?: RefObject<HTMLElement | null>
+  dialogRef?: RefObject<HTMLElement | null>,
+  options?: { closeOnEscape?: boolean }
 ) {
   const previousFocus = useRef<HTMLElement | null>(null);
+  // A consumer that needs a two-stage Escape (clear the filter first, close
+  // second) turns this off and handles the key on its own element.
+  const closeOnEscape = options?.closeOnEscape ?? true;
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        onClose();
+        if (closeOnEscape) {
+          onClose();
+        }
         return;
       }
       if (e.key === "Tab" && dialogRef?.current) {
         trapFocus(e, dialogRef.current);
       }
     },
-    [onClose, dialogRef]
+    [closeOnEscape, onClose, dialogRef]
   );
 
   useEffect(() => {

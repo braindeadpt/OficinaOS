@@ -2,10 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { useCan } from "@/hooks/use-can";
+import { useShortcutLabel } from "@/hooks/use-shortcut-label";
 import { useWs } from "@/hooks/use-ws";
 import { useAlertsStore } from "@/stores/alerts";
+import { useCommandPaletteStore } from "@/stores/command-palette";
 import { useUiStore } from "@/stores/ui";
-import GlobalSearch from "./global-search";
 import LanguageToggle from "./language-toggle";
 
 export default function TopBar() {
@@ -13,6 +14,8 @@ export default function TopBar() {
   const [showAlerts, setShowAlerts] = useState(false);
   const canCreateJob = useCan({ jobs: ["create"] });
   const openIntakeModal = useUiStore((s) => s.openIntakeModal);
+  const openCommandPalette = useCommandPaletteStore((s) => s.open);
+  const shortcutLabel = useShortcutLabel();
   const alerts = useAlertsStore((s) => s.alerts);
   const addAlert = useAlertsStore((s) => s.addAlert);
   const markRead = useAlertsStore((s) => s.markRead);
@@ -69,7 +72,25 @@ export default function TopBar() {
             OficinaOS
           </span>
         </div>
-        <GlobalSearch />
+        <button
+          aria-label={t("command_palette.open")}
+          className="group flex min-h-11 w-full max-w-xs items-center gap-2 rounded-full bg-surface-container-high px-3 text-on-surface-variant transition-colors hover:bg-surface-container-highest md:w-96"
+          onClick={openCommandPalette}
+          type="button"
+        >
+          <span
+            aria-hidden="true"
+            className="material-symbols-outlined text-lg"
+          >
+            search
+          </span>
+          <span className="min-w-0 flex-1 truncate text-start text-sm">
+            {t("command_palette.placeholder")}
+          </span>
+          <kbd className="pointer-events-none hidden shrink-0 rounded-md bg-surface-container-highest px-1.5 py-0.5 font-mono text-[10px] tracking-wide group-focus-within:hidden md:block">
+            {shortcutLabel}
+          </kbd>
+        </button>
       </div>
       <div className="flex items-center gap-2 md:gap-3">
         <LanguageToggle />

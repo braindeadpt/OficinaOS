@@ -1859,5 +1859,21 @@
   "parts_forecast_no_usage": "pas encore de consommation",
   "parts_forecast_suggested": "Suggéré",
   "parts_forecast_empty": "Tout va bien - aucune pièce à réapprovisionner",
-  "parts_forecast_buy": "Enregistrer l'achat"
+  "parts_forecast_buy": "Enregistrer l'achat",
+  "command_palette": {
+    "close": "Fermer la palette de commandes",
+    "group_actions": "Actions",
+    "group_pages": "Pages",
+    "group_records": "Enregistrements",
+    "hint_navigate": "naviguer",
+    "hint_run": "exécuter",
+    "hint_toggle": "ouvrir ou fermer",
+    "no_records": "Aucune réparation ni client trouvé",
+    "no_results": "Aucun résultat pour « {{query}} »",
+    "open": "Ouvrir la palette de commandes",
+    "placeholder": "Rechercher ou taper une commande…",
+    "search_error": "Recherche impossible",
+    "searching": "Recherche…",
+    "title": "Palette de commandes"
+  }
 }

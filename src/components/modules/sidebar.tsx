@@ -1,83 +1,12 @@
 import { ROLE_LABELS } from "@shared/constants";
-import type { PermissionCheck } from "@shared/permissions";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { NavLink } from "react-router";
 import { can, useCan } from "@/hooks/use-can";
+import { NAV_ITEMS } from "@/lib/navigation";
 import { getInitials } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth";
 import { useUiStore } from "@/stores/ui";
-
-interface NavItem {
-  icon: string;
-  labelKey: string;
-  perm: PermissionCheck;
-  to: string;
-}
-
-const NAV_ITEMS: NavItem[] = [
-  {
-    icon: "dashboard",
-    labelKey: "dashboard",
-    to: "/",
-    perm: { jobs: ["view"] },
-  },
-  { icon: "build", labelKey: "jobs", to: "/jobs", perm: { jobs: ["view"] } },
-  {
-    icon: "undo",
-    labelKey: "returns_nav_label",
-    to: "/returns",
-    perm: { returns: ["viewSelf"] },
-  },
-  {
-    icon: "people",
-    labelKey: "customers",
-    to: "/customers",
-    perm: { customers: ["view"] },
-  },
-  {
-    icon: "inventory_2",
-    labelKey: "parts_inventory",
-    to: "/parts",
-    perm: { parts: ["viewCatalog"] },
-  },
-  {
-    icon: "point_of_sale",
-    labelKey: "pos.nav_label",
-    to: "/pos",
-    perm: { sales: ["view"] },
-  },
-  {
-    icon: "menu_book",
-    labelKey: "repair_services",
-    to: "/repairs",
-    perm: { repairs: ["viewCatalog"] },
-  },
-  {
-    icon: "notifications",
-    labelKey: "notifications",
-    to: "/notifications",
-    perm: { notifications: ["read"] },
-  },
-  {
-    icon: "analytics",
-    labelKey: "reports.label",
-    to: "/reports",
-    perm: { reports: ["viewSelf"] },
-  },
-  {
-    icon: "auto_awesome",
-    labelKey: "ai_agent_title",
-    to: "/ai-analyst",
-    perm: { ai: ["access"] },
-  },
-  {
-    icon: "settings",
-    labelKey: "settings",
-    to: "/settings",
-    perm: { settings: ["view"] },
-  },
-];
 
 export default function Sidebar() {
   const { t } = useTranslation();
