@@ -4,13 +4,8 @@ import { Histogram } from "@/components/ui/histogram";
 import { MetricCard } from "@/components/ui/metric-card";
 import { StackedBar } from "@/components/ui/stacked-bar";
 import { useCan } from "@/hooks/use-can";
+import { FAULT_TONES } from "@/lib/category-display";
 import { useReportsStore } from "@/stores/reports";
-
-const FAULT_COLORS: Record<string, string> = {
-  WORKMANSHIP: "bg-primary",
-  DEFECTIVE_PART: "bg-tertiary",
-  MISDIAGNOSIS: "bg-error",
-};
 
 const TTR_BUCKET_LABELS: Record<TtrBucket, string> = {
   "0-7d": "reports.ttr_0_7d",
@@ -110,7 +105,7 @@ export default function ReturnsTab() {
                 key={fc.faultCategory}
               >
                 <span
-                  className={`inline-block size-3 rounded-full ${FAULT_COLORS[fc.faultCategory] ?? "bg-on-surface-variant"}`}
+                  className={`inline-block size-3 rounded-full ${FAULT_TONES[fc.faultCategory]}`}
                 />
                 <span className="flex-1 font-medium text-on-surface text-sm">
                   {fc.faultCategory}
@@ -137,8 +132,7 @@ export default function ReturnsTab() {
                 segments: r.faults.map((f) => ({
                   label: f.faultCategory,
                   value: f.count,
-                  color:
-                    FAULT_COLORS[f.faultCategory] ?? "bg-on-surface-variant",
+                  color: FAULT_TONES[f.faultCategory],
                 })),
               }))}
             />

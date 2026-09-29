@@ -1,11 +1,11 @@
+import type { RepairCategoryType } from "@shared/constants";
 import { useTranslation } from "react-i18next";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
-
-export type RepairCategory = "HARDWARE" | "SOFTWARE" | "DIAGNOSTIC";
+import { REPAIR_CATEGORY_TONES } from "@/lib/category-display";
 
 export interface RepairItem {
   basePrice: number;
-  category: RepairCategory;
+  category: RepairCategoryType;
   code: string;
   icon: string;
   iconBg: string;
@@ -14,12 +14,6 @@ export interface RepairItem {
   isActive: boolean;
   name: string;
 }
-
-export const CATEGORY_COLORS: Record<RepairCategory, string> = {
-  HARDWARE: "bg-secondary-container text-on-secondary-container",
-  SOFTWARE: "bg-tertiary-fixed text-on-tertiary-fixed",
-  DIAGNOSTIC: "bg-primary-fixed text-on-primary-fixed",
-};
 
 interface RepairTableProps {
   onEdit: (item: RepairItem) => void;
@@ -101,7 +95,7 @@ export default function RepairTable({
                 </td>
                 <td className="p-4">
                   <span
-                    className={`rounded-full px-3 py-1 font-medium text-xs uppercase ${CATEGORY_COLORS[repair.category]}`}
+                    className={`rounded-full px-3 py-1 font-medium text-xs uppercase ${REPAIR_CATEGORY_TONES[repair.category]}`}
                   >
                     {t(`repair_category.${repair.category}`)}
                   </span>
