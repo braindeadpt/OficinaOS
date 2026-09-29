@@ -211,6 +211,18 @@ export const partsRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.get(
+    "/restock-forecast",
+    {
+      schema: {
+        tags: ["parts"],
+        summary:
+          "Restock forecast: days-until-empty and suggested purchase quantity per part",
+      },
+    },
+    async (_req, reply) => reply.send(await restockForecast(app.prisma))
+  );
+
+  app.get(
     "/:id/stock-movements",
     {
       schema: {

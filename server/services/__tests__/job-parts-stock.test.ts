@@ -23,7 +23,9 @@ function mockPrisma() {
     stockMovement: {
       create: vi.fn().mockResolvedValue({}),
     },
-    $queryRaw: vi.fn().mockResolvedValue([{ stock_quantity: 8 }]),
+    // RETURNING echoes the column as written: "stockQuantity", camelCase.
+    // (An earlier snake_case mock hid the balanceAfter=0 bug.)
+    $queryRaw: vi.fn().mockResolvedValue([{ stockQuantity: 8 }]),
     $transaction: vi.fn(async (callback) => callback(mock)),
   };
   return mock as unknown as PrismaClient;

@@ -18,8 +18,14 @@ function makePrisma() {
     $transaction: vi.fn(async (fn: (tx: unknown) => unknown) =>
       fn({
         auditLog: { create: auditCreate },
-        job: { update: jobUpdate },
+        // settlePaymentOnDelivery locks and re-reads the job row
+        // in-transaction, so the tx needs the full job model.
+        job: {
+          findUnique: vi.fn().mockResolvedValue(baseJob),
+          update: jobUpdate,
+        },
         payment: { create: paymentCreate },
+        $queryRaw: vi.fn().mockResolvedValue([{ id: "job-1" }]),
       })
     ),
   } as unknown as any;

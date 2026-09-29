@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@generated/client";
 import { AuditAction } from "@generated/client";
 import { JobStatus } from "@shared/constants/job-statuses";
+import { AppError } from "@shared/errors/app-error.js";
 import type {
   AddPaymentInput,
   PaymentOnDeliveryMethodType,
@@ -92,32 +93,68 @@ export async function add(
     return { error: "PAYMENT_EXCEEDS_BALANCE" as const, balanceDue };
   }
 
-  const payment = await prisma.$transaction(async (tx) => {
-    const created = await createPaymentRepo(tx, {
-      amount: input.amount,
-      job: { connect: { id: jobId } },
-      method: input.method,
-      note: input.note ?? null,
-      reference: input.reference ?? null,
-      createdBy: { connect: { id: userId } },
-    });
+  try {
+    const payment = await prisma.$transaction(async (tx) => {
+      // Serialize concurrent checkouts on this job and re-read the balance
+      // under the lock. The pre-transaction check above is advisory: without
+      // the row lock two payments could both validate against the same stale
+      // figure and overpay the job.
+      await tx.$queryRaw`SELECT "id" FROM "jobs" WHERE "id" = ${jobId} FOR UPDATE`;
+      const fresh = await tx.job.findUnique({
+        where: { id: jobId },
+        select: {
+          depositAmount: true,
+          payments: { select: { amount: true } },
+          partsUsed: { select: { totalCost: true } },
+          repairs: { select: { price: true } },
+        },
+      });
+      if (!fresh) {
+        throw new AppError("JOB_NOT_FOUND");
+      }
+      const { balanceDue: current } = computeJobBalance(fresh);
+      if (input.amount > current) {
+        throw new AppError("PAYMENT_EXCEEDS_BALANCE", { balanceDue: current });
+      }
 
-    await createAuditLog(tx, {
-      action: AuditAction.PAYMENT_ADDED,
-      jobId,
-      metadata: {
+      const created = await createPaymentRepo(tx, {
+        amount: input.amount,
+        job: { connect: { id: jobId } },
         method: input.method,
-        paymentId: created.id,
+        note: input.note ?? null,
         reference: input.reference ?? null,
-      },
-      toValue: `${input.amount} ${input.method}`,
-      userId,
+        createdBy: { connect: { id: userId } },
+      });
+
+      await createAuditLog(tx, {
+        action: AuditAction.PAYMENT_ADDED,
+        jobId,
+        metadata: {
+          method: input.method,
+          paymentId: created.id,
+          reference: input.reference ?? null,
+        },
+        toValue: `${input.amount} ${input.method}`,
+        userId,
+      });
+
+      return created;
     });
 
-    return created;
-  });
-
-  return payment;
+    return payment;
+  } catch (error) {
+    if (error instanceof AppError && error.code === "PAYMENT_EXCEEDS_BALANCE") {
+      const details = error.details as { balanceDue?: number } | undefined;
+      if (details?.balanceDue !== undefined) {
+        return {
+          error: "PAYMENT_EXCEEDS_BALANCE" as const,
+          balanceDue: details.balanceDue,
+        };
+      }
+      return { error: "PAYMENT_EXCEEDS_BALANCE" as const };
+    }
+    throw error;
+  }
 }
 
 export async function remove(
@@ -239,8 +276,30 @@ export async function settlePaymentOnDelivery(
   }
 
   await prisma.$transaction(async (tx) => {
+    // Same lock-and-recheck as `add`: the delivery transition and a manual
+    // payment can race, and only the serialized balance may be settled.
+    await tx.$queryRaw`SELECT "id" FROM "jobs" WHERE "id" = ${jobId} FOR UPDATE`;
+    const fresh = await tx.job.findUnique({
+      where: { id: jobId },
+      select: {
+        depositAmount: true,
+        payments: { select: { amount: true } },
+        partsUsed: { select: { totalCost: true } },
+        repairs: { select: { price: true } },
+      },
+    });
+    if (!fresh) {
+      throw new AppError("JOB_NOT_FOUND");
+    }
+    const { balanceDue: current } = computeJobBalance(fresh);
+    if (current <= 0) {
+      // Settled by someone else in the meantime: clear the stale mark only.
+      await jobUpdate(tx, jobId, { paymentOnDeliveryMethod: null }, {});
+      return;
+    }
+
     const created = await createPaymentRepo(tx, {
-      amount: balanceDue,
+      amount: current,
       job: { connect: { id: jobId } },
       method,
       note: null,
@@ -256,7 +315,7 @@ export async function settlePaymentOnDelivery(
         method,
         paymentId: created.id,
       },
-      toValue: `${balanceDue} ${method}`,
+      toValue: `${current} ${method}`,
       userId,
     });
 

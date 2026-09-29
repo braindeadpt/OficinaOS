@@ -111,7 +111,7 @@ await app.register(websocket);
 await app.register(localePlugin);
 
 await app.register(prismaPlugin);
-app.register(authRoutes);
+await app.register(authRoutes);
 await app.register(authPlugin);
 await app.register(websocketPlugin);
 (app.decorate as (name: string, value: unknown) => void)(
