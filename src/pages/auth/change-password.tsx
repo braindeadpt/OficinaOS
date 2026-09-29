@@ -4,6 +4,8 @@ import { useNavigate } from "react-router";
 import api, { type ApiError } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth";
 
+const PASSWORD_POLICY = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+
 export default function ChangePasswordPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -29,7 +31,7 @@ export default function ChangePasswordPage() {
       return;
     }
 
-    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(newPassword)) {
+    if (!PASSWORD_POLICY.test(newPassword)) {
       setError(t("auth_password_requirements"));
       return;
     }
