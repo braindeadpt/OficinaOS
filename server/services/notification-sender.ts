@@ -9,7 +9,71 @@ interface WhatsAppConfig {
 
 interface SendResult {
   error?: string;
+  /** Graph API error code when the failure carried one. */
+  errorCode?: number;
+  /**
+   * Explicit retry policy for the failure. Undefined means "retry by
+   * default" (network errors, unexpected shapes); false marks permanent
+   * failures that the outbox must cancel instead of re-queueing.
+   */
+  retryable?: boolean;
   success: boolean;
+}
+
+interface GraphErrorBody {
+  error?: {
+    code?: number;
+    error_data?: { details?: string };
+    message?: string;
+    type?: string;
+  };
+}
+
+/** Token/auth problems: retrying with the same token cannot succeed. */
+const AUTH_ERROR_CODES = new Set([190]);
+/** Recipient unreachable or outside the 24h window: permanent. */
+const RECIPIENT_ERROR_CODES = new Set([131_026, 131_030, 131_047]);
+/** Cloud API throttling: backing off and retrying is the right move. */
+const RATE_LIMIT_CODES = new Set([130_429, 80_007]);
+
+const TRAILING_SLASHES = /\/+$/;
+
+/**
+ * Test seam: the Graph API base URL can be pointed at a local mock
+ * server (integration tests). Production keeps the real endpoint.
+ */
+function graphApiBase(): string {
+  const raw = process.env.WHATSAPP_GRAPH_BASE_URL?.trim();
+  if (!raw) {
+    return "https://graph.facebook.com";
+  }
+  return raw.replace(TRAILING_SLASHES, "");
+}
+
+function classifyFailure(
+  status: number,
+  body: GraphErrorBody | null
+): { errorCode?: number; retryable: boolean } {
+  const code = body?.error?.code;
+  if (
+    status === 429 ||
+    (code !== undefined && RATE_LIMIT_CODES.has(code)) ||
+    status >= 500
+  ) {
+    return { errorCode: code, retryable: true };
+  }
+  if (
+    (code !== undefined && AUTH_ERROR_CODES.has(code)) ||
+    (code !== undefined && RECIPIENT_ERROR_CODES.has(code))
+  ) {
+    return { errorCode: code, retryable: false };
+  }
+  if (status >= 400 && status < 500) {
+    // Other client errors: the payload is rejected as-is, retrying the
+    // identical request cannot succeed.
+    return { errorCode: code, retryable: false };
+  }
+  return { errorCode: code, retryable: true };
 }
 
 export async function sendWhatsApp(
@@ -18,7 +82,7 @@ export async function sendWhatsApp(
   message: string,
   countryCode?: string
 ): Promise<SendResult> {
-  const url = `https://graph.facebook.com/v21.0/${config.phoneNumberId}/messages`;
+  const url = `${graphApiBase()}/v21.0/${config.phoneNumberId}/messages`;
   const payload = {
     messaging_product: "whatsapp",
     recipient_type: "individual",
@@ -42,9 +106,17 @@ export async function sendWhatsApp(
       return { success: true };
     }
     const body = await response.text();
+    let parsed: GraphErrorBody | null = null;
+    try {
+      parsed = JSON.parse(body) as GraphErrorBody;
+    } catch {
+      // Plain-text error body (proxy pages, empty responses) — classify
+      // from the HTTP status alone.
+    }
     return {
-      success: false,
       error: `WhatsApp API ${response.status}: ${body.slice(0, 200)}`,
+      ...classifyFailure(response.status, parsed),
+      success: false,
     };
   } catch (err) {
     return {

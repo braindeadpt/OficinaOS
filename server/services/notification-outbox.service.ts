@@ -132,6 +132,40 @@ async function markSent(prisma: DbClient, entryId: string): Promise<void> {
 }
 
 /**
+ * Handles a failed send: permanent failures are cancelled with reason,
+ * transient ones go through the retry backoff.
+ */
+async function handleSendFailure(
+  prisma: DbClient,
+  entryId: string,
+  retryCount: number | null,
+  result: { error?: string; retryable?: boolean }
+): Promise<void> {
+  const errorMessage = result.error ?? "Unknown error";
+  if (result.retryable === false) {
+    // Permanent failure (bad token, unreachable recipient, rejected
+    // payload): re-queueing cannot succeed and would burn rate limit.
+    await updateOutboxEntry(
+      prisma,
+      { id: entryId },
+      {
+        error: `Cancelled: ${errorMessage}`,
+        status: OutboxStatus.CANCELLED,
+      }
+    );
+    return;
+  }
+  try {
+    await handleRetry(prisma, entryId, retryCount ?? 0, errorMessage);
+  } catch (retryDbErr) {
+    logger.error(
+      { err: retryDbErr, entryId },
+      "Outbox: failed to update retry state after failed send"
+    );
+  }
+}
+
+/**
  * Cancels an outbox entry blocked by the consent gate, recording why.
  * Returns true when the entry was blocked (caller must skip sending).
  */
@@ -183,19 +217,7 @@ async function processEntry(
       if (result.success) {
         await markSent(prisma, entry.id);
       } else {
-        try {
-          await handleRetry(
-            prisma,
-            entry.id,
-            entry.retryCount ?? 0,
-            result.error ?? "Unknown error"
-          );
-        } catch (retryDbErr) {
-          logger.error(
-            { err: retryDbErr, entryId: entry.id },
-            "Outbox: failed to update retry state after failed send"
-          );
-        }
+        await handleSendFailure(prisma, entry.id, entry.retryCount, result);
       }
     } else {
       logger.warn(

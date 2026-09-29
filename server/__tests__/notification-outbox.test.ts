@@ -208,6 +208,52 @@ describe("processOutbox", () => {
     );
   });
 
+  it("cancels instead of retrying when the failure is permanent", async () => {
+    mocks.findManyOutboxEntries.mockResolvedValue([
+      {
+        id: "out-3",
+        channel: "WHATSAPP",
+        recipientPhone: "+351900000000",
+        renderedBody: "Hello",
+        retryCount: 0,
+      },
+    ]);
+    mocks.findShopSettingsUnique
+      .mockResolvedValueOnce({
+        whatsappApiTokenEncrypted: "enc-token",
+        whatsappBusinessId: "biz-1",
+        whatsappPhoneNumberId: "phone-1",
+      })
+      .mockResolvedValueOnce({ countryCode: "PT" });
+    mocks.decryptWhatsAppConfig.mockReturnValue({
+      apiToken: "decrypted-token",
+      businessId: "biz-1",
+      phoneNumberId: "phone-1",
+    });
+    // Graph API 131030 — recipient not on WhatsApp: retrying cannot fix it.
+    mocks.sendWhatsApp.mockResolvedValue({
+      errorCode: 131_030,
+      retryable: false,
+      success: false,
+      error: "WhatsApp API 404: recipient not on whatsapp",
+    });
+    mocks.findCustomerByPhone.mockResolvedValue({
+      phone: "+351900000000",
+      whatsappConsent: true,
+    });
+
+    await processOutbox(prisma);
+
+    expect(mocks.updateOutboxEntry).toHaveBeenCalledWith(
+      prisma,
+      { id: "out-3" },
+      {
+        error: "Cancelled: WhatsApp API 404: recipient not on whatsapp",
+        status: OutboxStatus.CANCELLED,
+      }
+    );
+  });
+
   it("does nothing when no pending entries exist", async () => {
     mocks.findManyOutboxEntries.mockResolvedValue([]);
 
