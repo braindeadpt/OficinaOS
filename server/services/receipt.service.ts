@@ -24,6 +24,10 @@ function esc(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+function escMultiline(s: string): string {
+  return esc(s).replace(/\r?\n/g, "<br>");
+}
+
 function fmtMoney(
   v: number | { toNumber: () => number },
   currency = "EUR"
@@ -34,6 +38,122 @@ function fmtMoney(
 
 const toNum = (v: number | { toNumber: () => number }) =>
   typeof v === "number" ? v : v.toNumber();
+
+interface ReceiptStrings {
+  balanceDue: string;
+  customer: string;
+  dateLocale: string;
+  device: string;
+  job: string;
+  label: string;
+  paid: string;
+  paidDeposit: string;
+  paymentMethods: Record<string, string>;
+  phone: string;
+  problem: string;
+  qrUnavailable: string;
+  receipt: string;
+  sale: string;
+  scanQr: string;
+  servedBy: string;
+  total: string;
+}
+
+const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
+  pt: {
+    balanceDue: "Por pagar",
+    customer: "Cliente",
+    dateLocale: "pt-PT",
+    device: "Equipamento",
+    job: "Reparação",
+    label: "Etiqueta",
+    paid: "Pago",
+    paidDeposit: "Pago (sinal)",
+    paymentMethods: {
+      CARD: "Cartão",
+      CASH: "Numerário",
+      OTHER: "Outro",
+      TRANSFER: "Transferência",
+    },
+    phone: "Telefone",
+    problem: "Problema",
+    qrUnavailable: "QR indisponível — configurar APP_URL",
+    receipt: "Recibo",
+    sale: "Venda",
+    scanQr: "Leia o código QR para acompanhar a sua reparação",
+    servedBy: "Atendido por",
+    total: "Total",
+  },
+  en: {
+    balanceDue: "Balance due",
+    customer: "Customer",
+    dateLocale: "en-GB",
+    device: "Device",
+    job: "Job",
+    label: "Label",
+    paid: "Paid",
+    paidDeposit: "Paid (deposit)",
+    paymentMethods: {
+      CARD: "Card",
+      CASH: "Cash",
+      OTHER: "Other",
+      TRANSFER: "Transfer",
+    },
+    phone: "Phone",
+    problem: "Problem",
+    qrUnavailable: "QR unavailable — configure APP_URL",
+    receipt: "Receipt",
+    sale: "Sale",
+    scanQr: "Scan QR to track your repair",
+    servedBy: "Served by",
+    total: "Total",
+  },
+  fr: {
+    balanceDue: "Reste à payer",
+    customer: "Client",
+    dateLocale: "fr-FR",
+    device: "Appareil",
+    job: "Réparation",
+    label: "Étiquette",
+    paid: "Payé",
+    paidDeposit: "Payé (acompte)",
+    paymentMethods: {
+      CARD: "Carte",
+      CASH: "Espèces",
+      OTHER: "Autre",
+      TRANSFER: "Virement",
+    },
+    phone: "Téléphone",
+    problem: "Problème",
+    qrUnavailable: "QR indisponible — configurer APP_URL",
+    receipt: "Reçu",
+    sale: "Vente",
+    scanQr: "Scannez le QR pour suivre votre réparation",
+    servedBy: "Servi par",
+    total: "Total",
+  },
+};
+
+function receiptStrings(locale?: string): ReceiptStrings {
+  return RECEIPT_STRINGS[locale ?? ""] ?? RECEIPT_STRINGS.pt;
+}
+
+function shopHeaderHtml(settings: {
+  address?: string | null;
+  logoPath?: string | null;
+  phone?: string | null;
+  shopName?: string | null;
+}): string {
+  const shopName = esc(settings?.shopName ?? "OficinaOS");
+  const logoImg = settings?.logoPath
+    ? `<div style="text-align:center"><img src="${esc(settings.logoPath)}" alt="${shopName}" style="max-height:14mm;max-width:60mm" /></div>`
+    : "";
+  const addressLine = settings?.address
+    ? `<p>${escMultiline(settings.address)}</p>`
+    : "";
+  const phoneLine = settings?.phone ? `<p>${esc(settings.phone)}</p>` : "";
+  return `${logoImg}<h1>${shopName}</h1>${addressLine}${phoneLine}`;
+}
 
 export async function renderReceiptHtml(
   prisma: DbClient,
@@ -61,37 +181,45 @@ export async function renderReceiptHtml(
     }>;
   },
   baseUrl: string,
-  options?: { hideCosts?: boolean }
+  options?: { hideCosts?: boolean; locale?: string }
 ): Promise<string> {
   const settings = await findShopSettingsUnique(prisma);
   const currency = settings?.currency ?? "EUR";
-  const shopName = esc(settings?.shopName ?? "OficinaOS");
+  const s = receiptStrings(options?.locale);
+  const shopHeader = shopHeaderHtml(settings);
   const qrBuf = await generateTrackingQr(job.jobCode, baseUrl);
   const qrImg = qrBuf
     ? `<div class="qr"><img src="data:image/png;base64,${qrBuf.toString("base64")}" alt="QR Code" /></div>`
-    : `<div class="qr" style="color:#999;font-size:10px">QR unavailable — configure APP_URL</div>`;
+    : `<div class="qr" style="color:#999;font-size:10px">${s.qrUnavailable}</div>`;
 
-  const date = new Date(job.createdAt).toLocaleDateString();
+  const date = new Date(job.createdAt).toLocaleDateString(s.dateLocale);
   const hideCosts = options?.hideCosts ?? false;
 
   const partsUsed = job.partsUsed ?? [];
   const repairs = job.repairs ?? [];
   const payments = job.payments ?? [];
 
-  const partsTotal = partsUsed.reduce((s, p) => s + toNum(p.totalCost), 0);
-  const repairsTotal = repairs.reduce((s, r) => s + toNum(r.price), 0);
+  const partsTotal = partsUsed.reduce((sum, p) => sum + toNum(p.totalCost), 0);
+  const repairsTotal = repairs.reduce((sum, r) => sum + toNum(r.price), 0);
   const finalCost = partsTotal + repairsTotal;
   const displayCost = finalCost > 0 ? finalCost : toNum(job.estimatedCost);
   const deposit = job.depositAmount ? toNum(job.depositAmount) : 0;
-  const paidTotal = payments.reduce((s, p) => s + toNum(p.amount), 0) + deposit;
+  const paidTotal =
+    payments.reduce((sum, p) => sum + toNum(p.amount), 0) + deposit;
   const balanceDue = Math.max(0, finalCost - paidTotal);
   const hasPayments = paidTotal > 0;
 
+  const footerHtml = settings?.receiptFooter
+    ? `<div class="sep"></div><p style="text-align:left">${escMultiline(settings.receiptFooter)}</p>`
+    : "";
+
+  const methodLabel = (m: string) => esc(s.paymentMethods[m] ?? m);
+
   return `<!doctype html>
-<html lang="en">
+<html lang="${options?.locale ?? "pt"}">
 <head>
 <meta charset="utf-8">
-<title>Receipt ${esc(job.jobCode)}</title>
+<title>${s.receipt} ${esc(job.jobCode)}</title>
 <style>
   body{font-family:monospace;margin:0 auto;max-width:280px;padding:8px;font-size:12px}
   h1{text-align:center;font-size:16px;margin:0 0 4px}
@@ -105,38 +233,39 @@ export async function renderReceiptHtml(
 </style>
 </head>
 <body>
-<h1>${shopName}</h1>
+${shopHeader}
 <p>${date}</p>
 <div class="sep"></div>
-<table><tr><td>Job</td><td style="text-align:right">${esc(job.jobCode)}</td></tr>
-<tr><td>Customer</td><td style="text-align:right">${esc(job.customer.name)}</td></tr>
-<tr><td>Phone</td><td style="text-align:right">${esc(job.customer.phone)}</td></tr>
-<tr><td>Device</td><td style="text-align:right">${esc(job.device.brand.name)} ${esc(job.device.model)}</td></tr>${job.imei ? `<tr><td>IMEI</td><td style="text-align:right">${esc(job.imei)}</td></tr>` : ""}</table>
+<table><tr><td>${s.job}</td><td style="text-align:right">${esc(job.jobCode)}</td></tr>
+<tr><td>${s.customer}</td><td style="text-align:right">${esc(job.customer.name)}</td></tr>
+<tr><td>${s.phone}</td><td style="text-align:right">${esc(job.customer.phone)}</td></tr>
+<tr><td>${s.device}</td><td style="text-align:right">${esc(job.device.brand.name)} ${esc(job.device.model)}</td></tr>${job.imei ? `<tr><td>IMEI</td><td style="text-align:right">${esc(job.imei)}</td></tr>` : ""}</table>
 <div class="sep"></div>
-<p style="text-align:left"><strong>Problem:</strong> ${esc(job.reportedProblem)}</p>
+<p style="text-align:left"><strong>${s.problem}:</strong> ${esc(job.reportedProblem)}</p>
 <div class="sep"></div>
 ${
   hideCosts
     ? ""
-    : `<table><tr><td><strong>Total</strong></td><td style="text-align:right">${fmtMoney(displayCost, currency)}</td></tr></table>${
+    : `<table><tr><td><strong>${s.total}</strong></td><td style="text-align:right">${fmtMoney(displayCost, currency)}</td></tr></table>${
         hasPayments
           ? `<table>${
               deposit > 0
-                ? `<tr><td>Paid (deposit)</td><td style="text-align:right">${fmtMoney(deposit, currency)}</td></tr>`
+                ? `<tr><td>${s.paidDeposit}</td><td style="text-align:right">${fmtMoney(deposit, currency)}</td></tr>`
                 : ""
             }${payments
               .map(
                 (p) =>
-                  `<tr><td>Paid (${esc(p.method)})</td><td style="text-align:right">${fmtMoney(p.amount, currency)}</td></tr>`
+                  `<tr><td>${s.paid} (${methodLabel(p.method)})</td><td style="text-align:right">${fmtMoney(p.amount, currency)}</td></tr>`
               )
               .join(
                 ""
-              )}<tr><td><strong>Balance due</strong></td><td style="text-align:right"><strong>${fmtMoney(balanceDue, currency)}</strong></td></tr></table>`
+              )}<tr><td><strong>${s.balanceDue}</strong></td><td style="text-align:right"><strong>${fmtMoney(balanceDue, currency)}</strong></td></tr></table>`
           : ""
       }<div class="sep"></div>`
 }
 ${qrImg}
-<p style="text-align:center;font-size:10px;color:#555">Scan QR to track your repair</p>
+<p style="text-align:center;font-size:10px;color:#555">${s.scanQr}</p>
+${footerHtml}
 </body></html>`;
 }
 
@@ -166,17 +295,19 @@ export async function renderSaleReceiptHtml(
     payments: SaleReceiptPayment[];
     total: number | { toNumber: () => number };
   },
-  baseUrl: string
+  baseUrl: string,
+  options?: { locale?: string }
 ): Promise<string> {
   const settings = await findShopSettingsUnique(prisma);
   const currency = settings?.currency ?? "EUR";
-  const shopName = esc(settings?.shopName ?? "OficinaOS");
+  const s = receiptStrings(options?.locale);
+  const shopHeader = shopHeaderHtml(settings);
   const qrBuf = await generateTrackingQr(sale.saleCode, baseUrl);
   const qrImg = qrBuf
     ? `<div class="qr"><img src="data:image/png;base64,${qrBuf.toString("base64")}" alt="QR Code" /></div>`
     : "";
 
-  const date = new Date(sale.createdAt).toLocaleString();
+  const date = new Date(sale.createdAt).toLocaleString(s.dateLocale);
   const rows = sale.items
     .map(
       (i) =>
@@ -186,15 +317,18 @@ export async function renderSaleReceiptHtml(
   const payRows = sale.payments
     .map(
       (p) =>
-        `<tr><td>Paid (${esc(p.method)}${p.reference ? ` · ${esc(p.reference)}` : ""})</td><td style="text-align:right">${fmtMoney(p.amount, currency)}</td></tr>`
+        `<tr><td>${s.paid} (${esc(s.paymentMethods[p.method] ?? p.method)}${p.reference ? ` · ${esc(p.reference)}` : ""})</td><td style="text-align:right">${fmtMoney(p.amount, currency)}</td></tr>`
     )
     .join("");
+  const footerHtml = settings?.receiptFooter
+    ? `<div class="sep"></div><p style="text-align:left">${escMultiline(settings.receiptFooter)}</p>`
+    : "";
 
   return `<!doctype html>
-<html lang="en">
+<html lang="${options?.locale ?? "pt"}">
 <head>
 <meta charset="utf-8">
-<title>Sale ${esc(sale.saleCode)}</title>
+<title>${s.sale} ${esc(sale.saleCode)}</title>
 <style>
   body{font-family:monospace;margin:0 auto;max-width:280px;padding:8px;font-size:12px}
   h1{text-align:center;font-size:16px;margin:0 0 4px}
@@ -208,17 +342,17 @@ export async function renderSaleReceiptHtml(
 </style>
 </head>
 <body>
-<h1>${shopName}</h1>
+${shopHeader}
 <p>${date}</p>
 <div class="sep"></div>
-<table><tr><td>Sale</td><td style="text-align:right">${esc(sale.saleCode)}</td></tr>
-${sale.customer ? `<tr><td>Customer</td><td style="text-align:right">${esc(sale.customer.name)}</td></tr>` : ""}
-<tr><td>Served by</td><td style="text-align:right">${esc(sale.createdBy.name)}</td></tr></table>
+<table><tr><td>${s.sale}</td><td style="text-align:right">${esc(sale.saleCode)}</td></tr>
+${sale.customer ? `<tr><td>${s.customer}</td><td style="text-align:right">${esc(sale.customer.name)}</td></tr>` : ""}
+<tr><td>${s.servedBy}</td><td style="text-align:right">${esc(sale.createdBy.name)}</td></tr></table>
 <div class="sep"></div>
 <table>${rows}</table>
 <div class="sep"></div>
-<table><tr class="total"><td>Total</td><td style="text-align:right">${fmtMoney(sale.total, currency)}</td></tr>${payRows}</table>
-${settings?.receiptFooter ? `<div class="sep"></div><p style="text-align:left">${esc(settings.receiptFooter)}</p>` : ""}
+<table><tr class="total"><td>${s.total}</td><td style="text-align:right">${fmtMoney(sale.total, currency)}</td></tr>${payRows}</table>
+${footerHtml}
 ${qrImg}
 </body></html>`;
 }
@@ -243,10 +377,11 @@ export async function renderLabelHtml(
     }>;
   },
   baseUrl: string,
-  options?: { hideCosts?: boolean; noAutoPrint?: boolean }
+  options?: { hideCosts?: boolean; noAutoPrint?: boolean; locale?: string }
 ): Promise<string> {
   const settings = await findShopSettingsUnique(prisma);
   const currency = settings?.currency ?? "EUR";
+  const s = receiptStrings(options?.locale);
   const shopName = esc(settings?.shopName || "OficinaOS");
   const logoHtml = settings?.logoPath
     ? `<img src="${esc(settings.logoPath)}" alt="${shopName}" style="max-height:4mm;max-width:100%;" />`
@@ -255,7 +390,7 @@ export async function renderLabelHtml(
   const qrBuf = await generateTrackingQr(job.jobCode, baseUrl);
   const qrImg = qrBuf
     ? `<img src="data:image/png;base64,${qrBuf.toString("base64")}" alt="QR" />`
-    : `<span style="font-size:5pt;color:#999">QR unavailable</span>`;
+    : `<span style="font-size:5pt;color:#999">${s.qrUnavailable}</span>`;
 
   const hideCosts = options?.hideCosts ?? false;
   const noAutoPrint = options?.noAutoPrint ?? false;
@@ -264,11 +399,11 @@ export async function renderLabelHtml(
   const problem = esc(job.reportedProblem);
 
   const partsTotal = (job.partsUsed ?? []).reduce(
-    (s, p) => s + toNum(p.totalCost),
+    (sum, p) => sum + toNum(p.totalCost),
     0
   );
   const repairsTotal = (job.repairs ?? []).reduce(
-    (s, r) => s + toNum(r.price),
+    (sum, r) => sum + toNum(r.price),
     0
   );
   const finalCost = partsTotal + repairsTotal;
@@ -276,10 +411,10 @@ export async function renderLabelHtml(
   const price = hideCosts ? "" : fmtMoney(displayCost, currency);
 
   return `<!doctype html>
-<html lang="en">
+<html lang="${options?.locale ?? "pt"}">
 <head>
 <meta charset="utf-8">
-<title>Label</title>
+<title>${s.label}</title>
 <style>
   @page { size: 40mm 20mm; margin: 0; }
   * { box-sizing: border-box; }

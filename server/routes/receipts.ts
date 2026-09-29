@@ -56,6 +56,7 @@ export const receiptRoutes: FastifyPluginAsync = async (app) => {
         baseUrl,
         {
           hideCosts: !costPerm.success,
+          locale: req.locale,
         }
       );
 
@@ -116,6 +117,7 @@ export const receiptRoutes: FastifyPluginAsync = async (app) => {
         baseUrl,
         {
           hideCosts: !costPerm.success,
+          locale: req.locale,
           noAutoPrint: isPreview,
         }
       );

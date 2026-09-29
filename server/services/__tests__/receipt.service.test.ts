@@ -57,7 +57,7 @@ describe("renderLabelHtml", () => {
 
   it("shows QR unavailable when baseUrl is empty", async () => {
     const html = await renderLabelHtml(makePrisma(), baseJob, "");
-    expect(html).toContain("QR unavailable");
+    expect(html).toContain("QR indisponível");
     expect(html).not.toMatch(QR_BASE64_RE);
   });
 
@@ -169,14 +169,14 @@ describe("renderReceiptHtml", () => {
 
   it("shows QR unavailable when baseUrl is empty", async () => {
     const html = await renderReceiptHtml(makePrisma(), baseJob, "");
-    expect(html).toContain("QR unavailable");
+    expect(html).toContain("QR indisponível");
     expect(html).not.toMatch(QR_BASE64_RE);
   });
 
   it("does not include tracking link text", async () => {
     const html = await renderReceiptHtml(makePrisma(), baseJob, "https://x.y");
     expect(html).not.toContain("/tracking/");
-    expect(html).toContain("Scan QR");
+    expect(html).toContain("acompanhar");
   });
 
   it("renders problem and total for parts and repairs", async () => {
@@ -189,7 +189,7 @@ describe("renderReceiptHtml", () => {
       repairs: [{ repairName: "Screen Replace", price: 5000 }],
     };
     const html = await renderReceiptHtml(makePrisma(), job, "https://x.y");
-    expect(html).toContain("Problem:");
+    expect(html).toContain("Problema:");
     expect(html).toContain("Cracked screen");
     expect(html).not.toContain("Issue");
     expect(html).not.toContain("Parts Total");
@@ -203,7 +203,7 @@ describe("renderReceiptHtml", () => {
       repairs: [{ repairName: "Screen Replace", price: 5000 }],
     };
     const html = await renderReceiptHtml(makePrisma(), job, "https://x.y");
-    expect(html).toContain("Problem:");
+    expect(html).toContain("Problema:");
     expect(html).not.toContain("Repairs Total");
   });
 
@@ -217,7 +217,7 @@ describe("renderReceiptHtml", () => {
     });
     expect(html).not.toContain("DZD");
     expect(html).not.toContain("Total");
-    expect(html).toContain("Problem:");
+    expect(html).toContain("Problema:");
   });
 
   it("shows final total line when costs are visible", async () => {
@@ -240,9 +240,9 @@ describe("renderReceiptHtml", () => {
       payments: [{ amount: 3000, method: "CASH" }],
     };
     const html = await renderReceiptHtml(makePrisma(), job, "https://x.y");
-    expect(html).toContain("Balance due");
+    expect(html).toContain("Por pagar");
     expect(html).toContain("5,000");
-    expect(html).toContain("Paid (CASH)");
+    expect(html).toContain("Pago (Numerário)");
   });
 
   it("includes deposit as part of the paid total", async () => {
@@ -253,8 +253,8 @@ describe("renderReceiptHtml", () => {
       payments: [],
     };
     const html = await renderReceiptHtml(makePrisma(), job, "https://x.y");
-    expect(html).toContain("Paid (deposit)");
-    expect(html).toContain("Balance due");
+    expect(html).toContain("Pago (sinal)");
+    expect(html).toContain("Por pagar");
     expect(html).toContain("1,500");
   });
 
@@ -265,7 +265,7 @@ describe("renderReceiptHtml", () => {
       payments: [],
     };
     const html = await renderReceiptHtml(makePrisma(), job, "https://x.y");
-    expect(html).not.toContain("Balance due");
+    expect(html).not.toContain("Por pagar");
     expect(html).toContain("3,000");
   });
 
@@ -304,8 +304,8 @@ describe("renderSaleReceiptHtml", () => {
     expect(html).toContain("SALE-2026-000001");
     expect(html).toContain("iPhone 14 Screen ×1");
     expect(html).toContain("4,500");
-    expect(html).toContain("Paid (CASH)");
-    expect(html).toContain("Served by");
+    expect(html).toContain("Pago (Numerário)");
+    expect(html).toContain("Atendido por");
   });
 
   it("shows customer row only when a customer is linked", async () => {
@@ -324,7 +324,7 @@ describe("renderSaleReceiptHtml", () => {
       baseSale,
       "https://x.y"
     );
-    expect(plain).not.toContain("Customer");
+    expect(plain).not.toContain("Cliente");
   });
 
   it("renders multiple payment lines with references", async () => {
@@ -340,8 +340,8 @@ describe("renderSaleReceiptHtml", () => {
       multi,
       "https://x.y"
     );
-    expect(html).toContain("Paid (CASH)");
-    expect(html).toContain("Paid (CARD · tx-77)");
+    expect(html).toContain("Pago (Numerário)");
+    expect(html).toContain("Pago (Cartão · tx-77)");
     expect(html).toContain("2,000");
     expect(html).toContain("2,500");
   });

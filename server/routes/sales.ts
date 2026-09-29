@@ -115,7 +115,8 @@ export const saleRoutes: FastifyPluginAsync = async (app) => {
       const html = await renderSaleReceiptHtml(
         app.prisma,
         sale as unknown as Parameters<typeof renderSaleReceiptHtml>[1],
-        baseUrl
+        baseUrl,
+        { locale: req.locale }
       );
 
       return reply
