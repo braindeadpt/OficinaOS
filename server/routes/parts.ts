@@ -220,7 +220,7 @@ export const partsRoutes: FastifyPluginAsync = async (app) => {
           "Restock forecast: days-until-empty and suggested purchase quantity per part",
       },
     },
-    async (req, reply) => reply.send(await restockForecast(app.prisma))
+    async () => restockForecast(app.prisma)
   );
 
   app.get(
