@@ -231,6 +231,27 @@ async function seedNotificationTemplates() {
       body: "Hello {{customerName}}, your repair {{jobCode}} is taking longer than expected. Our team is on it and we will update you shortly.{{if shopName}} — {{shopName}}{{endif}}",
       isDefault: true,
     },
+    {
+      // Customer-facing notice for warranty rework jobs. Mirrors the
+      // dispatch context in POST /jobs (customerName, jobCode plus the
+      // recipient phone used for consent-gated delivery); shopName is
+      // optional and rendered via {{if}} (see above).
+      name: "warranty_return_created",
+      channel: "WHATSAPP" as const,
+      body: "Hello {{customerName}}, we have registered a warranty return for your device {{jobCode}}. We will inspect it and keep you updated.{{if shopName}} — {{shopName}}{{endif}}",
+      isDefault: true,
+    },
+    {
+      // Owner-facing stock alert using the exact vars the low-stock
+      // dispatcher provides (partName, partQuantity, partReorderLevel).
+      // The WHATSAPP handler only queues messages with a recipientPhone,
+      // so this channel activates once a recipient phone is included in
+      // the notify context; the rendered vars stay consistent today.
+      name: "part_low_stock",
+      channel: "WHATSAPP" as const,
+      body: "Low stock alert: {{partName}} is down to {{partQuantity}} units (reorder level: {{partReorderLevel}}).{{if shopName}} — {{shopName}}{{endif}}",
+      isDefault: true,
+    },
   ];
 
   for (const tmpl of templates) {

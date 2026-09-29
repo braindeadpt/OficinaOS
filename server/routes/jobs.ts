@@ -319,10 +319,18 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
         result.isWarrantyReturn &&
         "jobCode" in result
       ) {
+        const customer =
+          "customer" in result ? (result.customer ?? null) : null;
         notify(notifyCtx, {
-          context: {
-            jobCode: (result as Record<string, unknown>).jobCode as string,
-          },
+          context: customer
+            ? {
+                customerName: customer.name,
+                jobCode: result.jobCode,
+                // Enables consent-gated WhatsApp delivery to the
+                // customer alongside the in-app owner alert.
+                recipientPhone: customer.phone,
+              }
+            : { jobCode: result.jobCode },
           eventName: "warranty_return_created",
           jobId: result.id,
           recipients: { role: Role.OWNER },

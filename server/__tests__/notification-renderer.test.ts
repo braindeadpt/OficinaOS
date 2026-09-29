@@ -37,6 +37,29 @@ describe("renderTemplate", () => {
     expect(result).toBe("");
   });
 
+  it("renders warranty_return_created with exactly the dispatch context vars", () => {
+    // Must mirror the notify context in POST /jobs (customerName, jobCode).
+    const result = renderTemplate(
+      "Hello {{customerName}}, we have registered a warranty return for your device {{jobCode}}. We will inspect it and keep you updated.{{if shopName}} — {{shopName}}{{endif}}",
+      { customerName: "Ana", jobCode: "RPR-100" }
+    );
+    expect(result).toBe(
+      "Hello Ana, we have registered a warranty return for your device RPR-100. We will inspect it and keep you updated."
+    );
+  });
+
+  it("renders part_low_stock with exactly the dispatcher-provided vars", () => {
+    // Must mirror the low-stock notify context (partName, partQuantity,
+    // partReorderLevel).
+    const result = renderTemplate(
+      "Low stock alert: {{partName}} is down to {{partQuantity}} units (reorder level: {{partReorderLevel}}).{{if shopName}} — {{shopName}}{{endif}}",
+      { partName: "iPhone 15 screen", partQuantity: "2", partReorderLevel: "5" }
+    );
+    expect(result).toBe(
+      "Low stock alert: iPhone 15 screen is down to 2 units (reorder level: 5)."
+    );
+  });
+
   it("ignores placeholders not in vars", () => {
     const result = renderTemplate("Hi {{name}}, {{unknown}}", {
       name: "Lina",
