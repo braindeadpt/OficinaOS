@@ -3,6 +3,7 @@ import { Role } from "@shared/constants";
 import { lazy, Suspense, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, Route, Routes } from "react-router";
+import CommandPalette from "@/components/modules/command-palette";
 import DashboardLayout from "@/components/modules/dashboard-layout";
 import ProtectedRoute, {
   RequirePermission,
@@ -84,6 +85,7 @@ function PageSkeleton() {
 
 export default function App() {
   const role = useAuthStore((s) => s.role);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const checkSession = useAuthStore((s) => s.checkSession);
 
   useEffect(() => {
@@ -94,6 +96,9 @@ export default function App() {
 
   return (
     <ChunkErrorBoundary>
+      {/* Outside Suspense and outside any layout: the palette has to survive
+          route changes and lazy chunk loading, and open from every screen. */}
+      {isAuthenticated && <CommandPalette />}
       <Suspense fallback={<PageSkeleton />}>
         <Routes>
           <Route element={<LoginPage />} path="/login" />
