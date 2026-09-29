@@ -1794,5 +1794,15 @@
   "parts_movements_export_note": "Note",
   "parts_movements_export_done": "History exported",
   "parts_movements_export_failed": "Failed to export the history",
-  "parts_purchase_reference": "Reference"
+  "parts_purchase_reference": "Reference",
+  "parts_restock_forecast": "Restock forecast",
+  "parts_forecast_window": "Based on the last {{days}} days of consumption",
+  "parts_forecast_parts_at_risk": "Parts to buy",
+  "parts_forecast_total_units": "Total units suggested",
+  "parts_forecast_daily": "Daily usage",
+  "parts_forecast_days_left": "{{days}}d left",
+  "parts_forecast_no_usage": "no usage yet",
+  "parts_forecast_suggested": "Suggested",
+  "parts_forecast_empty": "All good - no parts need restocking right now",
+  "parts_forecast_buy": "Record purchase"
 }

@@ -13,6 +13,7 @@ interface PartsCatalogState {
   }) => Promise<PartsCatalog>;
   deletePart: (id: string) => Promise<void>;
   error: string | null;
+  fetchPartById: (id: string) => Promise<PartsCatalog | null>;
   fetchParts: (params?: {
     cursor?: string;
     limit?: number;
@@ -81,6 +82,15 @@ export const usePartsCatalogStore = create<PartsCatalogState>((set) => ({
     } catch (err: unknown) {
       const message = getErrorMessage(err, i18n.t("errors.fetch_parts"));
       set({ isLoadingMore: false, error: message });
+    }
+  },
+
+  fetchPartById: async (id) => {
+    try {
+      const res = await api.get(`/parts/${id}`);
+      return res.data as PartsCatalog;
+    } catch {
+      return null;
     }
   },
 

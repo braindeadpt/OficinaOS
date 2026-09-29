@@ -16,6 +16,7 @@ import {
   toggleActive,
   update as updatePart,
 } from "../services/parts-catalog.service.js";
+import { restockForecast } from "../services/restock-forecast.service.js";
 import {
   listMovementsQuerySchema,
   listByPart as listStockMovements,
@@ -208,6 +209,18 @@ export const partsRoutes: FastifyPluginAsync = async (app) => {
       }
       return reply.status(201).send(result);
     }
+  );
+
+  app.get(
+    "/restock-forecast",
+    {
+      schema: {
+        tags: ["parts"],
+        summary:
+          "Restock forecast: days-until-empty and suggested purchase quantity per part",
+      },
+    },
+    async () => restockForecast(app.prisma)
   );
 
   app.get(

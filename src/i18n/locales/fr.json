@@ -1794,5 +1794,15 @@
   "parts_movements_export_note": "Note",
   "parts_movements_export_done": "Historique exporté",
   "parts_movements_export_failed": "Échec de l'export de l'historique",
-  "parts_purchase_reference": "Référence"
+  "parts_purchase_reference": "Référence",
+  "parts_restock_forecast": "Prévision de réapprovisionnement",
+  "parts_forecast_window": "Basé sur la consommation des {{days}} derniers jours",
+  "parts_forecast_parts_at_risk": "Pièces à acheter",
+  "parts_forecast_total_units": "Total d'unités suggérées",
+  "parts_forecast_daily": "Consommation/jour",
+  "parts_forecast_days_left": "{{days}}j restants",
+  "parts_forecast_no_usage": "pas encore de consommation",
+  "parts_forecast_suggested": "Suggéré",
+  "parts_forecast_empty": "Tout va bien - aucune pièce à réapprovisionner",
+  "parts_forecast_buy": "Enregistrer l'achat"
 }
