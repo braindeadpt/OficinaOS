@@ -70,6 +70,14 @@ export default function PosPage() {
     () => payments.reduce((s, p) => s + p.amount, 0),
     [payments]
   );
+
+  const inCartQty = useCallback(
+    (partId: string) =>
+      cart
+        .filter((l) => l.partId === partId)
+        .reduce((s, l) => s + l.quantity, 0),
+    [cart]
+  );
   const remaining = useMemo(
     () => Math.round((cartTotal - paidSum) * 100) / 100,
     [cartTotal, paidSum]
@@ -133,37 +141,49 @@ export default function PosPage() {
           />
 
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {parts.map((p) => (
-              <button
-                className={`flex flex-col rounded-xl p-3 text-start transition-colors ${
-                  p.stockQuantity <= 0
-                    ? "bg-surface-container-low opacity-50"
-                    : "bg-surface-container hover:bg-surface-container-high"
-                }`}
-                disabled={p.stockQuantity <= 0}
-                key={p.id}
-                onClick={() =>
-                  addCatalogPart({
-                    category: p.category,
-                    defaultPrice: Number(p.defaultPrice ?? 0),
-                    id: p.id,
-                    name: p.name,
-                    stockQuantity: p.stockQuantity,
-                  })
-                }
-                type="button"
-              >
-                <span className="line-clamp-2 font-bold font-headline text-on-surface text-sm">
-                  {p.name}
-                </span>
-                <span className="mt-auto pt-2 font-bold text-primary text-sm">
-                  {fmt(Number(p.defaultPrice ?? 0), currency)}
-                </span>
-                <span className="font-label text-on-surface-variant text-xs">
-                  {t("pos.stock_label")}: {p.stockQuantity}
-                </span>
-              </button>
-            ))}
+            {parts.map((p) => {
+              const inCart = inCartQty(p.id);
+              const available = p.stockQuantity - inCart;
+              const soldOut = p.stockQuantity <= 0;
+              const unavailable = soldOut || available <= 0;
+              return (
+                <button
+                  className={`flex flex-col rounded-xl p-3 text-start transition-colors ${
+                    unavailable
+                      ? "bg-surface-container-low opacity-50"
+                      : "bg-surface-container hover:bg-surface-container-high"
+                  }`}
+                  disabled={unavailable}
+                  key={p.id}
+                  onClick={() =>
+                    addCatalogPart({
+                      category: p.category,
+                      defaultPrice: Number(p.defaultPrice ?? 0),
+                      id: p.id,
+                      name: p.name,
+                      stockQuantity: p.stockQuantity,
+                    })
+                  }
+                  type="button"
+                >
+                  <span className="line-clamp-2 font-bold font-headline text-on-surface text-sm">
+                    {p.name}
+                  </span>
+                  <span className="mt-auto pt-2 font-bold text-primary text-sm">
+                    {fmt(Number(p.defaultPrice ?? 0), currency)}
+                  </span>
+                  <span className="font-label text-on-surface-variant text-xs">
+                    {t("pos.stock_label")}: {soldOut ? 0 : available}
+                    {inCart > 0 && !soldOut && (
+                      <span className="text-primary">
+                        {" "}
+                        · {t("pos.in_cart_short")} {inCart}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
           {isLoading && (
@@ -234,8 +254,17 @@ export default function PosPage() {
                     {line.quantity}
                   </span>
                   <button
-                    aria-label={t("pos.increase")}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface-container-highest text-on-surface"
+                    aria-label={
+                      line.stockQuantity !== null &&
+                      line.quantity >= line.stockQuantity
+                        ? t("pos.max_stock_reached")
+                        : t("pos.increase")
+                    }
+                    className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface-container-highest text-on-surface disabled:cursor-not-allowed disabled:opacity-30"
+                    disabled={
+                      line.stockQuantity !== null &&
+                      line.quantity >= line.stockQuantity
+                    }
                     onClick={() => updateQuantity(idx, line.quantity + 1)}
                     type="button"
                   >

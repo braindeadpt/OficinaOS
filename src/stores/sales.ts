@@ -3,6 +3,7 @@ import type { Sale } from "@shared/types";
 import { create } from "zustand";
 import i18n from "@/i18n";
 import api, { getErrorMessage } from "@/lib/api";
+import { usePartsCatalogStore } from "@/stores/parts-catalog";
 
 export interface CartLine {
   category: string;
@@ -78,6 +79,7 @@ export const useSalesStore = create<SalesState>((set) => ({
         const line = cart[idx];
         cart[idx] = {
           ...line,
+          // Physical stock already includes the units this line holds.
           quantity: Math.min(line.quantity + quantity, part.stockQuantity),
         };
         return { cart, cartTotal: computeTotal(cart) };
@@ -88,7 +90,8 @@ export const useSalesStore = create<SalesState>((set) => ({
           category: part.category,
           name: part.name,
           partId: part.id,
-          quantity,
+          // Never start a line above physical stock.
+          quantity: Math.min(quantity, Math.max(0, part.stockQuantity)),
           stockQuantity: part.stockQuantity,
           uid: nextUid(),
           unitPrice: Number(part.defaultPrice ?? 0),
@@ -163,6 +166,8 @@ export const useSalesStore = create<SalesState>((set) => ({
       const res = await api.post("/sales", payload);
       const sale = res.data as Sale;
       set({ cart: [], cartTotal: 0, isCheckingOut: false });
+      // Sold catalog parts left the shelf — refresh the catalog stock.
+      usePartsCatalogStore.getState().fetchParts();
       return sale;
     } catch (err: unknown) {
       const message = getErrorMessage(err, i18n.t("errors.create_sale"));
