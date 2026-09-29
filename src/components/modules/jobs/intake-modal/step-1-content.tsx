@@ -555,7 +555,7 @@ export default function Step1Content(props: Step1Props) {
                   id="customer-phone"
                   onBlur={() => handleBlur("customerPhone")}
                   onChange={(e) => update("customerPhone", e.target.value)}
-                  placeholder="+213..."
+                  placeholder="+351..."
                   required
                   type="tel"
                   value={form.customerPhone}

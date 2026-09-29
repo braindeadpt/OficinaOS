@@ -44,7 +44,7 @@ const SEED_ADMIN_USERNAME = "admin";
 // first login, so this value is only a bootstrap credential.
 const SEED_ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD || "braindead";
 const SEED_ADMIN_EMAIL =
-  process.env.SEED_ADMIN_EMAIL || "admin@oficinaos.local";
+  process.env.SEED_ADMIN_EMAIL || "portuguesedoitbetter@gmail.com";
 
 async function main() {
   console.log("Seeding database...");

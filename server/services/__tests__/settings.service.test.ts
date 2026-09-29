@@ -173,7 +173,7 @@ describe("upsertShopSettings", () => {
 
     const upsertCall = (prisma.shopSettings.upsert as ReturnType<typeof vi.fn>)
       .mock.calls[0];
-    expect(upsertCall[0].create.currency).toBe("DZD");
+    expect(upsertCall[0].create.currency).toBe("EUR");
   });
 });
 

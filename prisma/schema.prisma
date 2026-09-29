@@ -917,8 +917,8 @@ model ShopSettings {
   logoPath                  String?
   address                   String?
   phone                     String?
-  countryCode               String   @default("DZ")
-  currency                  String   @default("DZD")
+  countryCode               String   @default("PT")
+  currency                  String   @default("EUR")
   defaultWarrantyDays       Int      @default(30)
   timezone                  String? // IANA name, e.g. "Africa/Algiers". Null -> env TZ fallback.
   receiptFooter             String?  @db.Text

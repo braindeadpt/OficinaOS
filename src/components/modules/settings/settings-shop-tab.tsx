@@ -33,8 +33,8 @@ export default function SettingsShopTab({
     shopName: "",
     address: "",
     phone: "",
-    countryCode: "DZ",
-    currency: "DZD",
+    countryCode: "PT",
+    currency: "EUR",
     receiptFooter: "",
   });
   const [shopFormInitial, setShopFormInitial] = useState(shopForm);
@@ -50,8 +50,8 @@ export default function SettingsShopTab({
         shopName: shopSettings.shopName ?? "",
         address: shopSettings.address ?? "",
         phone: shopSettings.phone ?? "",
-        countryCode: shopSettings.countryCode ?? "DZ",
-        currency: shopSettings.currency ?? "DZD",
+        countryCode: shopSettings.countryCode ?? "PT",
+        currency: shopSettings.currency ?? "EUR",
         receiptFooter: shopSettings.receiptFooter ?? "",
       };
       setShopForm(form);

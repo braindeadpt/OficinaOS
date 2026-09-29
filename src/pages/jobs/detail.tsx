@@ -35,7 +35,7 @@ function toNum(v: unknown): number {
 export default function JobDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { t } = useTranslation();
-  const currency = useSettingsStore((s) => s.shopSettings?.currency ?? "DZD");
+  const currency = useSettingsStore((s) => s.shopSettings?.currency ?? "EUR");
   const [job, setJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

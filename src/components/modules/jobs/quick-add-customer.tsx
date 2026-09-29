@@ -157,7 +157,7 @@ export default function QuickAddCustomer({
                   disabled={isCreating}
                   id="qa-phone"
                   onChange={(e) => update("phone", e.target.value)}
-                  placeholder="+213..."
+                  placeholder="+351..."
                   type="tel"
                   value={form.phone}
                 />

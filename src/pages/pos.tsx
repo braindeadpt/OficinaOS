@@ -24,7 +24,7 @@ function nextPayUid(): string {
 
 export default function PosPage() {
   const { t } = useTranslation();
-  const currency = useSettingsStore((s) => s.shopSettings?.currency ?? "DZD");
+  const currency = useSettingsStore((s) => s.shopSettings?.currency ?? "EUR");
   const {
     cart,
     cartTotal,

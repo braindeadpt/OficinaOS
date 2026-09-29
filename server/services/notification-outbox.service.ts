@@ -194,7 +194,7 @@ export async function processOutbox(prisma: DbClient): Promise<void> {
     }
 
     const shopSettings = await findShopSettingsUnique(prisma);
-    const countryCode = shopSettings?.countryCode ?? "DZ";
+    const countryCode = shopSettings?.countryCode ?? "PT";
 
     for (const entry of pending) {
       await processEntry(prisma, entry, config, countryCode);

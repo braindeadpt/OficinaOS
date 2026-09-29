@@ -1,4 +1,5 @@
 const PHONE_FORMATS: Record<string, string> = {
+  PT: "+351 XXX XXX XXX",
   DZ: "+213 XX XXX XXXX",
   FR: "+33 X XX XX XX XX",
   US: "+1 (XXX) XXX-XXXX",

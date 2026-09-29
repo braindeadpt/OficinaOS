@@ -1,7 +1,7 @@
 export function formatCurrency(
   value: number,
-  currency = "DZD",
-  locale = "fr-DZ"
+  currency = "EUR",
+  locale = "pt-PT"
 ): string {
   if (currency === "DZD" && locale === "fr-DZ") {
     return value.toLocaleString("fr-DZ");
