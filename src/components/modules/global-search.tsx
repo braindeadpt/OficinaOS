@@ -17,8 +17,25 @@ import {
 } from "@/lib/global-search";
 
 const DEBOUNCE_MS = 250;
+const APPLE_PLATFORM = /mac|iphone|ipad|ipod/i;
 
 type LoadState = "error" | "idle" | "loading" | "ready";
+
+/**
+ * The shortcut works with both modifiers, so the hint names the one the user
+ * actually has. Read once on mount: the platform cannot change under us.
+ */
+function detectModifierLabel(): string {
+  if (typeof navigator === "undefined") {
+    return "Ctrl K";
+  }
+  const platform =
+    (navigator as Navigator & { userAgentData?: { platform?: string } })
+      .userAgentData?.platform ||
+    navigator.platform ||
+    navigator.userAgent;
+  return APPLE_PLATFORM.test(platform) ? "⌘K" : "Ctrl K";
+}
 
 export default function GlobalSearch() {
   const { t } = useTranslation();
@@ -31,6 +48,8 @@ export default function GlobalSearch() {
   const [state, setState] = useState<LoadState>("idle");
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [focused, setFocused] = useState(false);
+  const [shortcutLabel] = useState(detectModifierLabel);
 
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -221,13 +240,17 @@ export default function GlobalSearch() {
         aria-expanded={showPanel}
         aria-label={t("search")}
         autoComplete="off"
-        className="w-full rounded-full border-none bg-surface-container-high py-2 ps-10 pe-4 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/20"
+        className="w-full rounded-full border-none bg-surface-container-high py-2 ps-10 pe-4 text-sm transition-all group-focus-within:pe-4"
         id={inputId}
+        onBlur={() => setFocused(false)}
         onChange={(e) => {
           setQuery(e.target.value);
           setOpen(true);
         }}
-        onFocus={() => setOpen(true)}
+        onFocus={() => {
+          setFocused(true);
+          setOpen(true);
+        }}
         onKeyDown={onKeyDown}
         placeholder={t("search")}
         ref={inputRef}
@@ -235,6 +258,17 @@ export default function GlobalSearch() {
         type="text"
         value={query}
       />
+
+      {/*
+       * Advertises the shortcut. The padding on the input expands on
+       * focus-within, so the hint occupies real space only while it is idle
+       * and never overlaps typed text.
+       */}
+      {!focused && query.length === 0 && (
+        <kbd className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 rounded-md bg-surface-container-highest px-1.5 py-0.5 font-mono text-[10px] text-on-surface-variant tracking-wide">
+          {shortcutLabel}
+        </kbd>
+      )}
 
       {showPanel && (
         <div className="absolute start-0 top-full z-50 mt-2 w-full overflow-hidden rounded-xl bg-surface-container-lowest shadow-xl ring-1 ring-outline-variant">
