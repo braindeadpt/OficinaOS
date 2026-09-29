@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
+import { toast } from "sonner";
 import AddCustomerModal from "@/components/modules/customers/add-customer-modal";
 import ConsentToggle from "@/components/modules/customers/consent-toggle";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { useDebounce } from "@/hooks/use-debounce";
+import { downloadCsv } from "@/lib/export-csv";
 import { useCustomersStore } from "@/stores/customers";
 
 function SkeletonRow() {
@@ -166,8 +168,14 @@ export default function CustomersPage() {
   const [consentFilter, setConsentFilter] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
   const debouncedSearch = useDebounce(search, 300);
-  const { customers, isLoading, totalCount, fetchCustomers } =
-    useCustomersStore();
+  const {
+    customers,
+    isLoading,
+    totalCount,
+    fetchCustomers,
+    exportCustomersCsv,
+    isExporting,
+  } = useCustomersStore();
 
   useEffect(() => {
     fetchCustomers(
@@ -175,6 +183,43 @@ export default function CustomersPage() {
       consentFilter || undefined
     );
   }, [debouncedSearch, consentFilter, fetchCustomers]);
+
+  // Export mirrors the visible list: same search + consent filters, but
+  // walks every page so campaign/audit exports cover the full directory.
+  const handleExportCsv = useCallback(async () => {
+    try {
+      const rows = await exportCustomersCsv(
+        debouncedSearch.trim() || undefined,
+        consentFilter || undefined
+      );
+      const stamp = new Date().toISOString().slice(0, 10);
+      const consentSlug = consentFilter || "all";
+      downloadCsv(
+        `customers-${consentSlug}-${stamp}.csv`,
+        [
+          t("customers_export_name"),
+          t("customer_phone"),
+          t("customer_email"),
+          t("customer_consent_column"),
+          t("customers_export_optin_since"),
+          t("jobs"),
+        ],
+        rows.map((c) => [
+          c.name,
+          c.phone,
+          c.email,
+          c.whatsappConsent ? t("yes") : t("no"),
+          c.whatsappConsentAt
+            ? new Date(c.whatsappConsentAt).toISOString()
+            : null,
+          c._count?.jobs ?? 0,
+        ])
+      );
+      toast.success(t("customers_export_done"));
+    } catch {
+      toast.error(t("customers_export_failed"));
+    }
+  }, [consentFilter, debouncedSearch, exportCustomersCsv, t]);
 
   const customersWithJobs = useMemo(
     () => customers.filter((c) => (c._count?.jobs ?? 0) > 0).length,
@@ -258,6 +303,16 @@ export default function CustomersPage() {
               <option value="false">{t("customers_consent_opted_out")}</option>
             </Select>
           </div>
+          <Button
+            aria-label={t("customers_export")}
+            icon="download"
+            loading={isExporting}
+            onClick={handleExportCsv}
+            size="md"
+            variant="secondary"
+          >
+            {t("customers_export")}
+          </Button>
         </div>
       )}
 

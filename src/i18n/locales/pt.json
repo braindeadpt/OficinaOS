@@ -469,6 +469,11 @@
   "customers_consent_filter": "Consentimento WhatsApp",
   "customers_consent_opted_in": "Com opt-in (WhatsApp)",
   "customers_consent_opted_out": "Sem opt-in",
+  "customers_export_optin_since": "Opt-in desde",
+  "customers_export_name": "Nome",
+  "customers_export_failed": "Falha ao exportar. Tente novamente.",
+  "customers_export_done": "Lista de clientes exportada",
+  "customers_export": "Exportar CSV",
   "dashboard": "Painel",
   "dashboard_greeting": "Bem-vindo de volta, {{name}}",
   "dashboard_page": {
@@ -735,6 +740,7 @@
   "financial_trend_empty": "Ainda não há dados de receitas – as tendências financeiras aparecerão após as suas primeiras entregas.",
   "overdue_jobs_empty": "Ótimo trabalho! Nenhuma reparação atrasada de momento.",
   "warranty_returns_empty": "Nenhuma garantia retorna para rastrear.",
+  "yes": "Sim",
   "intake": {
     "title": "Nova entrada de reparação",
     "job_code": "REP-2026-XXXX",
@@ -1016,6 +1022,7 @@
   "most_popular": "Categoria principal",
   "navigation": "Navegação",
   "new_checkin": "Novo check-in",
+  "no": "Não",
   "next": "Seguinte",
   "no_alerts": "Sem alertas",
   "no_customers_found": "Nenhum cliente encontrado",

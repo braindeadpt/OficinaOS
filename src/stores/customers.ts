@@ -30,6 +30,8 @@ interface CustomerListItem {
   id: string;
   name: string;
   phone: string;
+  whatsappConsent?: boolean;
+  whatsappConsentAt?: string | null;
 }
 
 interface CustomersState {
@@ -37,8 +39,13 @@ interface CustomersState {
   currentCustomer: CustomerDetail | null;
   customers: CustomerListItem[];
   error: string | null;
+  exportCustomersCsv: (
+    search?: string,
+    consent?: string
+  ) => Promise<CustomerListItem[]>;
   fetchCustomer: (id: string) => Promise<void>;
   fetchCustomers: (search?: string, consent?: string) => Promise<void>;
+  isExporting: boolean;
   isLoading: boolean;
   isLoadingCustomer: boolean;
   isUpdating: boolean;
@@ -62,9 +69,45 @@ export const useCustomersStore = create<CustomersState>((set) => ({
   error: null,
   isLoading: false,
   isLoadingCustomer: false,
+  isExporting: false,
   isUpdating: false,
   nextCursor: null,
   totalCount: 0,
+
+  // Full-directory export: walks every page of the list endpoint with the
+  // active search/consent filters applied, so GDPR campaign and audit
+  // exports are complete rather than limited to the first page.
+  exportCustomersCsv: async (search, consent) => {
+    set({ isExporting: true });
+    try {
+      const all: CustomerListItem[] = [];
+      let cursor: string | undefined;
+      let hasMore = true;
+      while (hasMore) {
+        const params: Record<string, unknown> = { limit: 100 };
+        if (search) {
+          params.search = search;
+        }
+        if (consent) {
+          params.consent = consent;
+        }
+        if (cursor) {
+          params.cursor = cursor;
+        }
+        const res = await api.get("/customers", { params });
+        const data = res.data as {
+          customers: CustomerListItem[];
+          nextCursor: string | null;
+        };
+        all.push(...data.customers);
+        cursor = data.nextCursor ?? undefined;
+        hasMore = Boolean(data.nextCursor);
+      }
+      return all;
+    } finally {
+      set({ isExporting: false });
+    }
+  },
 
   fetchCustomers: async (search, consent) => {
     set({ isLoading: true });

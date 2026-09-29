@@ -55,6 +55,62 @@ beforeEach(() => {
 });
 
 describe("useCustomersStore", () => {
+  describe("exportCustomersCsv", () => {
+    it("walks every page with the active filters", async () => {
+      const pageOne = [makeCustomer("1"), makeCustomer("2")];
+      const pageTwo = [makeCustomer("3")];
+      mockGet
+        .mockResolvedValueOnce({
+          data: { customers: pageOne, nextCursor: "cursor-a" },
+        })
+        .mockResolvedValueOnce({
+          data: { customers: pageTwo, nextCursor: null },
+        });
+
+      const all = await act(() =>
+        useCustomersStore.getState().exportCustomersCsv("ana", "true")
+      );
+
+      expect(all).toHaveLength(3);
+      expect(mockGet).toHaveBeenCalledTimes(2);
+      expect(mockGet.mock.calls[0][1].params).toEqual({
+        consent: "true",
+        limit: 100,
+        search: "ana",
+      });
+      expect(mockGet.mock.calls[1][1].params).toEqual({
+        consent: "true",
+        cursor: "cursor-a",
+        limit: 100,
+        search: "ana",
+      });
+      expect(useCustomersStore.getState().isExporting).toBe(false);
+    });
+
+    it("omits filter params when none are active", async () => {
+      mockGet.mockResolvedValue({
+        data: { customers: [], nextCursor: null },
+      });
+
+      await act(() => useCustomersStore.getState().exportCustomersCsv());
+
+      expect(mockGet.mock.calls[0][1].params).toEqual({ limit: 100 });
+    });
+
+    it("stops when a backend error occurs mid-walk", async () => {
+      mockGet
+        .mockResolvedValueOnce({
+          data: { customers: [makeCustomer("1")], nextCursor: "cursor-a" },
+        })
+        .mockRejectedValueOnce(new Error("boom"));
+
+      await expect(
+        act(() => useCustomersStore.getState().exportCustomersCsv())
+      ).rejects.toThrow("boom");
+      expect(useCustomersStore.getState().isExporting).toBe(false);
+    });
+  });
+
   describe("fetchCustomers", () => {
     it("passes consent param to the API when provided", async () => {
       mockGet.mockResolvedValue({
