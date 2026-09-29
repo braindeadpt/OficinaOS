@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 import AddCustomerModal from "@/components/modules/customers/add-customer-modal";
+import ConsentToggle from "@/components/modules/customers/consent-toggle";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,9 @@ function SkeletonRow() {
       <td className="hidden px-5 py-4 md:table-cell">
         <div className="h-3 w-1/3 animate-pulse rounded bg-surface-container-high" />
       </td>
+      <td className="hidden px-5 py-4 lg:table-cell">
+        <div className="h-5 w-12 animate-pulse rounded-full bg-surface-container-high" />
+      </td>
       <td className="px-5 py-4">
         <div className="h-5 w-12 animate-pulse rounded-full bg-surface-container-high" />
       </td>
@@ -42,6 +46,7 @@ function DesktopCustomersTable({
     id: string;
     name: string;
     phone: string;
+    whatsappConsent?: boolean;
   }[];
   isLoading: boolean;
   t: (key: string, options?: Record<string, unknown>) => string;
@@ -59,6 +64,9 @@ function DesktopCustomersTable({
           </th>
           <th className={`${thCls} hidden md:table-cell`}>
             {t("customer_email")}
+          </th>
+          <th className={`${thCls} hidden lg:table-cell`}>
+            {t("customer_consent_column")}
           </th>
           <th className={thCls}>{t("jobs")}</th>
         </tr>
@@ -91,6 +99,9 @@ function DesktopCustomersTable({
                     {c.email ?? "\u2014"}
                   </span>
                 </td>
+                <td className="hidden px-5 py-4 lg:table-cell">
+                  <ConsentToggle customer={c} />
+                </td>
                 <td className="px-5 py-4">
                   <span className="rounded-full bg-primary-container px-2.5 py-1 font-bold font-mono text-on-primary-container text-xs">
                     {c._count?.jobs ?? 0}
@@ -112,31 +123,38 @@ function MobileCustomerCard({
     id: string;
     name: string;
     phone: string;
+    whatsappConsent?: boolean;
   };
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   return (
-    <Link
-      className="flex items-center justify-between rounded-xl bg-surface-container-lowest p-4 transition-colors hover:bg-surface-container-low"
-      to={`/customers/${customer.id}`}
-    >
-      <div className="min-w-0">
+    <div className="flex items-center justify-between rounded-xl bg-surface-container-lowest p-4">
+      <Link
+        className="min-w-0 flex-1 transition-colors hover:opacity-80"
+        to={`/customers/${customer.id}`}
+      >
         <p className="font-bold text-on-surface text-sm">{customer.name}</p>
         <p className="font-mono text-on-surface-variant text-xs">
           {customer.phone}
         </p>
-      </div>
+      </Link>
       <div className="flex shrink-0 items-center gap-2">
-        <span className="rounded-full bg-primary-container px-2.5 py-1 font-bold text-on-primary-container text-xs">
-          {t("job_count", { count: customer._count?.jobs ?? 0 })}
-        </span>
-        <Icon
-          className="text-on-surface-variant"
-          name="chevron_right"
-          size="sm"
-        />
+        <ConsentToggle customer={customer} />
+        <Link
+          className="flex items-center gap-2"
+          to={`/customers/${customer.id}`}
+        >
+          <span className="rounded-full bg-primary-container px-2.5 py-1 font-bold text-on-primary-container text-xs">
+            {t("job_count", { count: customer._count?.jobs ?? 0 })}
+          </span>
+          <Icon
+            className="text-on-surface-variant"
+            name="chevron_right"
+            size="sm"
+          />
+        </Link>
       </div>
-    </Link>
+    </div>
   );
 }
 

@@ -138,6 +138,7 @@ export async function search(
       id: true,
       name: true,
       phone: true,
+      whatsappConsent: true,
     },
     limit,
     { name: "asc" }
