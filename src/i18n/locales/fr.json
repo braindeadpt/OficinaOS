@@ -1786,5 +1786,13 @@
   "backups_last": "{count} sauvegarde(s) sur disque - la dernière il y a {hours}h",
   "backups_stale": "Sauvegarde en retard - vérifiez le conteneur db-backup",
   "backups_fresh": "Sauvegardes en cours normales",
-  "backups_nightly": "Sauvegarde quotidienne automatique avec rétention de 14 jours"
+  "backups_nightly": "Sauvegarde quotidienne automatique avec rétention de 14 jours",
+  "parts_movements_export": "Exporter CSV",
+  "parts_movements_export_date": "Date",
+  "parts_movements_export_type": "Type",
+  "parts_movements_export_user": "Utilisateur",
+  "parts_movements_export_note": "Note",
+  "parts_movements_export_done": "Historique exporté",
+  "parts_movements_export_failed": "Échec de l'export de l'historique",
+  "parts_purchase_reference": "Référence"
 }
