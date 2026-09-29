@@ -21,6 +21,34 @@ const JOB = {
 
 const CUSTOMER = { id: "cus-1", name: "Ana Silva", phone: "+351912345678" };
 
+const PART = {
+  id: "part-1",
+  name: "Ecrã iPhone 14",
+  category: "SCREEN",
+  defaultPrice: "89.90",
+  reorderLevel: 2,
+  stockQuantity: 0,
+  supplier: "TechParts",
+};
+
+const REPAIR = {
+  id: "rep-1",
+  name: "Troca de ecrã",
+  category: "HARDWARE",
+  defaultPrice: "45.00",
+};
+
+/** Fulfils every catalogue leg with an empty payload unless told otherwise. */
+function emptyLeg(url: string) {
+  if (url === "/jobs") {
+    return Promise.resolve(jobsResponse([]));
+  }
+  if (url === "/parts" || url === "/repairs") {
+    return Promise.resolve({ data: { parts: [], repairs: [] } });
+  }
+  return Promise.resolve({ data: [] });
+}
+
 beforeEach(() => {
   mockGet.mockReset();
 });
@@ -151,6 +179,155 @@ describe("searchGlobal", () => {
 
     const [result] = await searchGlobal("OS");
 
-    expect(result.subtitle).toBe("");
+    expect(result).toMatchObject({ subtitle: "" });
+  });
+
+  it("queries the two catalogues alongside jobs and customers", async () => {
+    mockGet.mockImplementation((url: string) => emptyLeg(url));
+    await searchGlobal("tela");
+    const urls = mockGet.mock.calls.map((c) => c[0]);
+    expect(urls).toEqual(
+      expect.arrayContaining([
+        "/jobs",
+        "/customers/search",
+        "/parts",
+        "/repairs",
+      ])
+    );
+  });
+
+  it("skips a catalogue the reader may not see, without requesting it", async () => {
+    mockGet.mockImplementation((url: string) => emptyLeg(url));
+    await searchGlobal("tela", {
+      sources: { parts: false, repairs: true },
+    });
+    const urls = mockGet.mock.calls.map((c) => c[0]);
+    expect(urls).not.toContain("/parts");
+    expect(urls).toContain("/repairs");
+  });
+
+  it("maps a part to its name, stock, supplier and unit price", async () => {
+    mockGet.mockImplementation((url: string) =>
+      url === "/parts"
+        ? Promise.resolve({ data: { parts: [PART] } })
+        : emptyLeg(url)
+    );
+
+    const [result] = await searchGlobal("ecra");
+
+    expect(result).toMatchObject({
+      category: "SCREEN",
+      href: "/parts?search=Ecr%C3%A3%20iPhone%2014",
+      kind: "part",
+      lowStock: true,
+      stockQuantity: 0,
+      supplier: "TechParts",
+      title: "Ecrã iPhone 14",
+      unitPrice: 89.9,
+    });
+    // Wording belongs to the caller, so no translated string is baked in.
+    expect("subtitle" in (result as object)).toBe(false);
+  });
+
+  it("flags a part with stock at or below its reorder level", async () => {
+    mockGet.mockImplementation((url: string) =>
+      url === "/parts"
+        ? Promise.resolve({
+            data: {
+              parts: [{ ...PART, stockQuantity: 2, reorderLevel: 2 }],
+            },
+          })
+        : emptyLeg(url)
+    );
+
+    const [result] = await searchGlobal("ecra");
+    expect(result).toMatchObject({ lowStock: true, stockQuantity: 2 });
+  });
+
+  it("does not flag a part that is comfortably in stock", async () => {
+    mockGet.mockImplementation((url: string) =>
+      url === "/parts"
+        ? Promise.resolve({
+            data: {
+              parts: [{ ...PART, stockQuantity: 9, reorderLevel: 2 }],
+            },
+          })
+        : emptyLeg(url)
+    );
+
+    const [result] = await searchGlobal("ecra");
+    expect(result).toMatchObject({ lowStock: false, stockQuantity: 9 });
+  });
+
+  it("treats a reorder level of zero as no threshold at all", async () => {
+    mockGet.mockImplementation((url: string) =>
+      url === "/parts"
+        ? Promise.resolve({
+            data: {
+              parts: [{ ...PART, reorderLevel: 0, stockQuantity: 1 }],
+            },
+          })
+        : emptyLeg(url)
+    );
+
+    const [result] = await searchGlobal("ecra");
+    expect(result).toMatchObject({ lowStock: false });
+  });
+
+  it("maps a repair service to its name, category and price", async () => {
+    mockGet.mockImplementation((url: string) =>
+      url === "/repairs"
+        ? Promise.resolve({ data: { repairs: [REPAIR] } })
+        : emptyLeg(url)
+    );
+
+    const [result] = await searchGlobal("ecra");
+
+    expect(result).toMatchObject({
+      category: "HARDWARE",
+      href: "/repairs?search=Troca%20de%20ecr%C3%A3",
+      kind: "repair",
+      title: "Troca de ecrã",
+      unitPrice: 45,
+    });
+  });
+
+  it("keeps the other legs when one catalogue is rejected", async () => {
+    mockGet.mockImplementation((url: string) => {
+      if (url === "/repairs") {
+        return Promise.reject(new Error("403"));
+      }
+      return url === "/parts"
+        ? Promise.resolve({ data: { parts: [PART] } })
+        : emptyLeg(url);
+    });
+
+    const results = await searchGlobal("tela");
+
+    expect(results.map((r) => r.kind)).toEqual(["part"]);
+  });
+
+  it("groups results so jobs still come before catalogues", async () => {
+    mockGet.mockImplementation((url: string) => {
+      if (url === "/jobs") {
+        return Promise.resolve(jobsResponse([JOB]));
+      }
+      if (url === "/parts") {
+        return Promise.resolve({ data: { parts: [PART] } });
+      }
+      if (url === "/repairs") {
+        return Promise.resolve({ data: { repairs: [REPAIR] } });
+      }
+      return Promise.resolve({ data: [CUSTOMER] });
+    });
+
+    const results = await searchGlobal("ana");
+
+    expect(results.map((r) => r.kind)).toEqual([
+      "job",
+      "customer",
+      "part",
+      "repair",
+    ]);
   });
 });

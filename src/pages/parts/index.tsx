@@ -3,6 +3,7 @@ import { PartCategory } from "@shared/constants";
 import type { PartsCatalog } from "@shared/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useSearchParams } from "react-router";
 import AddPartModal from "@/components/modules/parts/add-part-modal";
 import RecordPurchaseDialog from "@/components/modules/parts/record-purchase-dialog";
 import RestockForecastDialog from "@/components/modules/parts/restock-forecast-dialog";
@@ -861,7 +862,29 @@ export default function PartsCatalogPage() {
     clearError,
   } = usePartsCatalogStore();
 
-  const [search, setSearch] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  // The query string, not local state, holds the term: a deep link from the
+  // command palette has to land pre-filtered even when this page is already
+  // mounted, and the filtered view stays shareable and survives Back.
+  const search = searchParams.get("search") ?? "";
+  const setSearch = useCallback(
+    (value: string) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (value) {
+            next.set("search", value);
+          } else {
+            next.delete("search");
+          }
+          return next;
+        },
+        // Typing should not stack a history entry per keystroke.
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
   const [sortBy, setSortBy] = useState<SortField>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [activeFilter, setActiveFilter] = useState<PartCategoryType | "ALL">(

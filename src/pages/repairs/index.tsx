@@ -2,6 +2,7 @@ import type { RepairCategoryType } from "@shared/constants";
 import type { RepairCatalog } from "@shared/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useSearchParams } from "react-router";
 import type { RepairFormData } from "@/components/modules/repairs/add-repair-modal";
 import AddRepairModal from "@/components/modules/repairs/add-repair-modal";
 import CategoryHealth from "@/components/modules/repairs/category-health";
@@ -135,7 +136,29 @@ export default function RepairsPage() {
     RepairCategoryType | "ALL"
   >("ALL");
   const [activeSort, setActiveSort] = useState<SortOption>("recently_added");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  // The query string, not local state, holds the term: a deep link from the
+  // command palette has to land pre-filtered even when this page is already
+  // mounted, and the filtered view stays shareable and survives Back.
+  const searchQuery = searchParams.get("search") ?? "";
+  const setSearchQuery = useCallback(
+    (value: string) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (value) {
+            next.set("search", value);
+          } else {
+            next.delete("search");
+          }
+          return next;
+        },
+        // Typing should not stack a history entry per keystroke.
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingRepair, setEditingRepair] = useState<RepairCatalog | null>(
     null

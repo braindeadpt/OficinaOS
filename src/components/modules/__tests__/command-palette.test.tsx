@@ -7,8 +7,11 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
+import type { TFunction } from "i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import CommandPalette from "@/components/modules/command-palette";
+import CommandPalette, {
+  recordSubtitle,
+} from "@/components/modules/command-palette";
 import type { SearchResult } from "@/lib/global-search";
 import { useCommandPaletteStore } from "@/stores/command-palette";
 
@@ -61,6 +64,29 @@ vi.mock("@/lib/global-search", async () => {
     searchGlobal: (...args: unknown[]) => searchGlobalMock(...args),
   };
 });
+
+const PART_RESULT: SearchResult = {
+  category: "SCREEN",
+  group: "parts",
+  href: "/parts?search=Ecr%C3%A3",
+  id: "part-1",
+  kind: "part",
+  lowStock: true,
+  stockQuantity: 0,
+  supplier: "TechParts",
+  title: "Ecrã iPhone 14",
+  unitPrice: 89.9,
+};
+
+const REPAIR_RESULT: SearchResult = {
+  category: "HARDWARE",
+  group: "repairs",
+  href: "/repairs?search=Troca%20de%20ecr%C3%A3",
+  id: "rep-1",
+  kind: "repair",
+  title: "Troca de ecrã",
+  unitPrice: 45,
+};
 
 const RESULTS: SearchResult[] = [
   {
@@ -167,8 +193,77 @@ describe("CommandPalette", () => {
     openPalette();
     await typeAndSettle("ana");
 
-    expect(screen.getByText("command_palette.group_records")).toBeDefined();
+    expect(screen.getByText("command_palette.group_jobs")).toBeDefined();
+    expect(screen.getByText("command_palette.group_customers")).toBeDefined();
     expect(screen.getByText("Ana Silva")).toBeDefined();
+  });
+
+  it("gives each record type its own group, parts and services included", async () => {
+    searchGlobalMock.mockResolvedValue([
+      ...RESULTS,
+      PART_RESULT,
+      REPAIR_RESULT,
+    ]);
+    render(<CommandPalette />);
+    openPalette();
+    await typeAndSettle("ecra");
+
+    expect(screen.getByText("command_palette.group_parts")).toBeDefined();
+    expect(screen.getByText("command_palette.group_repairs")).toBeDefined();
+    expect(screen.getByText("command_palette.group_jobs")).toBeDefined();
+  });
+
+  it("names a service by its category and a part by its stock", async () => {
+    searchGlobalMock.mockResolvedValue([PART_RESULT, REPAIR_RESULT]);
+    render(<CommandPalette />);
+    openPalette();
+    await typeAndSettle("ecra");
+
+    // Wording is the palette's, so the rows follow the active language.
+    expect(screen.getByText("repair_category.HARDWARE")).toBeDefined();
+    expect(
+      screen.getByText("command_palette.out_of_stock · TechParts")
+    ).toBeDefined();
+  });
+
+  it("flags a part that is out of stock", async () => {
+    searchGlobalMock.mockResolvedValue([PART_RESULT]);
+    render(<CommandPalette />);
+    openPalette();
+    await typeAndSettle("ecra");
+
+    expect(screen.getByText("command_palette.out_of_stock")).toBeDefined();
+  });
+
+  it("opens a catalogue result pre-filtered by its own name", async () => {
+    searchGlobalMock.mockResolvedValue([PART_RESULT, REPAIR_RESULT]);
+    render(<CommandPalette />);
+    openPalette();
+    await typeAndSettle("ecra");
+
+    // Wait for the rows themselves: the highlight can only move once they land.
+    await screen.findByText("Troca de ecrã");
+    fireEvent.keyDown(input(), { key: "End" });
+    fireEvent.keyDown(input(), { key: "Enter" });
+    expect(navigateMock).toHaveBeenCalledWith(
+      "/repairs?search=Troca%20de%20ecr%C3%A3"
+    );
+  });
+
+  it("passes the reader's permissions down so a hidden catalogue is not queried", async () => {
+    render(<CommandPalette />);
+    openPalette();
+    await typeAndSettle("ecra");
+
+    expect(searchGlobalMock).toHaveBeenCalledWith(
+      "ecra",
+      expect.objectContaining({
+        sources: expect.objectContaining({
+          parts: true,
+          repairs: true,
+        }),
+      })
+    );
   });
 
   it("navigates when a page command is selected with Enter", () => {
@@ -257,5 +352,51 @@ describe("CommandPalette", () => {
     await waitFor(() => {
       expect(screen.getByText("command_palette.search_error")).toBeDefined();
     });
+  });
+});
+
+describe("recordSubtitle", () => {
+  // Stands in for t: enough to prove which key each branch picks.
+  const t = ((key: string, options?: { quantity?: number }) =>
+    options?.quantity === undefined
+      ? key
+      : `${key}:${options.quantity}`) as TFunction;
+
+  it("says a part is out rather than showing a count of zero", () => {
+    expect(
+      recordSubtitle(
+        {
+          ...PART_RESULT,
+          lowStock: false,
+          stockQuantity: 0,
+          supplier: null,
+        },
+        t
+      )
+    ).toBe("command_palette.out_of_stock");
+  });
+
+  it("marks a part at or below its reorder level as low", () => {
+    expect(
+      recordSubtitle({ ...PART_RESULT, lowStock: true, stockQuantity: 2 }, t)
+    ).toBe("command_palette.stock_low:2 · TechParts");
+  });
+
+  it("appends the supplier, and omits it when there is none", () => {
+    expect(
+      recordSubtitle(
+        { ...PART_RESULT, lowStock: false, stockQuantity: 9, supplier: null },
+        t
+      )
+    ).toBe("command_palette.stock_count:9");
+  });
+
+  it("names a service by its category", () => {
+    expect(recordSubtitle(REPAIR_RESULT, t)).toBe("repair_category.HARDWARE");
+  });
+
+  it("passes a job or customer subtitle through untouched", () => {
+    expect(recordSubtitle(RESULTS[0], t)).toBe("Ana Silva · Apple iPhone 14");
+    expect(recordSubtitle(RESULTS[1], t)).toBe("+351912345678");
   });
 });

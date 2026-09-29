@@ -1863,17 +1863,23 @@
   "command_palette": {
     "close": "Close command palette",
     "group_actions": "Actions",
+    "group_customers": "Customers",
+    "group_jobs": "Jobs",
     "group_pages": "Pages",
-    "group_records": "Records",
+    "group_parts": "Parts",
+    "group_repairs": "Services",
     "hint_navigate": "navigate",
     "hint_run": "run",
     "hint_toggle": "open or close",
-    "no_records": "No jobs or customers found",
+    "no_records": "No records found",
     "no_results": "No results for “{{query}}”",
     "open": "Open command palette",
+    "out_of_stock": "Out of stock",
     "placeholder": "Search or type a command…",
     "search_error": "Could not search",
     "searching": "Searching…",
+    "stock_count": "{{quantity}} in stock",
+    "stock_low": "{{quantity}} in stock · reorder",
     "title": "Command palette"
   }
 }

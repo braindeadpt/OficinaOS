@@ -1863,17 +1863,23 @@
   "command_palette": {
     "close": "Fermer la palette de commandes",
     "group_actions": "Actions",
+    "group_customers": "Clients",
+    "group_jobs": "Réparations",
     "group_pages": "Pages",
-    "group_records": "Enregistrements",
+    "group_parts": "Pièces",
+    "group_repairs": "Services",
     "hint_navigate": "naviguer",
     "hint_run": "exécuter",
     "hint_toggle": "ouvrir ou fermer",
-    "no_records": "Aucune réparation ni client trouvé",
+    "no_records": "Aucun enregistrement trouvé",
     "no_results": "Aucun résultat pour « {{query}} »",
     "open": "Ouvrir la palette de commandes",
+    "out_of_stock": "Rupture",
     "placeholder": "Rechercher ou taper une commande…",
     "search_error": "Recherche impossible",
     "searching": "Recherche…",
+    "stock_count": "{{quantity}} en stock",
+    "stock_low": "{{quantity}} en stock · à réapprovisionner",
     "title": "Palette de commandes"
   }
 }
