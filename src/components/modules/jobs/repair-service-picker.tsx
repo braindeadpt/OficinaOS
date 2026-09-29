@@ -1,7 +1,7 @@
 import type { RepairCatalog } from "@shared/types";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { formatCurrency } from "@/lib/format";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 import { useRepairCatalogStore } from "@/stores/repair-catalog";
 
 interface RepairServicePickerProps {
@@ -16,6 +16,7 @@ export default function RepairServicePicker({
   compact = false,
 }: RepairServicePickerProps) {
   const { t } = useTranslation();
+  const fmt = useFormatCurrency();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -109,7 +110,7 @@ export default function RepairServicePicker({
                           </p>
                           <p className="font-label text-on-surface-variant text-xs">
                             {t(`repair_category.${r.category}`)} ·{" "}
-                            {formatCurrency(Number(r.defaultPrice))}
+                            {fmt(Number(r.defaultPrice))}
                           </p>
                         </div>
                         {alreadySelected && (

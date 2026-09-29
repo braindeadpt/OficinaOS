@@ -2,8 +2,8 @@ import { PAYMENT_METHODS } from "@shared/constants";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 import type { ApiError } from "@/lib/api";
-import { formatCurrency } from "@/lib/format";
 import { useJobsStore } from "@/stores/jobs";
 
 interface AddPaymentDialogProps {
@@ -22,6 +22,7 @@ export default function AddPaymentDialog({
   onAdded,
 }: AddPaymentDialogProps) {
   const { t } = useTranslation();
+  const fmt = useFormatCurrency();
   const [method, setMethod] = useState("CASH");
   const [amount, setAmount] = useState("");
   const [reference, setReference] = useState("");
@@ -166,9 +167,9 @@ export default function AddPaymentDialog({
                 value={amount}
               />
               <p className="mt-1 font-label text-on-surface-variant text-xs">
-                {t("payments.balance_due_label")}: {formatCurrency(balanceDue)}{" "}
-                · {t("payments.remaining_after")}:{" "}
-                {formatCurrency(Math.max(0, remainingAfter))}
+                {t("payments.balance_due_label")}: {fmt(balanceDue)} ·{" "}
+                {t("payments.remaining_after")}:{" "}
+                {fmt(Math.max(0, remainingAfter))}
               </p>
             </div>
 

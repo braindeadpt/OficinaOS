@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import RepairServicePicker from "@/components/modules/jobs/repair-service-picker";
-import { formatCurrency } from "@/lib/format";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 import { useJobsStore } from "@/stores/jobs";
 
 interface JobRepairsSectionProps {
@@ -17,6 +17,7 @@ export default function JobRepairsSection({
   onChanged,
 }: JobRepairsSectionProps) {
   const { t } = useTranslation();
+  const fmt = useFormatCurrency();
   const addRepair = useJobsStore((s) => s.addRepair);
   const removeRepair = useJobsStore((s) => s.removeRepair);
   const [showForm, setShowForm] = useState(false);
@@ -235,7 +236,7 @@ export default function JobRepairsSection({
               </div>
               <div className="flex items-center gap-2">
                 <span className="font-bold font-headline text-on-surface text-xs">
-                  {formatCurrency(Number(repair.price))}
+                  {fmt(Number(repair.price))}
                 </span>
                 {!isTerminal && (
                   <RemoveRepairButton

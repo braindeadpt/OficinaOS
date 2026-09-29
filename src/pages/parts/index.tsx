@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { LowStockBadge } from "@/components/ui/low-stock-badge";
 import { useCan } from "@/hooks/use-can";
 import { useDebounce } from "@/hooks/use-debounce";
-import { formatCurrency } from "@/lib/format";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 import { usePartsCatalogStore } from "@/stores/parts-catalog";
 
 type SortField = "name" | "category" | "defaultPrice" | "supplier";
@@ -168,6 +168,7 @@ function DesktopPartRow({
   toggleBtnCls: string;
 }) {
   const isConfirming = confirmingId === part.id;
+  const fmt = useFormatCurrency();
 
   const rowCls = isActive
     ? "transition-colors hover:bg-surface-container-lowest"
@@ -198,7 +199,7 @@ function DesktopPartRow({
       {showCost && (
         <td className="px-5 py-4">
           <span className="font-mono font-semibold text-sm">
-            {formatCurrency(Number(part.defaultPrice))}
+            {fmt(Number(part.defaultPrice))}
           </span>
         </td>
       )}
@@ -335,6 +336,7 @@ function MobilePartCard({
 }) {
   const isActive = part.isActive;
   const isConfirming = confirmingId === part.id;
+  const fmt = useFormatCurrency();
 
   const cardCls = isActive ? "p-4" : "bg-surface-container/30 p-4";
   const nameCls = isActive
@@ -373,7 +375,7 @@ function MobilePartCard({
         </div>
         {showCost && (
           <span className="font-bold font-mono text-primary text-sm">
-            {formatCurrency(Number(part.defaultPrice))}
+            {fmt(Number(part.defaultPrice))}
           </span>
         )}
       </div>
@@ -853,6 +855,7 @@ function ToastNotification({
 
 export default function PartsCatalogPage() {
   const { t } = useTranslation();
+  const fmt = useFormatCurrency();
   const canViewCost = useCan({ parts: ["viewCost"] });
   const {
     parts,
@@ -1104,7 +1107,7 @@ export default function PartsCatalogPage() {
                   {t("inventory_value")}
                 </p>
                 <p className="mt-1 font-extrabold font-headline text-2xl text-on-surface">
-                  {formatCurrency(catalogValue)}
+                  {fmt(catalogValue)}
                 </p>
               </div>
             )}

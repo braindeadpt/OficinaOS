@@ -3,8 +3,8 @@ import type { PartsCatalog } from "@shared/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 import type { ApiError } from "@/lib/api";
-import { formatCurrency } from "@/lib/format";
 import { useJobsStore } from "@/stores/jobs";
 import { usePartsCatalogStore } from "@/stores/parts-catalog";
 
@@ -43,6 +43,7 @@ export default function AddPartDialog({
   onAdded,
 }: AddPartDialogProps) {
   const { t } = useTranslation();
+  const fmt = useFormatCurrency();
   const [mode, setMode] = useState<Mode>("catalog");
   const [form, setForm] = useState<FormData>(INITIAL_FORM);
   const [catalogSearch, setCatalogSearch] = useState("");
@@ -249,7 +250,7 @@ export default function AddPartDialog({
                         <p className="font-label text-on-surface-variant text-xs">
                           {item.defaultPrice == null
                             ? "--"
-                            : formatCurrency(Number(item.defaultPrice))}
+                            : fmt(Number(item.defaultPrice))}
                         </p>
                       </div>
                     </button>
@@ -392,7 +393,7 @@ export default function AddPartDialog({
                   {t("jobs_parts_line_total")}
                 </span>
                 <span className="font-extrabold font-headline text-lg text-primary">
-                  {formatCurrency(unitPrice * quantity)}
+                  {fmt(unitPrice * quantity)}
                 </span>
               </div>
             </div>

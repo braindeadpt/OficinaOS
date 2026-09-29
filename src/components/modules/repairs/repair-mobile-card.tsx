@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { formatCurrency } from "@/lib/format";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 import type { RepairItem } from "./repair-table";
 import { CATEGORY_COLORS } from "./repair-table";
 
@@ -19,6 +19,7 @@ export default function RepairMobileCard({
   togglingId,
 }: RepairMobileCardProps) {
   const { t } = useTranslation();
+  const fmt = useFormatCurrency();
 
   return (
     <div className="rounded-xl bg-surface-container-lowest p-4">
@@ -58,7 +59,7 @@ export default function RepairMobileCard({
       <div className="flex items-end justify-between pt-3">
         <div className="flex items-center gap-2">
           <span className="font-mono font-semibold text-primary text-sm">
-            {formatCurrency(repair.basePrice)}
+            {fmt(repair.basePrice)}
           </span>
         </div>
       </div>
