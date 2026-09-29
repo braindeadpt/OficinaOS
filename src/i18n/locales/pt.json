@@ -1102,7 +1102,9 @@
     "stock_label": "Stock",
     "subtitle": "Vende acessórios e peças sem ticket de reparação",
     "title": "POS de balcão",
-    "total": "Total"
+    "total": "Total",
+    "in_cart_short": "no carrinho",
+    "max_stock_reached": "Sem mais unidades em stock"
   },
   "payments": {
     "add_payment": "Registar pagamento",

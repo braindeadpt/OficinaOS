@@ -1102,7 +1102,9 @@
     "stock_label": "Stock",
     "subtitle": "Vendez accessoires et pièces sans ticket de réparation",
     "title": "POS comptoir",
-    "total": "Total"
+    "total": "Total",
+    "in_cart_short": "au panier",
+    "max_stock_reached": "Plus d'unites en stock"
   },
   "payments": {
     "add_payment": "Ajouter un paiement",

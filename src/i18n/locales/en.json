@@ -1102,7 +1102,9 @@
     "stock_label": "Stock",
     "subtitle": "Sell accessories and parts without a repair ticket",
     "title": "Counter POS",
-    "total": "Total"
+    "total": "Total",
+    "in_cart_short": "in cart",
+    "max_stock_reached": "No more units in stock"
   },
   "payments": {
     "add_payment": "Add Payment",
