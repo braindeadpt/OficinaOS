@@ -13,10 +13,23 @@ echo.
 
 REM ── 1. Docker Desktop ──────────────────────────────────────────────────
 echo [1/4] A verificar o Docker...
+REM Docker pode estar instalado mas fora do PATH desta sessao
+set "PATH=%PATH%;C:\Program Files\Docker\Docker\resources\bin"
 docker info >nul 2>&1
 if errorlevel 1 (
     where docker >nul 2>&1
     if errorlevel 1 (
+        where winget >nul 2>&1
+        if errorlevel 1 (
+            echo.
+            echo  Docker Desktop nao encontrado e o instalador automatico
+            echo  ^(winget^) nao existe neste Windows.
+            echo  Instala o Docker Desktop em:
+            echo  https://www.docker.com/products/docker-desktop/
+            echo  e volta a correr este ficheiro.
+            pause
+            exit /b 1
+        )
         echo        Docker Desktop nao encontrado. A instalar (pode demorar)...
         winget install -e --id Docker.DockerDesktop --accept-source-agreements --accept-package-agreements
         if errorlevel 1 (
@@ -34,10 +47,21 @@ if errorlevel 1 (
     )
     echo        A iniciar o Docker Desktop (primeira vez pode demorar 1-2 min)...
     start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
+    set /a TENT=0
     :esperar_docker
     timeout /t 5 /nobreak >nul
+    set /a TENT+=1
     docker info >nul 2>&1
-    if errorlevel 1 goto esperar_docker
+    if not errorlevel 1 goto docker_ok
+    if !TENT! LSS 72 goto esperar_docker
+    echo.
+    echo  ERRO: o Docker Desktop nao respondeu.
+    echo  Se o Windows pediu para reiniciar, reinicia o PC e volta a correr
+    echo  o INSTALAR.bat. Se ja reiniciaste, abre o Docker Desktop
+    echo  manualmente, espera que arranque, e repete a instalacao.
+    pause
+    exit /b 1
+    :docker_ok
 )
 echo        Docker OK.
 
