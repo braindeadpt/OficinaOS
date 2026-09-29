@@ -71,11 +71,12 @@ function NotFoundPage() {
 }
 
 function PageSkeleton() {
+  const { t } = useTranslation();
   return (
     <div
       aria-busy="true"
-      aria-label="Loading page"
-      className="m-4 h-96 animate-pulse rounded-lg bg-muted"
+      aria-label={t("loading")}
+      className="m-4 h-96 animate-pulse rounded-xl bg-surface-container-low"
       role="status"
     />
   );

@@ -114,8 +114,8 @@ export default function Sidebar() {
   }, [logoutPending]);
 
   return (
-    <aside className="fixed start-0 top-0 z-40 hidden h-screen w-64 flex-col bg-surface-container-low p-4 lg:flex">
-      <div className="mb-8 flex items-center gap-3 px-2 py-6">
+    <aside className="fixed start-0 top-0 z-40 hidden h-dvh w-64 flex-col bg-surface-container-low p-4 lg:flex">
+      <div className="mb-8 flex shrink-0 items-center gap-3 px-2 py-6">
         <img
           alt=""
           aria-hidden="true"
@@ -134,7 +134,7 @@ export default function Sidebar() {
         </div>
       </div>
 
-      <nav className="flex-1 space-y-1.5">
+      <nav className="flex-1 space-y-1.5 overflow-y-auto overscroll-contain">
         {navItems.map(({ icon, labelKey, to }) => (
           <NavLink
             className={({ isActive }) =>
@@ -155,7 +155,7 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      <div className="mt-auto space-y-3">
+      <div className="mt-auto shrink-0 space-y-3">
         <button
           className={`flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-bold text-on-primary transition-all duration-200 active:scale-[0.98] ${FOCUS_VISIBLE} ${canCreateJob ? "" : "cursor-not-allowed opacity-50"}`}
           disabled={!canCreateJob}

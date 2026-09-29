@@ -50,7 +50,7 @@ export default function MarkdownRenderer({
   if (error) {
     return (
       <div className={className}>
-        <p className="text-destructive">Failed to load markdown renderer.</p>
+        <p className="text-error">Failed to load markdown renderer.</p>
       </div>
     );
   }
@@ -58,7 +58,7 @@ export default function MarkdownRenderer({
   if (!mod) {
     return (
       <div className={className}>
-        <div className="h-48 animate-pulse rounded bg-muted" />
+        <div className="h-48 animate-pulse rounded bg-surface-container-low" />
       </div>
     );
   }

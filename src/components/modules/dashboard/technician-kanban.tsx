@@ -232,7 +232,7 @@ export default function TechnicianKanban() {
                           {job.status === JobStatus.ON_HOLD &&
                             job.holdReason && (
                               <span
-                                className="max-w-[100px] truncate rounded bg-warning/15 px-1.5 py-0.5 font-extrabold font-headline text-[10px] text-warning"
+                                className="max-w-[100px] truncate rounded bg-tertiary/15 px-1.5 py-0.5 font-extrabold font-headline text-[10px] text-tertiary"
                                 title={job.holdReason}
                               >
                                 {job.holdReason}
