@@ -469,6 +469,8 @@
   "customers_consent_filter": "Consentement WhatsApp",
   "customers_consent_opted_in": "Ayant accepté (WhatsApp)",
   "customers_consent_opted_out": "Ayant refusé",
+  "customers_optin_rate": "Taux d'opt-in WhatsApp",
+  "customers_optin_breakdown": "{{optedIn}} ayant accepté · {{optedOut}} pas encore",
   "customers_export_optin_since": "Opt-in depuis",
   "customers_export_name": "Nom",
   "customers_export_failed": "Échec de l'export. Veuillez réessayer.",

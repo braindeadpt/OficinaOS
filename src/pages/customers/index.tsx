@@ -7,6 +7,7 @@ import ConsentToggle from "@/components/modules/customers/consent-toggle";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
+import { ProgressBar } from "@/components/ui/progress-bar";
 import { Select } from "@/components/ui/select";
 import { useDebounce } from "@/hooks/use-debounce";
 import { downloadCsv } from "@/lib/export-csv";
@@ -169,6 +170,7 @@ export default function CustomersPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const debouncedSearch = useDebounce(search, 300);
   const {
+    consentSummary,
     customers,
     isLoading,
     totalCount,
@@ -226,6 +228,12 @@ export default function CustomersPage() {
     [customers]
   );
 
+  const totalForRate = consentSummary.optedIn + consentSummary.optedOut;
+  const optInRate =
+    totalForRate > 0
+      ? Math.round((consentSummary.optedIn / totalForRate) * 100)
+      : null;
+
   const hasCustomers = customers.length > 0 || isLoading;
   const showSearchEmpty =
     customers.length === 0 &&
@@ -259,7 +267,7 @@ export default function CustomersPage() {
       {!showEmptyCatalog && (
         <section aria-label={t("customers")}>
           <h3 className="sr-only">{t("customers")}</h3>
-          <div className="mb-6 grid gap-4 sm:grid-cols-[1.5fr_1fr]">
+          <div className="mb-6 grid gap-4 sm:grid-cols-[1.5fr_1fr_1.25fr]">
             <div className="rounded-2xl bg-surface-container-low p-5">
               <p className="font-medium text-on-surface-variant text-xs uppercase tracking-wide">
                 {t("total_customers")}
@@ -275,6 +283,33 @@ export default function CustomersPage() {
               <p className="mt-1 font-extrabold font-headline text-2xl text-on-surface">
                 {customersWithJobs}
               </p>
+            </div>
+            <div className="rounded-2xl bg-surface-container p-5">
+              <p className="font-medium text-on-surface-variant text-xs uppercase tracking-wide">
+                {t("customers_optin_rate")}
+              </p>
+              {optInRate === null ? (
+                <p className="mt-1 font-extrabold font-headline text-2xl text-on-surface">
+                  —
+                </p>
+              ) : (
+                <>
+                  <p className="mt-1 font-extrabold font-headline text-2xl text-on-surface">
+                    {optInRate}%
+                  </p>
+                  <ProgressBar
+                    className="mt-2"
+                    color="secondary"
+                    value={optInRate}
+                  />
+                  <p className="mt-1.5 text-on-surface-variant text-xs">
+                    {t("customers_optin_breakdown", {
+                      optedIn: consentSummary.optedIn,
+                      optedOut: consentSummary.optedOut,
+                    })}
+                  </p>
+                </>
+              )}
             </div>
           </div>
         </section>

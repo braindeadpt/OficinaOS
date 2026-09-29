@@ -10,6 +10,7 @@ function mockPrisma() {
       update: vi.fn(),
       findMany: vi.fn(),
       count: vi.fn(),
+      groupBy: vi.fn(),
     },
   } as unknown as PrismaClient;
 }
@@ -205,6 +206,45 @@ describe("list", () => {
     const findManyCall = (prisma.customer.findMany as ReturnType<typeof vi.fn>)
       .mock.calls[0];
     expect(findManyCall[0].where.whatsappConsent).toBe(false);
+  });
+
+  it("returns global consent summary alongside the list", async () => {
+    (prisma.customer.findMany as ReturnType<typeof vi.fn>).mockResolvedValue(
+      []
+    );
+    (prisma.customer.count as ReturnType<typeof vi.fn>).mockResolvedValue(0);
+    (prisma.customer.groupBy as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { _count: { _all: 7 }, whatsappConsent: true },
+      { _count: { _all: 13 }, whatsappConsent: false },
+    ]);
+
+    const result = await list(prisma, {
+      cursor: undefined,
+      limit: 10,
+      search: undefined,
+    });
+
+    expect(result.consentSummary).toEqual({ optedIn: 7, optedOut: 13 });
+    expect(prisma.customer.groupBy).toHaveBeenCalledWith({
+      _count: { _all: true },
+      by: ["whatsappConsent"],
+    });
+  });
+
+  it("skips the consent summary when paginating with a cursor", async () => {
+    (prisma.customer.findMany as ReturnType<typeof vi.fn>).mockResolvedValue(
+      []
+    );
+
+    const result = await list(prisma, {
+      cursor: "cust-1",
+      limit: 10,
+      search: undefined,
+    });
+
+    expect(result.consentSummary).toEqual({ optedIn: 0, optedOut: 0 });
+    expect(prisma.customer.groupBy).not.toHaveBeenCalled();
+    expect(prisma.customer.count).not.toHaveBeenCalled();
   });
 
   it("does not filter by consent when unset", async () => {

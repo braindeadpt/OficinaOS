@@ -43,6 +43,7 @@ function makeCustomer(id: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   useCustomersStore.setState({
+    consentSummary: { optedIn: 0, optedOut: 0 },
     customers: [],
     currentCustomer: null,
     error: null,
@@ -112,6 +113,24 @@ describe("useCustomersStore", () => {
   });
 
   describe("fetchCustomers", () => {
+    it("stores the consent summary from the API response", async () => {
+      mockGet.mockResolvedValue({
+        data: {
+          consentSummary: { optedIn: 4, optedOut: 6 },
+          customers: [],
+          nextCursor: null,
+          totalCount: 0,
+        },
+      });
+
+      await act(() => useCustomersStore.getState().fetchCustomers());
+
+      expect(useCustomersStore.getState().consentSummary).toEqual({
+        optedIn: 4,
+        optedOut: 6,
+      });
+    });
+
     it("passes consent param to the API when provided", async () => {
       mockGet.mockResolvedValue({
         data: {
