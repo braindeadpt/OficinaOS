@@ -1,4 +1,7 @@
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import CashCloseCard from "@/components/reports/cash-close-card";
+import CashClosedCard from "@/components/reports/cash-closed-card";
 import { MetricCard } from "@/components/ui/metric-card";
 import { useReportsStore } from "@/stores/reports";
 
@@ -9,6 +12,15 @@ function methodKey(method: string): string {
 export default function CashTab() {
   const { t } = useTranslation();
   const state = useReportsStore((s) => s.cash);
+  const sessionState = useReportsStore((s) => s.cashSession);
+  const fetchCashSession = useReportsStore((s) => s.fetchCashSession);
+  const reopenCashSession = useReportsStore((s) => s.reopenCashSession);
+
+  useEffect(() => {
+    fetchCashSession();
+  }, [fetchCashSession]);
+
+  const session = sessionState.data;
 
   if (state.loading) {
     return (
@@ -34,6 +46,17 @@ export default function CashTab() {
 
   return (
     <div className="space-y-6">
+      {session && session.status === "OPEN" && (
+        <CashCloseCard
+          key={session.id}
+          onClosed={fetchCashSession}
+          session={session}
+        />
+      )}
+      {session && session.status === "CLOSED" && (
+        <CashClosedCard onReopen={reopenCashSession} session={session} />
+      )}
+
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <MetricCard
           detail=""

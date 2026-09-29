@@ -54,6 +54,11 @@ enum PaymentMethod {
   OTHER
 }
 
+enum CashSessionStatus {
+  OPEN
+  CLOSED
+}
+
 enum FaultCategory {
   WORKMANSHIP
   DEFECTIVE_PART
@@ -174,6 +179,8 @@ model User {
   stockMovementsCreated StockMovement[]     @relation("StockMovementCreatedBy")
   salesCreated          Sale[]              @relation("SaleCreatedBy")
   auditLogs             AuditLog[]
+  cashSessionsOpened    CashSession[]       @relation("CashSessionOpenedBy")
+  cashSessionsClosed    CashSession[]       @relation("CashSessionClosedBy")
   conversations         AiConversation[]
   sessions              Session[]
   accounts              Account[]
@@ -933,6 +940,43 @@ model ShopSettings {
   updatedAt                 DateTime @updatedAt @db.Timestamptz
 
   @@map("shop_settings")
+}
+
+// ─────────────────────────────────────────────
+// CASH SESSION (formal daily cash-up)
+// One OPEN session per shop-local day. The report figures are snapshotted at
+// close time so later backdated payments never rewrite history. Counted cash
+// is entered by the cashier; countedTotalCollected may be signed for the
+// paper audit trail. Divergence = countedCash − systemCash.
+// ─────────────────────────────────────────────
+
+model CashSession {
+  id          String           @id @default(cuid())
+  day         DateTime         @db.Timestamptz
+  timezone    String
+  status      CashSessionStatus @default(OPEN)
+
+  report               Json
+  countedCash          Decimal?  @db.Decimal(10, 2)
+  countedNonCash       Decimal?  @db.Decimal(10, 2)
+  countedTotalCollected Decimal? @db.Decimal(10, 2)
+  cashDivergence       Decimal?  @db.Decimal(10, 2)
+  note                 String?   @db.Text
+  signatureDataUrl     String?   @db.Text
+
+  openedById  String
+  openedBy    User     @relation("CashSessionOpenedBy", fields: [openedById], references: [id], onDelete: Restrict)
+  openedAt    DateTime @default(now()) @db.Timestamptz
+
+  closedById  String?
+  closedBy    User?    @relation("CashSessionClosedBy", fields: [closedById], references: [id], onDelete: Restrict)
+  closedAt    DateTime? @db.Timestamptz
+  reopenCount Int      @default(0)
+
+  @@unique([day, timezone])
+  @@index([status])
+  @@index([day])
+  @@map("cash_sessions")
 }
 
 // ─────────────────────────────────────────────

@@ -208,3 +208,43 @@ export interface RestockForecastDTO {
   /** Analysis window in days (consumption sampled over this period). */
   windowDays: number;
 }
+
+export interface CashSessionUser {
+  id: string;
+  name: string;
+}
+
+export interface CashSessionCounted {
+  /** Physical cash counted in the drawer at close time. */
+  cash: number | null;
+  /** Optional recount of non-cash slips (card terminal receipts etc.). */
+  nonCash: number | null;
+  /** Cashier-declared grand total (may be signed for the paper trail). */
+  totalCollected: number | null;
+}
+
+export interface CashSessionDivergence {
+  /** countedCash − systemCash at close time; negative = cash missing. */
+  cash: number | null;
+}
+
+export interface CashSessionDTO {
+  closedAt: string | null;
+  closedBy: CashSessionUser | null;
+  counted: CashSessionCounted;
+  /** ISO timestamp of the shop-local day start the session covers. */
+  day: string;
+  divergence: CashSessionDivergence;
+  id: string;
+  note: string | null;
+  openedAt: string;
+  openedBy: CashSessionUser;
+  reopenCount: number;
+  /** System figures: live while OPEN, frozen snapshot once CLOSED. */
+  report: CashReportDTO;
+  /** Signature image as a data URL (PNG), drawn at close time. */
+  signatureDataUrl: string | null;
+  status: "OPEN" | "CLOSED";
+  /** IANA timezone the session day was bucketed in. */
+  timezone: string;
+}
