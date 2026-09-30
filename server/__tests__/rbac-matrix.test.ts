@@ -137,6 +137,11 @@ vi.mock("../services/return-claim.service.js", () => ({
 vi.mock("../middlewares/rbac.js", () => ({
   requirePermission:
     (permissions: Record<string, string[]>) => async (request: any) => {
+      // Mirrors the real middleware: routes flagged config.public bypass
+      // permission checks entirely (public customer endpoints).
+      if (request.routeOptions?.config?.public === true) {
+        return;
+      }
       if (!request.user) {
         throw new AppError("UNAUTHORIZED");
       }

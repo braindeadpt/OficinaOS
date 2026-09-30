@@ -5,6 +5,16 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 
 export function requirePermission(permissions: PermissionCheck) {
   return async (request: FastifyRequest, _reply: FastifyReply) => {
+    // Routes flagged public (e.g. customer self-tracking) skip the check —
+    // they are also allowlisted by path in plugins/auth.ts. An empty
+    // `preHandler: []` on a route does NOT remove plugin hooks, so this
+    // config flag is the working bypass.
+    if (
+      (request.routeOptions?.config as { public?: boolean } | undefined)
+        ?.public === true
+    ) {
+      return;
+    }
     if (!request.user) {
       throw new AppError("UNAUTHORIZED");
     }

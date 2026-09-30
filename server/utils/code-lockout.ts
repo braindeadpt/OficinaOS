@@ -67,3 +67,8 @@ export function createCodeLockout(): CodeLockoutStore {
     },
   };
 }
+
+// Shared instance so misses on /api/jobs/lookup and /api/public/quote-respond
+// count against the same per-code budget. Tests should create fresh stores
+// via createCodeLockout() instead of importing this.
+export const codeLockout = createCodeLockout();
