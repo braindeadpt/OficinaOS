@@ -195,7 +195,8 @@ const authPlugin: FastifyPluginAsync = async (app) => {
       pathname === "/health" ||
       pathname === "/api/csrf-token" ||
       pathname.startsWith("/api/auth") ||
-      pathname.startsWith("/api/jobs/lookup")
+      pathname.startsWith("/api/jobs/lookup") ||
+      pathname.startsWith("/api/public")
     ) {
       return;
     }

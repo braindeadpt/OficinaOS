@@ -11,6 +11,7 @@ import {
   updateJobSchema,
 } from "@shared/schemas/job.schema";
 import { paymentOnDeliverySchema } from "@shared/schemas/payment.schema";
+import { sendQuoteSchema } from "@shared/schemas/quote.schema";
 import type { FastifyPluginAsync } from "fastify";
 import { requirePermission } from "../middlewares/rbac.js";
 import {
@@ -38,6 +39,10 @@ import {
   upload as uploadPhoto,
 } from "../services/job-photos.service.js";
 import {
+  createAndSendQuote,
+  listQuotes,
+} from "../services/job-quote.service.js";
+import {
   add as addRepair,
   remove as removeRepair,
 } from "../services/job-repairs.service.js";
@@ -50,62 +55,20 @@ import {
   clearPaymentOnDelivery,
   setPaymentOnDelivery,
 } from "../services/payment.service.js";
+import { createCodeLockout } from "../utils/code-lockout.js";
 import { getRole, getUserId } from "../utils/request.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
 const JOB_CODE_RE = /^[A-Za-z0-9-]+$/;
 const PHONE4_RE = /^\d{4}$/;
 
-// Failed-lookup lockout: five misses on one job code block further guesses
-// on it for an hour, enough to make enumerating phone suffixes impractical.
-const LOCKOUT_THRESHOLD = 5;
-const LOCKOUT_DURATION_MS = 60 * 60 * 1000;
-
-interface LockoutEntry {
-  failures: number;
-  lockedUntil: number;
-}
-
-function trackFailedAttempt(lockouts: Map<string, LockoutEntry>, code: string) {
-  const existing = lockouts.get(code) ?? { failures: 0, lockedUntil: 0 };
-  existing.failures += 1;
-  if (existing.failures >= LOCKOUT_THRESHOLD) {
-    existing.lockedUntil = Date.now() + LOCKOUT_DURATION_MS;
-  }
-  lockouts.set(code, existing);
-}
-
 // biome-ignore lint/suspicious/useAwait: FastifyPluginAsync requires async
 export const jobRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", requirePermission({ jobs: ["view"] }));
 
-  // In-memory lockout store: jobCode → { failures, lockedUntil }
-  // NOTE: This is per-process state — it will NOT be shared across multiple
-  // server instances. For OficinaOS's single-location deployment (one server)
-  // this is acceptable. If multi-instance deployment is ever needed, this
-  // should be replaced with a Redis or DB-backed store.
-  // TODO: Migrate to Redis/DB-backed store for multi-instance support.
-  const codeLockouts = new Map<
-    string,
-    { failures: number; lockedUntil: number }
-  >();
-  const cleanupInterval = setInterval(
-    () => {
-      const now = Date.now();
-      for (const [key, val] of codeLockouts) {
-        // Expired locks and still-unlocked failures both age out: keeping the
-        // latter forever would let one abandoned code pin memory indefinitely.
-        if (val.lockedUntil <= now) {
-          codeLockouts.delete(key);
-        }
-      }
-    },
-    15 * 60 * 1000
-  );
-  // Prevent cleanup from keeping the process alive
-  if (cleanupInterval.unref) {
-    cleanupInterval.unref();
-  }
+  // Per-code lockout shared with /api/public/quote-respond — see
+  // utils/code-lockout.ts for the per-process caveat.
+  const codeLockouts = createCodeLockout();
 
   // Public: no auth — used by customer self-tracking page.
   // Rate limit lives in config/route-security.ts (10 per 15 min, per IP).
@@ -144,12 +107,8 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
       // biome-ignore lint/style/noNonNullAssertion: validated above
       const phone4Str = phone4!;
 
-      const lockout = codeLockouts.get(codeStr);
-      if (lockout && lockout.lockedUntil > Date.now()) {
+      if (codeLockouts.isLocked(codeStr)) {
         throw new AppError("JOB_NOT_FOUND");
-      }
-      if (lockout?.lockedUntil && lockout.lockedUntil <= Date.now()) {
-        codeLockouts.delete(codeStr);
       }
 
       const result = await lookupByCode(app.prisma, codeStr, phone4Str);
@@ -157,11 +116,11 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
         throw new AppError("JOB_NOT_FOUND");
       }
       if (!result.job) {
-        trackFailedAttempt(codeLockouts, codeStr);
+        codeLockouts.trackFailure(codeStr);
         throw new AppError("JOB_NOT_FOUND");
       }
 
-      codeLockouts.delete(codeStr);
+      codeLockouts.clear(codeStr);
       return reply.send(result.job);
     },
   });
@@ -509,6 +468,70 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
       }
       throwIfError(result);
       return reply.status(204).send();
+    }
+  );
+
+  // ── Quotes ──
+  app.get(
+    "/:id/quotes",
+    {
+      schema: {
+        tags: ["jobs"],
+        summary: "List quotes sent for a job",
+        params: {
+          type: "object",
+          properties: { id: { type: "string" } },
+          required: ["id"],
+        },
+      },
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const quotes = await listQuotes(app.prisma, id);
+      if (!quotes) {
+        throw new AppError("JOB_NOT_FOUND");
+      }
+      return reply.send(quotes);
+    }
+  );
+
+  app.post(
+    "/:id/quotes",
+    {
+      schema: {
+        tags: ["jobs"],
+        summary: "Create and send a quote to the customer",
+        params: {
+          type: "object",
+          properties: { id: { type: "string" } },
+          required: ["id"],
+        },
+        body: { type: "object", additionalProperties: true },
+      },
+      preHandler: [requirePermission({ jobs: ["edit"] })],
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const parsed = sendQuoteSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new AppError("VALIDATION_ERROR", {
+          errors: resolveZodErrors(
+            parsed.error.flatten().fieldErrors,
+            req.locale
+          ),
+        });
+      }
+      const userId = getUserId(req);
+      const quote = await createAndSendQuote(
+        app.prisma,
+        id,
+        parsed.data,
+        userId
+      );
+      if (!quote) {
+        throw new AppError("JOB_NOT_FOUND");
+      }
+      return reply.status(201).send(quote);
     }
   );
 

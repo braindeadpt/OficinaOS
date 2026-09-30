@@ -691,6 +691,24 @@ export async function transitionStatus(
   return { ...updated, finalCost: computeFinalCost(updated) };
 }
 
+// Only the latest actionable quote is exposed — SUPERSEDED rows are internal
+// bookkeeping for the revise-and-resend flow.
+const LOOKUP_INCLUDE_QUOTES = {
+  where: { status: { not: "SUPERSEDED" as const } },
+  orderBy: { version: "desc" as const },
+  take: 1,
+  select: {
+    id: true,
+    version: true,
+    amount: true,
+    note: true,
+    status: true,
+    sentAt: true,
+    respondedAt: true,
+    responseNote: true,
+  },
+} as const;
+
 const LOOKUP_INCLUDE_PUBLIC = {
   customer: { select: { name: true, phone: true } },
   device: { select: { model: true, brand: { select: { name: true } } } },
@@ -700,6 +718,7 @@ const LOOKUP_INCLUDE_PUBLIC = {
     select: { content: true, createdAt: true },
     orderBy: { createdAt: "desc" as const },
   },
+  quotes: LOOKUP_INCLUDE_QUOTES,
 } as const;
 
 const LOOKUP_INCLUDE_AUTH = {
@@ -711,6 +730,7 @@ const LOOKUP_INCLUDE_AUTH = {
     select: { content: true, createdAt: true },
     orderBy: { createdAt: "desc" as const },
   },
+  quotes: LOOKUP_INCLUDE_QUOTES,
 } as const;
 
 async function buildJobLookupPayload(
@@ -726,6 +746,16 @@ async function buildJobLookupPayload(
     device: { brand: { name: string }; model: string };
     notes: Array<{ content: string; createdAt: Date }>;
     repairs: Array<{ repairName: string; price: { toNumber: () => number } }>;
+    quotes: Array<{
+      id: string;
+      version: number;
+      amount: { toNumber: () => number };
+      note: string | null;
+      status: string;
+      sentAt: Date;
+      respondedAt: Date | null;
+      responseNote: string | null;
+    }>;
   }
 ) {
   const [statusTransitions, shopSettings] = await Promise.all([
@@ -738,9 +768,23 @@ async function buildJobLookupPayload(
     findShopSettingsUnique(prisma),
   ]);
 
+  const latestQuote = job.quotes[0] ?? null;
+
   return {
     createdAt: job.createdAt,
     customer: { name: job.customer.name },
+    quote: latestQuote
+      ? {
+          id: latestQuote.id,
+          version: latestQuote.version,
+          amount: latestQuote.amount.toNumber(),
+          note: latestQuote.note,
+          status: latestQuote.status,
+          sentAt: latestQuote.sentAt,
+          respondedAt: latestQuote.respondedAt,
+          responseNote: latestQuote.responseNote,
+        }
+      : null,
     device: `${job.device.brand.name} ${job.device.model}`,
     estimatedDate: job.estimatedDate,
     jobCode: job.jobCode,

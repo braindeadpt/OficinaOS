@@ -18,6 +18,8 @@ export type { PartCategoryType } from "./part-categories";
 export { PartCategory } from "./part-categories";
 export type { PaymentMethodType } from "./payment-methods";
 export { PAYMENT_METHODS, PaymentMethod } from "./payment-methods";
+export type { QuoteStatusType } from "./quote-statuses";
+export { QuoteStatus } from "./quote-statuses";
 export type { RepairCategoryType } from "./repair-categories";
 export { RepairCategory } from "./repair-categories";
 export type { RoleType } from "./roles";
