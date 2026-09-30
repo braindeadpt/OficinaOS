@@ -171,8 +171,10 @@ export const technicianRole = ac.newRole({
 });
 
 export const frontDeskRole = ac.newRole({
-  // Admin-plugin resources — limited access
-  user: ["create", "list", "get", "update"],
+  // Admin-plugin resources — limited access.
+  // No create/update: staff account management is OWNER-only so front-desk
+  // users cannot mint or tamper with privileged accounts.
+  user: ["list", "get"],
   // No session access
 
   // Business resources

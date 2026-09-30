@@ -15,6 +15,7 @@ import {
   findUnique as findPartUnique,
   update as updatePart,
 } from "../repositories/part.repository.js";
+import { createStockMovement } from "../repositories/stock-movement.repository.js";
 import {
   keysetOrderBy,
   requireKeysetCursor,
@@ -87,14 +88,35 @@ export async function create(prisma: PrismaClient, input: CreatePartInput) {
 export async function update(
   prisma: PrismaClient,
   id: string,
-  input: UpdatePartInput
+  input: UpdatePartInput,
+  userId: string
 ) {
   const part = await findPartUnique(prisma, id);
   if (!part) {
     return null;
   }
 
-  return updatePart(prisma, id, input);
+  const stockDelta =
+    input.stockQuantity === undefined
+      ? 0
+      : input.stockQuantity - (part.stockQuantity ?? 0);
+  if (stockDelta === 0) {
+    return updatePart(prisma, id, input);
+  }
+
+  // A direct stock edit still goes through the movement ledger: record the
+  // signed delta as an ADJUSTMENT so physical count and history stay in sync.
+  return prisma.$transaction(async (tx) => {
+    const updated = await updatePart(tx, id, input);
+    await createStockMovement(tx, {
+      balanceAfter: updated.stockQuantity,
+      createdById: userId,
+      partId: id,
+      quantity: stockDelta,
+      type: "ADJUSTMENT",
+    });
+    return updated;
+  });
 }
 
 export async function toggleActive(

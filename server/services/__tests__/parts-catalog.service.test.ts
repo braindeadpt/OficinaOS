@@ -9,7 +9,7 @@ import {
 } from "../parts-catalog.service";
 
 function mockPrisma() {
-  return {
+  const mock = {
     partsCatalog: {
       findMany: vi.fn(),
       count: vi.fn(),
@@ -19,7 +19,10 @@ function mockPrisma() {
       // Field-reference sentinel for column-to-column comparisons
       fields: { reorderLevel: "partsCatalog.reorderLevel" },
     },
-  } as unknown as PrismaClient;
+    stockMovement: { create: vi.fn() },
+    $transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(mock)),
+  };
+  return mock as unknown as PrismaClient;
 }
 
 describe("list", () => {
@@ -343,7 +346,12 @@ describe("update", () => {
       prisma.partsCatalog.findUnique as ReturnType<typeof vi.fn>
     ).mockResolvedValue(null);
 
-    const result = await update(prisma, "non-existent", { name: "New Name" });
+    const result = await update(
+      prisma,
+      "non-existent",
+      { name: "New Name" },
+      "user-1"
+    );
 
     expect(result).toBeNull();
   });
@@ -361,13 +369,67 @@ describe("update", () => {
       name: "New Name",
     });
 
-    const result = await update(prisma, "part-1", {
-      name: "New Name",
-      defaultPrice: 200,
-    });
+    const result = await update(
+      prisma,
+      "part-1",
+      {
+        name: "New Name",
+        defaultPrice: 200,
+      },
+      "user-1"
+    );
 
     expect(result).toHaveProperty("name", "New Name");
     expect(result).toHaveProperty("defaultPrice", 200);
+  });
+
+  it("records an ADJUSTMENT movement when stockQuantity changes", async () => {
+    (
+      prisma.partsCatalog.findUnique as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      id: "part-1",
+      name: "Old Name",
+      stockQuantity: 10,
+    });
+    (prisma.partsCatalog.update as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "part-1",
+      stockQuantity: 4,
+    });
+
+    await update(prisma, "part-1", { stockQuantity: 4 }, "user-1");
+
+    expect(
+      (prisma as unknown as { stockMovement: { create: unknown } })
+        .stockMovement.create
+    ).toHaveBeenCalledWith({
+      data: {
+        balanceAfter: 4,
+        createdById: "user-1",
+        partId: "part-1",
+        quantity: -6,
+        type: "ADJUSTMENT",
+      },
+    });
+  });
+
+  it("does not write a movement when stockQuantity is unchanged", async () => {
+    (
+      prisma.partsCatalog.findUnique as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      id: "part-1",
+      stockQuantity: 10,
+    });
+    (prisma.partsCatalog.update as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "part-1",
+      stockQuantity: 10,
+    });
+
+    await update(prisma, "part-1", { name: "Renamed" }, "user-1");
+
+    expect(
+      (prisma as unknown as { stockMovement: { create: unknown } })
+        .stockMovement.create
+    ).not.toHaveBeenCalled();
   });
 });
 

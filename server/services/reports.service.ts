@@ -14,12 +14,12 @@ import type {
 import {
   aggregateJobDeposits,
   aggregateJobRevenue,
+  aggregateOutstandingJobs,
   countJobs,
   countJobsSimple,
   countReturnClaims,
   findAuditLogsForStatus,
   findCustomersByIds,
-  findOutstandingJobs,
   findRevenueBreakdown,
   findTurnaroundJobs,
   groupJobRepairs,
@@ -108,7 +108,7 @@ export async function revenueReport(
         ...scopeFilter,
         createdAt: { gte: range.start, lt: range.end },
       }),
-      findOutstandingJobs(db, {
+      aggregateOutstandingJobs(db, {
         ...scopeFilter,
         status: { in: ["DONE", "DELIVERED"] as JobStatus[] },
       }),
@@ -123,16 +123,8 @@ export async function revenueReport(
   const totalDeposits = toMoney(depositSum._sum.depositAmount);
   const prevTotalRevenue = toMoney(Number(prevRevenue[0]?.revenue ?? 0));
 
-  let outstandingBalance = 0;
-  let outstandingJobCount = 0;
-  for (const row of outstandingRows) {
-    const balance = toMoney(row.estimatedCost) - toMoney(row.depositAmount);
-    if (balance > 0) {
-      outstandingBalance += balance;
-      outstandingJobCount++;
-    }
-  }
-  outstandingBalance = toMoney(outstandingBalance);
+  const outstandingBalance = toMoney(Number(outstandingRows[0]?.balance ?? 0));
+  const outstandingJobCount = Number(outstandingRows[0]?.count ?? 0);
 
   const revenueChangePercent =
     prevTotalRevenue > 0

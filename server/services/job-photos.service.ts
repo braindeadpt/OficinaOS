@@ -34,15 +34,18 @@ export async function upload(
   prisma: PrismaClient,
   jobId: string,
   file: { mimetype: string; toBuffer: () => Promise<Buffer> },
-  userId: string
+  userId: string,
+  options?: { skipMutabilityCheck?: boolean }
 ) {
   const job = await findJobById(prisma, jobId);
   if (!job) {
     return null;
   }
-  const mutabilityError = assertJobMutable(job);
-  if (mutabilityError) {
-    return mutabilityError;
+  if (!options?.skipMutabilityCheck) {
+    const mutabilityError = assertJobMutable(job);
+    if (mutabilityError) {
+      return mutabilityError;
+    }
   }
 
   const photoCount = await countPhotos(prisma, jobId);

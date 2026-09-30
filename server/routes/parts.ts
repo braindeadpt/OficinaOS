@@ -153,7 +153,12 @@ export const partsRoutes: FastifyPluginAsync = async (app) => {
           ),
         });
       }
-      const result = await updatePart(app.prisma, id, parsed.data);
+      const result = await updatePart(
+        app.prisma,
+        id,
+        parsed.data,
+        getUserId(req)
+      );
       if (!result) {
         throw new AppError("PART_NOT_FOUND");
       }

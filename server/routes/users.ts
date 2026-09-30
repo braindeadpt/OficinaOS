@@ -24,7 +24,7 @@ import {
   toggleStatus as toggleStatusSvc,
   updateUserProfileService,
 } from "../services/user.service.js";
-import { getSessionId, getUserId } from "../utils/request.js";
+import { getRole, getSessionId, getUserId } from "../utils/request.js";
 import {
   resolveValidationMessage,
   resolveZodErrors,
@@ -129,7 +129,8 @@ export const usersRoutes: FastifyPluginAsync = async (app) => {
         },
         request.headers as unknown as Headers,
         parsed.data,
-        getUserId(request)
+        getUserId(request),
+        getRole(request)
       );
 
       return reply.status(201).send(user);
@@ -168,7 +169,12 @@ export const usersRoutes: FastifyPluginAsync = async (app) => {
         throw new AppError("CANNOT_DEACTIVATE_OWN");
       }
 
-      const user = await toggleStatusSvc(app.prisma, id, isActive);
+      const user = await toggleStatusSvc(
+        app.prisma,
+        id,
+        isActive,
+        getRole(request)
+      );
       return reply.send(user);
     }
   );
@@ -204,7 +210,8 @@ export const usersRoutes: FastifyPluginAsync = async (app) => {
         app.prisma,
         id,
         parsed.data.password,
-        getUserId(request)
+        getUserId(request),
+        getRole(request)
       );
       return reply.send({ success: true });
     }

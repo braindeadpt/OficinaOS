@@ -9,7 +9,7 @@ import {
   getById as getSaleById,
   list as listSales,
 } from "../services/sale.service.js";
-import { getUserId } from "../utils/request.js";
+import { getRole, getUserId } from "../utils/request.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
 // biome-ignore lint/suspicious/useAwait: FastifyPluginAsync requires async
@@ -59,7 +59,15 @@ export const saleRoutes: FastifyPluginAsync = async (app) => {
         });
       }
       const userId = getUserId(req);
-      const sale = await createSale(app.prisma, app, parsed.data, userId);
+      const pricePerm = await app.auth.api.userHasPermission({
+        body: {
+          role: getRole(req),
+          permissions: { parts: ["overridePrice"] },
+        },
+      });
+      const sale = await createSale(app.prisma, app, parsed.data, userId, {
+        canOverridePrice: Boolean(pricePerm.success),
+      });
       return reply.status(201).send(sale);
     }
   );

@@ -41,8 +41,16 @@ const auth = betterAuth({
 
 const SEED_ADMIN_USERNAME = "admin";
 // Default seed password — the app forces a username + password change on
-// first login, so this value is only a bootstrap credential.
-const SEED_ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD || "braindead";
+// first login, so this value is only a bootstrap credential. Outside dev it
+// must come from the environment so a predictable password is never seeded.
+const SEED_ADMIN_PASSWORD =
+  process.env.SEED_ADMIN_PASSWORD ||
+  (process.env.NODE_ENV === "production" ? "" : "braindead");
+if (!SEED_ADMIN_PASSWORD) {
+  throw new Error(
+    "SEED_ADMIN_PASSWORD is required when NODE_ENV=production — refusing to seed the default password"
+  );
+}
 const SEED_ADMIN_EMAIL =
   process.env.SEED_ADMIN_EMAIL || "portuguesedoitbetter@gmail.com";
 

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import { useLocation } from "react-router";
 import { toast } from "sonner";
 import BottomNav from "@/components/modules/bottom-nav";
 import type { IntakeFormData } from "@/components/modules/jobs/intake-modal";
@@ -9,6 +10,7 @@ import PrintPreviewDialog from "@/components/modules/jobs/print-preview-dialog";
 import Sidebar from "@/components/modules/sidebar";
 import TopBar from "@/components/modules/top-bar";
 import { ShopSettingsProvider } from "@/components/providers/shop-settings-provider";
+import { ChunkErrorBoundary } from "@/components/ui/chunk-error-boundary";
 import api from "@/lib/api";
 import { useJobsStore } from "@/stores/jobs";
 import { useUiStore } from "@/stores/ui";
@@ -22,6 +24,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const closeIntakeModal = useUiStore((s) => s.closeIntakeModal);
   const showPrintPreview = useUiStore((s) => s.showPrintPreview);
   const { createJob, fetchJobs, fetchMetrics } = useJobsStore();
+  const { pathname } = useLocation();
   const { t } = useTranslation();
 
   const handleIntakeSubmit = useCallback(
@@ -72,7 +75,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         <Sidebar />
         <TopBar />
         <main className="min-h-screen p-4 pt-20 pb-24 md:p-8 md:pt-24 md:pb-24 lg:ms-64 lg:pb-8">
-          {children}
+          {/* Page crashes stay inside <main> — keying by pathname also
+              auto-recovers the boundary on navigation. */}
+          <ChunkErrorBoundary key={pathname}>{children}</ChunkErrorBoundary>
         </main>
         <BottomNav />
         <IntakeModal

@@ -73,6 +73,7 @@ function mockPrisma(
     $transaction: vi.fn((callback: (client: typeof mock) => Promise<unknown>) =>
       callback(mock)
     ),
+    $queryRaw: vi.fn().mockResolvedValue([{ id: "job-1" }]),
     ...overrides,
   };
   return mock as unknown as PrismaClient;

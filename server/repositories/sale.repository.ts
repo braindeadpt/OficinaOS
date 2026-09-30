@@ -2,6 +2,7 @@ import type { Prisma } from "@generated/client";
 import type { DbClient } from "./types.js";
 
 export interface StockCandidate {
+  defaultPrice: Prisma.Decimal;
   id: string;
   stockQuantity: number;
 }
@@ -12,19 +13,31 @@ export function findCatalogPartsByIds(
 ): Promise<StockCandidate[]> {
   return prisma.partsCatalog.findMany({
     where: { id: { in: ids } },
-    select: { id: true, stockQuantity: true },
+    select: { id: true, stockQuantity: true, defaultPrice: true },
   });
 }
 
-export function decrementStock(
+export async function decrementStock(
   prisma: DbClient,
   id: string,
   quantity: number
-): Promise<{ count: number }> {
-  return prisma.partsCatalog.updateMany({
-    where: { id, stockQuantity: { gte: quantity } },
-    data: { stockQuantity: { decrement: quantity } },
-  });
+): Promise<{ balanceAfter: number } | null> {
+  const rows = await prisma.$queryRaw<
+    Array<{ stockQuantity: number | string }>
+  >`
+    UPDATE "parts_catalog"
+    SET "stockQuantity" = "stockQuantity" - ${quantity}
+    WHERE "id" = ${id} AND "stockQuantity" >= ${quantity}
+    RETURNING "stockQuantity"
+  `;
+  if (rows.length === 0) {
+    return null;
+  }
+  const first = rows[0]?.stockQuantity;
+  return {
+    balanceAfter:
+      typeof first === "string" ? Number.parseInt(first, 10) : (first ?? 0),
+  };
 }
 
 export function createSale(

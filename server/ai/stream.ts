@@ -223,7 +223,17 @@ export async function streamChat(params: StreamParams): Promise<StreamResult> {
   };
 
   let resolvedConversationId = conversationId;
-  if (!resolvedConversationId) {
+  if (resolvedConversationId) {
+    // A caller-supplied conversation must belong to them — otherwise a user
+    // could read or inject messages into someone else's AI history.
+    const owned = await prisma.aiConversation.findFirst({
+      where: { id: resolvedConversationId, userId },
+      select: { id: true },
+    });
+    if (!owned) {
+      throw new AppError("CONVERSATION_NOT_FOUND");
+    }
+  } else {
     const conv = await prisma.aiConversation.create({
       data: { userId },
     });

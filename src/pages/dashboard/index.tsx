@@ -249,7 +249,7 @@ function MetricsGrid({
         icon="bar_chart"
         label={t("avg_profit_margin")}
         unit="%"
-        value={data ? `${Math.round(data.avgProfitMargin * 100)}` : "--"}
+        value={data ? `${Math.round(data.avgProfitMargin)}` : "--"}
       >
         {data && data.avgProfitMargin > 0 && (
           <span

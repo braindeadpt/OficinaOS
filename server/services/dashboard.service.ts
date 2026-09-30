@@ -143,7 +143,8 @@ export async function avgProfitMargin(
   if (revenue === 0) {
     return 0;
   }
-  return Math.round(((revenue - cost) / revenue) * 100) / 100;
+  // Percent (e.g. 42.35), same unit as reports.service's avgProfitMargin.
+  return Math.round(((revenue - cost) / revenue) * 10_000) / 100;
 }
 
 export async function revenueAndMarginComparison(
@@ -166,15 +167,17 @@ export async function revenueAndMarginComparison(
 
   const revenueThisMonth = current.revenue;
   const revenuePrevMonth = prev.revenue;
+  // Percent (e.g. 42.35), same unit as reports.service's avgProfitMargin.
   const avgProfitMarginThis =
     current.revenue === 0
       ? 0
-      : Math.round(((current.revenue - current.cost) / current.revenue) * 100) /
-        100;
+      : Math.round(
+          ((current.revenue - current.cost) / current.revenue) * 10_000
+        ) / 100;
   const avgProfitMarginPrev =
     prev.revenue === 0
       ? 0
-      : Math.round(((prev.revenue - prev.cost) / prev.revenue) * 100) / 100;
+      : Math.round(((prev.revenue - prev.cost) / prev.revenue) * 10_000) / 100;
 
   let revenueChangePct: number;
   if (revenuePrevMonth === 0) {
@@ -186,7 +189,7 @@ export async function revenueAndMarginComparison(
   }
 
   const avgProfitMarginChange = Math.round(
-    (avgProfitMarginThis - avgProfitMarginPrev) * 100
+    avgProfitMarginThis - avgProfitMarginPrev
   );
 
   return {
