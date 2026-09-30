@@ -18,4 +18,6 @@ export const ACTION_ICONS: Record<string, string> = {
   USER_CREATED: "person_add",
   PASSWORD_RESET: "key",
   API_MUTATION: "api",
+  QUOTE_SENT: "request_quote",
+  QUOTE_RESPONDED: "how_to_reg",
 };

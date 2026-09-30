@@ -10,6 +10,7 @@ import JobNotesSection from "@/components/modules/jobs/job-notes-section";
 import JobPartsSection from "@/components/modules/jobs/job-parts-section";
 import JobPaymentsSection from "@/components/modules/jobs/job-payments-section";
 import JobPhotosSection from "@/components/modules/jobs/job-photos-section";
+import JobQuotesSection from "@/components/modules/jobs/job-quotes-section";
 import JobRepairsSection from "@/components/modules/jobs/job-repairs-section";
 import JobReturnsHistorySection from "@/components/modules/jobs/job-returns-history-section";
 import JobWaitingPartsSection from "@/components/modules/jobs/job-waiting-parts-section";
@@ -373,6 +374,15 @@ export default function JobDetailPage() {
         <div className="mt-3">
           <JobRepairsSection job={job} onChanged={() => fetchJob()} />
         </div>
+      </div>
+
+      {/* ── Quotes ── */}
+      <div className="mt-8 rounded-2xl bg-surface-container p-6">
+        <JobQuotesSection
+          estimatedCost={toNum(job.estimatedCost)}
+          jobId={job.id}
+          onChanged={() => fetchJob()}
+        />
       </div>
 
       {/* ── Payments ── */}

@@ -1,12 +1,14 @@
 import {
   JobStatus as PrismaJobStatus,
   PartCategory as PrismaPartCategory,
+  QuoteStatus as PrismaQuoteStatus,
   RepairCategory as PrismaRepairCategory,
   Role as PrismaRole,
 } from "@generated/enums";
 import {
   JobStatus,
   PartCategory,
+  QuoteStatus,
   RepairCategory,
   Role,
 } from "@shared/constants";
@@ -34,6 +36,12 @@ describe("enum sync: shared constants match Prisma generated enums", () => {
   it("RepairCategory matches Prisma enum", () => {
     const prismaValues = Object.values(PrismaRepairCategory).sort();
     const sharedValues = Object.values(RepairCategory).sort();
+    expect(sharedValues).toEqual(prismaValues);
+  });
+
+  it("QuoteStatus matches Prisma enum", () => {
+    const prismaValues = Object.values(PrismaQuoteStatus).sort();
+    const sharedValues = Object.values(QuoteStatus).sort();
     expect(sharedValues).toEqual(prismaValues);
   });
 });

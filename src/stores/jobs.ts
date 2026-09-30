@@ -4,6 +4,7 @@ import type {
   JobNote,
   JobPart,
   JobPartsWaiting,
+  JobQuote,
   JobRepair,
   Payment,
 } from "@shared/types";
@@ -92,6 +93,7 @@ interface JobsState {
   fetchPayments: (
     jobId: string
   ) => Promise<{ paidTotal: number; payments: Payment[] }>;
+  fetchQuotes: (jobId: string) => Promise<JobQuote[]>;
   isCreatingJob: boolean;
   isLoadingJobs: boolean;
   isLoadingMetrics: boolean;
@@ -103,6 +105,10 @@ interface JobsState {
   removePayment: (jobId: string, paymentId: string) => Promise<void>;
   removeRepair: (jobId: string, repairId: string) => Promise<void>;
   removeWaitingPart: (jobId: string, waitingId: string) => Promise<void>;
+  sendQuote: (
+    jobId: string,
+    data: { amount?: number; note?: string }
+  ) => Promise<JobQuote>;
   totalCount: number;
   transitionStatus: (
     id: string,
@@ -372,6 +378,30 @@ export const useJobsStore = create<JobsState>((set) => ({
       return res.data as { paidTotal: number; payments: Payment[] };
     } catch (err: unknown) {
       const message = getErrorMessage(err, i18n.t("errors.fetch_payments"));
+      set({ error: message });
+      throw new Error(message);
+    }
+  },
+
+  fetchQuotes: async (jobId) => {
+    set({ error: null });
+    try {
+      const res = await api.get(`/jobs/${jobId}/quotes`);
+      return res.data as JobQuote[];
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, i18n.t("errors.fetch_quotes"));
+      set({ error: message });
+      throw new Error(message);
+    }
+  },
+
+  sendQuote: async (jobId, data) => {
+    set({ error: null });
+    try {
+      const res = await api.post(`/jobs/${jobId}/quotes`, data);
+      return res.data as JobQuote;
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, i18n.t("errors.send_quote"));
       set({ error: message });
       throw new Error(message);
     }

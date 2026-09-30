@@ -1,8 +1,17 @@
 import { JobStatus, type JobStatusType, LANGUAGES } from "@shared/constants";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { useParams } from "react-router";
-import api from "@/lib/api";
+import { Field } from "@/components/ui/field";
+import { Textarea } from "@/components/ui/textarea";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
+import api, { type ApiError } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth";
 
 function LanguageSwitcher() {
@@ -51,6 +60,17 @@ interface StatusTransition {
   to: string;
 }
 
+interface QuoteInfo {
+  amount: number;
+  id: string;
+  note: string | null;
+  respondedAt: string | null;
+  responseNote: string | null;
+  sentAt: string;
+  status: string;
+  version: number;
+}
+
 interface TrackingData {
   createdAt: string;
   customerName: string;
@@ -61,6 +81,7 @@ interface TrackingData {
   formattedReceivedDate: string;
   issue: string;
   jobCode: string;
+  quote: QuoteInfo | null;
   shopAddress: string;
   shopName: string;
   shopPhone: string;
@@ -238,14 +259,194 @@ function LookupForm({
   );
 }
 
+function QuoteCard({
+  quote,
+  canRespond,
+  onRespond,
+}: {
+  quote: QuoteInfo;
+  canRespond: boolean;
+  onRespond: (decision: "approve" | "reject", note?: string) => Promise<void>;
+}) {
+  const { t } = useTranslation();
+  const fmt = useFormatCurrency();
+  const [showRejectForm, setShowRejectForm] = useState(false);
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const respond = async (decision: "approve" | "reject") => {
+    setBusy(true);
+    setError(null);
+    try {
+      await onRespond(decision, note.trim() || undefined);
+    } catch (err: unknown) {
+      const code = (err as ApiError)?.code;
+      if (code === "QUOTE_ALREADY_RESPONDED") {
+        setError(t("errors.quote_already_responded"));
+      } else if (code === "QUOTE_SUPERSEDED") {
+        setError(t("errors.quote_superseded"));
+      } else {
+        setError(t("errors.respond_quote"));
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const responded = quote.status !== "SENT";
+
+  let actionArea: ReactNode;
+  if (responded) {
+    actionArea = (
+      <div className="mt-4 flex items-start gap-3 rounded-xl bg-surface-container-high p-4">
+        <span
+          className={`material-symbols-outlined text-xl ${quote.status === "APPROVED" ? "text-primary" : "text-error"}`}
+        >
+          {quote.status === "APPROVED" ? "check_circle" : "cancel"}
+        </span>
+        <div>
+          <p className="font-semibold text-sm">
+            {quote.status === "APPROVED"
+              ? t("tracking_quote_approved")
+              : t("tracking_quote_rejected")}
+          </p>
+          {quote.respondedAt && (
+            <p className="mt-0.5 text-on-surface-variant text-xs">
+              {t("tracking_quote_responded_at", {
+                time: new Date(quote.respondedAt).toLocaleString(),
+              })}
+            </p>
+          )}
+          {quote.responseNote && (
+            <p className="mt-1 text-on-surface-variant text-sm">
+              {quote.responseNote}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  } else if (canRespond) {
+    actionArea = (
+      <div className="mt-4 space-y-3">
+        <p className="text-on-surface-variant text-sm">
+          {t("tracking_quote_pending_hint")}
+        </p>
+        {showRejectForm && (
+          <Field label={t("tracking_quote_reject_note_label")}>
+            <Textarea
+              onChange={(e) => setNote(e.target.value)}
+              placeholder={t("tracking_quote_reject_note_placeholder")}
+              rows={2}
+              value={note}
+            />
+          </Field>
+        )}
+        {error && (
+          <p className="font-body text-error text-xs" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="flex flex-col gap-3 sm:flex-row">
+          {showRejectForm ? (
+            <>
+              <button
+                className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-error px-6 py-3 font-semibold text-on-error text-sm transition-opacity hover:opacity-90 disabled:opacity-50"
+                disabled={busy}
+                onClick={() => respond("reject")}
+                type="button"
+              >
+                <span className="material-symbols-outlined text-sm">
+                  cancel
+                </span>
+                {t("tracking_quote_confirm_reject")}
+              </button>
+              <button
+                className="flex min-h-11 items-center justify-center rounded-xl px-6 py-3 font-semibold text-on-surface-variant text-sm transition-colors hover:bg-surface-container-high"
+                disabled={busy}
+                onClick={() => setShowRejectForm(false)}
+                type="button"
+              >
+                {t("cancel")}
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3 font-semibold text-on-primary text-sm transition-opacity hover:opacity-90 disabled:opacity-50"
+                disabled={busy}
+                onClick={() => respond("approve")}
+                type="button"
+              >
+                <span className="material-symbols-outlined text-sm">
+                  check_circle
+                </span>
+                {t("tracking_quote_approve")}
+              </button>
+              <button
+                className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-surface-container-high px-6 py-3 font-semibold text-on-surface text-sm transition-colors hover:bg-surface-container-highest disabled:opacity-50"
+                disabled={busy}
+                onClick={() => setShowRejectForm(true)}
+                type="button"
+              >
+                <span className="material-symbols-outlined text-sm">
+                  cancel
+                </span>
+                {t("tracking_quote_reject")}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  } else {
+    actionArea = (
+      <p className="mt-4 text-on-surface-variant text-sm">
+        {t("tracking_quote_awaiting")}
+      </p>
+    );
+  }
+
+  return (
+    <div className="rounded-xl bg-surface-container p-6">
+      <div className="mb-3 flex items-center gap-3">
+        <span className="material-symbols-outlined text-primary text-xl">
+          request_quote
+        </span>
+        <span className="font-bold text-on-surface text-sm uppercase tracking-wide">
+          {t("tracking_quote_title")}
+        </span>
+      </div>
+
+      <p className="font-extrabold font-headline text-2xl text-on-surface">
+        {fmt(quote.amount)}
+      </p>
+      {quote.note && (
+        <p className="mt-2 font-body text-on-surface-variant text-sm leading-relaxed">
+          {quote.note}
+        </p>
+      )}
+
+      {actionArea}
+    </div>
+  );
+}
+
 function StatusView({
   data,
+  canRespondQuote,
   onBack,
   onRefresh,
+  onRespondQuote,
 }: {
   data: TrackingData;
+  canRespondQuote: boolean;
   onBack: () => void;
   onRefresh: () => void;
+  onRespondQuote: (
+    decision: "approve" | "reject",
+    note?: string
+  ) => Promise<void>;
 }) {
   const { t } = useTranslation();
   const isTerminal = TERMINAL_STATUSES.has(data.status as JobStatusType);
@@ -497,6 +698,14 @@ function StatusView({
                 </div>
               </div>
 
+              {data.quote && (
+                <QuoteCard
+                  canRespond={canRespondQuote}
+                  onRespond={onRespondQuote}
+                  quote={data.quote}
+                />
+              )}
+
               <div className="space-y-6">
                 <h3 className="mb-6 font-label text-on-surface-variant text-xs uppercase tracking-widest">
                   {t("tracking_repair_progress")}
@@ -632,6 +841,7 @@ function mapJobToTrackingData(
   return {
     jobCode: data.jobCode as string,
     status: data.status as string,
+    quote: (data.quote as QuoteInfo | null) ?? null,
     device: data.device as string,
     issue: data.reportedProblem as string,
     estimatedCompletion,
@@ -718,6 +928,25 @@ export default function TrackingPage() {
       }
     },
     []
+  );
+
+  const respondQuote = useCallback(
+    async (decision: "approve" | "reject", note?: string) => {
+      if (!(lastSearchParams?.phone4 && trackedJob?.quote)) {
+        return;
+      }
+      const res = await api.post("/public/quote-respond", {
+        code: lastSearchParams.code,
+        phone4: lastSearchParams.phone4,
+        quoteId: trackedJob.quote.id,
+        decision,
+        ...(note ? { note } : {}),
+      });
+      setTrackedJob((prev) =>
+        prev ? { ...prev, quote: res.data as QuoteInfo } : prev
+      );
+    },
+    [lastSearchParams, trackedJob?.quote]
   );
 
   const refreshJob = useCallback(() => {
@@ -849,11 +1078,13 @@ export default function TrackingPage() {
   if (trackedJob) {
     return (
       <StatusView
+        canRespondQuote={Boolean(lastSearchParams?.phone4)}
         data={trackedJob}
         onBack={() => {
           setTrackedJob(null);
         }}
         onRefresh={refreshJob}
+        onRespondQuote={respondQuote}
       />
     );
   }

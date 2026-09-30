@@ -185,6 +185,18 @@ export const routeSecurity: [string, RouteSecurityOverride][] = [
       },
     },
   ],
+  // Public quote response shares the tracking identity proof, so it gets the
+  // same strict IP budget as the lookup endpoint.
+  [
+    "/api/public/quote-respond",
+    {
+      rateLimit: {
+        keyGenerator: lookupKeyGenerator,
+        max: 10,
+        timeWindow: "15 minutes",
+      },
+    },
+  ],
   ["/api/jobs", { rateLimit: { max: 30, timeWindow: "1 minute" } }],
   // A streaming completion is by far the most expensive request the API serves.
   ["/api/ai/chat/stream", { rateLimit: { max: 10, timeWindow: "1 minute" } }],

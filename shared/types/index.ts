@@ -67,6 +67,7 @@ export type Verification = Prisma.VerificationGetPayload<Record<string, never>>;
 export type JobPartsWaiting = Prisma.JobPartsWaitingGetPayload<
   Record<string, never>
 >;
+export type JobQuote = Prisma.JobQuoteGetPayload<Record<string, never>>;
 export type JobCounter = Prisma.JobCounterGetPayload<Record<string, never>>;
 export type Sale = Prisma.SaleGetPayload<{
   include: {

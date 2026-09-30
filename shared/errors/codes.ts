@@ -154,6 +154,14 @@ export const ERRORS = {
   },
   FEEDBACK_FAILED: { status: 502, message: "errors.feedback_failed" },
 
+  // ── Quotes ─────────────────────────────────────────────────────────────
+  QUOTE_NOT_FOUND: { status: 404, message: "errors.quote_not_found" },
+  QUOTE_ALREADY_RESPONDED: {
+    status: 409,
+    message: "errors.quote_already_responded",
+  },
+  QUOTE_SUPERSEDED: { status: 409, message: "errors.quote_superseded" },
+
   // ── Server ─────────────────────────────────────────────────────────────
   INTERNAL_ERROR: { status: 500, message: "errors.internal_error" },
 

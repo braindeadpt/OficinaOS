@@ -130,6 +130,15 @@ enum AuditAction {
   USER_CREATED
   PASSWORD_RESET
   API_MUTATION
+  QUOTE_SENT
+  QUOTE_RESPONDED
+}
+
+enum QuoteStatus {
+  SENT
+  APPROVED
+  REJECTED
+  SUPERSEDED
 }
 
 enum AiRole {
@@ -422,6 +431,7 @@ model Job {
   photos             JobPhoto[]
   notes              JobNote[]
   payments           Payment[]
+  quotes             JobQuote[]
   partsUsed          JobPart[]
   partsWaiting       JobPartsWaiting[]
   repairs            JobRepair[]
@@ -445,6 +455,31 @@ model Job {
   @@index([status, estimatedDate])
   @@index([imei])
   @@map("jobs")
+}
+
+// ─────────────────────────────────────────────
+// JOB QUOTES
+// Versioned customer-facing quotes sent for approval on the public
+// tracking page. Sending a new quote supersedes the previous SENT one
+// (rejection → revise → resend v2). status transitions:
+//   SENT -> APPROVED | REJECTED | SUPERSEDED
+// ─────────────────────────────────────────────
+
+model JobQuote {
+  id           String      @id @default(cuid())
+  jobId        String
+  job          Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  version      Int
+  amount       Decimal     @db.Decimal(10, 2)
+  note         String?     @db.Text
+  status       QuoteStatus @default(SENT)
+  sentAt       DateTime    @default(now()) @db.Timestamptz
+  respondedAt  DateTime?   @db.Timestamptz
+  responseNote String?     @db.Text
+
+  @@unique([jobId, version])
+  @@index([jobId])
+  @@map("job_quotes")
 }
 
 // ─────────────────────────────────────────────

@@ -177,6 +177,7 @@ describe("lookupByCode", () => {
       device: { brand: { name: "Apple" }, model: "iPhone 14" },
       jobCode: "ABC123",
       notes: [],
+      quotes: [],
       repairs: [],
       status: "IN_REPAIR",
     });
@@ -195,6 +196,7 @@ describe("lookupByCode", () => {
       estimatedDate: null,
       jobCode: "ABC123",
       notes: [],
+      quotes: [],
       repairs: [],
       reportedProblem: "Screen broken",
       status: "IN_REPAIR",
@@ -216,6 +218,7 @@ describe("lookupByCode", () => {
       estimatedDate: null,
       jobCode: "DEF456",
       notes: [],
+      quotes: [],
       repairs: [],
       reportedProblem: "Battery issue",
       status: "PENDING",
@@ -233,6 +236,7 @@ describe("lookupByCode", () => {
       device: { brand: { name: "Apple" }, model: "iPhone 13" },
       jobCode: "GHI789",
       notes: [],
+      quotes: [],
       repairs: [],
       status: "COMPLETED",
     });
@@ -249,6 +253,7 @@ describe("lookupByCode", () => {
       device: { brand: { name: "Apple" }, model: "iPhone 13" },
       jobCode: "JKL012",
       notes: [],
+      quotes: [],
       repairs: [],
       status: "COMPLETED",
     });
