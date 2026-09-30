@@ -36,6 +36,7 @@ src/CLAUDE.md
 
 # Agent-generated planning artifacts and Spec Kit output
 docs/superpowers/
+docs/internal/
 specs/
 # local backup dumps (sidecar writes to a volume; this guards dev runs)
 backups/
