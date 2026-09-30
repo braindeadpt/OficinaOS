@@ -33,7 +33,8 @@ export async function create(
   prisma: PrismaClient,
   app: FastifyInstance,
   input: CreateSaleInput,
-  userId: string
+  userId: string,
+  options?: { canOverridePrice?: boolean }
 ): Promise<CreateSaleResult> {
   const catalogItemIds = [
     ...new Set(
@@ -50,7 +51,18 @@ export async function create(
     if (item.partId && !part) {
       throw new AppError("PART_NOT_FOUND");
     }
+    // Catalog lines bill at the catalog price unless the caller holds
+    // parts:overridePrice; ad-hoc lines (no partId) keep the entered price.
+    if (
+      part &&
+      !options?.canOverridePrice &&
+      Math.round(item.unitPrice * 100) !==
+        Math.round(Number(part.defaultPrice) * 100)
+    ) {
+      throw new AppError("FORBIDDEN");
+    }
     return {
+      balanceAfter: 0,
       category: item.category,
       lineTotal: item.unitPrice * item.quantity,
       name: item.name,
@@ -65,14 +77,17 @@ export async function create(
 
   return prisma.$transaction(async (tx) => {
     // Atomic decrement: abort the whole sale if any catalog line is short.
+    // RETURNING gives the exact post-decrement balance for the movement
+    // ledger — a pre-read snapshot would drift under concurrent sales.
     for (const item of items) {
       if (!item.partId) {
         continue;
       }
       const updated = await decrementStock(tx, item.partId, item.quantity);
-      if (updated.count === 0) {
+      if (!updated) {
         throw new AppError("INSUFFICIENT_STOCK");
       }
+      item.balanceAfter = updated.balanceAfter;
     }
 
     const saleCode = await generateSaleCode(tx);
@@ -83,10 +98,8 @@ export async function create(
       if (!item.partId) {
         continue;
       }
-      const part = catalogById.get(item.partId);
       await createStockMovement(tx, {
-        // Best-effort post-decrement balance from the pre-read snapshot.
-        balanceAfter: part ? part.stockQuantity - item.quantity : 0,
+        balanceAfter: item.balanceAfter,
         createdById: userId,
         partId: item.partId,
         quantity: -item.quantity,

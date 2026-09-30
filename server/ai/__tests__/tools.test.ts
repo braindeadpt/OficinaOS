@@ -160,6 +160,32 @@ describe("executeQueryDatabase — statement safety", () => {
     );
   });
 
+  it("rejects dangerous Postgres functions even without a FROM clause", async () => {
+    for (const sql of [
+      "SELECT pg_terminate_backend(1)",
+      "SELECT pg_cancel_backend(1)",
+      "SELECT pg_advisory_lock(1)",
+      "SELECT pg_ls_dir('/tmp')",
+      "SELECT pg_stat_file('/etc/passwd')",
+      "SELECT pg_reload_conf()",
+      "SELECT set_config('statement_timeout','0',false)",
+      "SELECT nextval('job_counters_id_seq')",
+      "SELECT setval('job_counters_id_seq',1)",
+      "SELECT lo_create(1)",
+      "SELECT query_to_xml('SELECT 1',true,true,'')",
+    ]) {
+      const { executed } = await run(sql);
+      expect(executed, sql).toBe(false);
+    }
+  });
+
+  it("still allows ordinary function calls on allowed tables", async () => {
+    const { executed } = await run(
+      "SELECT upper(name), count(*) FROM customers GROUP BY name"
+    );
+    expect(executed).toBe(true);
+  });
+
   it("allows SQL keywords that appear inside string literals", async () => {
     // Blocklist matching must ignore quoted data, or a customer whose
     // company is literally named "UNION" becomes unsearchable.

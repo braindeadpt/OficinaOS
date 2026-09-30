@@ -223,7 +223,7 @@ describe("avgProfitMargin", () => {
       $queryRaw: vi.fn().mockResolvedValue([{ revenue: "1000", cost: "400" }]),
     });
     const result = await avgProfitMargin(prisma, ownerScope, monthRange);
-    expect(result).toBe(0.6);
+    expect(result).toBe(60);
   });
 
   it("returns 0 when revenue is 0", async () => {

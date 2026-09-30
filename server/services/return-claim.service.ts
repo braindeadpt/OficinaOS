@@ -377,13 +377,18 @@ export async function resolve(
     if (claim.reworkJobId) {
       return { error: "RETURN_CLAIM_HAS_REWORK_JOB" };
     }
+    // Cap the refund at money actually collected (deposit + payments),
+    // never the estimate — the customer can only be refunded what they paid.
     const original = await prisma.job.findUnique({
       where: { id: claim.originalJobId },
-      select: { estimatedCost: true, depositAmount: true },
+      select: {
+        depositAmount: true,
+        payments: { select: { amount: true } },
+      },
     });
     const totalReceived =
-      Number(original?.estimatedCost ?? 0) +
-      Number(original?.depositAmount ?? 0);
+      Number(original?.depositAmount ?? 0) +
+      (original?.payments ?? []).reduce((s, p) => s + Number(p.amount), 0);
     if ((input.refundAmount ?? 0) > totalReceived) {
       return { error: "REFUND_EXCEEDS_ORIGINAL" };
     }
@@ -436,11 +441,15 @@ export async function uploadPhoto(
     return { error: "RETURN_CLAIM_NOT_OPEN" };
   }
 
+  // The job is DELIVERED by definition of an open claim, so the job-level
+  // mutability gate would always reject; the OPEN claim check above is the
+  // correct guard for claim photos.
   const result = await uploadJobPhoto(
     prisma,
     claim.originalJobId,
     file,
-    userId
+    userId,
+    { skipMutabilityCheck: true }
   );
   if (!result || (typeof result === "object" && "error" in result)) {
     return result as ServiceResult<{ id: string; path: string }>;
@@ -459,7 +468,8 @@ export async function uploadPhoto(
 export async function removePhoto(
   prisma: DbClient,
   claimId: string,
-  photoId: string
+  photoId: string,
+  userId: string
 ): Promise<ServiceResult<{ removed: true }>> {
   const claim = await prisma.returnClaim.findUnique({
     where: { id: claimId },
@@ -476,7 +486,7 @@ export async function removePhoto(
     prisma,
     claim.originalJobId,
     photoId,
-    "system"
+    userId
   );
   if (!removed) {
     return { error: "RESOURCE_NOT_FOUND" };

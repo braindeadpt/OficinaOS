@@ -89,6 +89,22 @@ const BLOCKED_PATTERNS = [
   /\bpg_sleep\b/i,
   /\bwaitfor\b/i,
   /\bbenchmark\b/i,
+  // Every pg_* function call — a bare `SELECT <fn>(...)` has no FROM clause,
+  // so table allow-listing never sees pg_terminate_backend, pg_ls_dir,
+  // pg_stat_file, pg_advisory_lock, pg_reload_conf, etc.
+  /\bpg_[a-z_]+\s*\(/i,
+  // Config/sequence mutators that also bypass table validation.
+  /\bset_config\s*\(/i,
+  /\bcurrent_setting\s*\(/i,
+  /\bnextval\s*\(/i,
+  /\bsetval\s*\(/i,
+  /\bcurrval\s*\(/i,
+  /\blastval\s*\(/i,
+  /\blo_create\s*\(/i,
+  /\blo_put\s*\(/i,
+  /\blo_get\s*\(/i,
+  /\blo_unlink\s*\(/i,
+  /\bquery_to_xml\s*\(/i,
 ];
 
 /**

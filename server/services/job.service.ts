@@ -516,6 +516,76 @@ async function validateCancellation(
   return { ok: true };
 }
 
+interface TransitionArgs {
+  fromStatus: string;
+  newStatus: JobStatusType;
+  reason?: string;
+  techAssigned: boolean;
+  updateData: Prisma.JobUpdateInput;
+  userId: string;
+}
+
+async function applyTransition(
+  prisma: PrismaClient,
+  id: string,
+  args: TransitionArgs
+) {
+  try {
+    return await prisma.$transaction(async (tx) => {
+      // Serialize concurrent transitions and re-check the status under the
+      // lock: the flow validation above ran on a pre-lock snapshot, so
+      // without this a raced transition could apply on top of a newer state.
+      await tx.$queryRaw`SELECT "id" FROM "jobs" WHERE "id" = ${id} FOR UPDATE`;
+      const fresh = await tx.job.findUnique({
+        where: { id },
+        select: { status: true },
+      });
+      if (!fresh || fresh.status !== args.fromStatus) {
+        throw new AppError("CONFLICT_STATUS_TRANSITION");
+      }
+
+      const updatedJob = await jobUpdate(tx, id, args.updateData, JOB_INCLUDE);
+
+      await createAuditLog(tx, {
+        action: AuditAction.STATUS_CHANGED,
+        fromValue: args.fromStatus,
+        jobId: id,
+        metadata: args.reason ? { reason: args.reason } : undefined,
+        note: args.reason,
+        toValue: args.newStatus,
+        userId: args.userId,
+      });
+
+      if (args.techAssigned) {
+        await createAuditLog(tx, {
+          action: AuditAction.TECHNICIAN_ASSIGNED,
+          fromValue: undefined,
+          jobId: id,
+          toValue: args.userId,
+          userId: args.userId,
+        });
+      }
+
+      return updatedJob;
+    });
+  } catch (error) {
+    if (
+      error instanceof AppError &&
+      error.code === "CONFLICT_STATUS_TRANSITION"
+    ) {
+      const current = await findUniqueSimple(prisma, id);
+      return {
+        allowedTransitions: current
+          ? (JOB_STATUS_FLOW[current.status as JobStatusType] ?? [])
+          : [],
+        currentStatus: current?.status,
+        error: "CONFLICT_STATUS_TRANSITION" as const,
+      };
+    }
+    throw error;
+  }
+}
+
 export async function transitionStatus(
   prisma: PrismaClient,
   id: string,
@@ -578,27 +648,18 @@ export async function transitionStatus(
     techAssigned = true;
   }
 
-  const updated = await jobUpdate(prisma, id, updateData, JOB_INCLUDE);
-
-  await createAuditLog(prisma, {
-    action: AuditAction.STATUS_CHANGED,
-    fromValue: job.status,
-    jobId: id,
-    metadata: options?.reason ? { reason: options.reason } : undefined,
-    note: options?.reason,
-    toValue: newStatus,
+  const applied = await applyTransition(prisma, id, {
+    fromStatus: job.status,
+    newStatus,
+    reason: options?.reason,
+    techAssigned,
+    updateData,
     userId,
   });
-
-  if (techAssigned) {
-    await createAuditLog(prisma, {
-      action: AuditAction.TECHNICIAN_ASSIGNED,
-      fromValue: undefined,
-      jobId: id,
-      toValue: userId,
-      userId,
-    });
+  if ("error" in applied) {
+    return applied;
   }
+  const updated = applied;
 
   const templateName = STATUS_TEMPLATE_MAP[newStatus];
   if (templateName) {

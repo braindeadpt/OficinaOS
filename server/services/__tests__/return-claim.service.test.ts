@@ -523,8 +523,8 @@ describe("resolve", () => {
     });
     prisma.job.findUnique.mockResolvedValue({
       id: "job-1",
-      estimatedCost: 5000,
       depositAmount: 1000,
+      payments: [{ amount: 500 }],
     });
 
     const result = await resolve(
@@ -548,8 +548,8 @@ describe("resolve", () => {
     });
     prisma.job.findUnique.mockResolvedValue({
       id: "job-1",
-      estimatedCost: 5000,
       depositAmount: 1000,
+      payments: [{ amount: 4000 }],
     });
     prisma.returnClaim.update.mockResolvedValue({
       id: "rc-1",
@@ -583,8 +583,8 @@ describe("resolve", () => {
       originalJob: { jobCode: "RPR-001" },
     });
     prisma.job.findUnique.mockResolvedValue({
-      estimatedCost: 5000,
       depositAmount: 0,
+      payments: [{ amount: 3000 }, { amount: 2000 }],
     });
     prisma.returnClaim.update.mockResolvedValue({
       id: "rc-1",
@@ -689,7 +689,7 @@ describe("removePhoto", () => {
       id: "rc-1",
       status: "RESOLVED",
     });
-    const result = await removePhoto(prisma as never, "rc-1", "ph-1");
+    const result = await removePhoto(prisma as never, "rc-1", "ph-1", "user-1");
     expect(result).toEqual({ error: "RETURN_CLAIM_NOT_OPEN" });
   });
 });

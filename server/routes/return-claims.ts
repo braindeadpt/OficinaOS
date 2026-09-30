@@ -286,7 +286,7 @@ export const returnClaimsRoutes: FastifyPluginAsync = async (app) => {
     },
     async (req, reply) => {
       const { id, photoId } = req.params as { id: string; photoId: string };
-      const result = await removePhoto(app.prisma, id, photoId);
+      const result = await removePhoto(app.prisma, id, photoId, getUserId(req));
       throwIfError(result);
       return reply.status(204).send();
     }

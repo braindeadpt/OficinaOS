@@ -62,16 +62,50 @@ export function aggregateJobDeposits(prisma: DbClient, where: JobWhereInput) {
   });
 }
 
-export function findOutstandingJobs(prisma: DbClient, where: JobWhereInput) {
-  return prisma.job.findMany({
-    where,
-    select: {
-      estimatedCost: true,
-      depositAmount: true,
-      partsUsed: { select: { totalCost: true } },
-      repairs: { select: { price: true } },
-    },
-  });
+export function aggregateOutstandingJobs(
+  prisma: DbClient,
+  where: JobWhereInput
+) {
+  const statusFilter =
+    where.status &&
+    typeof where.status === "object" &&
+    "in" in (where.status as object)
+      ? (where.status as { in: string[] }).in
+      : undefined;
+
+  const technicianFilter = where.technicianId ?? undefined;
+
+  // Outstanding = billed (repairs + parts) − deposit − payments, per job,
+  // floored at zero — the same basis as computeJobBalance, computed in SQL
+  // so the report never has to hydrate every unpaid job.
+  return prisma.$queryRaw<{ balance: string; count: number }[]>`
+    SELECT
+      COALESCE(SUM(o.outstanding), 0)::text AS balance,
+      COUNT(*) FILTER (WHERE o.outstanding > 0)::int AS count
+    FROM (
+      SELECT
+        COALESCE(r_total.repair_sum, 0) + COALESCE(p_total.parts_sum, 0)
+          - COALESCE(j."depositAmount", 0) - COALESCE(pay.paid, 0) AS outstanding
+      FROM "jobs" j
+      LEFT JOIN (SELECT "jobId", SUM("price") AS repair_sum FROM "job_repairs" GROUP BY "jobId") r_total
+        ON r_total."jobId" = j."id"
+      LEFT JOIN (SELECT "jobId", SUM("totalCost") AS parts_sum FROM "job_parts" GROUP BY "jobId") p_total
+        ON p_total."jobId" = j."id"
+      LEFT JOIN (SELECT "jobId", SUM("amount") AS paid FROM "payments" GROUP BY "jobId") pay
+        ON pay."jobId" = j."id"
+      WHERE 1=1
+      ${
+        statusFilter
+          ? Prisma.sql`AND j."status" IN (${Prisma.join(statusFilter)})`
+          : Prisma.empty
+      }
+      ${
+        technicianFilter
+          ? Prisma.sql`AND j."technicianId" = ${technicianFilter}`
+          : Prisma.empty
+      }
+    ) o
+  `;
 }
 
 export function findRevenueBreakdown(prisma: DbClient, where: JobWhereInput) {

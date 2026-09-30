@@ -290,12 +290,12 @@ describe("FRONT_DESK role", () => {
     expect(frontDeskRole.statements).not.toHaveProperty("ai");
   });
 
-  it("has user create, list, get, update", () => {
+  it("has user list and get only — staff account management is OWNER-only", () => {
     const { user } = frontDeskRole.statements as { user: readonly string[] };
-    expect(user).toContain("create");
+    expect(user).not.toContain("create");
     expect(user).toContain("list");
     expect(user).toContain("get");
-    expect(user).toContain("update");
+    expect(user).not.toContain("update");
     expect(user).not.toContain("delete");
     expect(user).not.toContain("set-role");
     expect(user).not.toContain("ban");

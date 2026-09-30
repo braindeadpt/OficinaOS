@@ -136,6 +136,22 @@ export async function testAiConnection(prisma: PrismaClient) {
     return { message: "Endpoint URL is not set", success: false };
   }
 
+  // The URL is fetched server-side: only http(s) endpoints are probed, and
+  // redirects are not followed (a redirect could launder the probe to a
+  // different internal address than the one the owner configured).
+  let endpoint: URL;
+  try {
+    endpoint = new URL(settings.endpointUrl);
+  } catch {
+    return { message: "Endpoint URL is not valid", success: false };
+  }
+  if (endpoint.protocol !== "http:" && endpoint.protocol !== "https:") {
+    return {
+      message: "Endpoint URL must use http or https",
+      success: false,
+    };
+  }
+
   try {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -153,7 +169,7 @@ export async function testAiConnection(prisma: PrismaClient) {
       headers.Authorization = `Bearer ${apiKey}`;
     }
 
-    const response = await fetch(settings.endpointUrl, {
+    const response = await fetch(endpoint, {
       body: JSON.stringify({
         max_tokens: 1,
         messages: [{ content: "ping", role: "user" }],
@@ -161,6 +177,7 @@ export async function testAiConnection(prisma: PrismaClient) {
       }),
       headers,
       method: "POST",
+      redirect: "error",
       signal: AbortSignal.timeout(10_000),
     });
 

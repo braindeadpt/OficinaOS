@@ -16,12 +16,15 @@ vi.mock("../../utils/sale-code.js", () => ({
 import { create, getById, list } from "../sale.service.js";
 
 function makePrisma(
-  catalogParts: Array<{ id: string; stockQuantity: number }>
+  catalogParts: Array<{
+    id: string;
+    stockQuantity: number;
+    defaultPrice: number;
+  }>
 ) {
   const prisma = {
     partsCatalog: {
       findMany: vi.fn().mockResolvedValue(catalogParts),
-      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     stockMovement: {
       create: vi.fn().mockResolvedValue({}),
@@ -35,6 +38,7 @@ function makePrisma(
       findUnique: vi.fn(),
       findMany: vi.fn().mockResolvedValue([]),
     },
+    $queryRaw: vi.fn().mockResolvedValue([{ stockQuantity: 8 }]),
     $transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(prisma)),
   };
   return prisma as unknown as any;
@@ -63,7 +67,9 @@ describe("create sale", () => {
   });
 
   it("creates a sale with snapshotted items and decrements stock", async () => {
-    const prisma = makePrisma([{ id: "part-1", stockQuantity: 10 }]);
+    const prisma = makePrisma([
+      { id: "part-1", stockQuantity: 10, defaultPrice: 3500 },
+    ]);
 
     const result = await create(prisma, makeApp(), baseInput, "user-1");
 
@@ -71,10 +77,7 @@ describe("create sale", () => {
       id: "sale-1",
       saleCode: "SALE-2026-000001",
     });
-    expect(prisma.partsCatalog.updateMany).toHaveBeenCalledWith({
-      where: { id: "part-1", stockQuantity: { gte: 2 } },
-      data: { stockQuantity: { decrement: 2 } },
-    });
+    expect(prisma.$queryRaw).toHaveBeenCalled();
     expect(prisma.sale.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -102,12 +105,14 @@ describe("create sale", () => {
     const result = await create(prisma, makeApp(), input, "user-1");
 
     expect(result.saleCode).toBe("SALE-2026-000001");
-    expect(prisma.partsCatalog.updateMany).not.toHaveBeenCalled();
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
   });
 
   it("aborts and rolls back when stock is insufficient", async () => {
-    const prisma = makePrisma([{ id: "part-1", stockQuantity: 10 }]);
-    prisma.partsCatalog.updateMany.mockResolvedValue({ count: 0 });
+    const prisma = makePrisma([
+      { id: "part-1", stockQuantity: 10, defaultPrice: 3500 },
+    ]);
+    prisma.$queryRaw.mockResolvedValue([]);
 
     await expect(
       create(prisma, makeApp(), baseInput, "user-1")
@@ -125,7 +130,9 @@ describe("create sale", () => {
   });
 
   it("fires the low-stock hook inside the transaction", async () => {
-    const prisma = makePrisma([{ id: "part-1", stockQuantity: 10 }]);
+    const prisma = makePrisma([
+      { id: "part-1", stockQuantity: 10, defaultPrice: 3500 },
+    ]);
 
     await create(prisma, makeApp(), baseInput, "user-1");
 
@@ -137,7 +144,9 @@ describe("create sale", () => {
   });
 
   it("writes a CONSUMPTION ledger entry per catalog line", async () => {
-    const prisma = makePrisma([{ id: "part-1", stockQuantity: 10 }]);
+    const prisma = makePrisma([
+      { id: "part-1", stockQuantity: 10, defaultPrice: 3500 },
+    ]);
 
     await create(prisma, makeApp(), baseInput, "user-1");
 
@@ -150,6 +159,38 @@ describe("create sale", () => {
         type: "CONSUMPTION",
       },
     });
+  });
+
+  it("rejects a catalog price override without the permission", async () => {
+    const prisma = makePrisma([
+      { id: "part-1", stockQuantity: 10, defaultPrice: 3500 },
+    ]);
+    const input = {
+      ...baseInput,
+      items: [{ ...baseInput.items[0], unitPrice: 1 }],
+    };
+
+    await expect(create(prisma, makeApp(), input, "user-1")).rejects.toThrow(
+      AppError
+    );
+    expect(prisma.sale.create).not.toHaveBeenCalled();
+  });
+
+  it("allows a catalog price override with parts:overridePrice", async () => {
+    const prisma = makePrisma([
+      { id: "part-1", stockQuantity: 10, defaultPrice: 3500 },
+    ]);
+    const input = {
+      ...baseInput,
+      items: [{ ...baseInput.items[0], unitPrice: 100 }],
+      payments: [{ amount: 200, method: "CASH" as const }],
+    };
+
+    const result = await create(prisma, makeApp(), input, "user-1", {
+      canOverridePrice: true,
+    });
+
+    expect(result.saleCode).toBe("SALE-2026-000001");
   });
 
   it("skips ledger entries for ad-hoc items", async () => {

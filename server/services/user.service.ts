@@ -1,5 +1,5 @@
 import { Prisma, type PrismaClient } from "@generated/client";
-import type { RoleType } from "@shared/constants/roles";
+import { Role, type RoleType } from "@shared/constants/roles";
 import { AppError } from "@shared/errors/app-error.js";
 import type {
   ActivityListQueryInput,
@@ -115,9 +115,16 @@ export async function createUser(
   },
   headers: unknown,
   data: { username: string; email: string; password: string; role: string },
-  userId: string
+  userId: string,
+  callerRole: RoleType
 ) {
   const { username, email, password, role } = data;
+
+  // Only an OWNER may create another OWNER — non-owner callers can at most
+  // provision TECHNICIAN / FRONT_DESK accounts.
+  if (role === Role.OWNER && callerRole !== Role.OWNER) {
+    throw new AppError("FORBIDDEN");
+  }
 
   const existing = await userFindFirst(prisma, {
     OR: [{ username }, { email }],
@@ -165,8 +172,16 @@ export async function createUser(
 export async function toggleStatus(
   prisma: DbClient,
   id: string,
-  isActive: boolean
+  isActive: boolean,
+  callerRole: RoleType
 ) {
+  const target = await userFindUniqueById(prisma, id, { id: true, role: true });
+  if (!target) {
+    throw new AppError("USER_NOT_FOUND");
+  }
+  if (target.role === Role.OWNER && callerRole !== Role.OWNER) {
+    throw new AppError("FORBIDDEN");
+  }
   return await userUpdateStatus(prisma, id, isActive, USER_SELECT_NO_IMAGE);
 }
 
@@ -174,14 +189,19 @@ export async function resetPassword(
   prisma: PrismaClient,
   id: string,
   newPassword: string,
-  userId: string
+  userId: string,
+  callerRole: RoleType
 ) {
   const targetUser = await userFindUniqueById(prisma, id, {
     id: true,
+    role: true,
     username: true,
   });
   if (!targetUser) {
     throw new AppError("USER_NOT_FOUND");
+  }
+  if (targetUser.role === Role.OWNER && callerRole !== Role.OWNER) {
+    throw new AppError("FORBIDDEN");
   }
 
   const hashed = await hashPassword(newPassword);

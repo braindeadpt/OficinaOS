@@ -253,7 +253,7 @@ const rolePermissions: Record<RoleType, Record<string, string[]>> = {
     notifications: ["read", "send"],
     dashboard: ["viewFrontDesk"],
     returns: ["create", "edit", "viewSelf"],
-    user: ["create", "list", "get", "update"],
+    user: ["list", "get"],
   },
 };
 
@@ -705,6 +705,58 @@ describe("RBAC Matrix", () => {
         const app = buildApp("user-1", Role.FRONT_DESK);
         const res = await app.inject({ method: "GET", url: "/api/users" });
         expect(res.statusCode).toBe(200);
+      });
+    });
+
+    describe("User management (OWNER-only)", () => {
+      it("FRONT_DESK cannot create users", async () => {
+        const app = buildApp("user-1", Role.FRONT_DESK);
+        const res = await app.inject({
+          method: "POST",
+          url: "/api/users",
+          payload: {
+            username: "new-tech",
+            email: "new-tech@test.dev",
+            password: "Password1",
+            role: "TECHNICIAN",
+          },
+        });
+        expect(res.statusCode).toBe(403);
+      });
+
+      it("FRONT_DESK cannot toggle user status", async () => {
+        const app = buildApp("user-1", Role.FRONT_DESK);
+        const res = await app.inject({
+          method: "PATCH",
+          url: "/api/users/user-owner/status",
+          payload: { isActive: false },
+        });
+        expect(res.statusCode).toBe(403);
+      });
+
+      it("FRONT_DESK cannot reset user passwords", async () => {
+        const app = buildApp("user-1", Role.FRONT_DESK);
+        const res = await app.inject({
+          method: "POST",
+          url: "/api/users/user-owner/reset-password",
+          payload: { password: "Password1" },
+        });
+        expect(res.statusCode).toBe(403);
+      });
+
+      it("TECHNICIAN cannot create users", async () => {
+        const app = buildApp("user-1", Role.TECHNICIAN);
+        const res = await app.inject({
+          method: "POST",
+          url: "/api/users",
+          payload: {
+            username: "new-tech",
+            email: "new-tech@test.dev",
+            password: "Password1",
+            role: "TECHNICIAN",
+          },
+        });
+        expect(res.statusCode).toBe(403);
       });
     });
   });
