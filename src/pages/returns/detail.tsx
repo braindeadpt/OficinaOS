@@ -41,6 +41,16 @@ export default function ReturnDetailPage() {
     };
   }, [id]);
 
+  const refreshClaim = () => {
+    if (id) {
+      fetchReturnClaim(id)
+        .then(setClaim)
+        .catch(() => {
+          /* keep showing the stale snapshot */
+        });
+    }
+  };
+
   if (isLoading || !claim) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -81,7 +91,7 @@ export default function ReturnDetailPage() {
 
       <TriageSection claim={claim} />
       <ResolutionSection claim={claim} />
-      <ClaimPhotosSection claim={claim} />
+      <ClaimPhotosSection claim={claim} onChanged={refreshClaim} />
     </>
   );
 }

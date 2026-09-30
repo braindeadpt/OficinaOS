@@ -10,11 +10,12 @@ import type { ReturnClaimDetail } from "@/types/return-claim";
 
 interface Props {
   claim: ReturnClaimDetail;
+  onChanged: () => void;
 }
 
 const STAGES: PhotoStage[] = ["RETURN_INTAKE", "RETURN_RESOLUTION"];
 
-export default function ClaimPhotosSection({ claim }: Props) {
+export default function ClaimPhotosSection({ claim, onChanged }: Props) {
   const { t } = useTranslation();
   const canEdit = useCan({ returns: ["edit"] });
   const intakeRef = useRef<HTMLInputElement>(null);
@@ -32,6 +33,7 @@ export default function ClaimPhotosSection({ claim }: Props) {
     setUploading(true);
     try {
       await uploadClaimPhoto(claim.id, { file, stage });
+      onChanged();
       toast.success(t("returns_toast_photo_added"));
     } finally {
       setUploading(false);
@@ -40,6 +42,7 @@ export default function ClaimPhotosSection({ claim }: Props) {
 
   const handleRemove = async (photoId: string) => {
     await deleteClaimPhoto(claim.id, photoId);
+    onChanged();
     toast.success(t("returns_toast_photo_removed"));
   };
 
