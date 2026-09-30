@@ -186,10 +186,12 @@ export const routeSecurity: [string, RouteSecurityOverride][] = [
     },
   ],
   // Public quote response shares the tracking identity proof, so it gets the
-  // same strict IP budget as the lookup endpoint.
+  // same strict IP budget as the lookup endpoint. csrf:false — anonymous
+  // customers have no session/token pair to validate.
   [
     "/api/public/quote-respond",
     {
+      csrf: false,
       rateLimit: {
         keyGenerator: lookupKeyGenerator,
         max: 10,

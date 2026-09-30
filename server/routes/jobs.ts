@@ -55,7 +55,7 @@ import {
   clearPaymentOnDelivery,
   setPaymentOnDelivery,
 } from "../services/payment.service.js";
-import { createCodeLockout } from "../utils/code-lockout.js";
+import { codeLockout } from "../utils/code-lockout.js";
 import { getRole, getUserId } from "../utils/request.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
@@ -66,11 +66,9 @@ const PHONE4_RE = /^\d{4}$/;
 export const jobRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", requirePermission({ jobs: ["view"] }));
 
-  // Per-code lockout shared with /api/public/quote-respond — see
-  // utils/code-lockout.ts for the per-process caveat.
-  const codeLockouts = createCodeLockout();
-
   // Public: no auth — used by customer self-tracking page.
+  // `config.public` is what actually bypasses the requirePermission hook
+  // (a `preHandler: []` route option cannot remove plugin-level hooks).
   // Rate limit lives in config/route-security.ts (10 per 15 min, per IP).
   app.get("/lookup", {
     schema: {
@@ -85,7 +83,7 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
         },
       },
     },
-    preHandler: [],
+    config: { public: true },
     handler: async (req, reply) => {
       const { code, phone4 } = req.query as {
         code?: string;
@@ -107,7 +105,7 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
       // biome-ignore lint/style/noNonNullAssertion: validated above
       const phone4Str = phone4!;
 
-      if (codeLockouts.isLocked(codeStr)) {
+      if (codeLockout.isLocked(codeStr)) {
         throw new AppError("JOB_NOT_FOUND");
       }
 
@@ -116,11 +114,11 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
         throw new AppError("JOB_NOT_FOUND");
       }
       if (!result.job) {
-        codeLockouts.trackFailure(codeStr);
+        codeLockout.trackFailure(codeStr);
         throw new AppError("JOB_NOT_FOUND");
       }
 
-      codeLockouts.clear(codeStr);
+      codeLockout.clear(codeStr);
       return reply.send(result.job);
     },
   });
