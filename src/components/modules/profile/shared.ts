@@ -23,4 +23,5 @@ export const LANGUAGE_OPTIONS = [
   { value: "pt", label: "Português" },
   { value: "en", label: "English" },
   { value: "fr", label: "Français" },
+  { value: "es", label: "Español" },
 ];

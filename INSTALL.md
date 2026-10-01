@@ -55,6 +55,7 @@ No primeiro acesso a app **obriga a definir um novo nome de utilizador e uma nov
 |---|---|
 | `INICIAR.bat` | Ligar o OficinaOS (duplo clique — abre o browser) |
 | `PARAR.bat` | Desligar (os dados ficam guardados) |
+| `ATUALIZAR.bat` | Atualizar para a versão mais recente |
 
 **Outros dispositivos da loja** (tablet, telemóvel do técnico, outro PC): abrir `http://<IP-do-PC>:4000` — o endereço exato está no `PRIMEIRO-LOGIN.txt`. Não precisam de instalar nada.
 
@@ -70,6 +71,10 @@ No primeiro acesso a app **obriga a definir um novo nome de utilizador e uma nov
 
 ## Atualizar para uma versão nova
 
+Quando a app avisar que existe versão nova (ou quando quiseres): duplo clique em **`ATUALIZAR.bat`** — faz backup da base de dados, descarrega a imagem nova e reinicia. As migrações da base de dados correm sozinhas no arranque.
+
+À mão, se preferires:
+
 ```bat
 :: com imagem pré-construída (recomendado):
 docker compose -f docker-compose.app.yml pull
@@ -79,3 +84,14 @@ docker compose -f docker-compose.app.yml up -d
 git pull
 docker compose up -d --build
 ```
+
+### Atualizações automáticas (opcional)
+
+Se quiseres que a app se atualize sozinha, ativa o perfil `auto-update` no `.env`:
+
+```ini
+COMPOSE_PROFILES=auto-update
+UPDATE_SCHEDULE=0 30 7 * * *   # cron de 6 campos — por defeito 07:30 diário
+```
+
+Depois `docker compose -f docker-compose.app.yml up -d` para arrancar o Watchtower. Escolhe uma hora em que **o PC está ligado e a loja fechada** — atualizar implica uns segundos de restart. Só o contentor da app é atualizado; a base de dados e os backups nunca são mexidos. Se uma atualização correr mal, o dump diário (14 dias de retenção) permite restaurar.

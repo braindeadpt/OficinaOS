@@ -4,6 +4,7 @@ import LanguageDetector from "i18next-browser-languagedetector";
 import { initReactI18next } from "react-i18next";
 import { setFormatLocale } from "@/lib/format";
 import en from "./locales/en.json";
+import es from "./locales/es.json";
 import fr from "./locales/fr.json";
 import pt from "./locales/pt.json";
 
@@ -27,6 +28,7 @@ function applyLanguage(lng: string) {
 i18n.init({
   resources: {
     en: { translation: en },
+    es: { translation: es },
     fr: { translation: fr },
     pt: { translation: pt },
   },

@@ -32,6 +32,9 @@ function resolveLocale(lang: string): string {
   if (lang === "en") {
     return "en-US";
   }
+  if (lang === "es") {
+    return "es-ES";
+  }
   return "pt-PT";
 }
 

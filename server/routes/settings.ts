@@ -6,6 +6,7 @@ import {
 } from "@shared/schemas/settings.schema";
 import type { FastifyPluginAsync } from "fastify";
 import { requirePermission } from "../middlewares/rbac.js";
+import { getAppVersionInfo } from "../services/app-version.service.js";
 import { getBackupStatus } from "../services/backup-status.service.js";
 import {
   getAiSettings,
@@ -52,6 +53,17 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (_req, reply) => reply.send(await getBackupStatus())
+  );
+
+  app.get(
+    "/update-check",
+    {
+      schema: {
+        tags: ["settings"],
+        summary: "Check GitHub Releases for a newer OficinaOS version",
+      },
+    },
+    async (_req, reply) => reply.send(await getAppVersionInfo())
   );
 
   app.put(

@@ -132,6 +132,30 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     servedBy: "Servi par",
     total: "Total",
   },
+  es: {
+    balanceDue: "Pendiente de pago",
+    customer: "Cliente",
+    dateLocale: "es-ES",
+    device: "Dispositivo",
+    job: "Reparación",
+    label: "Etiqueta",
+    paid: "Pagado",
+    paidDeposit: "Pagado (anticipo)",
+    paymentMethods: {
+      CARD: "Tarjeta",
+      CASH: "Efectivo",
+      OTHER: "Otro",
+      TRANSFER: "Transferencia",
+    },
+    phone: "Teléfono",
+    problem: "Problema",
+    qrUnavailable: "QR no disponible — configurar APP_URL",
+    receipt: "Recibo",
+    sale: "Venta",
+    scanQr: "Escanea el QR para seguir tu reparación",
+    servedBy: "Atendido por",
+    total: "Total",
+  },
 };
 
 function receiptStrings(locale?: string): ReceiptStrings {
