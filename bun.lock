@@ -52,6 +52,9 @@
       "devDependencies": {
         "@biomejs/biome": "2.4.12",
         "@capacitor/cli": "^8.3.0",
+        "@fontsource-variable/karla": "^5.3.0",
+        "@fontsource-variable/manrope": "^5.3.0",
+        "@fontsource-variable/material-symbols-outlined": "^5.3.8",
         "@tailwindcss/vite": "^4.2.2",
         "@testing-library/jest-dom": "^6.9.1",
         "@testing-library/react": "^16.3.2",
@@ -229,6 +232,12 @@
     "@fastify/swagger-ui": ["@fastify/swagger-ui@5.2.6", "", { "dependencies": { "@fastify/static": "9.1.3", "fastify-plugin": "5.1.0", "openapi-types": "12.1.3", "rfdc": "1.4.1", "yaml": "2.8.3" } }, "sha512-OMnms0O5s9wb6wis/K5nlrAMLsgUbr1GA8uphM41IasWe3AFdgxz6r/3bA9HTxlDNUYc2FGGKeqMp3ntxmSiNA=="],
 
     "@fastify/websocket": ["@fastify/websocket@11.2.0", "", { "dependencies": { "duplexify": "4.1.3", "fastify-plugin": "5.1.0", "ws": "8.20.0" } }, "sha512-3HrDPbAG1CzUCqnslgJxppvzaAZffieOVbLp1DAy1huCSynUWPifSvfdEDUR8HlJLp3sp1A36uOM2tJogADS8w=="],
+
+    "@fontsource-variable/karla": ["@fontsource-variable/karla@5.3.0", "", {}, "sha512-CypH/IGhvpU0I4sue6YG+ZDyx5heglFJAiU2NClTkKOh+jsqjZ7AAgWKGG59+X1dGCN/9L4BLLacCXD7TBBETA=="],
+
+    "@fontsource-variable/manrope": ["@fontsource-variable/manrope@5.3.0", "", {}, "sha512-6D5dgokHsWDDMtmXHznKa0hK229NN+1a4BLPmUCLqcO1Pw5EEhWY5RFt0AcXnVRAljFFPfRtLkJePQj6LSsV6g=="],
+
+    "@fontsource-variable/material-symbols-outlined": ["@fontsource-variable/material-symbols-outlined@5.3.8", "", {}, "sha512-vKpCnuTqRehg5RUVrqEQ/A8a52KykOJ65wqal9nxFXFVTYKlJOhx7r0TUbTgd2SN7oh31NJblxvX2CJxBNVqJg=="],
 
     "@hono/node-server": ["@hono/node-server@1.19.11", "", { "peerDependencies": { "hono": "4.12.12" } }, "sha512-dr8/3zEaB+p0D2n/IUrlPF1HZm586qgJNXK1a9fhg/PzdtkK7Ksd5l312tJX2yBuALqDYBlG20QEbayqPyxn+g=="],
 

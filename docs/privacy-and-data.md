@@ -40,14 +40,17 @@ registo de atividades de tratamento (Art. 30):
 
 ## Chamadas técnicas (sempre ativas, sem dados de clientes)
 
-Há três ligações à internet que a app faz por si, sem dados pessoais —
+Há duas ligações à internet que a app faz por si, sem dados pessoais —
 ficam aqui para transparência total:
 
 | Chamada | Para onde vai | O que sai | Nota |
 |---|---|---|---|
-| Fontes (letra da interface) | Google Fonts | O IP de quem abre a página — a Google vê que "alguém abriu uma página", nada mais | Acontece em cada abertura de página, staff e cliente |
 | Verificação de nova versão | GitHub | O IP do PC da loja ao consultar a versão mais recente | Só serve para avisar que há update |
 | Reportar problema | GitHub | O texto que escreveres no relatório + página atual/versão | Só quando carregas em "Reportar" — nunca automático |
+
+Até as fontes da interface (letra e ícones) estão embutidas na app — a
+página abre sem falar com a Google nem nenhum CDN, e funciona igual com
+a internet em baixo.
 
 ## O que nunca sai
 

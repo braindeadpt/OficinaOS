@@ -57,9 +57,9 @@ const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       [
         `default-src 'self'`,
         `script-src 'self' 'nonce-${nonce}'`,
-        `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`,
+        `style-src 'self' 'unsafe-inline'`,
         `img-src 'self' data: blob:`,
-        `font-src 'self' https://fonts.gstatic.com`,
+        `font-src 'self'`,
         `connect-src ${connectSrc.join(" ")}`,
         `frame-src 'none'`,
         `frame-ancestors 'none'`,

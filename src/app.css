@@ -52,9 +52,9 @@
   --color-on-tertiary-fixed: #380d00;
   --color-secondary: #456080;
 
-  --font-family-headline: "Manrope", sans-serif;
-  --font-family-body: "Karla", sans-serif;
-  --font-family-label: "Karla", sans-serif;
+  --font-family-headline: "Manrope Variable", "Manrope", sans-serif;
+  --font-family-body: "Karla Variable", "Karla", sans-serif;
+  --font-family-label: "Karla Variable", "Karla", sans-serif;
   --font-family-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
 
   --radius-xs: 0.125rem;
@@ -75,6 +75,26 @@
     "wght" 400,
     "GRAD" 0,
     "opsz" 24;
+}
+
+/* Layered so Tailwind utilities (text-[22px] etc.) still win over the 24px
+   icon-font default — same role Google's stylesheet used to play. */
+@layer components {
+  .material-symbols-outlined {
+    display: inline-block;
+    font-family: "Material Symbols Outlined Variable", monospace;
+    font-size: 24px;
+    font-style: normal;
+    font-weight: normal;
+    font-feature-settings: "liga";
+    -webkit-font-smoothing: antialiased;
+    line-height: 1;
+    text-transform: none;
+    letter-spacing: normal;
+    word-wrap: normal;
+    white-space: nowrap;
+    direction: ltr;
+  }
 }
 
 body {
