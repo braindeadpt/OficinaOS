@@ -13,6 +13,7 @@ import {
 import { paymentOnDeliverySchema } from "@shared/schemas/payment.schema";
 import { sendQuoteSchema } from "@shared/schemas/quote.schema";
 import type { FastifyPluginAsync } from "fastify";
+import { resolveUrls } from "../config/env.js";
 import { requirePermission } from "../middlewares/rbac.js";
 import {
   computeMargin,
@@ -23,6 +24,7 @@ import {
   list as listJobs,
   lookupByCode,
   lookupByCodeAuth,
+  lookupReceiptByCode,
   transitionStatus,
   update as updateJob,
 } from "../services/job.service.js";
@@ -55,6 +57,7 @@ import {
   clearPaymentOnDelivery,
   setPaymentOnDelivery,
 } from "../services/payment.service.js";
+import { renderReceiptHtml } from "../services/receipt.service.js";
 import { codeLockout } from "../utils/code-lockout.js";
 import { getRole, getUserId } from "../utils/request.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
@@ -120,6 +123,69 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
 
       codeLockout.clear(codeStr);
       return reply.send(result.job);
+    },
+  });
+
+  // Public: customer digital receipt — same code + phone4 proof and the
+  // same rate-limit/lockout budget as the lookup endpoint.
+  app.get("/lookup-receipt", {
+    schema: {
+      tags: ["jobs"],
+      summary: "Public receipt HTML by code + phone4",
+      querystring: {
+        type: "object",
+        required: ["code", "phone4"],
+        properties: {
+          code: { type: "string" },
+          phone4: { type: "string" },
+        },
+      },
+    },
+    config: { public: true },
+    handler: async (req, reply) => {
+      const { code, phone4 } = req.query as {
+        code?: string;
+        phone4?: string;
+      };
+      if (!(code && phone4)) {
+        throw new AppError("MISSING_LOOKUP_PARAMS");
+      }
+      if (code.length > 50 || !JOB_CODE_RE.test(code)) {
+        throw new AppError("INVALID_JOB_CODE");
+      }
+      if (!PHONE4_RE.test(phone4)) {
+        throw new AppError("INVALID_PHONE4");
+      }
+
+      // biome-ignore lint/style/noNonNullAssertion: validated above
+      const codeStr = code!;
+      // biome-ignore lint/style/noNonNullAssertion: validated above
+      const phone4Str = phone4!;
+
+      if (codeLockout.isLocked(codeStr)) {
+        throw new AppError("JOB_NOT_FOUND");
+      }
+
+      const result = await lookupReceiptByCode(app.prisma, codeStr, phone4Str);
+      if (!result.jobExists) {
+        throw new AppError("JOB_NOT_FOUND");
+      }
+      if (!result.job) {
+        codeLockout.trackFailure(codeStr);
+        throw new AppError("JOB_NOT_FOUND");
+      }
+
+      codeLockout.clear(codeStr);
+      const { appUrl: baseUrl } = resolveUrls();
+      const html = await renderReceiptHtml(
+        app.prisma,
+        result.job as Parameters<typeof renderReceiptHtml>[1],
+        baseUrl,
+        { locale: req.locale }
+      );
+      return reply
+        .header("Content-Type", "text/html; charset=utf-8")
+        .send(html);
     },
   });
 

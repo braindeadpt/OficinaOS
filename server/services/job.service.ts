@@ -105,9 +105,9 @@ const JOB_INCLUDE = {
   },
   partsUsed: true,
   partsWaiting: true,
-  payments: { select: { amount: true } },
+  payments: { select: { amount: true, method: true, createdAt: true } },
   photos: true,
-  repairs: true,
+  repairs: { include: { repair: { select: { warrantyDays: true } } } },
   technician: { select: { id: true, name: true, username: true } },
 } as const satisfies Prisma.JobInclude;
 
@@ -712,7 +712,15 @@ const LOOKUP_INCLUDE_QUOTES = {
 const LOOKUP_INCLUDE_PUBLIC = {
   customer: { select: { name: true, phone: true } },
   device: { select: { model: true, brand: { select: { name: true } } } },
-  repairs: { select: { repairName: true, price: true } },
+  repairs: {
+    select: {
+      repairName: true,
+      price: true,
+      repair: { select: { warrantyDays: true } },
+    },
+  },
+  partsUsed: { select: { partName: true, quantity: true, totalCost: true } },
+  payments: { select: { amount: true, method: true, createdAt: true } },
   notes: {
     where: { isCustomerVisible: true },
     select: { content: true, createdAt: true },
@@ -724,7 +732,15 @@ const LOOKUP_INCLUDE_PUBLIC = {
 const LOOKUP_INCLUDE_AUTH = {
   customer: { select: { name: true } },
   device: { select: { model: true, brand: { select: { name: true } } } },
-  repairs: { select: { repairName: true, price: true } },
+  repairs: {
+    select: {
+      repairName: true,
+      price: true,
+      repair: { select: { warrantyDays: true } },
+    },
+  },
+  partsUsed: { select: { partName: true, quantity: true, totalCost: true } },
+  payments: { select: { amount: true, method: true, createdAt: true } },
   notes: {
     where: { isCustomerVisible: true },
     select: { content: true, createdAt: true },
@@ -740,12 +756,28 @@ async function buildJobLookupPayload(
     jobCode: string;
     status: string;
     reportedProblem: string;
+    estimatedCost?: number | { toNumber: () => number } | null;
+    depositAmount?: number | { toNumber: () => number } | null;
     estimatedDate: Date | null;
     createdAt: Date;
     customer: { name: string };
     device: { brand: { name: string }; model: string };
     notes: Array<{ content: string; createdAt: Date }>;
-    repairs: Array<{ repairName: string; price: { toNumber: () => number } }>;
+    repairs: Array<{
+      repairName: string;
+      price: { toNumber: () => number };
+      repair?: { warrantyDays: number | null } | null;
+    }>;
+    partsUsed?: Array<{
+      partName: string;
+      quantity: number;
+      totalCost: { toNumber: () => number };
+    }>;
+    payments?: Array<{
+      amount: { toNumber: () => number };
+      method: string;
+      createdAt: Date | string;
+    }>;
     quotes: Array<{
       id: string;
       version: number;
@@ -770,9 +802,69 @@ async function buildJobLookupPayload(
 
   const latestQuote = job.quotes[0] ?? null;
 
+  // Digital receipt + warranty: same totals the printed receipt shows, and
+  // per-repair warranty expiry counted from the DELIVERED transition.
+  const num = (v: number | { toNumber: () => number }) =>
+    typeof v === "number" ? v : v.toNumber();
+
+  const deliveredAt =
+    statusTransitions.find((t) => t.toValue === "DELIVERED")?.createdAt ?? null;
+  const defaultWarrantyDays = shopSettings?.defaultWarrantyDays ?? 30;
+  const warranty = {
+    deliveredAt,
+    items: job.repairs.map((r) => {
+      const days = r.repair?.warrantyDays ?? defaultWarrantyDays;
+      return {
+        days,
+        name: r.repairName,
+        validUntil: deliveredAt
+          ? new Date(deliveredAt.getTime() + days * 86_400_000)
+          : null,
+      };
+    }),
+  };
+
+  const partsUsed = job.partsUsed ?? [];
+  const payments = job.payments ?? [];
+  const receiptItems = [
+    ...job.repairs.map((r) => ({
+      name: r.repairName,
+      price: r.price.toNumber(),
+      quantity: 1,
+    })),
+    ...partsUsed.map((p) => ({
+      name: p.partName,
+      price: p.totalCost.toNumber(),
+      quantity: p.quantity,
+    })),
+  ];
+  let receiptTotal = 0;
+  if (receiptItems.length > 0) {
+    receiptTotal = receiptItems.reduce((s, i) => s + i.price, 0);
+  } else if (job.estimatedCost) {
+    receiptTotal = num(job.estimatedCost);
+  }
+  const receiptDeposit = job.depositAmount ? num(job.depositAmount) : 0;
+  const receiptPaid =
+    payments.reduce((s, p) => s + p.amount.toNumber(), 0) + receiptDeposit;
+
   return {
     createdAt: job.createdAt,
     customer: { name: job.customer.name },
+    receipt: {
+      balanceDue: Math.max(0, receiptTotal - receiptPaid),
+      currency: shopSettings?.currency ?? "EUR",
+      deposit: receiptDeposit,
+      items: receiptItems,
+      paid: receiptPaid,
+      payments: payments.map((p) => ({
+        amount: p.amount.toNumber(),
+        createdAt: p.createdAt,
+        method: p.method,
+      })),
+      total: receiptTotal,
+    },
+    warranty,
     quote: latestQuote
       ? {
           id: latestQuote.id,
@@ -813,6 +905,14 @@ async function buildJobLookupPayload(
   };
 }
 
+function customerPhoneMatches(phone: string | null, phone4: string): boolean {
+  if (!phone) {
+    return false;
+  }
+  const normalizedPhone = phone.replace(/\D/g, "");
+  return normalizedPhone.length >= 4 && normalizedPhone.slice(-4) === phone4;
+}
+
 export async function lookupByCode(
   prisma: PrismaClient,
   jobCode: string,
@@ -823,12 +923,7 @@ export async function lookupByCode(
     return { job: null, jobExists: false };
   }
 
-  const storedPhone = job.customer.phone;
-  if (!storedPhone) {
-    return { job: null, jobExists: true };
-  }
-  const normalizedPhone = storedPhone.replace(/\D/g, "");
-  if (normalizedPhone.length < 4 || normalizedPhone.slice(-4) !== phone4) {
+  if (!customerPhoneMatches(job.customer.phone, phone4)) {
     return { job: null, jobExists: true };
   }
 
@@ -838,6 +933,39 @@ export async function lookupByCode(
     job as unknown as Parameters<typeof buildJobLookupPayload>[2]
   );
   return { jobExists: true, job: payload };
+}
+
+const LOOKUP_INCLUDE_RECEIPT = {
+  customer: { select: { name: true, phone: true } },
+  device: { select: { model: true, brand: { select: { name: true } } } },
+  payments: { select: { amount: true, method: true, createdAt: true } },
+  partsUsed: { select: { partName: true, quantity: true, totalCost: true } },
+  repairs: {
+    select: {
+      repairName: true,
+      price: true,
+      repair: { select: { warrantyDays: true } },
+    },
+  },
+} as const;
+
+/**
+ * Same code + phone4 proof as the tracking lookup, returning the raw job
+ * shape renderReceiptHtml consumes for the customer's digital receipt.
+ */
+export async function lookupReceiptByCode(
+  prisma: PrismaClient,
+  jobCode: string,
+  phone4: string
+): Promise<{ job: unknown | null; jobExists: boolean }> {
+  const job = await jobFindFirst(prisma, { jobCode }, LOOKUP_INCLUDE_RECEIPT);
+  if (!job) {
+    return { job: null, jobExists: false };
+  }
+  if (!customerPhoneMatches(job.customer.phone, phone4)) {
+    return { job: null, jobExists: true };
+  }
+  return { job, jobExists: true };
 }
 
 export async function lookupByCodeAuth(

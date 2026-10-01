@@ -1663,6 +1663,16 @@
   "tracking_quote_rejected": "Vous avez refusé ce devis",
   "tracking_quote_responded_at": "A répondu {{time}}",
   "tracking_quote_awaiting": "Ce devis attend votre réponse. ",
+  "tracking_receipt_balance": "Solde dû",
+  "tracking_receipt_deposit": "Acompte",
+  "tracking_receipt_paid": "Payé ({{method}})",
+  "tracking_receipt_title": "Reçu",
+  "tracking_receipt_total": "Total",
+  "tracking_receipt_view": "Afficher le reçu",
+  "tracking_warranty_days_after_delivery": "{{days}} jours à compter de la livraison",
+  "tracking_warranty_expired": "expirée",
+  "tracking_warranty_title": "Garantie",
+  "tracking_warranty_until": "valable jusqu'au {{date}}",
   "tracking_ready_desc": "Votre réparation est terminée et votre appareil est prêt à être récupéré. ",
   "tracking_ready_title": "Votre appareil est prêt !",
   "tracking_received_date": "Reçu le {{date}}",
@@ -1853,6 +1863,8 @@
   "whatsapp_phone_number_id": "Numéro de téléphone",
   "whatsapp_settings": "Paramètres WhatsApp",
   "whatsapp_templates": "Modèles WhatsApp",
+  "whatsapp_tracking_url": "URL publique de suivi",
+  "whatsapp_tracking_url_help": "Adresse publique où les clients ouvrent la page de suivi depuis les messages WhatsApp, p. ex. https://reparations.maboutique.fr ou http://192.168.1.33:4000. Facultatif — le lien n'est inclus que s'il est défini",
   "you": "Vous",
   "jobStatus": {
     "INTAKE": "Admission",
@@ -1941,7 +1953,5 @@
     "success": "Rapport envoyé — merci ! (n° {{number}})",
     "error": "Impossible d'envoyer le rapport. ",
     "error_description_required": "Veuillez décrire le problème (au moins 10 caractères)."
-  },
-  "whatsapp_tracking_url": "URL publique de suivi",
-  "whatsapp_tracking_url_help": "Adresse publique où les clients ouvrent la page de suivi depuis les messages WhatsApp, p. ex. https://reparations.maboutique.fr ou http://192.168.1.33:4000. Facultatif — le lien n'est inclus que s'il est défini"
+  }
 }

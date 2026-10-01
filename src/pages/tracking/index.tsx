@@ -71,6 +71,21 @@ interface QuoteInfo {
   version: number;
 }
 
+interface WarrantyInfo {
+  deliveredAt: string | null;
+  items: { days: number; name: string; validUntil: string | null }[];
+}
+
+interface ReceiptInfo {
+  balanceDue: number;
+  currency: string;
+  deposit: number;
+  items: { name: string; price: number; quantity: number }[];
+  paid: number;
+  payments: { amount: number; method: string; createdAt: string }[];
+  total: number;
+}
+
 interface TrackingData {
   createdAt: string;
   customerName: string;
@@ -82,11 +97,13 @@ interface TrackingData {
   issue: string;
   jobCode: string;
   quote: QuoteInfo | null;
+  receipt: ReceiptInfo | null;
   shopAddress: string;
   shopName: string;
   shopPhone: string;
   status: string;
   statusTransitions: StatusTransition[];
+  warranty: WarrantyInfo | null;
 }
 
 function LookupForm({
@@ -432,15 +449,168 @@ function QuoteCard({
   );
 }
 
+function WarrantyCard({ warranty }: { warranty: WarrantyInfo }) {
+  const { i18n, t } = useTranslation();
+  const locale = i18n.language.split("-")[0];
+  const fmtDate = (iso: string) =>
+    new Date(iso).toLocaleDateString(locale, {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+
+  return (
+    <div className="rounded-xl bg-surface-container p-6">
+      <div className="mb-4 flex items-center gap-3">
+        <span className="material-symbols-outlined text-primary text-xl">
+          verified_user
+        </span>
+        <span className="font-bold text-on-surface text-sm uppercase tracking-wide">
+          {t("tracking_warranty_title")}
+        </span>
+      </div>
+      <ul className="space-y-2">
+        {warranty.items.map((item) => {
+          const expired =
+            item.validUntil !== null &&
+            new Date(item.validUntil).getTime() < Date.now();
+          return (
+            <li
+              className="flex items-center justify-between gap-3 text-sm"
+              key={item.name}
+            >
+              <span className="text-on-surface">{item.name}</span>
+              <span
+                className={`font-medium ${expired ? "text-error" : "text-on-surface-variant"}`}
+              >
+                {item.validUntil
+                  ? `${t("tracking_warranty_until", {
+                      date: fmtDate(item.validUntil),
+                    })}${expired ? ` · ${t("tracking_warranty_expired")}` : ""}`
+                  : t("tracking_warranty_days_after_delivery", {
+                      days: item.days,
+                    })}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function ReceiptCard({
+  receipt,
+  receiptUrl,
+}: {
+  receipt: ReceiptInfo;
+  receiptUrl?: string;
+}) {
+  const { t } = useTranslation();
+  const fmt = useFormatCurrency();
+  const methodLabel = (m: string) => t(`payment_method.${m}`, m);
+
+  return (
+    <div className="rounded-xl bg-surface-container p-6">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="material-symbols-outlined text-primary text-xl">
+            receipt_long
+          </span>
+          <span className="font-bold text-on-surface text-sm uppercase tracking-wide">
+            {t("tracking_receipt_title")}
+          </span>
+        </div>
+        {receiptUrl && (
+          <a
+            className="flex min-h-11 items-center gap-1.5 rounded-lg px-3 font-semibold text-primary text-xs transition-colors hover:bg-surface-container-high"
+            href={receiptUrl}
+            rel="noreferrer"
+            target="_blank"
+          >
+            <span className="material-symbols-outlined text-sm">
+              open_in_new
+            </span>
+            {t("tracking_receipt_view")}
+          </a>
+        )}
+      </div>
+
+      {receipt.items.length > 0 && (
+        <ul className="space-y-1.5 border-outline-variant/40 border-b pb-3">
+          {receipt.items.map((item) => (
+            <li
+              className="flex items-center justify-between gap-3 text-sm"
+              key={`${item.name}-${item.price}`}
+            >
+              <span className="text-on-surface">
+                {item.name}
+                {item.quantity > 1 ? ` ×${item.quantity}` : ""}
+              </span>
+              <span className="text-on-surface-variant">{fmt(item.price)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="mt-3 space-y-1.5 text-sm">
+        {receipt.deposit > 0 && (
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-on-surface-variant">
+              {t("tracking_receipt_deposit")}
+            </span>
+            <span className="text-on-surface-variant">
+              {fmt(receipt.deposit)}
+            </span>
+          </div>
+        )}
+        {receipt.payments.map((p) => (
+          <div
+            className="flex items-center justify-between gap-3"
+            key={`${p.method}-${p.amount}-${p.createdAt}`}
+          >
+            <span className="text-on-surface-variant">
+              {t("tracking_receipt_paid", { method: methodLabel(p.method) })}
+            </span>
+            <span className="text-on-surface-variant">{fmt(p.amount)}</span>
+          </div>
+        ))}
+        <div className="flex items-center justify-between gap-3 pt-1">
+          <span className="font-semibold text-on-surface">
+            {t("tracking_receipt_total")}
+          </span>
+          <span className="font-bold text-on-surface">
+            {fmt(receipt.total)}
+          </span>
+        </div>
+        {receipt.paid > 0 && (
+          <div className="flex items-center justify-between gap-3">
+            <span className="font-semibold text-on-surface">
+              {t("tracking_receipt_balance")}
+            </span>
+            <span
+              className={`font-bold ${receipt.balanceDue > 0 ? "text-error" : "text-primary"}`}
+            >
+              {fmt(receipt.balanceDue)}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function StatusView({
   data,
   canRespondQuote,
+  receiptUrl,
   onBack,
   onRefresh,
   onRespondQuote,
 }: {
   data: TrackingData;
   canRespondQuote: boolean;
+  receiptUrl?: string;
   onBack: () => void;
   onRefresh: () => void;
   onRespondQuote: (
@@ -706,6 +876,17 @@ function StatusView({
                 />
               )}
 
+              {data.warranty && data.warranty.items.length > 0 && (
+                <WarrantyCard warranty={data.warranty} />
+              )}
+
+              {data.receipt &&
+                (data.receipt.items.length > 0 ||
+                  data.receipt.payments.length > 0 ||
+                  data.receipt.total > 0) && (
+                  <ReceiptCard receipt={data.receipt} receiptUrl={receiptUrl} />
+                )}
+
               <div className="space-y-6">
                 <h3 className="mb-6 font-label text-on-surface-variant text-xs uppercase tracking-widest">
                   {t("tracking_repair_progress")}
@@ -842,6 +1023,8 @@ function mapJobToTrackingData(
     jobCode: data.jobCode as string,
     status: data.status as string,
     quote: (data.quote as QuoteInfo | null) ?? null,
+    receipt: (data.receipt as ReceiptInfo | null) ?? null,
+    warranty: (data.warranty as WarrantyInfo | null) ?? null,
     device: data.device as string,
     issue: data.reportedProblem as string,
     estimatedCompletion,
@@ -1085,6 +1268,13 @@ export default function TrackingPage() {
         }}
         onRefresh={refreshJob}
         onRespondQuote={respondQuote}
+        receiptUrl={
+          lastSearchParams?.phone4
+            ? `/api/jobs/lookup-receipt?code=${encodeURIComponent(
+                lastSearchParams.code
+              )}&phone4=${lastSearchParams.phone4}`
+            : undefined
+        }
       />
     );
   }

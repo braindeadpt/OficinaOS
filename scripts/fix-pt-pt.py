@@ -155,6 +155,13 @@ OVERRIDES = {
     "jobs_detail_track": "Acompanhar",
     "tracking_track_btn": "Acompanhar",
     "tracking_page_title": "Acompanhamento do cliente",
+
+    # ── recibo digital + garantia na página de acompanhamento ───────────
+    # alinhado com o recibo impresso ("Por pagar"/"Pago (sinal)")
+    "tracking_receipt_balance": "Por pagar",
+    "tracking_receipt_deposit": "Sinal",
+    "tracking_warranty_expired": "expirada",
+    "tracking_warranty_until": "válida até {{date}}",
 }
 
 # regex: "{{var}}m atrás" → "há {{var}}m"  (ordem PT-PT)
