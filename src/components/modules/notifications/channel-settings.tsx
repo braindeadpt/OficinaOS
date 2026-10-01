@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import type { useSettingsStore } from "@/stores/settings";
 
 interface ChannelSettingsProps {
@@ -175,27 +177,14 @@ export default function ChannelSettings({
                 value={whatsAppForm.phoneNumberId}
               />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <label
-                  className="mb-1.5 block font-medium text-on-surface text-sm"
-                  htmlFor="wa-tracking-url"
-                >
-                  {t("whatsapp_tracking_url")}
-                </label>
-                <span
-                  className="material-symbols-outlined mb-1.5 cursor-help text-on-surface-variant text-xs"
-                  title={t(
-                    "whatsapp_tracking_url_help",
-                    "Public address where customers open the tracking page from WhatsApp messages, e.g. https://repairs.myshop.com or http://192.168.1.33:4000. Optional — the link is only included when set"
-                  )}
-                >
-                  help
-                </span>
-              </div>
-              <input
-                className="min-h-11 w-full rounded-xl bg-surface-container px-4 py-2.5 text-on-surface text-sm focus:bg-surface-container-lowest"
-                id="wa-tracking-url"
+            <Field
+              hint={t(
+                "whatsapp_tracking_url_help",
+                "Public address where customers open the tracking page from WhatsApp messages, e.g. https://repairs.myshop.com or http://192.168.1.33:4000. Optional — the link is only included when set"
+              )}
+              label={t("whatsapp_tracking_url")}
+            >
+              <Input
                 onChange={(e) =>
                   setWhatsAppForm((f) => ({
                     ...f,
@@ -204,8 +193,9 @@ export default function ChannelSettings({
                 }
                 placeholder="https://"
                 type="url"
+                value={whatsAppForm.trackingBaseUrl}
               />
-            </div>
+            </Field>
             <div>
               <div className="flex items-center gap-2">
                 <label
