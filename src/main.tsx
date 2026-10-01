@@ -31,6 +31,18 @@ ReactDOM.createRoot(rootElement).render(
   </React.StrictMode>
 );
 
+// PWA: only in production over a secure context (HTTPS — e.g. behind the
+// Cloudflare Tunnel). Plain-HTTP LAN installs skip registration entirely.
+if (
+  import.meta.env.PROD &&
+  window.isSecureContext &&
+  "serviceWorker" in navigator
+) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+  });
+}
+
 if (Capacitor.isNativePlatform()) {
   CapacitorApp.addListener("backButton", ({ canGoBack }) => {
     if (canGoBack) {

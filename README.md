@@ -20,7 +20,7 @@ Sistema de gestão para oficinas de reparação de telemóveis — loja única, 
 - **Gestão de peças e stock** — inventário com alertas de stock baixo
 - **Assistente IA** (opcional) — traz a tua chave OpenAI; encriptada em AES-256 em repouso
 - **Notificações WhatsApp/email** (opcional) — templates editáveis nas definições
-- **Build Android via Capacitor** para tablets da loja
+- **PWA + Android (Capacitor)** — instalável no ecrã principal em iOS/Android ou APK nativo para tablets da loja
 - **Single-tenant por design** — feito para uma loja, não é SaaS
 
 ## Como funciona
@@ -79,8 +79,30 @@ docker compose restart app  # reiniciar após mudanças de build
 Este fork inclui patches para funcionar em HTTP simples dentro de uma rede local de confiança (sem TLS): cookies de sessão sem `Secure`, CSP sem `upgrade-insecure-requests`, HSTS desativado.
 
 - Acede sempre pelo **mesmo URL configurado em `APP_URL`** — misturar `localhost` e IP provoca erros de origem inválida
-- Se expuseres a app fora da rede da loja, **usa HTTPS** (reverse proxy com TLS) — a configuração HTTP é só para LAN privada
+- Se expuseres a app fora da rede da loja, **usa HTTPS** — a configuração HTTP é só para LAN privada. A forma mais simples: **[acesso remoto via Cloudflare Tunnel](docs/remote-access.md)**, sem abrir portas e sem IP público
 - Se o IP da máquina mudar, atualiza `APP_URL` no `.env` e corre `docker compose up -d`
+
+## Telemóveis e tablets
+
+A app é responsiva e instalável como **PWA** (ícone no ecrã principal, ecrã cheio) — iPhone, iPad e Android, na rede da loja ou remotamente. Também há configuração **Capacitor** pronta para gerar um APK Android nativo sem Play Store.
+
+Guia completo: **[docs/mobile-access.md](docs/mobile-access.md)**
+
+## Acesso remoto (opcional)
+
+Com o PC da loja ligado, um **Cloudflare Tunnel** gratuito expõe a app em HTTPS — para staff fora da loja e para os links de cliente (tracking, orçamentos, pré-check, recibo/QR de garantia). Sem port-forward, sem IP público, funciona com CGNAT.
+
+```bash
+# .env
+TUNNEL_TOKEN=eyJh…        # token do túnel (Cloudflare Zero Trust)
+EXTRA_TRUSTED_ORIGINS=https://oficina.oteudominio.pt
+```
+
+```bash
+docker compose --profile tunnel up -d
+```
+
+Guia passo a passo: **[docs/remote-access.md](docs/remote-access.md)**
 
 ## Backups e teste de restore (sidecar db-backup)
 

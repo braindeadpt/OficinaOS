@@ -21,7 +21,7 @@ Guia para Windows. Demora ~10 minutos na primeira vez.
 | **1. Um só PC** (o mais simples) | Instalas no PC do balcão e usas `http://localhost:4000` nesse mesmo PC |
 | **2. PC-servidor + vários dispositivos** | O mesmo PC corre a app; tablets, telemóveis e outros PCs abrem `http://<IP>:4000` no browser — sem instalar nada. ⚠️ A app só funciona enquanto esse PC estiver ligado |
 | **3. Máquina dedicada** | Um mini-PC ou NAS com Docker sempre ligado corre a app; todos acedem por browser. Ideal para não depender do PC do balcão |
-| **4. Acesso pela internet** | Exige domínio + HTTPS (reverse proxy tipo Caddy) e cuidados extra de segurança/RGPD. **Não recomendado** para começar — os cenários 1–3 chegam para uso em loja |
+| **4. Acesso pela internet** | Cloudflare Tunnel grátis — HTTPS automático, sem abrir portas no router, funciona com CGNAT. Guia: **[docs/remote-access.md](docs/remote-access.md)**. Também dá links públicos aos clientes (tracking, orçamentos, QR de garantia) |
 
 ## 1. Descarregar
 

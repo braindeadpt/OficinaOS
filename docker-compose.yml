@@ -71,6 +71,21 @@ services:
           sleep 86400
         done
 
+  # Optional public HTTPS access via Cloudflare Tunnel — no port-forward,
+  # works behind CGNAT. Create the tunnel in Cloudflare Zero Trust, point the
+  # public hostname at http://app:4000, set TUNNEL_TOKEN in .env, then:
+  #   docker compose --profile tunnel up -d
+  # Full guide: docs/remote-access.md
+  cloudflared:
+    image: cloudflare/cloudflared:2025.11.1
+    restart: unless-stopped
+    profiles: ["tunnel"]
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    depends_on:
+      - app
+
 volumes:
   pgdata:
   uploads:
