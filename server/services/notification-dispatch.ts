@@ -159,6 +159,7 @@ const DEFAULT_IN_APP_BODY =
  */
 async function resolveShopNotificationConfig(prisma: DbClient): Promise<{
   currency: string;
+  reviewUrl: string | null;
   shopName: string;
   trackingBaseUrl: string | null;
   whatsappEnabled: boolean;
@@ -167,6 +168,7 @@ async function resolveShopNotificationConfig(prisma: DbClient): Promise<{
     const shop = await findShopSettingsUnique(prisma);
     return {
       currency: shop?.currency ?? "EUR",
+      reviewUrl: shop?.reviewUrl ?? null,
       shopName: shop?.shopName ?? "",
       trackingBaseUrl: shop?.trackingBaseUrl ?? null,
       whatsappEnabled: shop?.whatsappEnabled ?? false,
@@ -177,6 +179,7 @@ async function resolveShopNotificationConfig(prisma: DbClient): Promise<{
     logger.warn({ err }, "failed to resolve shop settings for notification");
     return {
       currency: "EUR",
+      reviewUrl: null,
       shopName: "",
       trackingBaseUrl: null,
       whatsappEnabled: false,
@@ -262,6 +265,9 @@ export async function notify(
     if (trackingUrl) {
       templateVars.trackingUrl = trackingUrl;
     }
+  }
+  if (shop.reviewUrl && templateVars.reviewUrl === undefined) {
+    templateVars.reviewUrl = shop.reviewUrl;
   }
   const inAppBody = resolveInAppBody(templates);
 

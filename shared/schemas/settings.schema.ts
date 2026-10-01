@@ -33,6 +33,19 @@ export const updateShopSettingsSchema = z
     receiptFooter: z.string().optional(),
     countryCode: z.string().optional(),
     timezone: z.string().min(1).optional(),
+    // Public review link (e.g. Google Business "write a review" URL) shown
+    // on the tracking page and in the delivered notification. Empty string
+    // clears it; anything else must be an http(s) URL.
+    reviewUrl: z
+      .union([
+        z.literal(""),
+        z
+          .string()
+          .trim()
+          .max(2048)
+          .regex(/^https?:\/\//, { error: "validations.invalid_url" }),
+      ])
+      .optional(),
   })
   .refine(
     (data) =>
@@ -42,7 +55,8 @@ export const updateShopSettingsSchema = z
       data.currency !== undefined ||
       data.receiptFooter !== undefined ||
       data.countryCode !== undefined ||
-      data.timezone !== undefined,
+      data.timezone !== undefined ||
+      data.reviewUrl !== undefined,
     { message: "validations.at_least_one_field" }
   );
 

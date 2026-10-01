@@ -316,6 +316,7 @@ describe("lookupByCode — warranty & receipt", () => {
           currency: "EUR",
           defaultWarrantyDays: 30,
           phone: "123",
+          reviewUrl: "https://g.page/r/abc123/review",
           shopName: "Shop",
         }),
       },
@@ -440,6 +441,13 @@ describe("lookupByCode — warranty & receipt", () => {
     expect(receipt.total).toBe(200);
     expect(receipt.paid).toBe(20);
     expect(receipt.balanceDue).toBe(180);
+  });
+
+  it("exposes the shop reviewUrl so delivered customers can leave a review", async () => {
+    const result = await lookupByCode(prisma, "ABC123", "4567");
+    const shop = result.job?.shop as { reviewUrl: string | null };
+
+    expect(shop.reviewUrl).toBe("https://g.page/r/abc123/review");
   });
 });
 

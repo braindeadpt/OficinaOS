@@ -254,6 +254,7 @@ describe.skipIf(!serverReachable)(
           ...Object.keys(DISPATCH_CONTEXT[row.name] ?? {}),
           "shopName", // injected centrally by notify() since the shopName PR
           "trackingUrl", // injected centrally from ShopSettings.trackingBaseUrl
+          "reviewUrl", // injected centrally from ShopSettings.reviewUrl
           "currency", // injected centrally from ShopSettings.currency
         ]);
         for (const match of row.body.matchAll(VAR_NAME_RE)) {
