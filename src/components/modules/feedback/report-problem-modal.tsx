@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useModalEffects } from "@/hooks/use-modal-effects";
 import i18n from "@/i18n";
-import api, { getErrorMessage } from "@/lib/api";
+import api, { type ApiError, getErrorMessage } from "@/lib/api";
 import { getRecentErrors } from "@/lib/error-buffer";
 
 interface ReportProblemModalProps {
@@ -29,12 +29,14 @@ export default function ReportProblemModal({
   const [contact, setContact] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [fallback, setFallback] = useState(false);
 
   useEffect(() => {
     if (open) {
       setDescription("");
       setContact("");
       setError("");
+      setFallback(false);
     }
   }, [open]);
 
@@ -58,11 +60,61 @@ export default function ReportProblemModal({
       toast.success(t("report_problem.success", { number: data.issueNumber }));
       onClose();
     } catch (err) {
-      toast.error(getErrorMessage(err, t("report_problem.error")));
+      // No GitHub token configured server-side — offer a manual copy instead
+      // of a dead-end error toast.
+      if ((err as ApiError).code === "FEEDBACK_NOT_CONFIGURED") {
+        setFallback(true);
+      } else {
+        toast.error(getErrorMessage(err, t("report_problem.error")));
+      }
     } finally {
       setIsSubmitting(false);
     }
   }, [description, contact, onClose, t]);
+
+  const handleCopyReport = useCallback(async () => {
+    const errors = getRecentErrors();
+    const report = [
+      "[OficinaOS problem report]",
+      `Page: ${window.location.pathname + window.location.search}`,
+      `Locale: ${i18n.language}`,
+      `User agent: ${navigator.userAgent}`,
+      contact.trim() ? `Contact: ${contact.trim()}` : null,
+      "",
+      "Description:",
+      description.trim(),
+      errors.length > 0 ? `\nRecent errors:\n${errors.join("\n")}` : null,
+    ]
+      .filter((line) => line !== null)
+      .join("\n");
+
+    // LAN HTTP is not a secure context — navigator.clipboard may be
+    // unavailable, so fall back to a temporary textarea + execCommand.
+    let copied = false;
+    if (navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(report);
+        copied = true;
+      } catch {
+        copied = false;
+      }
+    }
+    if (!copied) {
+      const ta = document.createElement("textarea");
+      ta.value = report;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      copied = document.execCommand("copy");
+      ta.remove();
+    }
+    if (copied) {
+      toast.success(t("report_problem.report_copied"));
+    } else {
+      toast.error(t("report_problem.copy_error"));
+    }
+  }, [description, contact, t]);
 
   if (!open) {
     return null;
@@ -134,20 +186,35 @@ export default function ReportProblemModal({
           <p className="rounded-lg bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
             {t("report_problem.auto_attach")}
           </p>
+
+          {fallback && (
+            <p
+              className="rounded-lg bg-tertiary-container/30 px-3 py-2 text-on-surface text-xs"
+              role="status"
+            >
+              {t("report_problem.not_configured")}
+            </p>
+          )}
         </div>
 
         <div className="flex justify-end gap-3 px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <Button onClick={onClose} type="button" variant="ghost">
             {t("report_problem.cancel")}
           </Button>
-          <Button
-            disabled={isSubmitting}
-            loading={isSubmitting}
-            onClick={handleSubmit}
-            type="button"
-          >
-            {t("report_problem.submit")}
-          </Button>
+          {fallback ? (
+            <Button onClick={handleCopyReport} type="button">
+              {t("report_problem.copy_report")}
+            </Button>
+          ) : (
+            <Button
+              disabled={isSubmitting}
+              loading={isSubmitting}
+              onClick={handleSubmit}
+              type="button"
+            >
+              {t("report_problem.submit")}
+            </Button>
+          )}
         </div>
       </div>
     </div>

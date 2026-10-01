@@ -1993,6 +1993,10 @@
     "cancel": "Cancelar",
     "success": "Informe enviado: ¡gracias! (número{{number}})",
     "error": "No se pudo enviar el informe. ",
-    "error_description_required": "Describa el problema (al menos 10 caracteres)."
+    "error_description_required": "Describa el problema (al menos 10 caracteres).",
+    "not_configured": "El envío automático no está configurado en esta instalación. Copia el informe y envíanoslo por correo o WhatsApp.",
+    "copy_report": "Copiar informe",
+    "report_copied": "Informe copiado — pégalo en un correo o mensaje.",
+    "copy_error": "No se pudo copiar el informe"
   }
 }

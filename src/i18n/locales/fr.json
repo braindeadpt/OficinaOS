@@ -1993,6 +1993,10 @@
     "cancel": "Annuler",
     "success": "Rapport envoyé — merci ! (n° {{number}})",
     "error": "Impossible d'envoyer le rapport. ",
-    "error_description_required": "Veuillez décrire le problème (au moins 10 caractères)."
+    "error_description_required": "Veuillez décrire le problème (au moins 10 caractères).",
+    "not_configured": "L'envoi automatique n'est pas configuré sur cette installation. Copiez le rapport et envoyez-le nous par e-mail ou WhatsApp.",
+    "copy_report": "Copier le rapport",
+    "report_copied": "Rapport copié — collez-le dans un e-mail ou un message.",
+    "copy_error": "Impossible de copier le rapport"
   }
 }

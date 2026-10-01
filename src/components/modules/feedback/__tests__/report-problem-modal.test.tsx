@@ -102,4 +102,30 @@ describe("ReportProblemModal", () => {
       expect(onClose).toHaveBeenCalled();
     });
   });
+
+  it("offers a copy-report fallback when reporting is not configured", async () => {
+    mockPost.mockRejectedValue({
+      code: "FEEDBACK_NOT_CONFIGURED",
+      message: "not configured",
+    });
+    render(<ReportProblemModal {...defaultProps} />);
+    fireEvent.change(
+      screen.getByLabelText("report_problem.description_label"),
+      { target: { value: "A lista de peças não carrega" } }
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "report_problem.submit" })
+    );
+    await waitFor(() => {
+      expect(
+        screen.getByText("report_problem.not_configured")
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "report_problem.copy_report" })
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByRole("button", { name: "report_problem.submit" })
+    ).not.toBeInTheDocument();
+  });
 });

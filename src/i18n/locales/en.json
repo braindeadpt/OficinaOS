@@ -1993,6 +1993,10 @@
     "cancel": "Cancel",
     "success": "Report sent — thank you! (issue #{{number}})",
     "error": "Could not send the report. Please try again or contact the administrator.",
-    "error_description_required": "Please describe the problem (at least 10 characters)."
+    "error_description_required": "Please describe the problem (at least 10 characters).",
+    "not_configured": "Automatic reporting isn't configured on this installation. Copy the report and send it to us by email or WhatsApp.",
+    "copy_report": "Copy report",
+    "report_copied": "Report copied — paste it in an email or message to us.",
+    "copy_error": "Could not copy the report"
   }
 }

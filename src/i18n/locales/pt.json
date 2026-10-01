@@ -1993,6 +1993,10 @@
     "cancel": "Cancelar",
     "success": "Relatório enviado — obrigado! (n.º {{number}})",
     "error": "Não foi possível enviar o relatório. Tente novamente ou contacte o administrador.",
-    "error_description_required": "Descreva o problema (pelo menos 10 caracteres)."
+    "error_description_required": "Descreva o problema (pelo menos 10 caracteres).",
+    "not_configured": "O envio automático não está configurado nesta instalação. Copie o relatório e envie-nos por email ou WhatsApp.",
+    "copy_report": "Copiar relatório",
+    "report_copied": "Relatório copiado — cole-o num email ou mensagem para nós.",
+    "copy_error": "Não foi possível copiar o relatório"
   }
 }
