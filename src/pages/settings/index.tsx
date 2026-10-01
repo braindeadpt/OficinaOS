@@ -9,6 +9,7 @@ import AddUserModal from "@/components/modules/settings/add-user-modal";
 import ResetPasswordModal from "@/components/modules/settings/reset-password-modal";
 import type { SettingsAiTabHandle } from "@/components/modules/settings/settings-ai-tab";
 import SettingsAiTab from "@/components/modules/settings/settings-ai-tab";
+import SettingsCloudTab from "@/components/modules/settings/settings-cloud-tab";
 import SettingsNotificationsTab from "@/components/modules/settings/settings-notifications-tab";
 import type { SettingsShopTabHandle } from "@/components/modules/settings/settings-shop-tab";
 import SettingsShopTab from "@/components/modules/settings/settings-shop-tab";
@@ -21,12 +22,19 @@ import { useModalEffects } from "@/hooks/use-modal-effects";
 import { useSettingsStore } from "@/stores/settings";
 import { useUsersStore } from "@/stores/users";
 
-type SettingsTab = "ai" | "shop" | "notifications" | "users";
+type SettingsTab = "ai" | "cloud" | "shop" | "notifications" | "users";
 
-const TAB_KEYS: SettingsTab[] = ["ai", "shop", "notifications", "users"];
+const TAB_KEYS: SettingsTab[] = [
+  "ai",
+  "cloud",
+  "shop",
+  "notifications",
+  "users",
+];
 
 const TAB_ICONS: Record<SettingsTab, string> = {
   ai: "psychology",
+  cloud: "cloud",
   shop: "storefront",
   notifications: "notifications",
   users: "group",
@@ -55,6 +63,7 @@ export default function SettingsPage() {
 
   const tabRefs = useRef<Record<SettingsTab, HTMLButtonElement | null>>({
     ai: null,
+    cloud: null,
     shop: null,
     notifications: null,
     users: null,
@@ -84,6 +93,7 @@ export default function SettingsPage() {
 
   const tabs: { key: SettingsTab; label: string }[] = [
     { key: "ai", label: t("ai_settings_title") },
+    { key: "cloud", label: t("cloud_settings_title") },
     { key: "shop", label: t("shop_information") },
     { key: "notifications", label: t("notifications_settings") },
     { key: "users", label: t("users_management") },
@@ -91,6 +101,7 @@ export default function SettingsPage() {
 
   const sectionDescriptions: Record<SettingsTab, string> = {
     ai: t("ai_settings_description"),
+    cloud: t("cloud_settings_desc"),
     shop: t("shop_information_desc"),
     notifications: t("notifications_settings_desc"),
     users: t("users_management_desc"),
@@ -182,7 +193,7 @@ export default function SettingsPage() {
       <div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
         <div
           aria-label={t("settings_page")}
-          className="grid grid-cols-4 gap-1 lg:sticky lg:top-24 lg:flex lg:w-52 lg:shrink-0 lg:flex-col lg:self-start"
+          className="grid grid-cols-5 gap-1 lg:sticky lg:top-24 lg:flex lg:w-52 lg:shrink-0 lg:flex-col lg:self-start"
           role="tablist"
         >
           {tabs.map(({ key, label }) => (
@@ -245,6 +256,13 @@ export default function SettingsPage() {
                   type === "error" ? toast.error(msg) : toast.success(msg)
                 }
                 ref={aiTabRef}
+              />
+            )}
+            {activeTab === "cloud" && (
+              <SettingsCloudTab
+                onToast={(msg, type) =>
+                  type === "error" ? toast.error(msg) : toast.success(msg)
+                }
               />
             )}
             {activeTab === "shop" && (

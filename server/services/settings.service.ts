@@ -76,7 +76,13 @@ export async function upsertAiSettings(
 }
 
 export async function getShopSettings(prisma: PrismaClient) {
-  return await findShopSettingsUnique(prisma);
+  const row = await findShopSettingsUnique(prisma);
+  if (!row) {
+    return row;
+  }
+  // Never expose the encrypted cloud shop token through the settings API.
+  const { cloudShopTokenEncrypted: _cloudToken, ...rest } = row;
+  return rest;
 }
 
 export async function upsertShopSettings(
