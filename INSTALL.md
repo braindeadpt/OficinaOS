@@ -84,3 +84,14 @@ docker compose -f docker-compose.app.yml up -d
 git pull
 docker compose up -d --build
 ```
+
+### Atualizações automáticas (opcional)
+
+Se quiseres que a app se atualize sozinha, ativa o perfil `auto-update` no `.env`:
+
+```ini
+COMPOSE_PROFILES=auto-update
+UPDATE_SCHEDULE=0 30 7 * * *   # cron de 6 campos — por defeito 07:30 diário
+```
+
+Depois `docker compose -f docker-compose.app.yml up -d` para arrancar o Watchtower. Escolhe uma hora em que **o PC está ligado e a loja fechada** — atualizar implica uns segundos de restart. Só o contentor da app é atualizado; a base de dados e os backups nunca são mexidos. Se uma atualização correr mal, o dump diário (14 dias de retenção) permite restaurar.

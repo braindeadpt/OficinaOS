@@ -21,6 +21,9 @@ services:
   app:
     image: ghcr.io/braindeadpt/oficinaos:latest
     restart: unless-stopped
+    labels:
+      # Only this service is allowed to auto-update (see `watchtower` below).
+      com.centurylinklabs.watchtower.enable: "true"
     depends_on:
       db:
         condition: service_healthy
@@ -74,6 +77,27 @@ services:
           bash /scripts/run-backup.sh || echo '[db-backup] failed, retrying tomorrow'
           sleep 86400
         done
+
+  # Automatic updates — OPT-IN. Starts only when the "auto-update" compose
+  # profile is active (COMPOSE_PROFILES=auto-update in .env). Pulls a new app
+  # image and restarts it on a cron schedule; postgres/db-backup are never
+  # touched (label-gated). Migrations run at app start; the daily db-backup
+  # dump (14-day retention) is the rollback path — there is no pre-update
+  # dump here, unlike ATUALIZAR.bat.
+  watchtower:
+    image: containrrr/watchtower:latest
+    profiles: ["auto-update"]
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-UTC}
+      # 6-field cron (sec min hour dom mon dow), in TZ. Default 07:30 —
+      # pick a time when the PC is ON and the shop is CLOSED.
+      WATCHTOWER_SCHEDULE: "${UPDATE_SCHEDULE:-0 30 7 * * *}"
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_ROLLING_RESTART: "false"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
   pgdata:
