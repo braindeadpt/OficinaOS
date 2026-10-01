@@ -74,10 +74,43 @@ No primeiro acesso a app **obriga a definir um novo nome de utilizador e uma nov
 
 Para PCs onde o Docker não funciona — tipicamente porque a **virtualização de hardware (VT-x/SVM) está desativada na BIOS** ou o processador não a suporta. O `INSTALAR.bat` deteta isto automaticamente e propõe duas opções:
 
-- **Ativar na BIOS** — reiniciar, premir F2/F10/DEL/ESC, procurar "Intel VT-x" / "Virtualization Technology" / "SVM Mode", ativar e gravar (F10). Depois o caminho Docker normal funciona.
-- **Instalação portátil** — um pacote que traz tudo embutido (Bun + PostgreSQL), sem Docker, sem admin, sem serviços. Funciona em qualquer Windows 10/11 64-bit.
+- **Ativar na BIOS** — reiniciar, premir F2/F10/DEL/ESC, procurar "Intel VT-x" / "Virtualization Technology" / "SVM Mode" em Advanced/Security, ativar e gravar (F10). Depois o caminho Docker normal funciona.
+- **Instalação portátil** — um pacote que traz tudo embutido (Bun + PostgreSQL), sem Docker, sem admin, sem serviços Windows. Funciona em qualquer Windows 10/11 64-bit.
 
-No caminho portátil o instalador descarrega `oficinaos-portable.zip` (~400 MB), extrai para `oficinaos-portable\` e arranca. Uso diário idêntico: `INICIAR.bat`, `PARAR.bat`, `ATUALIZAR.bat` dentro dessa pasta — a base de dados fica em `data\` (backup = copiar essa pasta com a app parada, ou usar o backup in-app).
+No caminho portátil o instalador descarrega `oficinaos-portable.zip` (~540 MB), extrai para `oficinaos-portable\` e arranca. A app é exatamente a mesma — mesmo código, mesma base de dados PostgreSQL, mesmas funcionalidades, mesmas migrações automáticas.
+
+### Uso diário (modo portátil)
+
+Dentro de `oficinaos-portable\`:
+
+| Ficheiro | Para quê |
+|---|---|
+| `INICIAR.bat` | Ligar tudo (Postgres + app) — duplo clique, abre o browser |
+| `PARAR.bat` | Desligar (os dados ficam guardados em `data\`) |
+| `ATUALIZAR.bat` | Atualizar para a versão mais recente (preserva dados e configuração) |
+| `BACKUP.bat` | Backup manual da base de dados |
+
+- **Arranque automático**: na primeira execução o `INICIAR.bat` pergunta se queres que o OficinaOS arranque sozinho quando o PC liga (regista uma tarefa agendada; para remover: `schtasks /delete /tn "OficinaOS" /f`)
+- **Se a app crashar**: reinicia sozinha passados 5 segundos (wrapper de respawn)
+- **Backups**: feitos automaticamente a cada arranque para `app\uploads\backups\` (retenção 14 dias) — o indicador de backups na app funciona igual
+
+### Diferenças vs instalação Docker
+
+| | Docker | Portátil |
+|---|---|---|
+| Funciona sem virtualização/BIOS | não | **sim** |
+| Tamanho do download | ~1 GB (Docker + imagem) | ~540 MB uma vez; cada update re-descarrega tudo |
+| Arranque com o PC | automático | automático se aceitares a tarefa agendada |
+| Backups off-site (rclone) | suportado | não — copia `app\uploads\backups\` para um disco/pen manualmente |
+| Update automático (Watchtower) | opcional | não — sempre manual via `ATUALIZAR.bat` |
+| Tunnel Cloudflare (acesso remoto) | incluído no compose | instalação manual do cloudflared |
+| Acesso de outros dispositivos na LAN | `http://<IP>:4000` | igual |
+
+### Desinstalar (modo portátil)
+
+Corre `PARAR.bat` e apaga a pasta `oficinaos-portable`. ⚠️ `data\` contém a base de dados inteira — faz backup primeiro se quiseres guardar.
+
+Documentação técnica do bundle: [scripts/portable/README.md](scripts/portable/README.md)
 
 ## Atualizar para uma versão nova
 

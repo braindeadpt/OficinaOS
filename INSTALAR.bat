@@ -231,7 +231,7 @@ if exist "%~dp0oficinaos-portable\INICIAR.bat" (
     call "%~dp0oficinaos-portable\INICIAR.bat"
     exit /b 0
 )
-echo        A descarregar o pacote portatil ^(~400MB^)...
+echo        A descarregar o pacote portatil ^(~540MB^)...
 powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest -Uri 'https://github.com/braindeadpt/OficinaOS/releases/latest/download/oficinaos-portable.zip' -OutFile \"$env:TEMP\oficinaos-portable.zip\""
 if errorlevel 1 (
     echo.
