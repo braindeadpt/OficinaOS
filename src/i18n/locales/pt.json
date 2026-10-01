@@ -678,7 +678,12 @@
     "fetch_quotes": "Falha ao carregar os orçamentos",
     "respond_quote": "Não foi possível enviar a sua resposta. Por favor, tente novamente.",
     "intake_request_not_found": "Pedido não encontrado",
-    "intake_request_not_pending": "Este pedido já foi tratado"
+    "intake_request_not_pending": "Este pedido já foi tratado",
+    "cloud_unreachable": "Não foi possível aceder ao servidor OficinaOS Cloud. Verifique o URL e a sua ligação.",
+    "cloud_not_paired": "Esta instalação não está emparelhada com o OficinaOS Cloud.",
+    "cloud_invalid_code": "Código de emparelhamento inválido ou expirado.",
+    "cloud_pairing_failed": "O servidor na nuvem rejeitou o pedido de emparelhamento.",
+    "cloud_token_rejected": "A nuvem rejeitou este token da loja. Emparelhe novamente."
   },
   "failed_to_create_part": "Falha ao criar peça",
   "failed_to_delete_part": "Falha ao eliminar peça",
@@ -1931,7 +1936,8 @@
     "range_or_dates_required": "É necessário um intervalo predefinido ou datas personalizadas",
     "repair_name_required": "O nome da reparação é obrigatório",
     "imei_invalid": "IMEI inválido — verifique os 15 dígitos",
-    "invalid_url": "Tem de ser um URL http(s) válido"
+    "invalid_url": "Tem de ser um URL http(s) válido",
+    "pairing_code_required": "Introduza o código de emparelhamento."
   },
   "view_all_critical": "Ver todos os atrasos",
   "warranty_returns": "Devoluções de garantia",
@@ -2039,5 +2045,24 @@
     "copy_report": "Copiar relatório",
     "report_copied": "Relatório copiado — cole-o num email ou mensagem para nós.",
     "copy_error": "Não foi possível copiar o relatório"
-  }
+  },
+  "cloud_active_modules": "Módulos Active Pro",
+  "cloud_api_url": "URL do servidor",
+  "cloud_connect": "Ligar",
+  "cloud_connected": "Ligado",
+  "cloud_disconnect": "Desconectar",
+  "cloud_last_sync": "Última sincronização",
+  "cloud_no_modules": "Sem módulo Pro ativo. Os módulos estão ativados na sua conta na nuvem.",
+  "cloud_pair_failed": "Não foi possível emparelhar com a nuvem.",
+  "cloud_pair_intro": "Cole o código de emparelhamento gerado na sua conta OficinaOS Cloud (ou fornecido durante a versão beta) para ligar esta loja.",
+  "cloud_pair_success": "Comprar ligado ao OficinaOS Cloud.",
+  "cloud_pairing_code": "Código de emparelhamento",
+  "cloud_settings_desc": "Ligue esta instalação ao OficinaOS Cloud para ativar os módulos Pro. Os seus dados permanecem locais – a nuvem apenas verifica quais os módulos ativos.",
+  "cloud_settings_title": "Oficina OS Cloud",
+  "cloud_sync_failed": "Não foi possível sincronizar com a cloud.",
+  "cloud_sync_now": "Sincronize agora",
+  "cloud_sync_success": "Dados da cloud atualizados.",
+  "cloud_unpaired": "Desligado do OficinaOS Cloud.",
+  "cloud_unreachable": "Inacessível – utilizando dados guardados",
+  "never": "nunca"
 }

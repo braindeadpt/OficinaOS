@@ -678,7 +678,12 @@
     "fetch_quotes": "Failed to load quotes",
     "respond_quote": "Could not send your response. Please try again.",
     "intake_request_not_found": "Request not found",
-    "intake_request_not_pending": "This request has already been handled"
+    "intake_request_not_pending": "This request has already been handled",
+    "cloud_unreachable": "Could not reach the OficinaOS Cloud server. Check the URL and your connection.",
+    "cloud_not_paired": "This installation is not paired with OficinaOS Cloud.",
+    "cloud_invalid_code": "Invalid or expired pairing code.",
+    "cloud_pairing_failed": "The cloud server rejected the pairing request.",
+    "cloud_token_rejected": "The cloud rejected this shop token. Pair again."
   },
   "failed_to_create_part": "Failed to create part",
   "failed_to_delete_part": "Failed to delete part",
@@ -1931,7 +1936,8 @@
     "range_or_dates_required": "Either a predefined range or custom dates are required",
     "repair_name_required": "Repair name is required",
     "imei_invalid": "Invalid IMEI — check the 15 digits",
-    "invalid_url": "Must be a valid http(s) URL"
+    "invalid_url": "Must be a valid http(s) URL",
+    "pairing_code_required": "Enter the pairing code."
   },
   "view_all_critical": "View All Overdue",
   "warranty_returns": "Warranty Returns",
@@ -2039,5 +2045,24 @@
     "copy_report": "Copy report",
     "report_copied": "Report copied — paste it in an email or message to us.",
     "copy_error": "Could not copy the report"
-  }
+  },
+  "cloud_active_modules": "Active Pro modules",
+  "cloud_api_url": "Server URL",
+  "cloud_connect": "Connect",
+  "cloud_connected": "Connected",
+  "cloud_disconnect": "Disconnect",
+  "cloud_last_sync": "Last sync",
+  "cloud_no_modules": "No Pro modules active. Modules are enabled on your cloud account.",
+  "cloud_pair_failed": "Could not pair with the cloud.",
+  "cloud_pair_intro": "Paste the pairing code generated on your OficinaOS Cloud account (or provided during the beta) to connect this shop.",
+  "cloud_pair_success": "Shop connected to OficinaOS Cloud.",
+  "cloud_pairing_code": "Pairing code",
+  "cloud_settings_desc": "Connect this installation to OficinaOS Cloud to enable Pro modules. Your data stays local — the cloud only checks which modules are active.",
+  "cloud_settings_title": "OficinaOS Cloud",
+  "cloud_sync_failed": "Could not sync with the cloud.",
+  "cloud_sync_now": "Sync now",
+  "cloud_sync_success": "Cloud data updated.",
+  "cloud_unpaired": "Disconnected from OficinaOS Cloud.",
+  "cloud_unreachable": "Unreachable — using saved data",
+  "never": "never"
 }

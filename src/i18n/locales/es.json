@@ -678,7 +678,12 @@
     "fetch_quotes": "No se han podido cargar los presupuestos",
     "respond_quote": "No se pudo enviar tu respuesta. ",
     "intake_request_not_found": "Solicitud no encontrada",
-    "intake_request_not_pending": "Esta solicitud ya ha sido atendida."
+    "intake_request_not_pending": "Esta solicitud ya ha sido atendida.",
+    "cloud_unreachable": "No se pudo acceder al servidor de OficinaOS Cloud. ",
+    "cloud_not_paired": "Esta instalación no está emparejada con OficinaOS Cloud.",
+    "cloud_invalid_code": "Código de emparejamiento no válido o caducado.",
+    "cloud_pairing_failed": "El servidor de la nube rechazó la solicitud de emparejamiento.",
+    "cloud_token_rejected": "La nube rechazó este token de tienda. "
   },
   "failed_to_create_part": "No se pudo crear la pieza",
   "failed_to_delete_part": "No se pudo eliminar la parte",
@@ -1931,7 +1936,8 @@
     "range_or_dates_required": "Se requiere un rango predefinido o fechas personalizadas",
     "repair_name_required": "Se requiere el nombre de la reparación",
     "imei_invalid": "IMEI no válido: verifique los 15 dígitos",
-    "invalid_url": "Debe ser una URL http(s) válida"
+    "invalid_url": "Debe ser una URL http(s) válida",
+    "pairing_code_required": "Ingrese el código de emparejamiento."
   },
   "view_all_critical": "Ver todos los atrasados",
   "warranty_returns": "Devoluciones en garantía",
@@ -2039,5 +2045,24 @@
     "copy_report": "Copiar informe",
     "report_copied": "Informe copiado — pégalo en un correo o mensaje.",
     "copy_error": "No se pudo copiar el informe"
-  }
+  },
+  "cloud_active_modules": "Módulos Active Pro",
+  "cloud_api_url": "URL del servidor",
+  "cloud_connect": "Conectar",
+  "cloud_connected": "Conectado",
+  "cloud_disconnect": "Desconectar",
+  "cloud_last_sync": "Última sincronización",
+  "cloud_no_modules": "No hay módulos Pro activos. ",
+  "cloud_pair_failed": "No se pudo emparejar con la nube.",
+  "cloud_pair_intro": "Pegue el código de emparejamiento generado en su cuenta de OficinaOS Cloud (o proporcionado durante la versión beta) para conectar esta tienda.",
+  "cloud_pair_success": "Tienda conectada a OficinaOS Cloud.",
+  "cloud_pairing_code": "código de emparejamiento",
+  "cloud_settings_desc": "Conecte esta instalación a OficinaOS Cloud para habilitar los módulos Pro. ",
+  "cloud_settings_title": "OficinaOS Nube",
+  "cloud_sync_failed": "No se pudo sincronizar con la nube.",
+  "cloud_sync_now": "Sincronizar ahora",
+  "cloud_sync_success": "Datos de la nube actualizados.",
+  "cloud_unpaired": "Desconectado de OficinaOS Cloud.",
+  "cloud_unreachable": "Inalcanzable: usando datos guardados",
+  "never": "nunca"
 }

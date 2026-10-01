@@ -97,6 +97,18 @@ export const updateWhatsAppSettingsSchema = z
     { message: "validations.at_least_one_field" }
   );
 
+export const pairCloudSchema = z.object({
+  apiUrl: z
+    .string()
+    .trim()
+    .max(2048)
+    .regex(/^https?:\/\//, { error: "validations.invalid_url" }),
+  code: z
+    .string()
+    .trim()
+    .min(4, { error: "validations.pairing_code_required" }),
+});
+
 export type UpdateAiSettingsInput = z.infer<typeof updateAiSettingsSchema>;
 export type UpdateShopSettingsInput = z.infer<typeof updateShopSettingsSchema>;
 export type UpdateNotificationTemplateInput = z.infer<

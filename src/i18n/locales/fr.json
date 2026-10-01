@@ -678,7 +678,12 @@
     "fetch_quotes": "Échec du chargement des devis",
     "respond_quote": "Impossible d'envoyer votre réponse. ",
     "intake_request_not_found": "Demande introuvable",
-    "intake_request_not_pending": "Cette demande a déjà été traitée"
+    "intake_request_not_pending": "Cette demande a déjà été traitée",
+    "cloud_unreachable": "Impossible d'atteindre le serveur OficinaOS Cloud. ",
+    "cloud_not_paired": "Cette installation n'est pas associée à OficinaOS Cloud.",
+    "cloud_invalid_code": "Code de couplage invalide ou expiré.",
+    "cloud_pairing_failed": "Le serveur cloud a rejeté la demande de couplage.",
+    "cloud_token_rejected": "Le cloud a rejeté ce jeton de boutique. "
   },
   "failed_to_create_part": "Échec de la création de la pièce",
   "failed_to_delete_part": "Échec de la suppression de la pièce",
@@ -1931,7 +1936,8 @@
     "range_or_dates_required": "Une plage prédéfinie ou des dates personnalisées sont requises",
     "repair_name_required": "Le nom du réparateur est requis",
     "imei_invalid": "IMEI invalide — vérifiez les 15 chiffres",
-    "invalid_url": "Doit être une URL http(s) valide"
+    "invalid_url": "Doit être une URL http(s) valide",
+    "pairing_code_required": "Entrez le code d'appairage."
   },
   "view_all_critical": "Voir tous les en retard",
   "warranty_returns": "Retours garantie",
@@ -2039,5 +2045,24 @@
     "copy_report": "Copier le rapport",
     "report_copied": "Rapport copié — collez-le dans un e-mail ou un message.",
     "copy_error": "Impossible de copier le rapport"
-  }
+  },
+  "cloud_active_modules": "Modules Actifs Pro",
+  "cloud_api_url": "URL du serveur",
+  "cloud_connect": "Connecter",
+  "cloud_connected": "Connecté",
+  "cloud_disconnect": "Déconnecter",
+  "cloud_last_sync": "Dernière synchronisation",
+  "cloud_no_modules": "Aucun module Pro actif. ",
+  "cloud_pair_failed": "Impossible de s'associer avec le cloud.",
+  "cloud_pair_intro": "Collez le code d'appairage généré sur votre compte OficinaOS Cloud (ou fourni lors de la bêta) pour connecter cette boutique.",
+  "cloud_pair_success": "Boutique connectée à OficinaOS Cloud.",
+  "cloud_pairing_code": "Code d'appariement",
+  "cloud_settings_desc": "Connectez cette installation à OficinaOS Cloud pour activer les modules Pro. ",
+  "cloud_settings_title": "OficinaOS Cloud",
+  "cloud_sync_failed": "Impossible de synchroniser avec le cloud.",
+  "cloud_sync_now": "Synchronisez maintenant",
+  "cloud_sync_success": "Données cloud mises à jour.",
+  "cloud_unpaired": "Déconnecté d'OficinaOS Cloud.",
+  "cloud_unreachable": "Injoignable – en utilisant les données enregistrées",
+  "never": "jamais"
 }

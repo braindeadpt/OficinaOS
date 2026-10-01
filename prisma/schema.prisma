@@ -1019,6 +1019,14 @@ model ShopSettings {
   // Public review link (e.g. Google Business "write a review" URL) shown on
   // the tracking page after delivery and in the delivered notification.
   reviewUrl                 String?
+  // OficinaOS Cloud pairing — Pro modules live server-side; the shop token
+  // is stored encrypted like the AI key. Entitlements are cached and polled.
+  cloudApiUrl               String?
+  cloudShopTokenEncrypted   String?
+  cloudShopId               String?
+  cloudShopName             String?
+  cloudEntitlements         Json?
+  cloudSyncedAt             DateTime? @db.Timestamptz
   createdAt                 DateTime @default(now()) @db.Timestamptz
   updatedAt                 DateTime @updatedAt @db.Timestamptz
 

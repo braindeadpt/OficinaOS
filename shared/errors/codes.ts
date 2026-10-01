@@ -204,6 +204,19 @@ export const ERRORS = {
     message: "errors.return_claim_has_rework_job",
   },
 
+  // ── OficinaOS Cloud ────────────────────────────────────────────────────
+  CLOUD_UNREACHABLE: { status: 502, message: "errors.cloud_unreachable" },
+  CLOUD_NOT_PAIRED: { status: 400, message: "errors.cloud_not_paired" },
+  CLOUD_INVALID_CODE: { status: 400, message: "errors.cloud_invalid_code" },
+  CLOUD_PAIRING_FAILED: {
+    status: 502,
+    message: "errors.cloud_pairing_failed",
+  },
+  CLOUD_TOKEN_REJECTED: {
+    status: 502,
+    message: "errors.cloud_token_rejected",
+  },
+
   // ── Intake requests (public pre-check) ───────────────────────────────────
   INTAKE_REQUEST_NOT_FOUND: {
     status: 404,

@@ -1,5 +1,6 @@
 import { AppError } from "@shared/errors/app-error.js";
 import {
+  pairCloudSchema,
   updateAiSettingsSchema,
   updateShopSettingsSchema,
   updateWhatsAppSettingsSchema,
@@ -8,6 +9,12 @@ import type { FastifyPluginAsync } from "fastify";
 import { requirePermission } from "../middlewares/rbac.js";
 import { getAppVersionInfo } from "../services/app-version.service.js";
 import { getBackupStatus } from "../services/backup-status.service.js";
+import {
+  getCloudStatus,
+  pairWithCloud,
+  syncCloudEntitlements,
+  unpairCloud,
+} from "../services/cloud.service.js";
 import {
   getAiSettings,
   getShopSettings,
@@ -53,6 +60,69 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (_req, reply) => reply.send(await getBackupStatus())
+  );
+
+  app.get(
+    "/cloud",
+    {
+      schema: {
+        tags: ["settings"],
+        summary: "OficinaOS Cloud pairing status and cached entitlements",
+      },
+    },
+    async (_req, reply) => reply.send(await getCloudStatus(app.prisma, app.log))
+  );
+
+  app.post(
+    "/cloud/pair",
+    {
+      preHandler: [requirePermission({ settings: ["edit"] })],
+      schema: {
+        tags: ["settings"],
+        summary: "Redeem an OficinaOS Cloud pairing code",
+        body: { type: "object", additionalProperties: true },
+      },
+    },
+    async (req, reply) => {
+      const parsed = pairCloudSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new AppError("VALIDATION_ERROR", {
+          errors: resolveZodErrors(
+            parsed.error.flatten().fieldErrors,
+            req.locale
+          ),
+        });
+      }
+      return reply.send(await pairWithCloud(app.prisma, parsed.data, app.log));
+    }
+  );
+
+  app.post(
+    "/cloud/sync",
+    {
+      preHandler: [requirePermission({ settings: ["edit"] })],
+      schema: {
+        tags: ["settings"],
+        summary: "Refresh OficinaOS Cloud entitlements",
+      },
+    },
+    async (_req, reply) =>
+      reply.send(await syncCloudEntitlements(app.prisma, app.log))
+  );
+
+  app.delete(
+    "/cloud",
+    {
+      preHandler: [requirePermission({ settings: ["edit"] })],
+      schema: {
+        tags: ["settings"],
+        summary: "Unpair this installation from OficinaOS Cloud",
+      },
+    },
+    async (_req, reply) => {
+      await unpairCloud(app.prisma);
+      return reply.send({ ok: true });
+    }
   );
 
   app.get(
