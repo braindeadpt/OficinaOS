@@ -938,6 +938,8 @@
   "jobs_history_action_PART_REMOVED": "Part removed",
   "jobs_history_action_PHOTO_ADDED": "Photo added",
   "jobs_history_action_PHOTO_REMOVED": "Photo removed",
+  "jobs_history_action_QUOTE_RESPONDED": "Quote answered",
+  "jobs_history_action_QUOTE_SENT": "Quote sent",
   "jobs_history_action_REPAIR_ADDED": "Repair added",
   "jobs_history_action_REPAIR_REMOVED": "Repair removed",
   "jobs_history_action_STATUS_CHANGED": "Status changed",

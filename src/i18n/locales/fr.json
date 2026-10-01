@@ -938,6 +938,8 @@
   "jobs_history_action_PART_REMOVED": "Pièce retirée",
   "jobs_history_action_PHOTO_ADDED": "Photo ajoutée",
   "jobs_history_action_PHOTO_REMOVED": "Photo supprimée",
+  "jobs_history_action_QUOTE_RESPONDED": "Réponse au devis",
+  "jobs_history_action_QUOTE_SENT": "Devis envoyé",
   "jobs_history_action_REPAIR_ADDED": "Réparation ajoutée",
   "jobs_history_action_REPAIR_REMOVED": "Réparation supprimée",
   "jobs_history_action_STATUS_CHANGED": "Statut modifié",

@@ -124,6 +124,37 @@ OVERRIDES = {
     "profile_activity_user_sign_in": "Sessão iniciada",
     "profile_activity_user_sign_out": "Sessão terminada",
     "loading_dashboard": "A carregar o painel...",
+
+    # ── orçamento (não "cotação"/"citação") — quote de reparação ────────
+    # NOTA: "cotação" só é errada nestas keys; em contexto de bolsa/câmbio
+    # é o termo correto, por isso overrides por key em vez de SUB global.
+    "errors.quote_not_found": "Orçamento não encontrado",
+    "errors.quote_already_responded": "Este orçamento já foi respondido",
+    "errors.quote_superseded": "Este orçamento já não é atual — foi enviada uma versão mais recente",
+    "errors.send_quote": "Falha ao enviar o orçamento",
+    "errors.fetch_quotes": "Falha ao carregar os orçamentos",
+    "quotes.section_title": "Orçamentos",
+    "quotes.send": "Enviar orçamento",
+    "quotes.send_title": "Enviar orçamento ao cliente",
+    "quotes.send_hint": "O cliente irá rever este orçamento na página de acompanhamento e poderá aprová-lo ou recusá-lo.",
+    "quotes.send_submit": "Enviar orçamento",
+    "quotes.sent_success": "Orçamento enviado ao cliente",
+    "quotes.amount": "Valor",
+    "quotes.note_hint": "Opcional — apresentado ao lado do orçamento na página de acompanhamento",
+    "quotes.empty": "Ainda não foram enviados orçamentos",
+    "quotes.responded_at": "Respondido {{time}}",
+    "jobs_history_action_QUOTE_SENT": "Orçamento enviado",
+    "jobs_history_action_QUOTE_RESPONDED": "Resposta ao orçamento",
+    "tracking_quote_approve": "Aprovar orçamento",
+    "tracking_quote_approved": "Aprovou este orçamento",
+    "tracking_quote_rejected": "Recusou este orçamento",
+    "tracking_quote_responded_at": "Respondido {{time}}",
+    "tracking_quote_awaiting": "Este orçamento aguarda a sua resposta. Continue a acompanhar a reparação com os últimos 4 dígitos do seu telefone.",
+
+    # "track" neste contexto é "acompanhar" — "pista"/"rastreamento" são BR
+    "jobs_detail_track": "Acompanhar",
+    "tracking_track_btn": "Acompanhar",
+    "tracking_page_title": "Acompanhamento do cliente",
 }
 
 # regex: "{{var}}m atrás" → "há {{var}}m"  (ordem PT-PT)
