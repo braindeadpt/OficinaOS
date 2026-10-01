@@ -39,6 +39,9 @@ function formatValue(
       ? t("unassigned", { defaultValue: "Unassigned" })
       : value;
   }
+  if (action === "QUOTE_RESPONDED") {
+    return t(`quotes.status.${value}`, { defaultValue: value });
+  }
   return value;
 }
 
