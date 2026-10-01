@@ -8,6 +8,7 @@ import websocket from "@fastify/websocket";
 import Fastify from "fastify";
 import { loadEnv } from "./config/env.js";
 import { setAppInstance } from "./jobs/app-registry.js";
+import { startCloudPoller } from "./jobs/cloud-poller.js";
 import { startOverdueScheduler } from "./jobs/overdue-scheduler.js";
 import authPlugin from "./plugins/auth.js";
 import { localePlugin } from "./plugins/locale.js";
@@ -125,6 +126,7 @@ await app.register(websocketPlugin);
 
 setAppInstance(app);
 const stopOverdue = startOverdueScheduler(app);
+const stopCloudPoller = startCloudPoller(app);
 const stopLowStock = startLowStockScheduler(app);
 const stopOutboxWorker = startOutboxWorker(app.prisma);
 const CLEANUP_INTERVAL_MS = 15 * 60 * 1000;
@@ -222,6 +224,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, async () => {
     app.log.info(`Received ${signal}, shutting down...`);
     stopOverdue();
+    stopCloudPoller();
     stopLowStock();
     stopOutboxWorker();
     clearInterval(cleanupHandle);

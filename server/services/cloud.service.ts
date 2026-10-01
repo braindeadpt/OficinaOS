@@ -1,7 +1,13 @@
 import { Prisma, type PrismaClient } from "@generated/client";
+import { Role } from "@shared/constants/roles.js";
 import type { FastifyBaseLogger } from "fastify";
 import { AppError } from "../../shared/errors/app-error.js";
 import { decryptSecret, encryptSecret } from "../lib/crypto.js";
+import { create as createIntakeRequest } from "../repositories/intake-request.repository.js";
+import { findManyUsers } from "../repositories/notification.repository.js";
+import { generateIntakeRequestCode } from "../utils/intake-request-code.js";
+import type { NotifyContext } from "./job.service.js";
+import { notify } from "./notification-dispatch.js";
 
 const FETCH_TIMEOUT_MS = 10_000;
 
@@ -136,7 +142,8 @@ export async function pairWithCloud(
 /** Poll the cloud for the current entitlements and cache them locally. */
 export async function syncCloudEntitlements(
   prisma: PrismaClient,
-  log: FastifyBaseLogger
+  log: FastifyBaseLogger,
+  notifyCtx?: NotifyContext
 ): Promise<CloudStatus> {
   const settings = await prisma.shopSettings.findUniqueOrThrow({
     where: { id: "default" },
@@ -167,14 +174,24 @@ export async function syncCloudEntitlements(
   }
 
   const payload = res.body as { modules?: string[]; shopName?: string };
+  const modules = Array.isArray(payload.modules) ? payload.modules : [];
   const updated = await prisma.shopSettings.update({
     where: { id: "default" },
     data: {
-      cloudEntitlements: Array.isArray(payload.modules) ? payload.modules : [],
+      cloudEntitlements: modules,
       cloudShopName: payload.shopName ?? settings.cloudShopName,
       cloudSyncedAt: new Date(),
     },
   });
+
+  // Pull pending customer diagnostics whenever the shop is entitled — a
+  // missed pull never loses data (cloud keeps reports until acked).
+  if (modules.includes("diag-intake")) {
+    pullCloudIntake(prisma, token, settings.cloudApiUrl, log, notifyCtx).catch(
+      (err) => log.warn({ err }, "cloud intake pull failed")
+    );
+  }
+
   const status = toStatus(updated);
   status.reachable = true;
   return status;
@@ -219,4 +236,167 @@ export async function unpairCloud(prisma: PrismaClient): Promise<void> {
       cloudSyncedAt: null,
     },
   });
+}
+
+// ── Customer diagnostic intake (Pro module: diag-intake) ────────────
+
+interface CloudIntakePayload {
+  customerEmail?: string;
+  customerName: string;
+  customerPhone: string;
+  device?: {
+    brand?: string;
+    model?: string;
+    os?: string;
+    osVersion?: string;
+    serial?: string;
+  };
+  notes?: string;
+  results?: Record<string, unknown>;
+}
+
+interface CloudIntakeReport {
+  createdAt: string;
+  id: string;
+  payload: CloudIntakePayload;
+}
+
+/** Flatten one diagnostic section (e.g. battery) into "a: x, b: y". */
+function summarizeResults(results: Record<string, unknown>): string[] {
+  const lines: string[] = [];
+  for (const [key, value] of Object.entries(results)) {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      const inner = Object.entries(value as Record<string, unknown>)
+        .map(([k, v]) => `${k}: ${String(v)}`)
+        .join(", ");
+      lines.push(`${key} — ${inner}`);
+    } else {
+      lines.push(`${key}: ${String(value)}`);
+    }
+  }
+  return lines;
+}
+
+function buildDeviceLabel(device: CloudIntakePayload["device"]): string {
+  const parts = [device?.brand, device?.model].filter(Boolean);
+  return parts.length ? parts.join(" ") : "Dispositivo móvel";
+}
+
+function buildProblemText(payload: CloudIntakePayload): string {
+  const lines = ["Diagnóstico remoto (oficinaos-diag)"];
+  const os = [payload.device?.os, payload.device?.osVersion]
+    .filter(Boolean)
+    .join(" ");
+  if (os) {
+    lines.push(`Sistema: ${os}`);
+  }
+  if (payload.device?.serial) {
+    lines.push(`Série: ${payload.device.serial}`);
+  }
+  if (payload.results) {
+    lines.push(...summarizeResults(payload.results));
+  }
+  if (payload.notes) {
+    lines.push(`Notas do cliente: ${payload.notes}`);
+  }
+  return lines.join("\n");
+}
+
+/**
+ * Pull customer diagnostics pushed to this shop's public code, create an
+ * IntakeRequest per report (they land on the same Pedidos queue as the
+ * public pre-check form) and ack them so the cloud stops returning them.
+ * externalId dedupes reports already imported before a failed ack.
+ */
+export async function pullCloudIntake(
+  prisma: PrismaClient,
+  token: string,
+  apiUrl: string,
+  log: FastifyBaseLogger,
+  notifyCtx?: NotifyContext
+): Promise<void> {
+  const res = await cloudFetch(apiUrl, "/shops/intake", { token });
+  if (!res.ok) {
+    log.warn({ status: res.status }, "cloud intake fetch failed");
+    return;
+  }
+  const reports = (
+    (res.body as { reports?: CloudIntakeReport[] }).reports ?? []
+  ).filter((r) => r?.payload?.customerName && r.payload.customerPhone);
+  if (reports.length === 0) {
+    return;
+  }
+
+  const ackIds: string[] = [];
+  for (const report of reports) {
+    const p = report.payload;
+    try {
+      const request = await createIntakeRequest(prisma, {
+        code: await generateIntakeRequestCode(prisma),
+        customerEmail: p.customerEmail || null,
+        customerName: p.customerName,
+        customerPhone: p.customerPhone,
+        deviceLabel: buildDeviceLabel(p.device),
+        diagnostic: JSON.parse(JSON.stringify(p)),
+        externalId: report.id,
+        problem: buildProblemText(p),
+        whatsappOptIn: false,
+      });
+      ackIds.push(report.id);
+      notifyIntakeStaff(prisma, request, notifyCtx, log);
+    } catch (err) {
+      // Unique violation on externalId = already imported before a crash —
+      // still ack so the cloud stops redelivering it.
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === "P2002"
+      ) {
+        ackIds.push(report.id);
+      } else {
+        log.warn({ err, reportId: report.id }, "intake report import failed");
+      }
+    }
+  }
+
+  if (ackIds.length) {
+    const ack = await cloudFetch(apiUrl, "/shops/intake/ack", {
+      body: { ids: ackIds },
+      method: "POST",
+      token,
+    });
+    if (!ack.ok) {
+      log.warn({ status: ack.status }, "cloud intake ack failed");
+    }
+  }
+  log.info({ imported: ackIds.length }, "cloud intake pulled");
+}
+
+function notifyIntakeStaff(
+  prisma: PrismaClient,
+  request: { code: string; customerName: string; deviceLabel: string },
+  notifyCtx: NotifyContext | undefined,
+  log: FastifyBaseLogger
+): void {
+  if (!notifyCtx) {
+    return;
+  }
+  findManyUsers(
+    prisma,
+    { isActive: true, role: { in: [Role.OWNER, Role.FRONT_DESK] } },
+    { id: true }
+  )
+    .then((users) =>
+      users.length
+        ? notify(notifyCtx, {
+            context: {
+              customerName: request.customerName,
+              deviceLabel: request.deviceLabel,
+              requestCode: request.code,
+            },
+            eventName: "pre_check_submitted",
+            recipients: { userIds: users.map((u) => u.id) },
+          })
+        : undefined
+    )
+    .catch((err) => log.warn({ err }, "intake notification failed"));
 }

@@ -483,6 +483,10 @@ enum IntakeRequestStatus {
 model IntakeRequest {
   id            String              @id @default(cuid())
   code          String              @unique
+  // Diagnostics pushed by the cloud diag-intake module: externalId is the
+  // cloud IntakeReport id and dedupes redelivery after a partial failure.
+  externalId    String?             @unique
+  diagnostic    Json?
   customerName  String
   customerPhone String
   customerEmail String?
