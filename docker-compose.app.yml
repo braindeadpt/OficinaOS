@@ -99,6 +99,21 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
+  # Optional public HTTPS access via Cloudflare Tunnel — no port-forward,
+  # works behind CGNAT. Activate with TUNNEL_TOKEN in .env and
+  # COMPOSE_PROFILES including "tunnel" (can combine with "auto-update",
+  # comma-separated). Public hostname must point to http://app:4000.
+  # Full guide: https://github.com/braindeadpt/OficinaOS/blob/main/docs/remote-access.md
+  cloudflared:
+    image: cloudflare/cloudflared:2025.11.1
+    restart: unless-stopped
+    profiles: ["tunnel"]
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    depends_on:
+      - app
+
 volumes:
   pgdata:
   uploads:
