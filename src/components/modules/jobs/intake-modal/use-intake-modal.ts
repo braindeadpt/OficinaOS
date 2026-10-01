@@ -19,7 +19,12 @@ import {
 
 let overflowLockCount = 0;
 
-export function useIntakeModal({ open, onClose, onSubmit }: IntakeModalProps) {
+export function useIntakeModal({
+  open,
+  onClose,
+  onSubmit,
+  prefill,
+}: IntakeModalProps) {
   const { t } = useTranslation();
   const [form, setForm] = useState<IntakeFormData>(INITIAL_FORM);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
@@ -353,6 +358,7 @@ export function useIntakeModal({ open, onClose, onSubmit }: IntakeModalProps) {
     setForm({
       ...INITIAL_FORM,
       estimatedDelivery: new Date().toISOString().split("T")[0],
+      ...prefill,
     });
     setTouched({});
     setErrors({});
@@ -373,7 +379,7 @@ export function useIntakeModal({ open, onClose, onSubmit }: IntakeModalProps) {
         document.body.style.overflow = "";
       }
     };
-  }, [open, onClose]);
+  }, [open, onClose, prefill]);
 
   useEffect(
     () => () => {

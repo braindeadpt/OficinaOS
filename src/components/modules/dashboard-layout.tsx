@@ -22,11 +22,31 @@ interface DashboardLayoutProps {
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const intakeModalOpen = useUiStore((s) => s.intakeModalOpen);
+  const intakeModalPrefill = useUiStore((s) => s.intakeModalPrefill);
+  const intakeRequestId = useUiStore((s) => s.intakeRequestId);
   const closeIntakeModal = useUiStore((s) => s.closeIntakeModal);
   const showPrintPreview = useUiStore((s) => s.showPrintPreview);
   const { createJob, fetchJobs, fetchMetrics } = useJobsStore();
   const { pathname } = useLocation();
   const { t } = useTranslation();
+
+  // The job was already created — a failed convert link shouldn't block the
+  // intake flow, so this reports but never throws.
+  const markRequestConverted = useCallback(
+    async (jobId: string) => {
+      if (!intakeRequestId) {
+        return;
+      }
+      try {
+        await api.post(`/intake-requests/${intakeRequestId}/convert`, {
+          jobId,
+        });
+      } catch {
+        toast.error(t("requests_convert_error"));
+      }
+    },
+    [intakeRequestId, t]
+  );
 
   const handleIntakeSubmit = useCallback(
     async (data: IntakeFormData) => {
@@ -50,6 +70,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             : undefined,
         });
         toast.success(t("jobs_created_success", { id: job.jobCode || job.id }));
+        await markRequestConverted(job.id);
         showPrintPreview(job.id);
         if (data.photos.length > 0) {
           await Promise.allSettled(
@@ -67,7 +88,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         toast.error(t("jobs_create_error"));
       }
     },
-    [createJob, fetchJobs, fetchMetrics, closeIntakeModal, showPrintPreview, t]
+    [
+      createJob,
+      fetchJobs,
+      fetchMetrics,
+      closeIntakeModal,
+      showPrintPreview,
+      markRequestConverted,
+      t,
+    ]
   );
 
   return (
@@ -86,6 +115,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           onClose={closeIntakeModal}
           onSubmit={handleIntakeSubmit}
           open={intakeModalOpen}
+          prefill={intakeModalPrefill ?? undefined}
         />
         <PrintPreviewDialog />
       </div>

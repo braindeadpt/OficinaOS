@@ -183,6 +183,12 @@ async function seedNotificationTemplates() {
       isDefault: true,
     },
     {
+      name: "pre_check_submitted",
+      channel: "IN_APP" as const,
+      body: "New pre-check request{{if requestCode}} — {{requestCode}}{{endif}}{{if customerName}} from {{customerName}}{{endif}}{{if deviceLabel}} ({{deviceLabel}}){{endif}}",
+      isDefault: true,
+    },
+    {
       // WHATSAPP bodies only reference vars the dispatch actually
       // provides (customerName, jobCode). shopName is rendered via the
       // renderer's {{if}} conditional because it is optional in the

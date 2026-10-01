@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { IntakeFormData } from "@/components/modules/jobs/intake-modal/types";
 
 interface UiState {
   closeIntakeModal: () => void;
@@ -6,8 +7,15 @@ interface UiState {
   closePrintPreview: () => void;
   closeReportModal: () => void;
   intakeModalOpen: boolean;
+  // Set when opening intake from a pre-check request — merged into the form
+  // and used to mark the request converted after the job is created.
+  intakeModalPrefill: Partial<IntakeFormData> | null;
+  intakeRequestId: string | null;
   moreSheetOpen: boolean;
-  openIntakeModal: () => void;
+  openIntakeModal: (
+    prefill?: Partial<IntakeFormData>,
+    requestId?: string
+  ) => void;
   openMoreSheet: () => void;
   openReportModal: () => void;
   printPreviewJobId: string | null;
@@ -17,12 +25,24 @@ interface UiState {
 
 export const useUiStore = create<UiState>((set) => ({
   intakeModalOpen: false,
+  intakeModalPrefill: null,
+  intakeRequestId: null,
   moreSheetOpen: false,
   printPreviewJobId: null,
   reportModalOpen: false,
 
-  openIntakeModal: () => set({ intakeModalOpen: true }),
-  closeIntakeModal: () => set({ intakeModalOpen: false }),
+  openIntakeModal: (prefill, requestId) =>
+    set({
+      intakeModalOpen: true,
+      intakeModalPrefill: prefill ?? null,
+      intakeRequestId: requestId ?? null,
+    }),
+  closeIntakeModal: () =>
+    set({
+      intakeModalOpen: false,
+      intakeModalPrefill: null,
+      intakeRequestId: null,
+    }),
   openMoreSheet: () => set({ moreSheetOpen: true }),
   closeMoreSheet: () => set({ moreSheetOpen: false }),
   showPrintPreview: (jobId: string) => set({ printPreviewJobId: jobId }),
