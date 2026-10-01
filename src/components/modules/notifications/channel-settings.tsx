@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import type { useSettingsStore } from "@/stores/settings";
 
 interface ChannelSettingsProps {
@@ -10,6 +12,7 @@ interface ChannelSettingsProps {
     businessId?: string;
     phoneNumberId?: string;
     enabled?: boolean;
+    trackingBaseUrl?: string;
   }) => Promise<void>;
   whatsAppSettings: ReturnType<
     typeof useSettingsStore.getState
@@ -26,6 +29,7 @@ export default function ChannelSettings({
     apiToken: "",
     businessId: "",
     phoneNumberId: "",
+    trackingBaseUrl: "",
     enabled: false,
   });
   const [whatsAppSaving, setWhatsAppSaving] = useState(false);
@@ -50,6 +54,7 @@ export default function ChannelSettings({
         apiToken: prev.apiToken || "",
         businessId: whatsAppSettings.businessId ?? "",
         phoneNumberId: whatsAppSettings.phoneNumberId ?? "",
+        trackingBaseUrl: whatsAppSettings.trackingBaseUrl ?? "",
         enabled: whatsAppSettings.enabled,
       }));
     }
@@ -63,6 +68,7 @@ export default function ChannelSettings({
         businessId: whatsAppForm.businessId || undefined,
         phoneNumberId: whatsAppForm.phoneNumberId || undefined,
         enabled: whatsAppForm.enabled,
+        trackingBaseUrl: whatsAppForm.trackingBaseUrl,
       });
     } catch {
       // Error is stored in Zustand state
@@ -171,6 +177,25 @@ export default function ChannelSettings({
                 value={whatsAppForm.phoneNumberId}
               />
             </div>
+            <Field
+              hint={t(
+                "whatsapp_tracking_url_help",
+                "Public address where customers open the tracking page from WhatsApp messages, e.g. https://repairs.myshop.com or http://192.168.1.33:4000. Optional — the link is only included when set"
+              )}
+              label={t("whatsapp_tracking_url")}
+            >
+              <Input
+                onChange={(e) =>
+                  setWhatsAppForm((f) => ({
+                    ...f,
+                    trackingBaseUrl: e.target.value,
+                  }))
+                }
+                placeholder="https://"
+                type="url"
+                value={whatsAppForm.trackingBaseUrl}
+              />
+            </Field>
             <div>
               <div className="flex items-center gap-2">
                 <label

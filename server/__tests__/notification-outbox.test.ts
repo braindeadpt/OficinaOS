@@ -112,6 +112,7 @@ describe("processOutbox", () => {
       .mockResolvedValueOnce({
         whatsappApiTokenEncrypted: "enc-token",
         whatsappBusinessId: "biz-1",
+        whatsappEnabled: true,
         whatsappPhoneNumberId: "phone-1",
       })
       .mockResolvedValueOnce({ countryCode: "PT" });
@@ -177,6 +178,7 @@ describe("processOutbox", () => {
       .mockResolvedValueOnce({
         whatsappApiTokenEncrypted: "enc-token",
         whatsappBusinessId: "biz-1",
+        whatsappEnabled: true,
         whatsappPhoneNumberId: "phone-1",
       })
       .mockResolvedValueOnce({ countryCode: "PT" });
@@ -249,6 +251,7 @@ describe("processOutbox", () => {
     mocks.findShopSettingsUnique.mockResolvedValue({
       whatsappApiTokenEncrypted: "enc-token",
       whatsappBusinessId: "biz-1",
+      whatsappEnabled: true,
       whatsappPhoneNumberId: "phone-1",
     });
     mocks.decryptWhatsAppConfig.mockReturnValue(null);
@@ -257,6 +260,69 @@ describe("processOutbox", () => {
 
     expect(mocks.sendWhatsApp).not.toHaveBeenCalled();
     expect(mocks.updateOutboxEntry).not.toHaveBeenCalled();
+  });
+
+  it("does not send when WhatsApp is disabled even with credentials", async () => {
+    mocks.findManyOutboxEntries.mockResolvedValue([
+      {
+        id: "out-6",
+        channel: "WHATSAPP",
+        recipientPhone: "05551234567",
+        renderedBody: "Hello",
+        retryCount: 0,
+      },
+    ]);
+    mocks.findShopSettingsUnique.mockResolvedValue({
+      whatsappApiTokenEncrypted: "enc-token",
+      whatsappBusinessId: "biz-1",
+      whatsappEnabled: false,
+      whatsappPhoneNumberId: "phone-1",
+    });
+
+    await processOutbox(prisma);
+
+    expect(mocks.decryptWhatsAppConfig).not.toHaveBeenCalled();
+    expect(mocks.sendWhatsApp).not.toHaveBeenCalled();
+    expect(mocks.updateOutboxEntry).not.toHaveBeenCalled();
+  });
+
+  it("cancels entries older than 24h instead of sending them", async () => {
+    mocks.findManyOutboxEntries.mockResolvedValue([
+      {
+        id: "out-7",
+        channel: "WHATSAPP",
+        createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
+        recipientPhone: "05551234567",
+        renderedBody: "Stale status update",
+        retryCount: 0,
+      },
+    ]);
+    mocks.findShopSettingsUnique
+      .mockResolvedValueOnce({
+        whatsappApiTokenEncrypted: "enc-token",
+        whatsappBusinessId: "biz-1",
+        whatsappEnabled: true,
+        whatsappPhoneNumberId: "phone-1",
+      })
+      .mockResolvedValueOnce({ countryCode: "PT" });
+    mocks.decryptWhatsAppConfig.mockReturnValue({
+      apiToken: "decrypted-token",
+      businessId: "biz-1",
+      phoneNumberId: "phone-1",
+    });
+    mocks.updateOutboxEntry.mockResolvedValue({ id: "out-7" });
+
+    await processOutbox(prisma);
+
+    expect(mocks.sendWhatsApp).not.toHaveBeenCalled();
+    expect(mocks.updateOutboxEntry).toHaveBeenCalledWith(
+      prisma,
+      { id: "out-7" },
+      expect.objectContaining({
+        error: expect.stringContaining("Expired"),
+        status: OutboxStatus.CANCELLED,
+      })
+    );
   });
 });
 

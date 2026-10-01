@@ -1838,7 +1838,8 @@
     "invalid_signature": "Dados de assinatura inválidos",
     "range_or_dates_required": "É necessário um intervalo predefinido ou datas personalizadas",
     "repair_name_required": "O nome da reparação é obrigatório",
-    "imei_invalid": "IMEI inválido — verifique os 15 dígitos"
+    "imei_invalid": "IMEI inválido — verifique os 15 dígitos",
+    "invalid_url": "Tem de ser um URL http(s) válido"
   },
   "view_all_critical": "Ver todos os atrasos",
   "warranty_returns": "Devoluções de garantia",
@@ -1940,5 +1941,7 @@
     "success": "Relatório enviado — obrigado! (n.º {{number}})",
     "error": "Não foi possível enviar o relatório. Tente novamente ou contacte o administrador.",
     "error_description_required": "Descreva o problema (pelo menos 10 caracteres)."
-  }
+  },
+  "whatsapp_tracking_url": "URL público de acompanhamento",
+  "whatsapp_tracking_url_help": "Endereço público onde os clientes abrem a página de acompanhamento a partir das mensagens WhatsApp, ex.: https://reparacoes.minhaloja.pt ou http://192.168.1.33:4000. Opcional — o link só é incluído quando definido"
 }

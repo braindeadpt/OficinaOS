@@ -59,13 +59,27 @@ export const updateWhatsAppSettingsSchema = z
     businessId: z.string().optional(),
     phoneNumberId: z.string().optional(),
     enabled: z.boolean().optional(),
+    // Public base URL for customer-facing links in WhatsApp messages
+    // (tracking deep links). Empty string clears it; anything else must
+    // be an http(s) URL so customers can actually open it.
+    trackingBaseUrl: z
+      .union([
+        z.literal(""),
+        z
+          .string()
+          .trim()
+          .max(2048)
+          .regex(/^https?:\/\//, { error: "validations.invalid_url" }),
+      ])
+      .optional(),
   })
   .refine(
     (data) =>
       data.apiToken !== undefined ||
       data.businessId !== undefined ||
       data.phoneNumberId !== undefined ||
-      data.enabled !== undefined,
+      data.enabled !== undefined ||
+      data.trackingBaseUrl !== undefined,
     { message: "validations.at_least_one_field" }
   );
 

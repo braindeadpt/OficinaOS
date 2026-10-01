@@ -1838,7 +1838,8 @@
     "invalid_signature": "Invalid signature data",
     "range_or_dates_required": "Either a predefined range or custom dates are required",
     "repair_name_required": "Repair name is required",
-    "imei_invalid": "Invalid IMEI — check the 15 digits"
+    "imei_invalid": "Invalid IMEI — check the 15 digits",
+    "invalid_url": "Must be a valid http(s) URL"
   },
   "view_all_critical": "View All Overdue",
   "warranty_returns": "Warranty Returns",
@@ -1852,6 +1853,8 @@
   "whatsapp_phone_number_id": "Phone Number ID",
   "whatsapp_settings": "WhatsApp Settings",
   "whatsapp_templates": "WhatsApp Templates",
+  "whatsapp_tracking_url": "Public tracking URL",
+  "whatsapp_tracking_url_help": "Public address where customers open the tracking page from WhatsApp messages, e.g. https://repairs.myshop.com or http://192.168.1.33:4000. Optional — the link is only included when set",
   "you": "You",
   "jobStatus": {
     "INTAKE": "Intake",

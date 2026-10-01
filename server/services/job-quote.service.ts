@@ -1,6 +1,7 @@
 import type { JobQuote, PrismaClient } from "@generated/client";
 import { AuditAction } from "@generated/client";
 import { QuoteStatus } from "@shared/constants/quote-statuses";
+import { Role } from "@shared/constants/roles";
 import type { SendQuoteInput } from "@shared/schemas/quote.schema";
 import {
   createQuote,
@@ -29,7 +30,8 @@ export async function createAndSendQuote(
   prisma: DbClient,
   jobId: string,
   input: SendQuoteInput,
-  userId: string
+  userId: string,
+  notifyCtx: NotifyContext
 ): Promise<JobQuote | null> {
   const job = await findJobForQuote(prisma, jobId);
   if (!job) {
@@ -58,6 +60,23 @@ export async function createAndSendQuote(
     toValue: `v${quote.version} — ${quote.amount}`,
     metadata: { quoteId: quote.id, version: quote.version },
     userId,
+  });
+
+  // The whole point of sending a quote is that the customer learns about
+  // it — consent-gated WhatsApp carries the tracking deep link when the
+  // shop has a public base URL configured.
+  notify(notifyCtx, {
+    context: {
+      customerName: job.customer?.name,
+      jobCode: job.jobCode,
+      quoteAmount: quote.amount.toNumber().toFixed(2),
+      recipientPhone: job.customer?.phone,
+    },
+    eventName: "quote_sent",
+    jobId,
+    recipients: { role: Role.OWNER },
+  }).catch(() => {
+    /* fire-and-forget */
   });
 
   return quote;

@@ -1838,7 +1838,8 @@
     "invalid_signature": "Données de signature invalides",
     "range_or_dates_required": "Une plage prédéfinie ou des dates personnalisées sont requises",
     "repair_name_required": "Le nom du réparateur est requis",
-    "imei_invalid": "IMEI invalide — vérifiez les 15 chiffres"
+    "imei_invalid": "IMEI invalide — vérifiez les 15 chiffres",
+    "invalid_url": "Doit être une URL http(s) valide"
   },
   "view_all_critical": "Voir tous les en retard",
   "warranty_returns": "Retours garantie",
@@ -1940,5 +1941,7 @@
     "success": "Rapport envoyé — merci ! (n° {{number}})",
     "error": "Impossible d'envoyer le rapport. ",
     "error_description_required": "Veuillez décrire le problème (au moins 10 caractères)."
-  }
+  },
+  "whatsapp_tracking_url": "URL publique de suivi",
+  "whatsapp_tracking_url_help": "Adresse publique où les clients ouvrent la page de suivi depuis les messages WhatsApp, p. ex. https://reparations.maboutique.fr ou http://192.168.1.33:4000. Facultatif — le lien n'est inclus que s'il est défini"
 }

@@ -82,6 +82,12 @@ const DISPATCH_CONTEXT: Record<string, Record<string, string>> = {
     jobCode: "RPR-2026-0002",
     recipientPhone: "+351910000001",
   },
+  quote_sent: {
+    customerName: "Ana Silva",
+    jobCode: "RPR-2026-0001",
+    quoteAmount: "120.00",
+    recipientPhone: "+351910000001",
+  },
   // Owner-facing stock alert: no customer recipient yet.
   part_low_stock: {
     partName: "iPhone 15 screen",
@@ -107,6 +113,7 @@ const REQUIRED_WHATSAPP_EVENTS = [
   "job_overdue",
   "warranty_return_created",
   "part_low_stock",
+  "quote_sent",
 ];
 
 const PLACEHOLDER_RE = /\{\{[^}]*\}\}/g;
@@ -246,6 +253,8 @@ describe.skipIf(!serverReachable)(
         const provided = new Set([
           ...Object.keys(DISPATCH_CONTEXT[row.name] ?? {}),
           "shopName", // injected centrally by notify() since the shopName PR
+          "trackingUrl", // injected centrally from ShopSettings.trackingBaseUrl
+          "currency", // injected centrally from ShopSettings.currency
         ]);
         for (const match of row.body.matchAll(VAR_NAME_RE)) {
           // `{{endif}}` closes an {{if}} block — syntax, not a variable.

@@ -524,7 +524,8 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
         app.prisma,
         id,
         parsed.data,
-        userId
+        userId,
+        { prisma: app.prisma, wsBroadcast: app.wsBroadcast }
       );
       if (!quote) {
         throw new AppError("JOB_NOT_FOUND");

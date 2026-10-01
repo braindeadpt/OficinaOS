@@ -39,7 +39,10 @@ describe("notify: WHATSAPP enqueue consent gate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.createManyAndReturnInAppNotifications.mockResolvedValue([]);
-    mocks.findShopSettingsUnique.mockResolvedValue({ shopName: "Loja Teste" });
+    mocks.findShopSettingsUnique.mockResolvedValue({
+      shopName: "Loja Teste",
+      whatsappEnabled: true,
+    });
     mocks.queueNotification.mockResolvedValue(undefined);
   });
 
@@ -117,7 +120,7 @@ describe("notify: WHATSAPP enqueue consent gate", () => {
     );
   });
 
-  it("omits shopName when the shop settings row is missing", async () => {
+  it("omits shopName when the shop settings has none", async () => {
     mocks.findManyNotificationTemplatesByName.mockResolvedValue([
       { body: "hi {{customerName}}", channel: "WHATSAPP" },
     ]);
@@ -125,7 +128,7 @@ describe("notify: WHATSAPP enqueue consent gate", () => {
       phone: "+351910000001",
       whatsappConsent: true,
     });
-    mocks.findShopSettingsUnique.mockResolvedValue(null);
+    mocks.findShopSettingsUnique.mockResolvedValue({ whatsappEnabled: true });
 
     await notify(app, {
       context: { customerName: "Ana", recipientPhone: "+351910000001" },
@@ -158,5 +161,85 @@ describe("notify: WHATSAPP enqueue consent gate", () => {
 
     const call = mocks.queueNotification.mock.calls[0];
     expect(call[1].templateVars.shopName).toBe("Override");
+  });
+
+  it("does not enqueue WhatsApp when the channel is disabled", async () => {
+    mocks.findManyNotificationTemplatesByName.mockResolvedValue([
+      { body: "hi {{customerName}}", channel: "WHATSAPP" },
+    ]);
+    mocks.findShopSettingsUnique.mockResolvedValue({
+      shopName: "Loja Teste",
+      whatsappEnabled: false,
+    });
+    mocks.findCustomerByPhone.mockResolvedValue({
+      phone: "+351910000001",
+      whatsappConsent: true,
+    });
+
+    await notify(app, {
+      context: { customerName: "Ana", recipientPhone: "+351910000001" },
+      eventName: "job_done",
+      recipients: {},
+    });
+
+    expect(mocks.queueNotification).not.toHaveBeenCalled();
+  });
+
+  it("adds a trackingUrl built from the shop tracking base URL", async () => {
+    mocks.findManyNotificationTemplatesByName.mockResolvedValue([
+      { body: "hi {{customerName}}", channel: "WHATSAPP" },
+    ]);
+    mocks.findShopSettingsUnique.mockResolvedValue({
+      shopName: "Loja Teste",
+      trackingBaseUrl: "https://loja.example.com/",
+      whatsappEnabled: true,
+    });
+    mocks.findCustomerByPhone.mockResolvedValue({
+      phone: "+351 910 000 001",
+      whatsappConsent: true,
+    });
+
+    await notify(app, {
+      context: {
+        customerName: "Ana",
+        jobCode: "RPR-2026-0001",
+        recipientPhone: "+351 910 000 001",
+      },
+      eventName: "job_done",
+      recipients: {},
+    });
+
+    expect(mocks.queueNotification).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        templateVars: expect.objectContaining({
+          trackingUrl:
+            "https://loja.example.com/tracking/RPR-2026-0001?phone4=0001",
+        }),
+      })
+    );
+  });
+
+  it("omits trackingUrl when no tracking base URL is configured", async () => {
+    mocks.findManyNotificationTemplatesByName.mockResolvedValue([
+      { body: "hi {{customerName}}", channel: "WHATSAPP" },
+    ]);
+    mocks.findCustomerByPhone.mockResolvedValue({
+      phone: "+351910000001",
+      whatsappConsent: true,
+    });
+
+    await notify(app, {
+      context: {
+        customerName: "Ana",
+        jobCode: "RPR-2026-0001",
+        recipientPhone: "+351910000001",
+      },
+      eventName: "job_done",
+      recipients: {},
+    });
+
+    const call = mocks.queueNotification.mock.calls[0];
+    expect(call[1].templateVars).not.toHaveProperty("trackingUrl");
   });
 });

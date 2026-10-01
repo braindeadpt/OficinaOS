@@ -4,7 +4,12 @@ import type { DbClient } from "./types.js";
 export function findJobForQuote(prisma: DbClient, jobId: string) {
   return prisma.job.findUnique({
     where: { id: jobId },
-    select: { id: true, jobCode: true, estimatedCost: true },
+    select: {
+      id: true,
+      jobCode: true,
+      estimatedCost: true,
+      customer: { select: { name: true, phone: true } },
+    },
   });
 }
 

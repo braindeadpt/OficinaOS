@@ -32,6 +32,7 @@ interface ChannelHandlerContext {
   jobId?: string;
   templateBody: string;
   templateVars: Record<string, string>;
+  whatsappEnabled: boolean;
 }
 
 interface ChannelHandler {
@@ -109,6 +110,11 @@ const inAppHandler: ChannelHandler = {
 
 const whatsAppHandler: ChannelHandler = {
   async handle(prisma, _app, event, context) {
+    // Disabled channel never creates outbox entries — a dead QUEUED row
+    // would sit forever or flush late when the channel is re-enabled.
+    if (!context.whatsappEnabled) {
+      return;
+    }
     const phone = event.context.recipientPhone;
     if (!phone) {
       logger.warn(
@@ -145,21 +151,58 @@ const DEFAULT_IN_APP_BODY =
   "{{eventName}}{{if jobCode}} — Job {{jobCode}}{{endif}}";
 
 /**
- * Production dispatch supplies the real shop name (ShopSettings) so
- * template signatures like {{if shopName}} — {{shopName}}{{endif}}
- * render for every channel without relying on testNotification.
- * Event contexts may still override it explicitly.
+ * Production dispatch supplies shop-level values from ShopSettings so
+ * templates render for every channel without relying on testNotification:
+ * shopName for signatures ({{if shopName}} — {{shopName}}{{endif}}),
+ * trackingBaseUrl for customer links, whatsappEnabled to gate the channel.
+ * Event contexts may still override shopName explicitly.
  */
-async function resolveShopName(prisma: DbClient): Promise<string> {
+async function resolveShopNotificationConfig(prisma: DbClient): Promise<{
+  currency: string;
+  shopName: string;
+  trackingBaseUrl: string | null;
+  whatsappEnabled: boolean;
+}> {
   try {
     const shop = await findShopSettingsUnique(prisma);
-    return shop?.shopName ?? "";
+    return {
+      currency: shop?.currency ?? "EUR",
+      shopName: shop?.shopName ?? "",
+      trackingBaseUrl: shop?.trackingBaseUrl ?? null,
+      whatsappEnabled: shop?.whatsappEnabled ?? false,
+    };
   } catch (err) {
     // Notifications are best-effort: never block dispatch on a
     // settings lookup failure (e.g. row not seeded yet).
-    logger.warn({ err }, "failed to resolve shopName for notification");
-    return "";
+    logger.warn({ err }, "failed to resolve shop settings for notification");
+    return {
+      currency: "EUR",
+      shopName: "",
+      trackingBaseUrl: null,
+      whatsappEnabled: false,
+    };
   }
+}
+
+const NON_DIGIT_RE = /\D/g;
+const TRAILING_SLASH_RE = /\/+$/;
+
+/**
+ * Deep link into the public tracking page: /tracking/<code>?phone4=<last4>
+ * opens the job view straight from the WhatsApp message. Only built when
+ * the shop configured a public base URL — LAN-only installs simply omit it.
+ */
+function buildTrackingUrl(
+  trackingBaseUrl: string,
+  jobCode: string,
+  recipientPhone: string
+): string | null {
+  const phone4 = recipientPhone.replace(NON_DIGIT_RE, "").slice(-4);
+  if (phone4.length !== 4) {
+    return null;
+  }
+  const base = trackingBaseUrl.replace(TRAILING_SLASH_RE, "");
+  return `${base}/tracking/${encodeURIComponent(jobCode)}?phone4=${phone4}`;
 }
 
 function buildTemplateVars(
@@ -201,14 +244,32 @@ export async function notify(
     event.eventName
   );
 
-  const shopName = await resolveShopName(app.prisma);
-  const templateVars = buildTemplateVars(event.context, shopName);
+  const shop = await resolveShopNotificationConfig(app.prisma);
+  const templateVars = buildTemplateVars(event.context, shop.shopName);
+  if (templateVars.currency === undefined) {
+    templateVars.currency = shop.currency;
+  }
+  if (
+    shop.trackingBaseUrl &&
+    templateVars.jobCode &&
+    event.context.recipientPhone
+  ) {
+    const trackingUrl = buildTrackingUrl(
+      shop.trackingBaseUrl,
+      templateVars.jobCode,
+      event.context.recipientPhone
+    );
+    if (trackingUrl) {
+      templateVars.trackingUrl = trackingUrl;
+    }
+  }
   const inAppBody = resolveInAppBody(templates);
 
   await HANDLERS.IN_APP.handle(app.prisma, app, event, {
     jobId: event.jobId,
     templateBody: inAppBody,
     templateVars,
+    whatsappEnabled: shop.whatsappEnabled,
   });
 
   for (const template of templates) {
@@ -226,6 +287,7 @@ export async function notify(
       jobId: event.jobId,
       templateBody: template.body,
       templateVars,
+      whatsappEnabled: shop.whatsappEnabled,
     });
   }
 }

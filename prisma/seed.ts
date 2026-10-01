@@ -177,6 +177,12 @@ async function seedNotificationTemplates() {
       isDefault: true,
     },
     {
+      name: "quote_sent",
+      channel: "IN_APP" as const,
+      body: "Quote sent{{if jobCode}} — {{jobCode}}{{endif}}{{if quoteAmount}} ({{quoteAmount}} {{currency}}){{endif}}",
+      isDefault: true,
+    },
+    {
       // WHATSAPP bodies only reference vars the dispatch actually
       // provides (customerName, jobCode). shopName is rendered via the
       // renderer's {{if}} conditional because it is optional in the
@@ -185,25 +191,25 @@ async function seedNotificationTemplates() {
       // or render as an empty gap.
       name: "job_created",
       channel: "WHATSAPP" as const,
-      body: "Hello {{customerName}}, your repair {{jobCode}} has been registered. We will keep you updated at every step.{{if shopName}} — {{shopName}}{{endif}}",
+      body: "Hello {{customerName}}, your repair {{jobCode}} has been registered. We will keep you updated at every step.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nTrack it here: {{trackingUrl}}{{endif}}",
       isDefault: true,
     },
     {
       name: "job_done",
       channel: "WHATSAPP" as const,
-      body: "Good news, {{customerName}}! Your device {{jobCode}} is repaired and ready for pickup.{{if shopName}} — {{shopName}}{{endif}}",
+      body: "Good news, {{customerName}}! Your device {{jobCode}} is repaired and ready for pickup.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nTrack it here: {{trackingUrl}}{{endif}}",
       isDefault: true,
     },
     {
       name: "job_in_repair",
       channel: "WHATSAPP" as const,
-      body: "Hello {{customerName}}, your device {{jobCode}} is now being repaired.{{if shopName}} — {{shopName}}{{endif}}",
+      body: "Hello {{customerName}}, your device {{jobCode}} is now being repaired.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nTrack it here: {{trackingUrl}}{{endif}}",
       isDefault: true,
     },
     {
       name: "job_waiting_parts",
       channel: "WHATSAPP" as const,
-      body: "Hello {{customerName}}, your device {{jobCode}} is waiting for parts. We will let you know as soon as they arrive.{{if shopName}} — {{shopName}}{{endif}}",
+      body: "Hello {{customerName}}, your device {{jobCode}} is waiting for parts. We will let you know as soon as they arrive.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nTrack it here: {{trackingUrl}}{{endif}}",
       isDefault: true,
     },
     {
@@ -215,7 +221,7 @@ async function seedNotificationTemplates() {
     {
       name: "job_on_hold",
       channel: "WHATSAPP" as const,
-      body: "Hello {{customerName}}, the repair of your device {{jobCode}} is on hold. Please contact us for details.{{if shopName}} — {{shopName}}{{endif}}",
+      body: "Hello {{customerName}}, the repair of your device {{jobCode}} is on hold. Please contact us for details.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nTrack it here: {{trackingUrl}}{{endif}}",
       isDefault: true,
     },
     {
@@ -231,12 +237,21 @@ async function seedNotificationTemplates() {
       isDefault: true,
     },
     {
+      // Quote-ready notice with the deep link to approve/decline on the
+      // tracking page. trackingUrl only renders when the shop configured
+      // a public base URL; currency is injected centrally.
+      name: "quote_sent",
+      channel: "WHATSAPP" as const,
+      body: "Hello {{customerName}}, the estimate for your repair {{jobCode}} is ready: {{quoteAmount}} {{currency}}.{{if trackingUrl}}\nReview and approve it here: {{trackingUrl}}{{endif}}{{if shopName}} — {{shopName}}{{endif}}",
+      isDefault: true,
+    },
+    {
       // Delayed-job notice ("job-delayed"). The overdue scheduler sends
       // this to the customer's WhatsApp with consent gating handled by
       // the dispatch pipeline.
       name: "job_overdue",
       channel: "WHATSAPP" as const,
-      body: "Hello {{customerName}}, your repair {{jobCode}} is taking longer than expected. Our team is on it and we will update you shortly.{{if shopName}} — {{shopName}}{{endif}}",
+      body: "Hello {{customerName}}, your repair {{jobCode}} is taking longer than expected. Our team is on it and we will update you shortly.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nTrack it here: {{trackingUrl}}{{endif}}",
       isDefault: true,
     },
     {
@@ -246,7 +261,7 @@ async function seedNotificationTemplates() {
       // optional and rendered via {{if}} (see above).
       name: "warranty_return_created",
       channel: "WHATSAPP" as const,
-      body: "Hello {{customerName}}, we have registered a warranty return for your device {{jobCode}}. We will inspect it and keep you updated.{{if shopName}} — {{shopName}}{{endif}}",
+      body: "Hello {{customerName}}, we have registered a warranty return for your device {{jobCode}}. We will inspect it and keep you updated.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nTrack it here: {{trackingUrl}}{{endif}}",
       isDefault: true,
     },
     {
