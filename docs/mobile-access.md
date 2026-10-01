@@ -1,67 +1,76 @@
-# OficinaOS em telemóveis e tablets
+# Usar o OficinaOS no telemóvel ou tablet
 
-A app é totalmente responsiva e funciona em qualquer dispositivo com browser —
-sem instalar nada. Há três formas de usar no móvel, por ordem de simplicidade:
+Guia simples para a equipa — não precisas de perceber de tecnologia.
+São 2 minutos e faz-se uma única vez.
 
-| Forma | Esforço | Experiência |
-|---|---|---|
-| **Browser na rede da loja** | zero | abre num separador |
-| **Ícone no ecrã principal (PWA)** | 10 segundos | app em ecrã cheio, ícone próprio |
-| **APK Android** | build único | app instalada, câmara nativa |
+## Dentro da loja (Wi-Fi)
 
-## 1. Browser na rede da loja
+Precisas de 3 coisas que quem instalou a app te dá:
 
-Com o telemóvel/tablet ligado à Wi-Fi da loja, abre o mesmo endereço do PC:
+1. **Wi-Fi da loja** — o telemóvel tem de estar ligado à mesma rede do
+   computador onde a app está instalada (não funciona com dados móveis)
+2. **O endereço** — parecido com `http://192.168.1.33:4000`
+3. **O teu utilizador e palavra-passe**
 
-```
-http://192.168.1.33:4000        # o IP que está em APP_URL
-```
+Depois:
 
-Funciona em Chrome, Safari, Edge — em Android, iPhone, iPad e tablets Windows.
+1. Abre o browser — **Safari** no iPhone, **Chrome** no Android
+2. Escreve o endereço na barra de cima e toca para ir
+3. Faz login — está pronto a usar
 
-## 2. Ícone no ecrã principal (PWA)
+> 💡 O endereço é sempre o mesmo. Guarda nos favoritos ou instala o ícone
+> (passo seguinte) e nunca mais precisas de o escrever.
 
-O OficinaOS é uma PWA — podes "instalá-lo" para ficar com ícone próprio e abrir
-em ecrã cheio, sem barra do browser.
+## Instalar o ícone no ecrã (recomendado)
 
-### iPhone / iPad (Safari)
+Fica com um ícone próprio e abre em ecrã cheio, como uma app normal.
 
-1. Abre o endereço da app no **Safari**
-2. Toca em **Partilhar** (o quadrado com a seta)
-3. **"Adicionar ao ecrã principal"** → Adicionar
-4. Fica um ícone OficinaOS que abre em modo app (ecrã cheio)
+### iPhone / iPad
 
-Funciona na rede da loja em HTTP — não precisa de HTTPS para o ícone.
+1. Abre o endereço no **Safari**
+2. Toca no botão **Partilhar** (o quadrado com a seta para cima)
+3. Faz scroll e toca em **"Adicionar ao ecrã principal"**
+4. Toca em **Adicionar** — aparece o ícone OficinaOS
 
-### Android (Chrome)
+### Android
 
-- **Na loja (HTTP):** menu ⋮ → "Adicionar ao ecrã principal" → fica um atalho
-  que abre no browser.
-- **Com acesso remoto HTTPS** ([tunnel](remote-access.md)): o Chrome oferece
-  "Instalar aplicação" — instala como app real, com ícone adaptativo.
+1. Abre o endereço no **Chrome**
+2. Toca nos **três pontos (⋮)** no canto superior direito
+3. Toca em **"Adicionar ao ecrã principal"**
+4. Confirma — aparece o ícone
 
-## 3. App Android nativa (opcional)
+> Se a loja tiver o acesso remoto ligado (secção seguinte), no Android o
+> Chrome pode dizer **"Instalar aplicação"** — ainda melhor, instala como
+> app verdadeira.
 
-O projeto inclui configuração Capacitor (`appId: com.oficinaos.app`, plugins de
-Câmara para fotos nas fichas e SplashScreen). Para gerar o APK sem Play Store:
+## Fora da loja (em casa, na rua)
 
-```bash
-# no repo, numa máquina com Android Studio
-bun install
-VITE_API_BASE_URL=https://oficina.minhaloja.pt bun run build   # ou o IP da LAN
-bunx cap sync android
-bunx cap open android   # → Build → Build APK → distribui o .apk
-```
+Só funciona se a loja tiver o **acesso remoto** ativado — pergunta a quem
+instalou a app (o guia está em [remote-access.md](remote-access.md)).
 
-Notas:
+1. Usa o **endereço de internet** que te deram — parecido com
+   `https://oficina.nomedaloja.pt` (começa por `https`, não tem números)
+2. Login com o **mesmo** utilizador e palavra-passe
+3. Podes instalar o ícone no ecrã da mesma maneira
 
-- O `VITE_API_BASE_URL` fica gravado no APK — usa o URL do túnel se quiseres
-  que a app funcione dentro e fora da loja
-- Atualizações são manuais (distribuir novo `.apk`) — sem loja não há auto-update
-- Para iOS não há caminho sem App Store/conta de developer — usa a opção PWA
+> ⚠️ **Importante:** a app mora no computador da loja. Se esse computador
+> estiver desligado, ninguém acede — nem dentro nem fora da loja.
 
-## O servidor continua a ser o PC da loja
+## Algo não funciona?
 
-Os telemóveis são clientes — a base de dados e a app correm sempre no PC onde
-instalaste. Se o PC desligar, os dispositivos perdem a ligação até ele voltar
-(os dados ficam seguros nos volumes Docker).
+| O que acontece | O que fazer |
+|---|---|
+| A página não abre na loja | Confirma que estás na **Wi-Fi da loja** (desliga os dados móveis e tenta outra vez) |
+| A página não abre fora da loja | Pergunta se o **computador da loja está ligado** e se o acesso remoto está ativo |
+| "Endereço inválido" ou erro de segurança | Estás a usar o endereço errado — dentro da loja é o que tem números (`http://192.168...`), fora é o `https://` com o nome da loja |
+| Pediu login outra vez | Normal de vez em quando — entra com o teu utilizador |
+
+---
+
+### Nota para quem instala (opcional, não precisas de ler)
+
+Também existe a possibilidade de gerar um **APK Android nativo** via
+Capacitor para distribuir fora da Play Store — detalhes técnicos:
+`capacitor.config.ts` + `VITE_API_BASE_URL` apontado ao URL público (túnel)
+ou ao IP da LAN. Na maioria dos casos a PWA chega — sobretudo porque em
+iOS não há caminho sem App Store, e a experiência via ícone é equivalente.

@@ -1,146 +1,114 @@
-# Acesso remoto com Cloudflare Tunnel
+# Usar o OficinaOS fora da loja (acesso remoto)
 
-Acesso ao OficinaOS a partir de qualquer lugar — telemóvel fora da loja, casa do
-dono, links enviados a clientes — **sem abrir portas no router**, sem IP público
-e sem VPS. Funciona mesmo com CGNAT (MEO/NOS/Vodafone em modo NAT).
+Guia passo a passo para ligar o acesso pela internet — para a equipa usar
+o telemóvel fora da loja e para os **links dos clientes** (tracking,
+orçamentos, garantia) funcionarem em qualquer lado.
 
-O túnel é **opcional**: a app continua a funcionar 100% na rede local sem
-internet. O túnel acrescenta uma porta de entrada HTTPS gerida pela Cloudflare.
+É **grátis**, demora uns **15 minutos** e só se faz **uma vez**.
 
-```
-Internet (telemóvel, cliente)
-        │  HTTPS
-        ▼
-   Cloudflare edge
-        │  túnel encriptado (ligação de SAÍDA do PC da loja)
-        ▼
-  cloudflared (container) → app:4000 → OficinaOS
-```
+## O que vais precisar
 
-## O que precisas
+| Coisa | O que é | Custo |
+|---|---|---|
+| **Conta Cloudflare** | O serviço que liga a internet ao PC da loja em segurança | Grátis |
+| **Um domínio** | O "nome" da loja na internet, ex.: `minhaloja.pt` — compra-se na Cloudflare, Porkbun, Namecheap… | ~10 €/ano |
+| **OficinaOS instalado** | A app já a correr no PC da loja com Docker | — |
 
-- Uma conta Cloudflare gratuita
-- Um domínio próprio na Cloudflare (~10 €/ano, ex.: `minhaloja.pt`) —
-  subdomínio grátis ilimitado, ex.: `oficina.minhaloja.pt`
-- O OficinaOS já instalado e a correr com Docker
+> **Como funciona (em linguagem simples):** o PC da loja liga-se à
+> Cloudflare e fica "à escuta". Quando alguém abre o endereço da loja na
+> internet, a Cloudflare passa o pedido por esse canal até ao PC. **Não
+> precisas de abrir portas no router** nem de IP fixo — funciona mesmo
+> com as internet móveis dos operadores portugueses (CGNAT).
 
-> Sem domínio próprio: podes testar com `cloudflared tunnel --url`, mas o URL
-> muda a cada arranque — serve para experimentar, não para produção.
+## Passo 1 — Conta Cloudflare e domínio
 
-## Passo 1 — Criar o túnel
+1. Vai a [dash.cloudflare.com](https://dash.cloudflare.com) → **Sign up**,
+   cria a conta gratuita
+2. **Add a domain** → escreve o teu domínio
+3. A Cloudflare pede para mudar os "nameservers" no site onde compraste o
+   domínio — ela mostra exatamente quais são e onde mudar (passo guiado)
+4. Espera que fique verde "Active" (pode demorar alguns minutos a horas)
 
-1. Entra em [Cloudflare Zero Trust](https://one.dash.cloudflare.com/)
-   (login com a conta Cloudflare que gere o teu domínio).
-2. **Networks → Tunnels → Add a tunnel → Cloudflared**.
-3. Dá um nome (ex.: `oficina`) e guarda.
-4. No ecrã do conector escolhe **Docker** — a Cloudflare mostra um comando
-   `docker run … --token eyJh…`. Copia apenas o **token** (a string longa que
-   começa por `eyJ`).
-5. Em **Public Hostname** cria o endereço público:
-   - Subdomain: `oficina` · Domain: `minhaloja.pt`
-   - Service type: **HTTP** · URL: `app:4000`
-   - (o `app` resolve dentro da rede Docker — não é o IP do PC)
+## Passo 2 — Criar o túnel
 
-## Passo 2 — Configurar o `.env`
+1. Entra em [one.dash.cloudflare.com](https://one.dash.cloudflare.com)
+   (o painel "Zero Trust" — mesma conta)
+2. No menu: **Networks → Tunnels → Add a tunnel** → escolhe **Cloudflared**
+3. Dá um nome ao túnel, ex.: `oficina` → **Save**
+4. A Cloudflare mostra instruções para vários sistemas — escolhe **Docker**.
+   Aparece um comando longo; dele só te interessa o **token**: a string que
+   começa por `eyJ` (copia-a, é a "chave" do túnel)
+5. Continua para **Public Hostname** e cria o endereço público:
+   - **Subdomain:** `oficina` (ou `app`, como preferires)
+   - **Domain:** o teu domínio
+   - **Service:** Type `HTTP` · URL `app:4000`
+   - ⚠️ é mesmo `app:4000` — é o nome interno do contentor Docker, não o IP do PC
+6. Guarda. O túnel está criado.
 
-```bash
-TUNNEL_TOKEN=eyJhIjoixxxxx…     # o token do passo anterior
-```
+## Passo 3 — Ligar na app
 
-E escolhe um dos dois modos:
-
-### Modo A — Acesso duplo (recomendado)
-
-A loja continua a usar `http://<IP>:4000`; o túnel adiciona o acesso remoto.
-**A app funciona na loja mesmo se a internet falhar.**
+Abre o ficheiro **`.env`** na pasta onde instalaste o OficinaOS (com o
+Bloco de Notas ou VS Code) e adiciona/edita estas duas linhas:
 
 ```bash
-APP_URL=http://192.168.1.33:4000                        # fica como está
-EXTRA_TRUSTED_ORIGINS=https://oficina.minhaloja.pt      # adiciona o túnel
+TUNNEL_TOKEN=eyJhIjoixxxxx…        # cola aqui o token do passo 2
+EXTRA_TRUSTED_ORIGINS=https://oficina.minhaloja.pt   # o teu endereço público
 ```
 
-### Modo B — HTTPS em todo o lado
+> O `APP_URL` fica como está (`http://192.168…:4000`) — assim a loja
+> continua a funcionar **mesmo se a internet falhar**, e o acesso remoto
+> fica disponível em cima.
 
-Máxima segurança (cookies `Secure`, HSTS), mas **todos os dispositivos usam o
-URL público — incluindo dentro da loja — e o login exige internet.**
+Arranca de novo com o túnel:
 
-```bash
-APP_URL=https://oficina.minhaloja.pt
-```
+- **Se instalaste com o INSTALAR.bat** (a maioria) — no `.env` põe também:
 
-## Passo 3 — Arrancar
+  ```bash
+  COMPOSE_PROFILES=tunnel
+  ```
 
-Instalação por imagem (a maioria — `INSTALAR.bat`):
+  e depois abre o `INICIAR.bat` (ou corre `docker compose -f docker-compose.app.yml up -d`).
 
-```bash
-# no .env:
-COMPOSE_PROFILES=tunnel
-# ou, combinando com as atualizações automáticas:
-COMPOSE_PROFILES=auto-update,tunnel
-docker compose -f docker-compose.app.yml up -d
-```
+- **Se instalaste pelo código-fonte:**
 
-Instalação por código-fonte:
+  ```bash
+  docker compose --profile tunnel up -d
+  ```
 
-```bash
-docker compose --profile tunnel up -d
-```
+**Testar:** abre `https://oficina.minhaloja.pt` no telemóvel — se aparecer
+o login, está feito. ✅
 
-Verifica:
+## Passo 4 — Ativar os links para clientes
 
-```bash
-docker compose logs -f cloudflared
-# "Registered tunnel connection" ×4 = ligado
-```
+Para que os links que a app envia (tracking, orçamento, pedido de
+avaliação, QR de garantia) abram fora da loja:
 
-Abre `https://oficina.minhaloja.pt` no telemóvel — deve aparecer o login.
+**Definições → Loja → URL base de tracking** → escreve o endereço público
+`https://oficina.minhaloja.pt` → Guardar.
 
-## Passo 4 — Links para clientes
+## Perguntas rápidas
 
-Para que os links enviados aos clientes (tracking, aprovação de orçamento,
-pedido de avaliação, recibo/QR de garantia) funcionem fora da loja:
+**Se a internet da loja falhar, a loja para?**
+Não. Dentro da loja toda a gente continua a usar `http://192.168…:4000` —
+só o acesso remoto é que fica em pausa até a internet voltar.
 
-**Definições → Loja → URL base de tracking** → `https://oficina.minhaloja.pt`
+**Se o PC da loja desligar?**
+O acesso remoto para com ele. Quando o PC ligar, o Docker e o túnel
+arrancam sozinhos e tudo volta.
 
-Os QRs e links WhatsApp passam a usar o endereço público.
+**É seguro?**
+Sim: HTTPS encriptado, zero portas abertas no router, e os limites de
+tentativas de login continuam a funcionar por visitante. Se quiseres uma
+barreira extra, o **Cloudflare Access** (grátis, mesmo painel → Access →
+Applications) pode pedir email + código antes do login — lembra-te de
+deixar de fora os caminhos públicos (`/tracking*`, `/pre-check*`) para os
+clientes não baterem na barreira.
 
-## Segurança — o que muda e o que não muda
-
-- ✅ HTTPS na borda — tráfego encriptado entre a internet e a Cloudflare
-- ✅ Zero portas abertas no router — o túnel é uma ligação de saída
-- ✅ Rate limits por visitante funcionam (`TRUST_PROXY` já é `true` em produção
-  e honra o `X-Forwarded-For` do túnel)
-- ✅ Autenticação, CSRF e isolamento de rotas públicas inalterados
-- ⚠️ No Modo A os cookies não levam flag `Secure` (para a LAN HTTP continuar a
-  funcionar) — na prática o tráfego remoto vai sempre dentro do TLS do túnel
-- ⚠️ Não expõe a app a bots: sem o URL público ninguém a encontra, mas considera
-  **Cloudflare Access** (Zero Trust → Access → Applications) para exigir email +
-  código antes do login — grátis até 50 utilizadores
-
-### Cloudflare Access (opcional, recomendado para a área de staff)
-
-Se quiseres uma barreira extra à frente do login:
-
-1. Zero Trust → **Access → Applications → Add**
-2. Self-hosted → hostname `oficina.minhaloja.pt`
-3. Policy: Allow → emails da equipa
-4. **Exclui os caminhos públicos** para os clientes não baterem na barreira:
-   `/tracking*`, `/pre-check*`, `/api/public/*`, `/api/jobs/lookup*`,
-   `/api/receipts/*`
-
-## Perguntas frequentes
-
-**A loja funciona se a internet cair?**
-No Modo A, sim — todos na loja continuam em `http://<IP>:4000`. No Modo B não:
-tudo depende do túnel.
-
-**E se o PC da loja desligar?**
-O acesso remoto para com ele — os dados ficam guardados e tudo volta quando o
-PC ligar (com `restart: unless-stopped` o Docker sobe sozinho).
+**Alternativa máxima segurança:** se preferires que **toda** a gente use o
+endereço HTTPS (incluindo dentro da loja), põe `APP_URL=https://oficina.minhaloja.pt`
+em vez do IP — mais seguro (cookies endurecidos), mas a loja passa a
+precisar de internet para fazer login. Recomendado só se a net da loja for
+muito estável.
 
 **Custa alguma coisa?**
-Cloudflare Tunnel é grátis. O único custo é o domínio (~10 €/ano).
-
-**Vários túneis/lojas?**
-Cada loja cria o seu túnel com o seu subdomínio (`loja2.minhaloja.pt`), no seu
-próprio `.env`.
+O túnel é grátis. O único custo é o domínio (~10 €/ano).
