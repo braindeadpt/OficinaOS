@@ -39,7 +39,9 @@ Uma máquina corre o servidor e a base de dados; todos os outros dispositivos ac
 
 ### Instalação fácil (Windows) ⭐
 
-Descarrega o **[instalador ZIP](https://github.com/braindeadpt/OficinaOS/releases/latest/download/oficinaos-install.zip)**, extrai e faz **duplo clique em `INSTALAR.bat`** — instala o Docker se faltar, gera as passwords e arranca tudo sozinho. Uso diário: `INICIAR.bat` / `PARAR.bat` (o `INICIAR.bat` atualiza a app automaticamente).
+Descarrega o **[instalador ZIP](https://github.com/braindeadpt/OficinaOS/releases/latest/download/oficinaos-install.zip)**, extrai e faz **duplo clique em `INSTALAR.bat`** — instala o Docker se faltar, gera as passwords e arranca tudo sozinho. Uso diário: `INICIAR.bat` / `PARAR.bat` (o `INICIAR.bat` também atualiza a app).
+
+**PC sem virtualização?** Se o Docker não funciona (erro *"virtualization support not detected"*, VT-x/SVM desligado na BIOS ou não suportado), o instalador deteta-o e oferece o **modo portátil**: um pacote único (~540 MB) com Bun + PostgreSQL embutidos — sem Docker, sem admin, sem serviços. Também disponível direto: **[oficinaos-portable.zip](https://github.com/braindeadpt/OficinaOS/releases/latest/download/oficinaos-portable.zip)**. Diferenças, backups e restauro: **[INSTALL.md → Instalação portátil](./INSTALL.md#instalação-portátil-sem-docker)**.
 
 > O ZIP da release contém só os ficheiros de instalação. Para o código completo: **Code → Download ZIP** (sempre a versão mais recente de `main`).
 
