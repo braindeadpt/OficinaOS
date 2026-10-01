@@ -67,7 +67,17 @@ No primeiro acesso a app **obriga a definir um novo nome de utilizador e uma nov
 | Página em branco no browser | `Ctrl+F5`; se persistir, confirmar que usaste `http://` e não `https://` |
 | "Invalid username or password" | O login é por **username** (`admin`), não email |
 | O PC mudou de IP e os outros dispositivos deixaram de ligar | Apagar o ficheiro `.env`, correr `INSTALAR.bat` outra vez (gera config nova; os dados mantêm-se) |
+| "Virtualization support not detected" / Docker não arranca | O `INSTALAR.bat` deteta isto e oferece alternativa — ver **Instalação portátil** abaixo |
 | Desinstalar por completo | `docker compose down -v` na pasta + apagar a pasta (⚠️ apaga a base de dados) |
+
+## Instalação portátil (sem Docker)
+
+Para PCs onde o Docker não funciona — tipicamente porque a **virtualização de hardware (VT-x/SVM) está desativada na BIOS** ou o processador não a suporta. O `INSTALAR.bat` deteta isto automaticamente e propõe duas opções:
+
+- **Ativar na BIOS** — reiniciar, premir F2/F10/DEL/ESC, procurar "Intel VT-x" / "Virtualization Technology" / "SVM Mode", ativar e gravar (F10). Depois o caminho Docker normal funciona.
+- **Instalação portátil** — um pacote que traz tudo embutido (Bun + PostgreSQL), sem Docker, sem admin, sem serviços. Funciona em qualquer Windows 10/11 64-bit.
+
+No caminho portátil o instalador descarrega `oficinaos-portable.zip` (~400 MB), extrai para `oficinaos-portable\` e arranca. Uso diário idêntico: `INICIAR.bat`, `PARAR.bat`, `ATUALIZAR.bat` dentro dessa pasta — a base de dados fica em `data\` (backup = copiar essa pasta com a app parada, ou usar o backup in-app).
 
 ## Atualizar para uma versão nova
 
