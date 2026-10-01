@@ -11,8 +11,9 @@ export default function IntakeModal({
   onClose,
   onSubmit,
   open,
+  prefill,
 }: IntakeModalProps) {
-  const m = useIntakeModal({ open, onClose, onSubmit });
+  const m = useIntakeModal({ open, onClose, onSubmit, prefill });
 
   if (!open) {
     return null;

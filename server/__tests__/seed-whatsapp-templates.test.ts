@@ -98,6 +98,12 @@ const DISPATCH_CONTEXT: Record<string, Record<string, string>> = {
     jobCode: "RPR-2026-0001",
     outcome: "REFUNDED",
   },
+  // Staff-facing pre-triage alert — no customer recipient or job yet.
+  pre_check_submitted: {
+    customerName: "Ana Silva",
+    deviceLabel: "iPhone 14",
+    requestCode: "PRE-2026-000001",
+  },
 };
 
 // Events the seed must provide WHATSAPP templates for.

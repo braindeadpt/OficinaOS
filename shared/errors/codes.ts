@@ -203,6 +203,16 @@ export const ERRORS = {
     status: 409,
     message: "errors.return_claim_has_rework_job",
   },
+
+  // ── Intake requests (public pre-check) ───────────────────────────────────
+  INTAKE_REQUEST_NOT_FOUND: {
+    status: 404,
+    message: "errors.intake_request_not_found",
+  },
+  INTAKE_REQUEST_NOT_PENDING: {
+    status: 409,
+    message: "errors.intake_request_not_pending",
+  },
 } as const;
 
 export type ErrorCode = keyof typeof ERRORS;

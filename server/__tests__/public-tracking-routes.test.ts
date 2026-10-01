@@ -1,6 +1,7 @@
 import { isAppError } from "@shared/errors/app-error.js";
 import Fastify from "fastify";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { intakeRequestsRoutes } from "../routes/intake-requests.js";
 import { jobRoutes } from "../routes/jobs.js";
 import { publicRoutes } from "../routes/public.js";
 
@@ -8,10 +9,14 @@ import { publicRoutes } from "../routes/public.js";
 // caught by the jobs plugin's requirePermission hook — an anonymous customer
 // has no session. A 401/403 here means public tracking is broken.
 const mocks = vi.hoisted(() => ({
+  convertIntakeRequest: vi.fn(),
+  dismissIntakeRequest: vi.fn(),
+  listIntakeRequests: vi.fn(),
   lookupByCode: vi.fn(),
   lookupReceiptByCode: vi.fn(),
   renderReceiptHtml: vi.fn(),
   respondToQuote: vi.fn(),
+  submitPreCheckRequest: vi.fn(),
 }));
 
 vi.mock("../services/job.service.js", () => ({
@@ -28,6 +33,13 @@ vi.mock("../services/job-quote.service.js", () => ({
   respondToQuote: mocks.respondToQuote,
   listQuotes: vi.fn(),
   createAndSendQuote: vi.fn(),
+}));
+
+vi.mock("../services/intake-request.service.js", () => ({
+  submitPreCheckRequest: mocks.submitPreCheckRequest,
+  listIntakeRequests: mocks.listIntakeRequests,
+  dismissIntakeRequest: mocks.dismissIntakeRequest,
+  convertIntakeRequest: mocks.convertIntakeRequest,
 }));
 
 function buildApp() {
@@ -59,14 +71,15 @@ function buildApp() {
   // exactly what the requirePermission hook sees from a real public client.
   app.register(jobRoutes, { prefix: "/api/jobs" });
   app.register(publicRoutes, { prefix: "/api/public" });
+  app.register(intakeRequestsRoutes, { prefix: "/api/intake-requests" });
   return app;
 }
 
-describe("public tracking endpoints", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
+describe("public tracking endpoints", () => {
   it("GET /api/jobs/lookup does not 401 for anonymous customers", async () => {
     mocks.lookupByCode.mockResolvedValue({ jobExists: false });
     const app = buildApp();
@@ -176,5 +189,115 @@ describe("public tracking endpoints", () => {
 
     expect(res.statusCode).toBe(400);
     expect(mocks.respondToQuote).not.toHaveBeenCalled();
+  });
+});
+
+describe("public pre-check endpoint", () => {
+  const VALID = {
+    customerName: "Maria Silva",
+    customerPhone: "912345678",
+    deviceLabel: "iPhone 14",
+    problem: "Screen cracked after a fall.",
+  };
+
+  it("POST /api/public/pre-check accepts a valid anonymous submission", async () => {
+    mocks.submitPreCheckRequest.mockResolvedValue({
+      code: "PRE-2026-000001",
+      id: "req-1",
+    });
+    const app = buildApp();
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/public/pre-check",
+      payload: VALID,
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json().code).toBe("PRE-2026-000001");
+    expect(mocks.submitPreCheckRequest).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ customerName: "Maria Silva" }),
+      expect.anything()
+    );
+  });
+
+  it("rejects missing required fields before touching the service", async () => {
+    const app = buildApp();
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/public/pre-check",
+      payload: { customerName: "Maria" },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(mocks.submitPreCheckRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects too-short problem descriptions", async () => {
+    const app = buildApp();
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/public/pre-check",
+      payload: { ...VALID, problem: "broken" },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(mocks.submitPreCheckRequest).not.toHaveBeenCalled();
+  });
+
+  it("fakes success for a filled honeypot without creating anything", async () => {
+    const app = buildApp();
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/public/pre-check",
+      payload: { ...VALID, company: "spammy-bot" },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json().ok).toBe(true);
+    expect(mocks.submitPreCheckRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe("staff intake-request routes", () => {
+  it("GET /api/intake-requests rejects anonymous callers", async () => {
+    const app = buildApp();
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/intake-requests",
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(mocks.listIntakeRequests).not.toHaveBeenCalled();
+  });
+
+  it("POST /api/intake-requests/:id/dismiss rejects anonymous callers", async () => {
+    const app = buildApp();
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/intake-requests/req-1/dismiss",
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(mocks.dismissIntakeRequest).not.toHaveBeenCalled();
+  });
+
+  it("POST /api/intake-requests/:id/convert rejects anonymous callers", async () => {
+    const app = buildApp();
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/intake-requests/req-1/convert",
+      payload: { jobId: "job-1" },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(mocks.convertIntakeRequest).not.toHaveBeenCalled();
   });
 });

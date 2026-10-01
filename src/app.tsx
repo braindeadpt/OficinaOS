@@ -31,9 +31,11 @@ const JobDetailPage = lazy(() => import("@/pages/jobs/detail"));
 const NotificationsPage = lazy(() => import("@/pages/notifications"));
 const PartsCatalogPage = lazy(() => import("@/pages/parts"));
 const PosPage = lazy(() => import("@/pages/pos"));
+const PreCheckPage = lazy(() => import("@/pages/pre-check"));
 const ProfilePage = lazy(() => import("@/pages/profile"));
 const RepairsPage = lazy(() => import("@/pages/repairs"));
 const ReportsPage = lazy(() => import("@/pages/reports"));
+const RequestsPage = lazy(() => import("@/pages/requests"));
 const SettingsPage = lazy(() => import("@/pages/settings"));
 const TrackingPage = lazy(() => import("@/pages/tracking"));
 
@@ -163,6 +165,16 @@ export default function App() {
                 path="/notifications"
               />
             </Route>
+            <Route element={<RequirePermission perm={{ jobs: ["view"] }} />}>
+              <Route
+                element={
+                  <DashboardLayout>
+                    <RequestsPage />
+                  </DashboardLayout>
+                }
+                path="/requests"
+              />
+            </Route>
             <Route element={<RequirePermission perm={{ sales: ["view"] }} />}>
               <Route
                 element={
@@ -279,6 +291,7 @@ export default function App() {
             </Route>
           </Route>
           <Route element={<TrackingPage />} path="/tracking/:jobCode?" />
+          <Route element={<PreCheckPage />} path="/pre-check" />
           <Route element={<NotFoundPage />} path="*" />
         </Routes>
       </Suspense>

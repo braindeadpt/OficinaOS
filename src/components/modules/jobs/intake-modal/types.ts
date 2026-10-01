@@ -58,6 +58,8 @@ export interface IntakeModalProps {
   onClose: () => void;
   onSubmit: (data: IntakeFormData) => Promise<void>;
   open: boolean;
+  /** Pre-checked intake request conversion — merged over INITIAL_FORM on open. */
+  prefill?: Partial<IntakeFormData>;
 }
 
 export const labelCls =

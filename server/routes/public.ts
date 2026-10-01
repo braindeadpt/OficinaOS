@@ -1,8 +1,11 @@
 import { AppError } from "@shared/errors/app-error.js";
+import { preCheckSubmitSchema } from "@shared/schemas/intake-request.schema";
 import { quoteRespondSchema } from "@shared/schemas/quote.schema";
 import type { FastifyPluginAsync } from "fastify";
+import { submitPreCheckRequest } from "../services/intake-request.service.js";
 import { respondToQuote } from "../services/job-quote.service.js";
 import { codeLockout } from "../utils/code-lockout.js";
+import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
 const JOB_CODE_RE = /^[A-Za-z0-9-]+$/;
 const PHONE4_RE = /^\d{4}$/;
@@ -90,6 +93,50 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
         respondedAt: quote?.respondedAt,
         responseNote: quote?.responseNote,
       });
+    },
+  });
+
+  // Public pre-check form (and later the hosted Pro relay). Anonymous, so it
+  // carries the strictest budget in route-security.ts. The `company` honeypot
+  // is invisible to browsers — a filled value means a bot, which we reject
+  // silently with a fake success instead of an error worth retrying.
+  app.post("/pre-check", {
+    handler: async (req, reply) => {
+      const parsed = preCheckSubmitSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        throw new AppError("VALIDATION_ERROR", {
+          errors: resolveZodErrors(
+            parsed.error.flatten().fieldErrors,
+            req.locale
+          ),
+        });
+      }
+
+      if (parsed.data.company) {
+        return reply.status(201).send({ ok: true });
+      }
+
+      const request = await submitPreCheckRequest(app.prisma, parsed.data, {
+        prisma: app.prisma,
+        wsBroadcast: app.wsBroadcast,
+      });
+      return reply.status(201).send({ code: request.code, id: request.id });
+    },
+    schema: {
+      body: {
+        properties: {
+          company: { type: "string" },
+          customerEmail: { type: "string" },
+          customerName: { type: "string" },
+          customerPhone: { type: "string" },
+          deviceLabel: { type: "string" },
+          problem: { type: "string" },
+          whatsappOptIn: { type: "boolean" },
+        },
+        type: "object",
+      },
+      summary: "Submit a public pre-check request",
+      tags: ["public"],
     },
   });
 };

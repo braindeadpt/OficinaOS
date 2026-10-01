@@ -21,6 +21,7 @@ import { dashboardRoutes } from "./routes/dashboard.js";
 import { devicesRoutes } from "./routes/devices.js";
 import { feedbackRoutes } from "./routes/feedback.js";
 import { healthRoutes } from "./routes/health.js";
+import { intakeRequestsRoutes } from "./routes/intake-requests.js";
 import { jobRoutes } from "./routes/jobs.js";
 import { notificationsRoutes } from "./routes/notifications.js";
 import { partsRoutes } from "./routes/parts.js";
@@ -145,6 +146,7 @@ app.addHook("onReady", async () => {
 
 app.register(healthRoutes);
 app.register(publicRoutes, { prefix: "/api/public" });
+app.register(intakeRequestsRoutes, { prefix: "/api/intake-requests" });
 app.register(jobRoutes, { prefix: "/api/jobs" });
 app.register(paymentRoutes, { prefix: "/api/payments" });
 app.register(receiptRoutes, { prefix: "/api/receipts" });

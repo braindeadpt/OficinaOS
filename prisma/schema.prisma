@@ -443,6 +443,8 @@ model Job {
   returnClaimsAgainst ReturnClaim[] @relation("OriginalJobReturnClaims")
   reworkClaim         ReturnClaim?  @relation("ReworkJobReturnClaim")
 
+  intakeRequests IntakeRequest[]
+
   @@index([customerId])
   @@index([deviceId])
   @@index([status])
@@ -455,6 +457,46 @@ model Job {
   @@index([status, estimatedDate])
   @@index([imei])
   @@map("jobs")
+}
+
+// ─────────────────────────────────────────────
+// INTAKE REQUEST (public pre-check / pre-triage)
+// Created by the unauthenticated /pre-check form — later also by the
+// hosted Pro relay for inbound WhatsApp. Staff reviews and converts
+// each request into a Job; status never lets a request be converted
+// twice.
+// ─────────────────────────────────────────────
+
+model IntakeRequestCounter {
+  year    Int @id
+  lastSeq Int @default(0)
+
+  @@map("intake_request_counters")
+}
+
+enum IntakeRequestStatus {
+  PENDING
+  CONVERTED
+  DISMISSED
+}
+
+model IntakeRequest {
+  id            String              @id @default(cuid())
+  code          String              @unique
+  customerName  String
+  customerPhone String
+  customerEmail String?
+  deviceLabel   String
+  problem       String              @db.Text
+  whatsappOptIn Boolean             @default(false)
+  status        IntakeRequestStatus @default(PENDING)
+  jobId         String?
+  job           Job?                @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  createdAt     DateTime            @default(now()) @db.Timestamptz
+  updatedAt     DateTime            @updatedAt @db.Timestamptz
+
+  @@index([status, createdAt])
+  @@map("intake_requests")
 }
 
 // ─────────────────────────────────────────────

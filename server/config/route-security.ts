@@ -210,6 +210,20 @@ export const routeSecurity: [string, RouteSecurityOverride][] = [
       },
     },
   ],
+  // Public pre-check intake — anonymous form submissions, so no CSRF token
+  // exists and the budget is tighter than lookup: a real customer submits
+  // once, a spammer submits a lot.
+  [
+    "/api/public/pre-check",
+    {
+      csrf: false,
+      rateLimit: {
+        keyGenerator: lookupKeyGenerator,
+        max: 5,
+        timeWindow: "15 minutes",
+      },
+    },
+  ],
   ["/api/jobs", { rateLimit: { max: 30, timeWindow: "1 minute" } }],
   // A streaming completion is by far the most expensive request the API serves.
   ["/api/ai/chat/stream", { rateLimit: { max: 10, timeWindow: "1 minute" } }],
