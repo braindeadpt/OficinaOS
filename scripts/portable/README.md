@@ -19,8 +19,9 @@ oficinaos-portable/
 ├── PARAR.bat           para tudo
 ├── ATUALIZAR.bat       atualiza preservando data\ e app\.env
 ├── BACKUP.bat          backup manual (corre sozinho a cada arranque)
+├── RESTAURAR.bat       repõe a BD a partir de um backup (interativo)
 ├── run-app.bat         wrapper com respawn (usado pelo INICIAR)
-├── BACKUP.ps1 / gerar-env.ps1   lógica real
+├── BACKUP.ps1 / RESTORE.ps1 / gerar-env.ps1   lógica real
 └── STOP                flag criada pelo PARAR (impede respawn)
 ```
 
@@ -43,6 +44,11 @@ reinicia. Só pára quando existe o ficheiro `STOP` (criado pelo `PARAR.bat`).
 heartbeat ISO em `app\uploads\backups-status\last-backup.txt`, retenção 14 dias.
 Os nomes e o heartbeat seguem exatamente a convenção do `scripts/db-backup.sh`,
 por isso o indicador de backups na app funciona igual nos dois modos.
+
+**Restaurar (`RESTORE.ps1` via `RESTAURAR.bat`)** — lista os dumps disponíveis,
+pede confirmação (⚠️ substitui todos os dados), para a app (mantém o Postgres),
+recria a base de dados `oficinaos` e aplica o dump com `psql -f`. No fim diz
+para correr `INICIAR.bat`. Equivalente ao `run-restore.sh` do stack Docker.
 
 **Parar (`PARAR.bat`)** — cria `STOP`, mata os `bun.exe` debaixo da pasta do
 bundle, `pg_ctl stop -m fast`.

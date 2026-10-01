@@ -89,6 +89,7 @@ Dentro de `oficinaos-portable\`:
 | `PARAR.bat` | Desligar (os dados ficam guardados em `data\`) |
 | `ATUALIZAR.bat` | Atualizar para a versão mais recente (preserva dados e configuração) |
 | `BACKUP.bat` | Backup manual da base de dados |
+| `RESTAURAR.bat` | Repor a base de dados a partir de um backup |
 
 - **Arranque automático**: na primeira execução o `INICIAR.bat` pergunta se queres que o OficinaOS arranque sozinho quando o PC liga (regista uma tarefa agendada; para remover: `schtasks /delete /tn "OficinaOS" /f`)
 - **Se a app crashar**: reinicia sozinha passados 5 segundos (wrapper de respawn)
@@ -106,9 +107,30 @@ Dentro de `oficinaos-portable\`:
 | Tunnel Cloudflare (acesso remoto) | incluído no compose | instalação manual do cloudflared |
 | Acesso de outros dispositivos na LAN | `http://<IP>:4000` | igual |
 
+### Restaurar um backup (modo portátil)
+
+1. Duplo clique em **`RESTAURAR.bat`** — lista os backups em `app\uploads\backups\` do mais recente ao mais antigo
+2. Escolhe o número do backup e confirma com `SIM` — ⚠️ **substitui todos os dados atuais** pelos do backup
+3. O script para a app, recria a base de dados e aplica o dump; no fim corre `INICIAR.bat`
+
+> Backups no mesmo disco não protegem contra avaria, roubo ou ransomware — copia `app\uploads\backups\` para um disco externo ou pen com regularidade.
+
+### Migrar entre instalações
+
+Os dumps são `pg_dump` plain comprimidos — o mesmo formato nos dois modos, portanto migrar é fazer backup num lado e restaurar no outro.
+
+**Portátil → Docker:**
+1. No portátil: `BACKUP.bat` → copia o `oficinaos-*.sql.gz` de `app\uploads\backups\`
+2. No Docker: coloca o ficheiro no volume de backups (`docker compose cp` ou a pasta mapeada) e corre o restore: `docker compose exec -T db-backup /scripts/run-restore.sh oficinaos-<stamp>.sql.gz`
+
+**Docker → portátil:**
+1. No Docker: `docker compose exec -T db-backup /scripts/run-backup.sh` → copia o dump do volume `backups` para `oficinaos-portable\app\uploads\backups\`
+2. No portátil: `RESTAURAR.bat` e escolhe esse dump
+3. As imagens/ficheiros de upload vivem fora da BD: no Docker está no volume `uploads`, no portátil em `app\uploads\` — copia também esse conteúdo para não perderes fotos e talões
+
 ### Desinstalar (modo portátil)
 
-Corre `PARAR.bat` e apaga a pasta `oficinaos-portable`. ⚠️ `data\` contém a base de dados inteira — faz backup primeiro se quiseres guardar.
+Corre `PARAR.bat` e apaga a pasta `oficinaos-portable`. ⚠️ `data\` contém a base de dados inteira — faz backup primeiro se quiseres guardar. Se ativaste o arranque automático, remove a tarefa: `schtasks /delete /tn "OficinaOS" /f`.
 
 Documentação técnica do bundle: [scripts/portable/README.md](scripts/portable/README.md)
 
