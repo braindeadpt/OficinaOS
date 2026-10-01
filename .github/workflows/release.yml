@@ -19,9 +19,9 @@ jobs:
           mkdir -p bundle/scripts
           cp INSTALAR.bat INICIAR.bat PARAR.bat ATUALIZAR.bat \
              docker-compose.app.yml .env.example INSTALL.md bundle/
-          cp scripts/gerar-env.ps1 scripts/db-backup.sh \
-             scripts/db-restore.sh scripts/db-restore-check.sh \
-             bundle/scripts/
+          cp scripts/gerar-env.ps1 scripts/check-virtualization.ps1 \
+             scripts/db-backup.sh scripts/db-restore.sh \
+             scripts/db-restore-check.sh bundle/scripts/
           cd bundle && zip -r ../oficinaos-install.zip . && cd ..
 
       - name: Create GitHub release
@@ -31,3 +31,48 @@ jobs:
           gh release create "${{ github.ref_name }}" oficinaos-install.zip \
             --title "OficinaOS ${{ github.ref_name }}" \
             --generate-notes
+
+  portable:
+    name: Build portable Windows bundle (no Docker needed)
+    runs-on: windows-latest
+    needs: release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install deps + build app (frontend + prisma client)
+        # full install on purpose: the bundle ships node_modules and needs
+        # the prisma CLI for `migrate deploy` on first run
+        env:
+          DATABASE_URL: postgresql://localhost:5432/build
+        run: |
+          bun install
+          bun run build
+
+      - name: Download Bun runtime for Windows
+        run: |
+          Invoke-WebRequest "https://github.com/oven-sh/bun/releases/latest/download/bun-windows-x64.zip" -OutFile bun-win.zip
+          Expand-Archive bun-win.zip bun-tmp
+
+      - name: Download portable PostgreSQL binaries
+        run: |
+          Invoke-WebRequest "https://get.enterprisedb.com/postgresql/postgresql-17.6-1-windows-x64-binaries.zip" -OutFile pg.zip
+
+      - name: Assemble bundle
+        run: |
+          $b = "$env:RUNNER_TEMP\oficinaos-portable"
+          New-Item -ItemType Directory -Force "$b\app", "$b\bun", "$b\data" | Out-Null
+          git archive HEAD -o "$env:RUNNER_TEMP\app.tar"
+          tar -xf "$env:RUNNER_TEMP\app.tar" -C "$b\app"
+          robocopy node_modules "$b\app\node_modules" /E /NFL /NDL /NJH /NJS /NP | Out-Null
+          robocopy dist "$b\app\dist" /E /NFL /NDL /NJH /NJS /NP | Out-Null
+          robocopy generated "$b\app\generated" /E /NFL /NDL /NJH /NJS /NP | Out-Null
+          Copy-Item bun-tmp\bun-windows-x64\bun.exe "$b\bun\"
+          Expand-Archive pg.zip "$b"
+          Copy-Item scripts\portable\* "$b\"
+          tar -a -cf oficinaos-portable.zip -C "$env:RUNNER_TEMP" oficinaos-portable
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ github.ref_name }}" oficinaos-portable.zip --clobber

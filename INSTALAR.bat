@@ -30,6 +30,12 @@ set "PATH=%PATH%;C:\Program Files\Docker\Docker\resources\bin"
 docker info >nul 2>&1
 if not errorlevel 1 goto docker_ok
 
+REM Sem Docker funcional — verificar virtualizacao antes de instalar Docker.
+REM (0 = OK, 1 = desativada na BIOS, 2 = CPU sem suporte)
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\check-virtualization.ps1"
+if errorlevel 2 goto sem_suporte_cpu
+if errorlevel 1 goto menu_sem_virtualizacao
+
 where docker >nul 2>&1
 if not errorlevel 1 goto docker_arrancar
 
@@ -70,6 +76,10 @@ set /a TENT+=1
 docker info >nul 2>&1
 if not errorlevel 1 goto docker_ok
 if !TENT! LSS 48 goto esperar_docker
+REM Docker nao respondeu — pode ser virtualizacao desligada
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\check-virtualization.ps1"
+if errorlevel 2 goto sem_suporte_cpu
+if errorlevel 1 goto menu_sem_virtualizacao
 echo.
 if defined DOCKER_RECEM_INSTALADO (
     echo  O Docker acabou de ser instalado e precisa de um reinicio.
@@ -168,3 +178,76 @@ echo  Para uso diario: duplo clique em INICIAR.bat
 echo.
 start "" "http://localhost:4000"
 pause
+exit /b 0
+
+REM ── CPU sem suporte a virtualizacao — portatil e a unica opcao ────────
+:sem_suporte_cpu
+echo.
+echo  ============================================
+echo   ATENCAO: este PC nao suporta virtualizacao
+echo  ============================================
+echo.
+echo  O processador nao tem Intel VT-x / AMD-V, por isso
+echo  o Docker Desktop nunca vai funcionar aqui.
+echo  A instalacao portatil nao precisa de Docker.
+echo.
+pause
+goto portable
+
+REM ── Virtualizacao desativada: escolher BIOS ou instalacao portatil ────
+:menu_sem_virtualizacao
+echo.
+echo  ============================================
+echo   ATENCAO: virtualizacao desativada na BIOS
+echo  ============================================
+echo.
+echo  O Docker Desktop precisa de virtualizacao de
+echo  hardware (Intel VT-x / AMD SVM) — neste PC esta
+echo  desativada, por isso o Docker nao vai funcionar.
+echo.
+echo   [1] Ativar na BIOS e voltar a correr o instalador
+echo   [2] Instalacao PORTATIL — sem Docker (recomendado)
+echo.
+echo  Guia BIOS ^(opcao 1^): reinicia o PC e prime
+echo  F2, F10, DEL ou ESC no arranque. Procura
+echo  "Intel Virtualization Technology", "VT-x" ou
+echo  "SVM Mode" em Advanced / Security / CPU
+echo  Configuration, ativa e grava com F10.
+echo.
+choice /c 12 /n /m "Escolhe 1 ou 2: "
+if errorlevel 2 goto portable
+echo.
+echo  Reinicia o PC, ativa a virtualizacao na BIOS e
+echo  volta a correr o INSTALAR.bat.
+pause
+exit /b 0
+
+REM ── Instalacao portatil: download do bundle pre-empacotado ────────────
+:portable
+echo.
+echo  [P] Instalacao portatil — sem Docker.
+if exist "%~dp0oficinaos-portable\INICIAR.bat" (
+    echo        Instalacao portatil ja existe — a iniciar.
+    call "%~dp0oficinaos-portable\INICIAR.bat"
+    exit /b 0
+)
+echo        A descarregar o pacote portatil ^(~400MB^)...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest -Uri 'https://github.com/braindeadpt/OficinaOS/releases/latest/download/oficinaos-portable.zip' -OutFile \"$env:TEMP\oficinaos-portable.zip\""
+if errorlevel 1 (
+    echo.
+    echo  ERRO: nao consegui descarregar o pacote portatil.
+    echo  Verifica a ligacao a internet e repete.
+    pause
+    exit /b 1
+)
+echo        A extrair...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -Force -LiteralPath \"$env:TEMP\oficinaos-portable.zip\" -DestinationPath \"%~dp0\""
+if errorlevel 1 (
+    echo.
+    echo  ERRO: nao consegui extrair o pacote.
+    pause
+    exit /b 1
+)
+del "%TEMP%\oficinaos-portable.zip" >nul 2>&1
+call "%~dp0oficinaos-portable\INICIAR.bat"
+exit /b 0
