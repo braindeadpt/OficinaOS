@@ -91,6 +91,7 @@ export async function upsertShopSettings(
       id: "default",
       phone: input.phone ?? null,
       receiptFooter: input.receiptFooter ?? null,
+      reviewUrl: input.reviewUrl?.trim() || null,
       shopName: input.shopName,
     },
     update: {
@@ -99,6 +100,10 @@ export async function upsertShopSettings(
       currency: input.currency,
       phone: input.phone,
       receiptFooter: input.receiptFooter,
+      reviewUrl:
+        input.reviewUrl === undefined
+          ? undefined
+          : input.reviewUrl.trim() || null,
       shopName: input.shopName,
     },
     where: { id: "default" },

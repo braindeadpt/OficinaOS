@@ -8,6 +8,8 @@ import {
   useState,
 } from "react";
 import { useTranslation } from "react-i18next";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import api from "@/lib/api";
 import { getPhonePlaceholder } from "@/lib/phone-formats";
 import { useSettingsStore } from "@/stores/settings";
@@ -163,6 +165,7 @@ export default function SettingsShopTab({
     countryCode: "PT",
     currency: "EUR",
     receiptFooter: "",
+    reviewUrl: "",
   });
   const [shopFormInitial, setShopFormInitial] = useState(shopForm);
 
@@ -180,6 +183,7 @@ export default function SettingsShopTab({
         countryCode: shopSettings.countryCode ?? "PT",
         currency: shopSettings.currency ?? "EUR",
         receiptFooter: shopSettings.receiptFooter ?? "",
+        reviewUrl: shopSettings.reviewUrl ?? "",
       };
       setShopForm(form);
       setShopFormInitial(form);
@@ -281,6 +285,25 @@ export default function SettingsShopTab({
             rows={3}
             value={shopForm.address}
           />
+        </div>
+        <div className="mt-6">
+          <Field
+            hint={t(
+              "shop_review_url_help",
+              "Link where customers leave a review (e.g. your Google Business review link). Optional — shown on the tracking page after delivery and in the delivered message"
+            )}
+            label={t("shop_review_url")}
+          >
+            <Input
+              onChange={(e) => {
+                setShopForm((f) => ({ ...f, reviewUrl: e.target.value }));
+                onDirtyChange(true);
+              }}
+              placeholder="https://"
+              type="url"
+              value={shopForm.reviewUrl}
+            />
+          </Field>
         </div>
       </div>
       <div className="rounded-2xl bg-surface-container-low p-5">

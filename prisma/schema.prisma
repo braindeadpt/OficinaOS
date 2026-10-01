@@ -974,6 +974,9 @@ model ShopSettings {
   // Public base URL used to build customer-facing links (e.g. WhatsApp
   // tracking links). Optional: shops on a LAN may not expose one.
   trackingBaseUrl           String?
+  // Public review link (e.g. Google Business "write a review" URL) shown on
+  // the tracking page after delivery and in the delivered notification.
+  reviewUrl                 String?
   createdAt                 DateTime @default(now()) @db.Timestamptz
   updatedAt                 DateTime @updatedAt @db.Timestamptz
 

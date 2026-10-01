@@ -101,6 +101,7 @@ interface TrackingData {
   shopAddress: string;
   shopName: string;
   shopPhone: string;
+  shopReviewUrl: string;
   status: string;
   statusTransitions: StatusTransition[];
   warranty: WarrantyInfo | null;
@@ -600,6 +601,63 @@ function ReceiptCard({
   );
 }
 
+function hasReceiptContent(receipt: ReceiptInfo): boolean {
+  return (
+    receipt.items.length > 0 || receipt.payments.length > 0 || receipt.total > 0
+  );
+}
+
+function OptionalInfoCards({
+  data,
+  receiptUrl,
+}: {
+  data: TrackingData;
+  receiptUrl?: string;
+}) {
+  return (
+    <>
+      {data.warranty && data.warranty.items.length > 0 && (
+        <WarrantyCard warranty={data.warranty} />
+      )}
+
+      {data.receipt && hasReceiptContent(data.receipt) && (
+        <ReceiptCard receipt={data.receipt} receiptUrl={receiptUrl} />
+      )}
+
+      {data.status === JobStatus.DELIVERED && data.shopReviewUrl && (
+        <ReviewCard reviewUrl={data.shopReviewUrl} />
+      )}
+    </>
+  );
+}
+
+function ReviewCard({ reviewUrl }: { reviewUrl: string }) {
+  const { t } = useTranslation();
+  return (
+    <div className="rounded-xl bg-surface-container p-6">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="material-symbols-outlined text-primary text-xl">
+            rate_review
+          </span>
+          <span className="font-bold text-on-surface text-sm uppercase tracking-wide">
+            {t("tracking_review_title")}
+          </span>
+        </div>
+        <a
+          className="flex min-h-11 items-center gap-1.5 rounded-lg bg-primary px-4 font-semibold text-on-primary text-xs transition-opacity hover:opacity-90"
+          href={reviewUrl}
+          rel="noreferrer"
+          target="_blank"
+        >
+          <span className="material-symbols-outlined text-sm">star</span>
+          {t("tracking_review_button")}
+        </a>
+      </div>
+    </div>
+  );
+}
+
 function StatusView({
   data,
   canRespondQuote,
@@ -876,16 +934,7 @@ function StatusView({
                 />
               )}
 
-              {data.warranty && data.warranty.items.length > 0 && (
-                <WarrantyCard warranty={data.warranty} />
-              )}
-
-              {data.receipt &&
-                (data.receipt.items.length > 0 ||
-                  data.receipt.payments.length > 0 ||
-                  data.receipt.total > 0) && (
-                  <ReceiptCard receipt={data.receipt} receiptUrl={receiptUrl} />
-                )}
+              <OptionalInfoCards data={data} receiptUrl={receiptUrl} />
 
               <div className="space-y-6">
                 <h3 className="mb-6 font-label text-on-surface-variant text-xs uppercase tracking-widest">
@@ -988,6 +1037,7 @@ function mapJobToTrackingData(
     name: string;
     phone: string | null;
     address: string | null;
+    reviewUrl: string | null;
   } | null;
   const statusTransitions = (
     (data.statusTransitions ?? []) as StatusTransition[]
@@ -1034,6 +1084,7 @@ function mapJobToTrackingData(
     shopName: shop?.name ?? t("app_name"),
     shopPhone: shop?.phone ?? "",
     shopAddress: shop?.address ?? "",
+    shopReviewUrl: shop?.reviewUrl ?? "",
     statusTransitions,
     fetchedAt: now,
     formattedFetchedTime: new Date(now).toLocaleTimeString(locale, {

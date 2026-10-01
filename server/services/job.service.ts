@@ -894,6 +894,7 @@ async function buildJobLookupPayload(
           address: shopSettings.address,
           name: shopSettings.shopName,
           phone: shopSettings.phone,
+          reviewUrl: shopSettings.reviewUrl,
         }
       : null,
     status: job.status,
