@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import LanguageToggle from "@/components/modules/language-toggle";
 import api from "@/lib/api";
 import { useAuthStore } from "@/stores/auth";
@@ -382,7 +382,17 @@ export default function LoginPage() {
             </p>
           </div>
         </div>
-        <LanguageToggle />
+        <div className="flex items-center gap-1">
+          <Link
+            aria-label={t("help_nav")}
+            className="material-symbols-outlined min-h-11 min-w-11 rounded-full p-2.5 text-on-surface-variant transition-colors hover:bg-surface-container-high"
+            title={t("help_nav")}
+            to="/help"
+          >
+            help
+          </Link>
+          <LanguageToggle />
+        </div>
       </header>
 
       <section className="flex flex-1 items-center justify-center overflow-y-auto p-4 sm:p-6">
