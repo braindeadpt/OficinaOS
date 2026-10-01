@@ -279,6 +279,18 @@ describe("renderReceiptHtml", () => {
     expect(html).toContain("1,500");
   });
 
+  it("computes balance due from estimatedCost when no itemized lines exist", async () => {
+    const job = {
+      ...baseJob,
+      estimatedCost: 20_000,
+      depositAmount: 5000,
+      payments: [],
+    };
+    const html = await renderReceiptHtml(makePrisma(), job, "https://x.y");
+    // 200 total - 50 deposit = 150 due, not 0
+    expect(html).toContain("15,000");
+  });
+
   it("shows no payments section when nothing was paid", async () => {
     const job = {
       ...baseJob,

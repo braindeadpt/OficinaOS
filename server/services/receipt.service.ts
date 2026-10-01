@@ -307,7 +307,7 @@ export async function renderReceiptHtml(
   const deposit = job.depositAmount ? toNum(job.depositAmount) : 0;
   const paidTotal =
     payments.reduce((sum, p) => sum + toNum(p.amount), 0) + deposit;
-  const balanceDue = Math.max(0, finalCost - paidTotal);
+  const balanceDue = Math.max(0, displayCost - paidTotal);
   const hasPayments = paidTotal > 0;
 
   const footerHtml = settings?.receiptFooter
