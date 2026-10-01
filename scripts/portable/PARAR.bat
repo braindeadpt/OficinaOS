@@ -5,6 +5,8 @@ title OficinaOS - Parar
 cd /d "%~dp0"
 
 echo  A parar o OficinaOS...
+REM O ficheiro STOP impede o respawn do run-app.bat de reabrir a app
+echo stopped>"%~dp0STOP"
 powershell -NoProfile -Command "Get-Process bun -ErrorAction SilentlyContinue | Where-Object { $_.Path -like '%~dp0%' } | Stop-Process -Force" >nul 2>&1
 
 if exist "%~dp0data\PG_VERSION" (

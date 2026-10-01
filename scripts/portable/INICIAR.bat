@@ -57,10 +57,30 @@ if errorlevel 1 (
     "%PGBIN%\createdb.exe" -h 127.0.0.1 -p 5433 -U postgres oficinaos >nul 2>&1
 )
 
-REM ── migracoes + arranque (start:prod = migrate deploy + serve) ───────
+REM ── backup diario (equivalente ao sidecar db-backup do Docker) ───────
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0BACKUP.ps1" >nul 2>&1
+
+REM ── auto-arranque com o PC: pergunta uma vez, resposta fica em data\ ──
+if exist "%PGDATA%\PG_VERSION" if not exist "%PGDATA%\autostart.flag" (
+    echo.
+    choice /c SN /n /m "Iniciar o OficinaOS automaticamente quando o PC liga? [S/N] "
+    if errorlevel 2 (
+        echo n>"%PGDATA%\autostart.flag"
+    ) else (
+        schtasks /create /tn "OficinaOS" /tr "\"%~dp0INICIAR.bat\"" /sc onlogon /f >nul 2>&1
+        if errorlevel 1 (
+            echo        AVISO: nao consegui registar o arranque automatico.
+        ) else (
+            echo s>"%PGDATA%\autostart.flag"
+            echo        OK — arranca sozinho a partir do proximo arranque.
+        )
+    )
+)
+
+REM ── migracoes + arranque com respawn (start:prod = migrate + serve) ──
 cd /d "%~dp0app"
 echo  A aplicar migracoes e a arrancar...
-start "" /min "%BUN%" run start:prod
+start "" /min cmd /c "%~dp0run-app.bat"
 
 REM ── esperar a app e semear o admin ───────────────────────────────────
 set /a TENT=0
