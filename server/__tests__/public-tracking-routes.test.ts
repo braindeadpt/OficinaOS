@@ -9,12 +9,19 @@ import { publicRoutes } from "../routes/public.js";
 // has no session. A 401/403 here means public tracking is broken.
 const mocks = vi.hoisted(() => ({
   lookupByCode: vi.fn(),
+  lookupReceiptByCode: vi.fn(),
+  renderReceiptHtml: vi.fn(),
   respondToQuote: vi.fn(),
 }));
 
 vi.mock("../services/job.service.js", () => ({
   lookupByCode: mocks.lookupByCode,
   lookupByCodeAuth: vi.fn(),
+  lookupReceiptByCode: mocks.lookupReceiptByCode,
+}));
+
+vi.mock("../services/receipt.service.js", () => ({
+  renderReceiptHtml: mocks.renderReceiptHtml,
 }));
 
 vi.mock("../services/job-quote.service.js", () => ({
@@ -104,6 +111,53 @@ describe("public tracking endpoints", () => {
 
     expect(res.statusCode).toBe(401);
     expect(res.json().code).toBe("UNAUTHORIZED");
+  });
+
+  it("GET /api/jobs/lookup-receipt serves receipt HTML for valid code + phone4", async () => {
+    mocks.lookupReceiptByCode.mockResolvedValue({
+      job: { id: "j1", jobCode: "ABC123" },
+      jobExists: true,
+    });
+    mocks.renderReceiptHtml.mockResolvedValue("<html>receipt</html>");
+    const app = buildApp();
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/jobs/lookup-receipt?code=ABC123&phone4=1234",
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toContain("text/html");
+    expect(res.body).toBe("<html>receipt</html>");
+  });
+
+  it("GET /api/jobs/lookup-receipt does not 401 and 404s on wrong phone4", async () => {
+    mocks.lookupReceiptByCode.mockResolvedValue({
+      job: null,
+      jobExists: true,
+    });
+    const app = buildApp();
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/jobs/lookup-receipt?code=ABC123&phone4=9999",
+    });
+
+    expect(res.statusCode).not.toBe(401);
+    expect(res.statusCode).toBe(404);
+    expect(mocks.renderReceiptHtml).not.toHaveBeenCalled();
+  });
+
+  it("GET /api/jobs/lookup-receipt rejects malformed params before services", async () => {
+    const app = buildApp();
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/jobs/lookup-receipt?code=ABC123&phone4=abc",
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(mocks.lookupReceiptByCode).not.toHaveBeenCalled();
   });
 
   it("rejects malformed public payloads before touching services", async () => {

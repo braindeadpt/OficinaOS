@@ -5,15 +5,22 @@ import type { DbClient } from "../repositories/types.js";
 
 export async function generateTrackingQr(
   jobCode: string,
-  baseUrl: string
+  baseUrl: string,
+  phone4?: string
 ): Promise<Buffer | null> {
   if (!baseUrl) {
     return null;
   }
-  return await QRCode.toBuffer(`${baseUrl}/tracking/${jobCode}`, {
+  const query = phone4 ? `?phone4=${encodeURIComponent(phone4)}` : "";
+  return await QRCode.toBuffer(`${baseUrl}/tracking/${jobCode}${query}`, {
     type: "png",
     width: 200,
   });
+}
+
+function phone4Of(phone: string | null | undefined): string | undefined {
+  const digits = (phone ?? "").replace(/\D/g, "");
+  return digits.length >= 4 ? digits.slice(-4) : undefined;
 }
 
 function esc(s: string): string {
@@ -57,6 +64,9 @@ interface ReceiptStrings {
   scanQr: string;
   servedBy: string;
   total: string;
+  warranty: string;
+  warrantyDays: string;
+  warrantyUntil: string;
 }
 
 const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
@@ -83,6 +93,9 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     scanQr: "Leia o código QR para acompanhar a sua reparação",
     servedBy: "Atendido por",
     total: "Total",
+    warranty: "Garantia",
+    warrantyDays: "{days} dias",
+    warrantyUntil: "até {date}",
   },
   en: {
     balanceDue: "Balance due",
@@ -107,6 +120,9 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     scanQr: "Scan QR to track your repair",
     servedBy: "Served by",
     total: "Total",
+    warranty: "Warranty",
+    warrantyDays: "{days} days",
+    warrantyUntil: "until {date}",
   },
   fr: {
     balanceDue: "Reste à payer",
@@ -131,6 +147,9 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     scanQr: "Scannez le QR pour suivre votre réparation",
     servedBy: "Servi par",
     total: "Total",
+    warranty: "Garantie",
+    warrantyDays: "{days} jours",
+    warrantyUntil: "jusqu'au {date}",
   },
   es: {
     balanceDue: "Pendiente de pago",
@@ -155,6 +174,9 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     scanQr: "Escanea el QR para seguir tu reparación",
     servedBy: "Atendido por",
     total: "Total",
+    warranty: "Garantía",
+    warrantyDays: "{days} días",
+    warrantyUntil: "hasta el {date}",
   },
 };
 
@@ -181,9 +203,39 @@ function shopHeaderHtml(
   return `${logoImg}<h1>${shopName}</h1>${addressLine}${phoneLine}`;
 }
 
+function warrantySectionHtml(
+  repairs: Array<{
+    repairName: string;
+    repair?: { warrantyDays: number | null } | null;
+  }>,
+  deliveredAt: Date | null,
+  defaultWarrantyDays: number,
+  s: ReceiptStrings
+): string {
+  if (repairs.length === 0) {
+    return "";
+  }
+  const rows = repairs
+    .map((r) => {
+      const days = r.repair?.warrantyDays ?? defaultWarrantyDays;
+      const expiry = deliveredAt
+        ? ` (${s.warrantyUntil.replace(
+            "{date}",
+            new Date(
+              deliveredAt.getTime() + days * 86_400_000
+            ).toLocaleDateString(s.dateLocale)
+          )})`
+        : "";
+      return `<tr><td>${esc(r.repairName)}</td><td style="text-align:right">${s.warrantyDays.replace("{days}", String(days))}${expiry}</td></tr>`;
+    })
+    .join("");
+  return `<div class="sep"></div><p style="text-align:left"><strong>${s.warranty}:</strong></p><table>${rows}</table>`;
+}
+
 export async function renderReceiptHtml(
   prisma: DbClient,
   job: {
+    id: string;
     jobCode: string;
     imei?: string | null;
     customer: { name: string; phone: string };
@@ -204,16 +256,32 @@ export async function renderReceiptHtml(
     repairs: Array<{
       repairName: string;
       price: number | { toNumber: () => number };
+      repair?: { warrantyDays: number | null } | null;
     }>;
   },
   baseUrl: string,
   options?: { hideCosts?: boolean; locale?: string }
 ): Promise<string> {
-  const settings = await findShopSettingsUnique(prisma);
+  const [settings, deliveredLog] = await Promise.all([
+    findShopSettingsUnique(prisma),
+    prisma.auditLog.findFirst({
+      where: {
+        action: "STATUS_CHANGED",
+        jobId: job.id,
+        toValue: "DELIVERED",
+      },
+      orderBy: { createdAt: "asc" },
+      select: { createdAt: true },
+    }),
+  ]);
   const currency = settings?.currency ?? "EUR";
   const s = receiptStrings(options?.locale);
   const shopHeader = shopHeaderHtml(settings);
-  const qrBuf = await generateTrackingQr(job.jobCode, baseUrl);
+  const qrBuf = await generateTrackingQr(
+    job.jobCode,
+    settings?.trackingBaseUrl || baseUrl,
+    phone4Of(job.customer.phone)
+  );
   const qrImg = qrBuf
     ? `<div class="qr"><img src="data:image/png;base64,${qrBuf.toString("base64")}" alt="QR Code" /></div>`
     : `<div class="qr" style="color:#999;font-size:10px">${s.qrUnavailable}</div>`;
@@ -224,6 +292,13 @@ export async function renderReceiptHtml(
   const partsUsed = job.partsUsed ?? [];
   const repairs = job.repairs ?? [];
   const payments = job.payments ?? [];
+
+  const warrantyHtml = warrantySectionHtml(
+    repairs,
+    deliveredLog?.createdAt ?? null,
+    settings?.defaultWarrantyDays ?? 30,
+    s
+  );
 
   const partsTotal = partsUsed.reduce((sum, p) => sum + toNum(p.totalCost), 0);
   const repairsTotal = repairs.reduce((sum, r) => sum + toNum(r.price), 0);
@@ -289,6 +364,7 @@ ${
           : ""
       }<div class="sep"></div>`
 }
+${warrantyHtml}
 ${qrImg}
 <p style="text-align:center;font-size:10px;color:#555">${s.scanQr}</p>
 ${footerHtml}
@@ -321,17 +397,13 @@ export async function renderSaleReceiptHtml(
     payments: SaleReceiptPayment[];
     total: number | { toNumber: () => number };
   },
-  baseUrl: string,
+  _baseUrl: string,
   options?: { locale?: string }
 ): Promise<string> {
   const settings = await findShopSettingsUnique(prisma);
   const currency = settings?.currency ?? "EUR";
   const s = receiptStrings(options?.locale);
   const shopHeader = shopHeaderHtml(settings);
-  const qrBuf = await generateTrackingQr(sale.saleCode, baseUrl);
-  const qrImg = qrBuf
-    ? `<div class="qr"><img src="data:image/png;base64,${qrBuf.toString("base64")}" alt="QR Code" /></div>`
-    : "";
 
   const date = new Date(sale.createdAt).toLocaleString(s.dateLocale);
   const rows = sale.items
@@ -379,7 +451,6 @@ ${sale.customer ? `<tr><td>${s.customer}</td><td style="text-align:right">${esc(
 <div class="sep"></div>
 <table><tr class="total"><td>${s.total}</td><td style="text-align:right">${fmtMoney(sale.total, currency)}</td></tr>${payRows}</table>
 ${footerHtml}
-${qrImg}
 </body></html>`;
 }
 
@@ -413,7 +484,11 @@ export async function renderLabelHtml(
     ? `<img src="${esc(settings.logoPath)}" alt="${shopName}" style="max-height:4mm;max-width:100%;" />`
     : shopName;
 
-  const qrBuf = await generateTrackingQr(job.jobCode, baseUrl);
+  const qrBuf = await generateTrackingQr(
+    job.jobCode,
+    settings?.trackingBaseUrl || baseUrl,
+    phone4Of(job.customer.phone)
+  );
   const qrImg = qrBuf
     ? `<img src="data:image/png;base64,${qrBuf.toString("base64")}" alt="QR" />`
     : `<span style="font-size:5pt;color:#999">${s.qrUnavailable}</span>`;

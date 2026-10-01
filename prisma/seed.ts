@@ -215,7 +215,7 @@ async function seedNotificationTemplates() {
     {
       name: "job_delivered",
       channel: "WHATSAPP" as const,
-      body: "Hello {{customerName}}, your device {{jobCode}} has been delivered. Thank you for trusting us!{{if shopName}} — {{shopName}}{{endif}}",
+      body: "Hello {{customerName}}, your device {{jobCode}} has been delivered. Thank you for trusting us!{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nYour receipt and warranty: {{trackingUrl}}{{endif}}",
       isDefault: true,
     },
     {

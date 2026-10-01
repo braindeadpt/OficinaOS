@@ -265,6 +265,184 @@ describe("lookupByCode", () => {
   });
 });
 
+describe("lookupByCode — warranty & receipt", () => {
+  let prisma: ReturnType<typeof mockPrisma>;
+
+  const baseJob = {
+    createdAt: new Date("2024-01-01"),
+    customer: { name: "John Doe", phone: "+1-555-123-4567" },
+    depositAmount: null,
+    device: { brand: { name: "Apple" }, model: "iPhone 14" },
+    estimatedCost: { toNumber: () => 200 },
+    estimatedDate: null,
+    jobCode: "ABC123",
+    notes: [],
+    partsUsed: [
+      {
+        partName: "OLED Screen",
+        quantity: 1,
+        totalCost: { toNumber: () => 120 },
+      },
+    ],
+    payments: [
+      {
+        amount: { toNumber: () => 50 },
+        createdAt: new Date("2024-01-11"),
+        method: "CARD",
+      },
+    ],
+    quotes: [],
+    repairs: [
+      {
+        price: { toNumber: () => 80 },
+        repair: { warrantyDays: 90 },
+        repairName: "Screen replacement",
+      },
+      {
+        price: { toNumber: () => 30 },
+        repair: null,
+        repairName: "Cleaning",
+      },
+    ],
+    reportedProblem: "Screen broken",
+    status: "DELIVERED",
+  };
+
+  beforeEach(() => {
+    prisma = mockPrisma({
+      shopSettings: {
+        findUnique: vi.fn().mockResolvedValue({
+          address: "Rua X",
+          currency: "EUR",
+          defaultWarrantyDays: 30,
+          phone: "123",
+          shopName: "Shop",
+        }),
+      },
+    });
+    (prisma.job.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(
+      baseJob
+    );
+    (prisma.auditLog.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        createdAt: new Date("2024-01-05"),
+        fromValue: "IN_REPAIR",
+        toValue: "DONE",
+      },
+      {
+        createdAt: new Date("2024-01-10"),
+        fromValue: "DONE",
+        toValue: "DELIVERED",
+      },
+    ]);
+  });
+
+  it("returns per-repair warranty days from catalog, falling back to shop default", async () => {
+    const result = await lookupByCode(prisma, "ABC123", "4567");
+    const warranty = result.job?.warranty as {
+      items: { days: number; name: string }[];
+    };
+
+    expect(warranty.items).toEqual([
+      { days: 90, name: "Screen replacement", validUntil: expect.anything() },
+      { days: 30, name: "Cleaning", validUntil: expect.anything() },
+    ]);
+  });
+
+  it("computes validUntil from the DELIVERED transition date", async () => {
+    const result = await lookupByCode(prisma, "ABC123", "4567");
+    const warranty = result.job?.warranty as {
+      deliveredAt: string;
+      items: { name: string; validUntil: string }[];
+    };
+
+    expect(new Date(warranty.deliveredAt).toISOString()).toBe(
+      new Date("2024-01-10").toISOString()
+    );
+    const screen = warranty.items.find((i) => i.name === "Screen replacement");
+    expect(
+      screen?.validUntil && new Date(screen.validUntil).toISOString()
+    ).toBe(
+      new Date(new Date("2024-01-10").getTime() + 90 * 86_400_000).toISOString()
+    );
+  });
+
+  it("returns null validUntil when the job was never delivered", async () => {
+    (prisma.job.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...baseJob,
+      status: "IN_REPAIR",
+    });
+    (prisma.auditLog.findMany as ReturnType<typeof vi.fn>).mockResolvedValue(
+      []
+    );
+
+    const result = await lookupByCode(prisma, "ABC123", "4567");
+    const warranty = result.job?.warranty as {
+      deliveredAt: string | null;
+      items: { validUntil: string | null }[];
+    };
+
+    expect(warranty.deliveredAt).toBeNull();
+    expect(warranty.items.every((i) => i.validUntil === null)).toBe(true);
+  });
+
+  it("returns receipt totals: items, payments, deposit, paid and balance due", async () => {
+    const result = await lookupByCode(prisma, "ABC123", "4567");
+    const receipt = result.job?.receipt as {
+      balanceDue: number;
+      currency: string;
+      deposit: number;
+      items: { name: string; price: number; quantity: number }[];
+      paid: number;
+      payments: { amount: number; createdAt: Date; method: string }[];
+      total: number;
+    };
+
+    expect(receipt.total).toBe(230); // 80 + 30 repairs + 120 part
+    expect(receipt.paid).toBe(50);
+    expect(receipt.balanceDue).toBe(180);
+    expect(receipt.currency).toBe("EUR");
+    expect(receipt.payments).toEqual([
+      {
+        amount: 50,
+        createdAt: new Date("2024-01-11"),
+        method: "CARD",
+      },
+    ]);
+    expect(receipt.items).toContainEqual({
+      name: "Screen replacement",
+      price: 80,
+      quantity: 1,
+    });
+    expect(receipt.items).toContainEqual({
+      name: "OLED Screen",
+      price: 120,
+      quantity: 1,
+    });
+  });
+
+  it("counts the deposit as paid and falls back to estimatedCost when nothing is itemized", async () => {
+    (prisma.job.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...baseJob,
+      depositAmount: { toNumber: () => 20 },
+      partsUsed: [],
+      payments: [],
+      repairs: [],
+    });
+
+    const result = await lookupByCode(prisma, "ABC123", "4567");
+    const receipt = result.job?.receipt as {
+      balanceDue: number;
+      paid: number;
+      total: number;
+    };
+
+    expect(receipt.total).toBe(200);
+    expect(receipt.paid).toBe(20);
+    expect(receipt.balanceDue).toBe(180);
+  });
+});
+
 describe("list", () => {
   let prisma: ReturnType<typeof mockPrisma>;
 

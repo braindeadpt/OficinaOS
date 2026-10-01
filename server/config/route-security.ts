@@ -185,6 +185,17 @@ export const routeSecurity: [string, RouteSecurityOverride][] = [
       },
     },
   ],
+  // Public digital receipt — same identity proof and budget as lookup.
+  [
+    "/api/jobs/lookup-receipt",
+    {
+      rateLimit: {
+        keyGenerator: lookupKeyGenerator,
+        max: 10,
+        timeWindow: "15 minutes",
+      },
+    },
+  ],
   // Public quote response shares the tracking identity proof, so it gets the
   // same strict IP budget as the lookup endpoint. csrf:false — anonymous
   // customers have no session/token pair to validate.
