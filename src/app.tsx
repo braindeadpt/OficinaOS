@@ -15,6 +15,7 @@ const AiAnalystPage = lazy(() => import("@/pages/ai-analyst"));
 const AiAnalystLayout = lazy(() => import("@/pages/ai-analyst/layout"));
 const AiMemoriesPage = lazy(() => import("@/pages/ai-analyst/memories/page"));
 const ChangePasswordPage = lazy(() => import("@/pages/auth/change-password"));
+const HelpPage = lazy(() => import("@/pages/help"));
 const LoginPage = lazy(() => import("@/pages/auth/login"));
 const ResetPasswordPage = lazy(() => import("@/pages/auth/reset-password"));
 const CustomersPage = lazy(() => import("@/pages/customers"));
@@ -292,6 +293,7 @@ export default function App() {
           </Route>
           <Route element={<TrackingPage />} path="/tracking/:jobCode?" />
           <Route element={<PreCheckPage />} path="/pre-check" />
+          <Route element={<HelpPage />} path="/help" />
           <Route element={<NotFoundPage />} path="*" />
         </Routes>
       </Suspense>

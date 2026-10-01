@@ -83,6 +83,13 @@ export const NAV_ITEMS: NavItem[] = [
     to: "/settings",
     perm: { settings: ["view"] },
   },
+  {
+    icon: "help",
+    labelKey: "help_nav",
+    to: "/help",
+    // notifications.read is the one permission every role holds — help is for everyone
+    perm: { notifications: ["read"] },
+  },
 ];
 
 /**
