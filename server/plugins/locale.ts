@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 
-const SUPPORTED_LOCALES = new Set(["en", "fr", "pt"]);
+const SUPPORTED_LOCALES = new Set(["en", "es", "fr", "pt"]);
 
 function extractLocale(headers: Record<string, string | undefined>): string {
   const acceptLanguage = headers["accept-language"];

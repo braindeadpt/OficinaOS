@@ -22,6 +22,7 @@ export default function FinancialTrend({ data }: FinancialTrendProps) {
 
   const LOCALES: Record<string, string> = {
     en: "en-US",
+    es: "es-ES",
     fr: "fr-FR",
   };
   const DEFAULT_LOCALE = "pt-PT";

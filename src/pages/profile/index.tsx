@@ -103,6 +103,9 @@ export default function ProfilePage() {
     if (i18n.language.startsWith("en")) {
       return "en";
     }
+    if (i18n.language.startsWith("es")) {
+      return "es";
+    }
     return "pt";
   }, [i18n.language]);
 

@@ -3,7 +3,7 @@ import path from "node:path";
 
 const LOCALES_DIR = path.join(process.cwd(), "src/i18n/locales");
 const EN_PATH = path.join(LOCALES_DIR, "en.json");
-const TARGET_LANGS = ["fr", "pt"];
+const TARGET_LANGS = ["fr", "pt", "es"];
 
 // Google Translate target codes when they differ from the locale filename
 // (e.g. "pt" locale file should translate to European Portuguese, not pt-BR)

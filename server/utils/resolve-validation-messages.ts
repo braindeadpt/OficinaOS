@@ -20,9 +20,11 @@ export async function initValidationI18n() {
     return;
   }
   const en = await import("../../src/i18n/locales/en.json");
+  const es = await import("../../src/i18n/locales/es.json");
   const fr = await import("../../src/i18n/locales/fr.json");
   const pt = await import("../../src/i18n/locales/pt.json");
   validationI18n.addResourceBundle("en", "validations", en.validations);
+  validationI18n.addResourceBundle("es", "validations", es.validations);
   validationI18n.addResourceBundle("fr", "validations", fr.validations);
   validationI18n.addResourceBundle("pt", "validations", pt.validations);
   initialized = true;
