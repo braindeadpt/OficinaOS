@@ -9,6 +9,7 @@ import IntakeModal from "@/components/modules/jobs/intake-modal";
 import PrintPreviewDialog from "@/components/modules/jobs/print-preview-dialog";
 import Sidebar from "@/components/modules/sidebar";
 import TopBar from "@/components/modules/top-bar";
+import UpdateBanner from "@/components/modules/update-banner";
 import { ShopSettingsProvider } from "@/components/providers/shop-settings-provider";
 import { ChunkErrorBoundary } from "@/components/ui/chunk-error-boundary";
 import api from "@/lib/api";
@@ -75,6 +76,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         <Sidebar />
         <TopBar />
         <main className="min-h-screen p-4 pt-20 pb-24 md:p-8 md:pt-24 md:pb-24 lg:ms-64 lg:pb-8">
+          <UpdateBanner />
           {/* Page crashes stay inside <main> — keying by pathname also
               auto-recovers the boundary on navigation. */}
           <ChunkErrorBoundary key={pathname}>{children}</ChunkErrorBoundary>

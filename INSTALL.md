@@ -55,6 +55,7 @@ No primeiro acesso a app **obriga a definir um novo nome de utilizador e uma nov
 |---|---|
 | `INICIAR.bat` | Ligar o OficinaOS (duplo clique — abre o browser) |
 | `PARAR.bat` | Desligar (os dados ficam guardados) |
+| `ATUALIZAR.bat` | Atualizar para a versão mais recente |
 
 **Outros dispositivos da loja** (tablet, telemóvel do técnico, outro PC): abrir `http://<IP-do-PC>:4000` — o endereço exato está no `PRIMEIRO-LOGIN.txt`. Não precisam de instalar nada.
 
@@ -69,6 +70,10 @@ No primeiro acesso a app **obriga a definir um novo nome de utilizador e uma nov
 | Desinstalar por completo | `docker compose down -v` na pasta + apagar a pasta (⚠️ apaga a base de dados) |
 
 ## Atualizar para uma versão nova
+
+Quando a app avisar que existe versão nova (ou quando quiseres): duplo clique em **`ATUALIZAR.bat`** — faz backup da base de dados, descarrega a imagem nova e reinicia. As migrações da base de dados correm sozinhas no arranque.
+
+À mão, se preferires:
 
 ```bat
 :: com imagem pré-construída (recomendado):

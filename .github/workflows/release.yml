@@ -17,7 +17,7 @@ jobs:
       - name: Build installer bundle
         run: |
           mkdir -p bundle/scripts
-          cp INSTALAR.bat INICIAR.bat PARAR.bat \
+          cp INSTALAR.bat INICIAR.bat PARAR.bat ATUALIZAR.bat \
              docker-compose.app.yml .env.example INSTALL.md bundle/
           cp scripts/gerar-env.ps1 scripts/db-backup.sh \
              scripts/db-restore.sh scripts/db-restore-check.sh \
