@@ -1834,7 +1834,8 @@
     "invalid_signature": "Datos de firma no válidos",
     "range_or_dates_required": "Se requiere un rango predefinido o fechas personalizadas",
     "repair_name_required": "Se requiere el nombre de la reparación",
-    "imei_invalid": "IMEI no válido: verifique los 15 dígitos"
+    "imei_invalid": "IMEI no válido: verifique los 15 dígitos",
+    "invalid_url": "Debe ser una URL http(s) válida"
   },
   "view_all_critical": "Ver todos los atrasados",
   "warranty_returns": "Devoluciones en garantía",
@@ -1940,5 +1941,7 @@
   "update_available_hint": "Ejecuta ATUALIZAR.bat en el PC de la tienda para actualizar.",
   "update_available_title": "Nueva versión disponible — v{{version}}",
   "update_dismiss": "Ignorar",
-  "update_release_notes": "Novedades"
+  "update_release_notes": "Novedades",
+  "whatsapp_tracking_url": "URL pública de seguimiento",
+  "whatsapp_tracking_url_help": "Dirección pública donde los clientes abren la página de seguimiento desde los mensajes de WhatsApp, p. ej. https://reparaciones.mitienda.es o http://192.168.1.33:4000. Opcional — el enlace solo se incluye si está definida"
 }

@@ -202,6 +202,7 @@ export async function getWhatsAppSettings(prisma: PrismaClient) {
       enabled: false,
       hasApiToken: false,
       phoneNumberId: null,
+      trackingBaseUrl: null,
     };
   }
   return {
@@ -209,6 +210,7 @@ export async function getWhatsAppSettings(prisma: PrismaClient) {
     enabled: row.whatsappEnabled,
     hasApiToken: Boolean(row.whatsappApiTokenEncrypted),
     phoneNumberId: row.whatsappPhoneNumberId,
+    trackingBaseUrl: row.trackingBaseUrl,
   };
 }
 
@@ -217,6 +219,7 @@ export async function upsertWhatsAppSettings(
   input: UpdateWhatsAppSettingsInput
 ) {
   const data: {
+    trackingBaseUrl?: string | null;
     whatsappApiTokenEncrypted?: string;
     whatsappBusinessId?: string;
     whatsappEnabled?: boolean;
@@ -231,6 +234,9 @@ export async function upsertWhatsAppSettings(
   if (input.phoneNumberId !== undefined) {
     data.whatsappPhoneNumberId = input.phoneNumberId;
   }
+  if (input.trackingBaseUrl !== undefined) {
+    data.trackingBaseUrl = input.trackingBaseUrl.trim() || null;
+  }
   if (input.apiToken !== undefined && input.apiToken !== "") {
     data.whatsappApiTokenEncrypted = encryptSecret(input.apiToken);
   }
@@ -239,6 +245,7 @@ export async function upsertWhatsAppSettings(
     create: {
       id: "default",
       shopName: "",
+      trackingBaseUrl: data.trackingBaseUrl ?? null,
       whatsappApiTokenEncrypted: data.whatsappApiTokenEncrypted ?? null,
       whatsappBusinessId: data.whatsappBusinessId ?? null,
       whatsappEnabled: data.whatsappEnabled ?? false,

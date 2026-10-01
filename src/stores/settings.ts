@@ -23,6 +23,7 @@ interface WhatsAppSettings {
   enabled: boolean;
   hasApiToken: boolean;
   phoneNumberId: string | null;
+  trackingBaseUrl: string | null;
 }
 
 interface SettingsState {
@@ -61,6 +62,7 @@ interface SettingsState {
     businessId?: string;
     phoneNumberId?: string;
     enabled?: boolean;
+    trackingBaseUrl?: string;
   }) => Promise<void>;
   sendTestNotification: (templateId: string) => Promise<{
     message: string;

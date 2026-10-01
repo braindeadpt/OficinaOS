@@ -971,6 +971,9 @@ model ShopSettings {
   whatsappBusinessId        String?
   whatsappPhoneNumberId     String?
   whatsappEnabled           Boolean  @default(false)
+  // Public base URL used to build customer-facing links (e.g. WhatsApp
+  // tracking links). Optional: shops on a LAN may not expose one.
+  trackingBaseUrl           String?
   createdAt                 DateTime @default(now()) @db.Timestamptz
   updatedAt                 DateTime @updatedAt @db.Timestamptz
 

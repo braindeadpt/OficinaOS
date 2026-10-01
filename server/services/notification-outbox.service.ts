@@ -54,6 +54,10 @@ interface OutboxEntry {
 const POLL_INTERVAL_MS = 5000;
 const MAX_RETRIES = 3;
 const BACKOFF_MS = [60_000, 300_000, 900_000];
+// A status notification sent a day late is worse than none — stale
+// entries are cancelled instead of delivered (e.g. after the channel
+// was re-enabled following days of downtime).
+const MAX_ENTRY_AGE_MS = 24 * 60 * 60 * 1000;
 let intervalRef: ReturnType<typeof setInterval> | null = null;
 let isProcessing = false;
 
@@ -132,6 +136,32 @@ async function markSent(prisma: DbClient, entryId: string): Promise<void> {
 }
 
 /**
+ * Cancels an outbox entry that sat QUEUED past its useful life — a
+ * status update sent days late is worse than none. Returns true when
+ * the entry was cancelled (caller must skip sending).
+ */
+async function cancelIfExpired(
+  prisma: DbClient,
+  entry: OutboxEntry
+): Promise<boolean> {
+  if (
+    entry.createdAt &&
+    Date.now() - entry.createdAt.getTime() > MAX_ENTRY_AGE_MS
+  ) {
+    await updateOutboxEntry(
+      prisma,
+      { id: entry.id },
+      {
+        error: "Expired: queued for more than 24h",
+        status: OutboxStatus.CANCELLED,
+      }
+    );
+    return true;
+  }
+  return false;
+}
+
+/**
  * Cancels an outbox entry blocked by the consent gate, recording why.
  * Returns true when the entry was blocked (caller must skip sending).
  */
@@ -159,6 +189,47 @@ async function cancelIfConsentMissing(
   return true;
 }
 
+async function processWhatsAppEntry(
+  prisma: DbClient,
+  entry: OutboxEntry,
+  config: { apiToken: string; businessId: string; phoneNumberId: string },
+  countryCode: string,
+  shopPhone: string | null
+): Promise<void> {
+  if (await cancelIfExpired(prisma, entry)) {
+    return;
+  }
+  // Consent is the law here: without it the entry is cancelled (not
+  // retried) and the reason lands in the outbox error column.
+  const blocked = await cancelIfConsentMissing(prisma, entry, shopPhone);
+  if (blocked) {
+    return;
+  }
+  const result = await sendWhatsApp(
+    config,
+    entry.recipientPhone,
+    entry.renderedBody,
+    countryCode
+  );
+  if (result.success) {
+    await markSent(prisma, entry.id);
+    return;
+  }
+  try {
+    await handleRetry(
+      prisma,
+      entry.id,
+      entry.retryCount ?? 0,
+      result.error ?? "Unknown error"
+    );
+  } catch (retryDbErr) {
+    logger.error(
+      { err: retryDbErr, entryId: entry.id },
+      "Outbox: failed to update retry state after failed send"
+    );
+  }
+}
+
 async function processEntry(
   prisma: DbClient,
   entry: OutboxEntry,
@@ -168,35 +239,7 @@ async function processEntry(
 ): Promise<void> {
   try {
     if (entry.channel === "WHATSAPP") {
-      // Consent is the law here: without it the entry is cancelled (not
-      // retried) and the reason lands in the outbox error column.
-      const blocked = await cancelIfConsentMissing(prisma, entry, shopPhone);
-      if (blocked) {
-        return;
-      }
-      const result = await sendWhatsApp(
-        config,
-        entry.recipientPhone,
-        entry.renderedBody,
-        countryCode
-      );
-      if (result.success) {
-        await markSent(prisma, entry.id);
-      } else {
-        try {
-          await handleRetry(
-            prisma,
-            entry.id,
-            entry.retryCount ?? 0,
-            result.error ?? "Unknown error"
-          );
-        } catch (retryDbErr) {
-          logger.error(
-            { err: retryDbErr, entryId: entry.id },
-            "Outbox: failed to update retry state after failed send"
-          );
-        }
-      }
+      await processWhatsAppEntry(prisma, entry, config, countryCode, shopPhone);
     } else {
       logger.warn(
         `Outbox: unexpected channel "${entry.channel}" for entry ${entry.id} — marking FAILED`
@@ -296,7 +339,7 @@ async function getWhatsAppConfig(prisma: DbClient): Promise<{
   phoneNumberId: string;
 } | null> {
   const row = await findShopSettingsUnique(prisma);
-  if (!row) {
+  if (!row?.whatsappEnabled) {
     return null;
   }
 

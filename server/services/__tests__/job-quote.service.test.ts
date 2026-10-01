@@ -97,7 +97,13 @@ describe("createAndSendQuote", () => {
 
   it("returns null when job does not exist", async () => {
     (prisma.job.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(null);
-    const result = await createAndSendQuote(prisma, "missing", {}, "user-1");
+    const result = await createAndSendQuote(
+      prisma,
+      "missing",
+      {},
+      "user-1",
+      notifyCtx
+    );
     expect(result).toBeNull();
   });
 
@@ -114,7 +120,13 @@ describe("createAndSendQuote", () => {
       sentQuote
     );
 
-    const result = await createAndSendQuote(prisma, "job-1", {}, "user-1");
+    const result = await createAndSendQuote(
+      prisma,
+      "job-1",
+      {},
+      "user-1",
+      notifyCtx
+    );
 
     expect(prisma.jobQuote.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -147,7 +159,8 @@ describe("createAndSendQuote", () => {
       prisma,
       "job-1",
       { amount: 150, note: "revised" },
-      "user-1"
+      "user-1",
+      notifyCtx
     );
 
     expect(prisma.jobQuote.updateMany).toHaveBeenCalledWith({
@@ -160,6 +173,35 @@ describe("createAndSendQuote", () => {
           version: 2,
           amount: 150,
           note: "revised",
+        }),
+      })
+    );
+  });
+
+  it("notifies the customer that a quote is ready", async () => {
+    (prisma.job.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...baseJob,
+      estimatedCost: 80,
+    });
+    (prisma.jobQuote.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(
+      null
+    );
+    (prisma.jobQuote.create as ReturnType<typeof vi.fn>).mockResolvedValue(
+      sentQuote
+    );
+
+    await createAndSendQuote(prisma, "job-1", {}, "user-1", notifyCtx);
+
+    expect(mockNotify).toHaveBeenCalledWith(
+      notifyCtx,
+      expect.objectContaining({
+        eventName: "quote_sent",
+        jobId: "job-1",
+        context: expect.objectContaining({
+          customerName: "Maria",
+          jobCode: "JOB-2026-0001",
+          quoteAmount: "120.00",
+          recipientPhone: "+351 912 345 678",
         }),
       })
     );

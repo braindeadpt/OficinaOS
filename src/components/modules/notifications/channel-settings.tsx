@@ -10,6 +10,7 @@ interface ChannelSettingsProps {
     businessId?: string;
     phoneNumberId?: string;
     enabled?: boolean;
+    trackingBaseUrl?: string;
   }) => Promise<void>;
   whatsAppSettings: ReturnType<
     typeof useSettingsStore.getState
@@ -26,6 +27,7 @@ export default function ChannelSettings({
     apiToken: "",
     businessId: "",
     phoneNumberId: "",
+    trackingBaseUrl: "",
     enabled: false,
   });
   const [whatsAppSaving, setWhatsAppSaving] = useState(false);
@@ -50,6 +52,7 @@ export default function ChannelSettings({
         apiToken: prev.apiToken || "",
         businessId: whatsAppSettings.businessId ?? "",
         phoneNumberId: whatsAppSettings.phoneNumberId ?? "",
+        trackingBaseUrl: whatsAppSettings.trackingBaseUrl ?? "",
         enabled: whatsAppSettings.enabled,
       }));
     }
@@ -63,6 +66,7 @@ export default function ChannelSettings({
         businessId: whatsAppForm.businessId || undefined,
         phoneNumberId: whatsAppForm.phoneNumberId || undefined,
         enabled: whatsAppForm.enabled,
+        trackingBaseUrl: whatsAppForm.trackingBaseUrl,
       });
     } catch {
       // Error is stored in Zustand state
@@ -169,6 +173,37 @@ export default function ChannelSettings({
                 }
                 type="text"
                 value={whatsAppForm.phoneNumberId}
+              />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <label
+                  className="mb-1.5 block font-medium text-on-surface text-sm"
+                  htmlFor="wa-tracking-url"
+                >
+                  {t("whatsapp_tracking_url")}
+                </label>
+                <span
+                  className="material-symbols-outlined mb-1.5 cursor-help text-on-surface-variant text-xs"
+                  title={t(
+                    "whatsapp_tracking_url_help",
+                    "Public address where customers open the tracking page from WhatsApp messages, e.g. https://repairs.myshop.com or http://192.168.1.33:4000. Optional — the link is only included when set"
+                  )}
+                >
+                  help
+                </span>
+              </div>
+              <input
+                className="min-h-11 w-full rounded-xl bg-surface-container px-4 py-2.5 text-on-surface text-sm focus:bg-surface-container-lowest"
+                id="wa-tracking-url"
+                onChange={(e) =>
+                  setWhatsAppForm((f) => ({
+                    ...f,
+                    trackingBaseUrl: e.target.value,
+                  }))
+                }
+                placeholder="https://"
+                type="url"
               />
             </div>
             <div>
