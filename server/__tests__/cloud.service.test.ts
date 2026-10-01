@@ -1,14 +1,20 @@
+import { Prisma } from "@generated/client";
 import type { FastifyBaseLogger } from "fastify";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { decryptSecret, isEncrypted } from "../lib/crypto.js";
 import {
   getCloudStatus,
   pairWithCloud,
+  pullCloudIntake,
   syncCloudEntitlements,
   unpairCloud,
 } from "../services/cloud.service.js";
 
-const log = { warn: vi.fn() } as unknown as FastifyBaseLogger;
+const log = {
+  error: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+} as unknown as FastifyBaseLogger;
 
 interface ShopRow {
   cloudApiUrl: string | null;
@@ -190,5 +196,103 @@ describe("unpairCloud", () => {
     expect(row.cloudShopTokenEncrypted).toBeNull();
     expect(row.cloudApiUrl).toBeNull();
     expect(row.cloudShopId).toBeNull();
+  });
+});
+
+describe("pullCloudIntake", () => {
+  function intakePrisma(created: unknown[] = []) {
+    return {
+      $queryRaw: vi.fn(async () => [{ lastSeq: 7 }]),
+      intakeRequest: {
+        create: vi.fn((args: { data: unknown }) => {
+          created.push(args.data);
+          return Promise.resolve({ id: "ir1", ...(args.data as object) });
+        }),
+      },
+      user: { findMany: vi.fn(async () => []) },
+    };
+  }
+
+  it("imports pending reports as IntakeRequests and acks them", async () => {
+    const prisma = intakePrisma();
+    const urls: string[] = [];
+    vi.stubGlobal("fetch", (url: string) => {
+      urls.push(url);
+      if (url.endsWith("/shops/intake")) {
+        return okJson({
+          reports: [
+            {
+              id: "r1",
+              createdAt: "2026-10-01T00:00:00Z",
+              payload: {
+                customerName: "Maria",
+                customerPhone: "912345678",
+                device: { brand: "Samsung", model: "S21" },
+                results: { battery: { cycleCount: 410 } },
+              },
+            },
+          ],
+        });
+      }
+      return okJson({ ok: true });
+    });
+
+    await pullCloudIntake(
+      prisma as never,
+      "tok",
+      "https://cloud",
+      log as never
+    );
+
+    expect(prisma.intakeRequest.create).toHaveBeenCalledOnce();
+    const data = (prisma.intakeRequest.create.mock.calls[0] as never[])[0] as {
+      data: { externalId: string; customerName: string; deviceLabel: string };
+    };
+    expect(data.data.externalId).toBe("r1");
+    expect(data.data.customerName).toBe("Maria");
+    expect(data.data.deviceLabel).toBe("Samsung S21");
+    expect(urls.some((u) => u.endsWith("/shops/intake/ack"))).toBe(true);
+  });
+
+  it("acks already-imported reports instead of duplicating them", async () => {
+    const prisma = {
+      $queryRaw: vi.fn(async () => [{ lastSeq: 8 }]),
+      intakeRequest: {
+        create: vi.fn(() =>
+          Promise.reject(
+            new Prisma.PrismaClientKnownRequestError("dup", {
+              clientVersion: "7",
+              code: "P2002",
+            })
+          )
+        ),
+      },
+      user: { findMany: vi.fn(async () => []) },
+    };
+    const bodies: string[] = [];
+    vi.stubGlobal("fetch", (url: string, init?: { body?: string }) => {
+      if (url.endsWith("/shops/intake")) {
+        return okJson({
+          reports: [
+            {
+              id: "r-dup",
+              payload: { customerName: "A", customerPhone: "1" },
+            },
+          ],
+        });
+      }
+      if (init?.body) {
+        bodies.push(init.body);
+      }
+      return okJson({ ok: true });
+    });
+
+    await pullCloudIntake(
+      prisma as never,
+      "tok",
+      "https://cloud",
+      log as never
+    );
+    expect(bodies.some((b) => b.includes("r-dup"))).toBe(true);
   });
 });
