@@ -162,7 +162,7 @@ export default function PreCheckPage() {
                     aria-hidden="true"
                     className="absolute h-0 w-0 overflow-hidden opacity-0"
                   >
-                    <input
+                    <Input
                       autoComplete="off"
                       name="company"
                       onChange={(e) => set({ company: e.target.value })}
