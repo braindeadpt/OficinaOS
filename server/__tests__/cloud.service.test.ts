@@ -214,7 +214,12 @@ describe("pullCloudIntake", () => {
   }
 
   it("imports pending reports as IntakeRequests and acks them", async () => {
-    const prisma = intakePrisma();
+    const created: {
+      customerName: string;
+      deviceLabel: string;
+      externalId: string;
+    }[] = [];
+    const prisma = intakePrisma(created);
     const urls: string[] = [];
     vi.stubGlobal("fetch", (url: string) => {
       urls.push(url);
@@ -245,12 +250,9 @@ describe("pullCloudIntake", () => {
     );
 
     expect(prisma.intakeRequest.create).toHaveBeenCalledOnce();
-    const data = (prisma.intakeRequest.create.mock.calls[0] as never[])[0] as {
-      data: { externalId: string; customerName: string; deviceLabel: string };
-    };
-    expect(data.data.externalId).toBe("r1");
-    expect(data.data.customerName).toBe("Maria");
-    expect(data.data.deviceLabel).toBe("Samsung S21");
+    expect(created[0]?.externalId).toBe("r1");
+    expect(created[0]?.customerName).toBe("Maria");
+    expect(created[0]?.deviceLabel).toBe("Samsung S21");
     expect(urls.some((u) => u.endsWith("/shops/intake/ack"))).toBe(true);
   });
 
