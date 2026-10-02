@@ -2075,5 +2075,6 @@
   "cloud_sync_success": "Datos de la nube actualizados.",
   "cloud_unpaired": "Desconectado de OficinaOS Cloud.",
   "cloud_unreachable": "Inalcanzable: usando datos guardados",
-  "never": "nunca"
+  "never": "nunca",
+  "requests_purpose_sale": "En venta — quiere presupuesto"
 }

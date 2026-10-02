@@ -1555,6 +1555,7 @@
   "requests_link_job": "Link to repair",
   "requests_link_success": "Request linked to repair",
   "requests_no_jobs_found": "No repairs match",
+  "requests_purpose_sale": "For sale — wants a quote",
   "requests_dismiss_error": "Could not dismiss the request",
   "requests_empty": "No requests yet",
   "requests_empty_pending": "No pending requests",

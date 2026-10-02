@@ -141,6 +141,7 @@ interface IntakeDiagnostic {
     osVersion?: string;
   };
   notes?: string;
+  purpose?: "repair" | "sale";
   results?: Record<string, unknown>;
 }
 
@@ -181,6 +182,7 @@ export async function generateIntakeAiReport(
       device: diagnostic.device ?? {},
       lang,
       notes: diagnostic.notes,
+      purpose: diagnostic.purpose,
       results: diagnostic.results,
     },
     method: "POST",

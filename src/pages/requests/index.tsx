@@ -34,6 +34,7 @@ interface IntakeRequest {
       os?: string;
       osVersion?: string;
     };
+    purpose?: "repair" | "sale";
     results?: Record<string, DiagnosticResult>;
   } | null;
   id: string;
@@ -290,6 +291,11 @@ export default function RequestsPage() {
                 <p className="mt-0.5 font-medium text-on-surface-variant text-sm">
                   {r.deviceLabel}
                 </p>
+                {r.diagnostic?.purpose === "sale" && (
+                  <span className="mt-2 inline-block rounded-lg bg-tertiary/15 px-2 py-0.5 font-bold text-tertiary text-xs uppercase tracking-wide">
+                    {t("requests_purpose_sale")}
+                  </span>
+                )}
                 <p className="mt-2 whitespace-pre-wrap text-on-surface text-sm">
                   {r.problem}
                 </p>

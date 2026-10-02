@@ -2075,5 +2075,6 @@
   "cloud_sync_success": "Données cloud mises à jour.",
   "cloud_unpaired": "Déconnecté d'OficinaOS Cloud.",
   "cloud_unreachable": "Injoignable – en utilisant les données enregistrées",
-  "never": "jamais"
+  "never": "jamais",
+  "requests_purpose_sale": "À vendre — demande un devis"
 }
