@@ -29,15 +29,21 @@ if not exist "%~dp0app\.env" (
 REM ── Postgres portatil: initdb na 1a vez, depois start ────────────────
 REM listen_addresses=127.0.0.1 + auth=trust: so processos deste PC ligam,
 REM sem gestao de passwords. A app fica exposta na LAN, a BD nao.
+REM O initdb/postgres falham com acentos no caminho (Windows passa-o em
+REM CP1252 e o backend le-o como UTF-8). Usar sempre o nome curto 8.3 —
+REM e ASCII puro e aponta para a mesma pasta.
+if not exist "%PGDATA%" mkdir "%PGDATA%"
+for %%I in ("%PGDATA%") do set "PGDATA=%%~sI"
 if not exist "%PGDATA%\PG_VERSION" (
     echo  A inicializar a base de dados ^(primeira vez^)...
     REM dir existe mas sem PG_VERSION = initdb falhou a meio — limpar e refazer
-    if exist "%PGDATA%" rmdir /s /q "%PGDATA%"
+    rmdir /s /q "%PGDATA%"
     mkdir "%PGDATA%"
     REM o log tem de ficar FORA de data\ — initdb exige a pasta vazia
     "%PGBIN%\initdb.exe" -D "%PGDATA%" -U postgres -E UTF8 --locale=C --auth=trust >"%~dp0initdb.log" 2>&1
     if not exist "%PGDATA%\PG_VERSION" (
         echo  ERRO: a inicializacao da base de dados falhou. Ve initdb.log
+        echo  DICA: se a pasta tiver acentos, extrai para C:\OficinaOS e tenta de novo.
         type "%~dp0initdb.log"
         pause
         exit /b 1
