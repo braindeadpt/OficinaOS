@@ -13,4 +13,5 @@
 - **DB:** Prisma manual migration after every schema change; Postgres URL comes from `.env`.
 - **No barrel files** — explicit imports only.
 - **Deploy:** `docker compose up -d` (Postgres + app on :4000).
+- **Windows scripts:** never share `.bat`/`.ps1` via `raw.githubusercontent.com` (serves LF, breaks cmd.exe) — only inside release zips or as release assets.
 - **Login for QA:** username `admin` + `SEED_ADMIN_PASSWORD` from `.env`.

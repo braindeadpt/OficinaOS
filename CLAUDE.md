@@ -95,6 +95,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - This fork relaxes upstream's HTTPS-only assumptions for trusted-LAN HTTP use: no `upgrade-insecure-requests` in CSP, no HSTS, non-`Secure` session cookies, `localhost` added to allowed origins. Relevant files: `server/plugins/security.ts`, `server/lib/auth.ts`.
 - If you pull from `upstream` (`git pull upstream main`), re-check those files — upstream may reintroduce HTTPS-only headers that blank the page on LAN HTTP.
 - The DB credentials inside `docker-compose.yml` (`reparilo` user/db) are internal-only and intentionally unchanged — renaming them would orphan the existing Docker volume.
+- Never give users a `raw.githubusercontent.com` link to a `.bat`/`.cmd`/`.ps1` — raw serves the LF blob and `cmd.exe` misparses LF scripts (`'x' is not recognized` cascade). Distribute Windows scripts only inside release zips or as release assets (which preserve CRLF bytes).
 
 ## QA & Dev
 
