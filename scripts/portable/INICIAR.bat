@@ -32,9 +32,10 @@ REM sem gestao de passwords. A app fica exposta na LAN, a BD nao.
 if not exist "%PGDATA%\PG_VERSION" (
     echo  A inicializar a base de dados ^(primeira vez^)...
     if not exist "%PGDATA%" mkdir "%PGDATA%"
-    "%PGBIN%\initdb.exe" -D "%PGDATA%" -U postgres -E UTF8 --locale=C --auth=trust >nul 2>&1
+    "%PGBIN%\initdb.exe" -D "%PGDATA%" -U postgres -E UTF8 --locale=C --auth=trust >"%PGDATA%\initdb.log" 2>&1
     if not exist "%PGDATA%\PG_VERSION" (
-        echo  ERRO: a inicializacao da base de dados falhou.
+        echo  ERRO: a inicializacao da base de dados falhou. Ve data\initdb.log
+        type "%PGDATA%\initdb.log"
         pause
         exit /b 1
     )
