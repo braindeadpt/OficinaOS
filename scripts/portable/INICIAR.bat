@@ -31,11 +31,14 @@ REM listen_addresses=127.0.0.1 + auth=trust: so processos deste PC ligam,
 REM sem gestao de passwords. A app fica exposta na LAN, a BD nao.
 if not exist "%PGDATA%\PG_VERSION" (
     echo  A inicializar a base de dados ^(primeira vez^)...
-    if not exist "%PGDATA%" mkdir "%PGDATA%"
-    "%PGBIN%\initdb.exe" -D "%PGDATA%" -U postgres -E UTF8 --locale=C --auth=trust >"%PGDATA%\initdb.log" 2>&1
+    REM dir existe mas sem PG_VERSION = initdb falhou a meio — limpar e refazer
+    if exist "%PGDATA%" rmdir /s /q "%PGDATA%"
+    mkdir "%PGDATA%"
+    REM o log tem de ficar FORA de data\ — initdb exige a pasta vazia
+    "%PGBIN%\initdb.exe" -D "%PGDATA%" -U postgres -E UTF8 --locale=C --auth=trust >"%~dp0initdb.log" 2>&1
     if not exist "%PGDATA%\PG_VERSION" (
-        echo  ERRO: a inicializacao da base de dados falhou. Ve data\initdb.log
-        type "%PGDATA%\initdb.log"
+        echo  ERRO: a inicializacao da base de dados falhou. Ve initdb.log
+        type "%~dp0initdb.log"
         pause
         exit /b 1
     )
