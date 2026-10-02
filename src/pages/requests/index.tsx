@@ -12,6 +12,12 @@ import { useCan } from "@/hooks/use-can";
 import api from "@/lib/api";
 import { useUiStore } from "@/stores/ui";
 
+interface DiagnosticResult {
+  Detail?: string;
+  Status?: string;
+  Value?: string;
+}
+
 interface IntakeRequest {
   code: string;
   createdAt: string;
@@ -19,6 +25,15 @@ interface IntakeRequest {
   customerName: string;
   customerPhone: string;
   deviceLabel: string;
+  diagnostic?: {
+    device?: {
+      brand?: string;
+      model?: string;
+      os?: string;
+      osVersion?: string;
+    };
+    results?: Record<string, DiagnosticResult>;
+  } | null;
   id: string;
   job: { jobCode: string } | null;
   jobId: string | null;
@@ -27,7 +42,22 @@ interface IntakeRequest {
   whatsappOptIn: boolean;
 }
 
+interface JobHit {
+  customer: { name: string } | null;
+  device: { model: string; brand: { name: string } | null } | null;
+  id: string;
+  jobCode: string;
+  status: string;
+}
+
 type Filter = "PENDING" | "ALL";
+
+const RESULT_STATUS_STYLE: Record<string, string> = {
+  fail: "bg-error-container/40 text-error",
+  info: "bg-surface-container-highest text-on-surface-variant",
+  pass: "bg-primary/15 text-primary",
+  warn: "bg-tertiary-container/30 text-on-tertiary-container",
+};
 
 export default function RequestsPage() {
   const { t, i18n } = useTranslation();
@@ -39,6 +69,10 @@ export default function RequestsPage() {
   const openIntakeModal = useUiStore((s) => s.openIntakeModal);
   const intakeModalOpen = useUiStore((s) => s.intakeModalOpen);
   const modalOpenedForRequest = useRef(false);
+  const [linkingId, setLinkingId] = useState<string | null>(null);
+  const [jobQuery, setJobQuery] = useState("");
+  const [jobHits, setJobHits] = useState<JobHit[]>([]);
+  const [searchingJobs, setSearchingJobs] = useState(false);
 
   const load = useCallback(
     async (f: Filter) => {
@@ -112,6 +146,42 @@ export default function RequestsPage() {
       toast.error(t("requests_copy_error"));
     }
   }, [t]);
+
+  // Debounced job search while the link picker is open.
+  useEffect(() => {
+    if (!linkingId) {
+      return;
+    }
+    setSearchingJobs(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await api.get("/jobs", {
+          params: { limit: 8, search: jobQuery || undefined },
+        });
+        setJobHits(res.data?.jobs ?? []);
+      } catch {
+        setJobHits([]);
+      } finally {
+        setSearchingJobs(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [linkingId, jobQuery]);
+
+  const linkToJob = async (requestId: string, jobId: string) => {
+    setActingId(requestId);
+    try {
+      await api.post(`/intake-requests/${requestId}/convert`, { jobId });
+      toast.success(t("requests_link_success"));
+      setLinkingId(null);
+      setJobQuery("");
+      await load(filter);
+    } catch {
+      toast.error(t("requests_link_error"));
+    } finally {
+      setActingId(null);
+    }
+  };
 
   const createJob = (r: IntakeRequest) => {
     modalOpenedForRequest.current = true;
@@ -209,6 +279,46 @@ export default function RequestsPage() {
                 <p className="mt-2 whitespace-pre-wrap text-on-surface text-sm">
                   {r.problem}
                 </p>
+                {r.diagnostic?.results && (
+                  <div className="mt-3 rounded-xl bg-surface-container-lowest p-3">
+                    <p className="mb-2 font-bold text-on-surface-variant text-xs uppercase tracking-wide">
+                      {t("requests_diagnostic")}
+                    </p>
+                    <div className="space-y-1">
+                      {Object.entries(r.diagnostic.results).map(
+                        ([key, res]) => (
+                          <div
+                            className="flex flex-wrap items-baseline gap-2 text-xs"
+                            key={key}
+                          >
+                            <span
+                              className={`rounded px-1.5 py-0.5 font-bold uppercase ${
+                                RESULT_STATUS_STYLE[
+                                  res.Status?.toLowerCase() ?? ""
+                                ] ?? RESULT_STATUS_STYLE.info
+                              }`}
+                            >
+                              {res.Status ?? "info"}
+                            </span>
+                            <span className="font-mono text-on-surface-variant">
+                              {key}
+                            </span>
+                            {res.Value && (
+                              <span className="font-medium text-on-surface">
+                                {res.Value}
+                              </span>
+                            )}
+                            {res.Detail && (
+                              <span className="text-on-surface-variant">
+                                {res.Detail}
+                              </span>
+                            )}
+                          </div>
+                        )
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {r.status === "PENDING" && (
@@ -225,6 +335,22 @@ export default function RequestsPage() {
                       {t("requests_create_job")}
                     </button>
                   )}
+                  {canCreateJob && (
+                    <button
+                      className="flex items-center gap-2 rounded-xl bg-surface-container-high px-4 py-2.5 font-bold text-on-surface text-sm transition-all hover:bg-surface-container-highest active:scale-[0.98]"
+                      onClick={() => {
+                        setLinkingId(linkingId === r.id ? null : r.id);
+                        setJobQuery("");
+                        setJobHits([]);
+                      }}
+                      type="button"
+                    >
+                      <span className="material-symbols-outlined text-lg">
+                        link
+                      </span>
+                      {t("requests_link_job")}
+                    </button>
+                  )}
                   <button
                     className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-container-highest text-on-surface-variant transition-colors hover:text-error disabled:opacity-50"
                     disabled={actingId === r.id}
@@ -237,6 +363,53 @@ export default function RequestsPage() {
                 </div>
               )}
             </div>
+
+            {r.status === "PENDING" && linkingId === r.id && (
+              <div className="mt-4 border-outline-variant/40 border-t pt-4">
+                <input
+                  autoFocus
+                  className="w-full rounded-xl border border-outline-variant/40 bg-surface-container-lowest px-4 py-2.5 text-on-surface text-sm outline-none focus:border-primary"
+                  onChange={(e) => setJobQuery(e.target.value)}
+                  placeholder={t("requests_search_jobs")}
+                  type="search"
+                  value={jobQuery}
+                />
+                <div className="mt-2 space-y-1">
+                  {searchingJobs && (
+                    <p className="py-2 text-center text-on-surface-variant text-xs">
+                      …
+                    </p>
+                  )}
+                  {!searchingJobs && jobHits.length === 0 && (
+                    <p className="py-2 text-center text-on-surface-variant text-xs">
+                      {t("requests_no_jobs_found")}
+                    </p>
+                  )}
+                  {jobHits.map((j) => (
+                    <button
+                      className="flex w-full flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-surface-container-high disabled:opacity-50"
+                      disabled={actingId === r.id}
+                      key={j.id}
+                      onClick={() => linkToJob(r.id, j.id)}
+                      type="button"
+                    >
+                      <span className="font-bold font-mono text-primary text-xs">
+                        {j.jobCode}
+                      </span>
+                      <span className="font-medium text-on-surface">
+                        {j.customer?.name}
+                      </span>
+                      <span className="text-on-surface-variant text-xs">
+                        {j.device?.brand?.name} {j.device?.model}
+                      </span>
+                      <span className="ml-auto rounded bg-surface-container-highest px-1.5 py-0.5 text-on-surface-variant text-xs">
+                        {j.status}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </div>
