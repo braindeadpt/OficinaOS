@@ -216,6 +216,10 @@ export const ERRORS = {
     status: 502,
     message: "errors.cloud_token_rejected",
   },
+  CLOUD_AI_FAILED: {
+    status: 502,
+    message: "errors.cloud_ai_failed",
+  },
 
   // ── Intake requests (public pre-check) ───────────────────────────────────
   INTAKE_REQUEST_NOT_FOUND: {
@@ -225,6 +229,10 @@ export const ERRORS = {
   INTAKE_REQUEST_NOT_PENDING: {
     status: 409,
     message: "errors.intake_request_not_pending",
+  },
+  INTAKE_REQUEST_NO_DIAGNOSTIC: {
+    status: 400,
+    message: "errors.intake_request_no_diagnostic",
   },
 } as const;
 

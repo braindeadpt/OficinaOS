@@ -17,18 +17,26 @@ interface CloudErrorBody {
 
 const TRAILING_SLASHES = /\/+$/;
 
-function errorMessage(body: unknown): string | undefined {
+export function errorMessage(body: unknown): string | undefined {
   const err = (body as CloudErrorBody | null)?.error;
   return err?.message ?? err?.code;
 }
 
-async function cloudFetch(
+export async function cloudFetch(
   apiUrl: string,
   path: string,
-  init: { method?: string; body?: unknown; token?: string } = {}
+  init: {
+    method?: string;
+    body?: unknown;
+    token?: string;
+    timeoutMs?: number;
+  } = {}
 ): Promise<{ ok: boolean; status: number; body: unknown }> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const timer = setTimeout(
+    () => controller.abort(),
+    init.timeoutMs ?? FETCH_TIMEOUT_MS
+  );
   try {
     const res = await fetch(`${apiUrl.replace(TRAILING_SLASHES, "")}${path}`, {
       method: init.method ?? "GET",
@@ -241,6 +249,7 @@ export async function unpairCloud(prisma: PrismaClient): Promise<void> {
 // ── Customer diagnostic intake (Pro module: diag-intake) ────────────
 
 interface CloudIntakePayload {
+  aiReport?: string;
   customerEmail?: string;
   customerName: string;
   customerPhone: string;
@@ -332,6 +341,7 @@ export async function pullCloudIntake(
     const p = report.payload;
     try {
       const request = await createIntakeRequest(prisma, {
+        aiReport: typeof p.aiReport === "string" ? p.aiReport : null,
         code: await generateIntakeRequestCode(prisma),
         customerEmail: p.customerEmail || null,
         customerName: p.customerName,

@@ -487,6 +487,9 @@ model IntakeRequest {
   // cloud IntakeReport id and dedupes redelivery after a partial failure.
   externalId    String?             @unique
   diagnostic    Json?
+  // AI report attached to the diagnostic — either generated in the diag tool
+  // and sent with it, or generated on demand by the shop via cloud ai-reports.
+  aiReport      String?             @db.Text
   customerName  String
   customerPhone String
   customerEmail String?

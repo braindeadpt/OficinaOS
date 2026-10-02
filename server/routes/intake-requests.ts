@@ -6,6 +6,7 @@ import { requirePermission } from "../middlewares/rbac.js";
 import {
   convertIntakeRequest,
   dismissIntakeRequest,
+  generateIntakeAiReport,
   listIntakeRequests,
 } from "../services/intake-request.service.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
@@ -98,6 +99,29 @@ export const intakeRequestsRoutes: FastifyPluginAsync = async (app) => {
         id,
         parsed.data.jobId
       );
+      return reply.send(request);
+    }
+  );
+
+  // Shop-side Pro action: cloud generates the AI report with OUR paired token
+  // (ai-reports module) — the customer never needs a token.
+  app.post(
+    "/:id/ai-report",
+    {
+      preHandler: [requirePermission({ jobs: ["create"] })],
+      schema: {
+        params: {
+          properties: { id: { type: "string" } },
+          required: ["id"],
+          type: "object",
+        },
+        summary: "Generate the AI diagnostic report via OficinaOS Cloud",
+        tags: ["intake-requests"],
+      },
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const request = await generateIntakeAiReport(app.prisma, id, req.locale);
       return reply.send(request);
     }
   );

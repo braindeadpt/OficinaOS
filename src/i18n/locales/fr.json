@@ -683,7 +683,9 @@
     "cloud_not_paired": "Cette installation n'est pas associée à OficinaOS Cloud.",
     "cloud_invalid_code": "Code de couplage invalide ou expiré.",
     "cloud_pairing_failed": "Le serveur cloud a rejeté la demande de couplage.",
-    "cloud_token_rejected": "Le cloud a rejeté ce jeton de boutique. "
+    "cloud_token_rejected": "Le cloud a rejeté ce jeton de boutique. ",
+    "cloud_ai_failed": "Impossible de générer le rapport IA. Réessayez plus tard.",
+    "intake_request_no_diagnostic": "Cette demande n'a pas de données de diagnostic"
   },
   "failed_to_create_part": "Échec de la création de la pièce",
   "failed_to_delete_part": "Échec de la suppression de la pièce",
@@ -1544,6 +1546,9 @@
   "requests_copy_error": "Impossible de copier le lien",
   "requests_copy_link": "Copier le lien de demande",
   "requests_create_job": "Créer une réparation",
+  "requests_ai_report": "Rapport IA",
+  "requests_ai_report_error": "Impossible de générer le rapport IA",
+  "requests_ai_report_hint": "Générer le rapport IA via OficinaOS Cloud (Pro)",
   "requests_diagnostic": "Diagnostic",
   "requests_dismiss": "Rejeter",
   "requests_link_error": "Impossible d'associer la demande",

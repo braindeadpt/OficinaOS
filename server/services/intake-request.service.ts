@@ -3,6 +3,7 @@ import { IntakeRequestStatus } from "@generated/client";
 import { Role } from "@shared/constants/roles.js";
 import { AppError } from "@shared/errors/app-error.js";
 import type { PreCheckSubmitInput } from "@shared/schemas/intake-request.schema";
+import { decryptSecret } from "../lib/crypto.js";
 import { update as customerUpdate } from "../repositories/customer.repository.js";
 import {
   create,
@@ -13,6 +14,7 @@ import {
 import { findUniqueSimple } from "../repositories/job.repository.js";
 import { findManyUsers } from "../repositories/notification.repository.js";
 import { generateIntakeRequestCode } from "../utils/intake-request-code.js";
+import { cloudFetch } from "./cloud.service.js";
 import type { NotifyContext } from "./job.service.js";
 import { notify } from "./notification-dispatch.js";
 
@@ -126,4 +128,77 @@ export async function convertIntakeRequest(
     job: { connect: { id: jobId } },
     status: IntakeRequestStatus.CONVERTED,
   });
+}
+
+const AI_REPORT_TIMEOUT_MS = 150_000;
+const REPORT_LANGS = new Set(["pt", "en", "fr", "es"]);
+
+interface IntakeDiagnostic {
+  device?: {
+    brand?: string;
+    model?: string;
+    os?: string;
+    osVersion?: string;
+  };
+  notes?: string;
+  results?: Record<string, unknown>;
+}
+
+/**
+ * Shop-side AI report: the paired shop token calls the cloud Pro module
+ * (ai-reports) so the report lands on this request. Idempotent — a stored
+ * report is returned without spending another generation.
+ */
+export async function generateIntakeAiReport(
+  prisma: PrismaClient,
+  id: string,
+  locale?: string
+) {
+  const request = await findUnique(prisma, id);
+  if (!request) {
+    throw new AppError("INTAKE_REQUEST_NOT_FOUND");
+  }
+  if (request.aiReport) {
+    return request;
+  }
+
+  const diagnostic = request.diagnostic as IntakeDiagnostic | null;
+  if (!diagnostic?.results) {
+    throw new AppError("INTAKE_REQUEST_NO_DIAGNOSTIC");
+  }
+
+  const settings = await prisma.shopSettings.findUniqueOrThrow({
+    where: { id: "default" },
+  });
+  if (!(settings.cloudApiUrl && settings.cloudShopTokenEncrypted)) {
+    throw new AppError("CLOUD_NOT_PAIRED");
+  }
+  const token = decryptSecret(settings.cloudShopTokenEncrypted);
+
+  const lang = REPORT_LANGS.has(locale ?? "") ? (locale as string) : "pt";
+  const res = await cloudFetch(settings.cloudApiUrl, "/reports/diagnostic", {
+    body: {
+      device: diagnostic.device ?? {},
+      lang,
+      notes: diagnostic.notes,
+      results: diagnostic.results,
+    },
+    method: "POST",
+    timeoutMs: AI_REPORT_TIMEOUT_MS,
+    token,
+  });
+  if (!res.ok) {
+    const code = (res.body as { error?: { code?: string } } | null)?.error
+      ?.code;
+    if (code === "AI_NOT_CONFIGURED") {
+      throw new AppError("AI_NOT_CONFIGURED");
+    }
+    throw new AppError("CLOUD_AI_FAILED");
+  }
+
+  const report = (res.body as { report?: string } | null)?.report;
+  if (!report) {
+    throw new AppError("CLOUD_AI_FAILED");
+  }
+  return await update(prisma, id, { aiReport: report });
 }

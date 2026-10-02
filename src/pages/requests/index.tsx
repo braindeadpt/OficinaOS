@@ -10,6 +10,7 @@ import { Link } from "react-router";
 import { toast } from "sonner";
 import { useCan } from "@/hooks/use-can";
 import api from "@/lib/api";
+import MarkdownRenderer from "@/pages/ai-analyst/markdown-renderer";
 import { useUiStore } from "@/stores/ui";
 
 interface DiagnosticResult {
@@ -19,6 +20,7 @@ interface DiagnosticResult {
 }
 
 interface IntakeRequest {
+  aiReport?: string | null;
   code: string;
   createdAt: string;
   customerEmail: string | null;
@@ -111,6 +113,18 @@ export default function RequestsPage() {
       await load(filter);
     } catch {
       toast.error(t("requests_dismiss_error"));
+    } finally {
+      setActingId(null);
+    }
+  };
+
+  const generateAiReport = async (id: string) => {
+    setActingId(id);
+    try {
+      await api.post(`/intake-requests/${id}/ai-report`);
+      await load(filter);
+    } catch {
+      toast.error(t("requests_ai_report_error"));
     } finally {
       setActingId(null);
     }
@@ -319,6 +333,17 @@ export default function RequestsPage() {
                     </div>
                   </div>
                 )}
+                {r.aiReport && (
+                  <div className="mt-3 rounded-xl bg-surface-container-lowest p-3">
+                    <p className="mb-2 font-bold text-on-surface-variant text-xs uppercase tracking-wide">
+                      {t("requests_ai_report")}
+                    </p>
+                    <MarkdownRenderer
+                      className="text-on-surface text-sm"
+                      content={r.aiReport}
+                    />
+                  </div>
+                )}
               </div>
 
               {r.status === "PENDING" && (
@@ -349,6 +374,20 @@ export default function RequestsPage() {
                         link
                       </span>
                       {t("requests_link_job")}
+                    </button>
+                  )}
+                  {r.diagnostic && !r.aiReport && (
+                    <button
+                      className="flex items-center gap-2 rounded-xl bg-surface-container-high px-4 py-2.5 font-bold text-on-surface text-sm transition-all hover:bg-surface-container-highest active:scale-[0.98] disabled:opacity-50"
+                      disabled={actingId === r.id}
+                      onClick={() => generateAiReport(r.id)}
+                      title={t("requests_ai_report_hint")}
+                      type="button"
+                    >
+                      <span className="material-symbols-outlined text-lg">
+                        smart_toy
+                      </span>
+                      {t("requests_ai_report")}
                     </button>
                   )}
                   <button

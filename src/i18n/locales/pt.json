@@ -683,7 +683,9 @@
     "cloud_not_paired": "Esta instalação não está emparelhada com o OficinaOS Cloud.",
     "cloud_invalid_code": "Código de emparelhamento inválido ou expirado.",
     "cloud_pairing_failed": "O servidor na nuvem rejeitou o pedido de emparelhamento.",
-    "cloud_token_rejected": "A nuvem rejeitou este token da loja. Emparelhe novamente."
+    "cloud_token_rejected": "A nuvem rejeitou este token da loja. Emparelhe novamente.",
+    "cloud_ai_failed": "Não foi possível gerar o relatório IA. Tenta mais tarde.",
+    "intake_request_no_diagnostic": "Este pedido não tem dados de diagnóstico"
   },
   "failed_to_create_part": "Falha ao criar peça",
   "failed_to_delete_part": "Falha ao eliminar peça",
@@ -1544,6 +1546,9 @@
   "requests_copy_error": "Não foi possível copiar o link",
   "requests_copy_link": "Copiar link de pedido",
   "requests_create_job": "Criar reparação",
+  "requests_ai_report": "Relatório IA",
+  "requests_ai_report_error": "Não foi possível gerar o relatório IA",
+  "requests_ai_report_hint": "Gerar o relatório IA via OficinaOS Cloud (Pro)",
   "requests_diagnostic": "Diagnóstico",
   "requests_dismiss": "Ignorar",
   "requests_link_error": "Não foi possível associar o pedido",
