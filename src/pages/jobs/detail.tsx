@@ -28,6 +28,19 @@ function toNum(v: unknown): number {
   return typeof v === "number" ? v : Number(v ?? 0);
 }
 
+function UrgentBadge({ visible }: { visible: boolean }) {
+  const { t } = useTranslation();
+  if (!visible) {
+    return null;
+  }
+  return (
+    <span className="flex items-center gap-1 rounded-full bg-error-container px-3 py-1.5 font-bold font-headline text-on-error-container text-xs">
+      <span className="material-symbols-outlined text-sm">priority_high</span>
+      {t("intake.urgent")}
+    </span>
+  );
+}
+
 export default function JobDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { t } = useTranslation();
@@ -231,7 +244,8 @@ export default function JobDetailPage() {
               </p>
             )}
           </div>
-          <div className="flex shrink-0 items-center pt-1">
+          <div className="flex shrink-0 items-center gap-2 pt-1">
+            <UrgentBadge visible={job.isUrgent} />
             <StatusPopover job={job} onChanged={() => fetchJob()} />
           </div>
         </div>
@@ -266,7 +280,12 @@ export default function JobDetailPage() {
                 {t("intake.delivery_date")}
               </p>
               <p className="mt-0.5 font-bold font-headline text-lg text-on-surface">
-                {new Date(job.estimatedDate).toLocaleDateString()}
+                {new Date(job.estimatedDate).toLocaleString(undefined, {
+                  day: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                  month: "short",
+                })}
               </p>
             </div>
           )}
@@ -299,6 +318,7 @@ export default function JobDetailPage() {
         <JobIntakeChips
           accessories={job.accessories}
           intakeChecklist={job.intakeChecklist}
+          qcChecklist={job.qcChecklist}
         />
 
         {/* Actions */}

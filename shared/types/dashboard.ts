@@ -72,6 +72,7 @@ export interface KanbanJobDTO {
   estimatedDate: string | null;
   holdReason: string | null;
   id: string;
+  isUrgent: boolean;
   jobCode: string;
   reportedProblem: string;
   status: JobStatus;

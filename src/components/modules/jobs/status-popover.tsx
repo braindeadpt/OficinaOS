@@ -1,9 +1,11 @@
 import type { JobStatusType } from "@shared/constants";
-import { JOB_STATUS_FLOW } from "@shared/constants";
+import { JOB_STATUS_FLOW, QC_CHECK_ITEMS } from "@shared/constants";
 import type { Job } from "@shared/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import FunctionalChecklist from "@/components/modules/jobs/intake-modal/functional-checklist";
+import type { IntakeChecklist } from "@/components/modules/jobs/intake-modal/types";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useClickOutside } from "@/hooks/use-click-outside";
 import { getErrorMessage } from "@/lib/api";
@@ -22,6 +24,8 @@ export default function StatusPopover({ job, onChanged }: StatusPopoverProps) {
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState<JobStatusType | null>(null);
   const [reason, setReason] = useState("");
+  const [laborHours, setLaborHours] = useState("");
+  const [qc, setQc] = useState<IntakeChecklist>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useClickOutside(() => {
@@ -38,6 +42,8 @@ export default function StatusPopover({ job, onChanged }: StatusPopoverProps) {
   // DELIVERED goes through the pending panel too — as an outstanding-balance
   // warning instead of a reason prompt.
   const balanceWarning = pending === "DELIVERED" && balanceDue > 0;
+  // DONE needs labor hours + a fully answered QC checklist (server requires both).
+  const donePanel = pending === "DONE";
 
   useEffect(() => {
     if (!open) {
@@ -59,10 +65,13 @@ export default function StatusPopover({ job, onChanged }: StatusPopoverProps) {
     (status: JobStatusType) => {
       if (
         REQUIRES_REASON.includes(status) ||
+        status === "DONE" ||
         (status === "DELIVERED" && balanceDue > 0)
       ) {
         setPending(status);
         setReason("");
+        setLaborHours("");
+        setQc({});
         setError(null);
         return;
       }
@@ -103,11 +112,31 @@ export default function StatusPopover({ job, onChanged }: StatusPopoverProps) {
     if (!pending) {
       return;
     }
+    let hours: number | undefined;
+    if (pending === "DONE") {
+      const parsed = Number.parseFloat(laborHours);
+      if (Number.isNaN(parsed) || parsed <= 0) {
+        setError(t("validations.labor_hours_positive"));
+        return;
+      }
+      hours = parsed;
+      const qcIncomplete = QC_CHECK_ITEMS.some((item) => !qc[item]);
+      if (qcIncomplete) {
+        setError(t("validations.qc_checklist_required"));
+        return;
+      }
+    }
     setLoading(true);
     setError(null);
     const previousStatus = job.status;
     try {
-      await transitionStatus(job.id, pending, reason.trim() || undefined);
+      await transitionStatus(
+        job.id,
+        pending,
+        reason.trim() || undefined,
+        hours,
+        pending === "DONE" ? qc : undefined
+      );
       setOpen(false);
       setPending(null);
       setReason("");
@@ -134,11 +163,23 @@ export default function StatusPopover({ job, onChanged }: StatusPopoverProps) {
     } finally {
       setLoading(false);
     }
-  }, [pending, reason, job.id, job.status, transitionStatus, onChanged, t]);
+  }, [
+    pending,
+    reason,
+    laborHours,
+    qc,
+    job.id,
+    job.status,
+    transitionStatus,
+    onChanged,
+    t,
+  ]);
 
   const handleCancelReason = useCallback(() => {
     setPending(null);
     setReason("");
+    setLaborHours("");
+    setQc({});
     setError(null);
   }, []);
 
@@ -222,7 +263,7 @@ export default function StatusPopover({ job, onChanged }: StatusPopoverProps) {
           )}
 
           {pending && (
-            <div className="space-y-3 p-4">
+            <div className="max-h-[70vh] space-y-3 overflow-y-auto p-4">
               <div className="flex items-center gap-2">
                 <StatusBadge status={job.status} />
                 <span className="material-symbols-outlined text-on-surface-variant text-sm">
@@ -230,6 +271,34 @@ export default function StatusPopover({ job, onChanged }: StatusPopoverProps) {
                 </span>
                 <StatusBadge status={pending} />
               </div>
+              {donePanel && (
+                <>
+                  <div>
+                    <label
+                      className="mb-1 block font-label text-on-surface-variant text-xs"
+                      htmlFor="labor-hours"
+                    >
+                      {t("tech_dashboard.labor_hours_label")}
+                    </label>
+                    <input
+                      className="w-full rounded-xl bg-surface-container-highest px-4 py-2.5 font-body text-on-surface text-sm"
+                      id="labor-hours"
+                      min="0.1"
+                      onChange={(e) => setLaborHours(e.target.value)}
+                      placeholder={t("tech_dashboard.labor_hours_placeholder")}
+                      step="0.1"
+                      type="number"
+                      value={laborHours}
+                    />
+                  </div>
+                  <div>
+                    <p className="mb-1 block font-label text-on-surface-variant text-xs">
+                      {t("jobs_qc_title")}
+                    </p>
+                    <FunctionalChecklist onChange={setQc} t={t} value={qc} />
+                  </div>
+                </>
+              )}
               {balanceWarning && (
                 <div className="flex items-start gap-2 rounded-xl bg-error-container/50 px-3 py-2.5">
                   <span className="material-symbols-outlined text-base text-on-error-container">
@@ -245,7 +314,7 @@ export default function StatusPopover({ job, onChanged }: StatusPopoverProps) {
               <label className="sr-only" htmlFor="status-reason">
                 {t("jobs_status_change_reason_label")}
               </label>
-              {!balanceWarning && (
+              {!(balanceWarning || donePanel) && (
                 <textarea
                   aria-describedby={error ? "status-reason-error" : undefined}
                   aria-invalid={!!error}

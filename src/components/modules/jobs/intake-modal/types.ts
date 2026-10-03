@@ -29,6 +29,7 @@ export interface IntakeFormData {
   estimatedCost: string;
   estimatedDelivery: string;
   imei: string;
+  isUrgent: boolean;
   isWarrantyReturn: boolean;
   model: string;
   modelId: string;
@@ -58,6 +59,13 @@ export const INTAKE_CHECK_ITEMS = [
   "charging",
 ] as const;
 
+function defaultDeliveryDatetime(): string {
+  const d = new Date();
+  d.setHours(18, 0, 0, 0);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export const INITIAL_FORM: IntakeFormData = {
   accessories: [],
   brand: "",
@@ -73,7 +81,8 @@ export const INITIAL_FORM: IntakeFormData = {
   customerPhone: "",
   deposit: "",
   estimatedCost: "",
-  estimatedDelivery: new Date().toISOString().split("T")[0],
+  estimatedDelivery: defaultDeliveryDatetime(),
+  isUrgent: false,
   isWarrantyReturn: false,
   model: "",
   modelId: "",

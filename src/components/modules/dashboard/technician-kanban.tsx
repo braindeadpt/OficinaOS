@@ -2,11 +2,14 @@ import {
   JOB_STATUS_FLOW,
   JobStatus,
   type JobStatusType,
+  QC_CHECK_ITEMS,
 } from "@shared/constants";
 import type { KanbanJobDTO } from "@shared/types/dashboard";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import FunctionalChecklist from "@/components/modules/jobs/intake-modal/functional-checklist";
+import type { IntakeChecklist } from "@/components/modules/jobs/intake-modal/types";
 import { useDashboardStore } from "@/stores/dashboard";
 import { useJobsStore } from "@/stores/jobs";
 
@@ -22,6 +25,7 @@ export default function TechnicianKanban() {
   const [targetStatus, setTargetStatus] = useState<JobStatusType | null>(null);
   const [holdReason, setHoldReason] = useState("");
   const [laborHours, setLaborHours] = useState("");
+  const [qc, setQc] = useState<IntakeChecklist>({});
   const [loading, setLoading] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
 
@@ -71,6 +75,7 @@ export default function TechnicianKanban() {
     setTargetStatus(nextStatus);
     setHoldReason("");
     setLaborHours("");
+    setQc({});
 
     // If it doesn't require extra inputs, execute immediately
     if (nextStatus !== JobStatus.ON_HOLD && nextStatus !== JobStatus.DONE) {
@@ -82,11 +87,12 @@ export default function TechnicianKanban() {
     jobId: string,
     status: JobStatusType,
     reason?: string,
-    hours?: number
+    hours?: number,
+    qcChecklist?: IntakeChecklist
   ) => {
     setLoading(true);
     try {
-      await transitionStatus(jobId, status, reason, hours);
+      await transitionStatus(jobId, status, reason, hours, qcChecklist);
       toast.success(t("tech_dashboard.status_changed"));
       setTransitioningJob(null);
       setTargetStatus(null);
@@ -120,7 +126,17 @@ export default function TechnicianKanban() {
         toast.error(t("validations.labor_hours_positive"));
         return;
       }
-      executeTransition(transitioningJob.id, targetStatus, undefined, hoursNum);
+      if (QC_CHECK_ITEMS.some((item) => !qc[item])) {
+        toast.error(t("validations.qc_checklist_required"));
+        return;
+      }
+      executeTransition(
+        transitioningJob.id,
+        targetStatus,
+        undefined,
+        hoursNum,
+        qc
+      );
     }
   };
 
@@ -221,6 +237,15 @@ export default function TechnicianKanban() {
                           <span className="font-extrabold font-headline text-primary text-xs">
                             {job.jobCode}
                           </span>
+                          {/* Urgent Badge */}
+                          {job.isUrgent && (
+                            <span className="flex items-center gap-0.5 rounded bg-error-container px-1.5 py-0.5 font-extrabold font-headline text-[10px] text-on-error-container">
+                              <span className="material-symbols-outlined text-[12px]">
+                                priority_high
+                              </span>
+                              {t("intake.urgent")}
+                            </span>
+                          )}
                           {/* Done Badge */}
                           {job.status === JobStatus.DONE &&
                             job.actualLaborHours && (
@@ -267,12 +292,15 @@ export default function TechnicianKanban() {
                             </span>
                             <span>
                               {job.estimatedDate
-                                ? new Date(
-                                    job.estimatedDate
-                                  ).toLocaleDateString(undefined, {
-                                    month: "short",
-                                    day: "numeric",
-                                  })
+                                ? new Date(job.estimatedDate).toLocaleString(
+                                    undefined,
+                                    {
+                                      day: "numeric",
+                                      hour: "numeric",
+                                      minute: "2-digit",
+                                      month: "short",
+                                    }
+                                  )
                                 : "—"}
                             </span>
                           </div>
@@ -372,14 +400,19 @@ export default function TechnicianKanban() {
                   value={holdReason}
                 />
               ) : (
-                <input
-                  className="w-full rounded-xl bg-surface-container-high p-3 font-medium text-on-surface text-sm ring-1 ring-surface-container-highest"
-                  onChange={(e) => setLaborHours(e.target.value)}
-                  placeholder={t("tech_dashboard.labor_hours_placeholder")}
-                  step="0.1"
-                  type="number"
-                  value={laborHours}
-                />
+                <>
+                  <input
+                    className="w-full rounded-xl bg-surface-container-high p-3 font-medium text-on-surface text-sm ring-1 ring-surface-container-highest"
+                    onChange={(e) => setLaborHours(e.target.value)}
+                    placeholder={t("tech_dashboard.labor_hours_placeholder")}
+                    step="0.1"
+                    type="number"
+                    value={laborHours}
+                  />
+                  <div className="mt-4 max-h-[40vh] overflow-y-auto">
+                    <FunctionalChecklist onChange={setQc} t={t} value={qc} />
+                  </div>
+                </>
               )}
             </div>
 

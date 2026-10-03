@@ -37,3 +37,12 @@ export const JOB_STATUS_FLOW: Record<JobStatusType, JobStatusType[]> = {
   RETURNED: [],
   CANCELLED: [],
 };
+
+export const QC_CHECK_ITEMS = [
+  "powersOn",
+  "screen",
+  "touch",
+  "cameras",
+  "audio",
+  "charging",
+] as const;

@@ -11,6 +11,7 @@ export {
   INACTIVE_STATUSES,
   JOB_STATUS_FLOW,
   JobStatus,
+  QC_CHECK_ITEMS,
 } from "./job-statuses";
 export type { LanguageCode } from "./languages";
 export { LANGUAGES, RTL_LANGUAGES } from "./languages";

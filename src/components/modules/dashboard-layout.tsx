@@ -40,6 +40,7 @@ function buildJobPayload(data: IntakeFormData) {
     intakeSignatureDataUrl: data.signature ?? undefined,
     estimatedCost: Number.parseFloat(data.estimatedCost) || 0,
     estimatedDate: data.estimatedDelivery || undefined,
+    isUrgent: data.isUrgent,
     depositAmount: data.deposit ? Number.parseFloat(data.deposit) : undefined,
   };
 }

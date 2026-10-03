@@ -140,10 +140,39 @@ export default function Step2Content({
             className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface transition-all focus:bg-surface-container-lowest"
             id="delivery-date"
             onChange={(e) => update("estimatedDelivery", e.target.value)}
-            type="date"
+            type="datetime-local"
             value={form.estimatedDelivery}
           />
         </div>
+
+        <button
+          aria-pressed={form.isUrgent}
+          className={`flex w-full items-center justify-between rounded-xl px-4 py-3 transition-colors ${
+            form.isUrgent
+              ? "bg-error-container ring-2 ring-error/40"
+              : "bg-surface-container-highest hover:bg-surface-container"
+          }`}
+          onClick={() => update("isUrgent", !form.isUrgent)}
+          type="button"
+        >
+          <span className="flex items-center gap-2 font-label text-on-surface text-sm">
+            <span
+              className={`material-symbols-outlined text-lg ${
+                form.isUrgent ? "text-error" : "text-on-surface-variant"
+              }`}
+            >
+              priority_high
+            </span>
+            {t("intake.urgent")}
+          </span>
+          <span
+            className={`font-label text-xs ${
+              form.isUrgent ? "font-bold text-error" : "text-on-surface-variant"
+            }`}
+          >
+            {form.isUrgent ? t("intake.urgent_on") : t("intake.urgent_off")}
+          </span>
+        </button>
 
         <div>
           <span className={labelCls}>{t("intake.terms_title")}</span>

@@ -333,6 +333,7 @@ export async function create(
         estimatedDate: input.estimatedDate
           ? new Date(input.estimatedDate)
           : null,
+        isUrgent: input.isUrgent ?? false,
         isWarrantyReturn: input.isWarrantyReturn ?? false,
         jobCode,
         reportedProblem: input.reportedProblem,
@@ -612,6 +613,7 @@ export async function transitionStatus(
     reason?: string;
     requestingRole: RoleType;
     actualLaborHours?: number;
+    qcChecklist?: Record<string, "ok" | "fail" | null>;
   }
 ) {
   const job = await findUniqueSimple(prisma, id);
@@ -654,8 +656,13 @@ export async function transitionStatus(
     updateData.holdReason = options.reason;
   }
 
-  if (newStatus === JobStatus.DONE && options?.actualLaborHours !== undefined) {
-    updateData.actualLaborHours = options.actualLaborHours;
+  if (newStatus === JobStatus.DONE) {
+    if (options?.actualLaborHours !== undefined) {
+      updateData.actualLaborHours = options.actualLaborHours;
+    }
+    if (options?.qcChecklist) {
+      updateData.qcChecklist = options.qcChecklist;
+    }
   }
 
   let techAssigned = false;

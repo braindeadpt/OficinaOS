@@ -251,6 +251,6 @@ export function findKanbanJobs(prisma: DbClient, where: Prisma.JobWhereInput) {
       customer: { select: { name: true } },
       device: { select: { model: true, brand: { select: { name: true } } } },
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ isUrgent: "desc" }, { createdAt: "desc" }],
   });
 }

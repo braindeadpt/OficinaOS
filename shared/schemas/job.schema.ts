@@ -1,4 +1,9 @@
-import { JobStatus, PartCategory, RepairCategory } from "@shared/constants";
+import {
+  JobStatus,
+  PartCategory,
+  QC_CHECK_ITEMS,
+  RepairCategory,
+} from "@shared/constants";
 import { imeiField } from "@shared/utils/imei";
 import { z } from "zod";
 
@@ -53,6 +58,7 @@ export const createJobSchema = z.object({
     .max(99_999_999.99)
     .optional(),
   technicianId: z.string().cuid({ error: "validations.invalid_id" }).optional(),
+  isUrgent: z.boolean().optional(),
   isWarrantyReturn: z.boolean().optional(),
   warrantyForJobId: z.string().optional(),
   repairs: z.array(intakeRepairItemSchema).optional(),
@@ -67,6 +73,7 @@ export const updateJobSchema = z.object({
   estimatedDate: z.coerce.date().nullable().optional(),
   depositAmount: z.number().min(0).max(99_999_999.99).nullable().optional(),
   technicianId: z.string().cuid().nullable().optional(),
+  isUrgent: z.boolean().optional(),
   color: z.string().optional(),
   imei: imeiField,
   deviceUnlockCode: z.string().max(64).nullable().optional(),
@@ -91,6 +98,9 @@ export const transitionStatusSchema = z
     ]),
     reason: z.string().trim().max(500).optional(),
     actualLaborHours: z.number().positive().optional().nullable(),
+    qcChecklist: z
+      .record(z.string(), z.enum(["ok", "fail"]).nullable())
+      .optional(),
   })
   .superRefine((val, ctx) => {
     const requiresReason =
@@ -112,6 +122,21 @@ export const transitionStatusSchema = z
         path: ["actualLaborHours"],
         message: "validations.labor_hours_required",
       });
+    }
+
+    if (val.status === JobStatus.DONE) {
+      const missing = QC_CHECK_ITEMS.some(
+        (item) =>
+          val.qcChecklist?.[item] === undefined ||
+          val.qcChecklist?.[item] === null
+      );
+      if (missing) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["qcChecklist"],
+          message: "validations.qc_checklist_required",
+        });
+      }
     }
   });
 

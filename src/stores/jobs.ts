@@ -73,6 +73,7 @@ interface JobsState {
     estimatedDate?: string;
     depositAmount?: number;
     technicianId?: string;
+    isUrgent?: boolean;
     isWarrantyReturn?: boolean;
     warrantyForJobId?: string;
     repairs?: Array<{
@@ -118,7 +119,8 @@ interface JobsState {
     id: string,
     status: JobStatusType,
     reason?: string,
-    actualLaborHours?: number
+    actualLaborHours?: number,
+    qcChecklist?: Record<string, "ok" | "fail" | null>
   ) => Promise<Job>;
   updateJob: (id: string, data: Record<string, unknown>) => Promise<Job>;
 }
@@ -194,13 +196,20 @@ export const useJobsStore = create<JobsState>((set) => ({
     }
   },
 
-  transitionStatus: async (id, status, reason, actualLaborHours) => {
+  transitionStatus: async (
+    id,
+    status,
+    reason,
+    actualLaborHours,
+    qcChecklist
+  ) => {
     set({ error: null });
     try {
       const res = await api.patch(`/jobs/${id}/status`, {
         status,
         reason,
         actualLaborHours,
+        qcChecklist,
       });
       const updated = res.data as Job;
       set((state) => ({

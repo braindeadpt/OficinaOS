@@ -1060,9 +1060,11 @@ function mapJobToTrackingData(
   );
 
   const estimatedCompletion = data.estimatedDate
-    ? new Date(data.estimatedDate as string).toLocaleDateString(locale, {
-        month: "short",
+    ? new Date(data.estimatedDate as string).toLocaleString(locale, {
         day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        month: "short",
         year: "numeric",
       })
     : t("tracking_tbd");

@@ -640,6 +640,7 @@ export async function getKanbanJobsForTech(
     estimatedDate: j.estimatedDate ? j.estimatedDate.toISOString() : null,
     actualLaborHours: j.actualLaborHours ? Number(j.actualLaborHours) : null,
     holdReason: j.holdReason,
+    isUrgent: j.isUrgent,
   });
 
   return {

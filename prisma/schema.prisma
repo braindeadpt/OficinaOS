@@ -406,12 +406,17 @@ model Job {
   // Customer signature captured at intake (PNG data URL) — printed on the
   // receipt as proof the customer accepted the repair terms.
   intakeSignatureDataUrl String? @db.Text
+  // Post-repair QC checklist captured when marking the job DONE
+  // ({key: "ok"|"fail"}) — mirrors intakeChecklist.
+  qcChecklist Json?
+  // Urgent flag — customer waiting / priority queue. Surfaced as a badge.
+  isUrgent               Boolean   @default(false)
   status                 JobStatus @default(INTAKE)
 
   estimatedCost Decimal  @db.Decimal(10, 2)
   depositAmount Decimal? @db.Decimal(10, 2)
 
-  estimatedDate DateTime? @db.Date
+  estimatedDate DateTime? @db.Timestamptz
   createdAt     DateTime  @default(now()) @db.Timestamptz
   updatedAt     DateTime  @updatedAt @db.Timestamptz
 

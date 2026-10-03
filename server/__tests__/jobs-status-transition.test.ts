@@ -234,6 +234,98 @@ describe("PATCH /api/jobs/:id/status", () => {
     );
   });
 
+  it("returns 400 when DONE sent without actualLaborHours", async () => {
+    const app = buildApp("user-1");
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/jobs/job-1/status",
+      payload: {
+        status: "DONE",
+        qcChecklist: {
+          powersOn: "ok",
+          screen: "ok",
+          touch: "ok",
+          cameras: "ok",
+          audio: "ok",
+          charging: "ok",
+        },
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    const body = JSON.parse(res.body);
+    expect(body.code).toBe("VALIDATION_ERROR");
+    expect(body.details.errors.actualLaborHours).toBeDefined();
+  });
+
+  it("returns 400 when DONE sent without qcChecklist", async () => {
+    const app = buildApp("user-1");
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/jobs/job-1/status",
+      payload: { status: "DONE", actualLaborHours: 1.5 },
+    });
+    expect(res.statusCode).toBe(400);
+    const body = JSON.parse(res.body);
+    expect(body.code).toBe("VALIDATION_ERROR");
+    expect(body.details.errors.qcChecklist).toBeDefined();
+  });
+
+  it("returns 400 when DONE sent with incomplete qcChecklist", async () => {
+    const app = buildApp("user-1");
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/jobs/job-1/status",
+      payload: {
+        status: "DONE",
+        actualLaborHours: 1.5,
+        qcChecklist: { powersOn: "ok", screen: "ok" },
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    const body = JSON.parse(res.body);
+    expect(body.code).toBe("VALIDATION_ERROR");
+    expect(body.details.errors.qcChecklist).toBeDefined();
+  });
+
+  it("returns 200 for DONE with labor hours and complete qcChecklist", async () => {
+    mocks.transitionStatus.mockResolvedValue({
+      id: "job-1",
+      status: "DONE",
+      finalCost: 0,
+    });
+    const qcChecklist = {
+      powersOn: "ok",
+      screen: "ok",
+      touch: "ok",
+      cameras: "ok",
+      audio: "ok",
+      charging: "ok",
+    };
+    const app = buildApp("user-1");
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/jobs/job-1/status",
+      payload: { status: "DONE", actualLaborHours: 1.5, qcChecklist },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mocks.transitionStatus).toHaveBeenCalledWith(
+      { auditLog: { findMany: mocks.auditLogFindMany } },
+      "job-1",
+      "DONE",
+      "user-1",
+      {
+        prisma: { auditLog: { findMany: mocks.auditLogFindMany } },
+        wsBroadcast: undefined,
+      },
+      {
+        requestingRole: "OWNER",
+        reason: undefined,
+        actualLaborHours: 1.5,
+        qcChecklist,
+      }
+    );
+  });
+
   it("returns 403 FORBIDDEN_STATUS_TRANSITION when role lacks permission", async () => {
     const app = buildApp("user-1", "FRONT_DESK");
     mocks.userHasPermission.mockImplementation(({ body: { permissions } }) => {
