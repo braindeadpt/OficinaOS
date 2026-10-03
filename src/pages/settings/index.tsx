@@ -79,6 +79,25 @@ export default function SettingsPage() {
 
   useModalEffects(pendingTab !== null, () => setPendingTab(null), dialogRef);
 
+  // Deep links (?tab=...) also drive tab switching — browser back/forward,
+  // links from other pages. The dirty-form guard still applies.
+  useEffect(() => {
+    const requestedTab = searchParams.get("tab") as SettingsTab | null;
+    if (!(requestedTab && TAB_KEYS.includes(requestedTab))) {
+      return;
+    }
+    setActiveTab((current) => {
+      if (current === requestedTab) {
+        return current;
+      }
+      if (isDirty(current)) {
+        setPendingTab(requestedTab);
+        return current;
+      }
+      return requestedTab;
+    });
+  }, [searchParams, isDirty]);
+
   useEffect(() => {
     if (activeTab === "notifications" && notificationTemplates.length === 0) {
       fetchNotificationTemplates().catch(() => {

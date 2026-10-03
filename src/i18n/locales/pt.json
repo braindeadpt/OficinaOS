@@ -2135,5 +2135,8 @@
   "signature_clear": "Limpar",
   "jobs_deliver_balance_warning": "Atenção: faltam {{amount}}€. Confirme que o cliente vai liquidar o valor agora.",
   "jobs_deliver_anyway": "Entregar mesmo assim",
-  "jobs_detail_signature": "Assinatura"
+  "jobs_detail_signature": "Assinatura",
+  "confirm_deactivate_user": "Desativar este utilizador?",
+  "confirm_deactivate_user_desc": "{{name}} vai terminar a sessão e não poderá entrar até ser reativado.",
+  "deactivate_user_btn": "Desativar"
 }

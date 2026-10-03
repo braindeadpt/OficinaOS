@@ -213,13 +213,17 @@ export default function App() {
               />
             </Route>
             <Route
-              element={
-                <DashboardLayout>
-                  <SettingsPage />
-                </DashboardLayout>
-              }
-              path="/settings"
-            />
+              element={<RequirePermission perm={{ settings: ["view"] }} />}
+            >
+              <Route
+                element={
+                  <DashboardLayout>
+                    <SettingsPage />
+                  </DashboardLayout>
+                }
+                path="/settings"
+              />
+            </Route>
             <Route element={<RequirePermission perm={{ ai: ["access"] }} />}>
               <Route
                 element={

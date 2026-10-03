@@ -2135,5 +2135,8 @@
   "signature_clear": "Clair",
   "jobs_deliver_balance_warning": "Attention : {{amount}} € restent à payer. ",
   "jobs_deliver_anyway": "Livrer quand même",
-  "jobs_detail_signature": "Signature"
+  "jobs_detail_signature": "Signature",
+  "confirm_deactivate_user": "Désactiver cet utilisateur ?",
+  "confirm_deactivate_user_desc": "{{name}} sera déconnecté et ne pourra plus se connecter avant réactivation.",
+  "deactivate_user_btn": "Désactiver"
 }

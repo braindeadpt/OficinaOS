@@ -1,6 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import { Avatar } from "@/components/ui/avatar";
+import ConfirmDiscardDialog from "@/components/ui/confirm-discard-dialog";
 import { getAvatarSrc } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth";
 import { useUsersStore } from "@/stores/users";
@@ -138,6 +140,10 @@ export default function SettingsUsersTab({
   const { t } = useTranslation();
   const { users, isLoading: usersLoading, fetchUsers } = useUsersStore();
   const currentUser = useAuthStore((s) => s.user);
+  const [deactivateTarget, setDeactivateTarget] = useState<{
+    id: string;
+    username: string;
+  } | null>(null);
 
   // Fetch users on mount if needed
   useEffect(() => {
@@ -147,6 +153,28 @@ export default function SettingsUsersTab({
       });
     }
   }, [users.length, usersLoading, fetchUsers]);
+
+  const applyToggle = (id: string, isActive: boolean) => {
+    useUsersStore
+      .getState()
+      .toggleUserStatus(id, isActive)
+      .then(() => {
+        const err = useUsersStore.getState().error;
+        if (err) {
+          toast.error(err);
+          useUsersStore.getState().clearError();
+        }
+      });
+  };
+
+  const handleToggle = (user: UserRowData) => {
+    // Deactivation locks someone out — confirm first. Activation is safe.
+    if (user.isActive) {
+      setDeactivateTarget({ id: user.id, username: user.username });
+    } else {
+      applyToggle(user.id, true);
+    }
+  };
 
   if (usersLoading) {
     return (
@@ -189,15 +217,29 @@ export default function SettingsUsersTab({
               key={user.id}
               onEdit={() => onEditUser(user.id)}
               onResetPassword={() => onResetPassword(user.id, user.username)}
-              onToggleStatus={() => {
-                useUsersStore
-                  .getState()
-                  .toggleUserStatus(user.id, !user.isActive);
-              }}
+              onToggleStatus={() => handleToggle(user)}
               t={t}
               user={user}
             />
           ))}
+        </div>
+      )}
+      {deactivateTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-on-surface/40">
+          <ConfirmDiscardDialog
+            description={t("confirm_deactivate_user_desc", {
+              name: deactivateTarget.username,
+            })}
+            discardLabel={t("deactivate_user_btn")}
+            keepLabel={t("cancel")}
+            onDiscard={() => {
+              applyToggle(deactivateTarget.id, false);
+              setDeactivateTarget(null);
+            }}
+            onKeepEditing={() => setDeactivateTarget(null)}
+            open
+            title={t("confirm_deactivate_user")}
+          />
         </div>
       )}
     </div>
