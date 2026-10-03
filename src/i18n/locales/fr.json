@@ -1208,6 +1208,8 @@
     "checkout_failed": "Échec de l'encaissement",
     "clear_cart": "Vider",
     "complete_sale": "Terminer la vente",
+    "change_due": "Monnaie à rendre",
+    "no_parts_found": "Aucune pièce ne correspond à la recherche",
     "custom_name": "Nom de l'article",
     "custom_price": "Prix unitaire",
     "decrease": "Diminuer la quantité",

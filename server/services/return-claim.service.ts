@@ -46,7 +46,7 @@ const CLAIM_INCLUDE = {
     },
   },
   reworkJob: {
-    select: { id: true, jobCode: true, status: true },
+    select: { id: true, jobCode: true, status: true, technicianId: true },
   },
   claimedJobRepair: {
     select: { id: true, repairName: true, category: true, price: true },
@@ -113,12 +113,21 @@ export async function create(
 
 /* ─── getById ──────────────────────────────────────────────────────────── */
 
-export async function getById(prisma: DbClient, id: string) {
+export async function getById(
+  prisma: DbClient,
+  id: string,
+  scopeUserId?: string
+) {
   const claim = await prisma.returnClaim.findUnique({
     where: { id },
     include: CLAIM_INCLUDE,
   });
   if (!claim) {
+    return null;
+  }
+  // Out-of-scope lookups return null (404) rather than 403 so the claim's
+  // existence is not leaked to roles without returns:viewShop.
+  if (scopeUserId && !isInSelfScope(claim, scopeUserId)) {
     return null;
   }
 
@@ -161,13 +170,50 @@ export async function getById(prisma: DbClient, id: string) {
   };
 }
 
+/* ─── viewSelf scoping ─────────────────────────────────────────────────── */
+
+/** Claims visible to a user without `returns:viewShop`: the ones they
+ *  opened, plus claims on jobs where they are the assigned technician. */
+function selfScopeWhere(userId: string) {
+  return {
+    OR: [
+      { openedById: userId },
+      { originalJob: { technicianId: userId } },
+      { reworkJob: { technicianId: userId } },
+    ],
+  };
+}
+
+/** Check a fetched claim against the caller's self-scope. */
+function isInSelfScope(
+  claim: {
+    openedById: string;
+    originalJob?: { technicianId: string | null } | null;
+    reworkJob?: { technicianId: string | null } | null;
+  },
+  userId: string
+) {
+  return (
+    claim.openedById === userId ||
+    claim.originalJob?.technicianId === userId ||
+    claim.reworkJob?.technicianId === userId
+  );
+}
+
 /* ─── list ─────────────────────────────────────────────────────────────── */
 
-export async function list(prisma: DbClient, query: ListReturnClaimsQuery) {
+export async function list(
+  prisma: DbClient,
+  query: ListReturnClaimsQuery,
+  scopeUserId?: string
+) {
   const page = query.page ?? 1;
   const limit = query.limit ?? 20;
 
   const where: Record<string, unknown> = {};
+  if (scopeUserId) {
+    where.AND = [selfScopeWhere(scopeUserId)];
+  }
   if (query.status) {
     where.status = query.status;
   }
@@ -187,10 +233,13 @@ export async function list(prisma: DbClient, query: ListReturnClaimsQuery) {
     };
   }
   if (query.technicianId) {
-    where.OR = [
-      { originalJob: { technicianId: query.technicianId } },
-      { reworkJob: { technicianId: query.technicianId } },
-    ];
+    const techFilter = {
+      OR: [
+        { originalJob: { technicianId: query.technicianId } },
+        { reworkJob: { technicianId: query.technicianId } },
+      ],
+    };
+    where.AND = [...((where.AND as unknown[]) ?? []), techFilter];
   }
 
   const [items, total] = await Promise.all([

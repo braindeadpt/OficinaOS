@@ -1208,6 +1208,8 @@
     "checkout_failed": "Pago fallido",
     "clear_cart": "Claro",
     "complete_sale": "Venta completa",
+    "change_due": "Cambio a devolver",
+    "no_parts_found": "Ninguna pieza coincide con la búsqueda",
     "custom_name": "Nombre del artículo",
     "custom_price": "Precio unitario",
     "decrease": "Disminuir cantidad",

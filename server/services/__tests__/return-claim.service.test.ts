@@ -237,9 +237,13 @@ describe("list", () => {
     expect(prisma.returnClaim.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          OR: [
-            { originalJob: { technicianId: "tech-1" } },
-            { reworkJob: { technicianId: "tech-1" } },
+          AND: [
+            {
+              OR: [
+                { originalJob: { technicianId: "tech-1" } },
+                { reworkJob: { technicianId: "tech-1" } },
+              ],
+            },
           ],
         }),
       })

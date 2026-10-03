@@ -4,6 +4,9 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Can } from "@/components/modules/can";
 import RestockHint from "@/components/pos/restock-hint";
+import { Button } from "@/components/ui/button";
+import { CardSkeleton } from "@/components/ui/skeleton";
+import { useDebounce } from "@/hooks/use-debounce";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
 import type { ApiError } from "@/lib/api";
 import { usePartsCatalogStore } from "@/stores/parts-catalog";
@@ -33,7 +36,7 @@ export default function PosPage() {
   const { parts, isLoading, fetchParts } = usePartsCatalogStore();
 
   const [search, setSearch] = useState("");
-  const [debounced, setDebounced] = useState("");
+  const debounced = useDebounce(search, 300);
   const [showCustomForm, setShowCustomForm] = useState(false);
   const [customName, setCustomName] = useState("");
   const [customPrice, setCustomPrice] = useState("");
@@ -54,16 +57,18 @@ export default function PosPage() {
   >([]);
 
   useEffect(() => {
-    const timer = setTimeout(() => setDebounced(search), 300);
-    return () => clearTimeout(timer);
-  }, [search]);
-
-  useEffect(() => {
     fetchParts({ isActive: true, search: debounced || undefined, limit: 20 });
   }, [debounced, fetchParts]);
 
   const paidSum = useMemo(
     () => payments.reduce((s, p) => s + p.amount, 0),
+    [payments]
+  );
+  const cashPaid = useMemo(
+    () =>
+      payments
+        .filter((p) => p.method === "CASH")
+        .reduce((s, p) => s + p.amount, 0),
     [payments]
   );
 
@@ -78,9 +83,15 @@ export default function PosPage() {
     () => Math.round((cartTotal - paidSum) * 100) / 100,
     [cartTotal, paidSum]
   );
+  // Overpayment is only valid when the excess can leave the till as change —
+  // i.e. it was tendered in cash. Card/transfer overpay stays blocked.
+  const changeDue = Math.max(0, Math.round((paidSum - cartTotal) * 100) / 100);
+  const canComplete =
+    cart.length > 0 &&
+    (remaining === 0 || (changeDue > 0 && changeDue <= cashPaid + 0.001));
 
   const handleAddPayment = useCallback(() => {
-    const amount = Number.parseFloat(payAmount);
+    const amount = Number.parseFloat(payAmount.replace(",", "."));
     if (Number.isNaN(amount) || amount <= 0) {
       return;
     }
@@ -99,13 +110,31 @@ export default function PosPage() {
   }, [payAmount, payMethod, payReference]);
 
   const handleCheckout = useCallback(async () => {
+    // window.open after `await` is popup-blocked — reserve the tab now.
+    const receiptTab = window.open("", "_blank");
     try {
-      const sale = await checkout(payments);
+      // When a cash customer overpays, the recorded payment is what was
+      // applied to the sale — the rest leaves the till as change.
+      const paymentsToSend = payments.map((p) => ({ ...p }));
+      let excess = changeDue;
+      for (let i = paymentsToSend.length - 1; i >= 0 && excess > 0; i--) {
+        const p = paymentsToSend[i];
+        if (p.method !== "CASH") {
+          continue;
+        }
+        const applied = Math.max(0, p.amount - excess);
+        excess = Math.max(0, excess - (p.amount - applied));
+        p.amount = Math.round(applied * 100) / 100;
+      }
+      const sale = await checkout(paymentsToSend.filter((p) => p.amount > 0));
       toast.success(t("pos.sale_completed", { code: sale.saleCode }));
       setShowCheckout(false);
       setPayments([]);
-      window.open(`/api/sales/${sale.id}/receipt`, "_blank");
+      if (receiptTab) {
+        receiptTab.location.href = `/api/sales/${sale.id}/receipt`;
+      }
     } catch (err: unknown) {
+      receiptTab?.close();
       const apiErr = err as ApiError & { message?: string };
       const code = (apiErr as { code?: string }).code;
       if (code === "INSUFFICIENT_STOCK") {
@@ -114,7 +143,7 @@ export default function PosPage() {
         toast.error(apiErr?.message ?? t("pos.checkout_failed"));
       }
     }
-  }, [checkout, payments, t]);
+  }, [checkout, payments, changeDue, t]);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
@@ -184,10 +213,18 @@ export default function PosPage() {
           </div>
 
           {isLoading && (
-            <div className="flex items-center justify-center py-8">
-              <span className="material-symbols-outlined animate-spin text-on-surface-variant">
-                progress_activity
-              </span>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {["a", "b", "c", "d", "e", "f"].map((k) => (
+                <CardSkeleton key={k} />
+              ))}
+            </div>
+          )}
+
+          {!isLoading && parts.length === 0 && (
+            <div className="mt-4 rounded-2xl bg-surface-container-low px-6 py-10 text-center">
+              <p className="font-body text-on-surface-variant text-sm">
+                {t("pos.no_parts_found")}
+              </p>
             </div>
           )}
 
@@ -241,7 +278,7 @@ export default function PosPage() {
                 <div className="flex items-center gap-1">
                   <button
                     aria-label={t("pos.decrease")}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface-container-highest text-on-surface"
+                    className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg bg-surface-container-highest text-on-surface"
                     onClick={() => updateQuantity(idx, line.quantity - 1)}
                     type="button"
                   >
@@ -257,7 +294,7 @@ export default function PosPage() {
                         ? t("pos.max_stock_reached")
                         : t("pos.increase")
                     }
-                    className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface-container-highest text-on-surface disabled:cursor-not-allowed disabled:opacity-30"
+                    className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg bg-surface-container-highest text-on-surface disabled:cursor-not-allowed disabled:opacity-30"
                     disabled={
                       line.stockQuantity !== null &&
                       line.quantity >= line.stockQuantity
@@ -270,7 +307,7 @@ export default function PosPage() {
                 </div>
                 <button
                   aria-label={t("pos.remove_line")}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg text-outline hover:bg-error/10 hover:text-error"
+                  className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-outline hover:bg-error/10 hover:text-error"
                   onClick={() => removeLine(idx)}
                   type="button"
                 >
@@ -362,13 +399,16 @@ export default function PosPage() {
               <button
                 className="rounded-xl bg-primary px-5 py-2 font-bold font-headline text-on-primary text-sm disabled:opacity-50"
                 disabled={
-                  !(customName.trim() && Number.parseFloat(customPrice) >= 0)
+                  !(
+                    customName.trim() &&
+                    Number.parseFloat(customPrice.replace(",", ".")) >= 0
+                  )
                 }
                 onClick={() => {
                   addCustomItem({
                     name: customName.trim(),
                     quantity: Number.parseInt(customQty, 10) || 1,
-                    unitPrice: Number.parseFloat(customPrice),
+                    unitPrice: Number.parseFloat(customPrice.replace(",", ".")),
                   });
                   setCustomName("");
                   setCustomPrice("");
@@ -484,29 +524,39 @@ export default function PosPage() {
                   {t("pos.remaining")}
                 </span>
                 <span
-                  className={`font-extrabold font-headline ${remaining === 0 ? "text-primary" : "text-error"}`}
+                  className={`font-extrabold font-headline ${remaining <= 0 ? "text-primary" : "text-error"}`}
                 >
-                  {fmt(remaining)}
+                  {fmt(Math.max(0, remaining))}
                 </span>
               </div>
+              {changeDue > 0 && (
+                <div className="mt-1 flex items-baseline justify-between">
+                  <span className="font-bold font-label text-on-surface-variant text-xs uppercase">
+                    {t("pos.change_due")}
+                  </span>
+                  <span className="font-extrabold font-headline text-on-surface">
+                    {fmt(changeDue)}
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-3 border-outline-variant border-t px-6 py-4">
-              <button
-                className="px-4 py-2 font-bold font-headline text-on-surface-variant text-sm"
+              <Button
                 onClick={() => setShowCheckout(false)}
                 type="button"
+                variant="secondary"
               >
                 {t("cancel")}
-              </button>
-              <button
-                className="rounded-xl bg-primary px-6 py-2 font-bold font-headline text-on-primary text-sm disabled:opacity-50"
-                disabled={isCheckingOut || remaining !== 0}
+              </Button>
+              <Button
+                disabled={!canComplete}
+                loading={isCheckingOut}
                 onClick={handleCheckout}
                 type="button"
               >
-                {isCheckingOut ? "..." : t("pos.complete_sale")}
-              </button>
+                {t("pos.complete_sale")}
+              </Button>
             </div>
           </div>
         </div>

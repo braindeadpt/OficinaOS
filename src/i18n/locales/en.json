@@ -1208,6 +1208,8 @@
     "checkout_failed": "Checkout failed",
     "clear_cart": "Clear",
     "complete_sale": "Complete sale",
+    "change_due": "Change due",
+    "no_parts_found": "No parts match your search",
     "custom_name": "Item name",
     "custom_price": "Unit price",
     "decrease": "Decrease quantity",

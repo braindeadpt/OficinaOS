@@ -20,12 +20,29 @@ import {
   triage,
   uploadPhoto,
 } from "../services/return-claim.service.js";
-import { getUserId } from "../utils/request.js";
+import { getRole, getUserId } from "../utils/request.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
 // biome-ignore lint/suspicious/useAwait: FastifyPluginAsync requires async
 export const returnClaimsRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", requirePermission({ returns: ["viewSelf"] }));
+
+  /** Users without returns:viewShop only see claims they opened or that
+   *  belong to jobs assigned to them — never refund/financial details of
+   *  the whole shop. */
+  async function selfScopeUserId(req: {
+    user?: unknown;
+  }): Promise<string | undefined> {
+    const canViewShop = await app.auth.api.userHasPermission({
+      body: {
+        role: getRole(req as Parameters<typeof getRole>[0]),
+        permissions: { returns: ["viewShop"] },
+      },
+    });
+    return canViewShop.success
+      ? undefined
+      : getUserId(req as Parameters<typeof getUserId>[0]);
+  }
 
   app.post(
     "/",
@@ -73,7 +90,8 @@ export const returnClaimsRoutes: FastifyPluginAsync = async (app) => {
           ),
         });
       }
-      const result = await listClaims(app.prisma, parsed.data);
+      const scopeUserId = await selfScopeUserId(req);
+      const result = await listClaims(app.prisma, parsed.data, scopeUserId);
       return reply.send(result);
     }
   );
@@ -93,7 +111,8 @@ export const returnClaimsRoutes: FastifyPluginAsync = async (app) => {
     },
     async (req, reply) => {
       const { id } = req.params as { id: string };
-      const claim = await getClaim(app.prisma, id);
+      const scopeUserId = await selfScopeUserId(req);
+      const claim = await getClaim(app.prisma, id, scopeUserId);
       if (!claim) {
         throw new AppError("RETURN_CLAIM_NOT_FOUND");
       }
