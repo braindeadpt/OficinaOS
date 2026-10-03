@@ -1,7 +1,10 @@
 import type { ReactNode } from "react";
+import { Icon } from "@/components/ui/icon";
+import { useCountUp } from "@/hooks/use-count-up";
 
 interface MetricCardProps {
   children?: ReactNode;
+  className?: string;
   detail: string;
   icon: string;
   iconColor?: string;
@@ -12,28 +15,46 @@ interface MetricCardProps {
   value: string;
 }
 
+function AnimatedValue({ value }: { value: string }) {
+  const numeric = value.trim() === "" ? Number.NaN : Number(value);
+  const animated = useCountUp(Number.isFinite(numeric) ? numeric : 0);
+  if (!Number.isFinite(numeric)) {
+    return <>{value}</>;
+  }
+  const decimals = value.includes(".") ? value.split(".")[1].length : 0;
+  return <>{animated.toFixed(decimals)}</>;
+}
+
 export function MetricCard({
   label,
   value,
   unit,
   detail,
-  icon: _icon,
-  iconColor: _iconColor,
+  icon,
+  iconColor,
   labelTooltip,
   children,
+  className,
   onClick,
 }: MetricCardProps) {
   const inner = (
     <>
-      <p
-        className="font-medium text-on-surface-variant text-xs uppercase tracking-wide"
-        title={labelTooltip}
-      >
-        {label}
-      </p>
+      <div className="flex items-start justify-between gap-3">
+        <p
+          className="font-medium text-on-surface-variant text-xs uppercase tracking-wide"
+          title={labelTooltip}
+        >
+          {label}
+        </p>
+        <Icon
+          className={`mt-0.5 shrink-0 ${iconColor ?? "text-on-surface-variant/40"}`}
+          name={icon}
+          size="md"
+        />
+      </div>
       <div className="mt-1 flex items-baseline gap-2">
-        <span className="font-extrabold font-headline text-4xl text-on-surface">
-          {value}
+        <span className="font-extrabold font-headline text-4xl text-on-surface tabular-nums">
+          <AnimatedValue value={value} />
         </span>
         {unit && (
           <span className="font-medium text-on-surface-variant text-sm">
@@ -50,7 +71,7 @@ export function MetricCard({
     onClick
       ? "cursor-pointer hover:bg-surface-container-high active:scale-[0.98] w-full text-start"
       : ""
-  }`;
+  } ${className ?? ""}`;
 
   if (onClick) {
     return (
@@ -60,11 +81,7 @@ export function MetricCard({
     );
   }
 
-  return (
-    <div className={sharedClass} role="status">
-      {inner}
-    </div>
-  );
+  return <div className={sharedClass}>{inner}</div>;
 }
 
 export default MetricCard;

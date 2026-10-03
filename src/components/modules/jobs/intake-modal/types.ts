@@ -35,6 +35,7 @@ export interface IntakeFormData {
   photos: File[];
   repairs: SelectedRepair[];
   reportedProblem: string;
+  signature: string | null;
 }
 
 export const MAX_PHOTOS = 5;
@@ -79,6 +80,7 @@ export const INITIAL_FORM: IntakeFormData = {
   photos: [],
   repairs: [],
   reportedProblem: "",
+  signature: null,
 };
 
 export interface IntakeModalProps {

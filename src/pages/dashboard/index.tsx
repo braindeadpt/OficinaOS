@@ -172,7 +172,11 @@ function MetricsGrid({
   );
 
   return (
-    <div className="mb-10 grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6 lg:grid-cols-4">
+    <div
+      className={`mb-10 grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6 lg:grid-cols-4 ${
+        canViewReturns ? "xl:grid-cols-5" : ""
+      }`}
+    >
       <MetricCard
         detail={t("dashboard_page.since_8am", { count: activeJobs })}
         icon="precision_manufacturing"
@@ -189,7 +193,9 @@ function MetricsGrid({
       </MetricCard>
 
       <MetricCard
-        detail={t("completed_today")}
+        detail={t("dashboard_page.pipeline_share", {
+          total: pipelineTotal,
+        })}
         icon="check_circle"
         iconColor="text-on-secondary-container"
         label={t("completed_today")}
@@ -268,6 +274,7 @@ function MetricsGrid({
 
       {canViewReturns && (
         <MetricCard
+          className="sm:col-span-2 xl:col-span-1"
           detail={t("returns_dashboard_open_card_subtitle")}
           icon="undo"
           label={t("returns_dashboard_open_card_title")}

@@ -496,7 +496,8 @@
     "vs_last_month_short": "Maman",
     "active_jobs_tooltip": "Emplois actuellement en attente, en réparation, en attente ou en attente de pièces",
     "revenue_tooltip": "Revenu total des tâches livrées ce mois-ci par rapport au mois précédent",
-    "warranty_cost_inline": "Coût de la garantie ce mois-ci : {{amount}}"
+    "warranty_cost_inline": "Coût de la garantie ce mois-ci : {{amount}}",
+    "pipeline_share": "sur {{total}} dans le pipeline"
   },
   "date": "Date",
   "date_short": "{{val, date}}",
@@ -907,7 +908,12 @@
     "check_audio": "Audio/haut-parleurs",
     "check_charging": "Frais",
     "check_ok": "D'ACCORD",
-    "check_fail": "Échec"
+    "check_fail": "Échec",
+    "terms_title": "Conditions de réparation",
+    "terms_text": "Je déclare que l'appareil décrit dans ce formulaire m'appartient, j'autorise sa réparation dans les conditions convenues et j'accepte les conditions de service de la boutique, incluant le devis indiqué et la responsabilité de récupérer l'appareil sous 90 jours.",
+    "signature_captured": "Signature capturée",
+    "whatsapp_consent": "Le client autorise les notifications WhatsApp",
+    "whatsapp_consent_hint": "Mises à jour de l'état de réparation envoyées automatiquement. "
   },
   "intake_wizard_back": "Retour",
   "intake_wizard_next": "Suivant",
@@ -2113,5 +2119,9 @@
   "never": "jamais",
   "jobs_detail_unlock_code": "Code de déverrouillage",
   "jobs_detail_accessories": "Accessoires",
-  "jobs_detail_checklist": "Contrôle d'admission"
+  "jobs_detail_checklist": "Contrôle d'admission",
+  "signature_clear": "Clair",
+  "jobs_deliver_balance_warning": "Attention : {{amount}} € restent à payer. ",
+  "jobs_deliver_anyway": "Livrer quand même",
+  "jobs_detail_signature": "Signature"
 }

@@ -124,10 +124,31 @@ export default function JobDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <span className="material-symbols-outlined animate-spin text-2xl text-on-surface-variant">
-          progress_activity
-        </span>
+      <div className="mx-auto max-w-3xl animate-pulse px-4 py-6 sm:px-6 lg:max-w-4xl">
+        <div className="h-5 w-32 rounded bg-surface-container-high" />
+        <div className="mt-6 rounded-2xl bg-surface-container-high p-6 sm:p-8">
+          <div className="h-3 w-24 rounded bg-surface-container-highest" />
+          <div className="mt-2 h-9 w-64 rounded-lg bg-surface-container-highest" />
+          <div className="mt-2 h-4 w-48 rounded bg-surface-container-highest" />
+          <div className="mt-6 grid grid-cols-2 gap-x-8 gap-y-5 sm:grid-cols-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i}>
+                <div className="h-3 w-16 rounded bg-surface-container-highest" />
+                <div className="mt-1.5 h-6 w-24 rounded bg-surface-container-highest" />
+              </div>
+            ))}
+          </div>
+          <div className="mt-6 flex gap-3">
+            <div className="h-11 w-32 rounded-xl bg-surface-container-highest" />
+            <div className="h-11 w-32 rounded-xl bg-surface-container-highest" />
+            <div className="h-11 w-24 rounded-xl bg-surface-container-highest" />
+          </div>
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="h-28 rounded-2xl bg-surface-container" />
+          <div className="h-28 rounded-2xl bg-surface-container" />
+        </div>
+        <div className="mt-8 h-48 rounded-2xl bg-surface-container" />
       </div>
     );
   }
@@ -257,6 +278,20 @@ export default function JobDetailPage() {
               <p className="mt-0.5 font-bold font-headline text-lg text-on-surface tracking-wider">
                 {job.deviceUnlockCode}
               </p>
+            </div>
+          )}
+          {job.intakeSignatureDataUrl && (
+            <div>
+              <p className="font-label text-[11px] text-on-surface-variant uppercase tracking-widest">
+                {t("jobs_detail_signature")}
+              </p>
+              <img
+                alt={t("jobs_detail_signature")}
+                className="mt-1 h-10 max-w-[140px] rounded bg-surface-container-lowest object-contain ring-1 ring-outline-variant"
+                height={40}
+                src={job.intakeSignatureDataUrl}
+                width={140}
+              />
             </div>
           )}
         </div>

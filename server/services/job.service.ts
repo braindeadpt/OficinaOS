@@ -323,6 +323,7 @@ export async function create(
         conditionNotes: input.conditionNotes ?? null,
         deviceUnlockCode: input.deviceUnlockCode ?? null,
         intakeChecklist: input.intakeChecklist ?? undefined,
+        intakeSignatureDataUrl: input.intakeSignatureDataUrl ?? null,
         createdBy: { connect: { id: userId } },
         customer: { connect: { id: customer.id } },
         imei: input.imei ? normalizeImei(input.imei) : null,

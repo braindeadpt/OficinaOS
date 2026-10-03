@@ -34,6 +34,10 @@ export default function StatusPopover({ job, onChanged }: StatusPopoverProps) {
   const [focusedIndex, setFocusedIndex] = useState(0);
 
   const availableStatuses = JOB_STATUS_FLOW[job.status] ?? [];
+  const balanceDue = job.balanceDue ?? 0;
+  // DELIVERED goes through the pending panel too — as an outstanding-balance
+  // warning instead of a reason prompt.
+  const balanceWarning = pending === "DELIVERED" && balanceDue > 0;
 
   useEffect(() => {
     if (!open) {
@@ -53,7 +57,10 @@ export default function StatusPopover({ job, onChanged }: StatusPopoverProps) {
 
   const handleSelect = useCallback(
     (status: JobStatusType) => {
-      if (REQUIRES_REASON.includes(status)) {
+      if (
+        REQUIRES_REASON.includes(status) ||
+        (status === "DELIVERED" && balanceDue > 0)
+      ) {
         setPending(status);
         setReason("");
         setError(null);
@@ -89,7 +96,7 @@ export default function StatusPopover({ job, onChanged }: StatusPopoverProps) {
         })
         .finally(() => setLoading(false));
     },
-    [job.id, job.status, transitionStatus, onChanged, t]
+    [job.id, job.status, balanceDue, transitionStatus, onChanged, t]
   );
 
   const handleConfirmReason = useCallback(async () => {
@@ -223,20 +230,34 @@ export default function StatusPopover({ job, onChanged }: StatusPopoverProps) {
                 </span>
                 <StatusBadge status={pending} />
               </div>
+              {balanceWarning && (
+                <div className="flex items-start gap-2 rounded-xl bg-error-container/50 px-3 py-2.5">
+                  <span className="material-symbols-outlined text-base text-on-error-container">
+                    warning
+                  </span>
+                  <p className="font-body text-on-error-container text-xs leading-snug">
+                    {t("jobs_deliver_balance_warning", {
+                      amount: balanceDue.toFixed(2),
+                    })}
+                  </p>
+                </div>
+              )}
               <label className="sr-only" htmlFor="status-reason">
                 {t("jobs_status_change_reason_label")}
               </label>
-              <textarea
-                aria-describedby={error ? "status-reason-error" : undefined}
-                aria-invalid={!!error}
-                className="w-full resize-none rounded-xl bg-surface-container-highest px-4 py-3 font-body text-on-surface text-sm placeholder:text-outline"
-                disabled={loading}
-                id="status-reason"
-                onChange={(e) => setReason(e.target.value)}
-                placeholder={t("jobs_status_change_reason_placeholder")}
-                rows={2}
-                value={reason}
-              />
+              {!balanceWarning && (
+                <textarea
+                  aria-describedby={error ? "status-reason-error" : undefined}
+                  aria-invalid={!!error}
+                  className="w-full resize-none rounded-xl bg-surface-container-highest px-4 py-3 font-body text-on-surface text-sm placeholder:text-outline"
+                  disabled={loading}
+                  id="status-reason"
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder={t("jobs_status_change_reason_placeholder")}
+                  rows={2}
+                  value={reason}
+                />
+              )}
               {error && (
                 <p
                   className="font-body text-error text-xs"
@@ -266,7 +287,9 @@ export default function StatusPopover({ job, onChanged }: StatusPopoverProps) {
                       progress_activity
                     </span>
                   )}
-                  {t("jobs_status_change_confirm")}
+                  {balanceWarning
+                    ? t("jobs_deliver_anyway")
+                    : t("jobs_status_change_confirm")}
                 </button>
               </div>
             </div>

@@ -36,6 +36,12 @@ export const createJobSchema = z.object({
   intakeChecklist: z
     .record(z.string(), z.enum(["ok", "fail"]).nullable())
     .optional(),
+  // Signature canvas PNG data URL — ~50-150KB typical, cap well above.
+  intakeSignatureDataUrl: z
+    .string()
+    .startsWith("data:image/")
+    .max(600_000)
+    .optional(),
   estimatedCost: z
     .number()
     .min(0, { error: "validations.valid_cost" })

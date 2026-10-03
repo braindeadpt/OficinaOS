@@ -37,6 +37,7 @@ function buildJobPayload(data: IntakeFormData) {
     accessories: data.accessories.length > 0 ? data.accessories : undefined,
     intakeChecklist:
       Object.keys(data.checklist).length > 0 ? data.checklist : undefined,
+    intakeSignatureDataUrl: data.signature ?? undefined,
     estimatedCost: Number.parseFloat(data.estimatedCost) || 0,
     estimatedDate: data.estimatedDelivery || undefined,
     depositAmount: data.deposit ? Number.parseFloat(data.deposit) : undefined,
@@ -114,7 +115,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           <UpdateBanner />
           {/* Page crashes stay inside <main> — keying by pathname also
               auto-recovers the boundary on navigation. */}
-          <ChunkErrorBoundary key={pathname}>{children}</ChunkErrorBoundary>
+          <ChunkErrorBoundary key={pathname}>
+            <div className="animate-fade-slide-up">{children}</div>
+          </ChunkErrorBoundary>
         </main>
         <BottomNav />
         <IntakeModal

@@ -68,6 +68,7 @@ interface JobsState {
     deviceUnlockCode?: string;
     accessories?: string[];
     intakeChecklist?: Record<string, "ok" | "fail" | null>;
+    intakeSignatureDataUrl?: string;
     estimatedCost: number;
     estimatedDate?: string;
     depositAmount?: number;

@@ -496,7 +496,8 @@
     "vs_last_month_short": "Mãe",
     "active_jobs_tooltip": "Reparações atualmente em admissão, em reparação, em espera ou a aguardar peças",
     "revenue_tooltip": "Receita total de reparações entregues neste mês face ao mês anterior",
-    "warranty_cost_inline": "Custo da garantia este mês: {{amount}}"
+    "warranty_cost_inline": "Custo da garantia este mês: {{amount}}",
+    "pipeline_share": "de {{total}} no pipeline"
   },
   "date": "Data",
   "date_short": "{{val, date}}",
@@ -907,7 +908,12 @@
     "check_audio": "Áudio / Colunas",
     "check_charging": "Carrega",
     "check_ok": "OK",
-    "check_fail": "Falha"
+    "check_fail": "Falha",
+    "terms_title": "Termos de reparação",
+    "terms_text": "Declaro que o equipamento descrito nesta ficha me pertence, autorizo a sua reparação nas condições acordadas e aceito os termos de serviço da loja, incluindo o orçamento indicado e a obrigação de levantar o equipamento no prazo de 90 dias.",
+    "signature_captured": "Assinatura registada",
+    "whatsapp_consent": "O cliente autoriza notificações por WhatsApp",
+    "whatsapp_consent_hint": "Estados da reparação enviados automaticamente. Sem publicidade."
   },
   "intake_wizard_back": "Costas",
   "intake_wizard_next": "Seguinte",
@@ -2113,5 +2119,9 @@
   "never": "nunca",
   "jobs_detail_unlock_code": "Código de desbloqueio",
   "jobs_detail_accessories": "Acessórios",
-  "jobs_detail_checklist": "Verificação à entrada"
+  "jobs_detail_checklist": "Verificação à entrada",
+  "signature_clear": "Limpar",
+  "jobs_deliver_balance_warning": "Atenção: faltam {{amount}}€. Confirme que o cliente vai liquidar o valor agora.",
+  "jobs_deliver_anyway": "Entregar mesmo assim",
+  "jobs_detail_signature": "Assinatura"
 }

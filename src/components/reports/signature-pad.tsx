@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 
 interface SignaturePadProps {
   onChange: (dataUrl: string | null) => void;
@@ -10,6 +11,7 @@ interface SignaturePadProps {
  * output is a PNG data URL stored on the cash session at close time.
  */
 export default function SignaturePad({ onChange }: SignaturePadProps) {
+  const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
   const lastRef = useRef<{ x: number; y: number } | null>(null);
@@ -107,7 +109,7 @@ export default function SignaturePad({ onChange }: SignaturePadProps) {
         onClick={clear}
         type="button"
       >
-        clear
+        {t("signature_clear")}
       </button>
     </div>
   );

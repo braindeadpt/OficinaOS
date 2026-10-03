@@ -64,6 +64,7 @@ interface ReceiptStrings {
   sale: string;
   scanQr: string;
   servedBy: string;
+  termsSigned: string;
   total: string;
   warranty: string;
   warrantyDays: string;
@@ -93,6 +94,8 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     sale: "Venda",
     scanQr: "Leia o código QR para acompanhar a sua reparação",
     servedBy: "Atendido por",
+    termsSigned:
+      "Declaro que o equipamento descrito é meu e aceito os termos de reparação da loja.",
     total: "Total",
     warranty: "Garantia",
     warrantyDays: "{days} dias",
@@ -120,6 +123,8 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     sale: "Sale",
     scanQr: "Scan QR to track your repair",
     servedBy: "Served by",
+    termsSigned:
+      "I declare the described device is mine and accept the shop's repair terms.",
     total: "Total",
     warranty: "Warranty",
     warrantyDays: "{days} days",
@@ -147,6 +152,8 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     sale: "Vente",
     scanQr: "Scannez le QR pour suivre votre réparation",
     servedBy: "Servi par",
+    termsSigned:
+      "Je déclare que l'appareil décrit m'appartient et j'accepte les conditions de réparation.",
     total: "Total",
     warranty: "Garantie",
     warrantyDays: "{days} jours",
@@ -174,6 +181,8 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     sale: "Venta",
     scanQr: "Escanea el QR para seguir tu reparación",
     servedBy: "Atendido por",
+    termsSigned:
+      "Declaro que el dispositivo descrito es mío y acepto las condiciones de reparación.",
     total: "Total",
     warranty: "Garantía",
     warrantyDays: "{days} días",
@@ -233,6 +242,20 @@ function warrantySectionHtml(
   return `<div class="sep"></div><p style="text-align:left"><strong>${s.warranty}:</strong></p><table>${rows}</table>`;
 }
 
+/**
+ * Signature is already a data:image/... URL — the zod create schema enforces
+ * the prefix, and we re-check here before embedding it verbatim.
+ */
+function signatureSectionHtml(
+  dataUrl: string | null | undefined,
+  termsSigned: string
+): string {
+  if (!dataUrl?.startsWith("data:image/")) {
+    return "";
+  }
+  return `<p style="text-align:left;font-size:10px;color:#555">${esc(termsSigned)}</p><div style="text-align:center"><img src="${dataUrl}" style="max-width:200px;max-height:60px" alt="signature" /></div><div class="sep"></div>`;
+}
+
 export async function renderReceiptHtml(
   prisma: DbClient,
   job: {
@@ -244,6 +267,7 @@ export async function renderReceiptHtml(
     reportedProblem: string;
     estimatedCost: number | { toNumber: () => number };
     depositAmount?: number | { toNumber: () => number } | null;
+    intakeSignatureDataUrl?: string | null;
     createdAt: Date;
     payments?: Array<{
       amount: number | { toNumber: () => number };
@@ -316,6 +340,10 @@ export async function renderReceiptHtml(
     : "";
 
   const methodLabel = (m: string) => esc(s.paymentMethods[m] ?? m);
+  const signatureHtml = signatureSectionHtml(
+    job.intakeSignatureDataUrl,
+    s.termsSigned
+  );
 
   return `<!doctype html>
 <html lang="${options?.locale ?? "pt"}">
@@ -366,6 +394,7 @@ ${
       }<div class="sep"></div>`
 }
 ${warrantyHtml}
+${signatureHtml}
 ${qrImg}
 <p style="text-align:center;font-size:10px;color:#555">${s.scanQr}</p>
 ${footerHtml}

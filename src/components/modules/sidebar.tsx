@@ -60,11 +60,11 @@ export default function Sidebar() {
         </div>
       </div>
 
-      <nav className="flex-1 space-y-1.5 overflow-y-auto overscroll-contain">
+      <nav className="flex-1 space-y-1 overflow-y-auto overscroll-contain">
         {navItems.map(({ icon, labelKey, to }) => (
           <NavLink
             className={({ isActive }) =>
-              `flex items-center gap-3 rounded-lg px-3 py-3 transition-all duration-200 ${
+              `flex items-center gap-3 rounded-lg px-3 py-2.5 transition-all duration-200 ${
                 isActive
                   ? "translate-x-1 bg-surface-container-lowest font-semibold text-primary shadow-sm rtl:-translate-x-1"
                   : "text-on-surface-variant hover:bg-surface-container hover:text-primary"

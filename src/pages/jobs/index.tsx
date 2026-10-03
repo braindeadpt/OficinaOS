@@ -11,6 +11,8 @@ import { jobToRow, STATUS_GROUPS } from "@/components/modules/jobs/jobs-shared";
 import JobsTable from "@/components/modules/jobs/jobs-table";
 import JobMobileCard from "@/components/modules/jobs/mobile-card";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { TableSkeleton } from "@/components/ui/skeleton";
 import { exportJobsPdf } from "@/lib/export-pdf";
 import { useJobsStore } from "@/stores/jobs";
 import { useUiStore } from "@/stores/ui";
@@ -122,11 +124,13 @@ export default function JobsPage() {
 
   if (isLoadingJobs && jobs.length === 0) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <span className="material-symbols-outlined animate-spin text-4xl text-primary">
-          progress_activity
-        </span>
-      </div>
+      <>
+        <div className="mb-6">
+          <div className="h-8 w-56 animate-pulse rounded-lg bg-surface-container-high" />
+          <div className="mt-2 h-5 w-72 animate-pulse rounded-lg bg-surface-container-high" />
+        </div>
+        <TableSkeleton columns={6} rows={8} />
+      </>
     );
   }
 
@@ -218,46 +222,39 @@ export default function JobsPage() {
         </div>
 
         {filteredJobs.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16">
-            <span className="material-symbols-outlined mb-4 text-5xl text-on-surface-variant">
-              search_off
-            </span>
-            <p className="font-bold font-headline text-on-surface-variant text-sm">
-              {t("no_jobs_found")}
-            </p>
-            <p className="mt-1 font-body text-on-surface-variant text-xs">
-              {t("no_jobs_found_desc")}
-              {(searchQuery ||
-                groupFilter !== "ALL" ||
-                statusFilter !== "ALL") && (
-                <span className="mt-1 block font-medium text-primary">
-                  {t("active_filters_summary", {
+          <EmptyState
+            action={
+              <>
+                <Button
+                  className="min-h-11"
+                  onClick={clearFilters}
+                  size="sm"
+                  variant="ghost"
+                >
+                  {t("clear_filters")}
+                </Button>
+                <Button
+                  className="min-h-11"
+                  onClick={() => openIntakeModal()}
+                  size="sm"
+                >
+                  {t("new_checkin")}
+                </Button>
+              </>
+            }
+            description={`${t("no_jobs_found_desc")}${
+              searchQuery || groupFilter !== "ALL" || statusFilter !== "ALL"
+                ? ` ${t("active_filters_summary", {
                     group: groupFilter === "ALL" ? "" : t(groupFilter),
                     search: searchQuery ?? "",
                     status:
                       statusFilter === "ALL" ? "" : t(`status.${statusFilter}`),
-                  })}
-                </span>
-              )}
-            </p>
-            <div className="mt-5 flex flex-wrap justify-center gap-3">
-              <Button
-                className="min-h-11"
-                onClick={clearFilters}
-                size="sm"
-                variant="ghost"
-              >
-                {t("clear_filters")}
-              </Button>
-              <Button
-                className="min-h-11"
-                onClick={() => openIntakeModal()}
-                size="sm"
-              >
-                {t("new_checkin")}
-              </Button>
-            </div>
-          </div>
+                  })}`
+                : ""
+            }`}
+            icon="search_off"
+            title={t("no_jobs_found")}
+          />
         )}
       </section>
 

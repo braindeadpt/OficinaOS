@@ -442,7 +442,7 @@ export default function LoginPage() {
 
       <footer className="flex shrink-0 items-center justify-between border-outline-variant/30 border-t px-4 py-3 pb-[env(safe-area-inset-bottom,16px)] sm:px-6 lg:px-8">
         <span className="font-label text-on-surface-variant/40 text-xs">
-          {t("auth_copyright")}
+          {t("auth_copyright", { year: new Date().getFullYear() })}
         </span>
         <span className="flex items-center gap-1.5 font-label text-on-surface-variant/40 text-xs">
           <span className="h-1.5 w-1.5 rounded-full bg-success" />

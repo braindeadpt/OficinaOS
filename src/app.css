@@ -67,6 +67,10 @@
 
   /* "Ambient Float" — DESIGN.md §4. Tinted with primary, never pure gray. */
   --shadow-premium: 0 8px 40px rgb(0 64 161 / 0.06);
+
+  /* Motion vocabulary — entrances are a soft rise, never a bounce. */
+  --animate-fade-slide-up: fadeSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-fade-in: fadeIn 0.25s ease-out both;
 }
 
 .material-symbols-outlined {
@@ -172,10 +176,20 @@ h3,
   animation: typingDot 1.4s ease-in-out 0.4s infinite;
 }
 
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-spin,
   .animate-pulse,
   .animate-fade-slide-up,
+  .animate-fade-in,
   .typing-dot {
     animation: none;
   }

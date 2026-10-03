@@ -403,7 +403,10 @@ model Job {
   accessories      String[] @default([])
   // Intake functional checklist: {key: "ok"|"fail"|null} — null = not tested.
   intakeChecklist  Json?
-  status           JobStatus @default(INTAKE)
+  // Customer signature captured at intake (PNG data URL) — printed on the
+  // receipt as proof the customer accepted the repair terms.
+  intakeSignatureDataUrl String? @db.Text
+  status                 JobStatus @default(INTAKE)
 
   estimatedCost Decimal  @db.Decimal(10, 2)
   depositAmount Decimal? @db.Decimal(10, 2)

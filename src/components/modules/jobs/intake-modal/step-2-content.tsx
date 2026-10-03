@@ -1,3 +1,4 @@
+import SignaturePad from "@/components/reports/signature-pad";
 import AccessoriesPicker from "./accessories-picker";
 import FunctionalChecklist from "./functional-checklist";
 import {
@@ -142,6 +143,24 @@ export default function Step2Content({
             type="date"
             value={form.estimatedDelivery}
           />
+        </div>
+
+        <div>
+          <span className={labelCls}>{t("intake.terms_title")}</span>
+          <p className="rounded-xl bg-surface-container-lowest p-4 font-body text-on-surface-variant text-xs leading-relaxed ring-1 ring-outline-variant">
+            {t("intake.terms_text")}
+          </p>
+          <div className="mt-3">
+            <SignaturePad onChange={(v) => update("signature", v)} />
+            {form.signature && (
+              <p className="ms-1 mt-1 flex items-center gap-1 font-label text-success text-xs">
+                <span className="material-symbols-outlined text-sm">
+                  check_circle
+                </span>
+                {t("intake.signature_captured")}
+              </p>
+            )}
+          </div>
         </div>
       </div>
     </section>

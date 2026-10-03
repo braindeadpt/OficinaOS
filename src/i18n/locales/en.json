@@ -496,7 +496,8 @@
     "vs_last_month_short": "MoM",
     "active_jobs_tooltip": "Jobs currently in intake, repair, on hold, or waiting for parts",
     "revenue_tooltip": "Total revenue from delivered jobs this month vs. the previous month",
-    "warranty_cost_inline": "Warranty cost this month: {{amount}}"
+    "warranty_cost_inline": "Warranty cost this month: {{amount}}",
+    "pipeline_share": "of {{total}} in the pipeline"
   },
   "date": "Date",
   "date_short": "{{val, date}}",
@@ -907,7 +908,12 @@
     "check_audio": "Audio / speakers",
     "check_charging": "Charges",
     "check_ok": "OK",
-    "check_fail": "Fails"
+    "check_fail": "Fails",
+    "terms_title": "Repair terms",
+    "terms_text": "I declare that the device described in this form belongs to me, I authorize its repair under the agreed conditions, and I accept the shop's terms of service, including the stated estimate and the responsibility of collecting the device within 90 days.",
+    "signature_captured": "Signature captured",
+    "whatsapp_consent": "Customer authorizes WhatsApp notifications",
+    "whatsapp_consent_hint": "Repair status updates sent automatically. No marketing."
   },
   "intake_wizard_back": "Back",
   "intake_wizard_next": "Next",
@@ -2113,5 +2119,9 @@
   "never": "never",
   "jobs_detail_unlock_code": "Unlock code",
   "jobs_detail_accessories": "Accessories",
-  "jobs_detail_checklist": "Intake check"
+  "jobs_detail_checklist": "Intake check",
+  "signature_clear": "Clear",
+  "jobs_deliver_balance_warning": "Warning: €{{amount}} still due. Confirm the customer will settle it now.",
+  "jobs_deliver_anyway": "Deliver anyway",
+  "jobs_detail_signature": "Signature"
 }

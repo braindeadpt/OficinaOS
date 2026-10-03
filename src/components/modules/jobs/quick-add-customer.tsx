@@ -8,6 +8,7 @@ export interface CustomerFormData {
   email: string;
   name: string;
   phone: string;
+  whatsappConsent: boolean;
 }
 
 export interface CreatedCustomerData extends CustomerFormData {
@@ -29,6 +30,7 @@ export default function QuickAddCustomer({
     email: "",
     name: "",
     phone: "",
+    whatsappConsent: false,
   });
   const [fieldErrors, setFieldErrors] = useState<
     Partial<Record<keyof CustomerFormData, string>>
@@ -68,12 +70,14 @@ export default function QuickAddCustomer({
         email: form.email,
         name: form.name,
         phone: form.phone,
+        whatsappConsent: form.whatsappConsent,
       });
       onAdd({
         email: customer.email ?? "",
         id: customer.id,
         name: customer.name,
         phone: customer.phone,
+        whatsappConsent: form.whatsappConsent,
       });
     } catch {
       // error is set in the hook
@@ -157,6 +161,24 @@ export default function QuickAddCustomer({
               />
             </Field>
           </div>
+
+          <label className="mt-6 flex cursor-pointer items-start gap-3 rounded-xl bg-surface-container-lowest p-4 ring-1 ring-outline-variant">
+            <input
+              checked={form.whatsappConsent}
+              className="mt-0.5 h-5 w-5 shrink-0 accent-primary"
+              disabled={isCreating}
+              onChange={(e) => update("whatsappConsent", e.target.checked)}
+              type="checkbox"
+            />
+            <span>
+              <span className="block font-bold font-label text-on-surface text-xs">
+                {t("intake.whatsapp_consent")}
+              </span>
+              <span className="mt-0.5 block font-body text-on-surface-variant text-xs">
+                {t("intake.whatsapp_consent_hint")}
+              </span>
+            </span>
+          </label>
 
           <div className="mt-8 flex justify-end">
             <button

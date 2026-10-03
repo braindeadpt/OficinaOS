@@ -864,7 +864,7 @@ function StatusView({
 
       <main className="flex flex-grow items-center justify-center px-4 py-12">
         <div className="w-full max-w-2xl">
-          <div className="overflow-hidden rounded-xl bg-surface-container-lowest shadow-sm">
+          <div className="animate-fade-slide-up overflow-hidden rounded-xl bg-surface-container-lowest shadow-sm">
             <div
               className={`flex items-center justify-between px-8 py-6 ${headerBg}`}
             >

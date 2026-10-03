@@ -9,12 +9,12 @@ vi.mock("@/components/ui/icon", () => ({
 }));
 
 describe("MetricCard", () => {
-  it("renders label, value, and detail", () => {
+  it("renders label, value, and detail", async () => {
     render(
       <MetricCard detail="all" icon="inventory_2" label="Parts" value="42" />
     );
     expect(screen.getByText("Parts")).toBeInTheDocument();
-    expect(screen.getByText("42")).toBeInTheDocument();
+    expect(await screen.findByText("42")).toBeInTheDocument();
     expect(screen.getByText("all")).toBeInTheDocument();
   });
 
