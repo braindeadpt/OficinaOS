@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { MetricCard } from "@/components/ui/metric-card";
+import { downloadCsv } from "@/lib/export-csv";
 import { useReportsStore } from "@/stores/reports";
 
 const STATUSES = [
@@ -28,6 +29,39 @@ export default function OrdersTab() {
       ? `from=${encodeURIComponent(customFrom)}&to=${encodeURIComponent(customTo)}`
       : `range=${range}`;
   const pdfUrl = `/api/reports/orders/pdf?${base}${status ? `&status=${status}` : ""}`;
+
+  const exportCsv = () => {
+    const data = useReportsStore.getState().orders.data;
+    if (!data) {
+      return;
+    }
+    const showMargin = data.summary.avgMargin !== undefined;
+    const fmtDate = (iso: string | undefined) =>
+      iso ? new Date(iso).toLocaleDateString() : "";
+    downloadCsv(
+      `orders-${new Date().toISOString().slice(0, 10)}.csv`,
+      [
+        t("reports.jobCode"),
+        t("reports.customer"),
+        t("reports.device"),
+        t("status_label"),
+        t("reports.orders_value"),
+        ...(showMargin ? [t("reports.margin")] : []),
+        t("reports.orders_date_in"),
+        t("reports.orders_date_out"),
+      ],
+      data.rows.map((r) => [
+        r.jobCode,
+        r.customerName,
+        r.deviceName,
+        t(`status.${r.status}`),
+        r.totalValue,
+        ...(showMargin ? [r.margin ?? ""] : []),
+        fmtDate(r.createdAt),
+        fmtDate(r.completedAt),
+      ])
+    );
+  };
 
   const header = (
     <div className="flex flex-wrap items-center gap-3">
@@ -58,6 +92,15 @@ export default function OrdersTab() {
         </span>
         {t("reports.orders_generate_pdf")}
       </a>
+      <button
+        className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-surface-container-high px-4 font-medium text-on-surface text-sm transition-colors hover:bg-surface-container-highest disabled:opacity-50"
+        disabled={!state.data || state.data.rows.length === 0}
+        onClick={exportCsv}
+        type="button"
+      >
+        <span className="material-symbols-outlined text-[18px]">download</span>
+        {t("reports.export_csv")}
+      </button>
     </div>
   );
 

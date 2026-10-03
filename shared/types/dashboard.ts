@@ -38,6 +38,7 @@ export interface OwnerDashboardDTO {
   completedToday: number;
   financialTrend: FinancialTrendPoint[];
   overdueJobs: OverdueJobDTO[];
+  pickupReady: PickupReadyDTO[];
   pipeline: Record<JobStatus, number>;
   revenueChangePct: number;
   revenuePrevMonth: number;

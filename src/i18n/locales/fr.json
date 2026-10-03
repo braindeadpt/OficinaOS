@@ -497,7 +497,10 @@
     "active_jobs_tooltip": "Emplois actuellement en attente, en réparation, en attente ou en attente de pièces",
     "revenue_tooltip": "Revenu total des tâches livrées ce mois-ci par rapport au mois précédent",
     "warranty_cost_inline": "Coût de la garantie ce mois-ci : {{amount}}",
-    "pipeline_share": "sur {{total}} dans le pipeline"
+    "pipeline_share": "sur {{total}} dans le pipeline",
+    "ready_for_pickup": "Prêt pour le ramassage",
+    "pickup_empty": "Aucune réparation en attente de collecte",
+    "ready_ago": "prêt {{days}}j"
   },
   "date": "Date",
   "date_short": "{{val, date}}",
@@ -1437,6 +1440,7 @@
     "orders": "Ordres",
     "orders_all_statuses": "Tous les statuts",
     "orders_generate_pdf": "Générer un PDF",
+    "export_csv": "Exporter au format CSV",
     "orders_total": "Total des commandes",
     "orders_total_value": "Valeur totale",
     "orders_avg": "Moyenne par commande",

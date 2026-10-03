@@ -729,6 +729,93 @@ async function computeByRepairType(
     .slice(0, 10);
 }
 
+async function computeByTechnician(
+  db: DbClient,
+  claimRangeFilter: Record<string, unknown>,
+  range: DateRange
+): Promise<ReturnsReportDTO["byTechnician"]> {
+  const [claims, deliveredGroups] = await Promise.all([
+    db.returnClaim.findMany({
+      where: claimRangeFilter,
+      select: {
+        faultCategory: true,
+        originalJob: {
+          select: {
+            technicianId: true,
+            technician: { select: { name: true, username: true } },
+          },
+        },
+      },
+    }),
+    db.job.groupBy({
+      by: ["technicianId"],
+      where: {
+        status: "DELIVERED",
+        technicianId: { not: null },
+        updatedAt: { gte: range.start, lt: range.end },
+      },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const deliveredMap = new Map(
+    deliveredGroups
+      .filter((d) => d.technicianId !== null)
+      .map((d) => [
+        d.technicianId as string,
+        typeof d._count === "object" ? (d._count._all ?? 0) : 0,
+      ])
+  );
+
+  const techMap = new Map<
+    string,
+    { count: number; faults: Map<FaultCategory, number>; name: string }
+  >();
+  for (const c of claims) {
+    const techId = c.originalJob.technicianId;
+    if (!techId) {
+      continue;
+    }
+    let entry = techMap.get(techId);
+    if (!entry) {
+      entry = {
+        count: 0,
+        faults: new Map(),
+        name:
+          c.originalJob.technician?.name ||
+          c.originalJob.technician?.username ||
+          "—",
+      };
+      techMap.set(techId, entry);
+    }
+    entry.count += 1;
+    if (c.faultCategory) {
+      entry.faults.set(
+        c.faultCategory,
+        (entry.faults.get(c.faultCategory) ?? 0) + 1
+      );
+    }
+  }
+
+  return [...techMap.entries()]
+    .map(([technicianId, e]) => {
+      const jobsDelivered = deliveredMap.get(technicianId) ?? 0;
+      const dominant = [...e.faults.entries()].sort((a, b) => b[1] - a[1])[0];
+      return {
+        claimsCount: e.count,
+        dominantFault: dominant?.[0],
+        jobsDelivered,
+        returnRate:
+          jobsDelivered > 0
+            ? Math.round((e.count / jobsDelivered) * 1000) / 10
+            : 0,
+        technicianId,
+        technicianName: e.name,
+      };
+    })
+    .sort((a, b) => b.claimsCount - a.claimsCount);
+}
+
 export async function returnsReport(
   prisma: PrismaClient,
   scope: Scope,
@@ -792,7 +879,10 @@ export async function returnsReport(
     ReturnsReportDTO["byRepairType"],
     ReturnsReportDTO["byTechnician"],
   ] = includeShopWide
-    ? [await computeByRepairType(db, claimRangeFilter), []]
+    ? [
+        await computeByRepairType(db, claimRangeFilter),
+        await computeByTechnician(db, claimRangeFilter, range),
+      ]
     : [[], []];
 
   const ttrDistribution: ReturnsReportDTO["ttrDistribution"] = (

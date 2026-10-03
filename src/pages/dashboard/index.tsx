@@ -6,6 +6,7 @@ import AiCallout from "@/components/modules/dashboard/ai-callout";
 import FinancialTrend from "@/components/modules/dashboard/financial-trend";
 import JobPipeline from "@/components/modules/dashboard/job-pipeline";
 import OverdueJobs from "@/components/modules/dashboard/overdue-jobs";
+import ReadyForPickup from "@/components/modules/dashboard/ready-for-pickup";
 import MetricCard from "@/components/ui/metric-card";
 import { useCan } from "@/hooks/use-can";
 import api from "@/lib/api";
@@ -347,7 +348,7 @@ function DashboardDataGrid({
         {isAiEnabled && <AiCallout insight={insight} />}
       </div>
 
-      <div className="md:col-span-12 lg:col-span-3">
+      <div className="space-y-6 md:col-span-12 lg:col-span-3">
         <OverdueJobs
           jobs={data.overdueJobs.map((j) => ({
             device: j.device,
@@ -370,6 +371,7 @@ function DashboardDataGrid({
             }),
           }))}
         />
+        <ReadyForPickup items={data.pickupReady} />
       </div>
     </div>
   );

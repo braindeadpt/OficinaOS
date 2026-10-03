@@ -9,6 +9,7 @@ import ActiveRepairsQueue from "@/components/modules/dashboard/active-repairs-qu
 import PriorityAlertsPanel from "@/components/modules/dashboard/priority-alerts-panel";
 import QuickIntakeForm from "@/components/modules/dashboard/quick-intake-form";
 import QuickStatsChips from "@/components/modules/dashboard/quick-stats-chips";
+import ReadyForPickup from "@/components/modules/dashboard/ready-for-pickup";
 import TodayOverview from "@/components/modules/dashboard/today-overview";
 import WaitingCustomers from "@/components/modules/dashboard/waiting-customers";
 import { formatTimeAgo } from "@/lib/format-time-ago";
@@ -227,6 +228,7 @@ export default function FrontDeskPage() {
 
         <div className="flex flex-col gap-8 md:col-span-12 lg:col-span-3">
           <PriorityAlertsPanel alerts={priorityAlerts} />
+          <ReadyForPickup items={frontDeskData?.pickupReady ?? []} />
           <WaitingCustomers customers={waitingCustomers} />
           <QuickStatsChips
             stats={[

@@ -50,6 +50,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
         trend,
         overdue,
         warranty,
+        ready,
       ] = await Promise.all([
         pipelineCounts(app.prisma, scope),
         activeJobsCount(app.prisma, scope),
@@ -58,6 +59,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
         financialTrend(app.prisma, scope, 7),
         overdueJobs(app.prisma, scope, 10),
         warrantyReturnsOpen(app.prisma, scope, 5),
+        pickupReady(app.prisma, scope, 10),
       ]);
       return {
         pipeline,
@@ -71,6 +73,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
         avgProfitMarginChange: comparison.avgProfitMarginChange,
         financialTrend: trend,
         overdueJobs: overdue,
+        pickupReady: ready,
         warrantyReturns: warranty,
       };
     }
