@@ -1,8 +1,16 @@
 # OficinaOS — Repair Shop Management System
 
-Single-location mobile phone repair shop management. Web + Android (Capacitor). Trilingual (PT-PT / EN / FR).
+Single-location mobile phone repair shop management. Web + Android (Capacitor). Locales: PT-PT / EN / FR / ES.
 
 **Fork of [Reparilo](https://github.com/cranknet/reparilo)** (upstream remote: `upstream`) — Portuguese-market adaptation. The upstream license does not cover the "Reparilo" name, so this distribution is branded **OficinaOS**. Never reintroduce "Reparilo" in user-facing strings; referencing the upstream project name in docs/attribution is fine.
+
+# The OficinaOS ecosystem
+
+This repo is the shop app — one of **4 interconnected repositories** (`reparilo`,
+`oficinaos-cloud`, `oficinaos-website`, `oficinaos-diag`). Before touching Cloud
+features, Pro modules, diagnostics or the website, read
+[`docs/ecosystem.md`](docs/ecosystem.md) — the canonical map: data flows (poller,
+webhooks, entitlements), module IDs, deployment topology and where each thing lives.
 
 # Guidelines
 

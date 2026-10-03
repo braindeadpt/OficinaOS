@@ -4,6 +4,7 @@
 
 ## Critical rules
 
+- **Ecosystem:** this is 1 of 4 repos (app, `oficinaos-cloud`, `oficinaos-website`, `oficinaos-diag`). Read [`docs/ecosystem.md`](./docs/ecosystem.md) before touching Cloud features, Pro modules, diagnostics or the website.
 - **Package/runtime:** Bun only — `bun install`, `bun add`, `bun run`, `bunx`. Never npm/pnpm/npx.
 - **Lint:** `bun run check` / `bun run fix` (ultracite). Zero warnings, never suppress.
 - **i18n:** new strings go in `src/i18n/locales/en.json` → `bun run sync-locales` → `python scripts/fix-pt-pt.py` (normalizes to pt-PT).

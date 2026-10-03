@@ -4,6 +4,7 @@
 
 ## Critical rules
 
+- **Ecosystem:** this is 1 of 4 repos (app, `oficinaos-cloud`, `oficinaos-website`, `oficinaos-diag`). Read [`docs/ecosystem.md`](./docs/ecosystem.md) before touching Cloud features, Pro modules, diagnostics or the website.
 - **Package/runtime:** Bun only — `bun install`, `bun add`, `bun run`, `bunx`. Never npm/pnpm/npx.
 - **Lint:** `bun run check` / `bun run fix` (ultracite). Zero warnings, never suppress.
 - **i18n:** new strings go in `src/i18n/locales/en.json` → `bun run sync-locales` → `python scripts/fix-pt-pt.py` (normalizes to pt-PT).
@@ -13,4 +14,5 @@
 - **DB:** Prisma manual migration after every schema change; Postgres URL comes from `.env`.
 - **No barrel files** — explicit imports only.
 - **Deploy:** `docker compose up -d` (Postgres + app on :4000).
+- **Windows scripts:** never share `.bat`/`.ps1` via `raw.githubusercontent.com` (serves LF, breaks cmd.exe) — only inside release zips or as release assets.
 - **Login for QA:** username `admin` + `SEED_ADMIN_PASSWORD` from `.env`.
