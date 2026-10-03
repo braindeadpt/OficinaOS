@@ -137,6 +137,35 @@ export function findRevenueBreakdown(prisma: DbClient, where: JobWhereInput) {
   });
 }
 
+export function findOrdersForReport(prisma: DbClient, where: JobWhereInput) {
+  return prisma.job.findMany({
+    where,
+    select: {
+      jobCode: true,
+      status: true,
+      estimatedCost: true,
+      createdAt: true,
+      customer: { select: { name: true } },
+      device: {
+        select: { model: true, brand: { select: { name: true } } },
+      },
+      partsUsed: { select: { totalCost: true } },
+      repairs: { select: { price: true } },
+      auditLogs: {
+        where: {
+          action: "STATUS_CHANGED",
+          toValue: { in: ["DONE", "DELIVERED"] },
+        },
+        select: { createdAt: true },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 500,
+  });
+}
+
 export function countJobs(prisma: DbClient, where: JobWhereInput) {
   return prisma.job.count({ where });
 }

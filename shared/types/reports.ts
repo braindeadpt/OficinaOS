@@ -28,6 +28,29 @@ export interface RevenueReportDTO {
   summary: RevenueSummary;
 }
 
+export interface OrdersReportRow {
+  completedAt?: string;
+  createdAt: string;
+  customerName: string;
+  deviceName: string;
+  jobCode: string;
+  margin?: number;
+  partsCost: number;
+  repairsTotal: number;
+  status: string;
+  totalValue: number;
+}
+
+export interface OrdersReportDTO {
+  rows: OrdersReportRow[];
+  summary: {
+    avgMargin?: number;
+    avgOrderValue: number;
+    totalOrders: number;
+    totalValue: number;
+  };
+}
+
 export interface OperationsSummary {
   avgTurnaroundHours: number;
   jobsCompleted: number;

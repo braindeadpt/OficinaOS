@@ -10,6 +10,7 @@ import JobNotesSection from "@/components/modules/jobs/job-notes-section";
 import JobPartsSection from "@/components/modules/jobs/job-parts-section";
 import JobPaymentsSection from "@/components/modules/jobs/job-payments-section";
 import JobPhotosSection from "@/components/modules/jobs/job-photos-section";
+import JobPortalLink from "@/components/modules/jobs/job-portal-link";
 import JobQuotesSection from "@/components/modules/jobs/job-quotes-section";
 import JobRepairsSection from "@/components/modules/jobs/job-repairs-section";
 import JobReturnsHistorySection from "@/components/modules/jobs/job-returns-history-section";
@@ -75,6 +76,8 @@ export default function JobDetailPage() {
       (err) => console.error("Failed to copy tracking link:", err)
     );
   }, [job?.jobCode, t]);
+
+  const portalPublished = Boolean(job?.portalPublishedAt);
 
   const handleCustomerSaved = useCallback(
     (updated: Customer) => {
@@ -282,6 +285,12 @@ export default function JobDetailPage() {
             <span className="material-symbols-outlined text-[18px]">share</span>
             {t("jobs_detail_share")}
           </button>
+          <JobPortalLink
+            accessCode={job.accessCode}
+            jobId={job.id}
+            onChanged={fetchJob}
+            published={portalPublished}
+          />
           <button
             className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl px-2 text-on-surface-variant text-sm transition-colors hover:bg-surface-container-high hover:text-on-surface"
             onClick={() =>

@@ -416,6 +416,9 @@ model Job {
   lastOverdueAlertAt DateTime? @db.Timestamptz
 
   isWarrantyReturn Boolean @default(false)
+  // Public portal link published to OficinaOS Cloud (module: portal).
+  // accessCode is the unguessable token in the public URL.
+  portalPublishedAt DateTime? @db.Timestamptz
   warrantyForJobId String?
   warrantyForJob   Job?    @relation("WarrantyReturn", fields: [warrantyForJobId], references: [id], onDelete: SetNull)
   warrantyReturns  Job[]   @relation("WarrantyReturn")

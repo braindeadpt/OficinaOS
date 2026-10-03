@@ -28,3 +28,22 @@ export const reportsQuerySchema = z
   );
 
 export type ReportsQueryInput = z.infer<typeof reportsQuerySchema>;
+
+export const ordersReportQuerySchema = reportsQuerySchema.and(
+  z.object({
+    status: z
+      .enum([
+        "INTAKE",
+        "WAITING_FOR_PARTS",
+        "IN_REPAIR",
+        "ON_HOLD",
+        "DONE",
+        "DELIVERED",
+        "RETURNED",
+        "CANCELLED",
+      ])
+      .optional(),
+  })
+);
+
+export type OrdersReportQueryInput = z.infer<typeof ordersReportQuerySchema>;

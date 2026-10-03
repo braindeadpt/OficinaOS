@@ -220,6 +220,10 @@ export const ERRORS = {
     status: 502,
     message: "errors.cloud_ai_failed",
   },
+  CLOUD_MODULE_REQUIRED: {
+    status: 402,
+    message: "errors.cloud_module_required",
+  },
 
   // ── Intake requests (public pre-check) ───────────────────────────────────
   INTAKE_REQUEST_NOT_FOUND: {

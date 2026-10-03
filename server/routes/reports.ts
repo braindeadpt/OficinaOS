@@ -1,6 +1,10 @@
+import type { JobStatus } from "@generated/client";
 import { AppError } from "@shared/errors/app-error.js";
 import { closeCashSessionSchema } from "@shared/schemas/cash-session.schema.js";
-import { reportsQuerySchema } from "@shared/schemas/reports.schema.js";
+import {
+  ordersReportQuerySchema,
+  reportsQuerySchema,
+} from "@shared/schemas/reports.schema.js";
 import type { FastifyPluginAsync } from "fastify";
 import { dashboardScope } from "../middlewares/dashboard-scope.js";
 import { requirePermission } from "../middlewares/rbac.js";
@@ -11,9 +15,11 @@ import {
   reopenCashSession,
 } from "../services/cash-session.service.js";
 import { partsConsumptionReport } from "../services/parts-consumption.service.js";
+import { renderOrdersReportHtml } from "../services/receipt.service.js";
 import {
   insightsReport,
   operationsReport,
+  ordersReport,
   resolveRange,
   returnsReport,
   revenueReport,
@@ -56,6 +62,103 @@ export const reportsRoutes: FastifyPluginAsync = async (app) => {
         range,
         marginResult?.success === true
       );
+    }
+  );
+
+  app.get(
+    "/orders",
+    {
+      preHandler: [
+        requirePermission({ reports: ["viewShop"] }),
+        dashboardScope,
+      ],
+      schema: {
+        tags: ["reports"],
+        summary: "Filtered orders list (status + date range) with margin",
+      },
+    },
+    async (req) => {
+      // biome-ignore lint/style/noNonNullAssertion: set by dashboardScope preHandler
+      const scope = req.dashboardScope!;
+      const parsed = ordersReportQuerySchema.safeParse(req.query);
+      if (!parsed.success) {
+        throw new AppError("VALIDATION_ERROR", {
+          issues: parsed.error.issues,
+        });
+      }
+      const q = parsed.data;
+      const range = resolveRange(q.range, q.from, q.to, scope.shopTz);
+
+      const marginResult = await req.server.auth.api.userHasPermission({
+        body: {
+          role: getRole(req),
+          permissions: { reports: ["viewMargin"] },
+        },
+      });
+
+      return ordersReport(
+        app.prisma,
+        scope,
+        range,
+        q.status as JobStatus | undefined,
+        marginResult?.success === true
+      );
+    }
+  );
+
+  // Printable A4 page — the browser's print dialog saves it as PDF.
+  app.get(
+    "/orders/pdf",
+    {
+      preHandler: [
+        requirePermission({ reports: ["viewShop"] }),
+        dashboardScope,
+      ],
+      schema: {
+        tags: ["reports"],
+        summary: "Printable orders report (HTML → PDF via print dialog)",
+      },
+    },
+    async (req, reply) => {
+      // biome-ignore lint/style/noNonNullAssertion: set by dashboardScope preHandler
+      const scope = req.dashboardScope!;
+      const parsed = ordersReportQuerySchema.safeParse(req.query);
+      if (!parsed.success) {
+        throw new AppError("VALIDATION_ERROR", {
+          issues: parsed.error.issues,
+        });
+      }
+      const q = parsed.data;
+      const range = resolveRange(q.range, q.from, q.to, scope.shopTz);
+
+      const marginResult = await req.server.auth.api.userHasPermission({
+        body: {
+          role: getRole(req),
+          permissions: { reports: ["viewMargin"] },
+        },
+      });
+      const includeMargin = marginResult?.success === true;
+
+      const report = await ordersReport(
+        app.prisma,
+        scope,
+        range,
+        q.status as JobStatus | undefined,
+        includeMargin
+      );
+      const acceptLang = (req.headers["accept-language"] ?? "")
+        .split(",")[0]
+        .slice(0, 2);
+      const locale =
+        acceptLang === "en" || acceptLang === "fr" ? acceptLang : "pt";
+      const html = await renderOrdersReportHtml(app.prisma, report, {
+        from: range.start.toLocaleDateString("pt-PT"),
+        to: range.end.toLocaleDateString("pt-PT"),
+        status: q.status,
+        includeMargin,
+        locale,
+      });
+      return reply.type("text/html; charset=utf-8").send(html);
     }
   );
 

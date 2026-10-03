@@ -6,6 +6,7 @@ import type { Scope } from "@shared/types/dashboard";
 import type {
   InsightsReportDTO,
   OperationsReportDTO,
+  OrdersReportDTO,
   ReturnsReportDTO,
   RevenueReportDTO,
   TimeRangePreset,
@@ -20,6 +21,7 @@ import {
   countReturnClaims,
   findAuditLogsForStatus,
   findCustomersByIds,
+  findOrdersForReport,
   findRevenueBreakdown,
   findTurnaroundJobs,
   groupJobRepairs,
@@ -815,5 +817,66 @@ export async function returnsReport(
       warrantyReturnRateChangePercent,
     },
     ttrDistribution,
+  };
+}
+
+export async function ordersReport(
+  prisma: PrismaClient,
+  scope: Scope,
+  range: DateRange,
+  status: JobStatus | undefined,
+  includeMargin: boolean
+): Promise<OrdersReportDTO> {
+  const db = prisma as unknown as DbClient;
+  const jobs = await findOrdersForReport(db, {
+    ...scopeWhere(scope),
+    createdAt: { gte: range.start, lt: range.end },
+    ...(status ? { status } : {}),
+  });
+
+  let totalValue = 0;
+  let totalCost = 0;
+  const rows = jobs.map((j) => {
+    const partsCost = toMoney(
+      j.partsUsed.reduce((s, p) => s + toMoney(p.totalCost), 0)
+    );
+    const repairsTotal = toMoney(
+      j.repairs.reduce((s, r) => s + toMoney(r.price), 0)
+    );
+    const recorded = partsCost + repairsTotal;
+    const value = toMoney(recorded > 0 ? recorded : j.estimatedCost);
+    totalValue += value;
+    totalCost += partsCost;
+    const row: OrdersReportDTO["rows"][number] = {
+      jobCode: j.jobCode,
+      customerName: j.customer.name,
+      deviceName: `${j.device.brand.name} ${j.device.model}`,
+      status: j.status,
+      createdAt: j.createdAt.toISOString(),
+      completedAt: j.auditLogs[0]?.createdAt?.toISOString(),
+      totalValue: value,
+      partsCost,
+      repairsTotal,
+    };
+    if (includeMargin && repairsTotal > 0) {
+      row.margin =
+        Math.round(((repairsTotal - partsCost) / repairsTotal) * 10_000) / 100;
+    }
+    return row;
+  });
+
+  return {
+    rows,
+    summary: {
+      totalOrders: rows.length,
+      totalValue: toMoney(totalValue),
+      avgOrderValue: rows.length > 0 ? toMoney(totalValue / rows.length) : 0,
+      ...(includeMargin && {
+        avgMargin:
+          totalValue > 0
+            ? Math.round(((totalValue - totalCost) / totalValue) * 10_000) / 100
+            : 0,
+      }),
+    },
   };
 }

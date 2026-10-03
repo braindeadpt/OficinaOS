@@ -6,6 +6,7 @@ import { useReportsStore } from "@/stores/reports";
 import CashTab from "./cash-tab";
 import InsightsTab from "./insights-tab";
 import OperationsTab from "./operations-tab";
+import OrdersTab from "./orders-tab";
 import PartsConsumptionTab from "./parts-consumption-tab";
 import ReturnsTab from "./returns-tab";
 import RevenueTab from "./revenue-tab";
@@ -19,6 +20,7 @@ const RANGE_OPTIONS: { key: TimeRangePreset; label: string }[] = [
 
 type TabKey =
   | "revenue"
+  | "orders"
   | "cash"
   | "operations"
   | "returns"
@@ -30,6 +32,8 @@ export default function ReportsPage() {
   const range = useReportsStore((s) => s.range);
   const setRange = useReportsStore((s) => s.setRange);
   const fetchRevenue = useReportsStore((s) => s.fetchRevenue);
+  const fetchOrders = useReportsStore((s) => s.fetchOrders);
+  const ordersStatus = useReportsStore((s) => s.ordersStatus);
   const fetchCash = useReportsStore((s) => s.fetchCash);
   const fetchOperations = useReportsStore((s) => s.fetchOperations);
   const fetchInsights = useReportsStore((s) => s.fetchInsights);
@@ -45,8 +49,7 @@ export default function ReportsPage() {
     const tabs: TabKey[] = [];
     if (canViewShop) {
       tabs.push("revenue");
-    }
-    if (canViewShop) {
+      tabs.push("orders");
       tabs.push("cash");
     }
     if (canViewSelf) {
@@ -75,6 +78,9 @@ export default function ReportsPage() {
     if (activeTab === "revenue") {
       fetchRevenue();
     }
+    if (activeTab === "orders") {
+      fetchOrders(ordersStatus);
+    }
     if (activeTab === "cash") {
       fetchCash();
     }
@@ -94,6 +100,8 @@ export default function ReportsPage() {
     activeTab,
     range,
     fetchRevenue,
+    fetchOrders,
+    ordersStatus,
     fetchCash,
     fetchOperations,
     fetchInsights,
@@ -185,6 +193,7 @@ export default function ReportsPage() {
       )}
 
       {activeTab === "revenue" && <RevenueTab />}
+      {activeTab === "orders" && <OrdersTab />}
       {activeTab === "cash" && <CashTab />}
       {activeTab === "operations" && <OperationsTab />}
       {activeTab === "returns" && <ReturnsTab />}

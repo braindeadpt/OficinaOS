@@ -200,6 +200,33 @@ export async function syncCloudEntitlements(
     );
   }
 
+  // Portal público: re-publica páginas cujo job mudou e recolhe respostas
+  // de orçamento feitas pelos clientes no link público.
+  if (modules.includes("portal")) {
+    import("./portal.service.js")
+      .then(({ syncPortal }) =>
+        syncPortal(prisma, settings.cloudApiUrl ?? "", token, log, notifyCtx)
+      )
+      .catch((err) => log.warn({ err }, "cloud portal sync failed"));
+  }
+
+  // WhatsApp bot: regista o phone_number_id na cloud e processa mensagens
+  // inbound enfileiradas pelo webhook da Meta (responder é daqui, com as
+  // credenciais Meta que nunca saem da loja).
+  if (modules.includes("whatsapp-bot")) {
+    import("./whatsapp-bot.service.js")
+      .then(({ syncWhatsAppBot }) =>
+        syncWhatsAppBot(
+          prisma,
+          settings.cloudApiUrl ?? "",
+          token,
+          log,
+          notifyCtx
+        )
+      )
+      .catch((err) => log.warn({ err }, "whatsapp-bot sync failed"));
+  }
+
   const status = toStatus(updated);
   status.reachable = true;
   return status;

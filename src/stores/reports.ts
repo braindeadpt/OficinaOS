@@ -4,6 +4,7 @@ import type {
   CashSessionDTO,
   InsightsReportDTO,
   OperationsReportDTO,
+  OrdersReportDTO,
   PartsConsumptionReportDTO,
   ReturnsReportDTO,
   RevenueReportDTO,
@@ -27,11 +28,14 @@ interface ReportsState {
   fetchCashSession: () => Promise<void>;
   fetchInsights: () => Promise<void>;
   fetchOperations: () => Promise<void>;
+  fetchOrders: (status?: string) => Promise<void>;
   fetchPartsConsumption: () => Promise<void>;
   fetchReturns: () => Promise<void>;
   fetchRevenue: () => Promise<void>;
   insights: { data?: InsightsReportDTO; loading: boolean; error?: string };
   operations: { data?: OperationsReportDTO; loading: boolean; error?: string };
+  orders: { data?: OrdersReportDTO; loading: boolean; error?: string };
+  ordersStatus: string | undefined;
   partsConsumption: {
     data?: PartsConsumptionReportDTO;
     loading: boolean;
@@ -42,6 +46,7 @@ interface ReportsState {
   returns: { data?: ReturnsReportDTO; loading: boolean; error?: string };
   revenue: { data?: RevenueReportDTO; loading: boolean; error?: string };
   setCustomRange: (from: string, to: string) => void;
+  setOrdersStatus: (status?: string) => void;
   setRange: (range: TimeRangePreset) => void;
 }
 
@@ -59,6 +64,9 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
   customFrom: null,
   customTo: null,
   revenue: { loading: false },
+  orders: { loading: false },
+  ordersStatus: undefined,
+  setOrdersStatus: (status) => set({ ordersStatus: status }),
   operations: { loading: false },
   partsConsumption: { loading: false },
   insights: { loading: false },
@@ -77,6 +85,24 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
       set({
         revenue: {
           ...get().revenue,
+          loading: false,
+          error: getErrorMessage(err, i18n.t("errors.fetch_reports")),
+        },
+      });
+    }
+  },
+
+  fetchOrders: async (status?: string) => {
+    set({ orders: { ...get().orders, loading: true, error: undefined } });
+    try {
+      const q = queryParams(get());
+      const st = status ? `&status=${status}` : "";
+      const res = await api.get(`/reports/orders${q}${st}`);
+      set({ orders: { data: res.data as OrdersReportDTO, loading: false } });
+    } catch (err: unknown) {
+      set({
+        orders: {
+          ...get().orders,
           loading: false,
           error: getErrorMessage(err, i18n.t("errors.fetch_reports")),
         },

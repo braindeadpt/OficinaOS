@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@generated/client";
+import type { OrdersReportDTO } from "@shared/types/reports";
 import QRCode from "qrcode";
 import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
@@ -570,5 +571,198 @@ export async function renderLabelHtml(
       ${price ? `<div class="price">${price}</div>` : ""}
     </div>
   </div>
+</body></html>`;
+}
+
+interface OrdersReportLabels {
+  allStatuses: string;
+  avgOrder: string;
+  customer: string;
+  dateIn: string;
+  dateOut: string;
+  device: string;
+  margin: string;
+  order: string;
+  period: string;
+  status: string;
+  statusLabels: Record<string, string>;
+  title: string;
+  totalOrders: string;
+  totalValue: string;
+  value: string;
+}
+
+const STATUS_EN: Record<string, string> = {
+  INTAKE: "Intake",
+  WAITING_FOR_PARTS: "Waiting for parts",
+  IN_REPAIR: "In repair",
+  ON_HOLD: "On hold",
+  DONE: "Done",
+  DELIVERED: "Delivered",
+  RETURNED: "Returned",
+  CANCELLED: "Cancelled",
+};
+
+const STATUS_PT: Record<string, string> = {
+  INTAKE: "Receção",
+  WAITING_FOR_PARTS: "A aguardar peças",
+  IN_REPAIR: "Em reparação",
+  ON_HOLD: "Em espera",
+  DONE: "Concluída",
+  DELIVERED: "Entregue",
+  RETURNED: "Devolvida",
+  CANCELLED: "Cancelada",
+};
+
+const STATUS_FR: Record<string, string> = {
+  INTAKE: "Réception",
+  WAITING_FOR_PARTS: "En attente de pièces",
+  IN_REPAIR: "En réparation",
+  ON_HOLD: "En pause",
+  DONE: "Terminée",
+  DELIVERED: "Livrée",
+  RETURNED: "Retournée",
+  CANCELLED: "Annulée",
+};
+
+function ordersReportLabels(locale?: string): OrdersReportLabels {
+  if (locale === "fr") {
+    return {
+      title: "Rapport d'ordres de réparation",
+      period: "Période",
+      status: "État",
+      allStatuses: "Tous les états",
+      totalOrders: "Total d'ordres",
+      totalValue: "Valeur totale",
+      avgOrder: "Moyenne par ordre",
+      margin: "Marge",
+      order: "Nº Ordre",
+      customer: "Client",
+      device: "Appareil",
+      value: "Valeur",
+      dateIn: "Entrée",
+      dateOut: "Sortie",
+      statusLabels: STATUS_FR,
+    };
+  }
+  if (locale === "en") {
+    return {
+      title: "Repair orders report",
+      period: "Period",
+      status: "Status",
+      allStatuses: "All statuses",
+      totalOrders: "Total orders",
+      totalValue: "Total value",
+      avgOrder: "Average per order",
+      margin: "Margin",
+      order: "Order Nº",
+      customer: "Customer",
+      device: "Device",
+      value: "Value",
+      dateIn: "In",
+      dateOut: "Out",
+      statusLabels: STATUS_EN,
+    };
+  }
+  return {
+    title: "Relatório de ordens de reparação",
+    period: "Período",
+    status: "Estado",
+    allStatuses: "Todos os estados",
+    totalOrders: "Total de ordens",
+    totalValue: "Valor total",
+    avgOrder: "Média por ordem",
+    margin: "Margem",
+    order: "Nº Ordem",
+    customer: "Cliente",
+    device: "Equipamento",
+    value: "Valor",
+    dateIn: "Entrada",
+    dateOut: "Saída",
+    statusLabels: STATUS_PT,
+  };
+}
+
+/**
+ * A4 print page for the filtered orders report — opens as plain HTML and
+ * auto-triggers window.print() so the user can save as PDF.
+ */
+export async function renderOrdersReportHtml(
+  prisma: DbClient,
+  report: OrdersReportDTO,
+  opts: {
+    from: string;
+    to: string;
+    status?: string;
+    includeMargin: boolean;
+    locale?: string;
+  }
+): Promise<string> {
+  const settings = await findShopSettingsUnique(prisma);
+  const s = ordersReportLabels(opts.locale);
+  const shopName = esc(settings?.shopName ?? "OficinaOS");
+  const statusLabel = opts.status
+    ? (s.statusLabels[opts.status] ?? opts.status)
+    : s.allStatuses;
+  const dateLocale =
+    ({ fr: "fr-FR", en: "en-GB" } as Record<string, string>)[
+      opts.locale ?? "pt"
+    ] ?? "pt-PT";
+  const fmtDate = (iso?: string) =>
+    iso ? new Date(iso).toLocaleDateString(dateLocale) : "—";
+
+  const rowsHtml = report.rows
+    .map(
+      (r) => `<tr>
+      <td>${esc(r.jobCode)}</td>
+      <td>${esc(r.customerName)}</td>
+      <td>${esc(r.deviceName)}</td>
+      <td>${esc(s.statusLabels[r.status] ?? r.status)}</td>
+      <td class="num">${fmtMoney(r.totalValue)}</td>
+      ${opts.includeMargin ? `<td class="num">${r.margin === undefined ? "—" : `${r.margin}%`}</td>` : ""}
+      <td>${fmtDate(r.createdAt)}</td>
+      <td>${fmtDate(r.completedAt)}</td>
+    </tr>`
+    )
+    .join("\n");
+
+  return `<!doctype html>
+<html lang="${opts.locale ?? "pt"}">
+<head>
+<meta charset="utf-8">
+<title>${esc(s.title)}</title>
+<style>
+  body{font-family:system-ui,sans-serif;margin:24px;color:#111;font-size:12px}
+  h1{font-size:18px;margin:0}
+  .meta{color:#555;margin:4px 0 16px;font-size:11px}
+  .totals{display:flex;gap:32px;margin-bottom:16px}
+  .totals .t b{display:block;font-size:16px}
+  .totals .t span{color:#555;font-size:10px}
+  table{width:100%;border-collapse:collapse}
+  th{text-align:left;border-bottom:2px solid #000;padding:4px 6px;font-size:10px;text-transform:uppercase;color:#555}
+  td{border-bottom:1px solid #ddd;padding:4px 6px}
+  td.num,th.num{text-align:right}
+  @media print{body{margin:0}}
+  @page{size:A4 landscape;margin:12mm}
+</style>
+</head>
+<body onload="window.print()">
+  <h1>${shopName} — ${esc(s.title)}</h1>
+  <p class="meta">${esc(s.period)}: ${esc(opts.from)} → ${esc(opts.to)} &nbsp;·&nbsp; ${esc(s.status)}: ${esc(statusLabel)} &nbsp;·&nbsp; ${new Date().toLocaleString(dateLocale)}</p>
+  <div class="totals">
+    <div class="t"><b>${report.summary.totalOrders}</b><span>${esc(s.totalOrders)}</span></div>
+    <div class="t"><b>${fmtMoney(report.summary.totalValue)}</b><span>${esc(s.totalValue)}</span></div>
+    <div class="t"><b>${fmtMoney(report.summary.avgOrderValue)}</b><span>${esc(s.avgOrder)}</span></div>
+    ${opts.includeMargin && report.summary.avgMargin !== undefined ? `<div class="t"><b>${report.summary.avgMargin}%</b><span>${esc(s.margin)}</span></div>` : ""}
+  </div>
+  <table>
+    <thead><tr>
+      <th>${esc(s.order)}</th><th>${esc(s.customer)}</th><th>${esc(s.device)}</th>
+      <th>${esc(s.status)}</th><th class="num">${esc(s.value)}</th>
+      ${opts.includeMargin ? `<th class="num">${esc(s.margin)} %</th>` : ""}
+      <th>${esc(s.dateIn)}</th><th>${esc(s.dateOut)}</th>
+    </tr></thead>
+    <tbody>${rowsHtml}</tbody>
+  </table>
 </body></html>`;
 }

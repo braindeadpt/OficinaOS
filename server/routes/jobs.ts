@@ -57,6 +57,10 @@ import {
   clearPaymentOnDelivery,
   setPaymentOnDelivery,
 } from "../services/payment.service.js";
+import {
+  publishJobPortal,
+  unpublishJobPortal,
+} from "../services/portal.service.js";
 import { renderReceiptHtml } from "../services/receipt.service.js";
 import { codeLockout } from "../utils/code-lockout.js";
 import { getRole, getUserId } from "../utils/request.js";
@@ -899,6 +903,50 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
       if (!removed) {
         throw new AppError("RESOURCE_NOT_FOUND");
       }
+      return reply.status(204).send();
+    }
+  );
+
+  // Public portal link — pushes the job's public tracking snapshot to
+  // OficinaOS Cloud and returns the shareable URL (module: portal).
+  app.post(
+    "/:id/portal",
+    {
+      schema: {
+        tags: ["jobs"],
+        summary: "Publish public portal link",
+        params: {
+          type: "object",
+          properties: { id: { type: "string" } },
+          required: ["id"],
+        },
+      },
+      preHandler: [requirePermission({ jobs: ["edit"] })],
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const result = await publishJobPortal(app.prisma, id, req.log);
+      return reply.send(result);
+    }
+  );
+
+  app.delete(
+    "/:id/portal",
+    {
+      schema: {
+        tags: ["jobs"],
+        summary: "Unpublish public portal link",
+        params: {
+          type: "object",
+          properties: { id: { type: "string" } },
+          required: ["id"],
+        },
+      },
+      preHandler: [requirePermission({ jobs: ["edit"] })],
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      await unpublishJobPortal(app.prisma, id, req.log);
       return reply.status(204).send();
     }
   );
