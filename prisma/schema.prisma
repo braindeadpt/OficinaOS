@@ -397,7 +397,13 @@ model Job {
 
   reportedProblem String    @db.Text
   conditionNotes  String?   @db.Text
-  status          JobStatus @default(INTAKE)
+  // Unlock PIN/pattern collected at intake so the technician can test the device.
+  deviceUnlockCode String?
+  // Accessories handed in with the device (charger, case, SIM, box...).
+  accessories      String[] @default([])
+  // Intake functional checklist: {key: "ok"|"fail"|null} — null = not tested.
+  intakeChecklist  Json?
+  status           JobStatus @default(INTAKE)
 
   estimatedCost Decimal  @db.Decimal(10, 2)
   depositAmount Decimal? @db.Decimal(10, 2)

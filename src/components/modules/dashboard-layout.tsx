@@ -20,6 +20,29 @@ interface DashboardLayoutProps {
   children: ReactNode;
 }
 
+function buildJobPayload(data: IntakeFormData) {
+  return {
+    customerEmail: data.customerEmail || undefined,
+    customerId: data.customerId || undefined,
+    customerName: data.customerName,
+    customerPhone: data.customerPhone,
+    deviceBrand: data.brand || "Unknown",
+    deviceBrandId: data.brandId || undefined,
+    deviceModel: data.model,
+    color: data.color || undefined,
+    imei: data.imei || undefined,
+    reportedProblem: data.reportedProblem,
+    conditionNotes: data.conditionNotes || undefined,
+    deviceUnlockCode: data.deviceUnlockCode || undefined,
+    accessories: data.accessories.length > 0 ? data.accessories : undefined,
+    intakeChecklist:
+      Object.keys(data.checklist).length > 0 ? data.checklist : undefined,
+    estimatedCost: Number.parseFloat(data.estimatedCost) || 0,
+    estimatedDate: data.estimatedDelivery || undefined,
+    depositAmount: data.deposit ? Number.parseFloat(data.deposit) : undefined,
+  };
+}
+
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const intakeModalOpen = useUiStore((s) => s.intakeModalOpen);
   const intakeModalPrefill = useUiStore((s) => s.intakeModalPrefill);
@@ -51,24 +74,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const handleIntakeSubmit = useCallback(
     async (data: IntakeFormData) => {
       try {
-        const job = await createJob({
-          customerEmail: data.customerEmail || undefined,
-          customerId: data.customerId || undefined,
-          customerName: data.customerName,
-          customerPhone: data.customerPhone,
-          deviceBrand: data.brand || "Unknown",
-          deviceBrandId: data.brandId || undefined,
-          deviceModel: data.model,
-          color: data.color || undefined,
-          imei: data.imei || undefined,
-          reportedProblem: data.reportedProblem,
-          conditionNotes: data.conditionNotes || undefined,
-          estimatedCost: Number.parseFloat(data.estimatedCost) || 0,
-          estimatedDate: data.estimatedDelivery || undefined,
-          depositAmount: data.deposit
-            ? Number.parseFloat(data.deposit)
-            : undefined,
-        });
+        const job = await createJob(buildJobPayload(data));
         toast.success(t("jobs_created_success", { id: job.jobCode || job.id }));
         await markRequestConverted(job.id);
         showPrintPreview(job.id);

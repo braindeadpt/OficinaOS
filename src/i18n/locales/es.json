@@ -888,7 +888,26 @@
     "error_create_model": "No se pudo agregar el modelo",
     "select_brand_first": "Seleccione una marca primero",
     "imei": "IMEI/Serie",
-    "imei_placeholder": "IMEI de 15 dígitos (marca *#06# en el dispositivo)"
+    "imei_placeholder": "IMEI de 15 dígitos (marca *#06# en el dispositivo)",
+    "unlock_code": "Código de desbloqueo/PIN",
+    "unlock_code_placeholder": "p.ej. ",
+    "accessories_section": "Accesorios recibidos con el dispositivo.",
+    "accessory_charger": "Cargador",
+    "accessory_case": "Caso",
+    "accessory_simCard": "tarjeta SIM",
+    "accessory_sdCard": "tarjeta SD",
+    "accessory_box": "Caja",
+    "accessory_other": "Otro",
+    "checklist_section": "Comprobación del dispositivo en la admisión.",
+    "checklist_hint": "Marque solo lo que realmente probó; deje el resto intacto",
+    "check_powersOn": "Se enciende",
+    "check_screen": "Visualizaciones de pantalla",
+    "check_touch": "Toque responde",
+    "check_cameras": "Cámaras",
+    "check_audio": "Audio/altavoces",
+    "check_charging": "Cargos",
+    "check_ok": "DE ACUERDO",
+    "check_fail": "falla"
   },
   "intake_wizard_back": "Atrás",
   "intake_wizard_next": "Próximo",
@@ -2091,5 +2110,8 @@
   "cloud_sync_success": "Datos de la nube actualizados.",
   "cloud_unpaired": "Desconectado de OficinaOS Cloud.",
   "cloud_unreachable": "Inalcanzable: usando datos guardados",
-  "never": "nunca"
+  "never": "nunca",
+  "jobs_detail_unlock_code": "código de desbloqueo",
+  "jobs_detail_accessories": "Accesorios",
+  "jobs_detail_checklist": "control de admisión"
 }

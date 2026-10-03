@@ -10,9 +10,14 @@ export interface SelectedRepair {
   repairName: string;
 }
 
+export type CheckState = "ok" | "fail" | null;
+export type IntakeChecklist = Record<string, CheckState>;
+
 export interface IntakeFormData {
+  accessories: string[];
   brand: string;
   brandId: string;
+  checklist: IntakeChecklist;
   color: string;
   conditionNotes: string;
   customerEmail: string;
@@ -20,6 +25,7 @@ export interface IntakeFormData {
   customerName: string;
   customerPhone: string;
   deposit: string;
+  deviceUnlockCode: string;
   estimatedCost: string;
   estimatedDelivery: string;
   imei: string;
@@ -33,11 +39,32 @@ export interface IntakeFormData {
 
 export const MAX_PHOTOS = 5;
 
+export const INTAKE_ACCESSORY_ITEMS = [
+  "charger",
+  "case",
+  "simCard",
+  "sdCard",
+  "box",
+  "other",
+] as const;
+
+export const INTAKE_CHECK_ITEMS = [
+  "powersOn",
+  "screen",
+  "touch",
+  "cameras",
+  "audio",
+  "charging",
+] as const;
+
 export const INITIAL_FORM: IntakeFormData = {
+  accessories: [],
   brand: "",
   brandId: "",
+  checklist: {},
   color: "",
   conditionNotes: "",
+  deviceUnlockCode: "",
   imei: "",
   customerEmail: "",
   customerId: "",

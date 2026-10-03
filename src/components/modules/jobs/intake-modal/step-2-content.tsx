@@ -1,3 +1,5 @@
+import AccessoriesPicker from "./accessories-picker";
+import FunctionalChecklist from "./functional-checklist";
 import {
   errorCls,
   type IntakeFormData,
@@ -57,6 +59,18 @@ export default function Step2Content({
             </p>
           )}
         </div>
+
+        <AccessoriesPicker
+          onChange={(v) => update("accessories", v)}
+          t={t}
+          value={form.accessories}
+        />
+
+        <FunctionalChecklist
+          onChange={(v) => update("checklist", v)}
+          t={t}
+          value={form.checklist}
+        />
 
         <div>
           <label className={labelCls} htmlFor="condition-notes">

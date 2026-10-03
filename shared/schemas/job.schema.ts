@@ -31,6 +31,11 @@ export const createJobSchema = z.object({
   imei: imeiField,
   reportedProblem: z.string().min(1, { error: "validations.describe_problem" }),
   conditionNotes: z.string().optional(),
+  deviceUnlockCode: z.string().max(64).optional(),
+  accessories: z.array(z.string().max(40)).max(12).optional(),
+  intakeChecklist: z
+    .record(z.string(), z.enum(["ok", "fail"]).nullable())
+    .optional(),
   estimatedCost: z
     .number()
     .min(0, { error: "validations.valid_cost" })
@@ -58,6 +63,12 @@ export const updateJobSchema = z.object({
   technicianId: z.string().cuid().nullable().optional(),
   color: z.string().optional(),
   imei: imeiField,
+  deviceUnlockCode: z.string().max(64).nullable().optional(),
+  accessories: z.array(z.string().max(40)).max(12).optional(),
+  intakeChecklist: z
+    .record(z.string(), z.enum(["ok", "fail"]).nullable())
+    .nullable()
+    .optional(),
 });
 
 export const transitionStatusSchema = z

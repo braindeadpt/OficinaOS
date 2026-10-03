@@ -888,7 +888,26 @@
     "error_create_model": "Falha ao adicionar modelo",
     "select_brand_first": "Selecione primeiro uma marca",
     "imei": "IMEI / Número de série",
-    "imei_placeholder": "IMEI de 15 dígitos (marque *#06# no aparelho)"
+    "imei_placeholder": "IMEI de 15 dígitos (marque *#06# no aparelho)",
+    "unlock_code": "Código de desbloqueio / PIN",
+    "unlock_code_placeholder": "ex.: 1234 ou padrão",
+    "accessories_section": "Acessórios recebidos com o aparelho",
+    "accessory_charger": "Carregador",
+    "accessory_case": "Capa",
+    "accessory_simCard": "Cartão SIM",
+    "accessory_sdCard": "Cartão SD",
+    "accessory_box": "Caixa",
+    "accessory_other": "Outro",
+    "checklist_section": "Verificação do aparelho à entrada",
+    "checklist_hint": "Marque apenas o que testou — deixe o resto por marcar",
+    "check_powersOn": "Liga",
+    "check_screen": "Ecrã mostra imagem",
+    "check_touch": "O toque responde",
+    "check_cameras": "Câmaras",
+    "check_audio": "Áudio / Colunas",
+    "check_charging": "Carrega",
+    "check_ok": "OK",
+    "check_fail": "Falha"
   },
   "intake_wizard_back": "Costas",
   "intake_wizard_next": "Seguinte",
@@ -2092,5 +2111,7 @@
   "cloud_unpaired": "Desligado do OficinaOS Cloud.",
   "cloud_unreachable": "Inacessível – utilizando dados guardados",
   "never": "nunca",
-  "my_bench_usage": "A minha bancada"
+  "jobs_detail_unlock_code": "Código de desbloqueio",
+  "jobs_detail_accessories": "Acessórios",
+  "jobs_detail_checklist": "Verificação à entrada"
 }

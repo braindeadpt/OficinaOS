@@ -65,6 +65,9 @@ interface JobsState {
     imei?: string;
     reportedProblem: string;
     conditionNotes?: string;
+    deviceUnlockCode?: string;
+    accessories?: string[];
+    intakeChecklist?: Record<string, "ok" | "fail" | null>;
     estimatedCost: number;
     estimatedDate?: string;
     depositAmount?: number;

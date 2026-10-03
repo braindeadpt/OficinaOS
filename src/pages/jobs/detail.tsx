@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Can } from "@/components/modules/can";
 import EditCustomerDialog from "@/components/modules/customers/edit-customer-dialog";
 import CostSummary from "@/components/modules/jobs/cost-summary";
+import JobIntakeChips from "@/components/modules/jobs/job-intake-chips";
 import JobNotesSection from "@/components/modules/jobs/job-notes-section";
 import JobPartsSection from "@/components/modules/jobs/job-parts-section";
 import JobPaymentsSection from "@/components/modules/jobs/job-payments-section";
@@ -248,7 +249,22 @@ export default function JobDetailPage() {
               </p>
             </div>
           )}
+          {job.deviceUnlockCode && (
+            <div>
+              <p className="font-label text-[11px] text-on-surface-variant uppercase tracking-widest">
+                {t("jobs_detail_unlock_code")}
+              </p>
+              <p className="mt-0.5 font-bold font-headline text-lg text-on-surface tracking-wider">
+                {job.deviceUnlockCode}
+              </p>
+            </div>
+          )}
         </div>
+
+        <JobIntakeChips
+          accessories={job.accessories}
+          intakeChecklist={job.intakeChecklist}
+        />
 
         {/* Actions */}
         <div className="mt-6 flex flex-wrap items-center gap-3">

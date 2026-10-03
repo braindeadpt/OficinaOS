@@ -1,5 +1,5 @@
-import type { Job, Prisma, PrismaClient } from "@generated/client";
-import { AuditAction, type RepairCategory } from "@generated/client";
+import type { Job, PrismaClient } from "@generated/client";
+import { AuditAction, Prisma, type RepairCategory } from "@generated/client";
 import type { JobStatusType } from "@shared/constants/job-statuses";
 import {
   ACTIVE_STATUSES,
@@ -318,8 +318,11 @@ export async function create(
       tx,
       {
         accessCode,
+        accessories: input.accessories ?? [],
         color: input.color ?? null,
         conditionNotes: input.conditionNotes ?? null,
+        deviceUnlockCode: input.deviceUnlockCode ?? null,
+        intakeChecklist: input.intakeChecklist ?? undefined,
         createdBy: { connect: { id: userId } },
         customer: { connect: { id: customer.id } },
         imei: input.imei ? normalizeImei(input.imei) : null,
@@ -386,8 +389,20 @@ function hasNonSpecialFieldChanges(input: UpdateJobInput): boolean {
 }
 
 function buildJobUpdateData(input: UpdateJobInput): Prisma.JobUpdateInput {
-  const { depositAmount, estimatedDate, imei, technicianId, ...rest } = input;
+  const {
+    depositAmount,
+    estimatedDate,
+    imei,
+    intakeChecklist,
+    technicianId,
+    ...rest
+  } = input;
   const data: Prisma.JobUpdateInput = { ...rest };
+
+  if (intakeChecklist !== undefined) {
+    data.intakeChecklist =
+      intakeChecklist === null ? Prisma.JsonNull : intakeChecklist;
+  }
 
   if (imei !== undefined) {
     data.imei = imei ? normalizeImei(imei) : null;

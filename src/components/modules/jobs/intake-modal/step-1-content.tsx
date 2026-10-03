@@ -661,6 +661,19 @@ export default function Step1Content(props: Step1Props) {
               />
             </div>
             <div className="sm:col-span-2">
+              <label className={labelCls} htmlFor="device-unlock">
+                {t("intake.unlock_code")}
+              </label>
+              <input
+                className={inputCls}
+                id="device-unlock"
+                onChange={(e) => update("deviceUnlockCode", e.target.value)}
+                placeholder={t("intake.unlock_code_placeholder")}
+                type="text"
+                value={form.deviceUnlockCode}
+              />
+            </div>
+            <div className="sm:col-span-2">
               <PhotoUploadZone
                 isCapturing={isCapturing}
                 isNative={isNative}

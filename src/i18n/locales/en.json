@@ -888,7 +888,26 @@
     "error_create_model": "Failed to add model",
     "select_brand_first": "Select a brand first",
     "imei": "IMEI / Serial",
-    "imei_placeholder": "15-digit IMEI (dial *#06# on the device)"
+    "imei_placeholder": "15-digit IMEI (dial *#06# on the device)",
+    "unlock_code": "Unlock code / PIN",
+    "unlock_code_placeholder": "e.g. 1234 or pattern",
+    "accessories_section": "Accessories received with the device",
+    "accessory_charger": "Charger",
+    "accessory_case": "Case",
+    "accessory_simCard": "SIM card",
+    "accessory_sdCard": "SD card",
+    "accessory_box": "Box",
+    "accessory_other": "Other",
+    "checklist_section": "Device check at intake",
+    "checklist_hint": "Only mark what you actually tested — leave the rest untouched",
+    "check_powersOn": "Powers on",
+    "check_screen": "Screen displays",
+    "check_touch": "Touch responds",
+    "check_cameras": "Cameras",
+    "check_audio": "Audio / speakers",
+    "check_charging": "Charges",
+    "check_ok": "OK",
+    "check_fail": "Fails"
   },
   "intake_wizard_back": "Back",
   "intake_wizard_next": "Next",
@@ -2091,5 +2110,8 @@
   "cloud_sync_success": "Cloud data updated.",
   "cloud_unpaired": "Disconnected from OficinaOS Cloud.",
   "cloud_unreachable": "Unreachable — using saved data",
-  "never": "never"
+  "never": "never",
+  "jobs_detail_unlock_code": "Unlock code",
+  "jobs_detail_accessories": "Accessories",
+  "jobs_detail_checklist": "Intake check"
 }

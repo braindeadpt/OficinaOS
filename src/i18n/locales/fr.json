@@ -888,7 +888,26 @@
     "error_create_model": "Échec de l'ajout du modèle",
     "select_brand_first": "Sélectionnez d'abord une marque",
     "imei": "IMEI / Numéro de série",
-    "imei_placeholder": "IMEI à 15 chiffres (composez *#06# sur l'appareil)"
+    "imei_placeholder": "IMEI à 15 chiffres (composez *#06# sur l'appareil)",
+    "unlock_code": "Code de déverrouillage/PIN",
+    "unlock_code_placeholder": "par ex. ",
+    "accessories_section": "Accessoires reçus avec l'appareil",
+    "accessory_charger": "Chargeur",
+    "accessory_case": "Cas",
+    "accessory_simCard": "Carte SIM",
+    "accessory_sdCard": "carte SD",
+    "accessory_box": "Boîte",
+    "accessory_other": "Autre",
+    "checklist_section": "Contrôle de l'appareil à l'admission",
+    "checklist_hint": "Marquez uniquement ce que vous avez réellement testé – laissez le reste intact",
+    "check_powersOn": "S'allume",
+    "check_screen": "Affichages à l'écran",
+    "check_touch": "Le toucher répond",
+    "check_cameras": "Caméras",
+    "check_audio": "Audio/haut-parleurs",
+    "check_charging": "Frais",
+    "check_ok": "D'ACCORD",
+    "check_fail": "Échec"
   },
   "intake_wizard_back": "Retour",
   "intake_wizard_next": "Suivant",
@@ -2091,5 +2110,8 @@
   "cloud_sync_success": "Données cloud mises à jour.",
   "cloud_unpaired": "Déconnecté d'OficinaOS Cloud.",
   "cloud_unreachable": "Injoignable – en utilisant les données enregistrées",
-  "never": "jamais"
+  "never": "jamais",
+  "jobs_detail_unlock_code": "Code de déverrouillage",
+  "jobs_detail_accessories": "Accessoires",
+  "jobs_detail_checklist": "Contrôle d'admission"
 }
