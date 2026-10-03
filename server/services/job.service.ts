@@ -199,8 +199,26 @@ export async function list(prisma: PrismaClient, query: JobListQueryInput) {
     technician: { select: { id: true, name: true, username: true } },
   } as const satisfies Prisma.JobInclude;
 
+  // List rows never need the heavy/sensitive intake fields — the signature
+  // data-URL alone can be ~600KB per job, and unlock codes belong to the
+  // detail view only.
+  const listOmit = {
+    intakeSignatureDataUrl: true,
+    deviceUnlockCode: true,
+    accessCode: true,
+    intakeChecklist: true,
+    qcChecklist: true,
+  } as const satisfies Prisma.JobOmit;
+
   const [jobs, totalCount] = await Promise.all([
-    jobFindMany(prisma, where, listInclude, { id: "desc" }, limit + 1),
+    jobFindMany(
+      prisma,
+      where,
+      listInclude,
+      { id: "desc" },
+      limit + 1,
+      listOmit
+    ),
     cursor ? (Promise.resolve(null) as Promise<null>) : jobCount(prisma, where),
   ]);
 
@@ -216,14 +234,29 @@ export async function list(prisma: PrismaClient, query: JobListQueryInput) {
 }
 
 export async function getById(prisma: PrismaClient, id: string) {
-  const job = await jobFindUnique(prisma, id, JOB_INCLUDE);
+  const [job, deliveredTransitions] = await Promise.all([
+    jobFindUnique(prisma, id, JOB_INCLUDE),
+    auditFindMany(
+      prisma,
+      {
+        jobId: id,
+        action: AuditAction.STATUS_CHANGED,
+        toValue: "DELIVERED",
+      },
+      { createdAt: true },
+      { createdAt: "asc" }
+    ),
+  ]);
   if (!job) {
     return null;
   }
 
   const finalCost = computeFinalCost(job);
   const { balanceDue, paidTotal } = computeJobBalance(job);
-  return { ...job, balanceDue, finalCost, paidTotal };
+  // Delivery time comes from the audit trail — updatedAt shifts on any
+  // later edit, which would reset the warranty clock shown to the user.
+  const deliveredAt = deliveredTransitions[0]?.createdAt ?? null;
+  return { ...job, balanceDue, deliveredAt, finalCost, paidTotal };
 }
 
 export async function getMetrics(prisma: PrismaClient) {
@@ -418,6 +451,8 @@ function buildJobUpdateData(input: UpdateJobInput): Prisma.JobUpdateInput {
 
   if (depositAmount === null) {
     data.depositAmount = null;
+  } else if (depositAmount !== undefined) {
+    data.depositAmount = depositAmount;
   }
 
   if (technicianId === null) {
@@ -603,6 +638,44 @@ async function applyTransition(
   }
 }
 
+function buildTransitionUpdateData(
+  job: { status: string; technicianId: string | null },
+  newStatus: JobStatusType,
+  userId: string,
+  options?: {
+    reason?: string;
+    actualLaborHours?: number;
+    qcChecklist?: Record<string, "ok" | "fail" | null>;
+  }
+): { updateData: Prisma.JobUpdateInput; techAssigned: boolean } {
+  const updateData: Prisma.JobUpdateInput = {
+    status: newStatus,
+    updatedBy: { connect: { id: userId } },
+  };
+
+  if (newStatus === JobStatus.ON_HOLD && options?.reason) {
+    updateData.holdReason = options.reason;
+  } else if (job.status === JobStatus.ON_HOLD) {
+    updateData.holdReason = null;
+  }
+
+  if (newStatus === JobStatus.DONE) {
+    if (options?.actualLaborHours !== undefined) {
+      updateData.actualLaborHours = options.actualLaborHours;
+    }
+    if (options?.qcChecklist) {
+      updateData.qcChecklist = options.qcChecklist;
+    }
+  }
+
+  const techAssigned = newStatus === JobStatus.IN_REPAIR && !job.technicianId;
+  if (techAssigned) {
+    updateData.technician = { connect: { id: userId } };
+  }
+
+  return { updateData, techAssigned };
+}
+
 export async function transitionStatus(
   prisma: PrismaClient,
   id: string,
@@ -647,29 +720,12 @@ export async function transitionStatus(
     };
   }
 
-  const updateData: Prisma.JobUpdateInput = {
-    status: newStatus,
-    updatedBy: { connect: { id: userId } },
-  };
-
-  if (newStatus === JobStatus.ON_HOLD && options?.reason) {
-    updateData.holdReason = options.reason;
-  }
-
-  if (newStatus === JobStatus.DONE) {
-    if (options?.actualLaborHours !== undefined) {
-      updateData.actualLaborHours = options.actualLaborHours;
-    }
-    if (options?.qcChecklist) {
-      updateData.qcChecklist = options.qcChecklist;
-    }
-  }
-
-  let techAssigned = false;
-  if (newStatus === JobStatus.IN_REPAIR && !job.technicianId) {
-    updateData.technician = { connect: { id: userId } };
-    techAssigned = true;
-  }
+  const { updateData, techAssigned } = buildTransitionUpdateData(
+    job,
+    newStatus,
+    userId,
+    options
+  );
 
   const applied = await applyTransition(prisma, id, {
     fromStatus: job.status,

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import api, { getErrorMessage } from "@/lib/api";
+import { copyTextToClipboard } from "@/lib/clipboard";
 
 interface CloudStatus {
   apiUrl: string | null;
@@ -39,10 +40,13 @@ export default function JobPortalLink({
 
   const copyLink = useCallback(
     (url: string) => {
-      navigator.clipboard.writeText(url).then(
-        () => toast.success(t("jobs_detail_portal_link_copied")),
-        (err) => console.error("Failed to copy portal link:", err)
-      );
+      copyTextToClipboard(url).then((ok) => {
+        if (ok) {
+          toast.success(t("jobs_detail_portal_link_copied"));
+        } else {
+          console.error("Failed to copy portal link");
+        }
+      });
     },
     [t]
   );

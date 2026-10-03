@@ -1,5 +1,4 @@
 import type { JobStatusType } from "@shared/constants";
-import { DEVICE_ICONS } from "@shared/constants";
 import type { Job } from "@shared/types";
 
 export interface JobRow {
@@ -10,6 +9,7 @@ export interface JobRow {
   deviceSpec?: string;
   id: string;
   imei?: string;
+  isUrgent?: boolean;
   rawJob?: Job;
   status: JobStatusType;
   technician?: string;
@@ -74,9 +74,10 @@ export function jobToRow(job: Job): JobRow {
     id: job.jobCode ?? job.id,
     customer: job.customer?.name ?? "",
     device: job.device ? `${brandName} ${job.device.model}` : "",
-    deviceIcon: DEVICE_ICONS[deviceType] ?? deviceType,
+    deviceIcon: deviceType,
     deviceSpec: job.device?.model ?? "",
     imei: job.imei ?? undefined,
+    isUrgent: job.isUrgent ?? undefined,
     rawJob: job,
     status: job.status,
     technician: job.technician?.name,

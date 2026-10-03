@@ -1,7 +1,7 @@
 import type { Customer, Job } from "@shared/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useParams } from "react-router";
 import { toast } from "sonner";
 import { Can } from "@/components/modules/can";
 import EditCustomerDialog from "@/components/modules/customers/edit-customer-dialog";
@@ -21,8 +21,10 @@ import StatusPopover from "@/components/modules/jobs/status-popover";
 import TechnicianSelect from "@/components/modules/jobs/technician-select";
 import CreateWizardModal from "@/components/modules/returns/create-wizard-modal";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
+import { copyTextToClipboard } from "@/lib/clipboard";
 import { useJobsStore } from "@/stores/jobs";
 import { useSettingsStore } from "@/stores/settings";
+import { useUiStore } from "@/stores/ui";
 
 function toNum(v: unknown): number {
   return typeof v === "number" ? v : Number(v ?? 0);
@@ -50,7 +52,7 @@ export default function JobDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [showEditCustomer, setShowEditCustomer] = useState(false);
   const [showReturnWizard, setShowReturnWizard] = useState(false);
-  const navigate = useNavigate();
+  const openIntakeModal = useUiStore((s) => s.openIntakeModal);
 
   const fetchJob = useCallback(async () => {
     if (!id) {
@@ -85,10 +87,13 @@ export default function JobDetailPage() {
       return;
     }
     const url = `${window.location.origin}/tracking/${job.jobCode}`;
-    navigator.clipboard.writeText(url).then(
-      () => toast.success(t("jobs_detail_track_link_copied")),
-      (err) => console.error("Failed to copy tracking link:", err)
-    );
+    copyTextToClipboard(url).then((ok) => {
+      if (ok) {
+        toast.success(t("jobs_detail_track_link_copied"));
+      } else {
+        console.error("Failed to copy tracking link");
+      }
+    });
   }, [job?.jobCode, t]);
 
   const portalPublished = Boolean(job?.portalPublishedAt);
@@ -106,8 +111,15 @@ export default function JobDetailPage() {
     if (!job || job.status !== "DELIVERED") {
       return null;
     }
+    // deliveredAt comes from the audit trail (server-side getById) —
+    // updatedAt would shift on any post-delivery edit and reset the
+    // warranty clock shown in the wizard.
+    const deliveredAtRaw = (job as Job & { deliveredAt?: string | null })
+      .deliveredAt;
     const deliveredAt =
-      job.status === "DELIVERED" ? new Date(job.updatedAt) : null;
+      job.status === "DELIVERED" && deliveredAtRaw
+        ? new Date(deliveredAtRaw)
+        : null;
     const daysSince = deliveredAt
       ? Math.floor((Date.now() - deliveredAt.getTime()) / 86_400_000)
       : null;
@@ -518,7 +530,15 @@ export default function JobDetailPage() {
         <CreateWizardModal
           onClose={() => setShowReturnWizard(false)}
           onCreateNewPaidJob={() => {
-            navigate("/jobs/new");
+            setShowReturnWizard(false);
+            openIntakeModal({
+              customerId: job.customer?.id ?? "",
+              customerName: job.customer?.name ?? "",
+              customerPhone: job.customer?.phone ?? "",
+              customerEmail: job.customer?.email ?? "",
+              brand: job.device?.brand?.name ?? "",
+              model: job.device?.model ?? "",
+            });
           }}
           open={showReturnWizard}
           originalJob={wizardJob}

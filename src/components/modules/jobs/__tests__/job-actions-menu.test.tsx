@@ -53,7 +53,7 @@ describe("JobActionsMenu", () => {
   });
 
   it("opens dropdown on button click", () => {
-    render(<JobActionsMenu job={makeJob()} />);
+    render(<JobActionsMenu job={makeJob({ status: "INTAKE" })} />);
     fireEvent.click(screen.getByRole("button", { name: "job_actions" }));
     expect(screen.getByText("job_actions_change_status")).toBeInTheDocument();
     expect(screen.getByText("job_actions_add_note")).toBeInTheDocument();
@@ -62,12 +62,25 @@ describe("JobActionsMenu", () => {
     expect(screen.getByText("job_actions_cancel_job")).toBeInTheDocument();
   });
 
-  it("shows valid status transitions for IN_REPAIR", () => {
+  it("shows only input-free transitions for INTAKE", () => {
+    render(<JobActionsMenu job={makeJob({ status: "INTAKE" })} />);
+    fireEvent.click(screen.getByRole("button", { name: "job_actions" }));
+    // INTAKE → [WAITING_FOR_PARTS, IN_REPAIR, ON_HOLD, CANCELLED];
+    // ON_HOLD needs a reason and CANCELLED goes through the dialog.
+    expect(screen.getByText("status.WAITING_FOR_PARTS")).toBeInTheDocument();
+    expect(screen.getByText("status.IN_REPAIR")).toBeInTheDocument();
+    expect(screen.queryByText("status.ON_HOLD")).not.toBeInTheDocument();
+    expect(screen.queryByText("status.CANCELLED")).not.toBeInTheDocument();
+  });
+
+  it("hides the status section for IN_REPAIR (all transitions need input)", () => {
     render(<JobActionsMenu job={makeJob({ status: "IN_REPAIR" })} />);
     fireEvent.click(screen.getByRole("button", { name: "job_actions" }));
-    // IN_REPAIR → ["ON_HOLD", "DONE", "CANCELLED"]; statusTransitions filters out CANCELLED
-    expect(screen.getByText("status.ON_HOLD")).toBeInTheDocument();
-    expect(screen.getByText("status.DONE")).toBeInTheDocument();
+    // IN_REPAIR → [ON_HOLD, DONE, CANCELLED] — all need reason/QC/dialog.
+    expect(
+      screen.queryByText("job_actions_change_status")
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("job_actions_add_note")).toBeInTheDocument();
   });
 
   it("hides cancel option when CANCELLED not in valid transitions", () => {
@@ -82,11 +95,9 @@ describe("JobActionsMenu", () => {
   it("closes dropdown on Escape key", () => {
     render(<JobActionsMenu job={makeJob()} />);
     fireEvent.click(screen.getByRole("button", { name: "job_actions" }));
-    expect(screen.getByText("job_actions_change_status")).toBeInTheDocument();
+    expect(screen.getByText("job_actions_add_note")).toBeInTheDocument();
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(
-      screen.queryByText("job_actions_change_status")
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("job_actions_add_note")).not.toBeInTheDocument();
   });
 
   it("has enabled print receipt and print label buttons", () => {

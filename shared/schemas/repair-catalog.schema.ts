@@ -1,8 +1,14 @@
 import { RepairCategory } from "@shared/constants";
 import { z } from "zod";
 
+/** Query-string boolean — z.coerce.boolean() maps "false" -> true. */
+const stringBoolean = z.enum(["true", "false"]).transform((v) => v === "true");
+
 export const createRepairSchema = z.object({
-  name: z.string().min(1, { error: "validations.repair_name_required" }),
+  name: z
+    .string()
+    .min(1, { error: "validations.repair_name_required" })
+    .max(120),
   category: z.enum([
     RepairCategory.HARDWARE,
     RepairCategory.SOFTWARE,
@@ -16,7 +22,7 @@ export const createRepairSchema = z.object({
 });
 
 export const updateRepairSchema = z.object({
-  name: z.string().min(1).optional(),
+  name: z.string().min(1).max(120).optional(),
   category: z
     .enum([
       RepairCategory.HARDWARE,
@@ -34,7 +40,7 @@ export const listRepairsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   search: z.string().optional(),
   category: z.string().optional(),
-  isActive: z.coerce.boolean().optional(),
+  isActive: stringBoolean.optional(),
 });
 
 export const toggleRepairStatusSchema = z.object({

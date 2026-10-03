@@ -13,6 +13,7 @@ interface JobMobileCardProps {
   device: string;
   deviceIcon?: string;
   id: string;
+  isUrgent?: boolean;
   rawJob?: {
     id: string;
     technician?: { id: string; name: string } | null;
@@ -28,6 +29,7 @@ export default function JobMobileCard({
   status,
   customer,
   customerTier,
+  isUrgent,
 }: JobMobileCardProps) {
   const { t } = useTranslation();
 
@@ -44,7 +46,14 @@ export default function JobMobileCard({
             <h3 className="font-bold font-headline text-sm">{device}</h3>
           </div>
         </div>
-        <StatusBadge status={status} />
+        <div className="flex items-center gap-1.5">
+          {isUrgent && (
+            <span className="material-symbols-outlined text-base text-error">
+              priority_high
+            </span>
+          )}
+          <StatusBadge status={status} />
+        </div>
       </div>
 
       <div className="mt-2 flex items-center gap-2 text-on-surface-variant">

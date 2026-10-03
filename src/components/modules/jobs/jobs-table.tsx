@@ -130,7 +130,15 @@ export default function JobsTable({
                     )}
                   </td>
                   <td className="p-4">
-                    <div className="flex justify-center">
+                    <div className="flex items-center justify-center gap-1.5">
+                      {job.isUrgent && (
+                        <span
+                          className="material-symbols-outlined text-base text-error"
+                          title={t("intake.urgent")}
+                        >
+                          priority_high
+                        </span>
+                      )}
                       <StatusBadge status={job.status} />
                     </div>
                   </td>

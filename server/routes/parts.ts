@@ -229,6 +229,12 @@ export const partsRoutes: FastifyPluginAsync = async (app) => {
       const userId = getUserId(req);
       const { intent } = req.body as { intent?: string };
 
+      if (intent !== "ADJUSTMENT" && parsed.data.quantity <= 0) {
+        throw new AppError("VALIDATION_ERROR", {
+          errors: { quantity: ["validations.valid_quantity"] },
+        });
+      }
+
       const result =
         intent === "ADJUSTMENT"
           ? await recordAdjustment(app.prisma, id, parsed.data, userId)

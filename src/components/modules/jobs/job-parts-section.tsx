@@ -37,9 +37,11 @@ export default function JobPartsSection({
             label: t("undo"),
             onClick: () => {
               addPart(job.id, {
+                partId: partData.partId ?? undefined,
                 partName: partData.partName,
                 category: partData.category,
                 quantity: partData.quantity,
+                supplier: partData.supplier ?? undefined,
                 unitPrice: Number(partData.unitPrice),
               })
                 .then(() => {

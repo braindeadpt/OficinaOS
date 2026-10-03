@@ -10,9 +10,10 @@ export async function findMany(
   where: JobWhereInput,
   include: JobInclude,
   orderBy: Prisma.JobOrderByWithRelationInput,
-  take: number
+  take: number,
+  omit?: Prisma.JobOmit
 ) {
-  return await prisma.job.findMany({ where, include, orderBy, take });
+  return await prisma.job.findMany({ where, include, omit, orderBy, take });
 }
 
 export async function count(prisma: DbClient, where: JobWhereInput) {

@@ -37,6 +37,7 @@ export default function JobPaymentsSection({
   const [podMethod, setPodMethod] = useState<string>("CASH");
   const [podBusy, setPodBusy] = useState(false);
   const [podError, setPodError] = useState<string | undefined>();
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   const fetchPayments = useCallback(async () => {
     try {
@@ -244,16 +245,44 @@ export default function JobPaymentsSection({
                 {new Date(p.createdAt).toLocaleDateString()}
               </span>
               <Can perm={{ payments: ["delete"] }}>
-                <button
-                  aria-label={t("payments.remove")}
-                  className="flex h-9 w-9 items-center justify-center rounded-full text-outline hover:bg-surface-container-high hover:text-error"
-                  onClick={() => handleRemove(p.id)}
-                  type="button"
-                >
-                  <span className="material-symbols-outlined text-[18px]">
-                    delete
+                {confirmingId === p.id ? (
+                  <span className="flex items-center gap-1">
+                    <button
+                      aria-label={t("confirm")}
+                      className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg bg-error text-on-error transition-colors"
+                      onClick={() => {
+                        setConfirmingId(null);
+                        handleRemove(p.id);
+                      }}
+                      type="button"
+                    >
+                      <span className="material-symbols-outlined text-sm">
+                        check
+                      </span>
+                    </button>
+                    <button
+                      aria-label={t("cancel")}
+                      className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-on-surface-variant transition-colors hover:bg-surface-container-high"
+                      onClick={() => setConfirmingId(null)}
+                      type="button"
+                    >
+                      <span className="material-symbols-outlined text-sm">
+                        close
+                      </span>
+                    </button>
                   </span>
-                </button>
+                ) : (
+                  <button
+                    aria-label={t("payments.remove")}
+                    className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-outline transition-colors hover:bg-surface-container-high hover:text-error"
+                    onClick={() => setConfirmingId(p.id)}
+                    type="button"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">
+                      delete
+                    </span>
+                  </button>
+                )}
               </Can>
             </li>
           ))}

@@ -30,7 +30,7 @@ export async function restockForecast(
   const windowStart = new Date(start.getTime() - (windowDays - 1) * 86_400_000);
 
   const [activeParts, consumedRows] = await Promise.all([
-    findManyParts(db, { isActive: true }, { name: "asc" }, windowDays + 5),
+    findManyParts(db, { isActive: true }, { name: "asc" }),
     groupConsumedQuantity(db, {
       createdAt: { gte: windowStart },
       type: "CONSUMPTION",
@@ -49,15 +49,19 @@ export async function restockForecast(
     // CONSUMPTION rows carry signed (negative) quantities — usage is the
     // absolute amount taken off the shelf.
     const consumed = Math.abs(consumedByPart.get(part.id) ?? 0);
-    const avgDailyUsage = Math.round(((consumed / windowDays) * 10) / 10);
+    // One-decimal precision: the naive form rounds the daily rate to an
+    // integer, which zeroes out slow-moving parts entirely.
+    const avgDailyUsage = Math.round((consumed / windowDays) * 10) / 10;
     const daysLeft =
       avgDailyUsage > 0 ? Math.floor(part.stockQuantity / avgDailyUsage) : null;
 
     const reorderTarget = Math.max(part.reorderLevel, 1);
     const suggestedQuantity =
       avgDailyUsage > 0
-        ? Math.max(reorderTarget, avgDailyUsage * windowDays) -
-          part.stockQuantity
+        ? Math.ceil(
+            Math.max(reorderTarget, avgDailyUsage * windowDays) -
+              part.stockQuantity
+          )
         : reorderTarget - part.stockQuantity;
     if (suggestedQuantity <= 0) {
       continue;

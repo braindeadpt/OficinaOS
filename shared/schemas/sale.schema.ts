@@ -60,6 +60,12 @@ export const createSaleSchema = z
     }
   });
 
+export const listSalesQuerySchema = z.object({
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+});
+
 export type CreateSaleInput = z.infer<typeof createSaleSchema>;
+export type ListSalesQueryInput = z.infer<typeof listSalesQuerySchema>;
 export type SaleItemInput = z.infer<typeof saleItemSchema>;
 export type SalePaymentInput = z.infer<typeof salePaymentSchema>;

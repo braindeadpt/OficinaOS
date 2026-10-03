@@ -51,6 +51,7 @@ export default function AddPartDialog({
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const fetchedRef = useRef(false);
+  const dirtyRef = useRef(false);
   const {
     parts: catalogItems,
     isLoading: loading,
@@ -78,7 +79,8 @@ export default function AddPartDialog({
       return;
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
+      // Match the backdrop rule: a dirty form must not be lost on Escape.
+      if (e.key === "Escape" && !dirtyRef.current) {
         onClose();
       }
     }
@@ -119,7 +121,7 @@ export default function AddPartDialog({
   }, []);
 
   const handleSubmit = useCallback(async () => {
-    const unitPrice = Number.parseFloat(form.unitPrice);
+    const unitPrice = Number.parseFloat(form.unitPrice.replace(",", "."));
     const quantity = Number.parseInt(form.quantity, 10) || 1;
     if (!form.partName.trim() || Number.isNaN(unitPrice) || unitPrice < 0) {
       return;
@@ -156,9 +158,13 @@ export default function AddPartDialog({
     return null;
   }
 
-  const unitPrice = Number.parseFloat(form.unitPrice) || 0;
+  const unitPrice = Number.parseFloat(form.unitPrice.replace(",", ".")) || 0;
   const quantity = Number.parseInt(form.quantity, 10) || 1;
-  const canSubmit = form.partName.trim().length > 0 && unitPrice >= 0;
+  const canSubmit =
+    form.partName.trim().length > 0 &&
+    form.unitPrice.trim() !== "" &&
+    !Number.isNaN(Number.parseFloat(form.unitPrice.replace(",", "."))) &&
+    unitPrice >= 0;
   const isFormDirty =
     form.partName !== "" ||
     form.unitPrice !== "" ||
@@ -166,6 +172,7 @@ export default function AddPartDialog({
     form.supplier !== "" ||
     form.category !== "OTHER" ||
     form.partId !== undefined;
+  dirtyRef.current = isFormDirty;
 
   return (
     <div

@@ -1,8 +1,11 @@
 import { PartCategory } from "@shared/constants";
 import { z } from "zod";
 
+/** Query-string boolean — z.coerce.boolean() maps "false" -> true. */
+const stringBoolean = z.enum(["true", "false"]).transform((v) => v === "true");
+
 export const createPartSchema = z.object({
-  name: z.string().min(1, { error: "validations.part_name_required" }),
+  name: z.string().min(1, { error: "validations.part_name_required" }).max(120),
   category: z.enum([
     PartCategory.SCREEN,
     PartCategory.BATTERY,
@@ -19,13 +22,13 @@ export const createPartSchema = z.object({
     .number()
     .min(0, { error: "validations.price_positive" })
     .max(99_999_999.99),
-  supplier: z.string().optional(),
+  supplier: z.string().max(120).optional(),
   stockQuantity: z.number().int().min(0).optional(),
   reorderLevel: z.number().int().min(0).optional(),
 });
 
 export const updatePartSchema = z.object({
-  name: z.string().min(1).optional(),
+  name: z.string().min(1).max(120).optional(),
   category: z
     .enum([
       PartCategory.SCREEN,
@@ -41,7 +44,7 @@ export const updatePartSchema = z.object({
     ])
     .optional(),
   defaultPrice: z.number().min(0).max(99_999_999.99).optional(),
-  supplier: z.string().optional(),
+  supplier: z.string().max(120).optional(),
   isActive: z.boolean().optional(),
   stockQuantity: z.number().int().min(0).optional(),
   reorderLevel: z.number().int().min(0).optional(),
@@ -52,8 +55,8 @@ export const listPartsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   search: z.string().optional(),
   category: z.string().optional(),
-  isActive: z.coerce.boolean().optional(),
-  needsRestock: z.coerce.boolean().optional(),
+  isActive: stringBoolean.optional(),
+  needsRestock: stringBoolean.optional(),
 });
 
 export const togglePartStatusSchema = z.object({

@@ -22,10 +22,17 @@ export default function SignaturePad({ onChange }: SignaturePadProps) {
     if (!canvas) {
       return;
     }
+    // The canvas bitmap defaults to 300x150 — draw at devicePixelRatio and
+    // size it to the rendered box so pointer coords map 1:1 to pixels.
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = Math.max(1, Math.round(rect.width * dpr));
+    canvas.height = Math.max(1, Math.round(rect.height * dpr));
     const ctx = canvas.getContext("2d");
     if (!ctx) {
       return;
     }
+    ctx.scale(dpr, dpr);
     ctx.lineWidth = 2;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";

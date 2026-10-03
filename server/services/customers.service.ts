@@ -26,11 +26,12 @@ export async function create(prisma: PrismaClient, input: CreateCustomerInput) {
   if (email) {
     updateData.email = email;
   }
-  if (input.whatsappConsent !== undefined) {
-    // Timestamp records when consent was (re)granted; revocation keeps the
-    // flag change but the timestamp only moves on opt-in.
-    updateData.whatsappConsent = input.whatsappConsent;
-    updateData.whatsappConsentAt = input.whatsappConsent ? new Date() : null;
+  // Granting consent via the intake upsert is fine; revoking is not — a
+  // quick-add form with the box unchecked must not silently opt out an
+  // existing opted-in customer. Revocation goes through update().
+  if (input.whatsappConsent) {
+    updateData.whatsappConsent = true;
+    updateData.whatsappConsentAt = new Date();
   }
 
   return await customerUpsert(prisma, { phone: input.phone }, updateData, {

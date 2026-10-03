@@ -27,15 +27,21 @@ export const createJobSchema = z.object({
     .optional()
     .or(z.literal("")),
   customerId: z.string().cuid().optional(),
-  customerName: z.string().min(1, { error: "validations.enter_name" }),
-  customerPhone: z.string().min(1, { error: "validations.enter_phone" }),
-  deviceBrand: z.string().min(1, { error: "validations.enter_brand" }),
+  customerName: z.string().min(1, { error: "validations.enter_name" }).max(120),
+  customerPhone: z
+    .string()
+    .min(1, { error: "validations.enter_phone" })
+    .max(32),
+  deviceBrand: z.string().min(1, { error: "validations.enter_brand" }).max(60),
   deviceBrandId: z.string().optional(),
-  deviceModel: z.string().min(1, { error: "validations.enter_model" }),
-  color: z.string().optional(),
+  deviceModel: z.string().min(1, { error: "validations.enter_model" }).max(120),
+  color: z.string().max(40).optional(),
   imei: imeiField,
-  reportedProblem: z.string().min(1, { error: "validations.describe_problem" }),
-  conditionNotes: z.string().optional(),
+  reportedProblem: z
+    .string()
+    .min(1, { error: "validations.describe_problem" })
+    .max(2000),
+  conditionNotes: z.string().max(2000).optional(),
   deviceUnlockCode: z.string().max(64).optional(),
   accessories: z.array(z.string().max(40)).max(12).optional(),
   intakeChecklist: z
@@ -67,14 +73,14 @@ export const createJobSchema = z.object({
 export type CreateJobInput = z.infer<typeof createJobSchema>;
 
 export const updateJobSchema = z.object({
-  reportedProblem: z.string().min(1).optional(),
-  conditionNotes: z.string().optional(),
+  reportedProblem: z.string().min(1).max(2000).optional(),
+  conditionNotes: z.string().max(2000).optional(),
   estimatedCost: z.number().min(0).max(99_999_999.99).optional(),
   estimatedDate: z.coerce.date().nullable().optional(),
   depositAmount: z.number().min(0).max(99_999_999.99).nullable().optional(),
   technicianId: z.string().cuid().nullable().optional(),
   isUrgent: z.boolean().optional(),
-  color: z.string().optional(),
+  color: z.string().max(40).optional(),
   imei: imeiField,
   deviceUnlockCode: z.string().max(64).nullable().optional(),
   accessories: z.array(z.string().max(40)).max(12).optional(),
@@ -142,7 +148,7 @@ export const transitionStatusSchema = z
 
 export const addJobPartSchema = z.object({
   partId: z.string().optional(),
-  partName: z.string().min(1),
+  partName: z.string().min(1).max(120),
   category: z.enum([
     PartCategory.SCREEN,
     PartCategory.BATTERY,
@@ -157,24 +163,24 @@ export const addJobPartSchema = z.object({
   ]),
   unitPrice: z.number().min(0).max(99_999_999.99),
   quantity: z.number().int().min(1).max(10_000).default(1),
-  supplier: z.string().optional(),
+  supplier: z.string().max(120).optional(),
 });
 
 export const addJobRepairSchema = z.object({
   repairId: z.string().optional(),
-  repairName: z.string().min(1),
+  repairName: z.string().min(1).max(120),
   category: z.enum(repairCategoryValues),
   price: z.number().min(0).max(99_999_999.99),
 });
 
 export const addJobNoteSchema = z.object({
-  content: z.string().min(1),
+  content: z.string().min(1).max(2000),
   isCustomerVisible: z.boolean().default(false),
 });
 
 export const addWaitingPartSchema = z.object({
-  partName: z.string().min(1),
-  supplier: z.string().optional(),
+  partName: z.string().min(1).max(120),
+  supplier: z.string().max(120).optional(),
 });
 
 export const jobListQuerySchema = z.object({

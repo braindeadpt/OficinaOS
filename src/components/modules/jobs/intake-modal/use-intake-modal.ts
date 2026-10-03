@@ -9,6 +9,7 @@ import type { ModelSearchResult } from "@/hooks/use-model-search";
 import { useModelSearch } from "@/hooks/use-model-search";
 import { type CaptureSource, useNativeCamera } from "@/hooks/use-native-camera";
 import {
+  defaultDeliveryDatetime,
   INITIAL_FORM,
   type IntakeFormData,
   type IntakeModalProps,
@@ -94,6 +95,8 @@ export function useIntakeModal({
   const [photoPreviews, setPhotoPreviews] = useState<PhotoPreview[]>([]);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const submissionTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
+  const initialSnapshotRef = useRef<IntakeFormData | null>(null);
+  const isDirtyRef = useRef(false);
 
   /* ───── Validation ───── */
   const validateStep1 = useCallback((): boolean => {
@@ -355,18 +358,25 @@ export function useIntakeModal({
     if (!open) {
       return;
     }
-    setForm({
+    const initial: IntakeFormData = {
       ...INITIAL_FORM,
-      estimatedDelivery: new Date().toISOString().split("T")[0],
+      estimatedDelivery: defaultDeliveryDatetime(),
       ...prefill,
-    });
+    };
+    setForm(initial);
+    initialSnapshotRef.current = initial;
     setTouched({});
     setErrors({});
     setPhotoPreviews([]);
     setStep(1);
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
-        onClose();
+        // Mirror the X button: a dirty form asks before discarding.
+        if (isDirtyRef.current) {
+          setShowCloseConfirm(true);
+        } else {
+          onClose();
+        }
       }
     }
     document.addEventListener("keydown", onKey);
@@ -424,12 +434,18 @@ export function useIntakeModal({
   );
 
   /* ───── Derived + close guards ───── */
+  // Compare the whole form (incl. signature, accessories, checklist, costs)
+  // against the snapshot taken when the modal opened — a partial field list
+  // would let Escape/X discard real data without asking.
   const isFormDirty =
-    form.customerName !== "" ||
-    form.customerPhone !== "" ||
-    form.model !== "" ||
-    form.reportedProblem !== "" ||
-    form.photos.length > 0;
+    initialSnapshotRef.current !== null &&
+    (form.photos.length !== initialSnapshotRef.current.photos.length ||
+      JSON.stringify({ ...form, photos: undefined }) !==
+        JSON.stringify({
+          ...initialSnapshotRef.current,
+          photos: undefined,
+        }));
+  isDirtyRef.current = isFormDirty;
 
   const handleBackdropClick = useCallback(() => {
     if (isFormDirty) {

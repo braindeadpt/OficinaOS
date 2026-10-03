@@ -13,25 +13,57 @@ import JobMobileCard from "@/components/modules/jobs/mobile-card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { TableSkeleton } from "@/components/ui/skeleton";
+import { useDebounce } from "@/hooks/use-debounce";
 import { exportJobsPdf } from "@/lib/export-pdf";
 import { useJobsStore } from "@/stores/jobs";
 import { useUiStore } from "@/stores/ui";
 
+const JOBS_PAGE_SIZE = 50;
+
 export default function JobsPage() {
   const { t } = useTranslation();
-  const { jobs, metrics, isLoadingJobs, fetchJobs, fetchMetrics } =
-    useJobsStore();
+  const {
+    jobs,
+    metrics,
+    isLoadingJobs,
+    isLoadingMore,
+    nextCursor,
+    totalCount,
+    error,
+    fetchJobs,
+    fetchMetrics,
+    loadMoreJobs,
+  } = useJobsStore();
   const [statusFilter, setStatusFilter] = useState<JobStatusType | "ALL">(
     "ALL"
   );
   const [groupFilter, setGroupFilter] = useState<StatusGroupKey | "ALL">("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const openIntakeModal = useUiStore((s) => s.openIntakeModal);
+  const debouncedSearch = useDebounce(searchQuery, 300);
+
+  // Single-status and search go server-side so results aren't limited to the
+  // newest page; multi-status groups still filter client-side over the
+  // fetched window (load-more covers the rest).
+  useEffect(() => {
+    fetchJobs({
+      limit: JOBS_PAGE_SIZE,
+      search: debouncedSearch.trim() || undefined,
+      status: statusFilter === "ALL" ? undefined : statusFilter,
+    });
+  }, [fetchJobs, debouncedSearch, statusFilter]);
 
   useEffect(() => {
-    fetchJobs();
     fetchMetrics();
-  }, [fetchJobs, fetchMetrics]);
+  }, [fetchMetrics]);
+
+  const handleLoadMore = useCallback(() => {
+    loadMoreJobs({
+      limit: JOBS_PAGE_SIZE,
+      search: debouncedSearch.trim() || undefined,
+      status: statusFilter === "ALL" ? undefined : statusFilter,
+    });
+  }, [loadMoreJobs, debouncedSearch, statusFilter]);
 
   const jobRows: JobRow[] = useMemo(() => jobs.map(jobToRow), [jobs]);
 
@@ -47,19 +79,8 @@ export default function JobsPage() {
       }
     }
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter(
-        (j) =>
-          j.id.toLowerCase().includes(q) ||
-          j.customer.toLowerCase().includes(q) ||
-          j.device.toLowerCase().includes(q) ||
-          (j.imei ?? "").toLowerCase().includes(q)
-      );
-    }
-
     return result;
-  }, [jobRows, statusFilter, groupFilter, searchQuery]);
+  }, [jobRows, statusFilter, groupFilter]);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -178,11 +199,31 @@ export default function JobsPage() {
           searchQuery={searchQuery}
         />
 
+        {error && (
+          <div className="flex items-center justify-between gap-3 rounded-2xl bg-error-container px-4 py-3 text-on-error-container">
+            <p className="font-medium text-sm">{error}</p>
+            <Button
+              className="min-h-11"
+              onClick={() =>
+                fetchJobs({
+                  limit: JOBS_PAGE_SIZE,
+                  search: debouncedSearch.trim() || undefined,
+                  status: statusFilter === "ALL" ? undefined : statusFilter,
+                })
+              }
+              size="sm"
+              variant="ghost"
+            >
+              {t("retry")}
+            </Button>
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-surface-container-low px-4 py-3">
           <p className="font-bold text-on-surface-variant text-sm">
             {t("showing_results", {
               count: filteredJobs.length,
-              total: jobRows.length,
+              total: totalCount || jobRows.length,
             })}
           </p>
           {(searchQuery || groupFilter !== "ALL" || statusFilter !== "ALL") && (
@@ -197,29 +238,47 @@ export default function JobsPage() {
           )}
         </div>
 
-        <div className="hidden sm:block">
-          <JobsTable
-            jobs={filteredJobs}
-            onToggleSelect={toggleSelect}
-            onToggleSelectAll={toggleSelectAll}
-            selectedIds={selectedIds}
-          />
-        </div>
+        {filteredJobs.length > 0 && (
+          <>
+            <div className="hidden md:block">
+              <JobsTable
+                jobs={filteredJobs}
+                onToggleSelect={toggleSelect}
+                onToggleSelectAll={toggleSelectAll}
+                selectedIds={selectedIds}
+              />
+            </div>
 
-        <div className="space-y-3 sm:hidden">
-          {filteredJobs.map((job) => (
-            <JobMobileCard
-              customer={job.customer}
-              customerTier={job.customerTier}
-              device={job.device}
-              deviceIcon={job.deviceIcon}
-              id={job.id}
-              key={job.id}
-              rawJob={job.rawJob}
-              status={job.status}
-            />
-          ))}
-        </div>
+            <div className="space-y-3 md:hidden">
+              {filteredJobs.map((job) => (
+                <JobMobileCard
+                  customer={job.customer}
+                  customerTier={job.customerTier}
+                  device={job.device}
+                  deviceIcon={job.deviceIcon}
+                  id={job.id}
+                  isUrgent={job.isUrgent}
+                  key={job.id}
+                  rawJob={job.rawJob}
+                  status={job.status}
+                />
+              ))}
+            </div>
+
+            {nextCursor && (
+              <div className="flex justify-center pt-2">
+                <Button
+                  loading={isLoadingMore}
+                  onClick={handleLoadMore}
+                  size="md"
+                  variant="secondary"
+                >
+                  {t("load_more")}
+                </Button>
+              </div>
+            )}
+          </>
+        )}
 
         {filteredJobs.length === 0 && (
           <EmptyState

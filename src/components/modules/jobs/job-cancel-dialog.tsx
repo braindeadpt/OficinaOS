@@ -1,4 +1,3 @@
-import type { JobStatusType } from "@shared/constants";
 import type { Job } from "@shared/types";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -19,7 +18,6 @@ export default function JobCancelDialog({
   const { t } = useTranslation();
   const transitionStatus = useJobsStore((s) => s.transitionStatus);
   const jobId = job.id;
-  const previousStatus = job.status as JobStatusType;
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,21 +62,9 @@ export default function JobCancelDialog({
     try {
       await transitionStatus(jobId, "CANCELLED", reason.trim());
       onClose();
-      toast(t("job_cancel_success"), {
-        action: {
-          label: t("undo"),
-          onClick: () => {
-            transitionStatus(jobId, previousStatus)
-              .then(() => {
-                toast.success(t("job_cancel_undone"));
-              })
-              .catch(() => {
-                toast.error(t("job_cancel_undo_failed"));
-              });
-          },
-        },
-        duration: 5000,
-      });
+      // CANCELLED is terminal — JOB_STATUS_FLOW has no path back, so the
+      // undo action is only offered when the transition is reversible.
+      toast(t("job_cancel_success"), { duration: 5000 });
     } catch {
       setError(t("job_actions_status_error"));
       toast.error(t("job_cancel_failed"));

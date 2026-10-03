@@ -15,7 +15,10 @@ import {
   findUnique as findPartUnique,
   update as updatePart,
 } from "../repositories/part.repository.js";
-import { createStockMovement } from "../repositories/stock-movement.repository.js";
+import {
+  countStockMovements,
+  createStockMovement,
+} from "../repositories/stock-movement.repository.js";
 import {
   keysetOrderBy,
   requireKeysetCursor,
@@ -105,9 +108,16 @@ export async function update(
   }
 
   // A direct stock edit still goes through the movement ledger: record the
-  // signed delta as an ADJUSTMENT so physical count and history stay in sync.
+  // signed delta as an ADJUSTMENT so physical count and history stay in
+  // sync. The increment is applied atomically inside the transaction — a
+  // concurrent POS sale between the read above and this write must not be
+  // overwritten by an absolute value.
+  const { stockQuantity: _target, ...rest } = input;
   return prisma.$transaction(async (tx) => {
-    const updated = await updatePart(tx, id, input);
+    const updated = await updatePart(tx, id, {
+      ...rest,
+      stockQuantity: { increment: stockDelta },
+    });
     await createStockMovement(tx, {
       balanceAfter: updated.stockQuantity,
       createdById: userId,
@@ -139,8 +149,14 @@ export async function remove(prisma: PrismaClient, id: string) {
       return null;
     }
 
-    const refCount = await countJobPartsByPartId(tx, id);
-    if (refCount > 0) {
+    // StockMovement.part is onDelete: Restrict — a part that ever moved
+    // stock can't be deleted either, so check both references up front
+    // instead of letting Postgres throw P2003.
+    const [refCount, movementCount] = await Promise.all([
+      countJobPartsByPartId(tx, id),
+      countStockMovements(tx, { partId: id }),
+    ]);
+    if (refCount > 0 || movementCount > 0) {
       throw new AppError("PART_IN_USE");
     }
 

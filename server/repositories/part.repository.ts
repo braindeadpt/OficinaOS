@@ -12,7 +12,7 @@ export async function findMany(
   orderBy:
     | PartsCatalogOrderByWithRelationInput
     | PartsCatalogOrderByWithRelationInput[],
-  take: number
+  take?: number
 ) {
   return await prisma.partsCatalog.findMany({ where, orderBy, take });
 }

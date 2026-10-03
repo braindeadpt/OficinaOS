@@ -54,7 +54,11 @@ export default function BatchActionBar({
     for (const ts of transitionSets.slice(1)) {
       common = new Set([...common].filter((s) => ts.has(s)));
     }
-    return [...common].filter((s) => s !== "CANCELLED");
+    // Transitions that require extra input (reason / labor hours / QC
+    // checklist) can't be done in bulk — the detail-page popover owns them.
+    return [...common].filter(
+      (s) => s !== "CANCELLED" && s !== "ON_HOLD" && s !== "DONE"
+    );
   }, [selectedJobs]);
 
   const handleStatusTransition = useCallback(

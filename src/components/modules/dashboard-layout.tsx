@@ -91,16 +91,19 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         }
         await fetchJobs();
         await fetchMetrics();
-        closeIntakeModal();
-      } catch {
+        // The modal closes itself via the success-overlay timeout — closing
+        // it here would hide the confirmation the user just earned.
+      } catch (err) {
         toast.error(t("jobs_create_error"));
+        // Rethrow so the modal stays open with its error state instead of
+        // showing the success overlay on a failed create.
+        throw err;
       }
     },
     [
       createJob,
       fetchJobs,
       fetchMetrics,
-      closeIntakeModal,
       showPrintPreview,
       markRequestConverted,
       t,

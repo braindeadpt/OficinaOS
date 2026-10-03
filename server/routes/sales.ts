@@ -1,5 +1,8 @@
 import { AppError } from "@shared/errors/app-error.js";
-import { createSaleSchema } from "@shared/schemas/sale.schema";
+import {
+  createSaleSchema,
+  listSalesQuerySchema,
+} from "@shared/schemas/sale.schema";
 import type { FastifyPluginAsync } from "fastify";
 import { resolveUrls } from "../config/env.js";
 import { requirePermission } from "../middlewares/rbac.js";
@@ -26,14 +29,16 @@ export const saleRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (req, reply) => {
-      const { cursor, limit } = (req.query ?? {}) as {
-        cursor?: string;
-        limit?: string;
-      };
-      const result = await listSales(app.prisma, {
-        cursor,
-        limit: limit ? Number.parseInt(limit, 10) : undefined,
-      });
+      const parsed = listSalesQuerySchema.safeParse(req.query ?? {});
+      if (!parsed.success) {
+        throw new AppError("VALIDATION_ERROR", {
+          errors: resolveZodErrors(
+            parsed.error.flatten().fieldErrors,
+            req.locale
+          ),
+        });
+      }
+      const result = await listSales(app.prisma, parsed.data);
       return reply.send(result);
     }
   );

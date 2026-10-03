@@ -102,7 +102,14 @@ interface JobsState {
   isCreatingJob: boolean;
   isLoadingJobs: boolean;
   isLoadingMetrics: boolean;
+  isLoadingMore: boolean;
   jobs: Job[];
+  loadMoreJobs: (params?: {
+    limit?: number;
+    status?: string;
+    technicianId?: string;
+    search?: string;
+  }) => Promise<void>;
   markPaymentOnDelivery: (jobId: string, method: string) => Promise<void>;
   metrics: JobMetrics | null;
   nextCursor: string | null;
@@ -132,6 +139,7 @@ export const useJobsStore = create<JobsState>((set) => ({
   nextCursor: null,
   isLoadingJobs: false,
   isLoadingMetrics: false,
+  isLoadingMore: false,
   isCreatingJob: false,
   error: null,
 
@@ -148,6 +156,26 @@ export const useJobsStore = create<JobsState>((set) => ({
     } catch (err: unknown) {
       const message = getErrorMessage(err, i18n.t("errors.fetch_jobs"));
       set({ isLoadingJobs: false, error: message });
+    }
+  },
+
+  loadMoreJobs: async (params) => {
+    const cursor = useJobsStore.getState().nextCursor;
+    if (!cursor) {
+      return;
+    }
+    set({ isLoadingMore: true, error: null });
+    try {
+      const res = await api.get("/jobs", { params: { ...params, cursor } });
+      set((state) => ({
+        jobs: [...state.jobs, ...(res.data.jobs as Job[])],
+        nextCursor: res.data.nextCursor ?? null,
+        totalCount: res.data.totalCount ?? state.totalCount,
+        isLoadingMore: false,
+      }));
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, i18n.t("errors.fetch_jobs"));
+      set({ isLoadingMore: false, error: message });
     }
   },
 
@@ -317,6 +345,7 @@ export const useJobsStore = create<JobsState>((set) => ({
     } catch (err: unknown) {
       const message = getErrorMessage(err, i18n.t("errors.remove_part"));
       set({ error: message });
+      throw new Error(message);
     }
   },
 
@@ -356,6 +385,7 @@ export const useJobsStore = create<JobsState>((set) => ({
     } catch (err: unknown) {
       const message = getErrorMessage(err, i18n.t("errors.remove_repair"));
       set({ error: message });
+      throw new Error(message);
     }
   },
 
@@ -381,6 +411,7 @@ export const useJobsStore = create<JobsState>((set) => ({
         i18n.t("errors.remove_waiting_part")
       );
       set({ error: message });
+      throw new Error(message);
     }
   },
 

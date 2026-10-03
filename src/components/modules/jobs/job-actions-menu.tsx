@@ -35,7 +35,11 @@ export default function JobActionsMenu({ job }: JobActionsMenuProps) {
   const validTransitions: JobStatusType[] = isTerminal
     ? []
     : (JOB_STATUS_FLOW[job.status] ?? []);
-  const statusTransitions = validTransitions.filter((s) => s !== "CANCELLED");
+  // CANCELLED goes through the cancel dialog; ON_HOLD/DONE need reason and
+  // labor hours + QC — the detail-page status popover collects those.
+  const statusTransitions = validTransitions.filter(
+    (s) => s !== "CANCELLED" && s !== "ON_HOLD" && s !== "DONE"
+  );
   const canCancel = validTransitions.includes("CANCELLED");
   const hasPhone = Boolean(job.rawJob?.customer?.phone);
 

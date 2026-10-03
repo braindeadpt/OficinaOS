@@ -61,6 +61,33 @@ export default function StatusPopover({ job, onChanged }: StatusPopoverProps) {
     return () => document.removeEventListener("keydown", onKey);
   }, [open]);
 
+  const undoTransition = useCallback(
+    (previousStatus: JobStatusType) => {
+      transitionStatus(job.id, previousStatus)
+        .then(() => {
+          onChanged?.();
+          toast.success(t("job_status_undone"));
+        })
+        .catch(() => {
+          toast.error(t("job_status_undo_failed"));
+        });
+    },
+    [job.id, transitionStatus, onChanged, t]
+  );
+
+  const notifySuccess = useCallback(
+    (previousStatus: JobStatusType, target: JobStatusType) => {
+      const canUndo = (JOB_STATUS_FLOW[target] ?? []).includes(previousStatus);
+      toast(t("job_status_success"), {
+        action: canUndo
+          ? { label: t("undo"), onClick: () => undoTransition(previousStatus) }
+          : undefined,
+        duration: 5000,
+      });
+    },
+    [undoTransition, t]
+  );
+
   const handleSelect = useCallback(
     (status: JobStatusType) => {
       if (
@@ -82,22 +109,7 @@ export default function StatusPopover({ job, onChanged }: StatusPopoverProps) {
         .then(() => {
           setOpen(false);
           onChanged?.();
-          toast(t("job_status_success"), {
-            action: {
-              label: t("undo"),
-              onClick: () => {
-                transitionStatus(job.id, previousStatus)
-                  .then(() => {
-                    onChanged?.();
-                    toast.success(t("job_status_undone"));
-                  })
-                  .catch(() => {
-                    toast.error(t("job_status_undo_failed"));
-                  });
-              },
-            },
-            duration: 5000,
-          });
+          notifySuccess(previousStatus, status);
         })
         .catch((err: unknown) => {
           setError(getErrorMessage(err, t("jobs_status_change_error_unknown")));
@@ -105,26 +117,46 @@ export default function StatusPopover({ job, onChanged }: StatusPopoverProps) {
         })
         .finally(() => setLoading(false));
     },
-    [job.id, job.status, balanceDue, transitionStatus, onChanged, t]
+    [
+      job.id,
+      job.status,
+      balanceDue,
+      transitionStatus,
+      onChanged,
+      notifySuccess,
+      t,
+    ]
   );
+
+  // Returns the validated labor hours for DONE, or null (error already set).
+  const validateDonePanel = useCallback((): number | null => {
+    const parsed = Number.parseFloat(laborHours);
+    if (Number.isNaN(parsed) || parsed <= 0) {
+      setError(t("validations.labor_hours_positive"));
+      return null;
+    }
+    if (QC_CHECK_ITEMS.some((item) => !qc[item])) {
+      setError(t("validations.qc_checklist_required"));
+      return null;
+    }
+    return parsed;
+  }, [laborHours, qc, t]);
 
   const handleConfirmReason = useCallback(async () => {
     if (!pending) {
       return;
     }
+    if (REQUIRES_REASON.includes(pending) && !reason.trim()) {
+      setError(t("validations.reason_required"));
+      return;
+    }
     let hours: number | undefined;
     if (pending === "DONE") {
-      const parsed = Number.parseFloat(laborHours);
-      if (Number.isNaN(parsed) || parsed <= 0) {
-        setError(t("validations.labor_hours_positive"));
+      const validated = validateDonePanel();
+      if (validated === null) {
         return;
       }
-      hours = parsed;
-      const qcIncomplete = QC_CHECK_ITEMS.some((item) => !qc[item]);
-      if (qcIncomplete) {
-        setError(t("validations.qc_checklist_required"));
-        return;
-      }
+      hours = validated;
     }
     setLoading(true);
     setError(null);
@@ -141,22 +173,7 @@ export default function StatusPopover({ job, onChanged }: StatusPopoverProps) {
       setPending(null);
       setReason("");
       onChanged?.();
-      toast(t("job_status_success"), {
-        action: {
-          label: t("undo"),
-          onClick: () => {
-            transitionStatus(job.id, previousStatus)
-              .then(() => {
-                onChanged?.();
-                toast.success(t("job_status_undone"));
-              })
-              .catch(() => {
-                toast.error(t("job_status_undo_failed"));
-              });
-          },
-        },
-        duration: 5000,
-      });
+      notifySuccess(previousStatus, pending);
     } catch (err: unknown) {
       setError(getErrorMessage(err, t("jobs_status_change_error_unknown")));
       toast.error(t("job_status_failed"));
@@ -166,12 +183,13 @@ export default function StatusPopover({ job, onChanged }: StatusPopoverProps) {
   }, [
     pending,
     reason,
-    laborHours,
     qc,
     job.id,
     job.status,
     transitionStatus,
     onChanged,
+    notifySuccess,
+    validateDonePanel,
     t,
   ]);
 

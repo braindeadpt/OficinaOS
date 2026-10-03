@@ -245,6 +245,17 @@ const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       return;
     }
 
+    // Prisma constraint violations surface as localized conflicts instead
+    // of a generic 500 — P2002 unique, P2003 foreign-key restrict.
+    const prismaCode = (error as { code?: string }).code;
+    if (prismaCode === "P2002" || prismaCode === "P2003") {
+      reply.status(409).send({
+        code: "CONFLICT",
+        message: "errors.conflict",
+      });
+      return;
+    }
+
     const fastifyErr = error as FastifyError;
     if (fastifyErr.validation) {
       reply.status(fastifyErr.statusCode ?? 400).send({

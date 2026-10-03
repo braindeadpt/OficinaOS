@@ -3,13 +3,6 @@ export interface PhotoPreview {
   url: string;
 }
 
-export interface SelectedRepair {
-  category: string;
-  price: number;
-  repairId: string;
-  repairName: string;
-}
-
 export type CheckState = "ok" | "fail" | null;
 export type IntakeChecklist = Record<string, CheckState>;
 
@@ -34,7 +27,6 @@ export interface IntakeFormData {
   model: string;
   modelId: string;
   photos: File[];
-  repairs: SelectedRepair[];
   reportedProblem: string;
   signature: string | null;
 }
@@ -59,7 +51,7 @@ export const INTAKE_CHECK_ITEMS = [
   "charging",
 ] as const;
 
-function defaultDeliveryDatetime(): string {
+export function defaultDeliveryDatetime(): string {
   const d = new Date();
   d.setHours(18, 0, 0, 0);
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -87,7 +79,6 @@ export const INITIAL_FORM: IntakeFormData = {
   model: "",
   modelId: "",
   photos: [],
-  repairs: [],
   reportedProblem: "",
   signature: null,
 };
