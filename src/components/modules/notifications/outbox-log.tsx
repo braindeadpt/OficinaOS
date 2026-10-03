@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { useCan } from "@/hooks/use-can";
 import { useSettingsStore } from "@/stores/settings"; /**
  * The four states an outbox row can be in. A row in any other state (a value
  * added by a newer worker, say) falls back to a neutral badge and shows its
@@ -46,6 +47,7 @@ function StatusBadge({ status }: { status: string }) {
 export default function OutboxLog() {
   const { t } = useTranslation();
   const { outboxLogs, fetchOutboxLogs, cancelOutboxEntry } = useSettingsStore();
+  const canManage = useCan({ notifications: ["manage"] });
 
   const handleCancel = useCallback(
     async (id: string) => {
@@ -53,6 +55,8 @@ export default function OutboxLog() {
       if (result.success) {
         toast(t("notification_cancelled"), { duration: 5000 });
         await fetchOutboxLogs();
+      } else {
+        toast.error(result.message);
       }
     },
     [cancelOutboxEntry, fetchOutboxLogs, t]
@@ -94,7 +98,7 @@ export default function OutboxLog() {
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-on-surface-variant text-xs">
                   <span>{new Date(log.createdAt).toLocaleString()}</span>
                   {log.error && <span className="text-error">{log.error}</span>}
-                  {log.status === "QUEUED" && (
+                  {log.status === "QUEUED" && canManage && (
                     <button
                       aria-label={t("cancel")}
                       className="flex min-h-11 items-center gap-1 rounded-xl bg-error/10 px-4 font-medium text-error text-xs transition-colors hover:bg-error/20 focus-visible:outline-2 focus-visible:outline-error focus-visible:outline-offset-2"

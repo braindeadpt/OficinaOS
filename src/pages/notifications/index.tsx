@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import AlertList from "@/components/modules/notifications/alert-list";
 import ChannelSettings from "@/components/modules/notifications/channel-settings";
 import OutboxLog from "@/components/modules/notifications/outbox-log";
+import { useCan } from "@/hooks/use-can";
 import { useAlertsStore } from "@/stores/alerts";
 import { useSettingsStore } from "@/stores/settings";
 
@@ -31,6 +32,11 @@ export default function NotificationsPage() {
   } = useSettingsStore();
   const [outboxLoaded, setOutboxLoaded] = useState(false);
   const [mode, setMode] = useState<NotificationMode>("alerts");
+  // Setup = WhatsApp channel settings (settings:view); delete/cancel/test =
+  // notifications:manage. A technician with only notifications:read gets
+  // the alerts inbox and nothing that 403s.
+  const canViewSettings = useCan({ settings: ["view"] });
+  const canManage = useCan({ notifications: ["manage"] });
 
   useEffect(() => {
     if (!initialized) {
@@ -40,9 +46,11 @@ export default function NotificationsPage() {
 
   useEffect(() => {
     if (!outboxLoaded) {
-      fetchWhatsAppSettings().catch(() => {
-        /* intentionally swallowed */
-      });
+      if (canViewSettings) {
+        fetchWhatsAppSettings().catch(() => {
+          /* intentionally swallowed */
+        });
+      }
       fetchOutboxLogs().catch(() => {
         /* intentionally swallowed */
       });
@@ -55,6 +63,7 @@ export default function NotificationsPage() {
     }
   }, [
     outboxLoaded,
+    canViewSettings,
     fetchWhatsAppSettings,
     fetchOutboxLogs,
     fetchNotificationTemplates,
@@ -67,8 +76,12 @@ export default function NotificationsPage() {
 
   const handleDelete = useCallback(
     async (id: string) => {
-      await deleteAlert(id);
-      toast(t("notification_deleted"));
+      const ok = await deleteAlert(id);
+      if (ok) {
+        toast(t("notification_deleted"));
+      } else {
+        toast.error(t("errors.generic"));
+      }
     },
     [deleteAlert, t]
   );
@@ -100,12 +113,16 @@ export default function NotificationsPage() {
         </p>
       </div>
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-3">
+      <div
+        className={`mb-6 grid gap-3 ${canViewSettings ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}
+      >
         {(
           [
             ["alerts", t("notifications"), unreadCount],
             ["outbox", t("notification_outbox"), null],
-            ["setup", t("whatsapp_settings"), null],
+            ...(canViewSettings
+              ? ([["setup", t("whatsapp_settings"), null]] as const)
+              : []),
           ] as const
         ).map(([key, label, count]) => (
           <button
@@ -131,6 +148,7 @@ export default function NotificationsPage() {
       {mode === "alerts" && (
         <AlertList
           alerts={alerts}
+          canDelete={canManage}
           filter={filter}
           onDelete={handleDelete}
           onFilterChange={setFilter}

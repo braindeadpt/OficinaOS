@@ -75,7 +75,7 @@ function formatRelativeTime(
 
 interface AlertItemRowProps {
   alert: InAppAlert;
-  onDelete: (id: string) => void;
+  onDelete?: (id: string) => void;
   onNavigate: (jobId: string) => void;
 }
 
@@ -169,14 +169,18 @@ function AlertItemRow({ alert, onDelete, onNavigate }: AlertItemRowProps) {
             className="mt-2 h-2.5 w-2.5 rounded-full bg-primary"
           />
         )}
-        <button
-          aria-label={t("noti_dismiss")}
-          className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-on-surface-variant/50 transition-colors hover:bg-error/10 hover:text-error focus-visible:outline-2 focus-visible:outline-error focus-visible:outline-offset-2 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
-          onClick={() => onDelete(alert.id)}
-          type="button"
-        >
-          <span className="material-symbols-outlined text-[18px]">delete</span>
-        </button>
+        {onDelete && (
+          <button
+            aria-label={t("noti_dismiss")}
+            className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-on-surface-variant/50 transition-colors hover:bg-error/10 hover:text-error focus-visible:outline-2 focus-visible:outline-error focus-visible:outline-offset-2 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+            onClick={() => onDelete(alert.id)}
+            type="button"
+          >
+            <span className="material-symbols-outlined text-[18px]">
+              delete
+            </span>
+          </button>
+        )}
       </div>
     </div>
   );

@@ -62,6 +62,25 @@ export const aiRoutes: FastifyPluginAsync = async (app) => {
     }
   }
 
+  // Lightweight status for any role with ai:access — /settings/ai requires
+  // settings:view, so technicians would otherwise always see AI as off.
+  app.get(
+    "/status",
+    {
+      schema: {
+        tags: ["ai"],
+        summary: "AI availability flag (no secrets)",
+      },
+    },
+    async (_req, reply) => {
+      const settings = await getAiSettings(app.prisma);
+      return await reply.send({
+        enabled: settings?.enabled ?? false,
+        hasApiKey: settings?.hasApiKey ?? false,
+      });
+    }
+  );
+
   app.get(
     "/",
     {

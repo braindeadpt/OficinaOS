@@ -1,24 +1,32 @@
 import { useEffect, useState } from "react";
-import { useSettingsStore } from "@/stores/settings";
+import api from "@/lib/api";
 import ChatInterface from "./chat-interface";
 
 export default function AiAnalystPage() {
-  const { aiSettings, fetchAiSettings } = useSettingsStore();
-  const [loading, setLoading] = useState(!aiSettings);
+  // /ai/status is permission-gated by ai:access, not settings:view — a
+  // technician using the analyst must not need settings access.
+  const [enabled, setEnabled] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (aiSettings) {
-      setLoading(false);
-    } else {
-      fetchAiSettings()
-        .catch((err) => {
-          console.error("Failed to fetch AI settings:", err);
-        })
-        .finally(() => setLoading(false));
-    }
-  }, [aiSettings, fetchAiSettings]);
+    let cancelled = false;
+    api
+      .get("/ai/status")
+      .then((res) => {
+        if (!cancelled) {
+          setEnabled(Boolean(res.data?.enabled));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setEnabled(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  if (loading) {
+  if (enabled === null) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <span className="material-symbols-outlined animate-spin text-2xl text-primary">
@@ -28,5 +36,5 @@ export default function AiAnalystPage() {
     );
   }
 
-  return <ChatInterface agentEnabled={aiSettings?.enabled ?? false} />;
+  return <ChatInterface agentEnabled={enabled} />;
 }

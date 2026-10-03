@@ -19,7 +19,7 @@ interface AlertsState {
     }
   ) => void;
   alerts: InAppAlert[];
-  deleteAlert: (id: string) => Promise<void>;
+  deleteAlert: (id: string) => Promise<boolean>;
   fetchAlerts: () => Promise<void>;
   initialized: boolean;
   markAllRead: () => Promise<void>;
@@ -106,8 +106,10 @@ export const useAlertsStore = create<AlertsState>((set, get) => ({
     }));
     try {
       await api.delete(`/notifications/in-app/${id}`);
+      return true;
     } catch {
       set({ alerts: previousAlerts, unreadCount: previousCount });
+      return false;
     }
   },
 

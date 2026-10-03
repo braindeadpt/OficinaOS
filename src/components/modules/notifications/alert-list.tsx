@@ -8,6 +8,7 @@ const FILTER_KEYS: FilterType[] = ["all", "unread", "read"];
 
 interface AlertListProps {
   alerts: InAppAlert[];
+  canDelete?: boolean;
   filter: FilterType;
   onDelete: (id: string) => void;
   onFilterChange: (filter: FilterType) => void;
@@ -18,6 +19,7 @@ interface AlertListProps {
 
 export default function AlertList({
   alerts,
+  canDelete = false,
   filter,
   onDelete,
   onMarkAllRead,
@@ -147,7 +149,7 @@ export default function AlertList({
             <AlertItemRow
               alert={alert}
               key={alert.id}
-              onDelete={onDelete}
+              onDelete={canDelete ? onDelete : undefined}
               onNavigate={onNavigate}
             />
           ))
