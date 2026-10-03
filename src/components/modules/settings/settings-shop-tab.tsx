@@ -165,6 +165,7 @@ export default function SettingsShopTab({
     countryCode: "PT",
     currency: "EUR",
     receiptFooter: "",
+    monthlyRevenueGoal: "",
     reviewUrl: "",
   });
   const [shopFormInitial, setShopFormInitial] = useState(shopForm);
@@ -183,6 +184,11 @@ export default function SettingsShopTab({
         countryCode: shopSettings.countryCode ?? "PT",
         currency: shopSettings.currency ?? "EUR",
         receiptFooter: shopSettings.receiptFooter ?? "",
+        monthlyRevenueGoal:
+          shopSettings.monthlyRevenueGoal === null ||
+          shopSettings.monthlyRevenueGoal === undefined
+            ? ""
+            : String(shopSettings.monthlyRevenueGoal),
         reviewUrl: shopSettings.reviewUrl ?? "",
       };
       setShopForm(form);
@@ -206,7 +212,13 @@ export default function SettingsShopTab({
     }
     onSavingChange(true);
     try {
-      await saveShopSettings(shopForm);
+      const goal = shopForm.monthlyRevenueGoal.trim();
+      const parsedGoal = Number(goal.replace(",", "."));
+      await saveShopSettings({
+        ...shopForm,
+        monthlyRevenueGoal:
+          goal === "" || !Number.isFinite(parsedGoal) ? null : parsedGoal,
+      });
       setShopFormInitial({ ...shopForm });
       onDirtyChange(false);
       onToast(t("shop_config_saved"), "success");
@@ -392,6 +404,32 @@ export default function SettingsShopTab({
               type="text"
               value={shopForm.receiptFooter}
             />
+          </div>
+          <div className="space-y-2">
+            <label
+              className="block font-semibold text-on-surface text-sm"
+              htmlFor="shop-revenue-goal"
+            >
+              {t("shop_revenue_goal")}
+            </label>
+            <input
+              className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm transition-all"
+              id="shop-revenue-goal"
+              inputMode="decimal"
+              onChange={(e) => {
+                setShopForm((f) => ({
+                  ...f,
+                  monthlyRevenueGoal: e.target.value,
+                }));
+                onDirtyChange(true);
+              }}
+              placeholder="2500"
+              type="text"
+              value={shopForm.monthlyRevenueGoal}
+            />
+            <p className="font-label text-on-surface-variant text-xs">
+              {t("shop_revenue_goal_help")}
+            </p>
           </div>
         </div>
       </div>

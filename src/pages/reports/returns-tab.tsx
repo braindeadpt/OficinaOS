@@ -5,6 +5,7 @@ import { MetricCard } from "@/components/ui/metric-card";
 import { StackedBar } from "@/components/ui/stacked-bar";
 import { useCan } from "@/hooks/use-can";
 import { FAULT_TONES } from "@/lib/category-display";
+import { downloadCsv } from "@/lib/export-csv";
 import { useReportsStore } from "@/stores/reports";
 
 const TTR_BUCKET_LABELS: Record<TtrBucket, string> = {
@@ -55,8 +56,50 @@ export default function ReturnsTab() {
     ttrDistribution,
   } = state.data;
 
+  const exportCsv = () => {
+    const hasTech = canViewShop && byTechnician.length > 0;
+    downloadCsv(
+      `returns-${new Date().toISOString().slice(0, 10)}.csv`,
+      hasTech
+        ? [
+            t("reports.technician"),
+            t("reports.jobsDelivered"),
+            t("reports.claimsCount"),
+            t("reports.returnRate"),
+            t("reports.dominantFault"),
+          ]
+        : [t("reports.faultCategory"), t("reports.count")],
+      hasTech
+        ? byTechnician.map((tech) => [
+            tech.technicianName,
+            tech.jobsDelivered,
+            tech.claimsCount,
+            `${tech.returnRate}%`,
+            tech.dominantFault,
+          ])
+        : byFaultCategory.map((fc) => [fc.faultCategory, fc.count])
+    );
+  };
+
+  const canExport =
+    (canViewShop && byTechnician.length > 0) || byFaultCategory.length > 0;
+
   return (
     <div className="space-y-6">
+      {canExport && (
+        <div className="flex justify-end">
+          <button
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-surface-container-high px-4 font-medium text-on-surface text-sm transition-colors hover:bg-surface-container-highest"
+            onClick={exportCsv}
+            type="button"
+          >
+            <span className="material-symbols-outlined text-[18px]">
+              download
+            </span>
+            {t("reports.export_csv")}
+          </button>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <MetricCard
           detail={changeDetail(summary.totalReturnsChangePercent)}

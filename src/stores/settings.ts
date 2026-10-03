@@ -56,6 +56,7 @@ interface SettingsState {
     countryCode?: string;
     currency?: string;
     receiptFooter?: string;
+    monthlyRevenueGoal?: number | null;
     reviewUrl?: string;
   }) => Promise<ShopSettings>;
   saveWhatsAppSettings: (data: {

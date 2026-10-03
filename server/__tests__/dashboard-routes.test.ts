@@ -117,7 +117,10 @@ function buildApp(user: { id: string; role: string } | null) {
   });
   app.decorate("prisma", {
     job: { count: vi.fn().mockResolvedValue(0) },
-    shopSettings: { findFirst: vi.fn().mockResolvedValue({ timezone: "UTC" }) },
+    shopSettings: {
+      findFirst: vi.fn().mockResolvedValue({ timezone: "UTC" }),
+      findUnique: vi.fn().mockResolvedValue({ monthlyRevenueGoal: 1000 }),
+    },
   } as never);
   app.decorate("auth", auth as never);
   app.addHook("onRequest", (req, _r, done) => {
@@ -165,6 +168,7 @@ describe("GET /api/dashboard/owner", () => {
     expect(body).toHaveProperty("financialTrend");
     expect(body).toHaveProperty("overdueJobs");
     expect(body).toHaveProperty("warrantyReturns");
+    expect(body.monthlyRevenueGoal).toBe(1000);
   });
 });
 

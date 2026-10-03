@@ -251,6 +251,41 @@ function MetricsGrid({
             })}
           </p>
         )}
+        {data?.monthlyRevenueGoal ? (
+          <div className="mt-2">
+            <div className="flex items-center justify-between font-label text-on-surface-variant text-xs">
+              <span>
+                {t("dashboard_page.goal_label", {
+                  goal: data.monthlyRevenueGoal.toLocaleString(),
+                })}
+              </span>
+              <span className="font-bold">
+                {Math.min(
+                  999,
+                  Math.round(
+                    (data.revenueThisMonth / data.monthlyRevenueGoal) * 100
+                  )
+                )}
+                %
+              </span>
+            </div>
+            <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-surface-container-highest">
+              <div
+                className={`h-full transition-all ${
+                  data.revenueThisMonth >= data.monthlyRevenueGoal
+                    ? "bg-on-secondary-container"
+                    : "bg-primary"
+                }`}
+                style={{
+                  width: `${Math.min(
+                    100,
+                    (data.revenueThisMonth / data.monthlyRevenueGoal) * 100
+                  )}%`,
+                }}
+              />
+            </div>
+          </div>
+        ) : null}
       </MetricCard>
 
       <MetricCard

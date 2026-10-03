@@ -428,6 +428,9 @@
   "confirm_clear_history": "Confirme a limpeza do histórico",
   "confirm_deactivate": "Desativar esta peça?",
   "confirm_deactivate_desc": "Ficará oculto nos formulários de criação de reparações.",
+  "confirm_deactivate_user": "Desativar este utilizador?",
+  "confirm_deactivate_user_desc": "{{name}} vai terminar a sessão e não poderá entrar até ser reativado.",
+  "deactivate_user_btn": "Desativar",
   "confirm_market_suggestion": "Isto atualizará os seus preços com base nas taxas do mercado regional.",
   "confirm_remove": "Toque novamente para remover",
   "confirm_tab_switch_desc": "Tem alterações não guardadas. Sair deste separador irá descartá-los.",
@@ -500,7 +503,8 @@
     "pipeline_share": "de {{total}} no pipeline",
     "ready_for_pickup": "Pronto para levantamento",
     "pickup_empty": "Sem reparações a aguardar levantamento",
-    "ready_ago": "pronto há {{days}}d"
+    "ready_ago": "pronto há {{days}}d",
+    "goal_label": "meta {{goal}}"
   },
   "date": "Data",
   "date_short": "{{val, date}}",
@@ -2136,7 +2140,6 @@
   "jobs_deliver_balance_warning": "Atenção: faltam {{amount}}€. Confirme que o cliente vai liquidar o valor agora.",
   "jobs_deliver_anyway": "Entregar mesmo assim",
   "jobs_detail_signature": "Assinatura",
-  "confirm_deactivate_user": "Desativar este utilizador?",
-  "confirm_deactivate_user_desc": "{{name}} vai terminar a sessão e não poderá entrar até ser reativado.",
-  "deactivate_user_btn": "Desativar"
+  "shop_revenue_goal": "Meta mensal de faturação",
+  "shop_revenue_goal_help": "Faturação alvo por mês — o progresso aparece no painel. Deixa vazio para desativar."
 }

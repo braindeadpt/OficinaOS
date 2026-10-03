@@ -51,6 +51,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
         overdue,
         warranty,
         ready,
+        shopSettings,
       ] = await Promise.all([
         pipelineCounts(app.prisma, scope),
         activeJobsCount(app.prisma, scope),
@@ -60,6 +61,10 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
         overdueJobs(app.prisma, scope, 10),
         warrantyReturnsOpen(app.prisma, scope, 5),
         pickupReady(app.prisma, scope, 10),
+        app.prisma.shopSettings.findUnique({
+          where: { id: "default" },
+          select: { monthlyRevenueGoal: true },
+        }),
       ]);
       return {
         pipeline,
@@ -72,6 +77,11 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
         avgProfitMarginPrev: comparison.avgProfitMarginPrev,
         avgProfitMarginChange: comparison.avgProfitMarginChange,
         financialTrend: trend,
+        monthlyRevenueGoal:
+          shopSettings?.monthlyRevenueGoal === null ||
+          shopSettings?.monthlyRevenueGoal === undefined
+            ? null
+            : Number(shopSettings.monthlyRevenueGoal),
         overdueJobs: overdue,
         pickupReady: ready,
         warrantyReturns: warranty,

@@ -97,6 +97,7 @@ export async function upsertShopSettings(
       id: "default",
       phone: input.phone ?? null,
       receiptFooter: input.receiptFooter ?? null,
+      monthlyRevenueGoal: input.monthlyRevenueGoal ?? null,
       reviewUrl: input.reviewUrl?.trim() || null,
       shopName: input.shopName,
     },
@@ -106,6 +107,10 @@ export async function upsertShopSettings(
       currency: input.currency,
       phone: input.phone,
       receiptFooter: input.receiptFooter,
+      monthlyRevenueGoal:
+        input.monthlyRevenueGoal === undefined
+          ? undefined
+          : input.monthlyRevenueGoal || null,
       reviewUrl:
         input.reviewUrl === undefined
           ? undefined

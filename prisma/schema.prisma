@@ -1033,6 +1033,9 @@ model ShopSettings {
   defaultWarrantyDays       Int      @default(30)
   timezone                  String? // IANA name, e.g. "Africa/Algiers". Null -> env TZ fallback.
   receiptFooter             String?  @db.Text
+  // Meta mensal de faturação — progresso mostrado no dashboard do gerente.
+  // Null = sem meta definida (não mostrar nada).
+  monthlyRevenueGoal        Decimal? @db.Decimal(10, 2)
   whatsappApiTokenEncrypted String?
   whatsappBusinessId        String?
   whatsappPhoneNumberId     String?

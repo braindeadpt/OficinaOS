@@ -428,6 +428,9 @@
   "confirm_clear_history": "Confirmar borrar historial",
   "confirm_deactivate": "¿Desactivar esta parte?",
   "confirm_deactivate_desc": "Se ocultará de los formularios de creación de trabajos.",
+  "confirm_deactivate_user": "¿Desactivar este usuario?",
+  "confirm_deactivate_user_desc": "{{name}} cerrará la sesión y no podrá iniciarla hasta ser reactivado.",
+  "deactivate_user_btn": "Desactivar",
   "confirm_market_suggestion": "Esto actualizará tus precios en función de las tarifas del mercado regional.",
   "confirm_remove": "Toca de nuevo para eliminar",
   "confirm_tab_switch_desc": "Tiene cambios sin guardar. Dejar esta pestaña los descartará.",
@@ -500,7 +503,8 @@
     "pipeline_share": "de {{total}} en el pipeline",
     "ready_for_pickup": "Listo para ser recogido",
     "pickup_empty": "No hay reparaciones esperando la recogida.",
-    "ready_ago": "listo {{days}}d"
+    "ready_ago": "listo {{days}}d",
+    "goal_label": "meta {{goal}}"
   },
   "date": "Fecha",
   "date_short": "{{val, date}}",
@@ -2136,7 +2140,6 @@
   "jobs_deliver_balance_warning": "Advertencia: Aún debes pagar {{amount}} €. ",
   "jobs_deliver_anyway": "Entregar de todos modos",
   "jobs_detail_signature": "Firma",
-  "confirm_deactivate_user": "¿Desactivar este usuario?",
-  "confirm_deactivate_user_desc": "{{name}} cerrará la sesión y no podrá iniciarla hasta ser reactivado.",
-  "deactivate_user_btn": "Desactivar"
+  "shop_revenue_goal": "Meta mensal de facturación",
+  "shop_revenue_goal_help": "Facturación objetivo por mes — el progreso se muestra en el panel. Deja vacío para desactivar."
 }

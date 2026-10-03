@@ -33,6 +33,8 @@ export const updateShopSettingsSchema = z
     receiptFooter: z.string().optional(),
     countryCode: z.string().optional(),
     timezone: z.string().min(1).optional(),
+    // Meta mensal de faturação (€). 0/null limpa a meta.
+    monthlyRevenueGoal: z.number().min(0).max(99_999_999).nullable().optional(),
     // Public review link (e.g. Google Business "write a review" URL) shown
     // on the tracking page and in the delivered notification. Empty string
     // clears it; anything else must be an http(s) URL.
@@ -56,6 +58,7 @@ export const updateShopSettingsSchema = z
       data.receiptFooter !== undefined ||
       data.countryCode !== undefined ||
       data.timezone !== undefined ||
+      data.monthlyRevenueGoal !== undefined ||
       data.reviewUrl !== undefined,
     { message: "validations.at_least_one_field" }
   );

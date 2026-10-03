@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { MetricCard } from "@/components/ui/metric-card";
+import { downloadCsv } from "@/lib/export-csv";
 import { useReportsStore } from "@/stores/reports";
 
 export default function OperationsTab() {
@@ -28,8 +29,40 @@ export default function OperationsTab() {
 
   const { summary, topRepairs, statusBreakdown } = state.data;
 
+  const exportCsv = () =>
+    downloadCsv(
+      `operations-${new Date().toISOString().slice(0, 10)}.csv`,
+      [
+        t("reports.repairName"),
+        t("reports.category"),
+        t("reports.count"),
+        t("reports.avgPrice"),
+        t("reports.revenue"),
+      ],
+      topRepairs.map((r) => [
+        r.repairName,
+        r.category,
+        r.count,
+        r.avgPrice,
+        r.revenue,
+      ])
+    );
+
   return (
     <div className="space-y-6">
+      <div className="flex justify-end">
+        <button
+          className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-surface-container-high px-4 font-medium text-on-surface text-sm transition-colors hover:bg-surface-container-highest disabled:opacity-50"
+          disabled={topRepairs.length === 0}
+          onClick={exportCsv}
+          type="button"
+        >
+          <span className="material-symbols-outlined text-[18px]">
+            download
+          </span>
+          {t("reports.export_csv")}
+        </button>
+      </div>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <MetricCard
           detail={

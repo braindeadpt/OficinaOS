@@ -19,6 +19,30 @@ Dados completos  ── emparelha ──► Snapshots/filas redigidos ──► 
 - **Sem Cloud emparelhada = tudo local grátis na mesma**; os módulos Pro
   simplesmente não aparecem
 
+## Separação público / privado
+
+| Repositório | Visibilidade | O que lá mora |
+|---|---|---|
+| `OficinaOS` (app da loja) | público | Core local completo + **adaptadores** Pro |
+| `oficinaos-cloud` | **privado** | Toda a lógica paga — portal, bot, IA, filas |
+| `oficinaos-diag` | público | Ferramenta de bancada gratuita |
+| `oficinaos-website` | público | Site/docs — zero lógica de produto |
+
+Regra estrutural: **o valor pago vive na Cloud, não na app**. O repo público da
+app contém apenas clientes finos (`portal.service.ts`, `whatsapp-bot.service.ts`)
+que empurram snapshots redigidos — clonar o repo público não dá nenhum módulo Pro
+funcional, porque:
+
+- o processamento (páginas públicas, cérebro do bot, relatórios IA) corre
+  todo na Cloud privada
+- cada rota Pro na Cloud exige entitlement server-side → `402 MODULE_NOT_ENTITLED`
+- a app esconde os pontos de entrada quando o módulo não consta dos
+  entitlements (cache de 2 min via poller)
+
+**Para módulos futuros**: a lógica de negócio (prompts IA, regras de decisão,
+agregação) entra em `oficinaos-cloud`; a app recebe só o cliente mínimo para
+falar com ela. Nunca código pago compilado na app pública.
+
 ## Resumo dos módulos
 
 | Módulo | O que o cliente ganha | Onde se usa |

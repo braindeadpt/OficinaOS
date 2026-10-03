@@ -1,6 +1,7 @@
 import type { PartConsumptionRow } from "@shared/types/reports";
 import { useTranslation } from "react-i18next";
 import { MetricCard } from "@/components/ui/metric-card";
+import { downloadCsv } from "@/lib/export-csv";
 import { useReportsStore } from "@/stores/reports";
 
 function TrendBadge({ value }: { value: number | undefined }) {
@@ -57,8 +58,42 @@ export default function PartsConsumptionTab() {
 
   const { summary, topParts, includePosSales } = state.data;
 
+  const exportCsv = () =>
+    downloadCsv(
+      `parts-consumption-${new Date().toISOString().slice(0, 10)}.csv`,
+      [
+        t("reports.partName"),
+        t("reports.category"),
+        t("reports.qtyUsed"),
+        t("reports.usageLines"),
+        t("reports.avgUnitCost"),
+        t("reports.totalCost"),
+      ],
+      topParts.map((r) => [
+        r.partName,
+        r.category ? t(`part_category.${r.category}`) : "",
+        r.quantity,
+        r.usageCount,
+        r.avgUnitCost,
+        r.totalCost,
+      ])
+    );
+
   return (
     <div className="space-y-6">
+      <div className="flex justify-end">
+        <button
+          className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-surface-container-high px-4 font-medium text-on-surface text-sm transition-colors hover:bg-surface-container-highest disabled:opacity-50"
+          disabled={topParts.length === 0}
+          onClick={exportCsv}
+          type="button"
+        >
+          <span className="material-symbols-outlined text-[18px]">
+            download
+          </span>
+          {t("reports.export_csv")}
+        </button>
+      </div>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
         <MetricCard
           detail=""

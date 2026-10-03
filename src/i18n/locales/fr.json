@@ -428,6 +428,9 @@
   "confirm_clear_history": "Confirmer l'effacement de l'historique",
   "confirm_deactivate": "Désactiver cette partie ?",
   "confirm_deactivate_desc": "Il sera masqué des formulaires de création d’emplois.",
+  "confirm_deactivate_user": "Désactiver cet utilisateur ?",
+  "confirm_deactivate_user_desc": "{{name}} sera déconnecté et ne pourra plus se connecter avant réactivation.",
+  "deactivate_user_btn": "Désactiver",
   "confirm_market_suggestion": "Cela mettra à jour vos prix en fonction des données du marché régional.",
   "confirm_remove": "Appuyez à nouveau pour supprimer",
   "confirm_tab_switch_desc": "Vous avez des modifications non enregistrées. ",
@@ -500,7 +503,8 @@
     "pipeline_share": "sur {{total}} dans le pipeline",
     "ready_for_pickup": "Prêt pour le ramassage",
     "pickup_empty": "Aucune réparation en attente de collecte",
-    "ready_ago": "prêt {{days}}j"
+    "ready_ago": "prêt {{days}}j",
+    "goal_label": "objectif {{goal}}"
   },
   "date": "Date",
   "date_short": "{{val, date}}",
@@ -2136,7 +2140,6 @@
   "jobs_deliver_balance_warning": "Attention : {{amount}} € restent à payer. ",
   "jobs_deliver_anyway": "Livrer quand même",
   "jobs_detail_signature": "Signature",
-  "confirm_deactivate_user": "Désactiver cet utilisateur ?",
-  "confirm_deactivate_user_desc": "{{name}} sera déconnecté et ne pourra plus se connecter avant réactivation.",
-  "deactivate_user_btn": "Désactiver"
+  "shop_revenue_goal": "Objectif mensuel de chiffre d’affaires",
+  "shop_revenue_goal_help": "Chiffre d’affaires cible par mois — la progression s’affiche sur le tableau de bord. Laisser vide pour désactiver."
 }

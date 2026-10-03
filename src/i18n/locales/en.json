@@ -503,7 +503,8 @@
     "pipeline_share": "of {{total}} in the pipeline",
     "ready_for_pickup": "Ready for pickup",
     "pickup_empty": "No repairs waiting for collection",
-    "ready_ago": "ready {{days}}d"
+    "ready_ago": "ready {{days}}d",
+    "goal_label": "goal {{goal}}"
   },
   "date": "Date",
   "date_short": "{{val, date}}",
@@ -2138,5 +2139,7 @@
   "signature_clear": "Clear",
   "jobs_deliver_balance_warning": "Warning: €{{amount}} still due. Confirm the customer will settle it now.",
   "jobs_deliver_anyway": "Deliver anyway",
-  "jobs_detail_signature": "Signature"
+  "jobs_detail_signature": "Signature",
+  "shop_revenue_goal": "Monthly revenue goal",
+  "shop_revenue_goal_help": "Target revenue per month — progress is shown on the dashboard. Leave empty to disable."
 }
