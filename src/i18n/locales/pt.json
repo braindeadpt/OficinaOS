@@ -408,7 +408,7 @@
   "batch_status_partial": "{{count}} de {{total}} reparações atualizadas",
   "batch_status_success": "{{count}} reparações atualizadas",
   "batch_undo_partial": "Falha parcial ao desfazer ({{ok}} revertido, {{fail}} falhou)",
-  "bench_usage": "Uso de banco",
+  "bench_usage": "Uso de bancada",
   "cancel": "Cancelar",
   "category": "Categoria",
   "channel": "Canal",
@@ -2085,11 +2085,12 @@
   "cloud_pair_success": "Comprar ligado ao OficinaOS Cloud.",
   "cloud_pairing_code": "Código de emparelhamento",
   "cloud_settings_desc": "Ligue esta instalação ao OficinaOS Cloud para ativar os módulos Pro. Os seus dados permanecem locais – a nuvem apenas verifica quais os módulos ativos.",
-  "cloud_settings_title": "Oficina OS Cloud",
+  "cloud_settings_title": "OficinaOS Cloud",
   "cloud_sync_failed": "Não foi possível sincronizar com a cloud.",
   "cloud_sync_now": "Sincronize agora",
   "cloud_sync_success": "Dados da cloud atualizados.",
   "cloud_unpaired": "Desligado do OficinaOS Cloud.",
   "cloud_unreachable": "Inacessível – utilizando dados guardados",
-  "never": "nunca"
+  "never": "nunca",
+  "my_bench_usage": "A minha bancada"
 }

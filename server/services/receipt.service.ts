@@ -193,7 +193,7 @@ function shopHeaderHtml(
     shopName?: string | null;
   } | null
 ): string {
-  const shopName = esc(settings?.shopName ?? "OficinaOS");
+  const shopName = esc(settings?.shopName || "OficinaOS");
   const logoImg = settings?.logoPath
     ? `<div style="text-align:center"><img src="${esc(settings.logoPath)}" alt="${shopName}" style="max-height:14mm;max-width:60mm" /></div>`
     : "";
@@ -700,7 +700,7 @@ export async function renderOrdersReportHtml(
 ): Promise<string> {
   const settings = await findShopSettingsUnique(prisma);
   const s = ordersReportLabels(opts.locale);
-  const shopName = esc(settings?.shopName ?? "OficinaOS");
+  const shopName = esc(settings?.shopName || "OficinaOS");
   const statusLabel = opts.status
     ? (s.statusLabels[opts.status] ?? opts.status)
     : s.allStatuses;

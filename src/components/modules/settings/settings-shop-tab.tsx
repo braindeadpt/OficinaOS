@@ -281,7 +281,7 @@ export default function SettingsShopTab({
               setShopForm((f) => ({ ...f, address: e.target.value }));
               onDirtyChange(true);
             }}
-            placeholder="123 Rue Didouche Mourad, Algiers"
+            placeholder="Rua Augusta 123, Lisboa"
             rows={3}
             value={shopForm.address}
           />

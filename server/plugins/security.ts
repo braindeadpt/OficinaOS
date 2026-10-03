@@ -59,7 +59,7 @@ const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         `script-src 'self' 'nonce-${nonce}'`,
         `style-src 'self' 'unsafe-inline'`,
         `img-src 'self' data: blob:`,
-        `font-src 'self'`,
+        `font-src 'self' data:`,
         `connect-src ${connectSrc.join(" ")}`,
         `frame-src 'none'`,
         `frame-ancestors 'none'`,
