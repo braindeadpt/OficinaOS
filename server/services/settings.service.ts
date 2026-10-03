@@ -20,7 +20,7 @@ function publicAiSettings<
   T extends { apiKeyEncrypted: string } | null | undefined,
 >(row: T) {
   if (!row) {
-    return row;
+    return null;
   }
   const { apiKeyEncrypted, ...rest } = row;
   return { ...rest, hasApiKey: Boolean(apiKeyEncrypted) };
