@@ -111,3 +111,25 @@ Ativar módulos a uma loja (lado operador, na cloud):
 bun run scripts/grant.ts "<nome da loja>" portal
 bun run scripts/grant.ts "<nome da loja>" whatsapp-bot
 ```
+
+## Interfaces para agentes de IA (roadmap)
+
+O portal já é consumível por agentes sem trabalho extra:
+
+- `GET /api/portal/<token>` devolve JSON limpo; o token de 16 chars na URL é
+  a credencial — um assistente do cliente com browsing já lê o estado da
+  reparação a partir do link
+- `POST /api/portal/<token>/reply` aceita `{kind:"quote",decision:"approve"|"reject",quoteId}` —
+  rate-limited + honeypot anti-bot
+- A página `/t/<token>` declara o JSON via `<link rel="alternate" type="application/json">`
+  e `noindex`
+- `oficinaos.app/llms.txt` indexa a documentação para LLMs/AI search
+
+**Regra de segurança**: credenciais só por reparação (token no link). Nunca um
+endpoint "pesquisar por telefone/email" — vazaria a existência de reparações.
+
+**Possível futuro**: MCP server na Cloud (`mcp.oficinaos.app`) expondo tools
+`get_status` / `get_quote` / `respond_quote` com o portal token como
+credencial, no entitlement `portal`. Construir só se as lojas beta confirmarem
+procura — hoje o WhatsApp bot cobre o mesmo caso de uso no canal que os
+clientes realmente usam.

@@ -44,9 +44,13 @@ Em cada ciclo, `server/services/cloud.service.ts` faz:
 ### Módulo `portal`
 
 App publica snapshot **redigido** da ficha → `POST /portal/publish` → página
-pública em `cloud.oficinaos.app/api/portal/:token` (token = segredo de 16 chars).
+pública em `cloud.oficinaos.app/t/:token` (token = segredo de 16 chars).
 Resposta aceitar/recusar → fila → poller → `respondToQuote` (o mesmo serviço do
 balcão — mesmo audit trail).
+
+**Agent-readable**: a página declara `rel="alternate"` para `GET /api/portal/:token`
+(JSON limpo, noindex) e o site serve `/llms.txt` — LLMs/agentes conseguem ler o
+estado da reparação a partir do link. MCP server é roadmap em `docs/pro-modules.md`.
 
 ### Módulo `whatsapp-bot`
 
