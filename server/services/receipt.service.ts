@@ -654,7 +654,37 @@ const STATUS_FR: Record<string, string> = {
   CANCELLED: "Annulée",
 };
 
+const STATUS_ES: Record<string, string> = {
+  INTAKE: "Recepción",
+  WAITING_FOR_PARTS: "Esperando piezas",
+  IN_REPAIR: "En reparación",
+  ON_HOLD: "En espera",
+  DONE: "Terminada",
+  DELIVERED: "Entregada",
+  RETURNED: "Devuelta",
+  CANCELLED: "Cancelada",
+};
+
 function ordersReportLabels(locale?: string): OrdersReportLabels {
+  if (locale === "es") {
+    return {
+      title: "Informe de órdenes de reparación",
+      period: "Período",
+      status: "Estado",
+      allStatuses: "Todos los estados",
+      totalOrders: "Total de órdenes",
+      totalValue: "Valor total",
+      avgOrder: "Media por orden",
+      margin: "Margen",
+      order: "Nº Orden",
+      customer: "Cliente",
+      device: "Dispositivo",
+      value: "Valor",
+      dateIn: "Entrada",
+      dateOut: "Salida",
+      statusLabels: STATUS_ES,
+    };
+  }
   if (locale === "fr") {
     return {
       title: "Rapport d'ordres de réparation",
@@ -734,7 +764,7 @@ export async function renderOrdersReportHtml(
     ? (s.statusLabels[opts.status] ?? opts.status)
     : s.allStatuses;
   const dateLocale =
-    ({ fr: "fr-FR", en: "en-GB" } as Record<string, string>)[
+    ({ fr: "fr-FR", en: "en-GB", es: "es-ES" } as Record<string, string>)[
       opts.locale ?? "pt"
     ] ?? "pt-PT";
   const fmtDate = (iso?: string) =>

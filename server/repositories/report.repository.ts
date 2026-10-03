@@ -304,16 +304,22 @@ export function queryRawProfitMargin(
   isTechnician: boolean,
   technicianId?: string
 ) {
+  // EXISTS, not INNER JOIN: a job with two DONE/DELIVERED transitions in
+  // the window (e.g. delivered → undone → delivered) would multiply its
+  // parts cost once per matching audit row.
   return prisma.$queryRaw<{ cost: string }[]>`
     SELECT COALESCE(SUM(pt."totalCost"), 0) AS cost
     FROM "jobs" j
-    INNER JOIN "audit_logs" al ON al."jobId" = j."id"
-      AND al."action" = 'STATUS_CHANGED'
-      AND al."toValue" IN ('DONE', 'DELIVERED')
-      AND al."createdAt" >= ${rangeStart} AND al."createdAt" < ${rangeEnd}
     LEFT JOIN (SELECT "jobId", SUM("totalCost") AS "totalCost" FROM "job_parts" GROUP BY "jobId") pt
       ON pt."jobId" = j."id"
     WHERE j."status" IN ('DONE', 'DELIVERED')
+      AND EXISTS (
+        SELECT 1 FROM "audit_logs" al
+        WHERE al."jobId" = j."id"
+          AND al."action" = 'STATUS_CHANGED'
+          AND al."toValue" IN ('DONE', 'DELIVERED')
+          AND al."createdAt" >= ${rangeStart} AND al."createdAt" < ${rangeEnd}
+      )
       ${
         isTechnician
           ? Prisma.sql`AND j."technicianId" = ${technicianId}`

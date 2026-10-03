@@ -47,7 +47,8 @@ export default function FrontDeskPage() {
         (j) => ACTIVE_STATUSES.includes(j.status) || isCompleted(j.status)
       )
       .map((j) => ({
-        id: j.jobCode,
+        id: j.id,
+        jobCode: j.jobCode,
         deviceModel: `${j.device.brand?.name ?? ""} ${j.device.model}`,
         customerName: j.customer.name,
         status: j.status,

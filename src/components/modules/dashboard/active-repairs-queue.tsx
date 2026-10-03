@@ -9,6 +9,7 @@ interface RepairJob {
   deviceModel: string;
   estimatedCompletion?: string;
   id: string;
+  jobCode: string;
   status: JobStatusType;
   technician: string;
 }
@@ -46,7 +47,7 @@ export default function ActiveRepairsQueue({ jobs }: ActiveRepairsQueueProps) {
                 <div className="mb-4 flex items-start justify-between">
                   <div>
                     <p className="mb-1 font-bold text-on-surface-variant text-xs uppercase tracking-wide">
-                      {t("job_id")}: {job.id}
+                      {t("job_id")}: {job.jobCode}
                     </p>
                     <h3 className="font-extrabold font-headline text-primary text-xl">
                       {job.deviceModel}

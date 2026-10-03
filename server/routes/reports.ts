@@ -149,11 +149,17 @@ export const reportsRoutes: FastifyPluginAsync = async (app) => {
       const acceptLang = (req.headers["accept-language"] ?? "")
         .split(",")[0]
         .slice(0, 2);
-      const locale =
-        acceptLang === "en" || acceptLang === "fr" ? acceptLang : "pt";
+      const locale = ["en", "es", "fr"].includes(acceptLang)
+        ? acceptLang
+        : "pt";
+      const dateLocale =
+        ({ fr: "fr-FR", en: "en-GB", es: "es-ES" } as Record<string, string>)[
+          locale
+        ] ?? "pt-PT";
       const html = await renderOrdersReportHtml(app.prisma, report, {
-        from: range.start.toLocaleDateString("pt-PT"),
-        to: range.end.toLocaleDateString("pt-PT"),
+        from: range.start.toLocaleDateString(dateLocale),
+        // range.end is exclusive — display the last covered day instead.
+        to: new Date(range.end.getTime() - 1).toLocaleDateString(dateLocale),
         status: q.status,
         includeMargin,
         locale,

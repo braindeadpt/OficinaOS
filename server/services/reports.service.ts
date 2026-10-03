@@ -367,15 +367,21 @@ export async function insightsReport(
   const [customerJobGroups, newCustomerIds, totalJobs, topCustomersRaw] =
     await Promise.all([
       groupJobsByCustomer(db, baseWhere),
-      groupJobsByCustomerWithMinDate(db, baseWhere),
+      // All-time earliest job per customer — filtering createdAt here would
+      // clamp _min to the window and mark every customer "new".
+      groupJobsByCustomerWithMinDate(db, scopeWhere(scope)),
       countJobsSimple(db, baseWhere),
       groupTopCustomersByRevenue(db, baseWhere),
     ]);
 
+  const earliestByCustomer = new Map(
+    newCustomerIds.map((g) => [g.customerId, g._min.createdAt])
+  );
   let newCount = 0;
   let returningCount = 0;
-  for (const g of newCustomerIds) {
-    const earliestJob = g._min.createdAt;
+  for (const g of customerJobGroups) {
+    const earliestJob = earliestByCustomer.get(g.customerId);
+    // New = the customer's first-ever job falls inside the report window.
     if (earliestJob && earliestJob >= range.start && earliestJob < range.end) {
       newCount++;
     } else {

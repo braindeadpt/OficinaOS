@@ -463,19 +463,25 @@ describe("recentActivityForTech", () => {
 // ---------------------------------------------------------------------------
 
 describe("avgRepairTimeHours", () => {
-  it("computes average from created→updated deltas", async () => {
+  it("computes average from created→DELIVERED-transition deltas", async () => {
     const findMany = vi.fn().mockResolvedValue([
       {
-        createdAt: new Date("2025-04-24T08:00:00Z"),
-        updatedAt: new Date("2025-04-24T18:00:00Z"),
+        createdAt: new Date("2025-04-24T18:00:00Z"),
+        job: {
+          id: "job-1",
+          createdAt: new Date("2025-04-24T08:00:00Z"),
+        },
       },
       {
-        createdAt: new Date("2025-04-24T08:00:00Z"),
-        updatedAt: new Date("2025-04-24T13:00:00Z"),
+        createdAt: new Date("2025-04-24T13:00:00Z"),
+        job: {
+          id: "job-2",
+          createdAt: new Date("2025-04-24T08:00:00Z"),
+        },
       },
     ]);
     const prisma = makePrisma({
-      job: { findMany, count: vi.fn(), groupBy: vi.fn() },
+      auditLog: { findMany },
     });
     const result = await avgRepairTimeHours(prisma, "tech-1", 30);
     // (10h + 5h) / 2 = 7.5

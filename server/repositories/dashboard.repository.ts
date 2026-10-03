@@ -81,16 +81,6 @@ export function findDeliveredJobs(
   return prisma.job.findMany({ where, select, orderBy, take });
 }
 
-export function findRepairTimeJobs(
-  prisma: DbClient,
-  where: Prisma.JobWhereInput
-) {
-  return prisma.job.findMany({
-    where,
-    select: { createdAt: true, updatedAt: true },
-  });
-}
-
 export function findActiveRepairs(
   prisma: DbClient,
   where: Prisma.JobWhereInput,
@@ -153,6 +143,10 @@ export function queryRevenueAndCost(
   rangeEnd: Date,
   technicianCond: Prisma.Sql | typeof Prisma.empty
 ) {
+  // Revenue is attributed to the actual DELIVERED transition (latest
+  // STATUS_CHANGED → DELIVERED audit row), not updatedAt — a note added
+  // months later must not move revenue into the current period. Jobs
+  // delivered before audit logging existed fall back to updatedAt.
   return prisma.$queryRaw<RevCostRow[]>(
     Prisma.sql`SELECT
         COALESCE(SUM(rt.total), 0) + COALESCE(SUM(pt.total), 0) AS revenue,
@@ -162,8 +156,14 @@ export function queryRevenueAndCost(
         ON rt."jobId" = j."id"
       LEFT JOIN (SELECT "jobId", SUM("totalCost") AS total FROM "job_parts" GROUP BY "jobId") pt
         ON pt."jobId" = j."id"
+      LEFT JOIN (SELECT "jobId", MAX("createdAt") AS delivered_at
+                 FROM "audit_logs"
+                 WHERE "action" = 'STATUS_CHANGED' AND "toValue" = 'DELIVERED'
+                 GROUP BY "jobId") d
+        ON d."jobId" = j."id"
       WHERE j."status" = 'DELIVERED'
-        AND j."updatedAt" >= ${rangeStart} AND j."updatedAt" < ${rangeEnd}
+        AND COALESCE(d.delivered_at, j."updatedAt") >= ${rangeStart}
+        AND COALESCE(d.delivered_at, j."updatedAt") < ${rangeEnd}
         ${technicianCond}`
   );
 }
@@ -200,7 +200,12 @@ export function queryFinancialTrend(
      FROM series s
      LEFT JOIN "jobs" j
        ON j."status" = 'DELIVERED'
-      AND (j."updatedAt" AT TIME ZONE ${shopTz})::date = s.day
+      AND (COALESCE(
+            (SELECT MAX(a."createdAt") FROM "audit_logs" a
+             WHERE a."jobId" = j."id"
+               AND a."action" = 'STATUS_CHANGED' AND a."toValue" = 'DELIVERED'),
+            j."updatedAt"
+          ) AT TIME ZONE ${shopTz})::date = s.day
       ${technicianCond}
      LEFT JOIN repair_totals rt ON rt."jobId" = j."id"
      LEFT JOIN parts_totals pt ON pt."jobId" = j."id"

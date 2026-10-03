@@ -42,7 +42,10 @@ function resolveLocale(lang: string): string {
 function usePrevMonthName(): string {
   const { i18n } = useTranslation();
   return useMemo(() => {
+    // setMonth(-1) on the 31st overflows into the following month
+    // (Mar 31 → Mar 3, not Feb) — anchor to the 1st before subtracting.
     const now = new Date();
+    now.setDate(1);
     now.setMonth(now.getMonth() - 1);
     return now.toLocaleDateString(resolveLocale(i18n.language), {
       month: "short",

@@ -24,7 +24,6 @@ import {
   findLowStockParts,
   findOverdueJobs,
   findPickupReady,
-  findRepairTimeJobs,
   findScheduledForTech,
   findTodayIntakes,
   findWarrantyReturns,
@@ -340,20 +339,39 @@ async function calculateAvgRepairTime(
   days: number
 ): Promise<number> {
   const since = new Date(Date.now() - days * 86_400_000);
-  const rows = await findRepairTimeJobs(prisma, {
-    status: JobStatus.DELIVERED,
-    updatedAt: { gte: since },
-    ...whereClause,
-  });
-  if (rows.length === 0) {
+  // MTTR is measured to the actual DELIVERED transition, not updatedAt —
+  // any later edit (note, payment) would otherwise stretch the time.
+  const transitions = await auditLogFindMany(
+    prisma,
+    {
+      action: "STATUS_CHANGED",
+      createdAt: { gte: since },
+      job: { status: JobStatus.DELIVERED, ...whereClause },
+      toValue: "DELIVERED",
+    },
+    { job: { select: { createdAt: true, id: true } } },
+    { createdAt: "asc" },
+    5000
+  );
+  // Keep the latest transition per job (deliver → undo → deliver counts once).
+  const latestByJob = new Map<string, { jobCreatedAt: Date; at: Date }>();
+  for (const tr of transitions) {
+    if (!tr.job) {
+      continue;
+    }
+    latestByJob.set(tr.job.id, {
+      at: tr.createdAt,
+      jobCreatedAt: tr.job.createdAt,
+    });
+  }
+  if (latestByJob.size === 0) {
     return 0;
   }
-  const totalHours = rows.reduce(
-    (sum, j) =>
-      sum + (j.updatedAt.getTime() - j.createdAt.getTime()) / 3_600_000,
-    0
-  );
-  return Math.round((totalHours / rows.length) * 10) / 10;
+  let totalHours = 0;
+  for (const { at, jobCreatedAt } of latestByJob.values()) {
+    totalHours += (at.getTime() - jobCreatedAt.getTime()) / 3_600_000;
+  }
+  return Math.round((totalHours / latestByJob.size) * 10) / 10;
 }
 
 export async function avgRepairTimeHours(
