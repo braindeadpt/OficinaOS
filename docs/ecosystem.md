@@ -108,6 +108,7 @@ a funcionalidade se o módulo não constar nos entitlements.
 - **Copy do site** (todo o texto público): `oficinaos-website/src/i18n/{pt,en,es}.ts` — data-driven, `Copy` deriva de `pt.ts`
 - **Docs ao utilizador**: `oficinaos-website` `/docs` + `/docs/{portal,whatsapp,diag}` — o site, não os `.md`, é a fonte para clientes
 - **Docs técnicas**: `reparilo/docs/` (pro-modules.md, remote-access.md, mobile-access.md, privacy-and-data.md, este mapa)
+- **Roadmap aprovado (não implementado)**: `docs/marketplace.md` — classificados B2B entre lojas, pós-beta; `oficinaos-diag/docs/roadmap.md` — licença scrcpy (Apache-2.0, OK comercial) + plano do auto-orçamento determinístico
 
 ## Regras transversais (aplicam-se a todos os repos)
 
