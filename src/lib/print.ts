@@ -8,7 +8,10 @@ import { useSettingsStore } from "@/stores/settings";
 // back to the browser print dialog, which works with any installed printer.
 export function usesThermalPrinter(): boolean {
   const s = useSettingsStore.getState().shopSettings;
-  return s?.printerMode === "escpos" && !!s.printerHost;
+  // A4 paper means the shop wants full-page documents — always the dialog.
+  return (
+    s?.printerMode === "escpos" && !!s.printerHost && s.receiptPaper !== "a4"
+  );
 }
 
 export async function printJobReceipt(jobId: string): Promise<void> {
