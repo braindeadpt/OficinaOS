@@ -222,6 +222,60 @@ describe("public pre-check endpoint", () => {
     );
   });
 
+  it("accepts a valid scheduledFor in the future", async () => {
+    mocks.submitPreCheckRequest.mockResolvedValue({
+      code: "PRE-2026-000001",
+      id: "req-1",
+    });
+    const app = buildApp();
+    const scheduledFor = new Date(Date.now() + 3 * 86_400_000).toISOString();
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/public/pre-check",
+      payload: { ...VALID, scheduledFor },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(mocks.submitPreCheckRequest).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ scheduledFor }),
+      expect.anything()
+    );
+  });
+
+  it("rejects a scheduledFor in the past", async () => {
+    const app = buildApp();
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/public/pre-check",
+      payload: {
+        ...VALID,
+        scheduledFor: new Date(Date.now() - 86_400_000).toISOString(),
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(mocks.submitPreCheckRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects a scheduledFor beyond 30 days", async () => {
+    const app = buildApp();
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/public/pre-check",
+      payload: {
+        ...VALID,
+        scheduledFor: new Date(Date.now() + 31 * 86_400_000).toISOString(),
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(mocks.submitPreCheckRequest).not.toHaveBeenCalled();
+  });
+
   it("rejects missing required fields before touching the service", async () => {
     const app = buildApp();
 

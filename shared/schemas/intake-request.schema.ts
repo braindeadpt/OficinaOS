@@ -22,6 +22,17 @@ export const preCheckSubmitSchema = z.object({
   deviceLabel: z.string().trim().min(2).max(100),
   problem: z.string().trim().min(10).max(2000),
   whatsappOptIn: z.boolean().optional(),
+  // Optional appointment request — ISO 8601, must be in the future and
+  // within the next 30 days. The shop confirms availability by phone.
+  scheduledFor: z
+    .string()
+    .datetime({ offset: true })
+    .refine((v) => {
+      const ts = Date.parse(v);
+      const now = Date.now();
+      return ts > now - 60_000 && ts < now + 30 * 86_400_000;
+    })
+    .optional(),
 });
 
 export const convertIntakeRequestSchema = z.object({

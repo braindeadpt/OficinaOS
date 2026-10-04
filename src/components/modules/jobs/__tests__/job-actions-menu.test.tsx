@@ -10,6 +10,10 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
+// print.ts pulls the real i18n chain (initReactI18next) — stub it so the
+// jsdom test doesn't need the full module.
+vi.mock("@/i18n", () => ({ default: { t: (key: string) => key } }));
+
 const mockTransitionStatus = vi.fn().mockResolvedValue({});
 
 vi.mock("@/stores/jobs", () => ({

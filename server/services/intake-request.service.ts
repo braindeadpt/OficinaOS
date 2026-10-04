@@ -39,6 +39,7 @@ export async function submitPreCheckRequest(
     customerPhone: input.customerPhone,
     deviceLabel: input.deviceLabel,
     problem: input.problem,
+    scheduledFor: input.scheduledFor ? new Date(input.scheduledFor) : null,
     whatsappOptIn: input.whatsappOptIn ?? false,
   });
 

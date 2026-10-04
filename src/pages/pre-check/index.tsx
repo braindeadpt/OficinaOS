@@ -39,6 +39,7 @@ interface FormState {
   customerPhone: string;
   deviceLabel: string;
   problem: string;
+  scheduledFor: string;
   whatsappOptIn: boolean;
 }
 
@@ -49,6 +50,7 @@ const INITIAL: FormState = {
   customerPhone: "",
   deviceLabel: "",
   problem: "",
+  scheduledFor: "",
   whatsappOptIn: false,
 };
 
@@ -61,6 +63,12 @@ export default function PreCheckPage() {
 
   const set = (patch: Partial<FormState>) =>
     setForm((prev) => ({ ...prev, ...patch }));
+
+  // datetime-local wants "YYYY-MM-DDTHH:mm" in local time — no bookings
+  // earlier than now.
+  const minSlot = new Date(Date.now() - new Date().getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 16);
 
   const canSubmit =
     form.customerName.trim().length >= 2 &&
@@ -83,6 +91,9 @@ export default function PreCheckPage() {
         customerPhone: form.customerPhone.trim(),
         deviceLabel: form.deviceLabel.trim(),
         problem: form.problem.trim(),
+        scheduledFor: form.scheduledFor
+          ? new Date(form.scheduledFor).toISOString()
+          : undefined,
         whatsappOptIn: form.whatsappOptIn,
       });
       setSubmittedCode(res.data?.code ?? null);
@@ -230,6 +241,18 @@ export default function PreCheckPage() {
                       required
                       rows={4}
                       value={form.problem}
+                    />
+                  </Field>
+
+                  <Field
+                    hint={t("pre_check_schedule_hint")}
+                    label={t("pre_check_schedule")}
+                  >
+                    <Input
+                      min={minSlot}
+                      onChange={(e) => set({ scheduledFor: e.target.value })}
+                      type="datetime-local"
+                      value={form.scheduledFor}
                     />
                   </Field>
 

@@ -131,6 +131,7 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
           customerPhone: { type: "string" },
           deviceLabel: { type: "string" },
           problem: { type: "string" },
+          scheduledFor: { type: "string" },
           whatsappOptIn: { type: "boolean" },
         },
         type: "object",

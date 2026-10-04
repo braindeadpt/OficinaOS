@@ -41,6 +41,7 @@ interface IntakeRequest {
   job: { jobCode: string } | null;
   jobId: string | null;
   problem: string;
+  scheduledFor: string | null;
   status: "PENDING" | "CONVERTED" | "DISMISSED";
   whatsappOptIn: boolean;
 }
@@ -257,6 +258,17 @@ export default function RequestsPage() {
                   <span className="text-on-surface-variant text-xs">
                     {fmtDate(r.createdAt)}
                   </span>
+                  {r.scheduledFor && (
+                    <span
+                      className="flex items-center gap-1 rounded-lg bg-secondary-container/40 px-2 py-0.5 font-medium text-on-secondary-container text-xs"
+                      title={t("requests_scheduled_hint")}
+                    >
+                      <span className="material-symbols-outlined text-sm">
+                        event
+                      </span>
+                      {fmtDate(r.scheduledFor)}
+                    </span>
+                  )}
                   {r.whatsappOptIn && (
                     <span className="flex items-center gap-1 rounded-lg bg-tertiary-container/30 px-2 py-0.5 text-on-tertiary-container text-xs">
                       <span className="material-symbols-outlined text-sm">

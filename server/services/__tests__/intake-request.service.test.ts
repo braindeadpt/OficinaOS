@@ -102,6 +102,37 @@ describe("submitPreCheckRequest", () => {
     );
   });
 
+  it("persists the requested appointment as scheduledFor", async () => {
+    const prisma = mockPrisma();
+    vi.mocked(prisma.intakeRequest.create).mockResolvedValue({
+      id: "req-1",
+      code: "PRE-2026-000007",
+    } as never);
+    const scheduledFor = "2026-10-15T10:30:00.000Z";
+
+    await submitPreCheckRequest(prisma, { ...INPUT, scheduledFor }, NOTIFY_CTX);
+
+    expect(prisma.intakeRequest.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        scheduledFor: new Date(scheduledFor),
+      }),
+    });
+  });
+
+  it("stores null scheduledFor when the customer did not pick a time", async () => {
+    const prisma = mockPrisma();
+    vi.mocked(prisma.intakeRequest.create).mockResolvedValue({
+      id: "req-1",
+      code: "PRE-2026-000007",
+    } as never);
+
+    await submitPreCheckRequest(prisma, INPUT, NOTIFY_CTX);
+
+    expect(prisma.intakeRequest.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ scheduledFor: null }),
+    });
+  });
+
   it("skips notify when no staff user exists", async () => {
     findManyUsersMock.mockResolvedValue([]);
     const prisma = mockPrisma();

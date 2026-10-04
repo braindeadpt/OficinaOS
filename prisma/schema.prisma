@@ -516,6 +516,9 @@ model IntakeRequest {
   deviceLabel   String
   problem       String              @db.Text
   whatsappOptIn Boolean             @default(false)
+  // Optional appointment the customer asked for on the public form — a
+  // request, not a confirmed booking; staff confirms by phone.
+  scheduledFor  DateTime?           @db.Timestamptz
   status        IntakeRequestStatus @default(PENDING)
   jobId         String?
   job           Job?                @relation(fields: [jobId], references: [id], onDelete: SetNull)
