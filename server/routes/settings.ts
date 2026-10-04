@@ -7,6 +7,7 @@ import {
 } from "@shared/schemas/settings.schema";
 import type { FastifyPluginAsync } from "fastify";
 import { requirePermission } from "../middlewares/rbac.js";
+import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import { getAppVersionInfo } from "../services/app-version.service.js";
 import { getBackupStatus } from "../services/backup-status.service.js";
 import {
@@ -15,6 +16,10 @@ import {
   syncCloudEntitlements,
   unpairCloud,
 } from "../services/cloud.service.js";
+import {
+  buildTestTicketEscPos,
+  sendToPrinter,
+} from "../services/escpos.service.js";
 import {
   getAiSettings,
   getShopSettings,
@@ -121,6 +126,35 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
     },
     async (_req, reply) => {
       await unpairCloud(app.prisma);
+      return reply.send({ ok: true });
+    }
+  );
+
+  // Test ticket on a network ESC/POS printer — uses the submitted host/port
+  // when provided (test before saving), otherwise the saved settings.
+  app.post(
+    "/printer-test",
+    {
+      preHandler: [requirePermission({ settings: ["edit"] })],
+      schema: {
+        tags: ["settings"],
+        summary: "Send a test ticket to a network thermal printer",
+        body: { type: "object", additionalProperties: true },
+      },
+    },
+    async (req, reply) => {
+      const body = (req.body ?? {}) as { host?: string; port?: number };
+      const settings = await findShopSettingsUnique(app.prisma);
+      const host = body.host ?? settings?.printerHost;
+      const port = body.port ?? settings?.printerPort ?? 9100;
+      if (!host) {
+        throw new AppError("PRINTER_NOT_CONFIGURED");
+      }
+      try {
+        await sendToPrinter(host, port, buildTestTicketEscPos(settings));
+      } catch {
+        throw new AppError("PRINTER_UNREACHABLE");
+      }
       return reply.send({ ok: true });
     }
   );

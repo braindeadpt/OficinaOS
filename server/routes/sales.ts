@@ -6,6 +6,11 @@ import {
 import type { FastifyPluginAsync } from "fastify";
 import { resolveUrls } from "../config/env.js";
 import { requirePermission } from "../middlewares/rbac.js";
+import { findShopSettingsUnique } from "../repositories/settings.repository.js";
+import {
+  buildSaleReceiptEscPos,
+  sendEscPos,
+} from "../services/escpos.service.js";
 import { renderSaleReceiptHtml } from "../services/receipt.service.js";
 import {
   create as createSale,
@@ -135,6 +140,36 @@ export const saleRoutes: FastifyPluginAsync = async (app) => {
       return reply
         .header("Content-Type", "text/html; charset=utf-8")
         .send(html);
+    }
+  );
+
+  app.post(
+    "/:id/print-receipt",
+    {
+      schema: {
+        tags: ["sales"],
+        summary: "Print sale receipt on the configured ESC/POS network printer",
+        params: {
+          type: "object",
+          properties: { id: { type: "string" } },
+          required: ["id"],
+        },
+      },
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const sale = await getSaleById(app.prisma, id);
+      if (!sale) {
+        throw new AppError("SALE_NOT_FOUND");
+      }
+      const settings = await findShopSettingsUnique(app.prisma);
+      const data = buildSaleReceiptEscPos(
+        settings,
+        sale as unknown as Parameters<typeof buildSaleReceiptEscPos>[1],
+        { locale: req.locale }
+      );
+      await sendEscPos(settings, data);
+      return reply.send({ ok: true });
     }
   );
 };

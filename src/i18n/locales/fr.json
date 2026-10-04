@@ -2019,10 +2019,10 @@
     "confirm_purchase": "Confirmer l'achat de cet appareil ?",
     "confirm_sell": "Marquer cet appareil comme vendu ?",
     "confirm_cancel": "Annuler cet échange ?",
-    "transition_failed": "Échec de la mise à jour de l'échange",
-    "page_of": "Page {{page}} sur {{pages}}",
     "confirm_title": "Confirmer",
-    "confirm_yes": "Confirmer"
+    "confirm_yes": "Confirmer",
+    "transition_failed": "Échec de la mise à jour de l'échange",
+    "page_of": "Page {{page}} sur {{pages}}"
   },
   "validations": {
     "required": "Ce champ est obligatoire",
@@ -2212,5 +2212,18 @@
   "print_show_problem": "Problème signalé",
   "print_show_signature": "Signature du client",
   "print_show_qr": "Code QR de suivi",
-  "print_show_warranty": "Garantie"
+  "print_show_warranty": "Garantie",
+  "print_method_label": "Méthode d'impression",
+  "print_method_browser": "Boîte de dialogue Imprimer (toute imprimante installée)",
+  "print_method_escpos": "Imprimante thermique réseau (ESC/POS)",
+  "print_host": "Adresse IP de l'imprimante",
+  "print_host_help": "IP ou nom d'hôte de l'imprimante réseau - par ex. ",
+  "print_port": "Port imprimante",
+  "print_test": "Envoyer un ticket de test",
+  "print_test_success": "Ticket de test envoyé — vérifiez l'imprimante",
+  "print_test_failed": "Impossible d'atteindre l'imprimante : vérifiez l'adresse IP, le port et le réseau",
+  "print_sent": "Reçu envoyé à l'imprimeur",
+  "print_send_failed": "Impossible d'atteindre l'imprimante : vérifiez les paramètres d'impression",
+  "errors.printer_not_configured": "Aucune imprimante réseau configurée : définissez-la dans Paramètres ou utilisez la boîte de dialogue d'impression.",
+  "errors.printer_unreachable": "Imprimante inaccessible : vérifiez l'adresse IP, le port et sa présence sur le réseau"
 }

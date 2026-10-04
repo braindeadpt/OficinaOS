@@ -2019,10 +2019,10 @@
     "confirm_purchase": "¿Confirmar la compra de este dispositivo?",
     "confirm_sell": "¿Marcar este dispositivo como vendido?",
     "confirm_cancel": "¿Cancelar este intercambio?",
-    "transition_failed": "No se pudo actualizar el intercambio",
-    "page_of": "Página {{page}} de {{pages}}",
     "confirm_title": "Confirmar",
-    "confirm_yes": "Confirmar"
+    "confirm_yes": "Confirmar",
+    "transition_failed": "No se pudo actualizar el intercambio",
+    "page_of": "Página {{page}} de {{pages}}"
   },
   "validations": {
     "required": "Este campo es obligatorio",
@@ -2212,5 +2212,18 @@
   "print_show_problem": "Problema reportado",
   "print_show_signature": "Firma del cliente",
   "print_show_qr": "Seguimiento del código QR",
-  "print_show_warranty": "Garantía"
+  "print_show_warranty": "Garantía",
+  "print_method_label": "Método de impresión",
+  "print_method_browser": "Cuadro de diálogo Imprimir (cualquier impresora instalada)",
+  "print_method_escpos": "Impresora térmica de red (ESC/POS)",
+  "print_host": "Dirección IP de la impresora",
+  "print_host_help": "IP o nombre de host de la impresora de red, p. ",
+  "print_port": "Puerto de impresora",
+  "print_test": "Enviar ticket de prueba",
+  "print_test_success": "Ticket de prueba enviado — revisa la impresora",
+  "print_test_failed": "No se pudo conectar con la impresora: verifique la IP, el puerto y la red",
+  "print_sent": "Recibo enviado a la impresora.",
+  "print_send_failed": "No se pudo conectar con la impresora — revisa la configuración de impresión",
+  "errors.printer_not_configured": "No hay ninguna impresora de red configurada: configúrela en Configuración o use el cuadro de diálogo de impresión",
+  "errors.printer_unreachable": "Impresora inaccesible — revisa la IP, el puerto y que esté en la red"
 }

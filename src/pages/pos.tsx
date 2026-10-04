@@ -9,6 +9,7 @@ import { CardSkeleton } from "@/components/ui/skeleton";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
 import type { ApiError } from "@/lib/api";
+import { printSaleReceipt, usesThermalPrinter } from "@/lib/print";
 import { usePartsCatalogStore } from "@/stores/parts-catalog";
 import { useSalesStore } from "@/stores/sales";
 
@@ -111,7 +112,9 @@ export default function PosPage() {
 
   const handleCheckout = useCallback(async () => {
     // window.open after `await` is popup-blocked — reserve the tab now.
-    const receiptTab = window.open("", "_blank");
+    // With a configured ESC/POS printer the server prints directly, no tab.
+    const thermal = usesThermalPrinter();
+    const receiptTab = thermal ? null : window.open("", "_blank");
     try {
       // When a cash customer overpays, the recorded payment is what was
       // applied to the sale — the rest leaves the till as change.
@@ -130,7 +133,9 @@ export default function PosPage() {
       toast.success(t("pos.sale_completed", { code: sale.saleCode }));
       setShowCheckout(false);
       setPayments([]);
-      if (receiptTab) {
+      if (thermal) {
+        printSaleReceipt(sale.id);
+      } else if (receiptTab) {
         receiptTab.location.href = `/api/sales/${sale.id}/receipt`;
       }
     } catch (err: unknown) {

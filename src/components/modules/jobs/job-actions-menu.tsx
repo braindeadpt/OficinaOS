@@ -10,6 +10,7 @@ import {
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { printJobReceipt } from "@/lib/print";
 import { useJobsStore } from "@/stores/jobs";
 import JobCancelDialog from "./job-cancel-dialog";
 import JobNoteDialog from "./job-note-dialog";
@@ -196,10 +197,7 @@ export default function JobActionsMenu({ job }: JobActionsMenuProps) {
             <button
               className="flex w-full items-center gap-3 px-4 py-2 font-medium text-on-surface text-sm transition-colors hover:bg-surface-container-low"
               onClick={() => {
-                window.open(
-                  `/api/receipts/${job.rawJob?.id ?? job.id}/receipt`,
-                  "_blank"
-                );
+                printJobReceipt(job.rawJob?.id ?? job.id);
                 close();
               }}
               type="button"

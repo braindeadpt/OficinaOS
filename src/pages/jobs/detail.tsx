@@ -22,6 +22,7 @@ import TechnicianSelect from "@/components/modules/jobs/technician-select";
 import CreateWizardModal from "@/components/modules/returns/create-wizard-modal";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
 import { copyTextToClipboard } from "@/lib/clipboard";
+import { printJobReceipt } from "@/lib/print";
 import { useJobsStore } from "@/stores/jobs";
 import { useSettingsStore } from "@/stores/settings";
 import { useUiStore } from "@/stores/ui";
@@ -337,9 +338,7 @@ export default function JobDetailPage() {
         <div className="mt-6 flex flex-wrap items-center gap-3">
           <button
             className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-primary px-5 font-bold font-headline text-on-primary text-sm transition-colors hover:bg-primary-container hover:text-on-primary-container"
-            onClick={() =>
-              window.open(`/api/receipts/${job.id}/receipt`, "_blank")
-            }
+            onClick={() => printJobReceipt(job.id)}
             type="button"
           >
             <span className="material-symbols-outlined text-[18px]">print</span>

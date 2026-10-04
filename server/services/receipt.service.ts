@@ -19,7 +19,7 @@ export async function generateTrackingQr(
   });
 }
 
-function phone4Of(phone: string | null | undefined): string | undefined {
+export function phone4Of(phone: string | null | undefined): string | undefined {
   const digits = (phone ?? "").replace(/\D/g, "");
   return digits.length >= 4 ? digits.slice(-4) : undefined;
 }
@@ -36,7 +36,7 @@ function escMultiline(s: string): string {
   return esc(s).replace(/\r?\n/g, "<br>");
 }
 
-function fmtMoney(
+export function fmtMoney(
   v: number | { toNumber: () => number },
   currency = "EUR"
 ): string {
@@ -44,10 +44,10 @@ function fmtMoney(
   return `${n.toLocaleString("en-US")} ${currency}`;
 }
 
-const toNum = (v: number | { toNumber: () => number }) =>
+export const toNum = (v: number | { toNumber: () => number }) =>
   typeof v === "number" ? v : v.toNumber();
 
-interface ReceiptStrings {
+export interface ReceiptStrings {
   balanceDue: string;
   customer: string;
   dateLocale: string;
@@ -205,7 +205,7 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
   },
 };
 
-function receiptStrings(locale?: string): ReceiptStrings {
+export function receiptStrings(locale?: string): ReceiptStrings {
   return RECEIPT_STRINGS[locale ?? ""] ?? RECEIPT_STRINGS.pt;
 }
 

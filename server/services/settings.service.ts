@@ -85,52 +85,60 @@ export async function getShopSettings(prisma: PrismaClient) {
   return rest;
 }
 
+const shopCreate = (input: UpdateShopSettingsInput) => ({
+  address: input.address ?? null,
+  countryCode: input.countryCode ?? "PT",
+  currency: input.currency ?? "EUR",
+  id: "default",
+  phone: input.phone ?? null,
+  receiptFooter: input.receiptFooter ?? null,
+  receiptPaper: input.receiptPaper ?? "80mm",
+  receiptShowImei: input.receiptShowImei ?? true,
+  receiptShowProblem: input.receiptShowProblem ?? true,
+  receiptShowSignature: input.receiptShowSignature ?? true,
+  receiptShowQr: input.receiptShowQr ?? true,
+  receiptShowWarranty: input.receiptShowWarranty ?? true,
+  labelSize: input.labelSize ?? "40x20",
+  printerMode: input.printerMode ?? "browser",
+  printerHost: input.printerHost ?? null,
+  printerPort: input.printerPort ?? 9100,
+  monthlyRevenueGoal: input.monthlyRevenueGoal ?? null,
+  reviewUrl: input.reviewUrl?.trim() || null,
+  shopName: input.shopName,
+});
+
+const shopUpdate = (input: UpdateShopSettingsInput) => ({
+  address: input.address,
+  countryCode: input.countryCode,
+  currency: input.currency,
+  phone: input.phone,
+  receiptFooter: input.receiptFooter,
+  receiptPaper: input.receiptPaper,
+  receiptShowImei: input.receiptShowImei,
+  receiptShowProblem: input.receiptShowProblem,
+  receiptShowSignature: input.receiptShowSignature,
+  receiptShowQr: input.receiptShowQr,
+  receiptShowWarranty: input.receiptShowWarranty,
+  labelSize: input.labelSize,
+  printerMode: input.printerMode,
+  printerHost: input.printerHost,
+  printerPort: input.printerPort,
+  monthlyRevenueGoal:
+    input.monthlyRevenueGoal === undefined
+      ? undefined
+      : input.monthlyRevenueGoal || null,
+  reviewUrl:
+    input.reviewUrl === undefined ? undefined : input.reviewUrl.trim() || null,
+  shopName: input.shopName,
+});
+
 export async function upsertShopSettings(
   prisma: PrismaClient,
   input: UpdateShopSettingsInput
 ) {
   return await upsertShopSettingsRepo(prisma, {
-    create: {
-      address: input.address ?? null,
-      countryCode: input.countryCode ?? "PT",
-      currency: input.currency ?? "EUR",
-      id: "default",
-      phone: input.phone ?? null,
-      receiptFooter: input.receiptFooter ?? null,
-      receiptPaper: input.receiptPaper ?? "80mm",
-      receiptShowImei: input.receiptShowImei ?? true,
-      receiptShowProblem: input.receiptShowProblem ?? true,
-      receiptShowSignature: input.receiptShowSignature ?? true,
-      receiptShowQr: input.receiptShowQr ?? true,
-      receiptShowWarranty: input.receiptShowWarranty ?? true,
-      labelSize: input.labelSize ?? "40x20",
-      monthlyRevenueGoal: input.monthlyRevenueGoal ?? null,
-      reviewUrl: input.reviewUrl?.trim() || null,
-      shopName: input.shopName,
-    },
-    update: {
-      address: input.address,
-      countryCode: input.countryCode,
-      currency: input.currency,
-      phone: input.phone,
-      receiptFooter: input.receiptFooter,
-      receiptPaper: input.receiptPaper,
-      receiptShowImei: input.receiptShowImei,
-      receiptShowProblem: input.receiptShowProblem,
-      receiptShowSignature: input.receiptShowSignature,
-      receiptShowQr: input.receiptShowQr,
-      receiptShowWarranty: input.receiptShowWarranty,
-      labelSize: input.labelSize,
-      monthlyRevenueGoal:
-        input.monthlyRevenueGoal === undefined
-          ? undefined
-          : input.monthlyRevenueGoal || null,
-      reviewUrl:
-        input.reviewUrl === undefined
-          ? undefined
-          : input.reviewUrl.trim() || null,
-      shopName: input.shopName,
-    },
+    create: shopCreate(input),
+    update: shopUpdate(input),
     where: { id: "default" },
   });
 }

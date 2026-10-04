@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useModalEffects } from "@/hooks/use-modal-effects";
+import { printJobReceipt } from "@/lib/print";
 import { useSettingsStore } from "@/stores/settings";
 import { useUiStore } from "@/stores/ui";
 
@@ -37,7 +38,9 @@ export default function PrintPreviewDialog() {
   }, [jobId]);
 
   const handlePrintReceipt = useCallback(() => {
-    window.open(`/api/receipts/${jobId}/receipt`, "_blank");
+    if (jobId) {
+      printJobReceipt(jobId);
+    }
   }, [jobId]);
 
   if (!jobId) {

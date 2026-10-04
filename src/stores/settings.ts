@@ -63,6 +63,9 @@ interface SettingsState {
     receiptShowQr?: boolean;
     receiptShowWarranty?: boolean;
     labelSize?: "40x20" | "57x32" | "62x29";
+    printerMode?: "browser" | "escpos";
+    printerHost?: string | null;
+    printerPort?: number;
     monthlyRevenueGoal?: number | null;
     reviewUrl?: string;
   }) => Promise<ShopSettings>;

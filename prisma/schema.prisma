@@ -1046,6 +1046,11 @@ model ShopSettings {
   receiptShowWarranty       Boolean  @default(true)
   // Job label sheet size: "40x20" | "57x32" | "62x29" (mm).
   labelSize                 String   @default("40x20")
+  // Direct network printing: "browser" (OS print dialog, any printer) or
+  // "escpos" (server sends ESC/POS over TCP to printerHost:printerPort).
+  printerMode               String   @default("browser")
+  printerHost               String?
+  printerPort               Int      @default(9100)
   // Meta mensal de faturação — progresso mostrado no dashboard do gerente.
   // Null = sem meta definida (não mostrar nada).
   monthlyRevenueGoal        Decimal? @db.Decimal(10, 2)

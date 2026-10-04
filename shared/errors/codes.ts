@@ -252,6 +252,16 @@ export const ERRORS = {
     status: 400,
     message: "errors.trade_in_signature_required",
   },
+
+  // ── Direct network printing (ESC/POS) ──────────────────────────────────
+  PRINTER_NOT_CONFIGURED: {
+    status: 400,
+    message: "errors.printer_not_configured",
+  },
+  PRINTER_UNREACHABLE: {
+    status: 502,
+    message: "errors.printer_unreachable",
+  },
 } as const;
 
 export type ErrorCode = keyof typeof ERRORS;

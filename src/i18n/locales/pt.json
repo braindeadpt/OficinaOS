@@ -2019,10 +2019,10 @@
     "confirm_purchase": "Confirmar a compra deste equipamento?",
     "confirm_sell": "Marcar este equipamento como vendido?",
     "confirm_cancel": "Cancelar esta retoma?",
-    "transition_failed": "Falha ao atualizar a retoma",
-    "page_of": "Página {{page}} de {{pages}}",
     "confirm_title": "Confirmar",
-    "confirm_yes": "Confirmar"
+    "confirm_yes": "Confirmar",
+    "transition_failed": "Falha ao atualizar a retoma",
+    "page_of": "Página {{page}} de {{pages}}"
   },
   "validations": {
     "required": "Este campo é de preenchimento obrigatório",
@@ -2212,5 +2212,18 @@
   "print_show_problem": "Problema reportado",
   "print_show_signature": "Assinatura do cliente",
   "print_show_qr": "Código QR de rastreio",
-  "print_show_warranty": "Garantia"
+  "print_show_warranty": "Garantia",
+  "print_method_label": "Método de impressão",
+  "print_method_browser": "Caixa de diálogo Imprimir (qualquer impressora instalada)",
+  "print_method_escpos": "Impressora térmica de rede (ESC/POS)",
+  "print_host": "Endereço IP da impressora",
+  "print_host_help": "IP ou nome de host da impressora de rede — p. 192.168.1.50.",
+  "print_port": "Porta de impressora",
+  "print_test": "Enviar ticket de teste",
+  "print_test_success": "Ticket de teste enviado – verifique a impressora",
+  "print_test_failed": "Não foi possível aceder à impressora — verifique o IP, a porta e a rede",
+  "print_sent": "Recibo enviado para a impressora",
+  "print_send_failed": "Não foi possível aceder à impressora — verifique as definições de impressão",
+  "errors.printer_not_configured": "Nenhuma impressora de rede configurada — defina-a em Definições ou utilize a caixa de diálogo de impressão",
+  "errors.printer_unreachable": "Impressora inacessível – verifique o IP, a porta e se está na rede"
 }

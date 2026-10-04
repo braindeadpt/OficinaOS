@@ -150,6 +150,9 @@ const SHOP_FORM_DEFAULT = {
   receiptShowQr: true,
   receiptShowWarranty: true,
   labelSize: "40x20" as "40x20" | "57x32" | "62x29",
+  printerMode: "browser" as "browser" | "escpos",
+  printerHost: "",
+  printerPort: 9100,
   monthlyRevenueGoal: "",
   reviewUrl: "",
 };
@@ -171,6 +174,11 @@ function formFromSettings(shopSettings: ShopSettings) {
     receiptShowQr: shopSettings.receiptShowQr ?? true,
     receiptShowWarranty: shopSettings.receiptShowWarranty ?? true,
     labelSize: label ?? "40x20",
+    printerMode: (shopSettings.printerMode === "escpos"
+      ? "escpos"
+      : "browser") as "browser" | "escpos",
+    printerHost: shopSettings.printerHost ?? "",
+    printerPort: shopSettings.printerPort ?? 9100,
     monthlyRevenueGoal:
       shopSettings.monthlyRevenueGoal === null ||
       shopSettings.monthlyRevenueGoal === undefined
@@ -242,6 +250,7 @@ export default function SettingsShopTab({
         ...shopForm,
         monthlyRevenueGoal:
           goal === "" || !Number.isFinite(parsedGoal) ? null : parsedGoal,
+        printerHost: shopForm.printerHost.trim() || null,
       });
       setShopFormInitial({ ...shopForm });
       onDirtyChange(false);
@@ -250,6 +259,18 @@ export default function SettingsShopTab({
       onToast(t("settings_save_error"), "error");
     } finally {
       onSavingChange(false);
+    }
+  }
+
+  async function handlePrinterTest() {
+    try {
+      await api.post("/settings/printer-test", {
+        host: shopForm.printerHost.trim() || undefined,
+        port: shopForm.printerPort,
+      });
+      onToast(t("print_test_success"), "success");
+    } catch {
+      onToast(t("print_test_failed"), "error");
     }
   }
 
@@ -529,6 +550,78 @@ export default function SettingsShopTab({
             </div>
           </div>
         </div>
+        <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="space-y-2">
+            <label
+              className="block font-semibold text-on-surface text-sm"
+              htmlFor="shop-printer-mode"
+            >
+              {t("print_method_label")}
+            </label>
+            <div className="relative">
+              <select
+                className="w-full cursor-pointer appearance-none rounded-xl border-none bg-surface-container-lowest px-4 py-3 pe-10 text-sm transition-all"
+                id="shop-printer-mode"
+                onChange={(e) => {
+                  setShopForm((f) => ({
+                    ...f,
+                    printerMode: e.target.value as typeof f.printerMode,
+                  }));
+                  onDirtyChange(true);
+                }}
+                value={shopForm.printerMode}
+              >
+                <option value="browser">{t("print_method_browser")}</option>
+                <option value="escpos">{t("print_method_escpos")}</option>
+              </select>
+              <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-on-surface-variant">
+                <span className="material-symbols-outlined text-[20px]">
+                  expand_more
+                </span>
+              </span>
+            </div>
+          </div>
+          {shopForm.printerMode === "escpos" && (
+            <>
+              <Field hint={t("print_host_help")} label={t("print_host")}>
+                <Input
+                  onChange={(e) => {
+                    setShopForm((f) => ({ ...f, printerHost: e.target.value }));
+                    onDirtyChange(true);
+                  }}
+                  placeholder="192.168.1.50"
+                  type="text"
+                  value={shopForm.printerHost}
+                />
+              </Field>
+              <Field label={t("print_port")}>
+                <Input
+                  min={1}
+                  onChange={(e) => {
+                    setShopForm((f) => ({
+                      ...f,
+                      printerPort: Number(e.target.value) || 9100,
+                    }));
+                    onDirtyChange(true);
+                  }}
+                  placeholder="9100"
+                  type="number"
+                  value={shopForm.printerPort}
+                />
+              </Field>
+            </>
+          )}
+        </div>
+        {shopForm.printerMode === "escpos" && (
+          <button
+            className="mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-surface-container-high px-5 font-bold font-headline text-on-surface text-sm transition-colors hover:bg-surface-container"
+            onClick={handlePrinterTest}
+            type="button"
+          >
+            <span className="material-symbols-outlined text-[18px]">print</span>
+            {t("print_test")}
+          </button>
+        )}
         <div className="mt-5 space-y-1">
           <p className="font-semibold text-on-surface text-sm">
             {t("print_sections_label")}

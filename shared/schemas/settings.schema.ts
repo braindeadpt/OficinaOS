@@ -39,6 +39,9 @@ export const updateShopSettingsSchema = z
     receiptShowQr: z.boolean().optional(),
     receiptShowWarranty: z.boolean().optional(),
     labelSize: z.enum(["40x20", "57x32", "62x29"]).optional(),
+    printerMode: z.enum(["browser", "escpos"]).optional(),
+    printerHost: z.string().trim().max(253).nullable().optional(),
+    printerPort: z.number().int().min(1).max(65_535).optional(),
     countryCode: z.string().optional(),
     timezone: z.string().min(1).optional(),
     // Meta mensal de faturação (€). 0/null limpa a meta.
@@ -71,6 +74,9 @@ export const updateShopSettingsSchema = z
       data.receiptShowQr !== undefined ||
       data.receiptShowWarranty !== undefined ||
       data.labelSize !== undefined ||
+      data.printerMode !== undefined ||
+      data.printerHost !== undefined ||
+      data.printerPort !== undefined ||
       data.countryCode !== undefined ||
       data.timezone !== undefined ||
       data.monthlyRevenueGoal !== undefined ||
