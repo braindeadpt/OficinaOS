@@ -2141,5 +2141,18 @@
   "jobs_deliver_anyway": "Deliver anyway",
   "jobs_detail_signature": "Signature",
   "shop_revenue_goal": "Monthly revenue goal",
-  "shop_revenue_goal_help": "Target revenue per month — progress is shown on the dashboard. Leave empty to disable."
+  "shop_revenue_goal_help": "Target revenue per month — progress is shown on the dashboard. Leave empty to disable.",
+  "print_settings_title": "Printing",
+  "print_settings_help": "Documents open in the system print dialog — works with any installed printer (thermal, A4 or PDF).",
+  "print_paper_label": "Receipt paper",
+  "print_paper_58": "Thermal roll 58 mm",
+  "print_paper_80": "Thermal roll 80 mm",
+  "print_paper_a4": "A4 sheet (full document)",
+  "print_label_size": "Job label size",
+  "print_sections_label": "Receipt sections",
+  "print_show_imei": "IMEI",
+  "print_show_problem": "Reported problem",
+  "print_show_signature": "Customer signature",
+  "print_show_qr": "Tracking QR code",
+  "print_show_warranty": "Warranty"
 }

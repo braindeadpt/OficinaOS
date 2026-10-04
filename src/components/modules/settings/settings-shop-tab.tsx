@@ -1,4 +1,5 @@
 import { COUNTRIES, CURRENCIES } from "@shared/constants";
+import type { ShopSettings } from "@shared/types";
 import type { FormEvent } from "react";
 import {
   useCallback,
@@ -10,6 +11,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import api from "@/lib/api";
 import { getPhonePlaceholder } from "@/lib/phone-formats";
 import { useSettingsStore } from "@/stores/settings";
@@ -134,6 +136,50 @@ function RemoteBackupRows({ remote }: { remote: RemoteBackupStatus }) {
   );
 }
 
+const SHOP_FORM_DEFAULT = {
+  shopName: "",
+  address: "",
+  phone: "",
+  countryCode: "PT",
+  currency: "EUR",
+  receiptFooter: "",
+  receiptPaper: "80mm" as "58mm" | "80mm" | "a4",
+  receiptShowImei: true,
+  receiptShowProblem: true,
+  receiptShowSignature: true,
+  receiptShowQr: true,
+  receiptShowWarranty: true,
+  labelSize: "40x20" as "40x20" | "57x32" | "62x29",
+  monthlyRevenueGoal: "",
+  reviewUrl: "",
+};
+
+function formFromSettings(shopSettings: ShopSettings) {
+  const paper = shopSettings.receiptPaper as "58mm" | "80mm" | "a4" | null;
+  const label = shopSettings.labelSize as "40x20" | "57x32" | "62x29" | null;
+  return {
+    shopName: shopSettings.shopName ?? "",
+    address: shopSettings.address ?? "",
+    phone: shopSettings.phone ?? "",
+    countryCode: shopSettings.countryCode ?? "PT",
+    currency: shopSettings.currency ?? "EUR",
+    receiptFooter: shopSettings.receiptFooter ?? "",
+    receiptPaper: paper ?? "80mm",
+    receiptShowImei: shopSettings.receiptShowImei ?? true,
+    receiptShowProblem: shopSettings.receiptShowProblem ?? true,
+    receiptShowSignature: shopSettings.receiptShowSignature ?? true,
+    receiptShowQr: shopSettings.receiptShowQr ?? true,
+    receiptShowWarranty: shopSettings.receiptShowWarranty ?? true,
+    labelSize: label ?? "40x20",
+    monthlyRevenueGoal:
+      shopSettings.monthlyRevenueGoal === null ||
+      shopSettings.monthlyRevenueGoal === undefined
+        ? ""
+        : String(shopSettings.monthlyRevenueGoal),
+    reviewUrl: shopSettings.reviewUrl ?? "",
+  };
+}
+
 export interface SettingsShopTabHandle {
   requestSubmit: () => void;
   reset: () => void;
@@ -158,16 +204,7 @@ export default function SettingsShopTab({
   const { shopSettings, fetchShopSettings, saveShopSettings } =
     useSettingsStore();
 
-  const [shopForm, setShopForm] = useState({
-    shopName: "",
-    address: "",
-    phone: "",
-    countryCode: "PT",
-    currency: "EUR",
-    receiptFooter: "",
-    monthlyRevenueGoal: "",
-    reviewUrl: "",
-  });
+  const [shopForm, setShopForm] = useState(SHOP_FORM_DEFAULT);
   const [shopFormInitial, setShopFormInitial] = useState(shopForm);
 
   useImperativeHandle(ref, () => ({
@@ -177,20 +214,7 @@ export default function SettingsShopTab({
 
   useEffect(() => {
     if (shopSettings) {
-      const form = {
-        shopName: shopSettings.shopName ?? "",
-        address: shopSettings.address ?? "",
-        phone: shopSettings.phone ?? "",
-        countryCode: shopSettings.countryCode ?? "PT",
-        currency: shopSettings.currency ?? "EUR",
-        receiptFooter: shopSettings.receiptFooter ?? "",
-        monthlyRevenueGoal:
-          shopSettings.monthlyRevenueGoal === null ||
-          shopSettings.monthlyRevenueGoal === undefined
-            ? ""
-            : String(shopSettings.monthlyRevenueGoal),
-        reviewUrl: shopSettings.reviewUrl ?? "",
-      };
+      const form = formFromSettings(shopSettings);
       setShopForm(form);
       setShopFormInitial(form);
     }
@@ -431,6 +455,110 @@ export default function SettingsShopTab({
               {t("shop_revenue_goal_help")}
             </p>
           </div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl bg-surface-container-low p-5">
+        <p className="mb-1 font-semibold text-on-surface text-sm">
+          {t("print_settings_title")}
+        </p>
+        <p className="mb-4 font-label text-on-surface-variant text-xs">
+          {t("print_settings_help")}
+        </p>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="space-y-2">
+            <label
+              className="block font-semibold text-on-surface text-sm"
+              htmlFor="shop-receipt-paper"
+            >
+              {t("print_paper_label")}
+            </label>
+            <div className="relative">
+              <select
+                className="w-full cursor-pointer appearance-none rounded-xl border-none bg-surface-container-lowest px-4 py-3 pe-10 text-sm transition-all"
+                id="shop-receipt-paper"
+                onChange={(e) => {
+                  setShopForm((f) => ({
+                    ...f,
+                    receiptPaper: e.target.value as typeof f.receiptPaper,
+                  }));
+                  onDirtyChange(true);
+                }}
+                value={shopForm.receiptPaper}
+              >
+                <option value="58mm">{t("print_paper_58")}</option>
+                <option value="80mm">{t("print_paper_80")}</option>
+                <option value="a4">{t("print_paper_a4")}</option>
+              </select>
+              <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-on-surface-variant">
+                <span className="material-symbols-outlined text-[20px]">
+                  expand_more
+                </span>
+              </span>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label
+              className="block font-semibold text-on-surface text-sm"
+              htmlFor="shop-label-size"
+            >
+              {t("print_label_size")}
+            </label>
+            <div className="relative">
+              <select
+                className="w-full cursor-pointer appearance-none rounded-xl border-none bg-surface-container-lowest px-4 py-3 pe-10 text-sm transition-all"
+                id="shop-label-size"
+                onChange={(e) => {
+                  setShopForm((f) => ({
+                    ...f,
+                    labelSize: e.target.value as typeof f.labelSize,
+                  }));
+                  onDirtyChange(true);
+                }}
+                value={shopForm.labelSize}
+              >
+                <option value="40x20">40 × 20 mm</option>
+                <option value="57x32">57 × 32 mm</option>
+                <option value="62x29">62 × 29 mm</option>
+              </select>
+              <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-on-surface-variant">
+                <span className="material-symbols-outlined text-[20px]">
+                  expand_more
+                </span>
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="mt-5 space-y-1">
+          <p className="font-semibold text-on-surface text-sm">
+            {t("print_sections_label")}
+          </p>
+          {(
+            [
+              ["receiptShowImei", "print_show_imei"],
+              ["receiptShowProblem", "print_show_problem"],
+              ["receiptShowSignature", "print_show_signature"],
+              ["receiptShowQr", "print_show_qr"],
+              ["receiptShowWarranty", "print_show_warranty"],
+            ] as const
+          ).map(([field, key]) => (
+            <div className="flex items-center gap-3" key={field}>
+              <label
+                className="flex-1 font-medium text-on-surface-variant text-sm"
+                htmlFor={`print-${field}`}
+              >
+                {t(key)}
+              </label>
+              <Switch
+                checked={shopForm[field]}
+                id={`print-${field}`}
+                onChange={(checked) => {
+                  setShopForm((f) => ({ ...f, [field]: checked }));
+                  onDirtyChange(true);
+                }}
+              />
+            </div>
+          ))}
         </div>
       </div>
 

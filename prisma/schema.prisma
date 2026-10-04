@@ -1033,6 +1033,16 @@ model ShopSettings {
   defaultWarrantyDays       Int      @default(30)
   timezone                  String? // IANA name, e.g. "Africa/Algiers". Null -> env TZ fallback.
   receiptFooter             String?  @db.Text
+  // Printing — presets applied by the server-rendered receipt/label HTML.
+  // receiptPaper: "58mm" | "80mm" (thermal roll) | "a4" (full document).
+  receiptPaper              String   @default("80mm")
+  receiptShowImei           Boolean  @default(true)
+  receiptShowProblem        Boolean  @default(true)
+  receiptShowSignature      Boolean  @default(true)
+  receiptShowQr             Boolean  @default(true)
+  receiptShowWarranty       Boolean  @default(true)
+  // Job label sheet size: "40x20" | "57x32" | "62x29" (mm).
+  labelSize                 String   @default("40x20")
   // Meta mensal de faturação — progresso mostrado no dashboard do gerente.
   // Null = sem meta definida (não mostrar nada).
   monthlyRevenueGoal        Decimal? @db.Decimal(10, 2)

@@ -56,6 +56,13 @@ interface SettingsState {
     countryCode?: string;
     currency?: string;
     receiptFooter?: string;
+    receiptPaper?: "58mm" | "80mm" | "a4";
+    receiptShowImei?: boolean;
+    receiptShowProblem?: boolean;
+    receiptShowSignature?: boolean;
+    receiptShowQr?: boolean;
+    receiptShowWarranty?: boolean;
+    labelSize?: "40x20" | "57x32" | "62x29";
     monthlyRevenueGoal?: number | null;
     reviewUrl?: string;
   }) => Promise<ShopSettings>;

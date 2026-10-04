@@ -1,20 +1,36 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useModalEffects } from "@/hooks/use-modal-effects";
+import { useSettingsStore } from "@/stores/settings";
 import { useUiStore } from "@/stores/ui";
 
-// 40mm × 20mm at 96 dpi ≈ 152 × 76 px
-const LABEL_WIDTH_PX = 152;
-const LABEL_HEIGHT_PX = 76;
+// mm → px at 96 dpi — mirror of LABEL_PRESETS in server/services/receipt.service.ts
+const LABEL_PX: Record<string, { h: number; w: number }> = {
+  "40x20": { h: 76, w: 152 },
+  "57x32": { h: 121, w: 215 },
+  "62x29": { h: 110, w: 234 },
+};
+const DEFAULT_DIMS = LABEL_PX["40x20"];
 const PREVIEW_SCALE = 2.5;
+const PREVIEW_MAX_W = 380;
+const PREVIEW_MAX_H = 240;
 
 export default function PrintPreviewDialog() {
   const jobId = useUiStore((s) => s.printPreviewJobId);
   const closePrintPreview = useUiStore((s) => s.closePrintPreview);
   const { t } = useTranslation();
   const dialogRef = useRef<HTMLDivElement>(null);
+  const { shopSettings, fetchShopSettings } = useSettingsStore();
 
   useModalEffects(!!jobId, closePrintPreview, dialogRef);
+
+  useEffect(() => {
+    if (jobId && !shopSettings) {
+      fetchShopSettings().catch(() => {
+        /* label falls back to the 40x20 preview size */
+      });
+    }
+  }, [jobId, shopSettings, fetchShopSettings]);
 
   const handlePrintLabel = useCallback(() => {
     window.open(`/api/receipts/${jobId}/label`, "_blank");
@@ -27,6 +43,13 @@ export default function PrintPreviewDialog() {
   if (!jobId) {
     return null;
   }
+
+  const dims = LABEL_PX[shopSettings?.labelSize ?? ""] ?? DEFAULT_DIMS;
+  const scale = Math.min(
+    PREVIEW_SCALE,
+    PREVIEW_MAX_W / dims.w,
+    PREVIEW_MAX_H / dims.h
+  );
 
   return (
     <div
@@ -71,16 +94,16 @@ export default function PrintPreviewDialog() {
           <div
             className="shrink-0"
             style={{
-              width: LABEL_WIDTH_PX * PREVIEW_SCALE,
-              height: LABEL_HEIGHT_PX * PREVIEW_SCALE,
+              height: dims.h * scale,
+              width: dims.w * scale,
             }}
           >
             <div
               className="origin-top-left"
               style={{
-                width: LABEL_WIDTH_PX,
-                height: LABEL_HEIGHT_PX,
-                transform: `scale(${PREVIEW_SCALE})`,
+                height: dims.h,
+                transform: `scale(${scale})`,
+                width: dims.w,
               }}
             >
               <iframe

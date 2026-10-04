@@ -2141,5 +2141,18 @@
   "jobs_deliver_anyway": "Entregar de todos modos",
   "jobs_detail_signature": "Firma",
   "shop_revenue_goal": "Meta mensal de facturación",
-  "shop_revenue_goal_help": "Facturación objetivo por mes — el progreso se muestra en el panel. Deja vacío para desactivar."
+  "shop_revenue_goal_help": "Facturación objetivo por mes — el progreso se muestra en el panel. Deja vacío para desactivar.",
+  "print_settings_title": "Impresión",
+  "print_settings_help": "Los documentos se abren en el cuadro de diálogo de impresión del sistema: funciona con cualquier impresora instalada (térmica, A4 o PDF).",
+  "print_paper_label": "Papel del recibo",
+  "print_paper_58": "Rollo térmico 58 mm",
+  "print_paper_80": "Rollo térmico 80 mm",
+  "print_paper_a4": "Hoja A4 (documento completo)",
+  "print_label_size": "Tamaño de la etiqueta de reparación",
+  "print_sections_label": "Secciones de recibo",
+  "print_show_imei": "IMEI",
+  "print_show_problem": "Problema reportado",
+  "print_show_signature": "Firma del cliente",
+  "print_show_qr": "Seguimiento del código QR",
+  "print_show_warranty": "Garantía"
 }

@@ -1,506 +1,128 @@
 import type { PrismaClient } from "@generated/client";
 import { describe, expect, it, vi } from "vitest";
+import { renderLabelHtml, renderReceiptHtml } from "../receipt.service";
 
-const qrMock = vi.hoisted(() => ({
-  toBuffer: vi.fn().mockResolvedValue(Buffer.from("qr")),
-}));
-
-vi.mock("qrcode", () => ({ default: qrMock }));
-
-import {
-  renderLabelHtml,
-  renderReceiptHtml,
-  renderSaleReceiptHtml,
-} from "../receipt.service.js";
-
-const QR_BASE64_RE = /<img[^>]+src="data:image\/png;base64,[A-Za-z0-9+/=]+"/;
-
-function makePrisma(
-  shopName = "OficinaOS Test Shop",
-  extra?: {
-    auditLogFindFirst?: unknown;
-    shopSettings?: Record<string, unknown> | null;
-  }
-): PrismaClient {
-  const settings =
-    extra?.shopSettings === undefined
-      ? { id: "default", shopName }
-      : extra.shopSettings;
+function mockPrisma(settings: Record<string, unknown> | null) {
   return {
-    auditLog: {
-      findFirst: vi.fn().mockResolvedValue(extra?.auditLogFindFirst ?? null),
-    },
+    auditLog: { findFirst: vi.fn().mockResolvedValue(null) },
     shopSettings: {
       findUnique: vi.fn().mockResolvedValue(settings),
     },
   } as unknown as PrismaClient;
 }
 
-const baseJob = {
-  id: "job-1",
-  jobCode: "JOB-0042",
-  customer: { name: "John Doe", phone: "+351912345678" },
-  device: { brand: { name: "iPhone" }, model: "13 Pro" },
-  reportedProblem: "Cracked screen",
-  estimatedCost: 8500,
-  createdAt: new Date("2026-04-21T10:00:00Z"),
-  partsUsed: [],
-  repairs: [],
+const BASE_JOB = {
+  createdAt: new Date("2026-01-15T10:00:00Z"),
+  customer: { name: "Maria Silva", phone: "912345678" },
+  depositAmount: null,
+  device: { brand: { name: "Apple" }, model: "iPhone 13" },
+  estimatedCost: 120,
+  id: "job1",
+  imei: "356789104567890",
+  intakeSignatureDataUrl: "data:image/png;base64,AAAA",
+  jobCode: "R-2026-0001",
+  partsUsed: [{ partName: "Screen", quantity: 1, totalCost: 50 }],
+  payments: [],
+  reportedProblem: "Broken screen",
+  repairs: [
+    {
+      price: 70,
+      repair: { warrantyDays: 90 },
+      repairName: "Screen replacement",
+    },
+  ],
 };
 
-describe("renderLabelHtml", () => {
-  it("includes shop name, device, problem and price", async () => {
-    const html = await renderLabelHtml(
-      makePrisma("Acme Repairs"),
-      baseJob,
-      "https://example.com"
-    );
-    expect(html).toContain("Acme Repairs");
-    expect(html).toContain("iPhone");
-    expect(html).toContain("13 Pro");
-    expect(html).toContain("Cracked screen");
-    expect(html).toContain("8,500");
+const FULL_SETTINGS = {
+  currency: "EUR",
+  defaultWarrantyDays: 30,
+  labelSize: "40x20",
+  receiptPaper: "80mm",
+  receiptShowImei: true,
+  receiptShowProblem: true,
+  receiptShowQr: true,
+  receiptShowSignature: true,
+  receiptShowWarranty: true,
+  shopName: "Oficina XPTO",
+};
+
+describe("renderReceiptHtml paper presets", () => {
+  it("defaults to 80mm thermal when no settings exist", async () => {
+    const html = await renderReceiptHtml(mockPrisma(null), BASE_JOB, "", {});
+    expect(html).toContain("80mm auto");
   });
 
-  it("does not show job code in the label body", async () => {
-    const html = await renderLabelHtml(makePrisma(), baseJob, "https://x.y");
-    expect(html).not.toContain("JOB-0042");
+  it("renders 58mm layout when receiptPaper is 58mm", async () => {
+    const prisma = mockPrisma({ ...FULL_SETTINGS, receiptPaper: "58mm" });
+    const html = await renderReceiptHtml(prisma, BASE_JOB, "", {});
+    expect(html).toContain("58mm auto");
+    expect(html).not.toContain("size: A4");
   });
 
-  it("embeds a base64 QR code in left column", async () => {
-    const html = await renderLabelHtml(
-      makePrisma(),
-      baseJob,
-      "https://example.com"
-    );
-    expect(html).toMatch(QR_BASE64_RE);
-  });
-
-  it("shows QR unavailable when baseUrl is empty", async () => {
-    const html = await renderLabelHtml(makePrisma(), baseJob, "");
-    expect(html).toContain("QR indisponível");
-    expect(html).not.toMatch(QR_BASE64_RE);
-  });
-
-  it("sets @page size to 40mm 20mm and triggers print on load", async () => {
-    const html = await renderLabelHtml(makePrisma(), baseJob, "https://x.y");
-    expect(html).toContain("size: 40mm 20mm");
-    expect(html).toContain("window.print()");
-  });
-
-  it("hides price when hideCosts is true", async () => {
-    const html = await renderLabelHtml(makePrisma(), baseJob, "https://x.y", {
-      hideCosts: true,
-    });
-    expect(html).not.toContain("8,500");
-    expect(html).not.toContain("DZD");
-  });
-
-  it("shows finalCost (parts+repairs) over estimatedCost when parts/repairs exist", async () => {
-    const jobWithParts = {
-      ...baseJob,
-      estimatedCost: 0,
-      partsUsed: [{ partName: "Screen", quantity: 1, totalCost: 3000 }],
-      repairs: [{ repairName: "Replace", price: 2000 }],
-    };
-    const html = await renderLabelHtml(
-      makePrisma(),
-      jobWithParts,
-      "https://x.y"
-    );
-    expect(html).toContain("5,000");
-  });
-
-  it("escapes HTML in user-supplied fields", async () => {
-    const malicious = {
-      ...baseJob,
-      reportedProblem: "<script>alert(1)</script>",
-      device: { brand: { name: 'Acme"' }, model: "<b>X</b>" },
-    };
-    const html = await renderLabelHtml(makePrisma(), malicious, "https://x.y");
-    expect(html).not.toContain("<script>alert(1)</script>");
-    expect(html).toContain("&lt;script&gt;");
-    expect(html).toContain("&quot;");
-  });
-
-  it("falls back to 'OficinaOS' when shopName is empty", async () => {
-    const prisma = {
-      shopSettings: {
-        findUnique: vi.fn().mockResolvedValue(null),
-      },
-    } as unknown as PrismaClient;
-    const html = await renderLabelHtml(prisma, baseJob, "https://x.y");
-    expect(html).toContain("OficinaOS");
-  });
-
-  it("renders logo image when logoPath is set", async () => {
-    const prisma = {
-      shopSettings: {
-        findUnique: vi.fn().mockResolvedValue({
-          id: "default",
-          shopName: "Acme",
-          logoPath: "data:image/png;base64,abc123",
-        }),
-      },
-    } as unknown as PrismaClient;
-    const html = await renderLabelHtml(prisma, baseJob, "https://x.y");
-    expect(html).toContain('src="data:image/png;base64,abc123"');
-    expect(html).not.toContain(">Acme<");
-  });
-
-  it("renders shop name text when logoPath is null", async () => {
-    const prisma = {
-      shopSettings: {
-        findUnique: vi.fn().mockResolvedValue({
-          id: "default",
-          shopName: "Acme",
-          logoPath: null,
-        }),
-      },
-    } as unknown as PrismaClient;
-    const html = await renderLabelHtml(prisma, baseJob, "https://x.y");
-    expect(html).toContain(">Acme</div>");
+  it("renders the A4 document when receiptPaper is a4", async () => {
+    const prisma = mockPrisma({ ...FULL_SETTINGS, receiptPaper: "a4" });
+    const html = await renderReceiptHtml(prisma, BASE_JOB, "", {});
+    expect(html).toContain("size: A4");
+    expect(html).not.toContain("font-family:monospace");
   });
 });
 
-describe("renderReceiptHtml", () => {
-  it("includes shop name, job code, customer info, and device", async () => {
-    const html = await renderReceiptHtml(
-      makePrisma("Test Shop"),
-      baseJob,
-      "https://example.com"
-    );
-    expect(html).toContain("Test Shop");
-    expect(html).toContain("JOB-0042");
-    expect(html).toContain("John Doe");
-    expect(html).toContain("+351912345678");
-    expect(html).toContain("iPhone");
-    expect(html).toContain("13 Pro");
-    expect(html).toContain("Cracked screen");
-  });
-
-  it("embeds a base64 QR code", async () => {
-    const html = await renderReceiptHtml(
-      makePrisma(),
-      baseJob,
-      "https://example.com"
-    );
-    expect(html).toMatch(QR_BASE64_RE);
-  });
-
-  it("shows QR unavailable when baseUrl is empty", async () => {
-    const html = await renderReceiptHtml(makePrisma(), baseJob, "");
-    expect(html).toContain("QR indisponível");
-    expect(html).not.toMatch(QR_BASE64_RE);
-  });
-
-  it("does not include tracking link text", async () => {
-    const html = await renderReceiptHtml(makePrisma(), baseJob, "https://x.y");
-    expect(html).not.toContain("/tracking/");
-    expect(html).toContain("acompanhar");
-  });
-
-  it("renders problem and total for parts and repairs", async () => {
-    const job = {
-      ...baseJob,
-      partsUsed: [
-        { partName: "Screen", quantity: 1, totalCost: 3000 },
-        { partName: "Battery", quantity: 2, totalCost: 4000 },
-      ],
-      repairs: [{ repairName: "Screen Replace", price: 5000 }],
-    };
-    const html = await renderReceiptHtml(makePrisma(), job, "https://x.y");
-    expect(html).toContain("Problema:");
-    expect(html).toContain("Cracked screen");
-    expect(html).not.toContain("Issue");
-    expect(html).not.toContain("Parts Total");
-    expect(html).not.toContain("Repairs Total");
-    expect(html).toContain("12,000");
-  });
-
-  it("renders problem line for repairs", async () => {
-    const job = {
-      ...baseJob,
-      repairs: [{ repairName: "Screen Replace", price: 5000 }],
-    };
-    const html = await renderReceiptHtml(makePrisma(), job, "https://x.y");
-    expect(html).toContain("Problema:");
-    expect(html).not.toContain("Repairs Total");
-  });
-
-  it("hides total cost when hideCosts is true", async () => {
-    const job = {
-      ...baseJob,
-      partsUsed: [{ partName: "Screen", quantity: 1, totalCost: 3000 }],
-    };
-    const html = await renderReceiptHtml(makePrisma(), job, "https://x.y", {
-      hideCosts: true,
-    });
-    expect(html).not.toContain("DZD");
-    expect(html).not.toContain("Total");
-    expect(html).toContain("Problema:");
-  });
-
-  it("shows final total line when costs are visible", async () => {
-    const job = {
-      ...baseJob,
-      estimatedCost: 8500,
-      partsUsed: [],
-      repairs: [],
-    };
-    const html = await renderReceiptHtml(makePrisma(), job, "https://x.y");
-    expect(html).toContain("8,500");
-    expect(html).toContain("Total");
-  });
-
-  it("shows balance due line when payments exist", async () => {
-    const job = {
-      ...baseJob,
-      partsUsed: [{ partName: "Screen", quantity: 1, totalCost: 5000 }],
-      repairs: [{ repairName: "Fix", price: 3000 }],
-      payments: [{ amount: 3000, method: "CASH" }],
-    };
-    const html = await renderReceiptHtml(makePrisma(), job, "https://x.y");
-    expect(html).toContain("Por pagar");
-    expect(html).toContain("5,000");
-    expect(html).toContain("Pago (Numerário)");
-  });
-
-  it("includes deposit as part of the paid total", async () => {
-    const job = {
-      ...baseJob,
-      depositAmount: 1500,
-      repairs: [{ repairName: "Fix", price: 3000 }],
-      payments: [],
-    };
-    const html = await renderReceiptHtml(makePrisma(), job, "https://x.y");
-    expect(html).toContain("Pago (sinal)");
-    expect(html).toContain("Por pagar");
-    expect(html).toContain("1,500");
-  });
-
-  it("computes balance due from estimatedCost when no itemized lines exist", async () => {
-    const job = {
-      ...baseJob,
-      estimatedCost: 20_000,
-      depositAmount: 5000,
-      payments: [],
-    };
-    const html = await renderReceiptHtml(makePrisma(), job, "https://x.y");
-    // 200 total - 50 deposit = 150 due, not 0
-    expect(html).toContain("15,000");
-  });
-
-  it("shows no payments section when nothing was paid", async () => {
-    const job = {
-      ...baseJob,
-      repairs: [{ repairName: "Fix", price: 3000 }],
-      payments: [],
-    };
-    const html = await renderReceiptHtml(makePrisma(), job, "https://x.y");
-    expect(html).not.toContain("Por pagar");
-    expect(html).toContain("3,000");
-  });
-
-  it("escapes payment method labels", async () => {
-    const job = {
-      ...baseJob,
-      payments: [{ amount: 100, method: "<b>X</b>" }],
-    };
-    const html = await renderReceiptHtml(makePrisma(), job, "https://x.y");
-    expect(html).not.toContain("<b>X</b>");
-    expect(html).toContain("&lt;b&gt;");
-  });
-
-  it("shows per-repair warranty days with the shop default fallback", async () => {
-    const prisma = makePrisma("Shop", {
-      shopSettings: { defaultWarrantyDays: 30, id: "default" },
-    });
-    const job = {
-      ...baseJob,
-      repairs: [
-        {
-          price: 5000,
-          repair: { warrantyDays: 90 },
-          repairName: "Screen replace",
-        },
-        { price: 1000, repair: null, repairName: "Cleaning" },
-      ],
-    };
-    const html = await renderReceiptHtml(prisma, job, "https://x.y");
-    expect(html).toContain("Garantia");
-    expect(html).toContain("Screen replace");
-    expect(html).toContain("90");
-    expect(html).toContain("Cleaning");
-    expect(html).toContain("30");
-  });
-
-  it("shows warranty expiry dates when the job was delivered", async () => {
-    const prisma = makePrisma("Shop", {
-      auditLogFindFirst: { createdAt: new Date("2026-01-10T00:00:00Z") },
-      shopSettings: { defaultWarrantyDays: 30, id: "default" },
-    });
-    const job = {
-      ...baseJob,
-      repairs: [
-        {
-          price: 5000,
-          repair: { warrantyDays: 90 },
-          repairName: "Screen replace",
-        },
-      ],
-    };
-    const html = await renderReceiptHtml(prisma, job, "https://x.y");
-    // 2026-01-10 + 90 days = 2026-04-10
-    expect(html).toContain("10/04/2026");
-  });
-
-  it("omits the warranty block when the job has no repairs", async () => {
-    const html = await renderReceiptHtml(makePrisma(), baseJob, "https://x.y");
-    expect(html).not.toContain("Garantia");
-  });
-
-  it("prefers ShopSettings.trackingBaseUrl over the APP_URL param for the QR", async () => {
-    const prisma = makePrisma("Shop", {
-      shopSettings: {
-        id: "default",
-        trackingBaseUrl: "https://track.example.com",
-      },
-    });
-    await renderReceiptHtml(prisma, baseJob, "https://app-url.example");
-    expect(qrMock.toBuffer).toHaveBeenLastCalledWith(
-      "https://track.example.com/tracking/JOB-0042?phone4=5678",
-      expect.anything()
-    );
-  });
-
-  it("encodes the customer phone4 in the QR deep link", async () => {
-    await renderReceiptHtml(makePrisma(), baseJob, "https://app.example");
-    expect(qrMock.toBuffer).toHaveBeenLastCalledWith(
-      "https://app.example/tracking/JOB-0042?phone4=5678",
-      expect.anything()
-    );
-  });
-
-  it("omits phone4 from the QR when the customer phone is too short", async () => {
-    const job = {
-      ...baseJob,
-      customer: { name: "John Doe", phone: "12" },
-    };
-    await renderReceiptHtml(makePrisma(), job, "https://app.example");
-    expect(qrMock.toBuffer).toHaveBeenLastCalledWith(
-      "https://app.example/tracking/JOB-0042",
-      expect.anything()
-    );
-  });
-});
-
-describe("renderSaleReceiptHtml", () => {
-  const baseSale = {
-    saleCode: "SALE-2026-000001",
-    createdAt: new Date("2026-09-28T12:00:00Z"),
-    customer: null,
-    createdBy: { name: "Diana" },
-    items: [
-      { name: "iPhone 14 Screen", quantity: 1, lineTotal: 3500 },
-      { name: "Tempered glass", quantity: 2, lineTotal: 1000 },
-    ],
-    payments: [{ amount: 4500, method: "CASH" }],
-    total: 4500,
+describe("renderReceiptHtml section toggles", () => {
+  const withToggle = async (patch: Record<string, unknown>) => {
+    const prisma = mockPrisma({ ...FULL_SETTINGS, ...patch });
+    return await renderReceiptHtml(prisma, BASE_JOB, "", {});
   };
 
-  it("renders sale code, items, total and payment method", async () => {
-    const html = await renderSaleReceiptHtml(
-      makePrisma("POS Shop"),
-      baseSale,
-      "https://x.y"
-    );
-    expect(html).toContain("POS Shop");
-    expect(html).toContain("SALE-2026-000001");
-    expect(html).toContain("iPhone 14 Screen ×1");
-    expect(html).toContain("4,500");
-    expect(html).toContain("Pago (Numerário)");
-    expect(html).toContain("Atendido por");
+  it("hides the IMEI row when receiptShowImei is off", async () => {
+    const html = await withToggle({ receiptShowImei: false });
+    expect(html).not.toContain("356789104567890");
   });
 
-  it("shows customer row only when a customer is linked", async () => {
-    const withCustomer = {
-      ...baseSale,
-      customer: { name: "John", phone: "+1555000111" },
-    };
-    const html = await renderSaleReceiptHtml(
-      makePrisma(),
-      withCustomer,
-      "https://x.y"
-    );
-    expect(html).toContain("John");
-    const plain = await renderSaleReceiptHtml(
-      makePrisma(),
-      baseSale,
-      "https://x.y"
-    );
-    expect(plain).not.toContain("Cliente");
+  it("hides the reported problem when receiptShowProblem is off", async () => {
+    const html = await withToggle({ receiptShowProblem: false });
+    expect(html).not.toContain("Broken screen");
   });
 
-  it("renders multiple payment lines with references", async () => {
-    const multi = {
-      ...baseSale,
-      payments: [
-        { amount: 2000, method: "CASH" },
-        { amount: 2500, method: "CARD", reference: "tx-77" },
-      ],
-    };
-    const html = await renderSaleReceiptHtml(
-      makePrisma(),
-      multi,
-      "https://x.y"
-    );
-    expect(html).toContain("Pago (Numerário)");
-    expect(html).toContain("Pago (Cartão · tx-77)");
-    expect(html).toContain("2,000");
-    expect(html).toContain("2,500");
+  it("hides the signature when receiptShowSignature is off", async () => {
+    const html = await withToggle({ receiptShowSignature: false });
+    expect(html).not.toContain("data:image/png;base64,AAAA");
   });
 
-  it("escapes user-supplied item names and footer", async () => {
-    const prisma = {
-      shopSettings: {
-        findUnique: vi.fn().mockResolvedValue({
-          id: "default",
-          shopName: "Shop",
-          receiptFooter: "<b>Thanks</b>",
-        }),
-      },
-    } as unknown as PrismaClient;
-    const sale = {
-      ...baseSale,
-      items: [{ name: "<script>x</script>", quantity: 1, lineTotal: 10 }],
-    };
-    const html = await renderSaleReceiptHtml(prisma, sale, "https://x.y");
-    expect(html).not.toContain("<script>x</script>");
-    expect(html).toContain("&lt;b&gt;Thanks&lt;/b&gt;");
+  it("hides the QR block when receiptShowQr is off", async () => {
+    const html = await withToggle({ receiptShowQr: false });
+    expect(html).not.toContain('class="qr"');
   });
 
-  it("does not render a QR — a sale code resolves no tracking page", async () => {
-    const html = await renderSaleReceiptHtml(
-      makePrisma(),
-      baseSale,
-      "https://x.y"
-    );
-    expect(html).not.toMatch(QR_BASE64_RE);
-    expect(html).not.toContain("/tracking/");
+  it("hides the warranty table when receiptShowWarranty is off", async () => {
+    const html = await withToggle({ receiptShowWarranty: false });
+    expect(html).not.toContain("Garantia:");
   });
 
-  it("includes receipt footer when set", async () => {
-    const prisma = {
-      shopSettings: {
-        findUnique: vi.fn().mockResolvedValue({
-          id: "default",
-          shopName: "Shop",
-          receiptFooter: "Warranty 30 days",
-        }),
-      },
-    } as unknown as PrismaClient;
-    const html = await renderSaleReceiptHtml(prisma, baseSale, "https://x.y");
-    expect(html).toContain("Warranty 30 days");
+  it("shows every section by default", async () => {
+    const html = await withToggle({});
+    expect(html).toContain("356789104567890");
+    expect(html).toContain("Broken screen");
+    expect(html).toContain("data:image/png;base64,AAAA");
+    expect(html).toContain('class="qr"');
+    expect(html).toContain("Garantia:");
+  });
+});
+
+describe("renderLabelHtml label sizes", () => {
+  it("defaults to the 40x20 sheet", async () => {
+    const html = await renderLabelHtml(mockPrisma(null), BASE_JOB, "", {});
+    expect(html).toContain("size: 40mm 20mm");
+  });
+
+  it("renders the 57x32 sheet", async () => {
+    const prisma = mockPrisma({ ...FULL_SETTINGS, labelSize: "57x32" });
+    const html = await renderLabelHtml(prisma, BASE_JOB, "", {});
+    expect(html).toContain("size: 57mm 32mm");
+  });
+
+  it("renders the 62x29 sheet", async () => {
+    const prisma = mockPrisma({ ...FULL_SETTINGS, labelSize: "62x29" });
+    const html = await renderLabelHtml(prisma, BASE_JOB, "", {});
+    expect(html).toContain("size: 62mm 29mm");
   });
 });

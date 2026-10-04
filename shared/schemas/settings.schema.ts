@@ -31,6 +31,14 @@ export const updateShopSettingsSchema = z
     phone: z.string().optional(),
     currency: z.string().optional(),
     receiptFooter: z.string().optional(),
+    // Printing presets — applied by the server-rendered receipt/label HTML.
+    receiptPaper: z.enum(["58mm", "80mm", "a4"]).optional(),
+    receiptShowImei: z.boolean().optional(),
+    receiptShowProblem: z.boolean().optional(),
+    receiptShowSignature: z.boolean().optional(),
+    receiptShowQr: z.boolean().optional(),
+    receiptShowWarranty: z.boolean().optional(),
+    labelSize: z.enum(["40x20", "57x32", "62x29"]).optional(),
     countryCode: z.string().optional(),
     timezone: z.string().min(1).optional(),
     // Meta mensal de faturação (€). 0/null limpa a meta.
@@ -56,6 +64,13 @@ export const updateShopSettingsSchema = z
       data.phone !== undefined ||
       data.currency !== undefined ||
       data.receiptFooter !== undefined ||
+      data.receiptPaper !== undefined ||
+      data.receiptShowImei !== undefined ||
+      data.receiptShowProblem !== undefined ||
+      data.receiptShowSignature !== undefined ||
+      data.receiptShowQr !== undefined ||
+      data.receiptShowWarranty !== undefined ||
+      data.labelSize !== undefined ||
       data.countryCode !== undefined ||
       data.timezone !== undefined ||
       data.monthlyRevenueGoal !== undefined ||

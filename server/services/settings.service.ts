@@ -97,6 +97,13 @@ export async function upsertShopSettings(
       id: "default",
       phone: input.phone ?? null,
       receiptFooter: input.receiptFooter ?? null,
+      receiptPaper: input.receiptPaper ?? "80mm",
+      receiptShowImei: input.receiptShowImei ?? true,
+      receiptShowProblem: input.receiptShowProblem ?? true,
+      receiptShowSignature: input.receiptShowSignature ?? true,
+      receiptShowQr: input.receiptShowQr ?? true,
+      receiptShowWarranty: input.receiptShowWarranty ?? true,
+      labelSize: input.labelSize ?? "40x20",
       monthlyRevenueGoal: input.monthlyRevenueGoal ?? null,
       reviewUrl: input.reviewUrl?.trim() || null,
       shopName: input.shopName,
@@ -107,6 +114,13 @@ export async function upsertShopSettings(
       currency: input.currency,
       phone: input.phone,
       receiptFooter: input.receiptFooter,
+      receiptPaper: input.receiptPaper,
+      receiptShowImei: input.receiptShowImei,
+      receiptShowProblem: input.receiptShowProblem,
+      receiptShowSignature: input.receiptShowSignature,
+      receiptShowQr: input.receiptShowQr,
+      receiptShowWarranty: input.receiptShowWarranty,
+      labelSize: input.labelSize,
       monthlyRevenueGoal:
         input.monthlyRevenueGoal === undefined
           ? undefined

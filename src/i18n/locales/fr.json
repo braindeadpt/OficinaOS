@@ -2141,5 +2141,18 @@
   "jobs_deliver_anyway": "Livrer quand même",
   "jobs_detail_signature": "Signature",
   "shop_revenue_goal": "Objectif mensuel de chiffre d’affaires",
-  "shop_revenue_goal_help": "Chiffre d’affaires cible par mois — la progression s’affiche sur le tableau de bord. Laisser vide pour désactiver."
+  "shop_revenue_goal_help": "Chiffre d’affaires cible par mois — la progression s’affiche sur le tableau de bord. Laisser vide pour désactiver.",
+  "print_settings_title": "Impression",
+  "print_settings_help": "Documents ouverts dans la boîte de dialogue d'impression du système : fonctionne avec n'importe quelle imprimante installée (thermique, A4 ou PDF).",
+  "print_paper_label": "Papier du reçu",
+  "print_paper_58": "Rouleau thermique 58 mm",
+  "print_paper_80": "Rouleau thermique 80 mm",
+  "print_paper_a4": "Feuille A4 (document complet)",
+  "print_label_size": "Taille de l'étiquette de réparation",
+  "print_sections_label": "Sections du reçu",
+  "print_show_imei": "IMEI",
+  "print_show_problem": "Problème signalé",
+  "print_show_signature": "Signature du client",
+  "print_show_qr": "Code QR de suivi",
+  "print_show_warranty": "Garantie"
 }
