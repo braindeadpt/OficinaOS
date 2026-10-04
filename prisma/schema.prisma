@@ -187,6 +187,7 @@ model User {
   paymentsCreated       Payment[]           @relation("PaymentCreatedBy")
   stockMovementsCreated StockMovement[]     @relation("StockMovementCreatedBy")
   salesCreated          Sale[]              @relation("SaleCreatedBy")
+  tradeInsCreated       TradeIn[]           @relation("TradeInCreatedBy")
   auditLogs             AuditLog[]
   cashSessionsOpened    CashSession[]       @relation("CashSessionOpenedBy")
   cashSessionsClosed    CashSession[]       @relation("CashSessionClosedBy")
@@ -243,6 +244,8 @@ model Customer {
 
   jobs  Job[]
   sales Sale[]
+
+  tradeIns TradeIn[]
 
   @@index([email])
   @@map("customers")
@@ -1126,6 +1129,70 @@ model Session {
   @@index([userId])
   @@index([token])
   @@map("sessions")
+}
+
+// ─────────────────────────────────────────────
+// TRADE-INS (compra de usados / retoma)
+// The shop buys a used device from a customer. Portuguese law requires a
+// register of second-hand goods purchases identifying the seller — the
+// sellerIdType/sellerIdNumber fields are that legal record, and the signed
+// receipt is the proof. Status flow:
+//   OFFERED -> PURCHASED | CANCELLED ; PURCHASED -> SOLD
+// ─────────────────────────────────────────────
+
+enum TradeInStatus {
+  OFFERED
+  PURCHASED
+  CANCELLED
+  SOLD
+}
+
+enum TradeInCondition {
+  EXCELLENT
+  GOOD
+  FAIR
+  POOR
+}
+
+enum TradeInPaymentMethod {
+  CASH
+  TRANSFER
+  STORE_CREDIT
+}
+
+model TradeInCounter {
+  year    Int @id
+  lastSeq Int @default(0)
+
+  @@map("trade_in_counters")
+}
+
+model TradeIn {
+  id                  String                @id @default(cuid())
+  code                String                @unique
+  customerId          String
+  customer            Customer              @relation(fields: [customerId], references: [id])
+  // Registo legal de bens em 2ª mão — identificação do vendedor.
+  sellerIdType        String
+  sellerIdNumber      String
+  deviceBrand         String
+  deviceModel         String
+  imei                String?
+  storage             String?
+  condition           TradeInCondition
+  functionalChecklist Json?
+  notes               String?               @db.Text
+  purchasePrice       Decimal               @db.Decimal(10, 2)
+  paymentMethod       TradeInPaymentMethod
+  status              TradeInStatus         @default(OFFERED)
+  signatureDataUrl    String?               @db.Text
+  createdById         String?
+  createdBy           User?                 @relation("TradeInCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt           DateTime              @default(now()) @db.Timestamptz
+  updatedAt           DateTime              @updatedAt @db.Timestamptz
+
+  @@index([status, createdAt])
+  @@map("trade_ins")
 }
 
 // ─────────────────────────────────────────────

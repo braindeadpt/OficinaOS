@@ -27,6 +27,7 @@ const TechnicianDashboardPage = lazy(
 );
 const ReturnsListPage = lazy(() => import("@/pages/returns"));
 const ReturnDetailPage = lazy(() => import("@/pages/returns/detail"));
+const TradeInsPage = lazy(() => import("@/pages/trade-ins"));
 const JobsPage = lazy(() => import("@/pages/jobs"));
 const JobDetailPage = lazy(() => import("@/pages/jobs/detail"));
 const NotificationsPage = lazy(() => import("@/pages/notifications"));
@@ -152,6 +153,18 @@ export default function App() {
                   </DashboardLayout>
                 }
                 path="/returns/:id"
+              />
+            </Route>
+            <Route
+              element={<RequirePermission perm={{ tradeins: ["view"] }} />}
+            >
+              <Route
+                element={
+                  <DashboardLayout>
+                    <TradeInsPage />
+                  </DashboardLayout>
+                }
+                path="/trade-ins"
               />
             </Route>
             <Route

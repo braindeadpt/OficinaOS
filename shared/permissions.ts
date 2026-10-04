@@ -72,6 +72,8 @@ export const statement = {
     "viewSelf",
     "viewShop",
   ] as const,
+
+  tradeins: ["view", "create", "edit", "cancel"] as const,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -140,6 +142,7 @@ export const ownerRole = ac.newRole({
     "viewSelf",
     "viewShop",
   ],
+  tradeins: ["view", "create", "edit", "cancel"],
 });
 
 export const technicianRole = ac.newRole({
@@ -168,6 +171,8 @@ export const technicianRole = ac.newRole({
   ai: ["access"],
   dashboard: ["viewTechnician"],
   returns: ["create", "edit", "triage", "resolveRework", "viewSelf"],
+  // Trade-ins involve money — technicians can see them but not transact.
+  tradeins: ["view"],
 });
 
 export const frontDeskRole = ac.newRole({
@@ -191,6 +196,7 @@ export const frontDeskRole = ac.newRole({
   // No ai
   dashboard: ["viewFrontDesk"],
   returns: ["create", "edit", "viewSelf"],
+  tradeins: ["view", "create", "edit", "cancel"],
 });
 
 // ---------------------------------------------------------------------------

@@ -36,6 +36,12 @@ export const NAV_ITEMS: NavItem[] = [
     perm: { returns: ["viewSelf"] },
   },
   {
+    icon: "currency_exchange",
+    labelKey: "tradeins.nav_label",
+    to: "/trade-ins",
+    perm: { tradeins: ["view"] },
+  },
+  {
     icon: "people",
     labelKey: "customers",
     to: "/customers",

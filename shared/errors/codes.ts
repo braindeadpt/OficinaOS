@@ -238,6 +238,20 @@ export const ERRORS = {
     status: 400,
     message: "errors.intake_request_no_diagnostic",
   },
+
+  // ── Trade-ins (compra de usados) ─────────────────────────────────────────
+  TRADE_IN_NOT_FOUND: {
+    status: 404,
+    message: "errors.trade_in_not_found",
+  },
+  TRADE_IN_INVALID_STATE: {
+    status: 409,
+    message: "errors.trade_in_invalid_state",
+  },
+  TRADE_IN_SIGNATURE_REQUIRED: {
+    status: 400,
+    message: "errors.trade_in_signature_required",
+  },
 } as const;
 
 export type ErrorCode = keyof typeof ERRORS;

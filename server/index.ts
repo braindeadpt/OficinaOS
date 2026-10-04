@@ -34,6 +34,7 @@ import { reportsRoutes } from "./routes/reports.js";
 import { returnClaimsRoutes } from "./routes/return-claims.js";
 import { saleRoutes } from "./routes/sales.js";
 import { settingsRoutes } from "./routes/settings.js";
+import { tradeInsRoutes } from "./routes/trade-ins.js";
 import { usersRoutes } from "./routes/users.js";
 import { startLowStockScheduler } from "./services/low-stock.service.js";
 import { cleanupReadNotifications } from "./services/notification-inapp.service.js";
@@ -164,6 +165,7 @@ app.register(aiRoutes, { prefix: "/api/ai" });
 app.register(reportsRoutes, { prefix: "/api/reports" });
 app.register(saleRoutes, { prefix: "/api/sales" });
 app.register(returnClaimsRoutes, { prefix: "/api/return-claims" });
+app.register(tradeInsRoutes, { prefix: "/api/trade-ins" });
 app.register(feedbackRoutes, { prefix: "/api/feedback" });
 
 if (IS_PROD) {
