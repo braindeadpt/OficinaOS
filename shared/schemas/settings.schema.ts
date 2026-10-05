@@ -110,16 +110,28 @@ export const updateWhatsAppSettingsSchema = z
           .regex(/^https?:\/\//, { error: "validations.invalid_url" }),
       ])
       .optional(),
+    // Remarketing automático (módulo Pro "remarketing") — Meta template
+    // message a clientes inativos. O nome do template tem de existir e
+    // estar aprovado na conta Meta Business da loja.
+    remarketingEnabled: z.boolean().optional(),
+    remarketingDays: z.number().int().min(30).max(365).optional(),
+    remarketingCooldownDays: z.number().int().min(30).max(365).optional(),
+    remarketingTemplate: z
+      .union([
+        z.literal(""),
+        z
+          .string()
+          .trim()
+          .max(100)
+          .regex(/^[a-z0-9_]+$/, {
+            error: "validations.invalid_template_name",
+          }),
+      ])
+      .optional(),
   })
-  .refine(
-    (data) =>
-      data.apiToken !== undefined ||
-      data.businessId !== undefined ||
-      data.phoneNumberId !== undefined ||
-      data.enabled !== undefined ||
-      data.trackingBaseUrl !== undefined,
-    { message: "validations.at_least_one_field" }
-  );
+  .refine((data) => Object.values(data).some((v) => v !== undefined), {
+    message: "validations.at_least_one_field",
+  });
 
 export const pairCloudSchema = z.object({
   apiUrl: z

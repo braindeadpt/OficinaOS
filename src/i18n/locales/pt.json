@@ -2068,7 +2068,8 @@
     "imei_invalid": "IMEI inválido — verifique os 15 dígitos",
     "invalid_url": "Tem de ser um URL http(s) válido",
     "pairing_code_required": "Introduza o código de emparelhamento.",
-    "invalid_slug": "Utilize apenas letras minúsculas, números e hífens (mín. 2 caracteres)"
+    "invalid_slug": "Utilize apenas letras minúsculas, números e hífens (mín. 2 caracteres)",
+    "invalid_template_name": "Utilize apenas letras minúsculas, números e sublinhados"
   },
   "view_all_critical": "Ver todos os atrasos",
   "warranty_returns": "Devoluções de garantia",
@@ -2084,6 +2085,15 @@
   "whatsapp_templates": "Modelos do WhatsApp",
   "whatsapp_tracking_url": "URL público de acompanhamento",
   "whatsapp_tracking_url_help": "Endereço público onde os clientes abrem a página de acompanhamento a partir das mensagens WhatsApp, ex.: https://reparacoes.minhaloja.pt ou http://192.168.1.33:4000. Opcional — o link só é incluído quando definido",
+  "remarketing_enabled": "Remarketing automático",
+  "remarketing_desc": "Envia uma mensagem WhatsApp com consentimento aos clientes que não realizam reparações há algum tempo. Enviadas como um modelo Meta aprovado — estas mensagens podem ter um custo por mensagem no seu plano Meta.",
+  "remarketing_days": "Inativo há (dias)",
+  "remarketing_days_hint": "Os clientes cuja última reparação entregue é anterior a esta recebem uma mensagem",
+  "remarketing_cooldown": "Repita no máximo a cada (dias)",
+  "remarketing_cooldown_hint": "Espaço mínimo entre duas mensagens para o mesmo cliente",
+  "remarketing_template": "Nome do metamodelo",
+  "remarketing_template_hint": "Deve existir e estar APROVADO na sua conta Meta Business. Corpo sugerido: \"Olá {{1}}! Já passou algum tempo desde a sua última peça na {{2}}. Se o seu equipamento precisa de atenção, estamos aqui para ajudar.\"",
+  "remarketing_upsell": "O remarketing automático do WhatsApp está disponível com o módulo Remarketing – peça ao seu fornecedor para o ativar.",
   "you": "Tu",
   "jobStatus": {
     "INTAKE": "Receção",

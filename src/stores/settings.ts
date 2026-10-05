@@ -23,6 +23,11 @@ interface WhatsAppSettings {
   enabled: boolean;
   hasApiToken: boolean;
   phoneNumberId: string | null;
+  remarketingCooldownDays: number;
+  remarketingDays: number;
+  remarketingEnabled: boolean;
+  remarketingModule: boolean;
+  remarketingTemplate: string | null;
   trackingBaseUrl: string | null;
 }
 
@@ -75,6 +80,10 @@ interface SettingsState {
     phoneNumberId?: string;
     enabled?: boolean;
     trackingBaseUrl?: string;
+    remarketingEnabled?: boolean;
+    remarketingDays?: number;
+    remarketingCooldownDays?: number;
+    remarketingTemplate?: string;
   }) => Promise<void>;
   sendTestNotification: (templateId: string) => Promise<{
     message: string;

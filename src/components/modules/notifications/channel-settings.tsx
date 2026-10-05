@@ -13,6 +13,10 @@ interface ChannelSettingsProps {
     phoneNumberId?: string;
     enabled?: boolean;
     trackingBaseUrl?: string;
+    remarketingEnabled?: boolean;
+    remarketingDays?: number;
+    remarketingCooldownDays?: number;
+    remarketingTemplate?: string;
   }) => Promise<void>;
   whatsAppSettings: ReturnType<
     typeof useSettingsStore.getState
@@ -31,6 +35,10 @@ export default function ChannelSettings({
     phoneNumberId: "",
     trackingBaseUrl: "",
     enabled: false,
+    remarketingEnabled: false,
+    remarketingDays: "90",
+    remarketingCooldownDays: "180",
+    remarketingTemplate: "oficinaos_remarketing",
   });
   const [whatsAppSaving, setWhatsAppSaving] = useState(false);
   const [whatsAppLoaded, setWhatsAppLoaded] = useState(false);
@@ -56,6 +64,13 @@ export default function ChannelSettings({
         phoneNumberId: whatsAppSettings.phoneNumberId ?? "",
         trackingBaseUrl: whatsAppSettings.trackingBaseUrl ?? "",
         enabled: whatsAppSettings.enabled,
+        remarketingEnabled: whatsAppSettings.remarketingEnabled,
+        remarketingDays: String(whatsAppSettings.remarketingDays ?? 90),
+        remarketingCooldownDays: String(
+          whatsAppSettings.remarketingCooldownDays ?? 180
+        ),
+        remarketingTemplate:
+          whatsAppSettings.remarketingTemplate ?? "oficinaos_remarketing",
       }));
     }
   }, [whatsAppSettings, whatsAppSaving]);
@@ -69,13 +84,28 @@ export default function ChannelSettings({
         phoneNumberId: whatsAppForm.phoneNumberId || undefined,
         enabled: whatsAppForm.enabled,
         trackingBaseUrl: whatsAppForm.trackingBaseUrl,
+        ...(whatsAppSettings?.remarketingModule
+          ? {
+              remarketingEnabled: whatsAppForm.remarketingEnabled,
+              remarketingDays:
+                Number.parseInt(whatsAppForm.remarketingDays, 10) || 90,
+              remarketingCooldownDays:
+                Number.parseInt(whatsAppForm.remarketingCooldownDays, 10) ||
+                180,
+              remarketingTemplate: whatsAppForm.remarketingTemplate,
+            }
+          : {}),
       });
     } catch {
       // Error is stored in Zustand state
     } finally {
       setWhatsAppSaving(false);
     }
-  }, [whatsAppForm, onSaveWhatsAppSettings]);
+  }, [
+    whatsAppForm,
+    onSaveWhatsAppSettings,
+    whatsAppSettings?.remarketingModule,
+  ]);
 
   return (
     <div>
@@ -226,6 +256,108 @@ export default function ChannelSettings({
                 value={whatsAppForm.apiToken}
               />
             </div>
+            {whatsAppSettings?.remarketingModule ? (
+              <div className="rounded-xl bg-surface-container p-4">
+                <label className="flex cursor-pointer select-none items-center gap-3">
+                  <input
+                    checked={whatsAppForm.remarketingEnabled}
+                    className="sr-only"
+                    onChange={(e) =>
+                      setWhatsAppForm((f) => ({
+                        ...f,
+                        remarketingEnabled: e.target.checked,
+                      }))
+                    }
+                    type="checkbox"
+                  />
+                  <span
+                    className="relative inline-block h-6 w-11 rounded-full transition-colors"
+                    style={{
+                      backgroundColor: whatsAppForm.remarketingEnabled
+                        ? "var(--color-primary)"
+                        : "var(--color-outline-variant)",
+                    }}
+                  >
+                    <span
+                      className="absolute top-0.5 h-5 w-5 rounded-full bg-on-primary shadow-sm transition-all"
+                      style={{
+                        insetInlineStart: whatsAppForm.remarketingEnabled
+                          ? "22px"
+                          : "2px",
+                      }}
+                    />
+                  </span>
+                  <span className="font-medium text-on-surface text-sm">
+                    {t("remarketing_enabled")}
+                  </span>
+                </label>
+                <p className="mt-2 text-on-surface-variant text-xs">
+                  {t("remarketing_desc")}
+                </p>
+
+                {whatsAppForm.remarketingEnabled && (
+                  <div className="mt-4 space-y-3">
+                    <Field
+                      hint={t("remarketing_days_hint")}
+                      label={t("remarketing_days")}
+                    >
+                      <Input
+                        inputMode="numeric"
+                        max={365}
+                        min={30}
+                        onChange={(e) =>
+                          setWhatsAppForm((f) => ({
+                            ...f,
+                            remarketingDays: e.target.value,
+                          }))
+                        }
+                        type="number"
+                        value={whatsAppForm.remarketingDays}
+                      />
+                    </Field>
+                    <Field
+                      hint={t("remarketing_cooldown_hint")}
+                      label={t("remarketing_cooldown")}
+                    >
+                      <Input
+                        inputMode="numeric"
+                        max={365}
+                        min={30}
+                        onChange={(e) =>
+                          setWhatsAppForm((f) => ({
+                            ...f,
+                            remarketingCooldownDays: e.target.value,
+                          }))
+                        }
+                        type="number"
+                        value={whatsAppForm.remarketingCooldownDays}
+                      />
+                    </Field>
+                    <Field
+                      hint={t("remarketing_template_hint")}
+                      label={t("remarketing_template")}
+                    >
+                      <Input
+                        autoComplete="off"
+                        onChange={(e) =>
+                          setWhatsAppForm((f) => ({
+                            ...f,
+                            remarketingTemplate: e.target.value,
+                          }))
+                        }
+                        placeholder="oficinaos_remarketing"
+                        value={whatsAppForm.remarketingTemplate}
+                      />
+                    </Field>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="rounded-xl bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
+                {t("remarketing_upsell")}
+              </p>
+            )}
+
             <Button
               className="flex min-h-11"
               disabled={whatsAppSaving}

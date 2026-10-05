@@ -2068,7 +2068,8 @@
     "imei_invalid": "IMEI no válido: verifique los 15 dígitos",
     "invalid_url": "Debe ser una URL http(s) válida",
     "pairing_code_required": "Ingrese el código de emparejamiento.",
-    "invalid_slug": "Utilice únicamente letras minúsculas, números y guiones (mínimo 2 caracteres)"
+    "invalid_slug": "Utilice únicamente letras minúsculas, números y guiones (mínimo 2 caracteres)",
+    "invalid_template_name": "Utilice únicamente letras minúsculas, números y guiones bajos."
   },
   "view_all_critical": "Ver todos los atrasados",
   "warranty_returns": "Devoluciones en garantía",
@@ -2084,6 +2085,15 @@
   "whatsapp_templates": "Plantillas de WhatsApp",
   "whatsapp_tracking_url": "URL pública de seguimiento",
   "whatsapp_tracking_url_help": "Dirección pública donde los clientes abren la página de seguimiento desde los mensajes de WhatsApp, p. ej. https://reparaciones.mitienda.es o http://192.168.1.33:4000. Opcional — el enlace solo se incluye si está definida",
+  "remarketing_enabled": "Remarketing automático",
+  "remarketing_desc": "Envía un mensaje de WhatsApp a los clientes con consentimiento que no han tenido una reparación por un tiempo. ",
+  "remarketing_days": "Inactivo durante (días)",
+  "remarketing_days_hint": "Los clientes cuya última reparación entregada sea anterior a esta reciben un mensaje",
+  "remarketing_cooldown": "Repetir como máximo cada (días)",
+  "remarketing_cooldown_hint": "Espacio mínimo entre dos mensajes al mismo cliente",
+  "remarketing_template": "Nombre de metaplantilla",
+  "remarketing_template_hint": "Must exist and be APPROVED in your Meta Business account. Suggested body: \"Olá {{1}}! Já passou algum tempo desde a sua última reparação na {{2}}. Se o seu equipamento precisar de atenção, estamos aqui para ajudar.\"",
+  "remarketing_upsell": "El remarketing automático de WhatsApp está disponible con el módulo Remarketing; solicite a su proveedor que lo habilite.",
   "you": "Tú",
   "jobStatus": {
     "INTAKE": "Recepción",

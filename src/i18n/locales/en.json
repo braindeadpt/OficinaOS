@@ -2068,7 +2068,8 @@
     "imei_invalid": "Invalid IMEI — check the 15 digits",
     "invalid_url": "Must be a valid http(s) URL",
     "pairing_code_required": "Enter the pairing code.",
-    "invalid_slug": "Use only lowercase letters, numbers and hyphens (min. 2 characters)"
+    "invalid_slug": "Use only lowercase letters, numbers and hyphens (min. 2 characters)",
+    "invalid_template_name": "Use only lowercase letters, numbers and underscores"
   },
   "view_all_critical": "View All Overdue",
   "warranty_returns": "Warranty Returns",
@@ -2084,6 +2085,15 @@
   "whatsapp_templates": "WhatsApp Templates",
   "whatsapp_tracking_url": "Public tracking URL",
   "whatsapp_tracking_url_help": "Public address where customers open the tracking page from WhatsApp messages, e.g. https://repairs.myshop.com or http://192.168.1.33:4000. Optional — the link is only included when set",
+  "remarketing_enabled": "Automatic remarketing",
+  "remarketing_desc": "Sends a WhatsApp message to customers with consent who haven't had a repair in a while. Sent as an approved Meta template — these messages may have a per-message cost in your Meta plan.",
+  "remarketing_days": "Inactive for (days)",
+  "remarketing_days_hint": "Customers whose last delivered repair is older than this get a message",
+  "remarketing_cooldown": "Repeat at most every (days)",
+  "remarketing_cooldown_hint": "Minimum gap between two messages to the same customer",
+  "remarketing_template": "Meta template name",
+  "remarketing_template_hint": "Must exist and be APPROVED in your Meta Business account. Suggested body: \"Olá {{1}}! Já passou algum tempo desde a sua última reparação na {{2}}. Se o seu equipamento precisar de atenção, estamos aqui para ajudar.\"",
+  "remarketing_upsell": "Automatic WhatsApp remarketing is available with the Remarketing module — ask your provider to enable it.",
   "you": "You",
   "jobStatus": {
     "INTAKE": "Intake",

@@ -240,14 +240,27 @@ export async function getWhatsAppSettings(prisma: PrismaClient) {
       enabled: false,
       hasApiToken: false,
       phoneNumberId: null,
+      remarketingCooldownDays: 180,
+      remarketingDays: 90,
+      remarketingEnabled: false,
+      remarketingModule: false,
+      remarketingTemplate: null,
       trackingBaseUrl: null,
     };
   }
+  const modules = Array.isArray(row.cloudEntitlements)
+    ? (row.cloudEntitlements as string[])
+    : [];
   return {
     businessId: row.whatsappBusinessId,
     enabled: row.whatsappEnabled,
     hasApiToken: Boolean(row.whatsappApiTokenEncrypted),
     phoneNumberId: row.whatsappPhoneNumberId,
+    remarketingCooldownDays: row.remarketingCooldownDays,
+    remarketingDays: row.remarketingDays,
+    remarketingEnabled: row.remarketingEnabled,
+    remarketingModule: modules.includes("remarketing"),
+    remarketingTemplate: row.remarketingTemplate,
     trackingBaseUrl: row.trackingBaseUrl,
   };
 }
@@ -257,6 +270,10 @@ export async function upsertWhatsAppSettings(
   input: UpdateWhatsAppSettingsInput
 ) {
   const data: {
+    remarketingCooldownDays?: number;
+    remarketingDays?: number;
+    remarketingEnabled?: boolean;
+    remarketingTemplate?: string | null;
     trackingBaseUrl?: string | null;
     whatsappApiTokenEncrypted?: string;
     whatsappBusinessId?: string;
@@ -265,6 +282,18 @@ export async function upsertWhatsAppSettings(
   } = {};
   if (input.enabled !== undefined) {
     data.whatsappEnabled = input.enabled;
+  }
+  if (input.remarketingEnabled !== undefined) {
+    data.remarketingEnabled = input.remarketingEnabled;
+  }
+  if (input.remarketingDays !== undefined) {
+    data.remarketingDays = input.remarketingDays;
+  }
+  if (input.remarketingCooldownDays !== undefined) {
+    data.remarketingCooldownDays = input.remarketingCooldownDays;
+  }
+  if (input.remarketingTemplate !== undefined) {
+    data.remarketingTemplate = input.remarketingTemplate || null;
   }
   if (input.businessId !== undefined) {
     data.whatsappBusinessId = input.businessId;

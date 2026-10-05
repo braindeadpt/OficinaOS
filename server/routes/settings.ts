@@ -270,6 +270,19 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
           ),
         });
       }
+      // Enabling remarketing requires the Pro module — enforced again by
+      // the sweep on the cached entitlements.
+      if (parsed.data.remarketingEnabled) {
+        const s = await app.prisma.shopSettings.findUniqueOrThrow({
+          where: { id: "default" },
+        });
+        const modules = Array.isArray(s.cloudEntitlements)
+          ? (s.cloudEntitlements as string[])
+          : [];
+        if (!modules.includes("remarketing")) {
+          throw new AppError("CLOUD_MODULE_REQUIRED");
+        }
+      }
       const updated = await upsertWhatsAppSettings(app.prisma, parsed.data);
       return reply.send(updated);
     }

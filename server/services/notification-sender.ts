@@ -54,6 +54,64 @@ export async function sendWhatsApp(
   }
 }
 
+/**
+ * Business-initiated WhatsApp outside the 24h window must be a Meta
+ * template message — freeform text is rejected by the Graph API.
+ * `params` map to the template's positional body variables ({{1}}, {{2}}…).
+ */
+export async function sendWhatsAppTemplate(
+  config: WhatsAppConfig,
+  to: string,
+  templateName: string,
+  languageCode: string,
+  params: string[],
+  countryCode?: string
+): Promise<SendResult> {
+  const url = `https://graph.facebook.com/v21.0/${config.phoneNumberId}/messages`;
+  const payload = {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to: formatPhone(to, countryCode),
+    type: "template",
+    template: {
+      name: templateName,
+      language: { code: languageCode },
+      components: [
+        {
+          type: "body",
+          parameters: params.map((text) => ({ type: "text", text })),
+        },
+      ],
+    },
+  };
+
+  try {
+    const response = await fetch(url, {
+      body: JSON.stringify(payload),
+      headers: {
+        Authorization: `Bearer ${config.apiToken}`,
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+      signal: AbortSignal.timeout(15_000),
+    });
+
+    if (response.ok) {
+      return { success: true };
+    }
+    const body = await response.text();
+    return {
+      success: false,
+      error: `WhatsApp API ${response.status}: ${body.slice(0, 200)}`,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Unknown error",
+    };
+  }
+}
+
 export function decryptWhatsAppConfig(encrypted: {
   apiTokenEncrypted: string;
   businessId: string;

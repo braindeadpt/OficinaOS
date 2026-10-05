@@ -239,6 +239,9 @@ model Customer {
   // WhatsApp status updates are only sent when the customer opted in.
   whatsappConsent   Boolean   @default(false)
   whatsappConsentAt DateTime? @db.Timestamptz
+  // Last proactive remarketing send (Pro module "remarketing") — the
+  // cooldown between sends is measured from this timestamp.
+  lastRemarketingAt DateTime? @db.Timestamptz
   createdAt         DateTime  @default(now()) @db.Timestamptz
   updatedAt         DateTime  @updatedAt @db.Timestamptz
 
@@ -1063,6 +1066,13 @@ model ShopSettings {
   whatsappBusinessId        String?
   whatsappPhoneNumberId     String?
   whatsappEnabled           Boolean  @default(false)
+  // Remarketing automático (Pro module "remarketing") — proactive WhatsApp
+  // re-engagement for customers idle for remarketingDays, throttled by a
+  // cooldown and sent as a Meta-approved template message.
+  remarketingEnabled        Boolean  @default(false)
+  remarketingDays           Int      @default(90)
+  remarketingCooldownDays   Int      @default(180)
+  remarketingTemplate       String?
   // Public base URL used to build customer-facing links (e.g. WhatsApp
   // tracking links). Optional: shops on a LAN may not expose one.
   trackingBaseUrl           String?

@@ -41,6 +41,7 @@ import { usersRoutes } from "./routes/users.js";
 import { startLowStockScheduler } from "./services/low-stock.service.js";
 import { cleanupReadNotifications } from "./services/notification-inapp.service.js";
 import { startOutboxWorker } from "./services/notification-outbox.service.js";
+import { startRemarketingScheduler } from "./services/remarketing.service.js";
 import { initValidationI18n } from "./utils/resolve-validation-messages.js";
 
 const env = loadEnv();
@@ -131,6 +132,7 @@ setAppInstance(app);
 const stopOverdue = startOverdueScheduler(app);
 const stopCloudPoller = startCloudPoller(app);
 const stopLowStock = startLowStockScheduler(app);
+const stopRemarketing = startRemarketingScheduler(app);
 const stopOutboxWorker = startOutboxWorker(app.prisma);
 const CLEANUP_INTERVAL_MS = 15 * 60 * 1000;
 const cleanupHandle = setInterval(() => {
@@ -232,6 +234,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
     stopOverdue();
     stopCloudPoller();
     stopLowStock();
+    stopRemarketing();
     stopOutboxWorker();
     clearInterval(cleanupHandle);
     await app.close();

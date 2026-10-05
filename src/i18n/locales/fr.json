@@ -2068,7 +2068,8 @@
     "imei_invalid": "IMEI invalide — vérifiez les 15 chiffres",
     "invalid_url": "Doit être une URL http(s) valide",
     "pairing_code_required": "Entrez le code d'appairage.",
-    "invalid_slug": "Utilisez uniquement des lettres minuscules, des chiffres et des traits d'union (min. 2 caractères)"
+    "invalid_slug": "Utilisez uniquement des lettres minuscules, des chiffres et des traits d'union (min. 2 caractères)",
+    "invalid_template_name": "Utilisez uniquement des lettres minuscules, des chiffres et des traits de soulignement"
   },
   "view_all_critical": "Voir tous les en retard",
   "warranty_returns": "Retours garantie",
@@ -2084,6 +2085,15 @@
   "whatsapp_templates": "Modèles WhatsApp",
   "whatsapp_tracking_url": "URL publique de suivi",
   "whatsapp_tracking_url_help": "Adresse publique où les clients ouvrent la page de suivi depuis les messages WhatsApp, p. ex. https://reparations.maboutique.fr ou http://192.168.1.33:4000. Facultatif — le lien n'est inclus que s'il est défini",
+  "remarketing_enabled": "Remarketing automatique",
+  "remarketing_desc": "Envoie un message WhatsApp aux clients ayant donné leur consentement et qui n'ont pas subi de réparation depuis un certain temps. ",
+  "remarketing_days": "Inactif pendant (jours)",
+  "remarketing_days_hint": "Les clients dont la dernière réparation livrée est plus ancienne que celle-ci reçoivent un message",
+  "remarketing_cooldown": "Répéter au maximum tous les (jours)",
+  "remarketing_cooldown_hint": "Écart minimum entre deux messages adressés au même client",
+  "remarketing_template": "Nom du méta-modèle",
+  "remarketing_template_hint": "Must exist and be APPROVED in your Meta Business account. Suggested body: \"Olá {{1}}! Já passou algum tempo desde a sua última reparação na {{2}}. Se o seu equipamento precisar de atenção, estamos aqui para ajudar.\"",
+  "remarketing_upsell": "Le remarketing automatique de WhatsApp est disponible avec le module Remarketing : demandez à votre fournisseur de l'activer.",
   "you": "Vous",
   "jobStatus": {
     "INTAKE": "Admission",
