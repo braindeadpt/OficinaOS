@@ -42,6 +42,12 @@ export const NAV_ITEMS: NavItem[] = [
     perm: { tradeins: ["view"] },
   },
   {
+    icon: "travel_explore",
+    labelKey: "parts_board.nav_label",
+    to: "/part-requests",
+    perm: { jobs: ["view"] },
+  },
+  {
     icon: "people",
     labelKey: "customers",
     to: "/customers",

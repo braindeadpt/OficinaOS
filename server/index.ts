@@ -25,6 +25,7 @@ import { healthRoutes } from "./routes/health.js";
 import { intakeRequestsRoutes } from "./routes/intake-requests.js";
 import { jobRoutes } from "./routes/jobs.js";
 import { notificationsRoutes } from "./routes/notifications.js";
+import { partRequestsRoutes } from "./routes/part-requests.js";
 import { partsRoutes } from "./routes/parts.js";
 import { paymentRoutes } from "./routes/payments.js";
 import { publicRoutes } from "./routes/public.js";
@@ -166,6 +167,7 @@ app.register(reportsRoutes, { prefix: "/api/reports" });
 app.register(saleRoutes, { prefix: "/api/sales" });
 app.register(returnClaimsRoutes, { prefix: "/api/return-claims" });
 app.register(tradeInsRoutes, { prefix: "/api/trade-ins" });
+app.register(partRequestsRoutes, { prefix: "/api/part-requests" });
 app.register(feedbackRoutes, { prefix: "/api/feedback" });
 
 if (IS_PROD) {

@@ -253,6 +253,16 @@ export const ERRORS = {
     message: "errors.trade_in_signature_required",
   },
 
+  // ── Part-request board (procuro-peça, Pro module: market) ──────────────
+  PART_REQUEST_NOT_FOUND: {
+    status: 404,
+    message: "errors.part_request_not_found",
+  },
+  RATE_LIMITED: {
+    status: 429,
+    message: "errors.rate_limited",
+  },
+
   // ── Direct network printing (ESC/POS) ──────────────────────────────────
   PRINTER_NOT_CONFIGURED: {
     status: 400,
