@@ -5,14 +5,25 @@ import FunctionalChecklist from "@/components/modules/jobs/intake-modal/function
 import type { IntakeChecklist } from "@/components/modules/jobs/intake-modal/types";
 import QuickAddCustomer from "@/components/modules/jobs/quick-add-customer";
 import SignaturePad from "@/components/reports/signature-pad";
+import { Field } from "@/components/ui/field";
+import { Icon } from "@/components/ui/icon";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { useCustomerSearch } from "@/hooks/use-customer-search";
 import { useModalEffects } from "@/hooks/use-modal-effects";
 import { getErrorMessage } from "@/lib/api";
 import { createTradeIn, type TradeIn } from "@/lib/api-trade-ins";
 
-const inputCls =
-  "w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm transition-all";
 const labelCls = "mb-1.5 block font-medium text-on-surface text-sm";
+
+const chevron = (
+  <Icon
+    className="pointer-events-none absolute end-4 top-1/2 -translate-y-1/2 text-on-surface-variant"
+    name="expand_more"
+    size="sm"
+  />
+);
 
 const CONDITIONS = ["EXCELLENT", "GOOD", "FAIR", "POOR"] as const;
 const PAYMENT_METHODS = ["CASH", "TRANSFER", "STORE_CREDIT"] as const;
@@ -137,16 +148,10 @@ export default function TradeInModal({ onClose, onCreated }: Props) {
 
         <div className="flex-1 space-y-4 overflow-y-auto p-6">
           <div className="relative" id="ti-customer-wrap">
-            <label className={labelCls} htmlFor="ti-customer">
-              {t("tradeins.seller")}
-            </label>
-            <div className="relative">
-              <span className="material-symbols-outlined absolute top-1/2 left-3 -translate-y-1/2 text-on-surface-variant text-sm">
-                {customerId ? "check_circle" : "search"}
-              </span>
-              <input
+            <Field label={t("tradeins.seller")}>
+              <Input
                 autoComplete="off"
-                className={`${inputCls} ps-9`}
+                iconStart={customerId ? "check_circle" : "search"}
                 id="ti-customer"
                 onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
                 onChange={(e) => {
@@ -159,7 +164,7 @@ export default function TradeInModal({ onClose, onCreated }: Props) {
                 type="text"
                 value={customerId ? customerLabel : query}
               />
-            </div>
+            </Field>
             <CustomerSearchDropdown
               isSearching={isSearching}
               onCreateNew={() => setShowCreateCustomer(true)}
@@ -190,12 +195,8 @@ export default function TradeInModal({ onClose, onCreated }: Props) {
           )}
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls} htmlFor="ti-idtype">
-                {t("tradeins.id_type")}
-              </label>
-              <select
-                className={inputCls}
+            <Field endAdornment={chevron} label={t("tradeins.id_type")}>
+              <Select
                 id="ti-idtype"
                 onChange={(e) => setSellerIdType(e.target.value)}
                 value={sellerIdType}
@@ -205,83 +206,59 @@ export default function TradeInModal({ onClose, onCreated }: Props) {
                     {t(`tradeins.id_type_${idt.toLowerCase()}`)}
                   </option>
                 ))}
-              </select>
-            </div>
-            <div>
-              <label className={labelCls} htmlFor="ti-idnum">
-                {t("tradeins.id_number")}
-              </label>
-              <input
-                className={inputCls}
+              </Select>
+            </Field>
+            <Field label={t("tradeins.id_number")}>
+              <Input
                 id="ti-idnum"
                 onChange={(e) => setSellerIdNumber(e.target.value)}
                 placeholder="12345678"
                 type="text"
                 value={sellerIdNumber}
               />
-            </div>
+            </Field>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls} htmlFor="ti-brand">
-                {t("tradeins.brand")}
-              </label>
-              <input
-                className={inputCls}
+            <Field label={t("tradeins.brand")}>
+              <Input
                 id="ti-brand"
                 onChange={(e) => setDeviceBrand(e.target.value)}
                 placeholder="Apple"
                 type="text"
                 value={deviceBrand}
               />
-            </div>
-            <div>
-              <label className={labelCls} htmlFor="ti-model">
-                {t("tradeins.model")}
-              </label>
-              <input
-                className={inputCls}
+            </Field>
+            <Field label={t("tradeins.model")}>
+              <Input
                 id="ti-model"
                 onChange={(e) => setDeviceModel(e.target.value)}
                 placeholder="iPhone 12"
                 type="text"
                 value={deviceModel}
               />
-            </div>
-            <div>
-              <label className={labelCls} htmlFor="ti-imei">
-                {t("tradeins.imei")}
-              </label>
-              <input
-                className={inputCls}
+            </Field>
+            <Field label={t("tradeins.imei")}>
+              <Input
                 id="ti-imei"
                 onChange={(e) => setImei(e.target.value)}
                 type="text"
                 value={imei}
               />
-            </div>
-            <div>
-              <label className={labelCls} htmlFor="ti-storage">
-                {t("tradeins.storage")}
-              </label>
-              <input
-                className={inputCls}
+            </Field>
+            <Field label={t("tradeins.storage")}>
+              <Input
                 id="ti-storage"
                 onChange={(e) => setStorage(e.target.value)}
                 placeholder="128GB"
                 type="text"
                 value={storage}
               />
-            </div>
+            </Field>
           </div>
 
-          <div>
-            <label className={labelCls} htmlFor="ti-condition">
-              {t("tradeins.condition")}
-            </label>
-            <select
-              className={inputCls}
+          <Field endAdornment={chevron} label={t("tradeins.condition")}>
+            <Select
               id="ti-condition"
               onChange={(e) => setCondition(e.target.value)}
               value={condition}
@@ -291,8 +268,8 @@ export default function TradeInModal({ onClose, onCreated }: Props) {
                   {t(`tradeins.condition_${c.toLowerCase()}`)}
                 </option>
               ))}
-            </select>
-          </div>
+            </Select>
+          </Field>
 
           <FunctionalChecklist
             onChange={setChecklist}
@@ -301,12 +278,8 @@ export default function TradeInModal({ onClose, onCreated }: Props) {
           />
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls} htmlFor="ti-price">
-                {t("tradeins.price")}
-              </label>
-              <input
-                className={inputCls}
+            <Field label={t("tradeins.price")}>
+              <Input
                 id="ti-price"
                 inputMode="decimal"
                 onChange={(e) => setPurchasePrice(e.target.value)}
@@ -314,13 +287,9 @@ export default function TradeInModal({ onClose, onCreated }: Props) {
                 type="text"
                 value={purchasePrice}
               />
-            </div>
-            <div>
-              <label className={labelCls} htmlFor="ti-pay">
-                {t("tradeins.payment")}
-              </label>
-              <select
-                className={inputCls}
+            </Field>
+            <Field endAdornment={chevron} label={t("tradeins.payment")}>
+              <Select
                 id="ti-pay"
                 onChange={(e) => setPaymentMethod(e.target.value)}
                 value={paymentMethod}
@@ -330,21 +299,18 @@ export default function TradeInModal({ onClose, onCreated }: Props) {
                     {t(`tradeins.pay_${m.toLowerCase()}`)}
                   </option>
                 ))}
-              </select>
-            </div>
+              </Select>
+            </Field>
           </div>
 
-          <div>
-            <label className={labelCls} htmlFor="ti-notes">
-              {t("tradeins.notes")}
-            </label>
-            <textarea
-              className={`${inputCls} min-h-20 resize-y`}
+          <Field label={t("tradeins.notes")}>
+            <Textarea
+              className="min-h-20 resize-y"
               id="ti-notes"
               onChange={(e) => setNotes(e.target.value)}
               value={notes}
             />
-          </div>
+          </Field>
 
           <div>
             <p className={labelCls}>{t("tradeins.signature")}</p>

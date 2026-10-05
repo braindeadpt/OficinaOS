@@ -10,11 +10,22 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { Field } from "@/components/ui/field";
+import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import api from "@/lib/api";
 import { getPhonePlaceholder } from "@/lib/phone-formats";
 import { useSettingsStore } from "@/stores/settings";
+
+const chevron = (
+  <Icon
+    className="pointer-events-none absolute end-4 top-1/2 -translate-y-1/2 text-on-surface-variant"
+    name="expand_more"
+    size="sm"
+  />
+);
 
 interface RemoteBackupStatus {
   lastRemoteCopyAt: string | null;
@@ -281,18 +292,8 @@ export default function SettingsShopTab({
           {t("shop_identity_label")}
         </p>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <div className="space-y-2">
-            <label
-              className="block font-semibold text-on-surface text-sm"
-              htmlFor="shop-name"
-            >
-              {t("shop_name")}
-              <span aria-hidden="true" className="ms-0.5 text-error">
-                *
-              </span>
-            </label>
-            <input
-              className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm transition-all"
+          <Field label={t("shop_name")} required>
+            <Input
               id="shop-name"
               onChange={(e) => {
                 setShopForm((f) => ({ ...f, shopName: e.target.value }));
@@ -303,16 +304,9 @@ export default function SettingsShopTab({
               type="text"
               value={shopForm.shopName}
             />
-          </div>
-          <div className="space-y-2">
-            <label
-              className="block font-semibold text-on-surface text-sm"
-              htmlFor="shop-phone"
-            >
-              {t("shop_phone")}
-            </label>
-            <input
-              className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm transition-all"
+          </Field>
+          <Field label={t("shop_phone")}>
+            <Input
               id="shop-phone"
               onChange={(e) => {
                 setShopForm((f) => ({ ...f, phone: e.target.value }));
@@ -322,26 +316,22 @@ export default function SettingsShopTab({
               type="tel"
               value={shopForm.phone}
             />
-          </div>
+          </Field>
         </div>
-        <div className="mt-6 space-y-2">
-          <label
-            className="block font-semibold text-on-surface text-sm"
-            htmlFor="shop-address"
-          >
-            {t("shop_address")}
-          </label>
-          <textarea
-            className="w-full resize-none rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm transition-all"
-            id="shop-address"
-            onChange={(e) => {
-              setShopForm((f) => ({ ...f, address: e.target.value }));
-              onDirtyChange(true);
-            }}
-            placeholder="Rua Augusta 123, Lisboa"
-            rows={3}
-            value={shopForm.address}
-          />
+        <div className="mt-6">
+          <Field label={t("shop_address")}>
+            <Textarea
+              className="resize-none"
+              id="shop-address"
+              onChange={(e) => {
+                setShopForm((f) => ({ ...f, address: e.target.value }));
+                onDirtyChange(true);
+              }}
+              placeholder="Rua Augusta 123, Lisboa"
+              rows={3}
+              value={shopForm.address}
+            />
+          </Field>
         </div>
         <div className="mt-6">
           <Field
@@ -368,78 +358,43 @@ export default function SettingsShopTab({
           {t("regional_settings_label")}
         </p>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <div className="space-y-2">
-            <label
-              className="block font-semibold text-on-surface text-sm"
-              htmlFor="shop-country-code"
+          <Field endAdornment={chevron} label={t("country_code")}>
+            <Select
+              id="shop-country-code"
+              onChange={(e) => {
+                setShopForm((f) => ({
+                  ...f,
+                  countryCode: e.target.value,
+                }));
+                onDirtyChange(true);
+              }}
+              value={shopForm.countryCode}
             >
-              {t("country_code")}
-            </label>
-            <div className="relative">
-              <select
-                className="w-full cursor-pointer appearance-none rounded-xl border-none bg-surface-container-lowest px-4 py-3 pe-10 text-sm transition-all"
-                id="shop-country-code"
-                onChange={(e) => {
-                  setShopForm((f) => ({
-                    ...f,
-                    countryCode: e.target.value,
-                  }));
-                  onDirtyChange(true);
-                }}
-                value={shopForm.countryCode}
-              >
-                {COUNTRIES.map((c) => (
-                  <option key={c.code} value={c.code}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-              <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-on-surface-variant">
-                <span className="material-symbols-outlined text-[20px]">
-                  expand_more
-                </span>
-              </span>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <label
-              className="block font-semibold text-on-surface text-sm"
-              htmlFor="shop-currency"
+              {COUNTRIES.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field endAdornment={chevron} label={t("currency")}>
+            <Select
+              id="shop-currency"
+              onChange={(e) => {
+                setShopForm((f) => ({ ...f, currency: e.target.value }));
+                onDirtyChange(true);
+              }}
+              value={shopForm.currency}
             >
-              {t("currency")}
-            </label>
-            <div className="relative">
-              <select
-                className="w-full cursor-pointer appearance-none rounded-xl border-none bg-surface-container-lowest px-4 py-3 pe-10 text-sm transition-all"
-                id="shop-currency"
-                onChange={(e) => {
-                  setShopForm((f) => ({ ...f, currency: e.target.value }));
-                  onDirtyChange(true);
-                }}
-                value={shopForm.currency}
-              >
-                {CURRENCIES.map((c) => (
-                  <option key={c.code} value={c.code}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-              <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-on-surface-variant">
-                <span className="material-symbols-outlined text-[20px]">
-                  expand_more
-                </span>
-              </span>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <label
-              className="block font-semibold text-on-surface text-sm"
-              htmlFor="shop-receipt"
-            >
-              {t("receipt_footer")}
-            </label>
-            <input
-              className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm transition-all"
+              {CURRENCIES.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label={t("receipt_footer")}>
+            <Input
               id="shop-receipt"
               onChange={(e) => {
                 setShopForm((f) => ({ ...f, receiptFooter: e.target.value }));
@@ -449,16 +404,12 @@ export default function SettingsShopTab({
               type="text"
               value={shopForm.receiptFooter}
             />
-          </div>
-          <div className="space-y-2">
-            <label
-              className="block font-semibold text-on-surface text-sm"
-              htmlFor="shop-revenue-goal"
-            >
-              {t("shop_revenue_goal")}
-            </label>
-            <input
-              className="w-full rounded-xl border-none bg-surface-container-lowest px-4 py-3 text-sm transition-all"
+          </Field>
+          <Field
+            hint={t("shop_revenue_goal_help")}
+            label={t("shop_revenue_goal")}
+          >
+            <Input
               id="shop-revenue-goal"
               inputMode="decimal"
               onChange={(e) => {
@@ -472,10 +423,7 @@ export default function SettingsShopTab({
               type="text"
               value={shopForm.monthlyRevenueGoal}
             />
-            <p className="font-label text-on-surface-variant text-xs">
-              {t("shop_revenue_goal_help")}
-            </p>
-          </div>
+          </Field>
         </div>
       </div>
 
@@ -487,100 +435,58 @@ export default function SettingsShopTab({
           {t("print_settings_help")}
         </p>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <div className="space-y-2">
-            <label
-              className="block font-semibold text-on-surface text-sm"
-              htmlFor="shop-receipt-paper"
+          <Field endAdornment={chevron} label={t("print_paper_label")}>
+            <Select
+              id="shop-receipt-paper"
+              onChange={(e) => {
+                setShopForm((f) => ({
+                  ...f,
+                  receiptPaper: e.target.value as typeof f.receiptPaper,
+                }));
+                onDirtyChange(true);
+              }}
+              value={shopForm.receiptPaper}
             >
-              {t("print_paper_label")}
-            </label>
-            <div className="relative">
-              <select
-                className="w-full cursor-pointer appearance-none rounded-xl border-none bg-surface-container-lowest px-4 py-3 pe-10 text-sm transition-all"
-                id="shop-receipt-paper"
-                onChange={(e) => {
-                  setShopForm((f) => ({
-                    ...f,
-                    receiptPaper: e.target.value as typeof f.receiptPaper,
-                  }));
-                  onDirtyChange(true);
-                }}
-                value={shopForm.receiptPaper}
-              >
-                <option value="58mm">{t("print_paper_58")}</option>
-                <option value="80mm">{t("print_paper_80")}</option>
-                <option value="a4">{t("print_paper_a4")}</option>
-              </select>
-              <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-on-surface-variant">
-                <span className="material-symbols-outlined text-[20px]">
-                  expand_more
-                </span>
-              </span>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <label
-              className="block font-semibold text-on-surface text-sm"
-              htmlFor="shop-label-size"
+              <option value="58mm">{t("print_paper_58")}</option>
+              <option value="80mm">{t("print_paper_80")}</option>
+              <option value="a4">{t("print_paper_a4")}</option>
+            </Select>
+          </Field>
+          <Field endAdornment={chevron} label={t("print_label_size")}>
+            <Select
+              id="shop-label-size"
+              onChange={(e) => {
+                setShopForm((f) => ({
+                  ...f,
+                  labelSize: e.target.value as typeof f.labelSize,
+                }));
+                onDirtyChange(true);
+              }}
+              value={shopForm.labelSize}
             >
-              {t("print_label_size")}
-            </label>
-            <div className="relative">
-              <select
-                className="w-full cursor-pointer appearance-none rounded-xl border-none bg-surface-container-lowest px-4 py-3 pe-10 text-sm transition-all"
-                id="shop-label-size"
-                onChange={(e) => {
-                  setShopForm((f) => ({
-                    ...f,
-                    labelSize: e.target.value as typeof f.labelSize,
-                  }));
-                  onDirtyChange(true);
-                }}
-                value={shopForm.labelSize}
-              >
-                <option value="40x20">40 × 20 mm</option>
-                <option value="57x32">57 × 32 mm</option>
-                <option value="62x29">62 × 29 mm</option>
-              </select>
-              <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-on-surface-variant">
-                <span className="material-symbols-outlined text-[20px]">
-                  expand_more
-                </span>
-              </span>
-            </div>
-          </div>
+              <option value="40x20">40 × 20 mm</option>
+              <option value="57x32">57 × 32 mm</option>
+              <option value="62x29">62 × 29 mm</option>
+            </Select>
+          </Field>
         </div>
         <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="space-y-2">
-            <label
-              className="block font-semibold text-on-surface text-sm"
-              htmlFor="shop-printer-mode"
+          <Field endAdornment={chevron} label={t("print_method_label")}>
+            <Select
+              id="shop-printer-mode"
+              onChange={(e) => {
+                setShopForm((f) => ({
+                  ...f,
+                  printerMode: e.target.value as typeof f.printerMode,
+                }));
+                onDirtyChange(true);
+              }}
+              value={shopForm.printerMode}
             >
-              {t("print_method_label")}
-            </label>
-            <div className="relative">
-              <select
-                className="w-full cursor-pointer appearance-none rounded-xl border-none bg-surface-container-lowest px-4 py-3 pe-10 text-sm transition-all"
-                id="shop-printer-mode"
-                onChange={(e) => {
-                  setShopForm((f) => ({
-                    ...f,
-                    printerMode: e.target.value as typeof f.printerMode,
-                  }));
-                  onDirtyChange(true);
-                }}
-                value={shopForm.printerMode}
-              >
-                <option value="browser">{t("print_method_browser")}</option>
-                <option value="escpos">{t("print_method_escpos")}</option>
-              </select>
-              <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-on-surface-variant">
-                <span className="material-symbols-outlined text-[20px]">
-                  expand_more
-                </span>
-              </span>
-            </div>
-          </div>
+              <option value="browser">{t("print_method_browser")}</option>
+              <option value="escpos">{t("print_method_escpos")}</option>
+            </Select>
+          </Field>
           {shopForm.printerMode === "escpos" && (
             <>
               <Field hint={t("print_host_help")} label={t("print_host")}>
@@ -636,13 +542,14 @@ export default function SettingsShopTab({
             ] as const
           ).map(([field, key]) => (
             <div className="flex items-center gap-3" key={field}>
-              <label
+              <span
                 className="flex-1 font-medium text-on-surface-variant text-sm"
-                htmlFor={`print-${field}`}
+                id={`print-${field}-label`}
               >
                 {t(key)}
-              </label>
+              </span>
               <Switch
+                ariaLabelledBy={`print-${field}-label`}
                 checked={shopForm[field]}
                 id={`print-${field}`}
                 onChange={(checked) => {

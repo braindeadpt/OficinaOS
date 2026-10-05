@@ -28,9 +28,9 @@ type PrimitiveTag = (typeof PRIMITIVE_TAGS)[number];
  */
 const BUDGET: Record<PrimitiveTag, number> = {
   input: 78,
-  label: 71,
-  select: 13,
-  textarea: 15,
+  label: 67,
+  select: 12,
+  textarea: 12,
 };
 
 interface Offence {
