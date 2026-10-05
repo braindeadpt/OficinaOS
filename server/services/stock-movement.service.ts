@@ -14,6 +14,7 @@ import {
   requireKeysetCursor,
   withKeyset,
 } from "../utils/keyset.js";
+import { markStoreDirtyIfListed } from "./storefront.service.js";
 
 export const listMovementsQuerySchema = z.object({
   cursor: z.string().optional(),
@@ -41,27 +42,32 @@ export async function recordPurchase(
     return null;
   }
 
-  return prisma.$transaction(async (tx) => {
-    const updated = await tx.partsCatalog.update({
-      where: { id: partId },
-      data: { stockQuantity: { increment: input.quantity } },
-      select: { stockQuantity: true },
-    });
+  return prisma
+    .$transaction(async (tx) => {
+      const updated = await tx.partsCatalog.update({
+        where: { id: partId },
+        data: { stockQuantity: { increment: input.quantity } },
+        select: { stockQuantity: true },
+      });
 
-    const movement = await createStockMovement(tx, {
-      balanceAfter: updated.stockQuantity,
-      createdById: userId,
-      note: input.note ?? null,
-      partId,
-      quantity: input.quantity,
-      reference: input.reference ?? null,
-      supplier: input.supplier ?? null,
-      type: "PURCHASE",
-      unitCost: input.unitCost ?? null,
-    });
+      const movement = await createStockMovement(tx, {
+        balanceAfter: updated.stockQuantity,
+        createdById: userId,
+        note: input.note ?? null,
+        partId,
+        quantity: input.quantity,
+        reference: input.reference ?? null,
+        supplier: input.supplier ?? null,
+        type: "PURCHASE",
+        unitCost: input.unitCost ?? null,
+      });
 
-    return { movement, stockQuantity: updated.stockQuantity };
-  });
+      return { movement, stockQuantity: updated.stockQuantity };
+    })
+    .then(async (result) => {
+      await markStoreDirtyIfListed(prisma, partId);
+      return result;
+    });
 }
 
 /**
@@ -127,37 +133,42 @@ export async function recordAdjustment(
     return null;
   }
 
-  return prisma.$transaction(async (tx) => {
-    // Atomic signed delta: the WHERE re-checks the balance inside the UPDATE
-    // itself, so two concurrent adjustments can never both act on the same
-    // stale read (the previous read-then-write let the second one silently
-    // overwrite the first), and stock can never drop below zero.
-    const updated = await tx.$queryRaw<
-      Array<{ stockQuantity: number | string }>
-    >`
+  return prisma
+    .$transaction(async (tx) => {
+      // Atomic signed delta: the WHERE re-checks the balance inside the UPDATE
+      // itself, so two concurrent adjustments can never both act on the same
+      // stale read (the previous read-then-write let the second one silently
+      // overwrite the first), and stock can never drop below zero.
+      const updated = await tx.$queryRaw<
+        Array<{ stockQuantity: number | string }>
+      >`
       UPDATE "parts_catalog"
       SET "stockQuantity" = "stockQuantity" + ${input.quantity}
       WHERE "id" = ${partId}
         AND "stockQuantity" + ${input.quantity} >= 0
       RETURNING "stockQuantity"
     `;
-    if (updated.length === 0) {
-      throw new AppError("INSUFFICIENT_STOCK");
-    }
-    const balanceAfter = stockBalanceReader(updated);
+      if (updated.length === 0) {
+        throw new AppError("INSUFFICIENT_STOCK");
+      }
+      const balanceAfter = stockBalanceReader(updated);
 
-    const movement = await createStockMovement(tx, {
-      balanceAfter,
-      createdById: userId,
-      note: input.note ?? null,
-      partId,
-      quantity: input.quantity,
-      reference: input.reference ?? null,
-      type: "ADJUSTMENT",
+      const movement = await createStockMovement(tx, {
+        balanceAfter,
+        createdById: userId,
+        note: input.note ?? null,
+        partId,
+        quantity: input.quantity,
+        reference: input.reference ?? null,
+        type: "ADJUSTMENT",
+      });
+
+      return { movement, stockQuantity: balanceAfter };
+    })
+    .then(async (result) => {
+      await markStoreDirtyIfListed(prisma, partId);
+      return result;
     });
-
-    return { movement, stockQuantity: balanceAfter };
-  });
 }
 
 /** Reads the balance out of a RETURNING row, whatever type the driver chose. */

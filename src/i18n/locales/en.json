@@ -47,7 +47,9 @@
     "discard_title": "Discard changes?",
     "discard_desc": "You have unsaved changes that will be lost.",
     "keep_editing": "Keep editing",
-    "discard": "Discard"
+    "discard": "Discard",
+    "listed_online": "List in online store",
+    "listed_online_desc": "Shows this part on your public online store page"
   },
   "add_service": "Add Service",
   "add_user": "Add User",
@@ -2065,7 +2067,8 @@
     "repair_name_required": "Repair name is required",
     "imei_invalid": "Invalid IMEI — check the 15 digits",
     "invalid_url": "Must be a valid http(s) URL",
-    "pairing_code_required": "Enter the pairing code."
+    "pairing_code_required": "Enter the pairing code.",
+    "invalid_slug": "Use only lowercase letters, numbers and hyphens (min. 2 characters)"
   },
   "view_all_critical": "View All Overdue",
   "warranty_returns": "Warranty Returns",
@@ -2284,5 +2287,20 @@
     "send_reply": "Send reply",
     "reply_hint": "Your shop name and contact go with the reply — the deal is settled between shops."
   },
-  "saving": "Saving..."
+  "saving": "Saving...",
+  "storefront": {
+    "title": "Online store",
+    "subtitle": "Your shop's public page on OficinaOS Cloud",
+    "slug": "Page address (slug)",
+    "slug_placeholder": "my-shop",
+    "description": "Short description",
+    "description_placeholder": "e.g. Repairs and accessories in Braga",
+    "email": "Public contact email",
+    "email_placeholder": "shop@example.com",
+    "published": "Published (visible to customers)",
+    "items_listed": "{{count}} items listed",
+    "sync_pending": "sync pending",
+    "saved": "Online store saved",
+    "save_failed": "Could not save the online store"
+  }
 }

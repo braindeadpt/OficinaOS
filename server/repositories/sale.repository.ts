@@ -4,6 +4,7 @@ import type { DbClient } from "./types.js";
 export interface StockCandidate {
   defaultPrice: Prisma.Decimal;
   id: string;
+  listedOnline: boolean;
   stockQuantity: number;
 }
 
@@ -13,7 +14,12 @@ export function findCatalogPartsByIds(
 ): Promise<StockCandidate[]> {
   return prisma.partsCatalog.findMany({
     where: { id: { in: ids } },
-    select: { id: true, stockQuantity: true, defaultPrice: true },
+    select: {
+      id: true,
+      stockQuantity: true,
+      defaultPrice: true,
+      listedOnline: true,
+    },
   });
 }
 

@@ -16,6 +16,7 @@ interface AddPartFormData {
   category: PartCategoryType | "";
   defaultPrice: string;
   isActive: boolean;
+  listedOnline: boolean;
   name: string;
   supplier: string;
 }
@@ -37,6 +38,7 @@ const INITIAL_FORM: AddPartFormData = {
   defaultPrice: "",
   supplier: "",
   isActive: true,
+  listedOnline: false,
 };
 
 function isDirty(
@@ -50,7 +52,8 @@ function isDirty(
       Number.parseFloat(form.defaultPrice) !==
         Number(editingPart.defaultPrice) ||
       form.supplier !== (editingPart.supplier ?? "") ||
-      form.isActive !== editingPart.isActive
+      form.isActive !== editingPart.isActive ||
+      form.listedOnline !== editingPart.listedOnline
     );
   }
   return (
@@ -58,7 +61,8 @@ function isDirty(
     form.category !== INITIAL_FORM.category ||
     form.defaultPrice !== INITIAL_FORM.defaultPrice ||
     form.supplier !== INITIAL_FORM.supplier ||
-    form.isActive !== INITIAL_FORM.isActive
+    form.isActive !== INITIAL_FORM.isActive ||
+    form.listedOnline !== INITIAL_FORM.listedOnline
   );
 }
 
@@ -81,6 +85,7 @@ export default function AddPartModal({
         defaultPrice: String(editingPart.defaultPrice),
         supplier: editingPart.supplier ?? "",
         isActive: editingPart.isActive,
+        listedOnline: editingPart.listedOnline,
       };
     }
     return { ...INITIAL_FORM };
@@ -143,6 +148,7 @@ export default function AddPartModal({
       defaultPrice: priceVal,
       supplier: form.supplier,
       isActive: form.isActive,
+      listedOnline: form.listedOnline,
     });
   }
 
@@ -336,6 +342,28 @@ export default function AddPartModal({
                 ariaLabelledBy="active-status-label"
                 checked={form.isActive}
                 onChange={(val) => update("isActive", val)}
+              />
+            </fieldset>
+
+            <fieldset
+              aria-labelledby="listed-online-label"
+              className="flex items-center justify-between rounded-xl border-none bg-surface-container-low px-4 py-3"
+            >
+              <div>
+                <p
+                  className="font-bold text-on-surface text-sm"
+                  id="listed-online-label"
+                >
+                  {t("add_part_modal.listed_online")}
+                </p>
+                <p className="text-on-surface-variant text-xs">
+                  {t("add_part_modal.listed_online_desc")}
+                </p>
+              </div>
+              <Switch
+                ariaLabelledBy="listed-online-label"
+                checked={form.listedOnline}
+                onChange={(val) => update("listedOnline", val)}
               />
             </fieldset>
           </div>

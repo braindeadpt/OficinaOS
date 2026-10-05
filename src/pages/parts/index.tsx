@@ -22,6 +22,7 @@ type SortField = "name" | "category" | "defaultPrice" | "supplier";
 interface AddPartForm {
   category: PartCategoryType | "";
   isActive: boolean;
+  listedOnline: boolean;
   name: string;
   supplier: string;
 }
@@ -985,6 +986,7 @@ export default function PartsCatalogPage() {
         defaultPrice: data.defaultPrice,
         name: data.name,
         supplier: data.supplier || undefined,
+        listedOnline: data.listedOnline,
       });
       setShowAddModal(false);
       showToast(t("part_added_successfully"));
@@ -1015,6 +1017,7 @@ export default function PartsCatalogPage() {
     category: PartCategoryType | "";
     defaultPrice: number;
     isActive: boolean;
+    listedOnline: boolean;
     name: string;
     supplier: string;
   }) => {
@@ -1032,6 +1035,7 @@ export default function PartsCatalogPage() {
         defaultPrice: data.defaultPrice,
         supplier: data.supplier || undefined,
         isActive: data.isActive,
+        listedOnline: data.listedOnline,
       });
       setEditingPart(null);
       showToast(t("part_updated_successfully"));

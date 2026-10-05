@@ -24,6 +24,7 @@ import {
   requireKeysetCursor,
   withKeyset,
 } from "../utils/keyset.js";
+import { markStoreDirty } from "./storefront.service.js";
 
 export async function list(prisma: PrismaClient, query: ListPartsQueryInput) {
   const { category, cursor, isActive, limit, needsRestock, search } = query;
@@ -80,12 +81,17 @@ export async function getById(prisma: PrismaClient, id: string) {
 }
 
 export async function create(prisma: PrismaClient, input: CreatePartInput) {
-  return await createPart(prisma, {
+  const part = await createPart(prisma, {
     category: input.category,
     defaultPrice: input.defaultPrice,
+    listedOnline: input.listedOnline ?? false,
     name: input.name,
     supplier: input.supplier ?? null,
   });
+  if (part.listedOnline) {
+    await markStoreDirty(prisma).catch(() => null);
+  }
+  return part;
 }
 
 export async function update(
@@ -103,8 +109,16 @@ export async function update(
     input.stockQuantity === undefined
       ? 0
       : input.stockQuantity - (part.stockQuantity ?? 0);
+  const markDirty = async (listedBefore: boolean, listedAfter?: boolean) => {
+    if (listedBefore || listedAfter) {
+      await markStoreDirty(prisma).catch(() => null);
+    }
+  };
+
   if (stockDelta === 0) {
-    return updatePart(prisma, id, input);
+    const updated = await updatePart(prisma, id, input);
+    await markDirty(part.listedOnline, updated.listedOnline);
+    return updated;
   }
 
   // A direct stock edit still goes through the movement ledger: record the
@@ -113,20 +127,23 @@ export async function update(
   // concurrent POS sale between the read above and this write must not be
   // overwritten by an absolute value.
   const { stockQuantity: _target, ...rest } = input;
-  return prisma.$transaction(async (tx) => {
-    const updated = await updatePart(tx, id, {
+  const updated = await prisma.$transaction(async (tx) => {
+    const part2 = await updatePart(tx, id, {
       ...rest,
       stockQuantity: { increment: stockDelta },
     });
     await createStockMovement(tx, {
-      balanceAfter: updated.stockQuantity,
+      balanceAfter: part2.stockQuantity,
       createdById: userId,
       partId: id,
       quantity: stockDelta,
       type: "ADJUSTMENT",
     });
-    return updated;
+    return part2;
   });
+  // Stock de um artigo listado afeta o "em stock" da montra pública.
+  await markDirty(part.listedOnline, updated.listedOnline);
+  return updated;
 }
 
 export async function toggleActive(
@@ -139,7 +156,11 @@ export async function toggleActive(
     return null;
   }
 
-  return updatePart(prisma, id, { isActive });
+  const updated = await updatePart(prisma, id, { isActive });
+  if (part.listedOnline) {
+    await markStoreDirty(prisma).catch(() => null);
+  }
+  return updated;
 }
 
 export async function remove(prisma: PrismaClient, id: string) {
@@ -160,6 +181,10 @@ export async function remove(prisma: PrismaClient, id: string) {
       throw new AppError("PART_IN_USE");
     }
 
-    return deletePartRepo(tx, id);
+    const deleted = await deletePartRepo(tx, id);
+    if (deleted.listedOnline) {
+      await markStoreDirty(tx).catch(() => null);
+    }
+    return deleted;
   });
 }

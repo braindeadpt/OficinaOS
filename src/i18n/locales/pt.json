@@ -47,7 +47,9 @@
     "discard_title": "Descartar alterações?",
     "discard_desc": "Tem alterações não guardadas que serão perdidas.",
     "keep_editing": "Continue a editar",
-    "discard": "Descartar"
+    "discard": "Descartar",
+    "listed_online": "Listar na loja online",
+    "listed_online_desc": "Mostra este artigo na página pública da sua loja online"
   },
   "add_service": "Adicionar serviço",
   "add_user": "Adicionar utilizador",
@@ -2065,7 +2067,8 @@
     "repair_name_required": "O nome da reparação é obrigatório",
     "imei_invalid": "IMEI inválido — verifique os 15 dígitos",
     "invalid_url": "Tem de ser um URL http(s) válido",
-    "pairing_code_required": "Introduza o código de emparelhamento."
+    "pairing_code_required": "Introduza o código de emparelhamento.",
+    "invalid_slug": "Utilize apenas letras minúsculas, números e hífens (mín. 2 caracteres)"
   },
   "view_all_critical": "Ver todos os atrasos",
   "warranty_returns": "Devoluções de garantia",
@@ -2284,5 +2287,20 @@
     "send_reply": "Enviar resposta",
     "reply_hint": "O nome da sua loja e o contacto vão com a resposta — o negócio acerta-se entre lojas."
   },
-  "saving": "A guardar..."
+  "saving": "A guardar...",
+  "storefront": {
+    "title": "Loja online",
+    "subtitle": "A página pública da sua loja no OficinaOS Cloud",
+    "slug": "Endereço da página (slug)",
+    "slug_placeholder": "a-minha-loja",
+    "description": "Breve descrição",
+    "description_placeholder": "ex.: Reparações e acessórios em Braga",
+    "email": "Email de contacto público",
+    "email_placeholder": "loja@exemplo.com",
+    "published": "Publicado (visível para os clientes)",
+    "items_listed": "{{count}} artigos listados",
+    "sync_pending": "sincronização pendente",
+    "saved": "Loja online guardada",
+    "save_failed": "Não foi possível guardar a loja online"
+  }
 }

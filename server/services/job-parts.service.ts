@@ -12,6 +12,7 @@ import { createStockMovement } from "../repositories/stock-movement.repository.j
 import { assertJobMutable } from "../utils/job-mutations.js";
 import { createAuditLog } from "./audit.service.js";
 import { alertLowStock } from "./low-stock.service.js";
+import { markStoreDirtyIfListed } from "./storefront.service.js";
 
 export async function add(
   prisma: PrismaClient,
@@ -88,6 +89,11 @@ export async function add(
     return created;
   });
 
+  // Consumo de um artigo listado muda o "em stock" da montra pública.
+  if (input.partId && !("error" in result)) {
+    await markStoreDirtyIfListed(prisma, input.partId);
+  }
+
   return result;
 }
 
@@ -130,6 +136,10 @@ export async function remove(
       userId,
     });
   });
+
+  if (part.partId) {
+    await markStoreDirtyIfListed(prisma, part.partId);
+  }
 
   return true;
 }

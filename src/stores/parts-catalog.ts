@@ -10,6 +10,7 @@ interface PartsCatalogState {
     category: string;
     defaultPrice: number;
     supplier?: string;
+    listedOnline?: boolean;
   }) => Promise<PartsCatalog>;
   deletePart: (id: string) => Promise<void>;
   error: string | null;

@@ -23,6 +23,7 @@ export const createPartSchema = z.object({
     .min(0, { error: "validations.price_positive" })
     .max(99_999_999.99),
   supplier: z.string().max(120).optional(),
+  listedOnline: z.boolean().optional(),
   stockQuantity: z.number().int().min(0).optional(),
   reorderLevel: z.number().int().min(0).optional(),
 });
@@ -46,6 +47,7 @@ export const updatePartSchema = z.object({
   defaultPrice: z.number().min(0).max(99_999_999.99).optional(),
   supplier: z.string().max(120).optional(),
   isActive: z.boolean().optional(),
+  listedOnline: z.boolean().optional(),
   stockQuantity: z.number().int().min(0).optional(),
   reorderLevel: z.number().int().min(0).optional(),
 });

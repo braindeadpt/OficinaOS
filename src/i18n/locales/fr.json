@@ -47,7 +47,9 @@
     "discard_title": "Supprimer les modifications ?",
     "discard_desc": "Vous avez des modifications non enregistrées qui seront perdues.",
     "keep_editing": "Continuer à éditer",
-    "discard": "Jeter"
+    "discard": "Jeter",
+    "listed_online": "Afficher dans la boutique en ligne",
+    "listed_online_desc": "Affiche cet article sur la page publique de votre boutique en ligne"
   },
   "add_service": "Ajouter un service",
   "add_user": "Ajouter un utilisateur",
@@ -2065,7 +2067,8 @@
     "repair_name_required": "Le nom du réparateur est requis",
     "imei_invalid": "IMEI invalide — vérifiez les 15 chiffres",
     "invalid_url": "Doit être une URL http(s) valide",
-    "pairing_code_required": "Entrez le code d'appairage."
+    "pairing_code_required": "Entrez le code d'appairage.",
+    "invalid_slug": "Utilisez uniquement des lettres minuscules, des chiffres et des traits d'union (min. 2 caractères)"
   },
   "view_all_critical": "Voir tous les en retard",
   "warranty_returns": "Retours garantie",
@@ -2284,5 +2287,20 @@
     "send_reply": "Envoyer la réponse",
     "reply_hint": "Le nom de votre boutique et votre contact accompagnent la réponse — la transaction se règle entre boutiques."
   },
-  "saving": "Enregistrement..."
+  "saving": "Enregistrement...",
+  "storefront": {
+    "title": "Boutique en ligne",
+    "subtitle": "La page publique de votre boutique sur OficinaOS Cloud",
+    "slug": "Adresse de la page (slug)",
+    "slug_placeholder": "ma-boutique",
+    "description": "Brève description",
+    "description_placeholder": "p. ex. : Réparations et accessoires à Braga",
+    "email": "E-mail de contact public",
+    "email_placeholder": "boutique@exemple.com",
+    "published": "Publié (visible par les clients)",
+    "items_listed": "{{count}} articles listés",
+    "sync_pending": "synchronisation en attente",
+    "saved": "Boutique en ligne enregistrée",
+    "save_failed": "Impossible d'enregistrer la boutique en ligne"
+  }
 }

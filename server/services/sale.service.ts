@@ -16,6 +16,7 @@ import {
 } from "../utils/keyset.js";
 import { generateSaleCode } from "../utils/sale-code.js";
 import { alertLowStock } from "./low-stock.service.js";
+import { markStoreDirty } from "./storefront.service.js";
 
 export interface CreateSaleResult {
   id: string;
@@ -75,69 +76,77 @@ export async function create(
   const total = items.reduce((s, i) => s + i.lineTotal, 0);
   const customerId = input.customerId?.trim() || null;
 
-  return prisma.$transaction(async (tx) => {
-    // Atomic decrement: abort the whole sale if any catalog line is short.
-    // RETURNING gives the exact post-decrement balance for the movement
-    // ledger — a pre-read snapshot would drift under concurrent sales.
-    for (const item of items) {
-      if (!item.partId) {
-        continue;
+  return prisma
+    .$transaction(async (tx) => {
+      // Atomic decrement: abort the whole sale if any catalog line is short.
+      // RETURNING gives the exact post-decrement balance for the movement
+      // ledger — a pre-read snapshot would drift under concurrent sales.
+      for (const item of items) {
+        if (!item.partId) {
+          continue;
+        }
+        const updated = await decrementStock(tx, item.partId, item.quantity);
+        if (!updated) {
+          throw new AppError("INSUFFICIENT_STOCK");
+        }
+        item.balanceAfter = updated.balanceAfter;
       }
-      const updated = await decrementStock(tx, item.partId, item.quantity);
-      if (!updated) {
-        throw new AppError("INSUFFICIENT_STOCK");
-      }
-      item.balanceAfter = updated.balanceAfter;
-    }
 
-    const saleCode = await generateSaleCode(tx);
+      const saleCode = await generateSaleCode(tx);
 
-    // Ledger entry per catalog line: POS consumption feeds the same
-    // ledger as repair consumption, powering restock analytics.
-    for (const item of items) {
-      if (!item.partId) {
-        continue;
+      // Ledger entry per catalog line: POS consumption feeds the same
+      // ledger as repair consumption, powering restock analytics.
+      for (const item of items) {
+        if (!item.partId) {
+          continue;
+        }
+        await createStockMovement(tx, {
+          balanceAfter: item.balanceAfter,
+          createdById: userId,
+          partId: item.partId,
+          quantity: -item.quantity,
+          type: "CONSUMPTION",
+        });
       }
-      await createStockMovement(tx, {
-        balanceAfter: item.balanceAfter,
-        createdById: userId,
-        partId: item.partId,
-        quantity: -item.quantity,
-        type: "CONSUMPTION",
+
+      const created = await createSale(tx, {
+        saleCode,
+        items: {
+          create: items.map((item) => ({
+            category: item.category,
+            lineTotal: item.lineTotal,
+            name: item.name,
+            part: item.partId ? { connect: { id: item.partId } } : undefined,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+          })),
+        },
+        payments: {
+          create: input.payments.map((p) => ({
+            amount: p.amount,
+            method: p.method,
+            reference: p.reference ?? null,
+          })),
+        },
+        total,
+        ...(customerId ? { customer: { connect: { id: customerId } } } : {}),
+        createdBy: { connect: { id: userId } },
       });
-    }
 
-    const created = await createSale(tx, {
-      saleCode,
-      items: {
-        create: items.map((item) => ({
-          category: item.category,
-          lineTotal: item.lineTotal,
-          name: item.name,
-          part: item.partId ? { connect: { id: item.partId } } : undefined,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-        })),
-      },
-      payments: {
-        create: input.payments.map((p) => ({
-          amount: p.amount,
-          method: p.method,
-          reference: p.reference ?? null,
-        })),
-      },
-      total,
-      ...(customerId ? { customer: { connect: { id: customerId } } } : {}),
-      createdBy: { connect: { id: userId } },
+      // Low-stock alert for catalog parts pushed to their reorder level.
+      for (const partId of [...new Set(catalogItemIds)]) {
+        await alertLowStock(app, partId, tx);
+      }
+
+      return created;
+    })
+    .then(async (created) => {
+      // Uma venda a artigo listado muda o "em stock" da montra pública.
+      if (catalogParts.some((p) => p.listedOnline)) {
+        await markStoreDirty(prisma).catch(() => null);
+      }
+      return created;
     });
-
-    // Low-stock alert for catalog parts pushed to their reorder level.
-    for (const partId of [...new Set(catalogItemIds)]) {
-      await alertLowStock(app, partId, tx);
-    }
-
-    return created;
-  });
 }
 
 export function getById(prisma: PrismaClient, id: string) {

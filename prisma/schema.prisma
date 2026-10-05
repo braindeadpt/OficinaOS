@@ -622,6 +622,8 @@ model PartsCatalog {
   stockQuantity       Int          @default(0)
   reorderLevel        Int          @default(0)
   isActive            Boolean      @default(true)
+  // Pro module "storefront" — public on the shop's online store page.
+  listedOnline          Boolean      @default(false)
   // Set when an OWNER low-stock alert fires; gates re-alerts (24h window).
   lastLowStockAlertAt DateTime?    @db.Timestamptz
   createdAt           DateTime     @default(now()) @db.Timestamptz
@@ -1075,6 +1077,13 @@ model ShopSettings {
   cloudShopName             String?
   cloudEntitlements         Json?
   cloudSyncedAt             DateTime? @db.Timestamptz
+  // Loja online (Pro module "storefront") — public page on the cloud.
+  storePublished            Boolean  @default(false)
+  storeDescription          String?  @db.Text
+  storeSlug                 String?
+  storeEmail                String?
+  // Push to the cloud on the next entitlement sync when true.
+  storeDirty                Boolean  @default(true)
   createdAt                 DateTime @default(now()) @db.Timestamptz
   updatedAt                 DateTime @updatedAt @db.Timestamptz
 

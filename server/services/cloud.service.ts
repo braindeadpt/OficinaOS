@@ -210,6 +210,22 @@ export async function syncCloudEntitlements(
       .catch((err) => log.warn({ err }, "cloud portal sync failed"));
   }
 
+  // Loja online: publica a montra quando há alterações pendentes e
+  // recolhe reservas feitas pelos clientes na página pública.
+  if (modules.includes("storefront")) {
+    import("./storefront.service.js")
+      .then(({ syncStorefront }) =>
+        syncStorefront(
+          prisma,
+          settings.cloudApiUrl ?? "",
+          token,
+          log,
+          notifyCtx
+        )
+      )
+      .catch((err) => log.warn({ err }, "storefront sync failed"));
+  }
+
   // WhatsApp bot: regista o phone_number_id na cloud e processa mensagens
   // inbound enfileiradas pelo webhook da Meta (responder é daqui, com as
   // credenciais Meta que nunca saem da loja).
