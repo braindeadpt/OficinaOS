@@ -23,6 +23,7 @@ import { devicesRoutes } from "./routes/devices.js";
 import { feedbackRoutes } from "./routes/feedback.js";
 import { healthRoutes } from "./routes/health.js";
 import { intakeRequestsRoutes } from "./routes/intake-requests.js";
+import { invoicingRoutes } from "./routes/invoicing.js";
 import { jobRoutes } from "./routes/jobs.js";
 import { marketPricesRoutes } from "./routes/market-prices.js";
 import { notificationsRoutes } from "./routes/notifications.js";
@@ -174,6 +175,7 @@ app.register(tradeInsRoutes, { prefix: "/api/trade-ins" });
 app.register(partRequestsRoutes, { prefix: "/api/part-requests" });
 app.register(marketPricesRoutes, { prefix: "/api/market-prices" });
 app.register(storefrontRoutes, { prefix: "/api/storefront" });
+app.register(invoicingRoutes, { prefix: "/api/invoicing" });
 app.register(feedbackRoutes, { prefix: "/api/feedback" });
 
 if (IS_PROD) {

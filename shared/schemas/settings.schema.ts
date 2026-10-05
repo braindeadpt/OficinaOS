@@ -133,6 +133,37 @@ export const updateWhatsAppSettingsSchema = z
     message: "validations.at_least_one_field",
   });
 
+// Faturação (módulo Pro "invoicing") — a conta InvoiceXpress e a API key
+// pertencem à loja; a key é encriptada antes de gravar e nunca volta à UI.
+export const updateInvoicingSettingsSchema = z
+  .object({
+    account: z
+      .union([
+        z.literal(""),
+        z
+          .string()
+          .trim()
+          .max(64)
+          .regex(/^[a-z0-9-]+$/i, { error: "validations.invalid_account" }),
+      ])
+      .optional(),
+    apiKey: z.string().max(256).optional(),
+    enabled: z.boolean().optional(),
+    taxName: z
+      .union([
+        z.literal(""),
+        z
+          .string()
+          .trim()
+          .max(32)
+          .regex(/^[a-z0-9]+$/i, { error: "validations.invalid_tax_name" }),
+      ])
+      .optional(),
+  })
+  .refine((data) => Object.values(data).some((v) => v !== undefined), {
+    message: "validations.at_least_one_field",
+  });
+
 export const pairCloudSchema = z.object({
   apiUrl: z
     .string()
@@ -146,6 +177,9 @@ export const pairCloudSchema = z.object({
 });
 
 export type UpdateAiSettingsInput = z.infer<typeof updateAiSettingsSchema>;
+export type UpdateInvoicingSettingsInput = z.infer<
+  typeof updateInvoicingSettingsSchema
+>;
 export type UpdateShopSettingsInput = z.infer<typeof updateShopSettingsSchema>;
 export type UpdateNotificationTemplateInput = z.infer<
   typeof updateNotificationTemplateSchema

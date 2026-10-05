@@ -23,7 +23,9 @@
     "keep_editing": "Continue a editar",
     "discard": "Descartar",
     "whatsapp_consent": "Quero receber atualizações por WhatsApp sobre a reparação",
-    "whatsapp_consent_hint": "Usado apenas para estados da reparação. Pode alterar quando quiser."
+    "whatsapp_consent_hint": "Usado apenas para estados da reparação. Pode alterar quando quiser.",
+    "tax_id": "Número fiscal (NIF)",
+    "tax_id_placeholder": "Opcional – para empresas"
   },
   "add_new_part": "Adicionar nova peça",
   "add_part_modal": {
@@ -697,7 +699,10 @@
     "cloud_ai_failed": "Não foi possível gerar o relatório IA. Tenta mais tarde.",
     "cloud_module_required": "Esta funcionalidade requer um módulo Pro na sua conta OficinaOS Cloud.",
     "intake_request_no_diagnostic": "Este pedido não tem dados de diagnóstico",
-    "part_request_not_found": "Pedido de peça não encontrado"
+    "part_request_not_found": "Pedido de peça não encontrado",
+    "invoicing_not_configured": "A faturação não está configurada — defina a conta InvoiceXpress e a chave API em Definições",
+    "invoicing_provider_failed": "O fornecedor de faturação rejeitou ou falhou a solicitação. Tente novamente ou verifique as definições da conta",
+    "already_invoiced": "Já foi emitida uma fatura para este registo"
   },
   "failed_to_create_part": "Falha ao criar peça",
   "failed_to_delete_part": "Falha ao eliminar peça",
@@ -1237,7 +1242,12 @@
     "restock_no_data": "Sem consumos registados — repor pelo nível de reabastecimento",
     "restock_suggestion": "Média {{avg}}/dia ({{days}}d) · sugerido {{qty}} para repor",
     "restock_title": "Sugestão de reposição",
-    "max_stock_reached": "Sem mais unidades em stock"
+    "max_stock_reached": "Sem mais unidades em stock",
+    "issue_invoice": "Emitir fatura",
+    "invoice_issued": "Fatura {{number}} emitida",
+    "invoice_open": "Abrir documento",
+    "invoice_already": "Esta venda já tem fatura",
+    "invoice_failed": "Não foi possível emitir a fatura — verifique as definições de faturação"
   },
   "payments": {
     "add_payment": "Registar pagamento",
@@ -1259,7 +1269,11 @@
     "pod_cancel": "Cancelar marcação",
     "pod_hint": "Pago na entrega — regista automaticamente ao entregar",
     "pod_method_label": "Método de pagamento",
-    "pod_mark": "Marcar pago na entrega"
+    "pod_mark": "Marcar pago na entrega",
+    "issue_invoice": "Emitir fatura",
+    "invoice_issued": "Fatura {{number}} emitida",
+    "invoice_open": "Abrir documento",
+    "invoice_failed": "Não foi possível emitir a fatura — verifique as definições de faturação"
   },
   "quotes": {
     "section_title": "Orçamentos",
@@ -2348,5 +2362,20 @@
     "logo_hint": "PNG, JPEG ou WebP até 200 KB — apresentados no topo da página da sua loja",
     "logo_invalid": "O logótipo deve ser uma imagem PNG, JPEG ou WebP até 200 KB",
     "plus_upsell": "Cores, logótipo e layouts personalizados estão disponíveis com o módulo Storefront+ – peça ao seu fornecedor para o ativar."
+  },
+  "customer_edit_tax_id": "Número fiscal (NIF)",
+  "invoicing": {
+    "title": "Faturação (InvoiceXpress)",
+    "subtitle": "Emitir documentos fiscais certificados de vendas e reparações",
+    "account": "Conta InvoiceXpress",
+    "account_placeholder": "a sua conta (o subdomínio em account.app.invoicexpress.com)",
+    "api_key": "Chave API",
+    "api_key_placeholder": "Cole a chave API do InvoiceXpress",
+    "api_key_set": "Configurado – cole uma nova chave para a substituir",
+    "api_key_hint": "Armazenado encriptado neste computador; nunca sai do dispositivo, exceto para o InvoiceXpress.",
+    "tax_name": "Taxa de IVA padrão",
+    "enabled": "Ativar faturação",
+    "saved": "Definições de faturação guardadas",
+    "save_failed": "Não foi possível guardar as definições de faturação"
   }
 }

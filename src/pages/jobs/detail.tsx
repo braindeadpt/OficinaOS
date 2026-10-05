@@ -44,6 +44,14 @@ function UrgentBadge({ visible }: { visible: boolean }) {
   );
 }
 
+function invoiceProps(job: Job) {
+  return {
+    invoiceNumber: job.invoiceNumber ?? null,
+    invoicePermalink: job.invoicePermalink ?? null,
+    invoiced: Boolean(job.invoiceDocId),
+  };
+}
+
 export default function JobDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { t } = useTranslation();
@@ -480,6 +488,7 @@ export default function JobDetailPage() {
       <div className="mt-8 rounded-2xl bg-surface-container p-6">
         <JobPaymentsSection
           balanceDue={balanceDue}
+          {...invoiceProps(job)}
           jobId={job.id}
           onChanged={() => fetchJob()}
           paymentOnDeliveryMethod={job.paymentOnDeliveryMethod ?? null}

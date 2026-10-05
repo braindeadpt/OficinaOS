@@ -17,6 +17,7 @@ const INITIAL_FORM = {
   email: "",
   name: "",
   phone: "",
+  taxId: "",
   whatsappConsent: false,
 };
 
@@ -27,6 +28,7 @@ function isDirty(form: typeof INITIAL_FORM): boolean {
     form.name !== INITIAL_FORM.name ||
     form.phone !== INITIAL_FORM.phone ||
     form.email !== INITIAL_FORM.email ||
+    form.taxId !== INITIAL_FORM.taxId ||
     form.whatsappConsent !== INITIAL_FORM.whatsappConsent
   );
 }
@@ -102,6 +104,7 @@ export default function AddCustomerModal({
         name: form.name.trim(),
         phone: form.phone.trim(),
         email: form.email.trim() || undefined,
+        taxId: form.taxId.trim() || undefined,
         whatsappConsent: form.whatsappConsent || undefined,
       });
       setForm(INITIAL_FORM);
@@ -198,6 +201,19 @@ export default function AddCustomerModal({
                 placeholder="email@example.com"
                 type="email"
                 value={form.email}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="add-customer-tax-id">
+                {t("add_customer_modal.tax_id")}
+              </Label>
+              <Input
+                id="add-customer-tax-id"
+                inputMode="numeric"
+                onChange={(e) => updateForm("taxId", e.target.value)}
+                placeholder={t("add_customer_modal.tax_id_placeholder")}
+                value={form.taxId}
               />
             </div>
           </div>

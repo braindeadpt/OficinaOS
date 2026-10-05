@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@generated/client";
 import type {
   UpdateAiSettingsInput,
+  UpdateInvoicingSettingsInput,
   UpdateNotificationTemplateInput,
   UpdateShopSettingsInput,
   UpdateWhatsAppSettingsInput,
@@ -317,6 +318,57 @@ export async function upsertWhatsAppSettings(
       whatsappBusinessId: data.whatsappBusinessId ?? null,
       whatsappEnabled: data.whatsappEnabled ?? false,
       whatsappPhoneNumberId: data.whatsappPhoneNumberId ?? null,
+    },
+    update: data,
+    where: { id: "default" },
+  });
+}
+
+export async function getInvoicingSettings(prisma: PrismaClient) {
+  const row = await findShopSettingsUnique(prisma);
+  const modules = Array.isArray(row?.cloudEntitlements)
+    ? (row.cloudEntitlements as string[])
+    : [];
+  return {
+    account: row?.invoicingAccount ?? null,
+    enabled: row?.invoicingEnabled ?? false,
+    hasApiKey: Boolean(row?.invoicingApiKeyEncrypted),
+    module: modules.includes("invoicing"),
+    taxName: row?.invoicingTaxName ?? "IVA23",
+  };
+}
+
+export async function upsertInvoicingSettings(
+  prisma: PrismaClient,
+  input: UpdateInvoicingSettingsInput
+) {
+  const data: {
+    invoicingAccount?: string | null;
+    invoicingApiKeyEncrypted?: string;
+    invoicingEnabled?: boolean;
+    invoicingTaxName?: string;
+  } = {};
+  if (input.enabled !== undefined) {
+    data.invoicingEnabled = input.enabled;
+  }
+  if (input.account !== undefined) {
+    data.invoicingAccount = input.account.trim() || null;
+  }
+  if (input.taxName !== undefined) {
+    data.invoicingTaxName = input.taxName.trim() || "IVA23";
+  }
+  if (input.apiKey) {
+    data.invoicingApiKeyEncrypted = encryptSecret(input.apiKey);
+  }
+
+  return await upsertShopSettingsRepo(prisma, {
+    create: {
+      id: "default",
+      invoicingAccount: data.invoicingAccount ?? null,
+      invoicingApiKeyEncrypted: data.invoicingApiKeyEncrypted ?? null,
+      invoicingEnabled: data.invoicingEnabled ?? false,
+      invoicingTaxName: data.invoicingTaxName ?? "IVA23",
+      shopName: "",
     },
     update: data,
     where: { id: "default" },

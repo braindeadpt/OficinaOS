@@ -11,6 +11,7 @@ import {
   buildSaleReceiptEscPos,
   sendEscPos,
 } from "../services/escpos.service.js";
+import { issueInvoiceForSale } from "../services/invoicing.service.js";
 import { renderSaleReceiptHtml } from "../services/receipt.service.js";
 import {
   create as createSale,
@@ -140,6 +141,28 @@ export const saleRoutes: FastifyPluginAsync = async (app) => {
       return reply
         .header("Content-Type", "text/html; charset=utf-8")
         .send(html);
+    }
+  );
+
+  app.post(
+    "/:id/invoice",
+    {
+      schema: {
+        tags: ["sales"],
+        summary:
+          "Issue the fiscal document (InvoiceXpress) for a completed sale",
+        params: {
+          type: "object",
+          properties: { id: { type: "string" } },
+          required: ["id"],
+        },
+      },
+      preHandler: [requirePermission({ sales: ["create"] })],
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const issued = await issueInvoiceForSale(app.prisma, id, app.log);
+      return reply.status(201).send(issued);
     }
   );
 

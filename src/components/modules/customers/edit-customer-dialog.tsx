@@ -17,7 +17,31 @@ interface FormData {
   email: string;
   name: string;
   phone: string;
+  taxId: string;
   whatsappConsent: boolean;
+}
+
+function buildUpdatePayload(
+  form: FormData,
+  customer: Customer
+): Record<string, string> {
+  const data: Record<string, string> = {};
+  if (form.name.trim() !== customer.name) {
+    data.name = form.name.trim();
+  }
+  if (form.phone.trim() !== customer.phone) {
+    data.phone = form.phone.trim();
+  }
+  if ((form.email.trim() || null) !== (customer.email ?? null)) {
+    data.email = form.email.trim();
+  }
+  if ((form.taxId.trim() || null) !== (customer.taxId ?? null)) {
+    data.taxId = form.taxId.trim();
+  }
+  if (form.whatsappConsent !== (customer.whatsappConsent ?? false)) {
+    data.whatsappConsent = String(form.whatsappConsent);
+  }
+  return data;
 }
 
 export default function EditCustomerDialog({
@@ -31,6 +55,7 @@ export default function EditCustomerDialog({
     email: customer.email ?? "",
     name: customer.name,
     phone: customer.phone,
+    taxId: customer.taxId ?? "",
     whatsappConsent: customer.whatsappConsent ?? false,
   });
   const [submitting, setSubmitting] = useState(false);
@@ -49,6 +74,7 @@ export default function EditCustomerDialog({
       email: customer.email ?? "",
       name: customer.name,
       phone: customer.phone,
+      taxId: customer.taxId ?? "",
       whatsappConsent: customer.whatsappConsent ?? false,
     });
     setSubmitError(null);
@@ -68,19 +94,7 @@ export default function EditCustomerDialog({
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const data: Record<string, string> = {};
-      if (form.name.trim() !== customer.name) {
-        data.name = form.name.trim();
-      }
-      if (form.phone.trim() !== customer.phone) {
-        data.phone = form.phone.trim();
-      }
-      if ((form.email.trim() || null) !== (customer.email ?? null)) {
-        data.email = form.email.trim();
-      }
-      if (form.whatsappConsent !== (customer.whatsappConsent ?? false)) {
-        data.whatsappConsent = String(form.whatsappConsent);
-      }
+      const data = buildUpdatePayload(form, customer);
 
       if (Object.keys(data).length === 0) {
         onClose();
@@ -168,6 +182,18 @@ export default function EditCustomerDialog({
                 placeholder="email@example.com"
                 type="email"
                 value={form.email}
+              />
+            </Field>
+
+            <Field label={t("customer_edit_tax_id")}>
+              <Input
+                className="placeholder:text-outline"
+                inputMode="numeric"
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, taxId: e.target.value }))
+                }
+                placeholder={t("add_customer_modal.tax_id_placeholder")}
+                value={form.taxId}
               />
             </Field>
 

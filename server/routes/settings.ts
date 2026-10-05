@@ -2,6 +2,7 @@ import { AppError } from "@shared/errors/app-error.js";
 import {
   pairCloudSchema,
   updateAiSettingsSchema,
+  updateInvoicingSettingsSchema,
   updateShopSettingsSchema,
   updateWhatsAppSettingsSchema,
 } from "@shared/schemas/settings.schema";
@@ -22,10 +23,12 @@ import {
 } from "../services/escpos.service.js";
 import {
   getAiSettings,
+  getInvoicingSettings,
   getShopSettings,
   getWhatsAppSettings,
   testAiConnection,
   upsertAiSettings,
+  upsertInvoicingSettings,
   upsertShopSettings,
   upsertWhatsAppSettings,
 } from "../services/settings.service.js";
@@ -285,6 +288,58 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       }
       const updated = await upsertWhatsAppSettings(app.prisma, parsed.data);
       return reply.send(updated);
+    }
+  );
+
+  app.get(
+    "/invoicing",
+    {
+      schema: {
+        tags: ["settings"],
+        summary: "Get invoicing (InvoiceXpress) settings — key never exposed",
+      },
+    },
+    async (_req, reply) => {
+      const settings = await getInvoicingSettings(app.prisma);
+      return reply.send(settings);
+    }
+  );
+
+  app.put(
+    "/invoicing",
+    {
+      preHandler: [requirePermission({ settings: ["edit"] })],
+      schema: {
+        tags: ["settings"],
+        summary: "Update invoicing (InvoiceXpress) settings",
+        body: { type: "object", additionalProperties: true },
+      },
+    },
+    async (req, reply) => {
+      const parsed = updateInvoicingSettingsSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new AppError("VALIDATION_ERROR", {
+          errors: resolveZodErrors(
+            parsed.error.flatten().fieldErrors,
+            req.locale
+          ),
+        });
+      }
+      // Enabling invoicing requires the Pro module — the issue path also
+      // gates on the cached entitlements.
+      if (parsed.data.enabled) {
+        const s = await app.prisma.shopSettings.findUniqueOrThrow({
+          where: { id: "default" },
+        });
+        const modules = Array.isArray(s.cloudEntitlements)
+          ? (s.cloudEntitlements as string[])
+          : [];
+        if (!modules.includes("invoicing")) {
+          throw new AppError("CLOUD_MODULE_REQUIRED");
+        }
+      }
+      const updated = await upsertInvoicingSettings(app.prisma, parsed.data);
+      return reply.send({ ok: true, updated: Boolean(updated) });
     }
   );
 };

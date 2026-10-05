@@ -15,6 +15,7 @@ import { sendQuoteSchema } from "@shared/schemas/quote.schema";
 import type { FastifyPluginAsync } from "fastify";
 import { resolveUrls } from "../config/env.js";
 import { requirePermission } from "../middlewares/rbac.js";
+import { issueInvoiceForJob } from "../services/invoicing.service.js";
 import {
   computeMargin,
   create as createJob,
@@ -511,6 +512,28 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
       }
       throwIfError(result);
       return reply.status(201).send(result);
+    }
+  );
+
+  app.post(
+    "/:id/invoice",
+    {
+      schema: {
+        tags: ["jobs"],
+        summary:
+          "Issue the fiscal document (InvoiceXpress) for a repair job — repairs + parts lines",
+        params: {
+          type: "object",
+          properties: { id: { type: "string" } },
+          required: ["id"],
+        },
+      },
+      preHandler: [requirePermission({ payments: ["create"] })],
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const issued = await issueInvoiceForJob(app.prisma, id, app.log);
+      return reply.status(201).send(issued);
     }
   );
 

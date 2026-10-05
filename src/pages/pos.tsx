@@ -9,6 +9,7 @@ import { CardSkeleton } from "@/components/ui/skeleton";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
 import type { ApiError } from "@/lib/api";
+import { fetchInvoicingStatus, issueSaleInvoice } from "@/lib/api-invoicing";
 import { printSaleReceipt, usesThermalPrinter } from "@/lib/print";
 import { usePartsCatalogStore } from "@/stores/parts-catalog";
 import { useSalesStore } from "@/stores/sales";
@@ -17,6 +18,54 @@ let payUid = 0;
 function nextPayUid(): string {
   payUid += 1;
   return `pay-${payUid}`;
+}
+
+// When a cash customer overpays, the recorded payment is what was applied
+// to the sale — the rest leaves the till as change.
+function applyCashChange<T extends { amount: number; method: string }>(
+  payments: T[],
+  changeDue: number
+): T[] {
+  const paymentsToSend = payments.map((p) => ({ ...p }));
+  let excess = changeDue;
+  for (let i = paymentsToSend.length - 1; i >= 0 && excess > 0; i--) {
+    const p = paymentsToSend[i];
+    if (p.method !== "CASH") {
+      continue;
+    }
+    const applied = Math.max(0, p.amount - excess);
+    excess = Math.max(0, excess - (p.amount - applied));
+    p.amount = Math.round(applied * 100) / 100;
+  }
+  return paymentsToSend;
+}
+
+function issueInvoiceToast(
+  saleId: string,
+  t: (key: string, opts?: Record<string, unknown>) => string
+) {
+  issueSaleInvoice(saleId)
+    .then((inv) => {
+      toast.success(
+        t("pos.invoice_issued", { number: inv.number ?? "—" }),
+        inv.permalink
+          ? {
+              action: {
+                label: t("pos.invoice_open"),
+                onClick: () => window.open(inv.permalink ?? "", "_blank"),
+              },
+            }
+          : undefined
+      );
+    })
+    .catch((e: unknown) => {
+      const code = (e as ApiError & { code?: string }).code;
+      toast.error(
+        code === "ALREADY_INVOICED"
+          ? t("pos.invoice_already")
+          : t("pos.invoice_failed")
+      );
+    });
 }
 
 export default function PosPage() {
@@ -56,6 +105,13 @@ export default function PosPage() {
       uid: string;
     }>
   >([]);
+  const [invoicingReady, setInvoicingReady] = useState(false);
+
+  useEffect(() => {
+    fetchInvoicingStatus()
+      .then((s) => setInvoicingReady(s.enabled && s.module))
+      .catch(() => setInvoicingReady(false));
+  }, []);
 
   useEffect(() => {
     fetchParts({ isActive: true, search: debounced || undefined, limit: 20 });
@@ -116,21 +172,16 @@ export default function PosPage() {
     const thermal = usesThermalPrinter();
     const receiptTab = thermal ? null : window.open("", "_blank");
     try {
-      // When a cash customer overpays, the recorded payment is what was
-      // applied to the sale — the rest leaves the till as change.
-      const paymentsToSend = payments.map((p) => ({ ...p }));
-      let excess = changeDue;
-      for (let i = paymentsToSend.length - 1; i >= 0 && excess > 0; i--) {
-        const p = paymentsToSend[i];
-        if (p.method !== "CASH") {
-          continue;
-        }
-        const applied = Math.max(0, p.amount - excess);
-        excess = Math.max(0, excess - (p.amount - applied));
-        p.amount = Math.round(applied * 100) / 100;
-      }
+      const paymentsToSend = applyCashChange(payments, changeDue);
       const sale = await checkout(paymentsToSend.filter((p) => p.amount > 0));
-      toast.success(t("pos.sale_completed", { code: sale.saleCode }));
+      toast.success(t("pos.sale_completed", { code: sale.saleCode }), {
+        action: invoicingReady
+          ? {
+              label: t("pos.issue_invoice"),
+              onClick: () => issueInvoiceToast(sale.id, t),
+            }
+          : undefined,
+      });
       setShowCheckout(false);
       setPayments([]);
       if (thermal) {
@@ -148,7 +199,7 @@ export default function PosPage() {
         toast.error(apiErr?.message ?? t("pos.checkout_failed"));
       }
     }
-  }, [checkout, payments, changeDue, t]);
+  }, [checkout, payments, changeDue, invoicingReady, t]);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">

@@ -6,6 +6,7 @@ import { Field } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import api, { getErrorMessage } from "@/lib/api";
+import SettingsInvoicingSection from "./settings-invoicing-section";
 import SettingsStorefrontSection from "./settings-storefront-section";
 
 interface CloudStatus {
@@ -187,6 +188,7 @@ export default function SettingsCloudTab({
           </div>
 
           <SettingsStorefrontSection onToast={onToast} />
+          <SettingsInvoicingSection onToast={onToast} />
 
           <div className="flex gap-2">
             <Button

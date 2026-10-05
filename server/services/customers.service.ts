@@ -33,11 +33,16 @@ export async function create(prisma: PrismaClient, input: CreateCustomerInput) {
     updateData.whatsappConsent = true;
     updateData.whatsappConsentAt = new Date();
   }
+  const taxId = input.taxId?.trim() || null;
+  if (taxId) {
+    updateData.taxId = taxId;
+  }
 
   return await customerUpsert(prisma, { phone: input.phone }, updateData, {
     email,
     name: input.name,
     phone: input.phone,
+    taxId,
     whatsappConsent: input.whatsappConsent ?? false,
     whatsappConsentAt: input.whatsappConsent ? new Date() : null,
   });
@@ -62,6 +67,9 @@ export async function update(
   }
   if (data.email !== undefined) {
     updateData.email = data.email?.trim() || null;
+  }
+  if (data.taxId !== undefined) {
+    updateData.taxId = data.taxId?.trim() || null;
   }
   if (data.whatsappConsent !== undefined) {
     updateData.whatsappConsent = data.whatsappConsent;

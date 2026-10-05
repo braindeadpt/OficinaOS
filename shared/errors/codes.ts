@@ -272,6 +272,20 @@ export const ERRORS = {
     status: 502,
     message: "errors.printer_unreachable",
   },
+
+  // ── Invoicing (Pro module: invoicing — InvoiceXpress) ──────────────────
+  INVOICING_NOT_CONFIGURED: {
+    status: 400,
+    message: "errors.invoicing_not_configured",
+  },
+  INVOICING_PROVIDER_FAILED: {
+    status: 502,
+    message: "errors.invoicing_provider_failed",
+  },
+  ALREADY_INVOICED: {
+    status: 409,
+    message: "errors.already_invoiced",
+  },
 } as const;
 
 export type ErrorCode = keyof typeof ERRORS;

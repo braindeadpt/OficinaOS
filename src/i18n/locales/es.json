@@ -23,7 +23,9 @@
     "keep_editing": "Continuar editando",
     "discard": "Eliminar",
     "whatsapp_consent": "Enviarme actualizaciones de estado de WhatsApp sobre mi reparación",
-    "whatsapp_consent_hint": "Solo se utiliza para actualizaciones de estado de reparación. Puedes cambiar esto en cualquier momento."
+    "whatsapp_consent_hint": "Solo se utiliza para actualizaciones de estado de reparación. Puedes cambiar esto en cualquier momento.",
+    "tax_id": "Número fiscal (NIF)",
+    "tax_id_placeholder": "Opcional — para empresas"
   },
   "add_new_part": "Agregar Nueva Parte",
   "add_part_modal": {
@@ -697,7 +699,10 @@
     "cloud_ai_failed": "No se pudo generar el informe de IA. Inténtalo más tarde.",
     "cloud_module_required": "Esta función requiere un módulo Pro en su cuenta de OficinaOS Cloud.",
     "intake_request_no_diagnostic": "Esta solicitud no tiene datos de diagnóstico",
-    "part_request_not_found": "Solicitud de pieza no encontrada"
+    "part_request_not_found": "Solicitud de pieza no encontrada",
+    "invoicing_not_configured": "La facturación no está configurada: configure la cuenta de InvoiceXpress y la clave API en Configuración",
+    "invoicing_provider_failed": "El proveedor de facturación rechazó o falló la solicitud. Vuelva a intentarlo o verifique la configuración de la cuenta.",
+    "already_invoiced": "Ya se emitió un documento fiscal para este registro."
   },
   "failed_to_create_part": "No se pudo crear la pieza",
   "failed_to_delete_part": "No se pudo eliminar la parte",
@@ -1237,7 +1242,12 @@
     "restock_no_data": "Aún no hay datos de consumo: reabastecimiento por nivel de pedido",
     "restock_suggestion": "Promedio {{avg}}/día ({{days}}d) · sugerir {{qty}} para volver a hacer un pedido",
     "restock_title": "Sugerencia de reabastecimiento",
-    "max_stock_reached": "No hay más unidades en stock"
+    "max_stock_reached": "No hay más unidades en stock",
+    "issue_invoice": "Emitir factura",
+    "invoice_issued": "Factura {{number}} emitida",
+    "invoice_open": "Abrir documento",
+    "invoice_already": "Esta venta ya tiene factura.",
+    "invoice_failed": "No se pudo emitir la factura: verifique la configuración de facturación"
   },
   "payments": {
     "add_payment": "Agregar pago",
@@ -1259,7 +1269,11 @@
     "pod_cancel": "Cancelar marca",
     "pod_hint": "Pagado contra reembolso: registre automáticamente cuando devuelva el dispositivo",
     "pod_method_label": "Método de pago",
-    "pod_mark": "Marcar como pagado contra entrega"
+    "pod_mark": "Marcar como pagado contra entrega",
+    "issue_invoice": "Emitir factura",
+    "invoice_issued": "Factura {{number}} emitida",
+    "invoice_open": "Abrir documento",
+    "invoice_failed": "No se pudo emitir la factura: verifique la configuración de facturación"
   },
   "quotes": {
     "section_title": "Presupuestos",
@@ -2348,5 +2362,20 @@
     "logo_hint": "PNG, JPEG o WebP de hasta 200 KB: se muestran en la parte superior de la página de tu tienda",
     "logo_invalid": "El logotipo debe ser una imagen PNG, JPEG o WebP de hasta 200 KB",
     "plus_upsell": "Colores, logotipos y diseños personalizados están disponibles con el módulo Storefront+; solicite a su proveedor que lo habilite."
+  },
+  "customer_edit_tax_id": "Número fiscal (NIF)",
+  "invoicing": {
+    "title": "Facturación (InvoiceXpress)",
+    "subtitle": "Emitir documentos fiscales certificados de ventas y reparaciones.",
+    "account": "Cuenta de InvoiceXpress",
+    "account_placeholder": "tu-cuenta (el subdominio en account.app.invoicexpress.com)",
+    "api_key": "clave API",
+    "api_key_placeholder": "Pegue la clave API de InvoiceXpress",
+    "api_key_set": "Configurado: pegue una nueva clave para reemplazarla",
+    "api_key_hint": "Clave almacenada cifrada en este ordenador; solo se envía a InvoiceXpress.",
+    "tax_name": "Tipo de IVA predeterminado",
+    "enabled": "Habilitar facturación",
+    "saved": "Configuración de facturación guardada",
+    "save_failed": "No se pudo guardar la configuración de facturación"
   }
 }

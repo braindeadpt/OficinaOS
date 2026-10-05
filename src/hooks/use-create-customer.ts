@@ -13,6 +13,7 @@ interface CreateCustomerInput {
   email?: string;
   name: string;
   phone: string;
+  taxId?: string;
   whatsappConsent?: boolean;
 }
 

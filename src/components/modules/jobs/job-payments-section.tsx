@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Can } from "@/components/modules/can";
 import AddPaymentDialog from "@/components/modules/jobs/add-payment-dialog";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
+import { fetchInvoicingStatus, issueJobInvoice } from "@/lib/api-invoicing";
 import { useJobsStore } from "@/stores/jobs";
 
 const POD_METHODS = ["CASH", "CARD", "TRANSFER", "OTHER"] as const;
@@ -16,6 +17,9 @@ const POD_HIDDEN_STATUSES = new Set([
 
 interface JobPaymentsSectionProps {
   balanceDue: number;
+  invoiced: boolean;
+  invoiceNumber: string | null;
+  invoicePermalink: string | null;
   jobId: string;
   onChanged: () => void;
   paymentOnDeliveryMethod: string | null;
@@ -24,6 +28,9 @@ interface JobPaymentsSectionProps {
 
 export default function JobPaymentsSection({
   balanceDue,
+  invoiceNumber,
+  invoicePermalink,
+  invoiced,
   jobId,
   onChanged,
   paymentOnDeliveryMethod,
@@ -38,6 +45,15 @@ export default function JobPaymentsSection({
   const [podBusy, setPodBusy] = useState(false);
   const [podError, setPodError] = useState<string | undefined>();
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [invoicingReady, setInvoicingReady] = useState(false);
+  const [invoiceBusy, setInvoiceBusy] = useState(false);
+  const [invoiceError, setInvoiceError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchInvoicingStatus()
+      .then((s) => setInvoicingReady(s.enabled && s.module))
+      .catch(() => setInvoicingReady(false));
+  }, []);
 
   const fetchPayments = useCallback(async () => {
     try {
@@ -106,10 +122,28 @@ export default function JobPaymentsSection({
     }
   }, [jobId, onChanged, t]);
 
+  const handleIssueInvoice = useCallback(async () => {
+    setInvoiceBusy(true);
+    setInvoiceError(null);
+    try {
+      await issueJobInvoice(jobId);
+      onChanged();
+    } catch {
+      setInvoiceError(t("payments.invoice_failed"));
+    } finally {
+      setInvoiceBusy(false);
+    }
+  }, [jobId, onChanged, t]);
+
   const canMarkPod =
     !paymentOnDeliveryMethod &&
     balanceDue > 0 &&
     !POD_HIDDEN_STATUSES.has(status);
+
+  // A fiscal document makes sense once the repair is finished/delivered —
+  // before that the final amount is not settled.
+  const canInvoice =
+    invoicingReady && !invoiced && ["DONE", "DELIVERED"].includes(status);
 
   const showMarkedBanner =
     !!paymentOnDeliveryMethod && !["CANCELLED", "RETURNED"].includes(status);
@@ -219,6 +253,52 @@ export default function JobPaymentsSection({
           </div>
         )}
       </Can>
+
+      {invoiced && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-surface-container-high px-4 py-3">
+          <span
+            aria-hidden="true"
+            className="material-symbols-outlined text-[18px] text-on-surface-variant"
+          >
+            receipt_long
+          </span>
+          <span className="flex-1 font-body font-semibold text-on-surface text-sm">
+            {t("payments.invoice_issued", {
+              number: invoiceNumber ?? "—",
+            })}
+          </span>
+          {invoicePermalink && (
+            <a
+              className="min-h-[36px] rounded-lg px-3 py-2 font-bold text-primary text-xs transition-colors hover:bg-primary/10"
+              href={invoicePermalink}
+              rel="noreferrer"
+              target="_blank"
+            >
+              {t("payments.invoice_open")}
+            </a>
+          )}
+        </div>
+      )}
+
+      <Can perm={{ payments: ["create"] }}>
+        {canInvoice && (
+          <button
+            className="mt-3 inline-flex min-h-[36px] items-center gap-1 rounded-lg border border-primary/30 bg-primary-container/40 px-3 font-bold text-primary text-xs transition-colors hover:bg-primary-container/60 disabled:opacity-50"
+            disabled={invoiceBusy}
+            onClick={handleIssueInvoice}
+            type="button"
+          >
+            <span className="material-symbols-outlined text-[16px]">
+              receipt_long
+            </span>
+            {t("payments.issue_invoice")}
+          </button>
+        )}
+      </Can>
+
+      {invoiceError && (
+        <p className="mt-2 font-label text-error text-xs">{invoiceError}</p>
+      )}
 
       {podError && (
         <p className="mt-2 font-label text-error text-xs">{podError}</p>

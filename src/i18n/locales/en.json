@@ -23,7 +23,9 @@
     "keep_editing": "Keep editing",
     "discard": "Discard",
     "whatsapp_consent": "Send me WhatsApp status updates about my repair",
-    "whatsapp_consent_hint": "Only used for repair status updates. You can change this at any time."
+    "whatsapp_consent_hint": "Only used for repair status updates. You can change this at any time.",
+    "tax_id": "Tax number (NIF)",
+    "tax_id_placeholder": "Optional — for companies"
   },
   "add_new_part": "Add New Part",
   "add_part_modal": {
@@ -697,7 +699,10 @@
     "cloud_ai_failed": "Could not generate the AI report. Try again later.",
     "cloud_module_required": "This feature requires a Pro module on your OficinaOS Cloud account.",
     "intake_request_no_diagnostic": "This request has no diagnostic data",
-    "part_request_not_found": "Part request not found"
+    "part_request_not_found": "Part request not found",
+    "invoicing_not_configured": "Invoicing is not configured — set the InvoiceXpress account and API key in Settings",
+    "invoicing_provider_failed": "The invoicing provider rejected or failed the request — try again or check the account settings",
+    "already_invoiced": "A fiscal document was already issued for this record"
   },
   "failed_to_create_part": "Failed to create part",
   "failed_to_delete_part": "Failed to delete part",
@@ -1237,7 +1242,12 @@
     "restock_no_data": "No consumption data yet — restock per reorder level",
     "restock_suggestion": "Avg {{avg}}/day ({{days}}d) · suggest {{qty}} to reorder",
     "restock_title": "Restock hint",
-    "max_stock_reached": "No more units in stock"
+    "max_stock_reached": "No more units in stock",
+    "issue_invoice": "Issue invoice",
+    "invoice_issued": "Invoice {{number}} issued",
+    "invoice_open": "Open document",
+    "invoice_already": "This sale already has an invoice",
+    "invoice_failed": "Could not issue the invoice — check invoicing settings"
   },
   "payments": {
     "add_payment": "Add Payment",
@@ -1259,7 +1269,11 @@
     "pod_cancel": "Cancel mark",
     "pod_hint": "Paid on delivery — record automatically when handing the device back",
     "pod_method_label": "Payment method",
-    "pod_mark": "Mark as paid on delivery"
+    "pod_mark": "Mark as paid on delivery",
+    "issue_invoice": "Issue invoice",
+    "invoice_issued": "Invoice {{number}} issued",
+    "invoice_open": "Open document",
+    "invoice_failed": "Could not issue the invoice — check invoicing settings"
   },
   "quotes": {
     "section_title": "Quotes",
@@ -2348,5 +2362,20 @@
     "logo_hint": "PNG, JPEG or WebP up to 200 KB — shown at the top of your store page",
     "logo_invalid": "Logo must be a PNG, JPEG or WebP image up to 200 KB",
     "plus_upsell": "Custom colours, logo and layouts are available with the Storefront+ module — ask your provider to enable it."
+  },
+  "customer_edit_tax_id": "Tax number (NIF)",
+  "invoicing": {
+    "title": "Invoicing (InvoiceXpress)",
+    "subtitle": "Issue certified fiscal documents from sales and repairs",
+    "account": "InvoiceXpress account",
+    "account_placeholder": "your-account (the subdomain in account.app.invoicexpress.com)",
+    "api_key": "API key",
+    "api_key_placeholder": "Paste the API key from InvoiceXpress",
+    "api_key_set": "Configured — paste a new key to replace it",
+    "api_key_hint": "Stored encrypted on this computer; never leaves the device except to InvoiceXpress.",
+    "tax_name": "Default VAT rate",
+    "enabled": "Enable invoicing",
+    "saved": "Invoicing settings saved",
+    "save_failed": "Could not save invoicing settings"
   }
 }

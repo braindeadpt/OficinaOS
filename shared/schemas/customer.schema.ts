@@ -8,6 +8,8 @@ export const createCustomerSchema = z.object({
     .or(z.literal("")),
   name: z.string().min(1, { error: "validations.enter_name" }),
   phone: z.string().min(1, { error: "validations.enter_phone" }),
+  // NIF / VAT id — optional; enables proper invoices (FR) instead of FS.
+  taxId: z.string().trim().max(20).optional().or(z.literal("")),
   whatsappConsent: z.boolean().optional(),
 });
 
@@ -21,6 +23,7 @@ export const updateCustomerSchema = z.object({
     .email({ error: "validations.email" })
     .or(z.literal(""))
     .optional(),
+  taxId: z.string().trim().max(20).optional().or(z.literal("")),
   whatsappConsent: z.boolean().optional(),
 });
 

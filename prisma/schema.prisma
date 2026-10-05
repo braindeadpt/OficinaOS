@@ -236,6 +236,9 @@ model Customer {
   name              String
   phone             String    @unique
   email             String?
+  // NIF — needed to issue proper invoices (fatura/fatura-recibo) instead
+  // of a simplified "consumidor final" document.
+  taxId             String?
   // WhatsApp status updates are only sent when the customer opted in.
   whatsappConsent   Boolean   @default(false)
   whatsappConsentAt DateTime? @db.Timestamptz
@@ -336,6 +339,14 @@ model Sale {
   createdBy   User     @relation("SaleCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   createdAt   DateTime @default(now()) @db.Timestamptz
 
+  // Pro module "invoicing" (InvoiceXpress) — set once the fiscal document
+  // for this sale was issued. invoiceDocType: "FS" | "FR".
+  invoiceDocId     String?
+  invoiceDocType   String?
+  invoiceNumber    String?
+  invoicePermalink String?
+  invoicedAt       DateTime? @db.Timestamptz
+
   items    SaleItem[]
   payments SalePayment[]
 
@@ -425,6 +436,13 @@ model Job {
   estimatedDate DateTime? @db.Timestamptz
   createdAt     DateTime  @default(now()) @db.Timestamptz
   updatedAt     DateTime  @updatedAt @db.Timestamptz
+
+  // Pro module "invoicing" (InvoiceXpress) — fiscal document refs.
+  invoiceDocId     String?
+  invoiceDocType   String?
+  invoiceNumber    String?
+  invoicePermalink String?
+  invoicedAt       DateTime? @db.Timestamptz
 
   actualLaborHours Decimal? @db.Decimal(10, 2)
   holdReason       String?  @db.Text
@@ -1104,6 +1122,12 @@ model ShopSettings {
   sharePrices               Boolean  @default(false)
   // Push the price snapshot on the next entitlement sync when true.
   pricesDirty               Boolean  @default(true)
+  // Faturação (Pro module "invoicing") — InvoiceXpress account + key stay
+  // local and encrypted; the app calls their API directly.
+  invoicingEnabled          Boolean  @default(false)
+  invoicingAccount          String?
+  invoicingApiKeyEncrypted  String?  @db.Text
+  invoicingTaxName          String   @default("IVA23")
   createdAt                 DateTime @default(now()) @db.Timestamptz
   updatedAt                 DateTime @updatedAt @db.Timestamptz
 

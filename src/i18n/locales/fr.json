@@ -23,7 +23,9 @@
     "keep_editing": "Continuer à éditer",
     "discard": "Jeter",
     "whatsapp_consent": "Recevoir les mises à jour WhatsApp de ma réparation",
-    "whatsapp_consent_hint": "Uniquement pour les états de réparation. Modifiable à tout moment."
+    "whatsapp_consent_hint": "Uniquement pour les états de réparation. Modifiable à tout moment.",
+    "tax_id": "Numéro fiscal (NIF)",
+    "tax_id_placeholder": "Facultatif — pour les entreprises"
   },
   "add_new_part": "Ajouter une pièce",
   "add_part_modal": {
@@ -697,7 +699,10 @@
     "cloud_ai_failed": "Impossible de générer le rapport IA. Réessayez plus tard.",
     "cloud_module_required": "Cette fonctionnalité nécessite un module Pro sur votre compte OficinaOS Cloud.",
     "intake_request_no_diagnostic": "Cette demande n'a pas de données de diagnostic",
-    "part_request_not_found": "Demande de pièce introuvable"
+    "part_request_not_found": "Demande de pièce introuvable",
+    "invoicing_not_configured": "La facturation n'est pas configurée : définissez le compte InvoiceXpress et la clé API dans Paramètres",
+    "invoicing_provider_failed": "Le fournisseur de facturation a rejeté ou échoué la demande : réessayez ou vérifiez les paramètres du compte.",
+    "already_invoiced": "Un document fiscal a déjà été émis pour ce dossier"
   },
   "failed_to_create_part": "Échec de la création de la pièce",
   "failed_to_delete_part": "Échec de la suppression de la pièce",
@@ -1237,7 +1242,12 @@
     "restock_no_data": "Aucune consommation enregistrée — réappro selon le niveau défini",
     "restock_suggestion": "Moyenne {{avg}}/jour ({{days}}j) · suggéré {{qty}} à commander",
     "restock_title": "Suggestion de réappro",
-    "max_stock_reached": "Plus d'unites en stock"
+    "max_stock_reached": "Plus d'unites en stock",
+    "issue_invoice": "Émettre une facture",
+    "invoice_issued": "Facture {{number}} émise",
+    "invoice_open": "Ouvrir le document",
+    "invoice_already": "Cette vente a déjà une facture",
+    "invoice_failed": "Impossible d'émettre la facture : vérifiez les paramètres de facturation"
   },
   "payments": {
     "add_payment": "Ajouter un paiement",
@@ -1259,7 +1269,11 @@
     "pod_cancel": "Annuler le marquage",
     "pod_hint": "Payé à la livraison — enregistrer automatiquement à la remise",
     "pod_method_label": "Moyen de paiement",
-    "pod_mark": "Marquer payé à la livraison"
+    "pod_mark": "Marquer payé à la livraison",
+    "issue_invoice": "Émettre une facture",
+    "invoice_issued": "Facture {{number}} émise",
+    "invoice_open": "Ouvrir le document",
+    "invoice_failed": "Impossible d'émettre la facture : vérifiez les paramètres de facturation"
   },
   "quotes": {
     "section_title": "Citations",
@@ -2348,5 +2362,20 @@
     "logo_hint": "PNG, JPEG ou WebP jusqu'à 200 Ko — affichés en haut de la page de votre boutique",
     "logo_invalid": "Le logo doit être une image PNG, JPEG ou WebP pesant jusqu'à 200 Ko",
     "plus_upsell": "Des couleurs, un logo et des mises en page personnalisés sont disponibles avec le module Storefront+ — demandez à votre fournisseur de l'activer."
+  },
+  "customer_edit_tax_id": "Numéro fiscal (NIF)",
+  "invoicing": {
+    "title": "Facturation (InvoiceXpress)",
+    "subtitle": "Émettre des documents fiscaux certifiés des ventes et des réparations",
+    "account": "Compte InvoiceXpress",
+    "account_placeholder": "votre-compte (le sous-domaine dans account.app.invoicexpress.com)",
+    "api_key": "Clé API",
+    "api_key_placeholder": "Collez la clé API d'InvoiceXpress",
+    "api_key_set": "Configuré : collez une nouvelle clé pour la remplacer",
+    "api_key_hint": "Clé stockée chiffrée sur cet ordinateur ; elle n'est envoyée qu'à InvoiceXpress.",
+    "tax_name": "Taux de TVA par défaut",
+    "enabled": "Activer la facturation",
+    "saved": "Paramètres de facturation enregistrés",
+    "save_failed": "Impossible d'enregistrer les paramètres de facturation"
   }
 }

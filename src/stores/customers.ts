@@ -64,6 +64,7 @@ interface CustomersState {
       email?: string;
       name?: string;
       phone?: string;
+      taxId?: string;
       whatsappConsent?: boolean;
     }
   ) => Promise<Customer>;

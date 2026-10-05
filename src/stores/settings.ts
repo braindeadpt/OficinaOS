@@ -18,6 +18,14 @@ interface OutboxLog {
   templateName: string;
 }
 
+interface InvoicingSettings {
+  account: string | null;
+  enabled: boolean;
+  hasApiKey: boolean;
+  module: boolean;
+  taxName: string;
+}
+
 interface WhatsAppSettings {
   businessId: string | null;
   enabled: boolean;
@@ -39,11 +47,13 @@ interface SettingsState {
   clearError: () => void;
   error: string | null;
   fetchAiSettings: () => Promise<void>;
+  fetchInvoicingSettings: () => Promise<void>;
   fetchNotificationTemplates: () => Promise<void>;
   fetchOutboxLogs: () => Promise<void>;
   fetchSettings: () => Promise<void>;
   fetchShopSettings: () => Promise<void>;
   fetchWhatsAppSettings: () => Promise<void>;
+  invoicingSettings: InvoicingSettings | null;
   isLoading: boolean;
   notificationTemplates: NotificationTemplate[];
   outboxLogs: OutboxLog[];
@@ -54,6 +64,12 @@ interface SettingsState {
     temperature?: number;
     enabled?: boolean;
   }) => Promise<AiSettings>;
+  saveInvoicingSettings: (data: {
+    account?: string;
+    apiKey?: string;
+    enabled?: boolean;
+    taxName?: string;
+  }) => Promise<void>;
   saveShopSettings: (data: {
     shopName: string;
     address?: string;
@@ -107,6 +123,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   aiSettings: null,
   shopSettings: null,
   notificationTemplates: [],
+  invoicingSettings: null,
   outboxLogs: [],
   whatsAppSettings: null,
   isLoading: false,
@@ -222,6 +239,29 @@ export const useSettingsStore = create<SettingsState>((set) => ({
         err,
         i18n.t("errors.update_notification_template")
       );
+      set({ error: message });
+      throw new Error(message);
+    }
+  },
+
+  fetchInvoicingSettings: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const res = await api.get("/settings/invoicing");
+      set({ invoicingSettings: res.data, isLoading: false });
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, i18n.t("errors.fetch_settings"));
+      set({ isLoading: false, error: message });
+    }
+  },
+
+  saveInvoicingSettings: async (data) => {
+    set({ error: null });
+    try {
+      await api.put("/settings/invoicing", data);
+      await useSettingsStore.getState().fetchInvoicingSettings();
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, i18n.t("errors.save_shop_settings"));
       set({ error: message });
       throw new Error(message);
     }
