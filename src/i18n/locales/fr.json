@@ -2301,6 +2301,16 @@
     "items_listed": "{{count}} articles listés",
     "sync_pending": "synchronisation en attente",
     "saved": "Boutique en ligne enregistrée",
-    "save_failed": "Impossible d'enregistrer la boutique en ligne"
+    "save_failed": "Impossible d'enregistrer la boutique en ligne",
+    "accent_color": "Couleur d'accentuation",
+    "template": "Mise en page",
+    "template_vitrine": "Vitrine (cartes)",
+    "template_compacta": "Compact (liste)",
+    "logo": "Logo de la boutique",
+    "logo_upload": "Télécharger le logo",
+    "logo_remove": "Retirer",
+    "logo_hint": "PNG, JPEG ou WebP jusqu'à 200 Ko — affichés en haut de la page de votre boutique",
+    "logo_invalid": "Le logo doit être une image PNG, JPEG ou WebP pesant jusqu'à 200 Ko",
+    "plus_upsell": "Des couleurs, un logo et des mises en page personnalisés sont disponibles avec le module Storefront+ — demandez à votre fournisseur de l'activer."
   }
 }

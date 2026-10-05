@@ -2301,6 +2301,16 @@
     "items_listed": "{{count}} items listed",
     "sync_pending": "sync pending",
     "saved": "Online store saved",
-    "save_failed": "Could not save the online store"
+    "save_failed": "Could not save the online store",
+    "accent_color": "Accent colour",
+    "template": "Page layout",
+    "template_vitrine": "Showcase (cards)",
+    "template_compacta": "Compact (list)",
+    "logo": "Shop logo",
+    "logo_upload": "Upload logo",
+    "logo_remove": "Remove",
+    "logo_hint": "PNG, JPEG or WebP up to 200 KB — shown at the top of your store page",
+    "logo_invalid": "Logo must be a PNG, JPEG or WebP image up to 200 KB",
+    "plus_upsell": "Custom colours, logo and layouts are available with the Storefront+ module — ask your provider to enable it."
   }
 }

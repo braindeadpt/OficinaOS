@@ -2301,6 +2301,16 @@
     "items_listed": "{{count}} artigos listados",
     "sync_pending": "sincronização pendente",
     "saved": "Loja online guardada",
-    "save_failed": "Não foi possível guardar a loja online"
+    "save_failed": "Não foi possível guardar a loja online",
+    "accent_color": "Cor de destaque",
+    "template": "Layout da página",
+    "template_vitrine": "Vitrine (cartões)",
+    "template_compacta": "Compacto (lista)",
+    "logo": "Logótipo da loja",
+    "logo_upload": "Carregar logotipo",
+    "logo_remove": "Remover",
+    "logo_hint": "PNG, JPEG ou WebP até 200 KB — apresentados no topo da página da sua loja",
+    "logo_invalid": "O logótipo deve ser uma imagem PNG, JPEG ou WebP até 200 KB",
+    "plus_upsell": "Cores, logótipo e layouts personalizados estão disponíveis com o módulo Storefront+ – peça ao seu fornecedor para o ativar."
   }
 }

@@ -1,22 +1,31 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import api, { getErrorMessage } from "@/lib/api";
 
 interface StorefrontStatus {
+  accentColor: string | null;
   description: string | null;
   dirty: boolean;
   email: string | null;
   itemCount: number;
+  logoData: string | null;
   module: boolean;
   paired: boolean;
+  plus: boolean;
   published: boolean;
   slug: string | null;
+  template: string;
   url: string | null;
 }
+
+// ~200KB binary — matches the cap the cloud enforces on the base64 payload.
+const LOGO_MAX_BYTES = 200 * 1024;
+const LOGO_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 
 export default function SettingsStorefrontSection({
   onToast,
@@ -30,6 +39,10 @@ export default function SettingsStorefrontSection({
   const [description, setDescription] = useState("");
   const [email, setEmail] = useState("");
   const [published, setPublished] = useState(false);
+  const [accentColor, setAccentColor] = useState("#0040a1");
+  const [template, setTemplate] = useState("vitrine");
+  const [logoData, setLogoData] = useState<string | null>(null);
+  const logoInput = useRef<HTMLInputElement>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -39,6 +52,9 @@ export default function SettingsStorefrontSection({
       setDescription(res.data.description ?? "");
       setEmail(res.data.email ?? "");
       setPublished(res.data.published);
+      setAccentColor(res.data.accentColor ?? "#0040a1");
+      setTemplate(res.data.template ?? "vitrine");
+      setLogoData(res.data.logoData);
     } catch {
       // Section is best-effort: the Cloud tab still works without it.
       setStatus(null);
@@ -49,6 +65,21 @@ export default function SettingsStorefrontSection({
     refresh().catch(() => null);
   }, [refresh]);
 
+  function handleLogoFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) {
+      return;
+    }
+    if (!LOGO_TYPES.has(file.type) || file.size > LOGO_MAX_BYTES) {
+      onToast(t("storefront.logo_invalid"), "error");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setLogoData(String(reader.result));
+    reader.readAsDataURL(file);
+  }
+
   async function handleSave() {
     setBusy(true);
     try {
@@ -57,6 +88,13 @@ export default function SettingsStorefrontSection({
         email,
         published,
         slug,
+        ...(status?.plus
+          ? {
+              accentColor,
+              logo: logoData ?? "",
+              template,
+            }
+          : {}),
       });
       setStatus(res.data);
       setSlug(res.data.slug ?? "");
@@ -137,6 +175,85 @@ export default function SettingsStorefrontSection({
           onChange={setPublished}
         />
       </div>
+
+      {status.plus ? (
+        <>
+          <Field label={t("storefront.accent_color")}>
+            <div className="flex items-center gap-2">
+              <input
+                aria-label={t("storefront.accent_color")}
+                className="h-9 w-12 cursor-pointer rounded-lg border border-outline-variant bg-surface"
+                onChange={(e) => setAccentColor(e.target.value)}
+                type="color"
+                value={accentColor}
+              />
+              <Input
+                autoComplete="off"
+                className="w-28"
+                maxLength={7}
+                onChange={(e) => setAccentColor(e.target.value)}
+                value={accentColor}
+              />
+            </div>
+          </Field>
+
+          <Field label={t("storefront.template")}>
+            <Select
+              onChange={(e) => setTemplate(e.target.value)}
+              value={template}
+            >
+              <option value="vitrine">
+                {t("storefront.template_vitrine")}
+              </option>
+              <option value="compacta">
+                {t("storefront.template_compacta")}
+              </option>
+            </Select>
+          </Field>
+
+          <Field label={t("storefront.logo")}>
+            <div>
+              <div className="flex items-center gap-3">
+                {logoData && (
+                  <img
+                    alt={t("storefront.logo")}
+                    className="h-12 w-12 rounded-xl border border-outline-variant bg-surface object-contain"
+                    height={48}
+                    src={logoData}
+                    width={48}
+                  />
+                )}
+                <input
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  onChange={handleLogoFile}
+                  ref={logoInput}
+                  type="file"
+                />
+                <Button
+                  icon="upload"
+                  onClick={() => logoInput.current?.click()}
+                  variant="secondary"
+                >
+                  {t("storefront.logo_upload")}
+                </Button>
+                {logoData && (
+                  <Button onClick={() => setLogoData(null)} variant="ghost">
+                    {t("storefront.logo_remove")}
+                  </Button>
+                )}
+              </div>
+              <p className="mt-1 text-on-surface-variant text-xs">
+                {t("storefront.logo_hint")}
+              </p>
+            </div>
+          </Field>
+        </>
+      ) : (
+        <p className="rounded-xl bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
+          {t("storefront.plus_upsell")}
+        </p>
+      )}
 
       <div className="flex items-center justify-between">
         <p className="text-on-surface-variant text-xs">

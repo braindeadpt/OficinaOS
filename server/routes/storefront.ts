@@ -10,6 +10,59 @@ import {
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
 const MODULE = "storefront";
+// Paid design tier — accent color, logo and layout. Enforced here for a
+// fast UI error; the cloud re-checks the entitlement on every push.
+const PLUS_MODULE = "storefront-plus";
+
+interface ThemeInput {
+  accentColor?: string | undefined;
+  logo?: string | undefined;
+  template?: "vitrine" | "compacta" | undefined;
+}
+
+/** Paid theme fields → shop_settings columns ("" clears to null). */
+function themePatch(input: ThemeInput) {
+  return {
+    ...(input.accentColor === undefined
+      ? {}
+      : { storeAccentColor: input.accentColor || null }),
+    ...(input.template === undefined ? {} : { storeTemplate: input.template }),
+    ...(input.logo === undefined ? {} : { storeLogoData: input.logo || null }),
+  };
+}
+
+function hasThemeInput(input: ThemeInput): boolean {
+  return (
+    input.accentColor !== undefined ||
+    input.template !== undefined ||
+    input.logo !== undefined
+  );
+}
+
+interface SettingsView {
+  storeAccentColor: string | null;
+  storeDescription: string | null;
+  storeDirty: boolean;
+  storeEmail: string | null;
+  storeLogoData: string | null;
+  storePublished: boolean;
+  storeSlug: string | null;
+  storeTemplate: string | null;
+}
+
+function storefrontView(s: SettingsView, apiUrl: string | null) {
+  return {
+    accentColor: s.storeAccentColor,
+    description: s.storeDescription,
+    dirty: s.storeDirty,
+    email: s.storeEmail,
+    logoData: s.storeLogoData,
+    published: s.storePublished,
+    slug: s.storeSlug,
+    template: s.storeTemplate ?? "vitrine",
+    url: apiUrl && s.storeSlug ? storefrontUrl(apiUrl, s.storeSlug) : null,
+  };
+}
 
 // biome-ignore lint/suspicious/useAwait: FastifyPluginAsync requires async
 export const storefrontRoutes: FastifyPluginAsync = async (app) => {
@@ -36,18 +89,11 @@ export const storefrontRoutes: FastifyPluginAsync = async (app) => {
         where: { listedOnline: true, isActive: true },
       });
       return reply.send({
-        dirty: s.storeDirty,
-        email: s.storeEmail,
-        description: s.storeDescription,
+        ...storefrontView(s, s.cloudApiUrl),
         itemCount,
         module: modules.includes(MODULE),
         paired: Boolean(s.cloudShopTokenEncrypted),
-        published: s.storePublished,
-        slug: s.storeSlug,
-        url:
-          s.cloudApiUrl && s.storeSlug
-            ? storefrontUrl(s.cloudApiUrl, s.storeSlug)
-            : null,
+        plus: modules.includes(PLUS_MODULE),
       });
     }
   );
@@ -82,6 +128,10 @@ export const storefrontRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const { description, email, published, slug } = parsed.data;
+      // Paid theme fields require storefront-plus — rejected before save.
+      if (hasThemeInput(parsed.data) && !modules.includes(PLUS_MODULE)) {
+        throw new AppError("CLOUD_MODULE_REQUIRED");
+      }
       await app.prisma.shopSettings.update({
         where: { id: "default" },
         data: {
@@ -90,6 +140,7 @@ export const storefrontRoutes: FastifyPluginAsync = async (app) => {
           storeEmail: email ?? null,
           storePublished: published,
           ...(slug === undefined ? {} : { storeSlug: slug || null }),
+          ...themePatch(parsed.data),
         },
       });
 
@@ -102,16 +153,7 @@ export const storefrontRoutes: FastifyPluginAsync = async (app) => {
       const after = await app.prisma.shopSettings.findUniqueOrThrow({
         where: { id: "default" },
       });
-      return reply.send({
-        description: after.storeDescription,
-        dirty: after.storeDirty,
-        email: after.storeEmail,
-        published: after.storePublished,
-        slug: after.storeSlug,
-        url: after.storeSlug
-          ? storefrontUrl(s.cloudApiUrl, after.storeSlug)
-          : null,
-      });
+      return reply.send(storefrontView(after, s.cloudApiUrl));
     }
   );
 };

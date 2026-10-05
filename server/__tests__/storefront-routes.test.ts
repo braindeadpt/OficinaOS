@@ -10,11 +10,14 @@ interface SettingsRow {
   cloudApiUrl: string | null;
   cloudEntitlements: unknown;
   cloudShopTokenEncrypted: string | null;
+  storeAccentColor: string | null;
   storeDescription: string | null;
   storeDirty: boolean;
   storeEmail: string | null;
+  storeLogoData: string | null;
   storePublished: boolean;
   storeSlug: string | null;
+  storeTemplate: string | null;
 }
 
 function fakePrisma(overrides: Partial<SettingsRow> = {}) {
@@ -22,11 +25,14 @@ function fakePrisma(overrides: Partial<SettingsRow> = {}) {
     cloudApiUrl: CLOUD_URL,
     cloudShopTokenEncrypted: encryptSecret("shop-token-secret"),
     cloudEntitlements: ["storefront"],
+    storeAccentColor: null,
     storeDescription: null,
     storeDirty: false,
     storeEmail: null,
+    storeLogoData: null,
     storePublished: false,
     storeSlug: null,
+    storeTemplate: null,
     ...overrides,
   };
   return {
@@ -224,5 +230,78 @@ describe("storefront routes — PUT", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().dirty).toBe(true);
+  });
+
+  it("402 when theme fields are sent without storefront-plus", async () => {
+    const { prisma } = fakePrisma();
+    const app = buildApp(prisma);
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/storefront",
+      payload: { published: true, accentColor: "#c00000" },
+    });
+    expect(res.statusCode).toBe(402);
+    expect(res.json().code).toBe("CLOUD_MODULE_REQUIRED");
+    expect(prisma.shopSettings.update).not.toHaveBeenCalled();
+  });
+
+  it("persists theme fields and pushes them when storefront-plus is active", async () => {
+    fetchMock.mockReturnValueOnce(cloudJson({ ok: true, slug: "minha-loja" }));
+    const { prisma, row } = fakePrisma({
+      cloudEntitlements: ["storefront", "storefront-plus"],
+    });
+    const app = buildApp(prisma);
+    const logo = "data:image/png;base64,aGVsbG8=";
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/storefront",
+      payload: {
+        published: true,
+        accentColor: "#c00000",
+        template: "compacta",
+        logo,
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(row.storeAccentColor).toBe("#c00000");
+    expect(row.storeTemplate).toBe("compacta");
+    expect(row.storeLogoData).toBe(logo);
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body.accentColor).toBe("#c00000");
+    expect(body.template).toBe("compacta");
+    expect(body.logo).toEqual({
+      mime: "image/png",
+      dataBase64: "aGVsbG8=",
+    });
+  });
+
+  it("omits theme fields from the push without storefront-plus", async () => {
+    fetchMock.mockReturnValueOnce(cloudJson({ ok: true, slug: "minha-loja" }));
+    const { prisma } = fakePrisma();
+    const app = buildApp(prisma);
+    await app.inject({
+      method: "PUT",
+      url: "/api/storefront",
+      payload: { published: true },
+    });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body).not.toHaveProperty("accentColor");
+    expect(body).not.toHaveProperty("template");
+    expect(body).not.toHaveProperty("logo");
+  });
+
+  it("GET exposes the plus flag and stored theme", async () => {
+    const { prisma } = fakePrisma({
+      cloudEntitlements: ["storefront", "storefront-plus"],
+      storeAccentColor: "#00ff00",
+      storeTemplate: "compacta",
+    });
+    const app = buildApp(prisma);
+    const res = await app.inject({ method: "GET", url: "/api/storefront" });
+    const body = res.json();
+    expect(body.plus).toBe(true);
+    expect(body.accentColor).toBe("#00ff00");
+    expect(body.template).toBe("compacta");
   });
 });

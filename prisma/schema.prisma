@@ -1084,6 +1084,11 @@ model ShopSettings {
   storeEmail                String?
   // Push to the cloud on the next entitlement sync when true.
   storeDirty                Boolean  @default(true)
+  // Storefront+ (Pro module "storefront-plus") — paid store theme.
+  storeAccentColor          String?
+  storeTemplate             String?
+  // Shop logo as a data URL (≤~280KB); pushed to the cloud on sync.
+  storeLogoData             String?  @db.Text
   createdAt                 DateTime @default(now()) @db.Timestamptz
   updatedAt                 DateTime @updatedAt @db.Timestamptz
 

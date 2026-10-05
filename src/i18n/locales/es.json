@@ -2301,6 +2301,16 @@
     "items_listed": "{{count}} artículos listados",
     "sync_pending": "sincronización pendiente",
     "saved": "Tienda online guardada",
-    "save_failed": "No se pudo guardar la tienda en línea"
+    "save_failed": "No se pudo guardar la tienda en línea",
+    "accent_color": "Color de acento",
+    "template": "Diseño de página",
+    "template_vitrine": "Escaparate (tarjetas)",
+    "template_compacta": "Compacto (lista)",
+    "logo": "Logotipo de la tienda",
+    "logo_upload": "Subir logotipo",
+    "logo_remove": "Eliminar",
+    "logo_hint": "PNG, JPEG o WebP de hasta 200 KB: se muestran en la parte superior de la página de tu tienda",
+    "logo_invalid": "El logotipo debe ser una imagen PNG, JPEG o WebP de hasta 200 KB",
+    "plus_upsell": "Colores, logotipos y diseños personalizados están disponibles con el módulo Storefront+; solicite a su proveedor que lo habilite."
   }
 }

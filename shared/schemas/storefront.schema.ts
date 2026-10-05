@@ -15,6 +15,24 @@ export const updateStorefrontSchema = z.object({
     .regex(/^[a-z0-9][a-z0-9-]{1,48}$/, { error: "validations.invalid_slug" })
     .optional()
     .or(z.literal("")),
+  // Storefront+ (módulo pago "storefront-plus") — tema da montra. Os campos
+  // são opcionais e ignorados sem o entitlement; a cloud revalida.
+  accentColor: z
+    .union([z.literal(""), z.string().regex(/^#[0-9a-f]{6}$/i)])
+    .optional(),
+  template: z.enum(["vitrine", "compacta"]).optional(),
+  // Logo como data URL (≤~280KB). "" remove o logo.
+  logo: z
+    .union([
+      z.literal(""),
+      z
+        .string()
+        .regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/, {
+          error: "storefront.logo_invalid",
+        })
+        .max(400_000),
+    ])
+    .optional(),
 });
 
 export type UpdateStorefrontInput = z.infer<typeof updateStorefrontSchema>;

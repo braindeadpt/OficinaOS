@@ -54,12 +54,26 @@ export async function markStoreDirtyIfListed(
 
 interface SettingsRow {
   address: string | null;
+  cloudEntitlements: unknown;
   phone: string | null;
+  storeAccentColor: string | null;
   storeDescription: string | null;
   storeDirty: boolean;
   storeEmail: string | null;
+  storeLogoData: string | null;
   storePublished: boolean;
   storeSlug: string | null;
+  storeTemplate: string | null;
+}
+
+const DATA_URL_RE = /^data:(image\/(?:png|jpeg|webp));base64,(.+)$/;
+
+/** "data:image/png;base64,XXX" → { mime, dataBase64 } para o PUT da cloud. */
+function splitDataUrl(
+  dataUrl: string | null
+): { dataBase64: string; mime: string } | null {
+  const match = DATA_URL_RE.exec(dataUrl ?? "");
+  return match ? { dataBase64: match[2], mime: match[1] } : null;
 }
 
 /**
@@ -92,6 +106,21 @@ export async function pushStorefront(
     take: 500,
   });
 
+  // Tema pago: a cloud trata o PUT como snapshot completo — campos de tema
+  // ausentes voltam aos defaults. Só se enviam com o entitlement plus em
+  // cache; sem ele, a cloud rejeitaria o push inteiro (402).
+  const modules = Array.isArray(settings.cloudEntitlements)
+    ? (settings.cloudEntitlements as string[])
+    : [];
+  const theme = modules.includes("storefront-plus")
+    ? {
+        accentColor: settings.storeAccentColor ?? null,
+        logo: splitDataUrl(settings.storeLogoData),
+        template:
+          settings.storeTemplate === "compacta" ? "compacta" : "vitrine",
+      }
+    : {};
+
   const res = await cloudFetch(apiUrl, "/storefront", {
     body: {
       address: settings.address ?? undefined,
@@ -107,6 +136,7 @@ export async function pushStorefront(
       phone: settings.phone ?? undefined,
       published: settings.storePublished,
       slug: settings.storeSlug ?? undefined,
+      ...theme,
     },
     method: "PUT",
     token,
