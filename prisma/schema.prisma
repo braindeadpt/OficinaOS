@@ -1099,6 +1099,11 @@ model ShopSettings {
   storeTemplate             String?
   // Shop logo as a data URL (≤~280KB); pushed to the cloud on sync.
   storeLogoData             String?  @db.Text
+  // Preços de mercado (Pro module "market-prices") — anonymous opt-in
+  // contribution of catalog prices to the cloud aggregate.
+  sharePrices               Boolean  @default(false)
+  // Push the price snapshot on the next entitlement sync when true.
+  pricesDirty               Boolean  @default(true)
   createdAt                 DateTime @default(now()) @db.Timestamptz
   updatedAt                 DateTime @updatedAt @db.Timestamptz
 

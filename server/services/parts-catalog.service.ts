@@ -24,6 +24,7 @@ import {
   requireKeysetCursor,
   withKeyset,
 } from "../utils/keyset.js";
+import { markPricesDirty } from "./market-prices.service.js";
 import { markStoreDirty } from "./storefront.service.js";
 
 export async function list(prisma: PrismaClient, query: ListPartsQueryInput) {
@@ -91,6 +92,7 @@ export async function create(prisma: PrismaClient, input: CreatePartInput) {
   if (part.listedOnline) {
     await markStoreDirty(prisma).catch(() => null);
   }
+  await markPricesDirty(prisma).catch(() => null);
   return part;
 }
 
@@ -118,6 +120,7 @@ export async function update(
   if (stockDelta === 0) {
     const updated = await updatePart(prisma, id, input);
     await markDirty(part.listedOnline, updated.listedOnline);
+    await markPricesDirty(prisma).catch(() => null);
     return updated;
   }
 
@@ -143,6 +146,7 @@ export async function update(
   });
   // Stock de um artigo listado afeta o "em stock" da montra pública.
   await markDirty(part.listedOnline, updated.listedOnline);
+  await markPricesDirty(prisma).catch(() => null);
   return updated;
 }
 
@@ -160,6 +164,7 @@ export async function toggleActive(
   if (part.listedOnline) {
     await markStoreDirty(prisma).catch(() => null);
   }
+  await markPricesDirty(prisma).catch(() => null);
   return updated;
 }
 
@@ -185,6 +190,7 @@ export async function remove(prisma: PrismaClient, id: string) {
     if (deleted.listedOnline) {
       await markStoreDirty(tx).catch(() => null);
     }
+    await markPricesDirty(tx).catch(() => null);
     return deleted;
   });
 }

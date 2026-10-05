@@ -20,6 +20,7 @@ import {
   requireKeysetCursor,
   withKeyset,
 } from "../utils/keyset.js";
+import { markPricesDirty } from "./market-prices.service.js";
 
 export async function list(prisma: PrismaClient, query: ListRepairsQueryInput) {
   const { cursor, limit, search, category, isActive } = query;
@@ -68,11 +69,13 @@ export async function getById(prisma: PrismaClient, id: string) {
 }
 
 export async function create(prisma: PrismaClient, input: CreateRepairInput) {
-  return await createRepair(prisma, {
+  const repair = await createRepair(prisma, {
     category: input.category,
     defaultPrice: input.defaultPrice,
     name: input.name,
   });
+  await markPricesDirty(prisma).catch(() => null);
+  return repair;
 }
 
 export async function update(
@@ -85,7 +88,9 @@ export async function update(
     return null;
   }
 
-  return await updateRepair(prisma, id, input);
+  const updated = await updateRepair(prisma, id, input);
+  await markPricesDirty(prisma).catch(() => null);
+  return updated;
 }
 
 export async function toggleActive(
@@ -98,7 +103,9 @@ export async function toggleActive(
     return null;
   }
 
-  return await updateRepair(prisma, id, { isActive });
+  const updated = await updateRepair(prisma, id, { isActive });
+  await markPricesDirty(prisma).catch(() => null);
+  return updated;
 }
 
 export async function remove(prisma: PrismaClient, id: string) {
@@ -112,5 +119,7 @@ export async function remove(prisma: PrismaClient, id: string) {
     throw new AppError("REPAIR_IN_USE");
   }
 
-  return await deleteRepairRepo(prisma, id);
+  const deleted = await deleteRepairRepo(prisma, id);
+  await markPricesDirty(prisma).catch(() => null);
+  return deleted;
 }

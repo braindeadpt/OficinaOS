@@ -29,6 +29,7 @@ const ReturnsListPage = lazy(() => import("@/pages/returns"));
 const ReturnDetailPage = lazy(() => import("@/pages/returns/detail"));
 const TradeInsPage = lazy(() => import("@/pages/trade-ins"));
 const PartRequestsPage = lazy(() => import("@/pages/part-requests"));
+const MarketPricesPage = lazy(() => import("@/pages/market-prices"));
 const JobsPage = lazy(() => import("@/pages/jobs"));
 const JobDetailPage = lazy(() => import("@/pages/jobs/detail"));
 const NotificationsPage = lazy(() => import("@/pages/notifications"));
@@ -176,6 +177,20 @@ export default function App() {
                   </DashboardLayout>
                 }
                 path="/part-requests"
+              />
+            </Route>
+            <Route
+              element={
+                <RequirePermission perm={{ repairs: ["viewCatalog"] }} />
+              }
+            >
+              <Route
+                element={
+                  <DashboardLayout>
+                    <MarketPricesPage />
+                  </DashboardLayout>
+                }
+                path="/market-prices"
               />
             </Route>
             <Route

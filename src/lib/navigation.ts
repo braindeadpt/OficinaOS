@@ -72,6 +72,12 @@ export const NAV_ITEMS: NavItem[] = [
     perm: { repairs: ["viewCatalog"] },
   },
   {
+    icon: "monitoring",
+    labelKey: "market_prices.nav_label",
+    to: "/market-prices",
+    perm: { repairs: ["viewCatalog"] },
+  },
+  {
     icon: "notifications",
     labelKey: "notifications",
     to: "/notifications",

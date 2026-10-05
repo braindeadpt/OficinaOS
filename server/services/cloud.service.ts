@@ -226,6 +226,16 @@ export async function syncCloudEntitlements(
       .catch((err) => log.warn({ err }, "storefront sync failed"));
   }
 
+  // Preços de mercado: empurra o snapshot anónimo de preços quando a loja
+  // optou pela partilha e há alterações pendentes.
+  if (modules.includes("market-prices")) {
+    import("./market-prices.service.js")
+      .then(({ syncMarketPrices }) =>
+        syncMarketPrices(prisma, settings.cloudApiUrl ?? "", token, log)
+      )
+      .catch((err) => log.warn({ err }, "market-prices sync failed"));
+  }
+
   // WhatsApp bot: regista o phone_number_id na cloud e processa mensagens
   // inbound enfileiradas pelo webhook da Meta (responder é daqui, com as
   // credenciais Meta que nunca saem da loja).
