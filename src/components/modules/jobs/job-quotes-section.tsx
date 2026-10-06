@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Can } from "@/components/modules/can";
 import SendQuoteDialog from "@/components/modules/jobs/send-quote-dialog";
+import { Icon } from "@/components/ui/icon";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
 import { useJobsStore } from "@/stores/jobs";
 
@@ -63,9 +64,7 @@ export default function JobQuotesSection({
             onClick={() => setShowSendDialog(true)}
             type="button"
           >
-            <span className="material-symbols-outlined text-[18px]">
-              request_quote
-            </span>
+            <Icon className="text-[18px]" name="request_quote" />
             <span className="font-label text-xs">{t("quotes.send")}</span>
           </button>
         </Can>
@@ -75,9 +74,10 @@ export default function JobQuotesSection({
         <ul className="mt-3 divide-y divide-outline-variant">
           {quotes.map((q) => (
             <li className="flex items-start gap-3 py-2.5" key={q.id}>
-              <span className="material-symbols-outlined pt-0.5 text-[18px] text-on-surface-variant">
-                request_quote
-              </span>
+              <Icon
+                className="pt-0.5 text-[18px] text-on-surface-variant"
+                name="request_quote"
+              />
               <div className="min-w-0 flex-1">
                 <p className="font-body font-semibold text-on-surface text-sm">
                   {t("quotes.version_label", { version: q.version })} ·{" "}

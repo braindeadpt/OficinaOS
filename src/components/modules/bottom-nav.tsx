@@ -2,6 +2,7 @@ import { ROLE_LABELS } from "@shared/constants";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { NavLink, useLocation } from "react-router";
+import { Icon } from "@/components/ui/icon";
 import { can, useCan } from "@/hooks/use-can";
 import { BOTTOM_NAV_PRIMARY, NAV_ITEMS } from "@/lib/navigation";
 import { getInitials } from "@/lib/utils";
@@ -44,12 +45,10 @@ function MoreSheetProfile({ onClose }: { onClose: () => void }) {
       >
         {logoutPending ? (
           <>
-            <span
-              aria-hidden="true"
-              className="material-symbols-outlined shrink-0 text-[22px] text-on-error-container"
-            >
-              warning
-            </span>
+            <Icon
+              className="shrink-0 text-[22px] text-on-error-container"
+              name="warning"
+            />
             <span className="flex-1 font-semibold text-on-error-container text-sm">
               {t("auth_sign_out_confirm")}
             </span>
@@ -92,12 +91,10 @@ function MoreSheetProfile({ onClose }: { onClose: () => void }) {
           }
           type="button"
         >
-          <span
-            aria-hidden="true"
-            className="material-symbols-outlined text-[22px]"
-          >
-            {logoutPending ? "warning" : "power_settings_new"}
-          </span>
+          <Icon
+            className="text-[22px]"
+            name={logoutPending ? "warning" : "power_settings_new"}
+          />
         </button>
       </div>
     </div>
@@ -127,17 +124,15 @@ function NavTab({
     >
       {({ isActive }) => (
         <>
-          <span
-            aria-hidden="true"
-            className={`material-symbols-outlined text-[22px] ${isActive ? "text-primary" : ""}`}
+          <Icon
+            className={`text-[22px] ${isActive ? "text-primary" : ""}`}
+            name={icon}
             style={
               isActive
                 ? { fontVariationSettings: ACTIVE_FONT_SETTINGS }
                 : undefined
             }
-          >
-            {icon}
-          </span>
+          />
           <span
             className={`mt-0.5 text-[12px] leading-tight ${isActive ? "font-bold text-primary" : "text-on-surface-variant"}`}
           >
@@ -172,13 +167,11 @@ function FabButton({
             : "bg-primary text-on-primary"
         }`}
       >
-        <span
-          aria-hidden="true"
-          className={`material-symbols-outlined text-[26px] ${disabled ? "text-on-surface-variant" : "text-on-primary"}`}
+        <Icon
+          className={`text-[26px] ${disabled ? "text-on-surface-variant" : "text-on-primary"}`}
+          name="add_circle"
           style={{ fontVariationSettings: ACTIVE_FONT_SETTINGS }}
-        >
-          add_circle
-        </span>
+        />
       </span>
       <span
         className={`mt-0.5 text-[12px] leading-tight ${disabled ? "text-on-surface-variant" : "font-semibold text-primary"}`}
@@ -257,17 +250,15 @@ export default function BottomNav() {
       onClick={moreSheetOpen ? closeMoreSheet : openMoreSheet}
       type="button"
     >
-      <span
-        aria-hidden="true"
-        className={`material-symbols-outlined text-[22px] ${isMoreActive || moreSheetOpen ? "text-primary" : ""}`}
+      <Icon
+        className={`text-[22px] ${isMoreActive || moreSheetOpen ? "text-primary" : ""}`}
+        name="more_horiz"
         style={
           isMoreActive || moreSheetOpen
             ? { fontVariationSettings: ACTIVE_FONT_SETTINGS }
             : undefined
         }
-      >
-        more_horiz
-      </span>
+      />
       <span
         className={`mt-0.5 text-[12px] leading-tight ${isMoreActive || moreSheetOpen ? "font-bold text-primary" : "text-on-surface-variant"}`}
       >
@@ -287,7 +278,7 @@ export default function BottomNav() {
         >
           <button
             aria-label={t("close")}
-            className="absolute inset-0 bg-on-surface/40 backdrop-blur-sm"
+            className="absolute inset-0 bg-overlay backdrop-blur-sm"
             onClick={closeMoreSheet}
             type="button"
           />
@@ -309,17 +300,15 @@ export default function BottomNav() {
                 >
                   {({ isActive }) => (
                     <>
-                      <span
-                        aria-hidden="true"
-                        className={`material-symbols-outlined text-[22px] ${isActive ? "text-primary" : ""}`}
+                      <Icon
+                        className={`text-[22px] ${isActive ? "text-primary" : ""}`}
+                        name={icon}
                         style={
                           isActive
                             ? { fontVariationSettings: ACTIVE_FONT_SETTINGS }
                             : undefined
                         }
-                      >
-                        {icon}
-                      </span>
+                      />
                       <span
                         className={`text-sm ${isActive ? "font-bold text-primary" : "text-on-surface-variant"}`}
                       >

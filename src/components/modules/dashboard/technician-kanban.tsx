@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import FunctionalChecklist from "@/components/modules/jobs/intake-modal/functional-checklist";
 import type { IntakeChecklist } from "@/components/modules/jobs/intake-modal/types";
+import { Icon } from "@/components/ui/icon";
 import { useDashboardStore } from "@/stores/dashboard";
 import { useJobsStore } from "@/stores/jobs";
 
@@ -215,9 +216,10 @@ export default function TechnicianKanban() {
               <div className="scrollbar-thin flex-1 space-y-3 overflow-y-auto pr-1 md:max-h-[500px]">
                 {colJobs.length === 0 ? (
                   <div className="flex h-32 flex-col items-center justify-center rounded-lg border border-surface-container-high border-dashed p-4 text-center">
-                    <span className="material-symbols-outlined text-3xl text-surface-container-highest">
-                      inbox
-                    </span>
+                    <Icon
+                      className="text-3xl text-surface-container-highest"
+                      name="inbox"
+                    />
                     <span className="mt-1 text-on-surface-variant text-xs">
                       {t("no_records")}
                     </span>
@@ -244,9 +246,10 @@ export default function TechnicianKanban() {
                           {/* Urgent Badge */}
                           {job.isUrgent && (
                             <span className="flex items-center gap-0.5 rounded bg-error-container px-1.5 py-0.5 font-extrabold font-headline text-[10px] text-on-error-container">
-                              <span className="material-symbols-outlined text-[12px]">
-                                priority_high
-                              </span>
+                              <Icon
+                                className="text-[12px]"
+                                name="priority_high"
+                              />
                               {t("intake.urgent")}
                             </span>
                           )}
@@ -276,9 +279,7 @@ export default function TechnicianKanban() {
 
                         {/* Customer */}
                         <div className="mt-2 flex items-center gap-1.5 text-on-surface-variant text-xs">
-                          <span className="material-symbols-outlined text-[14px]">
-                            person
-                          </span>
+                          <Icon className="text-[14px]" name="person" />
                           <span className="truncate">{job.customerName}</span>
                         </div>
 
@@ -291,9 +292,10 @@ export default function TechnicianKanban() {
                         <div className="mt-3 flex items-center justify-between border-surface-container-high/30 border-t pt-3">
                           {/* Estimated Date */}
                           <div className="flex items-center gap-1 text-[11px] text-on-surface-variant">
-                            <span className="material-symbols-outlined text-[13px]">
-                              calendar_today
-                            </span>
+                            <Icon
+                              className="text-[13px]"
+                              name="calendar_today"
+                            />
                             <span>
                               {job.estimatedDate
                                 ? new Date(job.estimatedDate).toLocaleString(
@@ -317,9 +319,7 @@ export default function TechnicianKanban() {
                               onClick={() => handleClaim(job.id)}
                               type="button"
                             >
-                              <span className="material-symbols-outlined text-[12px]">
-                                front_hand
-                              </span>
+                              <Icon className="text-[12px]" name="front_hand" />
                               <span>{t("tech_dashboard.claim_job")}</span>
                             </button>
                           ) : (
@@ -336,9 +336,10 @@ export default function TechnicianKanban() {
                                   type="button"
                                 >
                                   <span>{t("tech_dashboard.update")}</span>
-                                  <span className="material-symbols-outlined text-[14px]">
-                                    arrow_drop_down
-                                  </span>
+                                  <Icon
+                                    className="text-[14px]"
+                                    name="arrow_drop_down"
+                                  />
                                 </button>
 
                                 {/* Dropdown menu */}
@@ -382,7 +383,7 @@ export default function TechnicianKanban() {
 
       {/* Beautiful Modal for holdReason/laborHours */}
       {transitioningJob && targetStatus && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl bg-surface-container p-6 shadow-xl ring-1 ring-black/10 transition-all">
             <h4 className="font-extrabold font-headline text-lg text-on-surface">
               {targetStatus === JobStatus.ON_HOLD

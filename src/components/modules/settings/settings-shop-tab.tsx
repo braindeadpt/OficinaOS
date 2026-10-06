@@ -10,7 +10,6 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { Field } from "@/components/ui/field";
-import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -18,14 +17,6 @@ import { Textarea } from "@/components/ui/textarea";
 import api from "@/lib/api";
 import { getPhonePlaceholder } from "@/lib/phone-formats";
 import { useSettingsStore } from "@/stores/settings";
-
-const chevron = (
-  <Icon
-    className="pointer-events-none absolute end-4 top-1/2 -translate-y-1/2 text-on-surface-variant"
-    name="expand_more"
-    size="sm"
-  />
-);
 
 interface RemoteBackupStatus {
   lastRemoteCopyAt: string | null;
@@ -358,7 +349,7 @@ export default function SettingsShopTab({
           {t("regional_settings_label")}
         </p>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <Field endAdornment={chevron} label={t("country_code")}>
+          <Field label={t("country_code")}>
             <Select
               id="shop-country-code"
               onChange={(e) => {
@@ -377,7 +368,7 @@ export default function SettingsShopTab({
               ))}
             </Select>
           </Field>
-          <Field endAdornment={chevron} label={t("currency")}>
+          <Field label={t("currency")}>
             <Select
               id="shop-currency"
               onChange={(e) => {
@@ -435,7 +426,7 @@ export default function SettingsShopTab({
           {t("print_settings_help")}
         </p>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <Field endAdornment={chevron} label={t("print_paper_label")}>
+          <Field label={t("print_paper_label")}>
             <Select
               id="shop-receipt-paper"
               onChange={(e) => {
@@ -452,7 +443,7 @@ export default function SettingsShopTab({
               <option value="a4">{t("print_paper_a4")}</option>
             </Select>
           </Field>
-          <Field endAdornment={chevron} label={t("print_label_size")}>
+          <Field label={t("print_label_size")}>
             <Select
               id="shop-label-size"
               onChange={(e) => {
@@ -471,7 +462,7 @@ export default function SettingsShopTab({
           </Field>
         </div>
         <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <Field endAdornment={chevron} label={t("print_method_label")}>
+          <Field label={t("print_method_label")}>
             <Select
               id="shop-printer-mode"
               onChange={(e) => {

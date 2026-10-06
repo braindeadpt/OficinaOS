@@ -9,6 +9,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { useParams } from "react-router";
 import { Field } from "@/components/ui/field";
+import { Icon } from "@/components/ui/icon";
 import { Textarea } from "@/components/ui/textarea";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
 import api, { type ApiError, getErrorMessage } from "@/lib/api";
@@ -30,11 +31,11 @@ function LanguageSwitcher() {
   return (
     <button
       aria-label={t("language_switch")}
-      className="material-symbols-outlined min-h-11 min-w-11 rounded-full p-2.5 text-on-surface-variant transition-colors hover:bg-surface-container-high"
+      className="flex min-h-11 min-w-11 items-center justify-center rounded-full p-2.5 text-on-surface-variant transition-colors hover:bg-surface-container-high"
       onClick={nextLang}
       type="button"
     >
-      language
+      <Icon name="language" size="lg" />
     </button>
   );
 }
@@ -194,9 +195,10 @@ function LookupForm({
           <div className="overflow-hidden rounded-xl bg-surface-container-low p-8 shadow-sm md:p-12">
             <div className="flex flex-col items-center text-center">
               <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-surface-container-highest">
-                <span className="material-symbols-outlined text-3xl text-primary-container">
-                  build_circle
-                </span>
+                <Icon
+                  className="text-3xl text-primary-container"
+                  name="build_circle"
+                />
               </div>
 
               <h1 className="mb-3 font-extrabold font-headline text-3xl text-on-surface tracking-tight md:text-4xl">
@@ -229,7 +231,7 @@ function LookupForm({
                     value={code}
                   />
                   <div className="absolute end-4 top-1/2 -translate-y-1/2 text-outline transition-colors group-focus-within:text-primary">
-                    <span className="material-symbols-outlined">search</span>
+                    <Icon name="search" size="lg" />
                   </div>
                   <p className="sr-only" id="job-code-help">
                     {t("tracking_input_help")}
@@ -251,7 +253,7 @@ function LookupForm({
                     value={phone4}
                   />
                   <div className="absolute end-4 top-1/2 -translate-y-1/2 text-outline transition-colors group-focus-within:text-primary">
-                    <span className="material-symbols-outlined">lock</span>
+                    <Icon name="lock" size="lg" />
                   </div>
                   <p className="sr-only" id="phone4-help">
                     {t("tracking_phone4_help")}
@@ -263,9 +265,7 @@ function LookupForm({
                   type="submit"
                 >
                   <span>{t("tracking_track_btn")}</span>
-                  <span className="material-symbols-outlined text-xl">
-                    arrow_forward
-                  </span>
+                  <Icon className="text-xl" name="arrow_forward" />
                 </button>
               </form>
 
@@ -293,9 +293,11 @@ function LookupForm({
             <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="flex items-center gap-4 rounded-xl bg-surface-container p-6">
                 <div className="rounded-lg bg-surface-container-lowest p-3">
-                  <span className="material-symbols-outlined text-primary">
-                    verified_user
-                  </span>
+                  <Icon
+                    className="text-primary"
+                    name="verified_user"
+                    size="lg"
+                  />
                 </div>
                 <div className="text-start">
                   <p className="font-label text-on-surface-variant text-xs uppercase tracking-widest">
@@ -311,9 +313,11 @@ function LookupForm({
               {(shop.address || shop.phone) && (
                 <div className="flex items-center gap-4 rounded-xl bg-surface-container p-6">
                   <div className="rounded-lg bg-surface-container-lowest p-3">
-                    <span className="material-symbols-outlined text-primary">
-                      storefront
-                    </span>
+                    <Icon
+                      className="text-primary"
+                      name="storefront"
+                      size="lg"
+                    />
                   </div>
                   <div className="min-w-0 text-start">
                     <p className="font-label text-on-surface-variant text-xs uppercase tracking-widest">
@@ -383,11 +387,10 @@ function QuoteCard({
   if (responded) {
     actionArea = (
       <div className="mt-4 flex items-start gap-3 rounded-xl bg-surface-container-high p-4">
-        <span
-          className={`material-symbols-outlined text-xl ${quote.status === "APPROVED" ? "text-primary" : "text-error"}`}
-        >
-          {quote.status === "APPROVED" ? "check_circle" : "cancel"}
-        </span>
+        <Icon
+          className={`text-xl ${quote.status === "APPROVED" ? "text-primary" : "text-error"}`}
+          name={quote.status === "APPROVED" ? "check_circle" : "cancel"}
+        />
         <div>
           <p className="font-semibold text-sm">
             {quote.status === "APPROVED"
@@ -439,9 +442,7 @@ function QuoteCard({
                 onClick={() => respond("reject")}
                 type="button"
               >
-                <span className="material-symbols-outlined text-sm">
-                  cancel
-                </span>
+                <Icon className="text-sm" name="cancel" />
                 {t("tracking_quote_confirm_reject")}
               </button>
               <button
@@ -461,9 +462,7 @@ function QuoteCard({
                 onClick={() => respond("approve")}
                 type="button"
               >
-                <span className="material-symbols-outlined text-sm">
-                  check_circle
-                </span>
+                <Icon className="text-sm" name="check_circle" />
                 {t("tracking_quote_approve")}
               </button>
               <button
@@ -472,9 +471,7 @@ function QuoteCard({
                 onClick={() => setShowRejectForm(true)}
                 type="button"
               >
-                <span className="material-symbols-outlined text-sm">
-                  cancel
-                </span>
+                <Icon className="text-sm" name="cancel" />
                 {t("tracking_quote_reject")}
               </button>
             </>
@@ -493,9 +490,7 @@ function QuoteCard({
   return (
     <div className="rounded-xl bg-surface-container p-6">
       <div className="mb-3 flex items-center gap-3">
-        <span className="material-symbols-outlined text-primary text-xl">
-          request_quote
-        </span>
+        <Icon className="text-primary text-xl" name="request_quote" />
         <span className="font-bold text-on-surface text-sm uppercase tracking-wide">
           {t("tracking_quote_title")}
         </span>
@@ -528,9 +523,7 @@ function WarrantyCard({ warranty }: { warranty: WarrantyInfo }) {
   return (
     <div className="rounded-xl bg-surface-container p-6">
       <div className="mb-4 flex items-center gap-3">
-        <span className="material-symbols-outlined text-primary text-xl">
-          verified_user
-        </span>
+        <Icon className="text-primary text-xl" name="verified_user" />
         <span className="font-bold text-on-surface text-sm uppercase tracking-wide">
           {t("tracking_warranty_title")}
         </span>
@@ -580,9 +573,7 @@ function ReceiptCard({
     <div className="rounded-xl bg-surface-container p-6">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-primary text-xl">
-            receipt_long
-          </span>
+          <Icon className="text-primary text-xl" name="receipt_long" />
           <span className="font-bold text-on-surface text-sm uppercase tracking-wide">
             {t("tracking_receipt_title")}
           </span>
@@ -594,9 +585,7 @@ function ReceiptCard({
             rel="noreferrer"
             target="_blank"
           >
-            <span className="material-symbols-outlined text-sm">
-              open_in_new
-            </span>
+            <Icon className="text-sm" name="open_in_new" />
             {t("tracking_receipt_view")}
           </a>
         )}
@@ -702,9 +691,7 @@ function ReviewCard({ reviewUrl }: { reviewUrl: string }) {
     <div className="rounded-xl bg-surface-container p-6">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-primary text-xl">
-            rate_review
-          </span>
+          <Icon className="text-primary text-xl" name="rate_review" />
           <span className="font-bold text-on-surface text-sm uppercase tracking-wide">
             {t("tracking_review_title")}
           </span>
@@ -715,7 +702,7 @@ function ReviewCard({ reviewUrl }: { reviewUrl: string }) {
           rel="noreferrer"
           target="_blank"
         >
-          <span className="material-symbols-outlined text-sm">star</span>
+          <Icon className="text-sm" name="star" />
           {t("tracking_review_button")}
         </a>
       </div>
@@ -779,9 +766,7 @@ function StatusView({
       return (
         <div className="rounded-xl bg-error-container/20 p-6">
           <div className="mb-3 flex items-center gap-3">
-            <span className="material-symbols-outlined text-error text-xl">
-              cancel
-            </span>
+            <Icon className="text-error text-xl" name="cancel" />
             <span className="font-bold text-error text-sm uppercase tracking-wide">
               {t("status.CANCELLED")}
             </span>
@@ -796,9 +781,7 @@ function StatusView({
       return (
         <div className="rounded-xl bg-error-container/20 p-6">
           <div className="mb-3 flex items-center gap-3">
-            <span className="material-symbols-outlined text-error text-xl">
-              undo
-            </span>
+            <Icon className="text-error text-xl" name="undo" />
             <span className="font-bold text-error text-sm uppercase tracking-wide">
               {t("status.RETURNED")}
             </span>
@@ -813,9 +796,7 @@ function StatusView({
       return (
         <div className="rounded-xl bg-surface-container-high p-6">
           <div className="mb-3 flex items-center gap-3">
-            <span className="material-symbols-outlined text-primary text-xl">
-              pause_circle
-            </span>
+            <Icon className="text-primary text-xl" name="pause_circle" />
             <span className="font-bold text-primary text-sm uppercase tracking-wide">
               {t("status.ON_HOLD")}
             </span>
@@ -830,12 +811,11 @@ function StatusView({
       return (
         <div className="rounded-xl bg-primary-container/20 p-6">
           <div className="mb-3 flex items-center gap-3">
-            <span
-              className="material-symbols-outlined text-primary text-xl"
+            <Icon
+              className="text-primary text-xl"
+              name="check_circle"
               style={{ fontVariationSettings: "'wght' 700" }}
-            >
-              check_circle
-            </span>
+            />
             <span className="font-bold text-primary text-sm uppercase tracking-wide">
               {t("tracking_ready_title")}
             </span>
@@ -863,12 +843,11 @@ function StatusView({
             >
               {isStepCompleted && (
                 <div className="z-10 flex h-6 w-6 items-center justify-center rounded-full bg-primary">
-                  <span
-                    className="material-symbols-outlined text-on-primary text-sm"
+                  <Icon
+                    className="text-on-primary text-sm"
+                    name="check"
                     style={{ fontVariationSettings: "'wght' 700" }}
-                  >
-                    check
-                  </span>
+                  />
                 </div>
               )}
               {isStepCurrent && (
@@ -919,9 +898,7 @@ function StatusView({
             onClick={onBack}
             type="button"
           >
-            <span className="material-symbols-outlined text-lg">
-              arrow_back
-            </span>
+            <Icon className="text-lg" name="arrow_back" />
             {t("tracking_new_search")}
           </button>
           <LanguageSwitcher />
@@ -1013,9 +990,7 @@ function StatusView({
 
             <div className="space-y-6 bg-surface-container-low p-8">
               <div className="flex items-start gap-3 rounded-xl bg-surface-container p-4">
-                <span className="material-symbols-outlined text-lg text-primary">
-                  verified_user
-                </span>
+                <Icon className="text-lg text-primary" name="verified_user" />
                 <div>
                   <p className="font-semibold text-sm">
                     {t("tracking_repair_guarantee")}
@@ -1030,9 +1005,7 @@ function StatusView({
 
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-2 text-on-surface-variant text-xs">
-                  <span className="material-symbols-outlined text-sm">
-                    schedule
-                  </span>
+                  <Icon className="text-sm" name="schedule" />
                   <span>
                     {t("tracking_last_updated", {
                       time: data.formattedFetchedTime,
@@ -1051,9 +1024,7 @@ function StatusView({
                     className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3 font-semibold text-on-primary text-sm transition-opacity hover:opacity-90"
                     href={`tel:${data.shopPhone}`}
                   >
-                    <span className="material-symbols-outlined text-sm">
-                      call
-                    </span>
+                    <Icon className="text-sm" name="call" />
                     {t("tracking_contact_shop")}
                   </a>
                 )}
@@ -1063,17 +1034,16 @@ function StatusView({
                 <div className="flex flex-wrap items-center gap-4 text-on-surface-variant text-xs">
                   {data.shopName && (
                     <div className="flex items-center gap-1.5">
-                      <span className="material-symbols-outlined text-primary text-sm">
-                        storefront
-                      </span>
+                      <Icon
+                        className="text-primary text-sm"
+                        name="storefront"
+                      />
                       <span className="font-medium">{data.shopName}</span>
                     </div>
                   )}
                   {data.shopAddress && (
                     <div className="flex items-center gap-1.5">
-                      <span className="material-symbols-outlined text-sm">
-                        location_on
-                      </span>
+                      <Icon className="text-sm" name="location_on" />
                       <span>{data.shopAddress}</span>
                     </div>
                   )}
@@ -1315,9 +1285,10 @@ export default function TrackingPage() {
         </nav>
         <main className="flex flex-grow items-center justify-center px-4">
           <div className="max-w-sm text-center">
-            <span className="material-symbols-outlined mb-4 block text-5xl text-error">
-              search_off
-            </span>
+            <Icon
+              className="mb-4 block text-5xl text-error"
+              name="search_off"
+            />
             <p className="font-bold font-headline text-on-surface text-xl">
               {error}
             </p>

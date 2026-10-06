@@ -164,7 +164,7 @@ export default function AddRepairModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <button
         aria-hidden="true"
-        className="absolute inset-0 bg-on-surface/40 backdrop-blur-[20px]"
+        className="absolute inset-0 bg-overlay backdrop-blur-[20px]"
         onClick={handleRequestClose}
         tabIndex={-1}
         type="button"

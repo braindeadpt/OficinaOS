@@ -20,7 +20,7 @@ describe("Select", () => {
       </Select>
     );
     const el = screen.getByRole("combobox");
-    expect(el).toHaveClass("bg-surface-container-highest");
-    expect(el).toHaveClass("rounded-xl");
+    expect(el).toHaveClass("oos-field");
+    expect(el).toHaveClass("oos-select");
   });
 });

@@ -11,10 +11,11 @@ describe("Label", () => {
     expect(el).toHaveAttribute("for", "test");
   });
 
-  it("has uppercase tracking-wider styling", () => {
+  it("is sentence case, semibold, in the text colour", () => {
     render(<Label htmlFor="test2">Test</Label>);
     const el = screen.getByText("Test");
-    expect(el).toHaveClass("uppercase");
-    expect(el).toHaveClass("tracking-wider");
+    expect(el).not.toHaveClass("uppercase");
+    expect(el).toHaveClass("font-semibold");
+    expect(el).toHaveClass("text-on-surface");
   });
 });

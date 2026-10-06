@@ -10,6 +10,7 @@ import {
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { Icon } from "@/components/ui/icon";
 import { printJobReceipt } from "@/lib/print";
 import { useJobsStore } from "@/stores/jobs";
 import JobCancelDialog from "./job-cancel-dialog";
@@ -138,7 +139,7 @@ export default function JobActionsMenu({ job }: JobActionsMenuProps) {
           title={t("job_actions")}
           type="button"
         >
-          <span className="material-symbols-outlined">more_vert</span>
+          <Icon name="more_vert" size="lg" />
         </button>
       </div>
 
@@ -163,9 +164,10 @@ export default function JobActionsMenu({ job }: JobActionsMenuProps) {
                     onClick={() => handleStatusChange(status)}
                     type="button"
                   >
-                    <span className="material-symbols-outlined text-lg text-primary">
-                      arrow_forward
-                    </span>
+                    <Icon
+                      className="text-lg text-primary"
+                      name="arrow_forward"
+                    />
                     <span>{t(`status.${status}`)}</span>
                   </button>
                 ))}
@@ -179,9 +181,7 @@ export default function JobActionsMenu({ job }: JobActionsMenuProps) {
                 onClick={handleNoteOpen}
                 type="button"
               >
-                <span className="material-symbols-outlined text-lg">
-                  sticky_note_2
-                </span>
+                <Icon className="text-lg" name="sticky_note_2" />
                 <span>{t("job_actions_add_note")}</span>
               </button>
             )}
@@ -192,7 +192,7 @@ export default function JobActionsMenu({ job }: JobActionsMenuProps) {
               href={hasPhone ? `tel:${job.rawJob?.customer?.phone}` : undefined}
               onClick={hasPhone ? () => close() : (e) => e.preventDefault()}
             >
-              <span className="material-symbols-outlined text-lg">call</span>
+              <Icon className="text-lg" name="call" />
               <span>{t("job_actions_call_customer")}</span>
             </a>
 
@@ -204,7 +204,7 @@ export default function JobActionsMenu({ job }: JobActionsMenuProps) {
               }}
               type="button"
             >
-              <span className="material-symbols-outlined text-lg">print</span>
+              <Icon className="text-lg" name="print" />
               <span>{t("job_actions_print_receipt")}</span>
             </button>
             <button
@@ -218,7 +218,7 @@ export default function JobActionsMenu({ job }: JobActionsMenuProps) {
               }}
               type="button"
             >
-              <span className="material-symbols-outlined text-lg">label</span>
+              <Icon className="text-lg" name="label" />
               <span>{t("job_actions_print_label")}</span>
             </button>
 
@@ -230,9 +230,7 @@ export default function JobActionsMenu({ job }: JobActionsMenuProps) {
                   onClick={handleCancelOpen}
                   type="button"
                 >
-                  <span className="material-symbols-outlined text-lg">
-                    close
-                  </span>
+                  <Icon className="text-lg" name="close" />
                   <span>{t("job_actions_cancel_job")}</span>
                 </button>
               </>

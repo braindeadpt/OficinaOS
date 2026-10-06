@@ -1,35 +1,57 @@
 import type { JobStatusType } from "@shared/constants";
 import { useTranslation } from "react-i18next";
-import { statusContainerClass } from "@/lib/status-colors";
+import { STATUS_TONES } from "@/lib/status-colors";
 
 type BadgeSize = "sm" | "md";
 
+/**
+ * Status chip (design-system.md §4.4): pill, icon + label, colours from the
+ * status tokens. `sm` is the 22 px table version, `md` the 26 px default.
+ * Sentence case — the label is information, not a shout.
+ */
 const SIZE_CLASSES: Record<BadgeSize, string> = {
-  sm: "px-2 py-0.5 text-xs",
-  md: "px-3 py-1 text-xs",
+  sm: "h-[22px] gap-1 px-2 text-xs",
+  md: "h-[26px] gap-1.5 px-2.5 text-xs",
 };
 
-const DEFAULT_SIZE_CLASSES = "px-2.5 py-0.5 font-extrabold text-xs";
-
 interface StatusBadgeProps {
+  className?: string;
   size?: BadgeSize;
   status: JobStatusType;
 }
 
-export function StatusBadge({ status, size }: StatusBadgeProps) {
+export function StatusBadge({
+  status,
+  size = "md",
+  className,
+}: StatusBadgeProps) {
   const { t } = useTranslation();
+  const tone = STATUS_TONES[status];
+  const Glyph = tone.icon;
 
   return (
     <span
       className={[
-        "inline-flex items-center whitespace-nowrap rounded-full uppercase tracking-wider",
-        size ? SIZE_CLASSES[size] : DEFAULT_SIZE_CLASSES,
-        statusContainerClass(status),
-      ].join(" ")}
+        "inline-flex items-center whitespace-nowrap rounded-full font-semibold leading-none",
+        SIZE_CLASSES[size],
+        tone.container,
+        className,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      data-status={status}
     >
+      <Glyph
+        aria-hidden="true"
+        className="size-[13px] shrink-0"
+        strokeWidth={2.25}
+      />
       {t(`status.${status}`)}
     </span>
   );
 }
+
+/** Alias with the spec's name; same component. */
+export const StatusChip = StatusBadge;
 
 export default StatusBadge;

@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Icon } from "@/components/ui/icon";
 
 interface OverdueJob {
   device: string;
@@ -27,9 +28,11 @@ export default function OverdueJobs({
     <div className="space-y-6">
       <div className="relative overflow-hidden rounded-xl bg-surface-container-lowest p-6 shadow-sm ring-1 ring-surface-container-low transition-all">
         <div className="mb-6 flex items-center gap-2">
-          <span className="material-symbols-outlined animate-pulse text-error">
-            alarm_on
-          </span>
+          <Icon
+            className="animate-pulse text-error"
+            name="alarm_on"
+            size="lg"
+          />
           <h3 className="font-extrabold font-headline text-on-surface text-sm uppercase tracking-tight">
             {t("overdue_jobs")}
           </h3>
@@ -42,9 +45,10 @@ export default function OverdueJobs({
 
         {jobs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
-            <span className="material-symbols-outlined mb-2 text-3xl text-surface-variant">
-              schedule
-            </span>
+            <Icon
+              className="mb-2 text-3xl text-surface-variant"
+              name="schedule"
+            />
             <p className="text-on-surface-variant text-sm">
               {t("overdue_jobs_empty")}
             </p>
@@ -82,9 +86,11 @@ export default function OverdueJobs({
 
       <div className="relative overflow-hidden rounded-xl bg-surface-container-low p-6 ring-1 ring-surface-container-low/50 transition-all">
         <div className="mb-6 flex items-center gap-2">
-          <span className="material-symbols-outlined text-on-secondary-container">
-            assignment_return
-          </span>
+          <Icon
+            className="text-on-secondary-container"
+            name="assignment_return"
+            size="lg"
+          />
           <h3 className="font-extrabold font-headline text-on-surface text-sm uppercase tracking-tight">
             {t("warranty_returns")}
           </h3>
@@ -107,9 +113,7 @@ export default function OverdueJobs({
             >
               {wr.priority && (
                 <div className="mb-2 flex items-center gap-3">
-                  <span className="material-symbols-outlined text-[18px] text-error">
-                    warning
-                  </span>
+                  <Icon className="text-[18px] text-error" name="warning" />
                   <p className="font-bold text-on-surface text-xs">{wr.id}</p>
                 </div>
               )}

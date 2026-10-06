@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Icon } from "@/components/ui/icon";
 
 interface PartsAlertItem {
   name: string;
@@ -62,7 +63,7 @@ export default function PartsAlert({ items }: PartsAlertProps) {
   return (
     <div className="rounded-xl bg-surface-container-low p-6">
       <div className="mb-6 flex items-center gap-2">
-        <span className="material-symbols-outlined text-error">warning</span>
+        <Icon className="text-error" name="warning" size="lg" />
         <h3 className="font-bold font-headline text-lg text-on-surface">
           {t("tech_dashboard.parts_alert")}
         </h3>

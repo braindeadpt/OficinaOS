@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Can } from "@/components/modules/can";
 import AddPaymentDialog from "@/components/modules/jobs/add-payment-dialog";
+import { Icon } from "@/components/ui/icon";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
 import { fetchInvoicingStatus, issueJobInvoice } from "@/lib/api-invoicing";
 import { useJobsStore } from "@/stores/jobs";
@@ -161,7 +162,7 @@ export default function JobPaymentsSection({
             onClick={() => setShowAddDialog(true)}
             type="button"
           >
-            <span className="material-symbols-outlined text-[18px]">add</span>
+            <Icon className="text-[18px]" name="add" />
             <span className="font-label text-xs">
               {t("payments.add_payment")}
             </span>
@@ -182,12 +183,7 @@ export default function JobPaymentsSection({
 
       {showMarkedBanner && (
         <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-primary-container px-4 py-3">
-          <span
-            aria-hidden="true"
-            className="material-symbols-outlined text-[18px] text-on-primary-container"
-          >
-            bolt
-          </span>
+          <Icon className="text-[18px] text-on-primary-container" name="bolt" />
           <span className="flex-1 font-body font-semibold text-on-primary-container text-sm">
             {t("payments.pod_marked", {
               amount: fmt(balanceDue),
@@ -219,12 +215,7 @@ export default function JobPaymentsSection({
       <Can perm={{ payments: ["create"] }}>
         {canMarkPod && (
           <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-primary-container/40 px-4 py-3">
-            <span
-              aria-hidden="true"
-              className="material-symbols-outlined text-[18px] text-primary"
-            >
-              bolt
-            </span>
+            <Icon className="text-[18px] text-primary" name="bolt" />
             <span className="flex-1 font-body text-on-surface text-sm">
               {t("payments.pod_hint")}
             </span>
@@ -246,9 +237,7 @@ export default function JobPaymentsSection({
               onClick={handleMarkPod}
               type="button"
             >
-              <span className="material-symbols-outlined text-[16px]">
-                how_to_reg
-              </span>
+              <Icon className="text-[16px]" name="how_to_reg" />
               {t("payments.pod_mark")}
             </button>
           </div>
@@ -257,12 +246,10 @@ export default function JobPaymentsSection({
 
       {invoiced && (
         <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-surface-container-high px-4 py-3">
-          <span
-            aria-hidden="true"
-            className="material-symbols-outlined text-[18px] text-on-surface-variant"
-          >
-            receipt_long
-          </span>
+          <Icon
+            className="text-[18px] text-on-surface-variant"
+            name="receipt_long"
+          />
           <span className="flex-1 font-body font-semibold text-on-surface text-sm">
             {t("payments.invoice_issued", {
               number: invoiceNumber ?? "—",
@@ -289,9 +276,7 @@ export default function JobPaymentsSection({
             onClick={handleIssueInvoice}
             type="button"
           >
-            <span className="material-symbols-outlined text-[16px]">
-              receipt_long
-            </span>
+            <Icon className="text-[16px]" name="receipt_long" />
             {t("payments.issue_invoice")}
           </button>
         )}
@@ -309,9 +294,10 @@ export default function JobPaymentsSection({
         <ul className="mt-3 divide-y divide-outline-variant">
           {payments.map((p) => (
             <li className="flex items-center gap-3 py-2.5" key={p.id}>
-              <span className="material-symbols-outlined text-[18px] text-on-surface-variant">
-                {p.method === "CASH" ? "local_atm" : "payments"}
-              </span>
+              <Icon
+                className="text-[18px] text-on-surface-variant"
+                name={p.method === "CASH" ? "local_atm" : "payments"}
+              />
               <div className="min-w-0 flex-1">
                 <p className="font-body font-semibold text-on-surface text-sm">
                   {fmt(Number(p.amount))} · {t(`payment_method.${p.method}`)}
@@ -337,9 +323,7 @@ export default function JobPaymentsSection({
                       }}
                       type="button"
                     >
-                      <span className="material-symbols-outlined text-sm">
-                        check
-                      </span>
+                      <Icon className="text-sm" name="check" />
                     </button>
                     <button
                       aria-label={t("cancel")}
@@ -347,9 +331,7 @@ export default function JobPaymentsSection({
                       onClick={() => setConfirmingId(null)}
                       type="button"
                     >
-                      <span className="material-symbols-outlined text-sm">
-                        close
-                      </span>
+                      <Icon className="text-sm" name="close" />
                     </button>
                   </span>
                 ) : (
@@ -359,9 +341,7 @@ export default function JobPaymentsSection({
                     onClick={() => setConfirmingId(p.id)}
                     type="button"
                   >
-                    <span className="material-symbols-outlined text-[18px]">
-                      delete
-                    </span>
+                    <Icon className="text-[18px]" name="delete" />
                   </button>
                 )}
               </Can>

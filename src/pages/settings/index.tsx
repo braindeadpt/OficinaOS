@@ -17,6 +17,8 @@ import SettingsUsersTab from "@/components/modules/settings/settings-users-tab";
 import TemplateEditor from "@/components/modules/settings/template-editor";
 import UnsavedChangesBar from "@/components/modules/settings/unsaved-changes-bar";
 import ConfirmDiscardDialog from "@/components/ui/confirm-discard-dialog";
+import { Icon } from "@/components/ui/icon";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useDirtyState } from "@/hooks/use-dirty-state";
 import { useModalEffects } from "@/hooks/use-modal-effects";
 import { useSettingsStore } from "@/stores/settings";
@@ -200,13 +202,16 @@ export default function SettingsPage() {
 
   return (
     <>
-      <div className="mb-8">
-        <h2 className="font-extrabold font-headline text-2xl text-on-surface tracking-tight md:text-3xl">
-          {t("settings_page")}
-        </h2>
-        <p className="mt-1 font-medium text-on-surface-variant text-sm md:text-base">
-          {t("settings_page_desc")}
-        </p>
+      <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h2 className="font-extrabold font-headline text-2xl text-on-surface tracking-tight md:text-3xl">
+            {t("settings_page")}
+          </h2>
+          <p className="mt-1 font-medium text-on-surface-variant text-sm md:text-base">
+            {t("settings_page_desc")}
+          </p>
+        </div>
+        <ThemeToggle className="shrink-0" hideHint />
       </div>
 
       <div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
@@ -235,9 +240,7 @@ export default function SettingsPage() {
               tabIndex={activeTab === key ? 0 : -1}
               type="button"
             >
-              <span className="material-symbols-outlined text-[20px]">
-                {TAB_ICONS[key]}
-              </span>
+              <Icon className="text-[20px]" name={TAB_ICONS[key]} />
               <span className="text-xs leading-tight lg:hidden">{label}</span>
               <span className="hidden lg:inline">{label}</span>
             </button>
@@ -253,9 +256,10 @@ export default function SettingsPage() {
           >
             <div className="mb-5">
               <div className="flex items-center gap-3">
-                <span className="material-symbols-outlined text-[22px] text-primary">
-                  {TAB_ICONS[activeTab]}
-                </span>
+                <Icon
+                  className="text-[22px] text-primary"
+                  name={TAB_ICONS[activeTab]}
+                />
                 <h3
                   className="font-extrabold font-headline text-lg text-on-surface"
                   id={headingId(activeTab)}
@@ -327,7 +331,7 @@ export default function SettingsPage() {
       </div>
 
       {pendingTab && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-on-surface/40">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-overlay">
           <div ref={dialogRef}>
             <ConfirmDiscardDialog
               description={t("confirm_tab_switch_desc")}

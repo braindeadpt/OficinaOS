@@ -1,6 +1,7 @@
 import type { JobStatusType } from "@shared/constants";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { Icon } from "@/components/ui/icon";
 import type { StatusGroupKey } from "./jobs-shared";
 import { STATUS_GROUPS } from "./jobs-shared";
 
@@ -49,9 +50,10 @@ export default function UnifiedJobsFilter({
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
         <div className="relative w-full sm:w-64 sm:shrink-0">
-          <span className="material-symbols-outlined absolute start-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">
-            search
-          </span>
+          <Icon
+            className="absolute start-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm"
+            name="search"
+          />
           <input
             aria-label={t("search")}
             className="min-h-[44px] w-full rounded-lg bg-surface-container-low py-2 ps-10 pe-3 font-body text-on-surface text-sm transition-all placeholder:text-outline focus:bg-surface-container-lowest"

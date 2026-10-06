@@ -11,7 +11,6 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
-import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -729,11 +728,6 @@ export default function SettingsAiTab({
                   </option>
                 ))}
               </Select>
-              <Icon
-                className="pointer-events-none absolute end-4 top-1/2 -translate-y-1/2 text-on-surface-variant"
-                name="expand_more"
-                size="sm"
-              />
             </div>
           </Field>
           <button
@@ -873,7 +867,7 @@ export default function SettingsAiTab({
       )}
 
       {deleteTarget && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-on-surface/40">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-overlay">
           <div
             className="relative z-[60] mx-4 w-full max-w-[360px] overflow-y-auto rounded-2xl bg-surface-container-lowest shadow-2xl"
             ref={deleteDialogRef}

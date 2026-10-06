@@ -2,6 +2,7 @@ import type { IntakeModalProps } from "./types";
 
 export type { IntakeFormData } from "./types";
 
+import { Icon } from "@/components/ui/icon";
 import ModalFooter from "./modal-footer";
 import Step1Content from "./step-1-content";
 import Step2Content from "./step-2-content";
@@ -30,7 +31,7 @@ export default function IntakeModal({
     >
       <button
         aria-label={m.t("close_modal")}
-        className="absolute inset-0 bg-on-surface/40"
+        className="absolute inset-0 bg-overlay"
         onClick={m.handleBackdropClick}
         type="button"
       />
@@ -50,9 +51,11 @@ export default function IntakeModal({
               className="flex items-center gap-3 bg-error-container px-4 py-3 md:px-8"
               role="alert"
             >
-              <span className="material-symbols-outlined text-on-error-container">
-                error
-              </span>
+              <Icon
+                className="text-on-error-container"
+                name="error"
+                size="lg"
+              />
               <p className="font-bold font-label text-on-error-container text-xs">
                 {m.t("intake.error_summary")}
               </p>
@@ -62,9 +65,10 @@ export default function IntakeModal({
           {m.submissionSuccess && (
             <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 rounded-xl bg-surface-container-lowest/95">
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary-container">
-                <span className="material-symbols-outlined text-3xl text-on-primary-container">
-                  check_circle
-                </span>
+                <Icon
+                  className="text-3xl text-on-primary-container"
+                  name="check_circle"
+                />
               </div>
               <p className="font-bold font-headline text-lg text-on-surface">
                 {m.t("intake.success_title")}
@@ -84,7 +88,7 @@ export default function IntakeModal({
                   onClick={() => m.setStep(1)}
                   type="button"
                 >
-                  <span className="material-symbols-outlined">arrow_back</span>
+                  <Icon name="arrow_back" size="lg" />
                 </button>
               )}
               <div>
@@ -106,7 +110,7 @@ export default function IntakeModal({
               onClick={m.handleCloseClick}
               type="button"
             >
-              <span className="material-symbols-outlined text-2xl">close</span>
+              <Icon className="text-2xl" name="close" />
             </button>
           </header>
 
@@ -202,14 +206,12 @@ export default function IntakeModal({
           <div
             aria-label={m.t("intake.discard_title")}
             aria-modal="true"
-            className="absolute inset-0 z-40 flex items-center justify-center rounded-xl bg-on-surface/50"
+            className="absolute inset-0 z-40 flex items-center justify-center rounded-xl bg-overlay"
             role="dialog"
           >
             <div className="mx-4 w-full max-w-xs space-y-4 rounded-2xl bg-surface-container-lowest p-6 shadow-2xl">
               <div className="text-center">
-                <span className="material-symbols-outlined text-3xl text-warning">
-                  warning
-                </span>
+                <Icon className="text-3xl text-warning" name="warning" />
                 <h3 className="mt-2 font-bold font-headline text-lg text-on-surface">
                   {m.t("intake.discard_title")}
                 </h3>

@@ -1,72 +1,20 @@
 @import "tailwindcss";
+/*
+ * Design system «Parafuso» (design-system/design-system.md). Tokens are
+ * generated into design-system/ and never edited by hand; the compat layer maps
+ * the Material 3 colour names the screens still use onto the new tokens, so
+ * every bg-surface-container-* / text-on-surface-variant gets the new palette
+ * and dark mode without touching the component. Delete it once
+ * `grep -r "surface-container\|on-surface" src` comes back empty (§9.1 fase 3).
+ */
+@import "../design-system/fonts.css";
+@import "../design-system/tokens.css";
+@import "../design-system/tokens.theme.css";
+@import "../design-system/compat-app-material.css";
 
 @theme {
-  --color-on-secondary-container: #445f7f;
-  --color-surface-container-highest: #dfe3e8;
-  --color-on-error: #ffffff;
-  --color-secondary-fixed-dim: #adc9ed;
-  --color-inverse-primary: #b2c5ff;
-  --color-on-secondary-fixed-variant: #2d4867;
-  --color-on-tertiary-fixed-variant: #812800;
-  --color-surface-dim: #d7dae0;
-  --color-tertiary-fixed-dim: #ffb59b;
-  --color-on-secondary: #ffffff;
-  --color-tertiary: #822800;
-  --color-surface-container-lowest: #ffffff;
-  --color-primary-fixed-dim: #b2c5ff;
-  --color-secondary-container: #bed9ff;
-  --color-primary: #0040a1;
-  --color-primary-tint: oklch(from var(--color-primary) l c h / 0.1);
-  --color-on-tertiary-container: #ffcebd;
-  --color-surface-tint: #0056d2;
-  --color-on-background: #181c20;
-  --color-outline: #737785;
-  --color-surface-container-high: #e5e8ee;
-  --color-on-primary-container: #ccd8ff;
-  --color-secondary-fixed: #d1e4ff;
-  --color-inverse-on-surface: #eef1f7;
-  --color-tertiary-fixed: #ffdbcf;
-  --color-surface-container: #ebeef4;
-  --color-inverse-surface: #2d3135;
-  --color-primary-container: #0056d2;
-  --color-on-error-container: #93000a;
-  --color-surface-variant: #dfe3e8;
-  --color-outline-variant: #c3c6d6;
-  --color-on-primary-fixed-variant: #0040a1;
-  --color-on-primary: #ffffff;
-  --color-on-surface-variant: #424654;
-  --color-primary-fixed: #dae2ff;
-  --color-background: #f7f9ff;
-  --color-success: #16a34a;
-  --color-on-success: #ffffff;
-  --color-error-container: #ffdad6;
-  --color-error: #ba1a1a;
-  --color-surface: #f7f9ff;
-  --color-surface-bright: #f7f9ff;
-  --color-on-secondary-fixed: #001d36;
-  --color-surface-container-low: #f1f4fa;
-  --color-on-tertiary: #ffffff;
-  --color-tertiary-container: #a93802;
-  --color-on-primary-fixed: #001847;
-  --color-on-surface: #181c20;
-  --color-on-tertiary-fixed: #380d00;
-  --color-secondary: #456080;
-
-  --font-family-headline: "Manrope Variable", "Manrope", sans-serif;
-  --font-family-body: "Karla Variable", "Karla", sans-serif;
-  --font-family-label: "Karla Variable", "Karla", sans-serif;
-  --font-family-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
-
-  --radius-xs: 0.125rem;
-  --radius-sm: 0.25rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
   --radius-2xl: 1.5rem;
   --radius-full: 9999px;
-
-  /* "Ambient Float" — DESIGN.md §4. Tinted with primary, never pure gray. */
-  --shadow-premium: 0 8px 40px rgb(0 64 161 / 0.06);
 
   /* Motion vocabulary — entrances are a soft rise, never a bounce. */
   --animate-fade-slide-up: fadeSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)
@@ -80,6 +28,67 @@
     "wght" 400,
     "GRAD" 0,
     "opsz" 24;
+}
+
+/* Lucide icons sized like the icon font: 1em square, 24px unless a text-*
+   utility says otherwise (layered so utilities win). */
+@layer components {
+  .oos-icon {
+    display: inline-block;
+    flex-shrink: 0;
+    width: 1em;
+    height: 1em;
+    font-size: 24px;
+    line-height: 1;
+    vertical-align: -0.125em;
+  }
+}
+
+/*
+ * Text fields (design-system.md §4.2): surface box, 1 px border-strong
+ * outline, radius md, 14 px text. Focus turns the border to the focus colour
+ * plus a soft ring; errors are handled by [aria-invalid] below. Shared by the
+ * Input, Select and Textarea primitives.
+ */
+@layer components {
+  .oos-field {
+    font-size: var(--oos-text-base);
+    line-height: var(--oos-leading-base);
+    color: var(--oos-color-text);
+    background-color: var(--oos-color-surface);
+    border: 1px solid var(--oos-color-border-strong);
+    border-radius: var(--oos-radius-md);
+    transition:
+      border-color var(--oos-duration-fast) var(--oos-ease-standard),
+      box-shadow var(--oos-duration-fast) var(--oos-ease-standard);
+  }
+
+  .oos-field::placeholder {
+    color: var(--oos-color-text-subtle);
+  }
+
+  .oos-field:focus {
+    border-color: var(--oos-color-focus);
+    box-shadow: 0 0 0 3px
+      color-mix(in srgb, var(--oos-color-focus) 28%, transparent);
+  }
+
+  .oos-field:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  /* chevron-down, 16 px, in border-strong grey (readable in both themes) */
+  .oos-select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238792A6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 16px;
+  }
+
+  [dir="rtl"] .oos-select {
+    background-position: left 0.75rem center;
+  }
 }
 
 /* Layered so Tailwind utilities (text-[22px] etc.) still win over the 24px
@@ -102,10 +111,19 @@
   }
 }
 
+html {
+  color: var(--oos-color-text);
+  background-color: var(--oos-color-bg);
+}
+
 body {
   font-family: var(--font-family-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background-color: var(--oos-color-selection);
 }
 
 h1,
@@ -115,25 +133,60 @@ h3,
   font-family: var(--font-family-headline);
 }
 
+/* Codes, IMEI, NIF and money line up in columns (§3.3). */
+.font-mono,
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Both used to be decorative navy/gradient fills. The spec drops gradients and
+ * patterns (§4.1, §1.5): they now resolve to the flat tokens, so the screens
+ * that still carry the class keep their contrast in light and dark.
+ */
 .blueprint-pattern {
-  background-color: var(--color-on-primary-fixed);
-  background-image: radial-gradient(
-    var(--color-primary) 0.5px,
-    transparent 0.5px
-  );
-  background-size: 20px 20px;
+  background-color: var(--oos-color-surface-2);
 }
 
 .atelier-gradient {
-  background: linear-gradient(
-    135deg,
-    var(--color-primary) 0%,
-    var(--color-surface-tint) 100%
-  );
+  background: var(--oos-color-primary);
 }
 
-.modal-surface {
-  background-color: var(--color-surface-container-lowest);
+/*
+ * Every hand-built dialog panel carries .modal-surface: give them the spec's
+ * surface, shadow and entrance (§4.7) in one place, and a hairline border in
+ * dark mode where shadows are nearly invisible on purpose.
+ */
+.modal-surface,
+.oos-dialog {
+  background-color: var(--oos-color-surface);
+  box-shadow: var(--oos-shadow-lg);
+  animation: oosDialogIn var(--oos-duration-slow) var(--oos-ease-enter) both;
+}
+
+:root[data-theme="dark"] :is(.modal-surface, .oos-dialog) {
+  outline: 1px solid var(--oos-color-border);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) :is(.modal-surface, .oos-dialog) {
+    outline: 1px solid var(--oos-color-border);
+  }
+}
+
+.oos-dialog::backdrop {
+  background-color: var(--oos-color-overlay);
+}
+
+@keyframes oosDialogIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .cta-primary {
@@ -191,7 +244,9 @@ h3,
   .animate-pulse,
   .animate-fade-slide-up,
   .animate-fade-in,
-  .typing-dot {
+  .typing-dot,
+  .modal-surface,
+  .oos-dialog {
     animation: none;
   }
 }
@@ -212,7 +267,7 @@ h3,
  * red, say) can still set outline-color on top of this.
  */
 :focus-visible {
-  outline: 2px solid var(--color-primary);
+  outline: 2px solid var(--oos-color-focus);
   outline-offset: 2px;
 }
 
@@ -221,11 +276,54 @@ h3,
  * Suppressed while focused so the primary focus ring is never doubled up.
  */
 [aria-invalid="true"]:not(:focus) {
-  box-shadow: 0 0 0 2px var(--color-error);
+  box-shadow: 0 0 0 2px var(--oos-color-danger);
+}
+
+.oos-field[aria-invalid="true"]:not(:focus) {
+  border-color: var(--oos-color-danger);
+  box-shadow: 0 0 0 1px var(--oos-color-danger);
 }
 
 @supports not (min-height: 100dvh) {
   .min-h-dvh {
     min-height: 100vh;
+  }
+}
+
+/* Toasts: inverse surface + semantic icon (§4.8). Sonner reads these vars. */
+[data-sonner-toaster] {
+  --normal-bg: var(--oos-color-inverse);
+  --normal-text: var(--oos-color-on-inverse);
+  --normal-border: transparent;
+  --border-radius: var(--oos-radius-md);
+  font-family: var(--oos-font-ui);
+}
+
+[data-sonner-toast].oos-toast {
+  box-shadow: var(--oos-shadow-lg);
+}
+
+[data-sonner-toast][data-type="success"] [data-icon] {
+  color: var(--oos-status-done-dot);
+}
+
+[data-sonner-toast][data-type="error"] [data-icon] {
+  color: var(--oos-status-returned-dot);
+}
+
+[data-sonner-toast][data-type="warning"] [data-icon] {
+  color: var(--oos-status-waiting-for-parts-dot);
+}
+
+/* Receipts, labels and anything printed are always light (§5.7). */
+@media print {
+  :root {
+    color-scheme: light;
+  }
+
+  html,
+  body {
+    color: #111827;
+    background: #fff;
   }
 }

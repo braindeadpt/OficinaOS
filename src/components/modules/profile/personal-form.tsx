@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { LANGUAGE_OPTIONS } from "@/components/modules/profile/shared";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
-import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 
@@ -71,13 +70,6 @@ export function PersonalForm({
           </Field>
 
           <Field
-            endAdornment={
-              <Icon
-                className="pointer-events-none absolute end-4 top-1/2 -translate-y-1/2 text-on-surface-variant"
-                name="expand_more"
-                size="sm"
-              />
-            }
             hint={languageChanged ? t("profile_language_preview") : undefined}
             label={t("profile_language")}
           >

@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Field } from "@/components/ui/field";
+import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { useCreateCustomer } from "@/hooks/use-create-customer";
 
@@ -105,9 +106,7 @@ export default function QuickAddCustomer({
       <div className="rounded-xl bg-surface-container-lowest p-6 ring-1 ring-outline-variant">
         <div className="mb-8 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary text-xl">
-              person_add
-            </span>
+            <Icon className="text-primary text-xl" name="person_add" />
             <h2 className="font-bold font-headline text-primary text-sm">
               {t("intake.new_customer")}
             </h2>
@@ -117,17 +116,17 @@ export default function QuickAddCustomer({
             onClick={onClose}
             type="button"
           >
-            <span className="material-symbols-outlined text-on-surface-variant transition-colors group-hover:text-on-surface">
-              close
-            </span>
+            <Icon
+              className="text-on-surface-variant transition-colors group-hover:text-on-surface"
+              name="close"
+              size="lg"
+            />
           </button>
         </div>
 
         {error && (
           <div className="mb-4 flex items-center gap-2 rounded-xl bg-error-container px-4 py-3">
-            <span className="material-symbols-outlined text-on-error-container text-sm">
-              error
-            </span>
+            <Icon className="text-on-error-container text-sm" name="error" />
             <p className="font-bold font-label text-on-error-container text-xs">
               {error}
             </p>
@@ -217,11 +216,12 @@ export default function QuickAddCustomer({
               type="button"
             >
               {isCreating ? (
-                <span className="material-symbols-outlined animate-spin text-sm">
-                  progress_activity
-                </span>
+                <Icon
+                  className="animate-spin text-sm"
+                  name="progress_activity"
+                />
               ) : (
-                <span className="material-symbols-outlined text-sm">check</span>
+                <Icon className="text-sm" name="check" />
               )}
               {isCreating
                 ? t("intake.creating_customer")

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { Icon } from "@/components/ui/icon";
 import api, { getErrorMessage } from "@/lib/api";
 import { copyTextToClipboard } from "@/lib/clipboard";
 
@@ -93,7 +94,7 @@ export default function JobPortalLink({
         onClick={publish}
         type="button"
       >
-        <span className="material-symbols-outlined text-[18px]">public</span>
+        <Icon className="text-[18px]" name="public" />
         {t("jobs_detail_portal_publish")}
       </button>
     );
@@ -108,7 +109,7 @@ export default function JobPortalLink({
           title={portalUrl}
           type="button"
         >
-          <span className="material-symbols-outlined text-[18px]">public</span>
+          <Icon className="text-[18px]" name="public" />
           {t("jobs_detail_portal_published")}
         </button>
       )}
@@ -118,7 +119,7 @@ export default function JobPortalLink({
         onClick={unpublish}
         type="button"
       >
-        <span className="material-symbols-outlined text-[18px]">link_off</span>
+        <Icon className="text-[18px]" name="link_off" />
         {t("jobs_detail_portal_unpublish")}
       </button>
     </>

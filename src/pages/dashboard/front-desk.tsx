@@ -12,6 +12,7 @@ import QuickStatsChips from "@/components/modules/dashboard/quick-stats-chips";
 import ReadyForPickup from "@/components/modules/dashboard/ready-for-pickup";
 import TodayOverview from "@/components/modules/dashboard/today-overview";
 import WaitingCustomers from "@/components/modules/dashboard/waiting-customers";
+import { Icon } from "@/components/ui/icon";
 import { formatTimeAgo } from "@/lib/format-time-ago";
 import { useDashboardStore } from "@/stores/dashboard";
 import { useJobsStore } from "@/stores/jobs";
@@ -170,9 +171,10 @@ export default function FrontDeskPage() {
   if ((frontDeskLoading || isLoadingJobs) && jobs.length === 0) {
     return (
       <div className="flex items-center justify-center py-20">
-        <span className="material-symbols-outlined animate-spin text-4xl text-primary">
-          progress_activity
-        </span>
+        <Icon
+          className="animate-spin text-4xl text-primary"
+          name="progress_activity"
+        />
       </div>
     );
   }
@@ -196,7 +198,7 @@ export default function FrontDeskPage() {
             className="flex flex-col items-center gap-1 rounded-xl bg-surface-container-high px-2 py-2.5 font-semibold text-on-surface-variant transition-colors hover:bg-secondary-fixed-dim hover:text-on-secondary-fixed sm:flex-row sm:justify-center sm:gap-2 sm:px-6"
             type="button"
           >
-            <span className="material-symbols-outlined text-lg">search</span>
+            <Icon className="text-lg" name="search" />
             <span className="text-[10px] leading-tight sm:text-xs sm:leading-normal">
               {t("front_desk.walk_in_lookup")}
             </span>
@@ -205,7 +207,7 @@ export default function FrontDeskPage() {
             className="flex flex-col items-center gap-1 rounded-xl bg-surface-container-high px-2 py-2.5 font-semibold text-on-surface-variant transition-colors hover:bg-surface-container hover:text-primary sm:flex-row sm:justify-center sm:gap-2 sm:px-4"
             type="button"
           >
-            <span className="material-symbols-outlined text-lg">print</span>
+            <Icon className="text-lg" name="print" />
             <span className="text-[10px] leading-tight sm:text-xs sm:leading-normal">
               {t("front_desk.print_receipt")}
             </span>

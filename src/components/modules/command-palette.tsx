@@ -9,6 +9,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
+import { Icon } from "@/components/ui/icon";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { can } from "@/hooks/use-can";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
@@ -311,7 +312,7 @@ export default function CommandPalette() {
     >
       <button
         aria-label={t("command_palette.close")}
-        className="absolute inset-0 -z-10 cursor-default bg-black/50 backdrop-blur-sm"
+        className="absolute inset-0 -z-10 cursor-default bg-overlay backdrop-blur-sm"
         onClick={close}
         tabIndex={-1}
         type="button"
@@ -321,12 +322,7 @@ export default function CommandPalette() {
         ref={panelRef}
       >
         <div className="flex items-center gap-3 border-outline-variant border-b px-4">
-          <span
-            aria-hidden="true"
-            className="material-symbols-outlined text-on-surface-variant"
-          >
-            search
-          </span>
+          <Icon className="text-on-surface-variant" name="search" size="lg" />
           <input
             aria-activedescendant={
               total > 0 ? optionId(activeIndex) : undefined
@@ -539,12 +535,7 @@ function CommandRow({
       role="option"
       type="button"
     >
-      <span
-        aria-hidden="true"
-        className="material-symbols-outlined text-on-surface-variant"
-      >
-        {icon}
-      </span>
+      <Icon className="text-on-surface-variant" name={icon} size="lg" />
       <span
         className={`min-w-0 flex-1 truncate text-sm ${
           hint ? "font-bold text-error" : "text-on-surface"
@@ -623,12 +614,11 @@ function RecordRow({
       role="option"
       type="button"
     >
-      <span
-        aria-hidden="true"
-        className="material-symbols-outlined text-on-surface-variant"
-      >
-        {RECORD_ICON[record.kind]}
-      </span>
+      <Icon
+        className="text-on-surface-variant"
+        name={RECORD_ICON[record.kind]}
+        size="lg"
+      />
       <span className="min-w-0 flex-1">
         <span className="block truncate font-bold text-on-surface text-sm">
           {record.title}

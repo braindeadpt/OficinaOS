@@ -190,7 +190,7 @@ export default function DeliverJobDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <button
         aria-hidden="true"
-        className="absolute inset-0 bg-on-surface/40"
+        className="absolute inset-0 bg-overlay"
         onClick={close}
         tabIndex={-1}
         type="button"
@@ -203,9 +203,10 @@ export default function DeliverJobDialog({
         role="dialog"
       >
         <header className="flex items-start gap-3 bg-surface-container-low px-6 py-5">
-          <span className="material-symbols-outlined mt-0.5 text-2xl text-primary">
-            local_shipping
-          </span>
+          <Icon
+            className="mt-0.5 text-2xl text-primary"
+            name="local_shipping"
+          />
           <div className="min-w-0 flex-1">
             <h2
               className="font-bold font-headline text-lg text-on-surface"

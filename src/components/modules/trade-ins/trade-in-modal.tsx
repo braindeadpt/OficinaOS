@@ -141,7 +141,7 @@ export default function TradeInModal({ onClose, onCreated }: Props) {
     >
       <button
         aria-label={t("close")}
-        className="absolute inset-0 bg-on-surface/40"
+        className="absolute inset-0 bg-overlay"
         onClick={handleClose}
         type="button"
       />

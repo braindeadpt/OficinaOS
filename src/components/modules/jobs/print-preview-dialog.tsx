@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { Icon } from "@/components/ui/icon";
 import { useModalEffects } from "@/hooks/use-modal-effects";
 import { printJobReceipt } from "@/lib/print";
 import { useSettingsStore } from "@/stores/settings";
@@ -64,15 +65,13 @@ export default function PrintPreviewDialog() {
     >
       <button
         aria-label={t("close")}
-        className="absolute inset-0 bg-on-surface/40"
+        className="absolute inset-0 bg-overlay"
         onClick={closePrintPreview}
         type="button"
       />
       <div className="relative z-10 flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-surface-container-lowest shadow-2xl">
         <header className="flex shrink-0 items-center gap-3 bg-surface-container-low px-6 py-4">
-          <span className="material-symbols-outlined text-2xl text-primary">
-            label
-          </span>
+          <Icon className="text-2xl text-primary" name="label" />
           <div className="flex-1">
             <h2
               className="font-bold font-headline text-lg text-on-surface"
@@ -89,7 +88,7 @@ export default function PrintPreviewDialog() {
             onClick={closePrintPreview}
             type="button"
           >
-            <span className="material-symbols-outlined text-xl">close</span>
+            <Icon className="text-xl" name="close" />
           </button>
         </header>
 
@@ -124,9 +123,7 @@ export default function PrintPreviewDialog() {
             onClick={closePrintPreview}
             type="button"
           >
-            <span className="material-symbols-outlined text-[18px]">
-              check_circle
-            </span>
+            <Icon className="text-[18px]" name="check_circle" />
             {t("print_preview_done")}
           </button>
           <button
@@ -134,9 +131,7 @@ export default function PrintPreviewDialog() {
             onClick={handlePrintReceipt}
             type="button"
           >
-            <span className="material-symbols-outlined text-[18px]">
-              receipt_long
-            </span>
+            <Icon className="text-[18px]" name="receipt_long" />
             {t("print_preview_receipt")}
           </button>
           <button
@@ -144,7 +139,7 @@ export default function PrintPreviewDialog() {
             onClick={handlePrintLabel}
             type="button"
           >
-            <span className="material-symbols-outlined text-[18px]">print</span>
+            <Icon className="text-[18px]" name="print" />
             {t("print_preview_label")}
           </button>
         </footer>

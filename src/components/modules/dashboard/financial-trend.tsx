@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Icon } from "@/components/ui/icon";
 
 interface FinancialTrendPoint {
   cost: number;
@@ -57,9 +58,10 @@ export default function FinancialTrend({ data }: FinancialTrendProps) {
 
       {allZero ? (
         <div className="flex h-48 flex-col items-center justify-center text-center">
-          <span className="material-symbols-outlined mb-2 text-3xl text-surface-variant">
-            bar_chart
-          </span>
+          <Icon
+            className="mb-2 text-3xl text-surface-variant"
+            name="bar_chart"
+          />
           <p className="text-on-surface-variant text-sm">
             {t("financial_trend_empty")}
           </p>

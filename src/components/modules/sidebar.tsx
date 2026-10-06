@@ -2,6 +2,8 @@ import { ROLE_LABELS } from "@shared/constants";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { NavLink } from "react-router";
+import { Icon } from "@/components/ui/icon";
+import { Wordmark } from "@/components/ui/wordmark";
 import { can, useCan } from "@/hooks/use-can";
 import { NAV_ITEMS } from "@/lib/navigation";
 import { getInitials } from "@/lib/utils";
@@ -51,8 +53,8 @@ export default function Sidebar() {
           width={40}
         />
         <div>
-          <h1 className="font-black font-headline text-primary text-xl tracking-tight">
-            OficinaOS
+          <h1 className="text-xl">
+            <Wordmark />
           </h1>
           <p className="font-medium text-on-surface-variant text-xs tracking-wide">
             {t("app_tagline")}
@@ -73,9 +75,7 @@ export default function Sidebar() {
             key={to}
             to={to}
           >
-            <span aria-hidden="true" className="material-symbols-outlined">
-              {icon}
-            </span>
+            <Icon name={icon} size="lg" />
             <span className="font-medium text-sm">{t(labelKey)}</span>
           </NavLink>
         ))}
@@ -88,9 +88,7 @@ export default function Sidebar() {
           onClick={() => openIntakeModal()}
           type="button"
         >
-          <span aria-hidden="true" className="material-symbols-outlined">
-            add_circle
-          </span>
+          <Icon name="add_circle" size="lg" />
           <span>{t("new_checkin")}</span>
         </button>
 
@@ -139,12 +137,7 @@ export default function Sidebar() {
             {logoutPending ? (
               t("auth_sign_out_confirm")
             ) : (
-              <span
-                aria-hidden="true"
-                className="material-symbols-outlined text-lg"
-              >
-                power_settings_new
-              </span>
+              <Icon className="text-lg" name="power_settings_new" />
             )}
           </button>
         </div>

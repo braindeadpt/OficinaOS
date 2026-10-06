@@ -4,12 +4,10 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { I18nextProvider } from "react-i18next";
 import { BrowserRouter } from "react-router";
-import { Toaster } from "sonner";
-import "@fontsource-variable/karla";
-import "@fontsource-variable/manrope";
 import "@fontsource-variable/material-symbols-outlined/full.css";
 import App from "./app";
 import { ErrorBoundary } from "./components/error-boundary";
+import { AppToaster } from "./components/ui/app-toaster";
 import i18n from "./i18n";
 import { installErrorBuffer } from "./lib/error-buffer";
 import "./app.css";
@@ -27,7 +25,7 @@ ReactDOM.createRoot(rootElement).render(
       <I18nextProvider i18n={i18n}>
         <BrowserRouter>
           <App />
-          <Toaster closeButton position="bottom-right" richColors />
+          <AppToaster />
         </BrowserRouter>
       </I18nextProvider>
     </ErrorBoundary>

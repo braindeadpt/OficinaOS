@@ -7,6 +7,7 @@ import { SessionButton } from "@/components/modules/profile/session-button";
 import type { ActivityItem } from "@/components/modules/profile/shared";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 function ActivitySkeleton() {
   return (
@@ -183,6 +184,11 @@ export function ProfileTabContent({
             form={personalForm}
             success={personalSuccess}
           />
+        )}
+        {isSelf && (
+          <div className="border-outline-variant border-t pt-6">
+            <ThemeToggle />
+          </div>
         )}
       </div>
     );

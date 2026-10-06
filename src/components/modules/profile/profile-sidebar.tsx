@@ -59,7 +59,7 @@ export function ProfileSidebar({
           src={getAvatarSrc(image)}
         />
         {avatarUploading && (
-          <div className="absolute inset-0 flex items-center justify-center rounded-full bg-on-surface/30">
+          <div className="absolute inset-0 flex items-center justify-center rounded-full bg-overlay">
             <Icon
               className="animate-spin text-on-primary"
               name="progress_activity"

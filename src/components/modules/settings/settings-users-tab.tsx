@@ -225,7 +225,7 @@ export default function SettingsUsersTab({
         </div>
       )}
       {deactivateTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-on-surface/40">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay">
           <ConfirmDiscardDialog
             description={t("confirm_deactivate_user_desc", {
               name: deactivateTarget.username,

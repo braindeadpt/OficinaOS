@@ -3,6 +3,7 @@ import { ACTION_ICONS } from "@shared/constants/action-icons";
 import type { TFunction } from "i18next";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Icon } from "@/components/ui/icon";
 import api from "@/lib/api";
 
 interface HistoryEntry {
@@ -71,9 +72,10 @@ export default function StatusHistoryTimeline({
   if (loading) {
     return (
       <div className="flex items-center justify-center py-6">
-        <span className="material-symbols-outlined animate-spin text-lg text-on-surface-variant">
-          progress_activity
-        </span>
+        <Icon
+          className="animate-spin text-lg text-on-surface-variant"
+          name="progress_activity"
+        />
       </div>
     );
   }
@@ -99,9 +101,10 @@ export default function StatusHistoryTimeline({
                 <div className="absolute start-[15px] top-6 bottom-0 w-px bg-outline-variant" />
               )}
               <div className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-container-high">
-                <span className="material-symbols-outlined text-on-surface-variant text-sm">
-                  {ACTION_ICONS[entry.action] ?? "circle"}
-                </span>
+                <Icon
+                  className="text-on-surface-variant text-sm"
+                  name={ACTION_ICONS[entry.action] ?? "circle"}
+                />
               </div>
               <div className="min-w-0 flex-1 pt-0.5">
                 <div className="flex flex-wrap items-baseline gap-x-2">

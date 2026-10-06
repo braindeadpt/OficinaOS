@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
+import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useJobsStore } from "@/stores/jobs";
@@ -56,9 +57,11 @@ export default function QuickIntakeForm() {
         <h2 className="font-bold font-headline text-xl">
           {t("front_desk.quick_intake")}
         </h2>
-        <span className="material-symbols-outlined text-primary transition-transform duration-200">
-          {expanded ? "expand_less" : "expand_more"}
-        </span>
+        <Icon
+          className="text-primary transition-transform duration-200"
+          name={expanded ? "expand_less" : "expand_more"}
+          size="lg"
+        />
       </button>
 
       {expanded && (

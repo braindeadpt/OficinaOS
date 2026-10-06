@@ -18,9 +18,9 @@ export const Input = ({
   const hasIconEnd = !!iconEnd;
 
   const inputClasses = [
-    "w-full rounded-xl border-none bg-surface-container-highest px-4 py-3.5 text-sm transition-all focus:bg-surface-container-lowest",
-    hasIconStart && "ps-12",
-    hasIconEnd && "pe-12",
+    "oos-field h-10 w-full px-3 pointer-coarse:h-12",
+    hasIconStart && "ps-10",
+    hasIconEnd && "pe-10",
     className,
   ]
     .filter(Boolean)
@@ -30,17 +30,17 @@ export const Input = ({
     <div className="group relative">
       {iconStart && (
         <Icon
-          className="absolute start-4 top-1/2 -translate-y-1/2 text-outline transition-colors group-focus-within:text-primary"
+          className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-on-surface-variant transition-colors group-focus-within:text-primary"
           name={iconStart}
-          size="sm"
+          size="md"
         />
       )}
       <input className={inputClasses} ref={ref} {...props} />
       {iconEnd && (
         <Icon
-          className="absolute end-4 top-1/2 -translate-y-1/2 text-on-surface-variant"
+          className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-on-surface-variant"
           name={iconEnd}
-          size="sm"
+          size="md"
         />
       )}
     </div>

@@ -111,7 +111,7 @@ export default function ConversationItem({
 
       {data.starred && (
         <span
-          className="material-symbols-outlined shrink-0 text-amber-500 text-base"
+          className="material-symbols-outlined shrink-0 text-base text-warning"
           style={{ fontVariationSettings: "'FILL' 1" }}
         >
           star

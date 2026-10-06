@@ -1,3 +1,4 @@
+import { Icon } from "@/components/ui/icon";
 import type { ModelSearchResult } from "@/hooks/use-model-search";
 
 interface ModelSearchDropdownProps {
@@ -35,9 +36,10 @@ export default function ModelSearchDropdown({
     <div className="absolute inset-x-0 top-full z-20 mt-1 overflow-hidden rounded-xl bg-surface-container-lowest shadow-lg ring-1 ring-outline-variant">
       {isSearching && !searchError && (
         <div className="flex items-center gap-2 px-4 py-3">
-          <span className="material-symbols-outlined animate-spin text-on-surface-variant text-sm">
-            progress_activity
-          </span>
+          <Icon
+            className="animate-spin text-on-surface-variant text-sm"
+            name="progress_activity"
+          />
           <span className="font-label text-on-surface-variant text-xs">
             {t("intake.searching")}
           </span>
@@ -45,9 +47,7 @@ export default function ModelSearchDropdown({
       )}
       {searchError && (
         <div className="flex items-center gap-2 px-4 py-3">
-          <span className="material-symbols-outlined text-error text-sm">
-            error
-          </span>
+          <Icon className="text-error text-sm" name="error" />
           <span className="font-label text-error text-xs">
             {t("intake.error_search_model")}
           </span>
@@ -72,9 +72,10 @@ export default function ModelSearchDropdown({
                 type="button"
               >
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary-container">
-                  <span className="material-symbols-outlined text-on-secondary-container text-sm">
-                    phone_iphone
-                  </span>
+                  <Icon
+                    className="text-on-secondary-container text-sm"
+                    name="phone_iphone"
+                  />
                 </span>
                 <span className="truncate font-bold font-headline text-on-surface text-sm">
                   {m.model}
@@ -94,9 +95,7 @@ export default function ModelSearchDropdown({
           type="button"
         >
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-tertiary-container">
-            <span className="material-symbols-outlined text-on-tertiary-container text-sm">
-              add
-            </span>
+            <Icon className="text-on-tertiary-container text-sm" name="add" />
           </span>
           <span className="truncate font-bold font-headline text-primary text-sm">
             {t("intake.add_model", { name: query })}
@@ -105,9 +104,10 @@ export default function ModelSearchDropdown({
       )}
       {isCreating && (
         <div className="flex items-center gap-2 border-outline-variant border-t px-4 py-3">
-          <span className="material-symbols-outlined animate-spin text-on-surface-variant text-sm">
-            progress_activity
-          </span>
+          <Icon
+            className="animate-spin text-on-surface-variant text-sm"
+            name="progress_activity"
+          />
           <span className="font-label text-on-surface-variant text-xs">
             {t("intake.creating_model")}
           </span>
@@ -119,9 +119,10 @@ export default function ModelSearchDropdown({
         !showAddOption &&
         query.length >= 1 && (
           <div className="flex items-center gap-2 px-4 py-3">
-            <span className="material-symbols-outlined text-on-surface-variant text-sm">
-              search_off
-            </span>
+            <Icon
+              className="text-on-surface-variant text-sm"
+              name="search_off"
+            />
             <span className="font-label text-on-surface-variant text-xs">
               {t("intake.no_model_found")}
             </span>

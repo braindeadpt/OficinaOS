@@ -2,6 +2,7 @@ import type { JobStatusType } from "@shared/constants";
 import { DEVICE_ICONS } from "@shared/constants";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
+import { Icon } from "@/components/ui/icon";
 import { StatusBadge } from "@/components/ui/status-badge";
 import JobActionsMenu from "./job-actions-menu";
 import type { JobRow } from "./jobs-shared";
@@ -38,9 +39,13 @@ export default function JobMobileCard({
       <div className="mb-3 flex items-start justify-between">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-surface-container-high">
-            <span className="material-symbols-outlined text-secondary">
-              {DEVICE_ICONS[deviceIcon ?? "other"] ?? "precision_manufacturing"}
-            </span>
+            <Icon
+              className="text-secondary"
+              name={
+                DEVICE_ICONS[deviceIcon ?? "other"] ?? "precision_manufacturing"
+              }
+              size="lg"
+            />
           </div>
           <div>
             <h3 className="font-bold font-headline text-sm">{device}</h3>
@@ -48,9 +53,7 @@ export default function JobMobileCard({
         </div>
         <div className="flex items-center gap-1.5">
           {isUrgent && (
-            <span className="material-symbols-outlined text-base text-error">
-              priority_high
-            </span>
+            <Icon className="text-base text-error" name="priority_high" />
           )}
           <StatusBadge status={status} />
         </div>
@@ -68,9 +71,7 @@ export default function JobMobileCard({
       <div className="-mx-4 mt-3 flex items-center justify-between bg-surface-container-low px-4 py-3">
         <div className="flex items-center gap-2">
           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-container-highest">
-            <span className="material-symbols-outlined text-on-surface-variant text-sm">
-              person
-            </span>
+            <Icon className="text-on-surface-variant text-sm" name="person" />
           </div>
           {rawJob ? (
             <TechnicianSelect
@@ -101,9 +102,7 @@ export default function JobMobileCard({
             to={`/jobs/${rawJob?.id ?? id}`}
           >
             {t("details")}
-            <span className="material-symbols-outlined text-sm">
-              chevron_right
-            </span>
+            <Icon className="text-sm" name="chevron_right" />
           </Link>
         </div>
       </div>

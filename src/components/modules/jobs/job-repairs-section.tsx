@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import RepairServicePicker from "@/components/modules/jobs/repair-service-picker";
+import { Icon } from "@/components/ui/icon";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
 import { useJobsStore } from "@/stores/jobs";
 
@@ -117,7 +118,7 @@ export default function JobRepairsSection({
             onClick={() => setShowForm(!showForm)}
             type="button"
           >
-            <span className="material-symbols-outlined text-sm">add</span>
+            <Icon className="text-sm" name="add" />
             {t("jobs_repairs_add")}
           </button>
         )}
@@ -161,7 +162,7 @@ export default function JobRepairsSection({
                 }}
                 type="button"
               >
-                <span className="material-symbols-outlined text-sm">close</span>
+                <Icon className="text-sm" name="close" />
               </button>
             </div>
           )}
@@ -187,9 +188,10 @@ export default function JobRepairsSection({
               type="button"
             >
               {loading && (
-                <span className="material-symbols-outlined animate-spin text-sm">
-                  progress_activity
-                </span>
+                <Icon
+                  className="animate-spin text-sm"
+                  name="progress_activity"
+                />
               )}
               {t("jobs_repairs_add")}
             </button>
@@ -199,9 +201,10 @@ export default function JobRepairsSection({
 
       {repairs.length === 0 ? (
         <div className="flex flex-col items-center rounded-xl bg-surface-container-low/50 py-8">
-          <span className="material-symbols-outlined mb-2 text-3xl text-on-surface-variant/60">
-            build
-          </span>
+          <Icon
+            className="mb-2 text-3xl text-on-surface-variant/60"
+            name="build"
+          />
           <p className="font-bold font-headline text-on-surface-variant text-sm">
             {t("jobs_repairs_empty_title")}
           </p>
@@ -214,7 +217,7 @@ export default function JobRepairsSection({
               onClick={() => setShowForm(true)}
               type="button"
             >
-              <span className="material-symbols-outlined text-sm">add</span>
+              <Icon className="text-sm" name="add" />
               {t("jobs_repairs_add")}
             </button>
           )}
@@ -271,7 +274,7 @@ function RemoveRepairButton({ onRemove }: { onRemove: () => void }) {
           title={t("confirm")}
           type="button"
         >
-          <span className="material-symbols-outlined text-sm">check</span>
+          <Icon className="text-sm" name="check" />
         </button>
         <button
           className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-on-surface-variant transition-colors hover:bg-surface-container-high"
@@ -279,7 +282,7 @@ function RemoveRepairButton({ onRemove }: { onRemove: () => void }) {
           title={t("cancel")}
           type="button"
         >
-          <span className="material-symbols-outlined text-sm">close</span>
+          <Icon className="text-sm" name="close" />
         </button>
       </div>
     );
@@ -292,7 +295,7 @@ function RemoveRepairButton({ onRemove }: { onRemove: () => void }) {
       title={t("jobs_repairs_remove")}
       type="button"
     >
-      <span className="material-symbols-outlined text-sm">close</span>
+      <Icon className="text-sm" name="close" />
     </button>
   );
 }

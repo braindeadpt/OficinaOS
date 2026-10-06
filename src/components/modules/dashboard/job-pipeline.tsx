@@ -3,6 +3,7 @@ import { JobStatus } from "@shared/constants";
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
+import { Icon } from "@/components/ui/icon";
 import { PIPELINE_ITEMS_ACCENT } from "@/lib/pipeline-items";
 
 interface JobPipelineProps {
@@ -27,7 +28,7 @@ export default function JobPipeline({
   return (
     <div className="h-full rounded-xl bg-surface-container-low p-6 transition-all">
       <h3 className="mb-6 flex items-center gap-2 font-bold font-headline text-lg text-on-surface">
-        <span className="material-symbols-outlined">account_tree</span>
+        <Icon name="account_tree" size="lg" />
         {t("repair_status_board")}
       </h3>
       <div className="space-y-3">

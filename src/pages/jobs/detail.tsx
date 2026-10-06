@@ -20,6 +20,7 @@ import StatusHistoryTimeline from "@/components/modules/jobs/status-history-time
 import StatusPopover from "@/components/modules/jobs/status-popover";
 import TechnicianSelect from "@/components/modules/jobs/technician-select";
 import CreateWizardModal from "@/components/modules/returns/create-wizard-modal";
+import { Icon } from "@/components/ui/icon";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import { printJobReceipt } from "@/lib/print";
@@ -43,7 +44,7 @@ function UrgentBadge({ visible }: { visible: boolean }) {
   }
   return (
     <span className="flex items-center gap-1 rounded-full bg-error-container px-3 py-1.5 font-bold font-headline text-on-error-container text-xs">
-      <span className="material-symbols-outlined text-sm">priority_high</span>
+      <Icon className="text-sm" name="priority_high" />
       {t("intake.urgent")}
     </span>
   );
@@ -195,9 +196,7 @@ export default function JobDetailPage() {
   if (error || !job) {
     return (
       <div className="py-20 text-center">
-        <span className="material-symbols-outlined text-3xl text-error">
-          error
-        </span>
+        <Icon className="text-3xl text-error" name="error" />
         <p className="mt-2 font-body text-error text-sm">
           {error ?? t("jobs_detail_not_found")}
         </p>
@@ -213,9 +212,7 @@ export default function JobDetailPage() {
             onClick={fetchJob}
             type="button"
           >
-            <span className="material-symbols-outlined text-[18px]">
-              refresh
-            </span>
+            <Icon className="text-[18px]" name="refresh" />
             {t("retry", { defaultValue: "Try again" })}
           </button>
         </div>
@@ -249,7 +246,7 @@ export default function JobDetailPage() {
         className="inline-flex min-h-[44px] items-center gap-1 font-bold text-primary text-sm hover:underline"
         to="/jobs"
       >
-        <span className="material-symbols-outlined text-sm">arrow_back</span>
+        <Icon className="text-sm" name="arrow_back" />
         {t("jobs_detail_back")}
       </Link>
 
@@ -357,16 +354,14 @@ export default function JobDetailPage() {
             onClick={() => printJobReceipt(job.id)}
             type="button"
           >
-            <span className="material-symbols-outlined text-[18px]">print</span>
+            <Icon className="text-[18px]" name="print" />
             {t("jobs_detail_print")}
           </button>
           <Link
             className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-surface-container-low px-5 font-bold font-headline text-on-surface text-sm transition-colors hover:bg-surface-container hover:text-on-surface"
             to={`/tracking/${job.jobCode}`}
           >
-            <span className="material-symbols-outlined text-[18px]">
-              open_in_new
-            </span>
+            <Icon className="text-[18px]" name="open_in_new" />
             {t("jobs_detail_track")}
           </Link>
 
@@ -380,7 +375,7 @@ export default function JobDetailPage() {
             onClick={handleCopyTrackLink}
             type="button"
           >
-            <span className="material-symbols-outlined text-[18px]">share</span>
+            <Icon className="text-[18px]" name="share" />
             {t("jobs_detail_share")}
           </button>
           <JobPortalLink
@@ -396,7 +391,7 @@ export default function JobDetailPage() {
             }
             type="button"
           >
-            <span className="material-symbols-outlined text-[18px]">label</span>
+            <Icon className="text-[18px]" name="label" />
             {t("jobs_detail_print_label")}
           </button>
           <Can perm={{ returns: ["create"] }}>
@@ -406,9 +401,7 @@ export default function JobDetailPage() {
                 onClick={() => setShowReturnWizard(true)}
                 type="button"
               >
-                <span className="material-symbols-outlined text-[18px]">
-                  assignment_return
-                </span>
+                <Icon className="text-[18px]" name="assignment_return" />
                 {t("returns_file_button")}
               </button>
             )}
@@ -429,9 +422,7 @@ export default function JobDetailPage() {
                 onClick={() => setShowEditCustomer(true)}
                 type="button"
               >
-                <span className="material-symbols-outlined text-[18px]">
-                  edit
-                </span>
+                <Icon className="text-[18px]" name="edit" />
                 <span className="font-label text-xs">{t("edit")}</span>
               </button>
             </Can>

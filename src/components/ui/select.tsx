@@ -4,7 +4,7 @@ export function Select({ className, ...props }: SelectProps) {
   return (
     <select
       className={[
-        "w-full cursor-pointer appearance-none rounded-xl border-none bg-surface-container-highest px-4 py-3.5 text-sm transition-all focus:bg-surface-container-lowest",
+        "oos-field oos-select h-10 pointer-coarse:h-12 w-full cursor-pointer appearance-none ps-3 pe-9",
         className,
       ]
         .filter(Boolean)

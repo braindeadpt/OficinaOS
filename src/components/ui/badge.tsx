@@ -12,7 +12,7 @@ const VARIANT_CLASSES: Record<BadgeVariant, string> = {
   secondary: "bg-secondary-container text-on-secondary-container",
   tertiary: "bg-tertiary-fixed text-on-tertiary-fixed-variant",
   error: "bg-error-container text-on-error-container",
-  success: "bg-primary/10 text-primary",
+  success: "bg-success-soft text-on-success-soft",
   outline: "border border-outline-variant text-on-surface-variant",
 };
 
@@ -37,7 +37,7 @@ export function Badge({
   return (
     <span
       className={[
-        "inline-flex items-center whitespace-nowrap rounded-full font-bold uppercase tracking-wider",
+        "inline-flex items-center whitespace-nowrap rounded-full font-semibold",
         VARIANT_CLASSES[variant],
         SIZE_CLASSES[size],
         className,
