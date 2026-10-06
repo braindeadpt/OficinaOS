@@ -27,7 +27,7 @@ interface StoreEntry {
 type StoreCallback = (err: Error | null, res: StoreEntry) => void;
 
 interface RateLimitStore {
-  child(routeOptions: Record<string, unknown>): RateLimitStore;
+  child(routeOptions: object): RateLimitStore;
   incr(key: string, cb: StoreCallback, timeWindow: number, max: number): void;
   read?(key: string, cb: StoreCallback, timeWindow: number, max: number): void;
 }
@@ -94,7 +94,7 @@ export class CappedBackoffStore implements RateLimitStore {
     );
   }
 
-  child(routeOptions: Record<string, unknown>): CappedBackoffStore {
+  child(routeOptions: object): CappedBackoffStore {
     return new CappedBackoffStore(
       routeOptions as ConstructorParameters<typeof CappedBackoffStore>[0],
       this.maxTtlMs

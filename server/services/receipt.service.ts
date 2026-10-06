@@ -123,6 +123,8 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     paymentMethods: {
       CARD: "Cartão",
       CASH: "Numerário",
+      MB_WAY: "MB WAY",
+      MULTIBANCO: "Multibanco",
       OTHER: "Outro",
       TRANSFER: "Transferência",
     },
@@ -155,6 +157,8 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     paymentMethods: {
       CARD: "Card",
       CASH: "Cash",
+      MB_WAY: "MB WAY",
+      MULTIBANCO: "Multibanco",
       OTHER: "Other",
       TRANSFER: "Transfer",
     },
@@ -187,6 +191,8 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     paymentMethods: {
       CARD: "Carte",
       CASH: "Espèces",
+      MB_WAY: "MB WAY",
+      MULTIBANCO: "Multibanco",
       OTHER: "Autre",
       TRANSFER: "Virement",
     },
@@ -219,6 +225,8 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     paymentMethods: {
       CARD: "Tarjeta",
       CASH: "Efectivo",
+      MB_WAY: "MB WAY",
+      MULTIBANCO: "Multibanco",
       OTHER: "Otro",
       TRANSFER: "Transferencia",
     },

@@ -2,6 +2,8 @@ export const PaymentMethod = {
   CASH: "CASH",
   CARD: "CARD",
   TRANSFER: "TRANSFER",
+  MB_WAY: "MB_WAY",
+  MULTIBANCO: "MULTIBANCO",
   OTHER: "OTHER",
 } as const;
 

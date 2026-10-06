@@ -1,6 +1,7 @@
 import {
   JobStatus as PrismaJobStatus,
   PartCategory as PrismaPartCategory,
+  PaymentMethod as PrismaPaymentMethod,
   QuoteStatus as PrismaQuoteStatus,
   RepairCategory as PrismaRepairCategory,
   Role as PrismaRole,
@@ -8,6 +9,7 @@ import {
 import {
   JobStatus,
   PartCategory,
+  PaymentMethod,
   QuoteStatus,
   RepairCategory,
   Role,
@@ -42,6 +44,12 @@ describe("enum sync: shared constants match Prisma generated enums", () => {
   it("QuoteStatus matches Prisma enum", () => {
     const prismaValues = Object.values(PrismaQuoteStatus).sort();
     const sharedValues = Object.values(QuoteStatus).sort();
+    expect(sharedValues).toEqual(prismaValues);
+  });
+
+  it("PaymentMethod matches Prisma enum", () => {
+    const prismaValues = Object.values(PrismaPaymentMethod).sort();
+    const sharedValues = Object.values(PaymentMethod).sort();
     expect(sharedValues).toEqual(prismaValues);
   });
 });
