@@ -81,14 +81,40 @@ export async function getById(prisma: PrismaClient, id: string) {
   return await findPartUnique(prisma, id);
 }
 
-export async function create(prisma: PrismaClient, input: CreatePartInput) {
-  const part = await createPart(prisma, {
+export async function create(
+  prisma: PrismaClient,
+  input: CreatePartInput,
+  userId?: string
+) {
+  const initialStock = input.stockQuantity ?? 0;
+  const data = {
     category: input.category,
     defaultPrice: input.defaultPrice,
     listedOnline: input.listedOnline ?? false,
     name: input.name,
+    reorderLevel: input.reorderLevel ?? 0,
+    stockQuantity: initialStock,
     supplier: input.supplier ?? null,
-  });
+  };
+  // The initial count used to be dropped (stock always started at 0). When
+  // there is opening stock it is recorded as a PURCHASE so the movement
+  // ledger and the physical count agree from day one.
+  const part =
+    initialStock > 0 && userId
+      ? await prisma.$transaction(async (tx) => {
+          const created = await createPart(tx, data);
+          await createStockMovement(tx, {
+            balanceAfter: created.stockQuantity,
+            createdById: userId,
+            note: "Stock inicial",
+            partId: created.id,
+            quantity: initialStock,
+            supplier: input.supplier ?? null,
+            type: "PURCHASE",
+          });
+          return created;
+        })
+      : await createPart(prisma, data);
   if (part.listedOnline) {
     await markStoreDirty(prisma).catch(() => null);
   }

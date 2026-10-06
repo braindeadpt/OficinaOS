@@ -29,6 +29,7 @@ import {
   updateUserProfile as userUpdateProfile,
   updateStatus as userUpdateStatus,
 } from "../repositories/user.repository.js";
+import { resolveTechnicianNames } from "./technician-names.js";
 
 async function checkUniqueFields(
   prisma: DbClient,
@@ -225,7 +226,30 @@ export async function updateUserProfileService(
   id: string,
   data: { name?: string; email?: string; username?: string }
 ) {
-  const { name, email, username } = data;
+  const { email, username } = data;
+  let { name } = data;
+
+  // A name that was only ever a copy of the login (the seeded owner is
+  // name "Admin", username "admin") follows a username change, so the
+  // greeting and job history never keep showing the old placeholder.
+  if (username) {
+    const current = await userFindUniqueById(prisma, id, {
+      name: true,
+      username: true,
+    });
+    const placeholder =
+      current?.name &&
+      current.username &&
+      current.name.trim().toLowerCase() === current.username.toLowerCase();
+    const nameUntouched = name === undefined || name === current?.name;
+    if (
+      placeholder &&
+      nameUntouched &&
+      username.toLowerCase() !== current.username?.toLowerCase()
+    ) {
+      name = username;
+    }
+  }
 
   const updateData = buildUpdateData({ name, email, username });
 
@@ -310,7 +334,7 @@ export async function getActivity(
 
   const nextCursor = logs.length === take ? logs.at(-1)?.id : null;
 
-  return { items: logs, nextCursor };
+  return { items: await resolveTechnicianNames(prisma, logs), nextCursor };
 }
 
 export async function getStats(prisma: DbClient, id: string) {

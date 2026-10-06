@@ -99,6 +99,7 @@ export default function CommandPalette() {
   const shortcutLabel = useShortcutLabel();
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   // Guards against a slow early response overwriting a newer one.
@@ -111,8 +112,16 @@ export default function CommandPalette() {
   }, [closePalette]);
 
   // The palette handles Escape itself: the first press clears the filter and
-  // only the second closes.
-  useModalEffects(isOpen, close, inputRef, { closeOnEscape: false });
+  // only the second closes. The focus container is the panel (not the input
+  // itself, which has no focusable children), so focus lands in the search
+  // field and Tab stays inside the palette.
+  useModalEffects(isOpen, close, panelRef, { closeOnEscape: false });
+
+  useEffect(() => {
+    if (isOpen) {
+      inputRef.current?.focus();
+    }
+  }, [isOpen]);
 
   /**
    * Two-step sign out, mirroring the sidebar: the first press arms it and the
@@ -307,7 +316,10 @@ export default function CommandPalette() {
         tabIndex={-1}
         type="button"
       />
-      <div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-surface-container-lowest shadow-2xl ring-1 ring-outline-variant">
+      <div
+        className="w-full max-w-2xl overflow-hidden rounded-2xl bg-surface-container-lowest shadow-2xl ring-1 ring-outline-variant"
+        ref={panelRef}
+      >
         <div className="flex items-center gap-3 border-outline-variant border-b px-4">
           <span
             aria-hidden="true"

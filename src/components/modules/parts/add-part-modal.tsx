@@ -18,19 +18,30 @@ interface AddPartFormData {
   isActive: boolean;
   listedOnline: boolean;
   name: string;
+  reorderLevel: string;
+  /** Opening stock — create only; later changes go through stock movements. */
+  stockQuantity: string;
   supplier: string;
 }
+
+export type AddPartSubmitData = Omit<
+  AddPartFormData,
+  "defaultPrice" | "reorderLevel" | "stockQuantity"
+> & {
+  defaultPrice: number;
+  reorderLevel: number;
+  stockQuantity?: number;
+};
 
 interface AddPartModalProps {
   editingPart?: PartsCatalog | null;
   onClose: () => void;
-  onSubmit: (
-    data: Omit<AddPartFormData, "defaultPrice"> & { defaultPrice: number }
-  ) => void;
+  onSubmit: (data: AddPartSubmitData) => void;
 }
 
 const CATEGORIES: PartCategoryType[] = Object.values(PartCategory);
 const PRICE_REGEX = /^\d*\.?\d{0,2}$/;
+const INT_REGEX = /^\d{0,6}$/;
 
 const INITIAL_FORM: AddPartFormData = {
   name: "",
@@ -39,6 +50,8 @@ const INITIAL_FORM: AddPartFormData = {
   supplier: "",
   isActive: true,
   listedOnline: false,
+  reorderLevel: "",
+  stockQuantity: "",
 };
 
 function isDirty(
@@ -53,7 +66,8 @@ function isDirty(
         Number(editingPart.defaultPrice) ||
       form.supplier !== (editingPart.supplier ?? "") ||
       form.isActive !== editingPart.isActive ||
-      form.listedOnline !== editingPart.listedOnline
+      form.listedOnline !== editingPart.listedOnline ||
+      form.reorderLevel !== String(editingPart.reorderLevel ?? 0)
     );
   }
   return (
@@ -62,7 +76,9 @@ function isDirty(
     form.defaultPrice !== INITIAL_FORM.defaultPrice ||
     form.supplier !== INITIAL_FORM.supplier ||
     form.isActive !== INITIAL_FORM.isActive ||
-    form.listedOnline !== INITIAL_FORM.listedOnline
+    form.listedOnline !== INITIAL_FORM.listedOnline ||
+    form.reorderLevel !== INITIAL_FORM.reorderLevel ||
+    form.stockQuantity !== INITIAL_FORM.stockQuantity
   );
 }
 
@@ -85,6 +101,8 @@ export default function AddPartModal({
         supplier: editingPart.supplier ?? "",
         isActive: editingPart.isActive,
         listedOnline: editingPart.listedOnline,
+        reorderLevel: String(editingPart.reorderLevel ?? 0),
+        stockQuantity: String(editingPart.stockQuantity ?? 0),
       };
     }
     return { ...INITIAL_FORM };
@@ -151,6 +169,10 @@ export default function AddPartModal({
       supplier: form.supplier,
       isActive: form.isActive,
       listedOnline: form.listedOnline,
+      reorderLevel: Number.parseInt(form.reorderLevel, 10) || 0,
+      stockQuantity: isEditing
+        ? undefined
+        : Number.parseInt(form.stockQuantity, 10) || 0,
     });
   }
 
@@ -323,6 +345,54 @@ export default function AddPartModal({
                 placeholder={t("add_part_modal.supplier_placeholder")}
                 value={form.supplier}
               />
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {!isEditing && (
+                <div>
+                  <Label className="mb-2 block" htmlFor="part-stock">
+                    {t("add_part_modal.initial_stock")}
+                  </Label>
+                  <Input
+                    autoComplete="off"
+                    className="font-mono"
+                    id="part-stock"
+                    inputMode="numeric"
+                    onChange={(e) => {
+                      if (INT_REGEX.test(e.target.value)) {
+                        update("stockQuantity", e.target.value);
+                      }
+                    }}
+                    placeholder="0"
+                    value={form.stockQuantity}
+                  />
+                </div>
+              )}
+              <div>
+                <Label className="mb-2 block" htmlFor="part-reorder">
+                  {t("add_part_modal.reorder_level")}
+                </Label>
+                <Input
+                  aria-describedby="part-reorder-hint"
+                  autoComplete="off"
+                  className="font-mono"
+                  id="part-reorder"
+                  inputMode="numeric"
+                  onChange={(e) => {
+                    if (INT_REGEX.test(e.target.value)) {
+                      update("reorderLevel", e.target.value);
+                    }
+                  }}
+                  placeholder="0"
+                  value={form.reorderLevel}
+                />
+                <p
+                  className="mt-1 text-on-surface-variant text-xs"
+                  id="part-reorder-hint"
+                >
+                  {t("add_part_modal.reorder_level_hint")}
+                </p>
+              </div>
             </div>
 
             <fieldset

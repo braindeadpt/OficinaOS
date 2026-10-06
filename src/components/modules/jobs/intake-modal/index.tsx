@@ -38,6 +38,10 @@ export default function IntakeModal({
       <div className="modal-surface relative z-10 flex max-h-full w-full max-w-[960px] flex-col overflow-hidden rounded-xl shadow-2xl">
         <form
           className="flex flex-1 flex-col overflow-hidden"
+          // Our own validation marks fields inline — the browser's native
+          // "Please fill out this field" bubbles are untranslated and fire
+          // on hidden step-2 fields.
+          noValidate
           onSubmit={m.handleSubmit}
         >
           {hasErrors && (

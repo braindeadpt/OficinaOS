@@ -46,7 +46,10 @@
     "keep_editing": "Continuer à éditer",
     "discard": "Jeter",
     "listed_online": "Afficher dans la boutique en ligne",
-    "listed_online_desc": "Affiche cet article sur la page publique de votre boutique en ligne"
+    "listed_online_desc": "Affiche cet article sur la page publique de votre boutique en ligne",
+    "initial_stock": "Stock initial",
+    "reorder_level": "Seuil de réapprovisionnement",
+    "reorder_level_hint": "Vous avertit lorsque le stock atteint ce nombre."
   },
   "add_service": "Ajouter un service",
   "add_user": "Ajouter un utilisateur",
@@ -792,7 +795,8 @@
     "signature_captured": "Signature capturée",
     "whatsapp_consent": "Le client autorise les notifications WhatsApp",
     "whatsapp_consent_hint": "Mises à jour de l'état de réparation envoyées automatiquement. ",
-    "estimated_cost_pending": "À chiffrer"
+    "estimated_cost_pending": "À chiffrer",
+    "email_placeholder": "exemple@email.fr"
   },
   "intake_wizard_next": "Suivant",
   "intake_wizard_step1_title": "Client et appareil",
@@ -1564,17 +1568,12 @@
   "total_customers": "Clients totaux",
   "total_parts": "Total des pièces",
   "total_services": "Total services",
-  "tracking_24h_express": "Express 24 heures sur 24",
   "tracking_all_rights_reserved": "Tous droits réservés.",
   "tracking_cancelled_desc": "Cette réparation a été annulée. ",
-  "tracking_certified_parts": "Pièces certifiées",
   "tracking_contact_shop": "Contacter la boutique",
-  "tracking_contact_us": "Contactez-nous au +351 210 000 000",
   "tracking_device_model": "Modèle d'appareil",
   "tracking_error_hint": "Vérifiez votre code de travail et les chiffres de votre numéro de téléphone.",
   "tracking_estimated_completion": "Achèvement estimé",
-  "tracking_fast_turnaround": "Délai d'exécution rapide",
-  "tracking_guarantee_desc": "Cette réparation est couverte par notre garantie pièces et main d'œuvre de 12 mois. Composants d'origine utilisés exclusivement.",
   "tracking_input_help": "Entrez le code de travail figurant sur votre reçu, par ex. ",
   "tracking_input_placeholder": "par ex. JOB-12345",
   "tracking_job_not_found": "Emploi introuvable. ",
@@ -1583,7 +1582,6 @@
   "tracking_loading": "Chargement...",
   "tracking_new_search": "Nouvelle recherche",
   "tracking_no_code": "Pas de code de travail ?",
-  "tracking_oem_components": "Composants OEM",
   "tracking_on_hold_desc": "Votre réparation est temporairement suspendue. ",
   "tracking_phone4_help": "Saisissez les 4 derniers chiffres du numéro de téléphone que vous avez donné à la boutique",
   "tracking_phone4_placeholder": "4 derniers chiffres de votre numéro de téléphone",
@@ -2180,5 +2178,15 @@
     "checklist_legend": "Test final de l'appareil",
     "checklist_hint": "Répondez à chaque point (OK ou Échec) pour terminer.",
     "confirm": "Marquer comme terminée"
-  }
+  },
+  "tracking_contact_us_phone": "Appelez le {{phone}}",
+  "tracking_contact_us_generic": "Contactez la boutique où vous avez déposé l'appareil.",
+  "tracking_warranty_days_short_one": "{{count}} jour pièces et main-d'œuvre",
+  "tracking_warranty_days_short_other": "{{count}} jours pièces et main-d'œuvre",
+  "tracking_guarantee_desc_one": "Votre réparation est garantie {{count}} jour pièces et main-d'œuvre, à compter de la remise.",
+  "tracking_guarantee_desc_other": "Votre réparation est garantie {{count}} jours pièces et main-d'œuvre, à compter de la remise.",
+  "tracking_shop": "Boutique",
+  "parts_stock": "Stock",
+  "parts_stock_count_one": "{{count}} en stock",
+  "parts_stock_count_other": "{{count}} en stock"
 }

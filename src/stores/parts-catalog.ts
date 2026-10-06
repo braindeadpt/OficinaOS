@@ -11,6 +11,8 @@ interface PartsCatalogState {
     defaultPrice: number;
     supplier?: string;
     listedOnline?: boolean;
+    reorderLevel?: number;
+    stockQuantity?: number;
   }) => Promise<PartsCatalog>;
   deletePart: (id: string) => Promise<void>;
   error: string | null;

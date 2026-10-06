@@ -165,6 +165,12 @@ describe("CommandPalette", () => {
     expect(screen.getByRole("dialog")).toBeDefined();
   });
 
+  it("puts the cursor in the search field when it opens", () => {
+    render(<CommandPalette />);
+    fireEvent.keyDown(document, { key: "k", ctrlKey: true });
+    expect(document.activeElement).toBe(screen.getByRole("combobox"));
+  });
+
   it("closes on the same chord, so it behaves as a toggle", () => {
     render(<CommandPalette />);
     fireEvent.keyDown(document, { key: "k", metaKey: true });

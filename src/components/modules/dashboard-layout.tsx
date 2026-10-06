@@ -6,13 +6,14 @@ import { toast } from "sonner";
 import BottomNav from "@/components/modules/bottom-nav";
 import type { IntakeFormData } from "@/components/modules/jobs/intake-modal";
 import IntakeModal from "@/components/modules/jobs/intake-modal";
+import { mapServerFieldErrors } from "@/components/modules/jobs/intake-modal/types";
 import PrintPreviewDialog from "@/components/modules/jobs/print-preview-dialog";
 import Sidebar from "@/components/modules/sidebar";
 import TopBar from "@/components/modules/top-bar";
 import UpdateBanner from "@/components/modules/update-banner";
 import { ShopSettingsProvider } from "@/components/providers/shop-settings-provider";
 import { ChunkErrorBoundary } from "@/components/ui/chunk-error-boundary";
-import api from "@/lib/api";
+import api, { getErrorMessage } from "@/lib/api";
 import { useJobsStore } from "@/stores/jobs";
 import { useUiStore } from "@/stores/ui";
 
@@ -106,7 +107,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         // The modal closes itself via the success-overlay timeout — closing
         // it here would hide the confirmation the user just earned.
       } catch (err) {
-        toast.error(t("jobs_create_error"));
+        // Field validation errors are marked inline by the modal; only a
+        // failure it cannot attribute to a field gets the generic toast,
+        // now with the server's actual message.
+        if (mapServerFieldErrors(err).step === null) {
+          toast.error(getErrorMessage(err, t("jobs_create_error")));
+        }
         // Rethrow so the modal stays open with its error state instead of
         // showing the success overlay on a failed create.
         throw err;

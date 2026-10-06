@@ -270,22 +270,32 @@ export default function ProfilePage() {
     }
     setPersonalSubmitting(true);
     try {
-      await api.patch(`/users/${userId}`, {
+      const res = await api.patch(`/users/${userId}`, {
         name: personalForm.name,
         email: personalForm.email,
         username: personalForm.username,
       });
+      // The server may change the name too (a placeholder name follows the
+      // username), so take what it saved rather than what the form sent.
+      const saved = (res?.data ?? {}) as {
+        email?: string;
+        name?: string;
+        username?: string;
+      };
+      const savedName = saved.name ?? personalForm.name;
       if (isSelf) {
         useAuthStore.getState().updateUser({
-          name: personalForm.name,
-          email: personalForm.email,
-          username: personalForm.username,
+          name: savedName,
+          email: saved.email ?? personalForm.email,
+          username: saved.username ?? personalForm.username,
         });
         if (personalForm.language !== detectLanguage()) {
           i18n.changeLanguage(personalForm.language);
         }
       }
-      setPersonalInitial(personalForm);
+      const savedForm = { ...personalForm, name: savedName };
+      setPersonalForm(savedForm);
+      setPersonalInitial(savedForm);
       setPersonalDirty(false);
       setEditing(false);
       setPersonalSuccess(t("profile_info_updated"));

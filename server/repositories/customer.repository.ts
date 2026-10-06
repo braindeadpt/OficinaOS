@@ -112,3 +112,40 @@ export async function update(
 ) {
   return await prisma.customer.update({ where: { id }, data });
 }
+
+/**
+ * IDs of customers whose phone contains `digits` once separators and a
+ * Portuguese +351/00351 prefix are ignored (the SQL mirrors
+ * phoneSearchDigits in shared/utils/phone.ts).
+ */
+export async function findIdsByPhoneDigits(
+  prisma: DbClient,
+  digits: string,
+  limit: number
+): Promise<string[]> {
+  const rows = await prisma.$queryRaw<{ id: string }[]>`
+    SELECT id
+    FROM (
+      SELECT id,
+             btrim(phone) AS trimmed,
+             regexp_replace(phone, '[^0-9]', '', 'g') AS digits
+      FROM customers
+    ) c
+    CROSS JOIN LATERAL (
+      SELECT CASE WHEN c.digits LIKE '00%' THEN substr(c.digits, 3)
+                  ELSE c.digits END AS d,
+             (c.trimmed LIKE '+%' OR c.digits LIKE '00%') AS intl
+    ) p
+    CROSS JOIN LATERAL (
+      SELECT CASE
+               WHEN p.d LIKE '351%' AND (p.intl OR length(p.d) >= 12)
+                 THEN substr(p.d, 4)
+               ELSE p.d
+             END AS national
+    ) n
+    WHERE n.national LIKE '%' || ${digits} || '%'
+    ORDER BY id DESC
+    LIMIT ${limit}
+  `;
+  return rows.map((r) => r.id);
+}

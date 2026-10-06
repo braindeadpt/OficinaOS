@@ -575,14 +575,31 @@ export default function Step1Content(props: Step1Props) {
                   {t("intake.email")}
                 </label>
                 <input
-                  className={inputCls}
+                  aria-describedby={
+                    errors.customerEmail && touched.customerEmail
+                      ? "error-customer-email"
+                      : undefined
+                  }
+                  aria-invalid={
+                    !!(errors.customerEmail && touched.customerEmail)
+                  }
+                  className={
+                    errors.customerEmail && touched.customerEmail
+                      ? inputErrorCls
+                      : inputCls
+                  }
                   id="customer-email"
                   maxLength={254}
                   onChange={(e) => update("customerEmail", e.target.value)}
-                  placeholder="example@email.com"
+                  placeholder={t("intake.email_placeholder")}
                   type="email"
                   value={form.customerEmail}
                 />
+                {errors.customerEmail && touched.customerEmail && (
+                  <p className={errorCls} id="error-customer-email">
+                    {errors.customerEmail}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -657,7 +674,13 @@ export default function Step1Content(props: Step1Props) {
                 {t("intake.imei")}
               </label>
               <input
-                className={inputCls}
+                aria-describedby={
+                  errors.imei && touched.imei ? "error-device-imei" : undefined
+                }
+                aria-invalid={!!(errors.imei && touched.imei)}
+                className={
+                  errors.imei && touched.imei ? inputErrorCls : inputCls
+                }
                 id="device-imei"
                 inputMode="numeric"
                 onChange={(e) => update("imei", e.target.value)}
@@ -665,6 +688,11 @@ export default function Step1Content(props: Step1Props) {
                 type="text"
                 value={form.imei}
               />
+              {errors.imei && touched.imei && (
+                <p className={errorCls} id="error-device-imei">
+                  {errors.imei}
+                </p>
+              )}
             </div>
             <div className="sm:col-span-2">
               <label className={labelCls} htmlFor="device-unlock">
