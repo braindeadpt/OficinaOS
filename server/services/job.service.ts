@@ -49,6 +49,7 @@ import type { DbClient } from "../repositories/types.js";
 import { generateJobCode } from "../utils/job-code.js";
 import { assertJobMutable } from "../utils/job-mutations.js";
 import { logger } from "../utils/logger.js";
+import { toPublicShop } from "../utils/public-shop.js";
 import { createAuditLog } from "./audit.service.js";
 import { notify } from "./notification-dispatch.js";
 import {
@@ -978,9 +979,7 @@ async function buildJobLookupPayload(
     })),
     shop: shopSettings
       ? {
-          address: shopSettings.address,
-          name: shopSettings.shopName,
-          phone: shopSettings.phone,
+          ...toPublicShop(shopSettings),
           reviewUrl: shopSettings.reviewUrl,
         }
       : null,

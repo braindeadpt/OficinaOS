@@ -8,6 +8,7 @@ import { submitPreCheckRequest } from "../services/intake-request.service.js";
 import { respondToQuote } from "../services/job-quote.service.js";
 import { handleInboundSms } from "../services/sms.service.js";
 import { codeLockout } from "../utils/code-lockout.js";
+import { parseImageDataUrl, toPublicShop } from "../utils/public-shop.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
 const JOB_CODE_RE = /^[A-Za-z0-9-]+$/;
@@ -102,6 +103,42 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
         respondedAt: quote?.respondedAt,
         responseNote: quote?.responseNote,
       });
+    },
+  });
+
+  /**
+   * Public shop identity for the customer tracking page: the shop's real
+   * name, phone, address, logo and default warranty. Only what a customer
+   * would read on a receipt anyway — nothing from settings that is private.
+   */
+  app.get("/shop", {
+    handler: async () => {
+      const s = await getOrCreateShopSettings(app.prisma);
+      return toPublicShop(s);
+    },
+    schema: {
+      summary: "Public shop identity for the tracking page",
+      tags: ["public"],
+    },
+  });
+
+  // The uploaded logo lives in settings as a data URL; serve it as an image
+  // so the tracking page can use a plain <img> (cacheable, no 280 KB JSON).
+  app.get("/shop/logo", {
+    handler: async (_req, reply) => {
+      const s = await getOrCreateShopSettings(app.prisma);
+      const parsed = parseImageDataUrl(s.storeLogoData);
+      if (!parsed) {
+        throw new AppError("NOT_FOUND");
+      }
+      return reply
+        .header("Cache-Control", "public, max-age=300")
+        .type(parsed.mime)
+        .send(parsed.data);
+    },
+    schema: {
+      summary: "Shop logo image",
+      tags: ["public"],
     },
   });
 

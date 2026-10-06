@@ -105,6 +105,65 @@ interface TrackingData {
   status: string;
   statusTransitions: StatusTransition[];
   warranty: WarrantyInfo | null;
+  warrantyDays: number;
+}
+
+interface PublicShop {
+  address: string | null;
+  logoUrl: string | null;
+  name: string | null;
+  phone: string | null;
+  warrantyDays: number;
+}
+
+// One request per page load: the lookup form, status view and header all
+// read the same public shop identity.
+let publicShopPromise: Promise<PublicShop | null> | null = null;
+
+function usePublicShop(): PublicShop | null {
+  const [shop, setShop] = useState<PublicShop | null>(null);
+  useEffect(() => {
+    let alive = true;
+    publicShopPromise ??= api
+      .get("/public/shop")
+      .then((res) => res.data as PublicShop)
+      .catch(() => {
+        publicShopPromise = null;
+        return null;
+      });
+    publicShopPromise.then((value) => {
+      if (alive) {
+        setShop(value);
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return shop;
+}
+
+/** The shop's own logo and name; OficinaOS only until settings load. */
+function ShopBrand() {
+  const shop = usePublicShop();
+  const [logoFailed, setLogoFailed] = useState(false);
+  const logo = shop?.logoUrl && !logoFailed ? shop.logoUrl : "/logo-mark.svg";
+  return (
+    <>
+      <img
+        alt=""
+        aria-hidden="true"
+        className="h-8 w-auto max-w-[96px] object-contain"
+        height={32}
+        onError={() => setLogoFailed(true)}
+        src={logo}
+        width={32}
+      />
+      <span className="truncate font-bold font-headline text-2xl text-primary-container tracking-tight">
+        {shop ? (shop.name ?? "OficinaOS") : "\u00a0"}
+      </span>
+    </>
+  );
 }
 
 function LookupForm({
@@ -115,6 +174,7 @@ function LookupForm({
   onSearch: (code: string, phone4: string) => void;
 }) {
   const { t } = useTranslation();
+  const shop = usePublicShop();
   const [code, setCode] = useState(initialCode ?? "");
   const [phone4, setPhone4] = useState("");
 
@@ -123,17 +183,7 @@ function LookupForm({
       <nav className="sticky top-0 z-50 w-full bg-background">
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-2.5">
-            <img
-              alt=""
-              aria-hidden="true"
-              className="h-8 w-8"
-              height={32}
-              src="/logo-mark.svg"
-              width={32}
-            />
-            <span className="font-bold font-headline text-2xl text-primary-container tracking-tight">
-              OficinaOS
-            </span>
+            <ShopBrand />
           </div>
           <LanguageSwitcher />
         </div>
@@ -222,53 +272,68 @@ function LookupForm({
               <div className="mt-10 w-full bg-surface-container-low pt-8">
                 <p className="flex flex-col items-center justify-center gap-1 font-label text-on-surface-variant text-sm sm:flex-row">
                   <span>{t("tracking_no_code")}</span>
-                  <span className="font-semibold text-primary">
-                    {t("tracking_contact_us")}
-                  </span>
+                  {shop?.phone ? (
+                    <a
+                      className="font-semibold text-primary underline-offset-2 hover:underline"
+                      href={`tel:${shop.phone.replace(/\s+/g, "")}`}
+                    >
+                      {t("tracking_contact_us_phone", { phone: shop.phone })}
+                    </a>
+                  ) : (
+                    <span className="font-semibold text-primary">
+                      {t("tracking_contact_us_generic")}
+                    </span>
+                  )}
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div className="flex items-center gap-4 rounded-xl bg-surface-container p-6">
-              <div className="rounded-lg bg-surface-container-lowest p-3">
-                <span className="material-symbols-outlined text-primary">
-                  verified
-                </span>
+          {shop && (
+            <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="flex items-center gap-4 rounded-xl bg-surface-container p-6">
+                <div className="rounded-lg bg-surface-container-lowest p-3">
+                  <span className="material-symbols-outlined text-primary">
+                    verified_user
+                  </span>
+                </div>
+                <div className="text-start">
+                  <p className="font-label text-on-surface-variant text-xs uppercase tracking-widest">
+                    {t("tracking_warranty_title")}
+                  </p>
+                  <p className="font-bold font-headline text-sm">
+                    {t("tracking_warranty_days_short", {
+                      count: shop.warrantyDays,
+                    })}
+                  </p>
+                </div>
               </div>
-              <div className="text-start">
-                <p className="font-label text-on-surface-variant text-xs uppercase tracking-widest">
-                  {t("tracking_certified_parts")}
-                </p>
-                <p className="font-bold font-headline text-sm">
-                  {t("tracking_oem_components")}
-                </p>
-              </div>
+              {(shop.address || shop.phone) && (
+                <div className="flex items-center gap-4 rounded-xl bg-surface-container p-6">
+                  <div className="rounded-lg bg-surface-container-lowest p-3">
+                    <span className="material-symbols-outlined text-primary">
+                      storefront
+                    </span>
+                  </div>
+                  <div className="min-w-0 text-start">
+                    <p className="font-label text-on-surface-variant text-xs uppercase tracking-widest">
+                      {shop.name ?? t("tracking_shop")}
+                    </p>
+                    <p className="font-bold font-headline text-sm">
+                      {shop.address ?? shop.phone}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
-            <div className="flex items-center gap-4 rounded-xl bg-surface-container p-6">
-              <div className="rounded-lg bg-surface-container-lowest p-3">
-                <span className="material-symbols-outlined text-primary">
-                  shutter_speed
-                </span>
-              </div>
-              <div className="text-start">
-                <p className="font-label text-on-surface-variant text-xs uppercase tracking-widest">
-                  {t("tracking_fast_turnaround")}
-                </p>
-                <p className="font-bold font-headline text-sm">
-                  {t("tracking_24h_express")}
-                </p>
-              </div>
-            </div>
-          </div>
+          )}
         </div>
       </main>
 
       <footer className="mt-auto w-full bg-surface-container-high py-8">
         <div className="flex w-full flex-col items-center gap-2 text-center">
           <span className="font-body text-on-surface-variant text-xs tracking-wider">
-            © {new Date().getFullYear()} OficinaOS.{" "}
+            © {new Date().getFullYear()} {shop?.name ?? "OficinaOS"}.{" "}
             {t("tracking_all_rights_reserved")}
           </span>
         </div>
@@ -677,6 +742,7 @@ function StatusView({
   ) => Promise<void>;
 }) {
   const { t } = useTranslation();
+  const shop = usePublicShop();
   const isTerminal = TERMINAL_STATUSES.has(data.status as JobStatusType);
   const isOnHold = data.status === JobStatus.ON_HOLD;
   const isCompleted =
@@ -955,7 +1021,9 @@ function StatusView({
                     {t("tracking_repair_guarantee")}
                   </p>
                   <p className="mt-1 text-on-surface-variant text-xs leading-relaxed">
-                    {t("tracking_guarantee_desc")}
+                    {t("tracking_guarantee_desc", {
+                      count: shop?.warrantyDays ?? data.warrantyDays,
+                    })}
                   </p>
                 </div>
               </div>
@@ -1019,7 +1087,7 @@ function StatusView({
       <footer className="mt-auto w-full bg-surface-container-high py-8">
         <div className="flex w-full flex-col items-center gap-2 text-center">
           <span className="font-body text-on-surface-variant text-xs tracking-wider">
-            © {new Date().getFullYear()} OficinaOS.{" "}
+            © {new Date().getFullYear()} {shop?.name ?? "OficinaOS"}.{" "}
             {t("tracking_all_rights_reserved")}
           </span>
         </div>
@@ -1033,12 +1101,11 @@ function mapJobToTrackingData(
   t: (key: string, options?: Record<string, unknown>) => string,
   locale: string
 ): TrackingData {
-  const shop = data.shop as {
-    name: string;
-    phone: string | null;
-    address: string | null;
-    reviewUrl: string | null;
-  } | null;
+  const shop = data.shop as
+    | (PublicShop & {
+        reviewUrl: string | null;
+      })
+    | null;
   const statusTransitions = (
     (data.statusTransitions ?? []) as StatusTransition[]
   ).map((tr) => {
@@ -1087,6 +1154,7 @@ function mapJobToTrackingData(
     shopPhone: shop?.phone ?? "",
     shopAddress: shop?.address ?? "",
     shopReviewUrl: shop?.reviewUrl ?? "",
+    warrantyDays: shop?.warrantyDays ?? 30,
     statusTransitions,
     fetchedAt: now,
     formattedFetchedTime: new Date(now).toLocaleTimeString(locale, {
@@ -1240,17 +1308,7 @@ export default function TrackingPage() {
         <nav className="sticky top-0 z-50 w-full bg-background">
           <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4">
             <div className="flex items-center gap-2.5">
-              <img
-                alt=""
-                aria-hidden="true"
-                className="h-8 w-8"
-                height={32}
-                src="/logo-mark.svg"
-                width={32}
-              />
-              <span className="font-bold font-headline text-2xl text-primary-container tracking-tight">
-                OficinaOS
-              </span>
+              <ShopBrand />
             </div>
             <LanguageSwitcher />
           </div>
@@ -1288,17 +1346,7 @@ export default function TrackingPage() {
         <nav className="sticky top-0 z-50 w-full bg-background">
           <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4">
             <div className="flex items-center gap-2.5">
-              <img
-                alt=""
-                aria-hidden="true"
-                className="h-8 w-8"
-                height={32}
-                src="/logo-mark.svg"
-                width={32}
-              />
-              <span className="font-bold font-headline text-2xl text-primary-container tracking-tight">
-                OficinaOS
-              </span>
+              <ShopBrand />
             </div>
             <LanguageSwitcher />
           </div>
