@@ -414,7 +414,7 @@ export default function JobDetailPage() {
         <div className="rounded-2xl bg-surface-container p-5">
           <div className="flex items-center justify-between">
             <p className="font-label text-[11px] text-on-surface-variant uppercase tracking-widest">
-              {t("customers")}
+              {t("customer")}
             </p>
             <Can perm={{ customers: ["edit"] }}>
               <button

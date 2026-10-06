@@ -65,8 +65,8 @@ export default function TopBar() {
   return (
     <>
       <header className="fixed start-0 top-0 z-40 flex h-16 w-full items-center justify-between border-outline-variant border-b bg-surface/95 px-4 shadow-sm backdrop-blur-sm md:px-8 lg:start-64 lg:w-[calc(100%-16rem)]">
-        <div className="flex flex-1 items-center gap-4">
-          <div className="flex items-center gap-2 lg:hidden">
+        <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
+          <div className="flex shrink-0 items-center gap-2 lg:hidden">
             <img
               alt=""
               aria-hidden="true"
@@ -79,12 +79,12 @@ export default function TopBar() {
           </div>
           <button
             aria-label={t("command_palette.open")}
-            className="group flex min-h-11 w-full max-w-xs items-center gap-2 rounded-full bg-surface-container-high px-3 text-on-surface-variant transition-colors hover:bg-surface-container-highest md:w-96"
+            className="group flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-full bg-surface-container-high text-on-surface-variant transition-colors hover:bg-surface-container-highest sm:w-full sm:max-w-xs sm:shrink sm:justify-start sm:px-3 md:w-96"
             onClick={openCommandPalette}
             type="button"
           >
             <Icon className="text-lg" name="search" />
-            <span className="min-w-0 flex-1 truncate text-start text-sm">
+            <span className="hidden min-w-0 flex-1 truncate text-start text-sm sm:block">
               {t("command_palette.placeholder")}
             </span>
             <kbd className="pointer-events-none hidden shrink-0 rounded-md bg-surface-container-highest px-1.5 py-0.5 font-mono text-[10px] tracking-wide group-focus-within:hidden md:block">
