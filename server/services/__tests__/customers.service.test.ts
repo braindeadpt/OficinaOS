@@ -329,6 +329,36 @@ describe("search", () => {
     prisma = mockPrisma();
   });
 
+  it("matches a phone typed with spaces or a +351 prefix", async () => {
+    (prisma.$queryRaw as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "cust-7" },
+    ]);
+    (prisma.customer.findMany as ReturnType<typeof vi.fn>).mockResolvedValue(
+      []
+    );
+
+    await search(prisma, { limit: 10, q: "+351 912 345" });
+
+    const sqlCall = (prisma.$queryRaw as ReturnType<typeof vi.fn>).mock
+      .calls[0];
+    expect(sqlCall.slice(1)).toContain("912345");
+    const findManyCall = (prisma.customer.findMany as ReturnType<typeof vi.fn>)
+      .mock.calls[0];
+    expect(findManyCall[0].where.OR).toContainEqual({
+      id: { in: ["cust-7"] },
+    });
+  });
+
+  it("does not run the phone lookup for a name", async () => {
+    (prisma.customer.findMany as ReturnType<typeof vi.fn>).mockResolvedValue(
+      []
+    );
+
+    await search(prisma, { limit: 10, q: "Maria 2" });
+
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
+  });
+
   it("searches by name or phone", async () => {
     const mockResults = [
       { email: "john@test.com", id: "1", name: "John", phone: "+1234567890" },

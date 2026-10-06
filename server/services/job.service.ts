@@ -56,6 +56,7 @@ import {
   computeJobBalance,
   settlePaymentOnDelivery,
 } from "./payment.service.js";
+import { resolveTechnicianNames } from "./technician-names.js";
 
 export interface NotifyContext {
   prisma: PrismaClient;
@@ -1082,11 +1083,12 @@ const STATUS_TEMPLATE_MAP: Record<JobStatusType, string> = {
   [JobStatus.INTAKE]: "",
 };
 
-export function getJobHistory(prisma: PrismaClient, jobId: string) {
-  return auditFindManyWithInclude(
+export async function getJobHistory(prisma: PrismaClient, jobId: string) {
+  const entries = await auditFindManyWithInclude(
     prisma,
     { jobId },
     { user: { select: { id: true, name: true, role: true } } },
     { createdAt: "desc" }
   );
+  return resolveTechnicianNames(prisma, entries);
 }

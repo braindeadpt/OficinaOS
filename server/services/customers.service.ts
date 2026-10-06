@@ -6,7 +6,11 @@ import type {
   CustomerSearchQueryInput,
   UpdateCustomerInput,
 } from "@shared/schemas/customer.schema";
-import { normalizePhone } from "@shared/utils/phone";
+import {
+  MIN_PHONE_SEARCH_DIGITS,
+  normalizePhone,
+  phoneSearchDigits,
+} from "@shared/utils/phone";
 import {
   count as customerCount,
   findMany as customerFindMany,
@@ -16,8 +20,33 @@ import {
   update as customerUpdate,
   upsert as customerUpsert,
   findByNormalizedPhone,
+  findIdsByPhoneDigits,
   findUniqueWithJobs,
 } from "../repositories/customer.repository.js";
+
+/** Upper bound on phone matches folded into a search; plenty for a shop. */
+const PHONE_MATCH_LIMIT = 200;
+
+/**
+ * Customers whose phone matches `term` ignoring spaces and a +351/00351
+ * prefix, as an extra OR branch. null when the term is not phone-like.
+ */
+async function phoneMatchClause(
+  prisma: PrismaClient,
+  term: string
+): Promise<Prisma.CustomerWhereInput | null> {
+  const digits = phoneSearchDigits(term);
+  if (digits.length < MIN_PHONE_SEARCH_DIGITS) {
+    return null;
+  }
+  // Names don't carry digits; a term that is mostly letters is a name.
+  const letters = term.replace(/[^\p{L}]/gu, "").length;
+  if (letters > 0) {
+    return null;
+  }
+  const ids = await findIdsByPhoneDigits(prisma, digits, PHONE_MATCH_LIMIT);
+  return ids.length > 0 ? { id: { in: ids } } : null;
+}
 
 export async function create(prisma: PrismaClient, input: CreateCustomerInput) {
   const email = input.email?.trim() || null;
@@ -108,10 +137,15 @@ export async function list(
 
   const where: Prisma.CustomerWhereInput = {};
   if (search) {
-    where.OR = [
+    const or: Prisma.CustomerWhereInput[] = [
       { name: { contains: search, mode: "insensitive" } },
       { phone: { contains: search, mode: "insensitive" } },
     ];
+    const phoneMatch = await phoneMatchClause(prisma, search);
+    if (phoneMatch) {
+      or.push(phoneMatch);
+    }
+    where.OR = or;
   }
   // GDPR campaign/audit support: list only opted-in (or only opted-out)
   // customers. whatsappConsent defaults to false in the schema, so the
@@ -162,14 +196,18 @@ export async function search(
 ) {
   const { q, limit } = query;
 
+  const or: Prisma.CustomerWhereInput[] = [
+    { name: { contains: q, mode: "insensitive" } },
+    { phone: { startsWith: q } },
+  ];
+  const phoneMatch = await phoneMatchClause(prisma, q);
+  if (phoneMatch) {
+    or.push(phoneMatch);
+  }
+
   return await customerSearch(
     prisma,
-    {
-      OR: [
-        { name: { contains: q, mode: "insensitive" } },
-        { phone: { startsWith: q } },
-      ],
-    },
+    { OR: or },
     {
       _count: { select: { jobs: true } },
       email: true,
