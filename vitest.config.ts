@@ -12,6 +12,9 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
+    // First test in a file builds the Fastify app and cold-imports modules —
+    // under parallel load the 5s default flakes (seen in pre-commit runs).
+    testTimeout: 15_000,
     include: [
       "src/**/*.{test,spec}.{ts,tsx}",
       "server/**/*.{test,spec}.ts",
