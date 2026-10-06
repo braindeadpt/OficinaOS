@@ -5,6 +5,7 @@ import { AppError } from "../../shared/errors/app-error.js";
 import { decryptSecret, encryptSecret } from "../lib/crypto.js";
 import { create as createIntakeRequest } from "../repositories/intake-request.repository.js";
 import { findManyUsers } from "../repositories/notification.repository.js";
+import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import { generateIntakeRequestCode } from "../utils/intake-request-code.js";
 import type { NotifyContext } from "./job.service.js";
 import { notify } from "./notification-dispatch.js";
@@ -96,9 +97,7 @@ export async function pairWithCloud(
   input: { apiUrl: string; code: string },
   log: FastifyBaseLogger
 ): Promise<CloudStatus> {
-  const settings = await prisma.shopSettings.findUniqueOrThrow({
-    where: { id: "default" },
-  });
+  const settings = await getOrCreateShopSettings(prisma);
 
   const res = await cloudFetch(input.apiUrl, "/pairing/redeem", {
     method: "POST",
@@ -141,9 +140,7 @@ export async function pairWithCloud(
   // Best-effort first sync — pairing already succeeded even if this fails.
   await syncCloudEntitlements(prisma, log).catch(() => null);
 
-  const updated = await prisma.shopSettings.findUniqueOrThrow({
-    where: { id: "default" },
-  });
+  const updated = await getOrCreateShopSettings(prisma);
   return toStatus(updated);
 }
 
@@ -153,9 +150,7 @@ export async function syncCloudEntitlements(
   log: FastifyBaseLogger,
   notifyCtx?: NotifyContext
 ): Promise<CloudStatus> {
-  const settings = await prisma.shopSettings.findUniqueOrThrow({
-    where: { id: "default" },
-  });
+  const settings = await getOrCreateShopSettings(prisma);
   if (!(settings.cloudApiUrl && settings.cloudShopTokenEncrypted)) {
     throw new AppError("CLOUD_NOT_PAIRED");
   }
@@ -274,9 +269,7 @@ export async function getCloudStatus(
   log: FastifyBaseLogger,
   staleMs = 5 * 60 * 1000
 ): Promise<CloudStatus> {
-  const settings = await prisma.shopSettings.findUniqueOrThrow({
-    where: { id: "default" },
-  });
+  const settings = await getOrCreateShopSettings(prisma);
   if (!settings.cloudShopTokenEncrypted) {
     return toStatus(settings);
   }

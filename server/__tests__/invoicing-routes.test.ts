@@ -42,7 +42,6 @@ function fakePrisma(overrides: Partial<SettingsRow> = {}) {
     prisma: {
       shopSettings: {
         findUnique: vi.fn(async () => ({ ...row })),
-        findUniqueOrThrow: vi.fn(async () => ({ ...row })),
         upsert,
       },
     },

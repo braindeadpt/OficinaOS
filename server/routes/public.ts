@@ -3,6 +3,7 @@ import { AppError } from "@shared/errors/app-error.js";
 import { preCheckSubmitSchema } from "@shared/schemas/intake-request.schema";
 import { quoteRespondSchema } from "@shared/schemas/quote.schema";
 import type { FastifyPluginAsync } from "fastify";
+import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import { submitPreCheckRequest } from "../services/intake-request.service.js";
 import { respondToQuote } from "../services/job-quote.service.js";
 import { handleInboundSms } from "../services/sms.service.js";
@@ -158,9 +159,7 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
   app.post("/sms/inbound/:token", {
     handler: async (req, reply) => {
       const { token } = req.params as { token: string };
-      const settings = await app.prisma.shopSettings.findUniqueOrThrow({
-        where: { id: "default" },
-      });
+      const settings = await getOrCreateShopSettings(app.prisma);
       // Token errado responde 404 — não dá pistas sobre a existência da rota.
       if (
         !(

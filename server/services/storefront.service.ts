@@ -3,6 +3,7 @@ import { Role } from "@shared/constants/roles.js";
 import type { FastifyBaseLogger } from "fastify";
 import { create as createIntakeRequest } from "../repositories/intake-request.repository.js";
 import { findManyUsers } from "../repositories/notification.repository.js";
+import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import { generateIntakeRequestCode } from "../utils/intake-request-code.js";
 import { cloudFetch } from "./cloud.service.js";
@@ -86,9 +87,9 @@ export async function pushStorefront(
   token: string,
   log: FastifyBaseLogger
 ): Promise<void> {
-  const settings = (await prisma.shopSettings.findUniqueOrThrow({
-    where: { id: "default" },
-  })) as unknown as SettingsRow;
+  const settings = (await getOrCreateShopSettings(
+    prisma
+  )) as unknown as SettingsRow;
   if (!settings.storeDirty) {
     return;
   }

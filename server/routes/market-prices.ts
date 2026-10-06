@@ -3,6 +3,7 @@ import { AppError } from "@shared/errors/app-error.js";
 import type { FastifyPluginAsync } from "fastify";
 import { decryptSecret } from "../lib/crypto.js";
 import { requirePermission } from "../middlewares/rbac.js";
+import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import { cloudFetch } from "../services/cloud.service.js";
 import {
   normalizePriceKey,
@@ -39,9 +40,7 @@ interface StatRow {
 async function requireMarketPrices(
   prisma: PrismaClient
 ): Promise<{ auth: CloudAuth; settings: { sharePrices: boolean } }> {
-  const settings = await prisma.shopSettings.findUniqueOrThrow({
-    where: { id: "default" },
-  });
+  const settings = await getOrCreateShopSettings(prisma);
   if (!(settings.cloudApiUrl && settings.cloudShopTokenEncrypted)) {
     throw new AppError("CLOUD_NOT_PAIRED");
   }
