@@ -9,7 +9,7 @@ import {
 import { cacheControlFor, IMMUTABLE_CACHE } from "../lib/static-cache.js";
 import securityPlugin from "../plugins/security.js";
 
-// The real security plugin (global limit: 100 req/min) on a bare app, so the
+// The real security plugin (global limit: 300 req/min) on a bare app, so the
 // assertions cover the exact options production registers.
 async function buildApp() {
   const app = Fastify();
@@ -104,7 +104,7 @@ describe("global rate limit (security plugin)", () => {
   it("answers 429 with Retry-After and a JSON body once the budget is spent", async () => {
     const app = await buildApp();
     let res = await app.inject("/api/ping");
-    for (let i = 0; i < 100 && res.statusCode === 200; i++) {
+    for (let i = 0; i < 300 && res.statusCode === 200; i++) {
       res = await app.inject("/api/ping");
     }
     expect(res.statusCode).toBe(429);
@@ -126,7 +126,7 @@ describe("global rate limit (security plugin)", () => {
 
   it("does not count static assets against the budget", async () => {
     const app = await buildApp();
-    for (let i = 0; i < 150; i++) {
+    for (let i = 0; i < 350; i++) {
       const res = await app.inject("/assets/app-ABC123.js");
       expect(res.statusCode).toBe(200);
     }

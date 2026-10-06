@@ -62,18 +62,18 @@ describe("matchRoute", () => {
   it("prefix-matches parent routes to sub-routes", () => {
     const jobsOverride = matchRoute("/api/jobs", routeSecurity);
     expect(jobsOverride?.rateLimit).toEqual({
-      max: 30,
+      max: 300,
       timeWindow: "1 minute",
     });
 
     const jobsSub = matchRoute("/api/jobs/abc-123", routeSecurity);
-    expect(jobsSub?.rateLimit).toEqual({ max: 30, timeWindow: "1 minute" });
+    expect(jobsSub?.rateLimit).toEqual({ max: 300, timeWindow: "1 minute" });
 
     const jobsDeep = matchRoute("/api/jobs/abc-123/status", routeSecurity);
-    expect(jobsDeep?.rateLimit).toEqual({ max: 30, timeWindow: "1 minute" });
+    expect(jobsDeep?.rateLimit).toEqual({ max: 300, timeWindow: "1 minute" });
 
     const jobsNotes = matchRoute("/api/jobs/abc-123/notes", routeSecurity);
-    expect(jobsNotes?.rateLimit).toEqual({ max: 30, timeWindow: "1 minute" });
+    expect(jobsNotes?.rateLimit).toEqual({ max: 300, timeWindow: "1 minute" });
   });
 
   it("does not match shorter URLs against longer patterns", () => {
@@ -98,7 +98,7 @@ describe("mergeRouteConfig", () => {
 
   it("applies the central map when a route declares no config", () => {
     const merged = effective("/api/jobs");
-    expect(merged.rateLimit).toEqual({ max: 30, timeWindow: "1 minute" });
+    expect(merged.rateLimit).toEqual({ max: 300, timeWindow: "1 minute" });
     expect(merged.allowSensitiveKeys).toBe(false);
   });
 
@@ -144,7 +144,7 @@ describe("mergeRouteConfig", () => {
 describe("DEFAULT_SECURITY", () => {
   it("has correct defaults", () => {
     expect(DEFAULT_SECURITY.rateLimit).toEqual({
-      max: 100,
+      max: 300,
       timeWindow: "1 minute",
     });
     expect(DEFAULT_SECURITY.csrf).toBeUndefined();

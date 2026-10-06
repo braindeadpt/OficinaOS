@@ -33,8 +33,10 @@ const signInKeyGenerator = (req: FastifyRequest): string => {
 // budget in the app and always keys on the caller's IP.
 const lookupKeyGenerator = (req: FastifyRequest): string => req.ip;
 
+// Authenticated API traffic is keyed per user (see plugins/security.ts), so
+// staff sharing one shop IP do not share a budget.
 export const DEFAULT_SECURITY: RouteSecurityOverride = {
-  rateLimit: { max: 100, timeWindow: "1 minute" },
+  rateLimit: { max: 300, timeWindow: "1 minute" },
   allowSensitiveKeys: false,
 };
 
@@ -238,7 +240,10 @@ export const routeSecurity: [string, RouteSecurityOverride][] = [
       },
     },
   ],
-  ["/api/jobs", { rateLimit: { max: 30, timeWindow: "1 minute" } }],
+  // Staff screens poll and refetch jobs constantly (lists, detail, status
+  // changes, notes). Keyed per signed-in user, 300/min stays far above normal
+  // use even for a busy counter, while still capping a runaway client.
+  ["/api/jobs", { rateLimit: { max: 300, timeWindow: "1 minute" } }],
   // A streaming completion is by far the most expensive request the API serves.
   ["/api/ai/chat/stream", { rateLimit: { max: 10, timeWindow: "1 minute" } }],
   ["/api/ai", { rateLimit: { max: 30, timeWindow: "1 minute" } }],
