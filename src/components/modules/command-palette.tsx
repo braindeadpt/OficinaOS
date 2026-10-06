@@ -311,7 +311,7 @@ export default function CommandPalette() {
     >
       <button
         aria-label={t("command_palette.close")}
-        className="absolute inset-0 -z-10 cursor-default bg-black/50 backdrop-blur-sm"
+        className="absolute inset-0 -z-10 cursor-default bg-overlay backdrop-blur-sm"
         onClick={close}
         tabIndex={-1}
         type="button"

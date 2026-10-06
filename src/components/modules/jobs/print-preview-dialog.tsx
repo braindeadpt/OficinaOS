@@ -64,7 +64,7 @@ export default function PrintPreviewDialog() {
     >
       <button
         aria-label={t("close")}
-        className="absolute inset-0 bg-on-surface/40"
+        className="absolute inset-0 bg-overlay"
         onClick={closePrintPreview}
         type="button"
       />

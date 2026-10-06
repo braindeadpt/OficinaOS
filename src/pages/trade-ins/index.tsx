@@ -330,7 +330,7 @@ export default function TradeInsPage() {
         <div className="fixed inset-0 z-[60] flex items-center justify-center">
           <button
             aria-label={t("cancel")}
-            className="absolute inset-0 bg-on-surface/40"
+            className="absolute inset-0 bg-overlay"
             onClick={() => setPending(null)}
             type="button"
           />

@@ -1,0 +1,83 @@
+/*
+ * OficinaOS — camada de compatibilidade para a app (src/app.css usa nomes Material 3).
+ * Fase 1 da migração: substituir o bloco de cores do @theme em src/app.css por este ficheiro.
+ * Todas as classes existentes (bg-surface-container-high, text-on-surface-variant, …) passam a ler
+ * os tokens novos e ganham modo escuro automaticamente. Depois migrar para os nomes novos e apagar isto.
+ *
+ * Uso em src/app.css:
+ *   @import "tailwindcss";
+ *   @import "../design-system/tokens.css";
+ *   @import "../design-system/tokens.theme.css";
+ *   @import "../design-system/compat-app-material.css";
+ */
+@theme inline {
+  /* superfícies */
+  --color-background: var(--oos-color-bg);
+  --color-surface: var(--oos-color-bg);
+  --color-surface-bright: var(--oos-color-bg);
+  --color-surface-container-lowest: var(--oos-color-surface);
+  --color-surface-container-low: var(--oos-color-surface-2);
+  --color-surface-container: var(--oos-color-surface-2);
+  --color-surface-container-high: var(--oos-color-surface-3);
+  --color-surface-container-highest: var(--oos-color-surface-3);
+  --color-surface-dim: var(--oos-color-surface-3);
+  --color-surface-variant: var(--oos-color-surface-3);
+  --color-surface-tint: var(--oos-color-primary);
+  --color-inverse-surface: var(--oos-color-inverse);
+  --color-inverse-on-surface: var(--oos-color-on-inverse);
+
+  /* texto e contornos */
+  --color-on-background: var(--oos-color-text);
+  --color-on-surface: var(--oos-color-text);
+  --color-on-surface-variant: var(--oos-color-text-muted);
+  --color-outline: var(--oos-color-border-strong);
+  --color-outline-variant: var(--oos-color-border);
+
+  /* primário */
+  --color-primary: var(--oos-color-primary);
+  --color-on-primary: var(--oos-color-on-primary);
+  --color-primary-container: var(--oos-color-primary-hover);
+  --color-on-primary-container: var(--oos-color-on-primary);
+  --color-primary-fixed: var(--oos-color-primary-soft);
+  --color-primary-fixed-dim: var(--oos-color-primary-soft);
+  --color-on-primary-fixed: var(--oos-color-text);
+  --color-on-primary-fixed-variant: var(--oos-color-on-primary-soft);
+  --color-inverse-primary: var(--oos-color-link);
+  --color-primary-tint: var(--oos-color-primary-soft);
+
+  /* secundário (azul-ardósia) → família "Receção" */
+  --color-secondary: var(--oos-color-text-muted);
+  --color-on-secondary: var(--oos-color-surface);
+  --color-secondary-container: var(--oos-status-intake-bg);
+  --color-on-secondary-container: var(--oos-status-intake-fg);
+  --color-secondary-fixed: var(--oos-status-intake-bg);
+  --color-secondary-fixed-dim: var(--oos-status-intake-bg);
+  --color-on-secondary-fixed: var(--oos-color-text);
+  --color-on-secondary-fixed-variant: var(--oos-status-intake-fg);
+
+  /* terciário ("forge amber") → aviso */
+  --color-tertiary: var(--oos-color-warning);
+  --color-on-tertiary: var(--oos-color-on-warning);
+  --color-tertiary-container: var(--oos-color-warning);
+  --color-on-tertiary-container: var(--oos-color-on-warning);
+  --color-tertiary-fixed: var(--oos-color-warning-soft);
+  --color-tertiary-fixed-dim: var(--oos-color-warning-soft);
+  --color-on-tertiary-fixed: var(--oos-color-text);
+  --color-on-tertiary-fixed-variant: var(--oos-color-on-warning-soft);
+
+  /* erro / sucesso */
+  --color-error: var(--oos-color-danger);
+  --color-on-error: var(--oos-color-on-danger);
+  --color-error-container: var(--oos-color-danger-soft);
+  --color-on-error-container: var(--oos-color-on-danger-soft);
+  --color-success: var(--oos-color-success);
+  --color-on-success: var(--oos-color-on-success);
+
+  /* tipografia antiga → nova */
+  --font-family-headline: var(--oos-font-display);
+  --font-family-body: var(--oos-font-ui);
+  --font-family-label: var(--oos-font-ui);
+  --font-family-mono: var(--oos-font-mono);
+
+  --shadow-premium: var(--oos-shadow-md);
+}

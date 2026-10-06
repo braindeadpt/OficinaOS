@@ -327,7 +327,7 @@ export default function SettingsPage() {
       </div>
 
       {pendingTab && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-on-surface/40">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-overlay">
           <div ref={dialogRef}>
             <ConfirmDiscardDialog
               description={t("confirm_tab_switch_desc")}

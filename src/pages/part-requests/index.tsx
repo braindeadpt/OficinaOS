@@ -50,7 +50,7 @@ function Modal({
     >
       <button
         aria-label="close"
-        className="absolute inset-0 bg-on-surface/60"
+        className="absolute inset-0 bg-overlay"
         onClick={onClose}
         type="button"
       />

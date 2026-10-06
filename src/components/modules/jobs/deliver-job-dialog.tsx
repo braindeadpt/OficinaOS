@@ -190,7 +190,7 @@ export default function DeliverJobDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <button
         aria-hidden="true"
-        className="absolute inset-0 bg-on-surface/40"
+        className="absolute inset-0 bg-overlay"
         onClick={close}
         tabIndex={-1}
         type="button"

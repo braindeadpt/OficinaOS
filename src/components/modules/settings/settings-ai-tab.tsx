@@ -873,7 +873,7 @@ export default function SettingsAiTab({
       )}
 
       {deleteTarget && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-on-surface/40">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-overlay">
           <div
             className="relative z-[60] mx-4 w-full max-w-[360px] overflow-y-auto rounded-2xl bg-surface-container-lowest shadow-2xl"
             ref={deleteDialogRef}

@@ -382,7 +382,7 @@ export default function TechnicianKanban() {
 
       {/* Beautiful Modal for holdReason/laborHours */}
       {transitioningJob && targetStatus && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl bg-surface-container p-6 shadow-xl ring-1 ring-black/10 transition-all">
             <h4 className="font-extrabold font-headline text-lg text-on-surface">
               {targetStatus === JobStatus.ON_HOLD

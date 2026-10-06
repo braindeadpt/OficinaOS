@@ -2,6 +2,7 @@ import { ROLE_LABELS } from "@shared/constants";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { NavLink } from "react-router";
+import { Wordmark } from "@/components/ui/wordmark";
 import { can, useCan } from "@/hooks/use-can";
 import { NAV_ITEMS } from "@/lib/navigation";
 import { getInitials } from "@/lib/utils";
@@ -51,8 +52,8 @@ export default function Sidebar() {
           width={40}
         />
         <div>
-          <h1 className="font-black font-headline text-primary text-xl tracking-tight">
-            OficinaOS
+          <h1 className="text-xl">
+            <Wordmark />
           </h1>
           <p className="font-medium text-on-surface-variant text-xs tracking-wide">
             {t("app_tagline")}

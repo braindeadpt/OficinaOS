@@ -32,7 +32,7 @@ export default function DeleteRepairDialog({
     >
       <button
         aria-label={t("close_modal")}
-        className="absolute inset-0 bg-on-surface/40"
+        className="absolute inset-0 bg-overlay"
         onClick={onClose}
         type="button"
       />

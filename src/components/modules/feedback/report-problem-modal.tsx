@@ -129,7 +129,7 @@ export default function ReportProblemModal({
     >
       <button
         aria-label={t("close_modal")}
-        className="absolute inset-0 bg-on-surface"
+        className="absolute inset-0 bg-overlay"
         onClick={onClose}
         type="button"
       />

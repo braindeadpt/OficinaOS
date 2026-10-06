@@ -50,7 +50,7 @@ export default function RenameDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4">
       <div
         className="w-full max-w-sm rounded-2xl bg-surface-container-high p-6 shadow-xl"
         role="dialog"

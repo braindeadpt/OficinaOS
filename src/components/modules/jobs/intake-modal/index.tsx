@@ -30,7 +30,7 @@ export default function IntakeModal({
     >
       <button
         aria-label={m.t("close_modal")}
-        className="absolute inset-0 bg-on-surface/40"
+        className="absolute inset-0 bg-overlay"
         onClick={m.handleBackdropClick}
         type="button"
       />
@@ -202,7 +202,7 @@ export default function IntakeModal({
           <div
             aria-label={m.t("intake.discard_title")}
             aria-modal="true"
-            className="absolute inset-0 z-40 flex items-center justify-center rounded-xl bg-on-surface/50"
+            className="absolute inset-0 z-40 flex items-center justify-center rounded-xl bg-overlay"
             role="dialog"
           >
             <div className="mx-4 w-full max-w-xs space-y-4 rounded-2xl bg-surface-container-lowest p-6 shadow-2xl">

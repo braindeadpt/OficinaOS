@@ -417,7 +417,7 @@ export default function PosPage() {
         >
           <button
             aria-label={t("close_modal")}
-            className="absolute inset-0 bg-on-surface/40"
+            className="absolute inset-0 bg-overlay"
             onClick={() => setShowCustomForm(false)}
             type="button"
           />
@@ -503,7 +503,7 @@ export default function PosPage() {
         >
           <button
             aria-label={t("close_modal")}
-            className="absolute inset-0 bg-on-surface/40"
+            className="absolute inset-0 bg-overlay"
             onClick={() => setShowCheckout(false)}
             type="button"
           />

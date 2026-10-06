@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
+import { Wordmark } from "@/components/ui/wordmark";
 import { useCan } from "@/hooks/use-can";
 import { useShortcutLabel } from "@/hooks/use-shortcut-label";
 import { useWs } from "@/hooks/use-ws";
@@ -73,9 +74,7 @@ export default function TopBar() {
               src="/logo-mark.svg"
               width={24}
             />
-            <span className="font-black font-headline text-on-surface text-sm uppercase tracking-tighter">
-              OficinaOS
-            </span>
+            <Wordmark className="text-base" />
           </div>
           <button
             aria-label={t("command_palette.open")}

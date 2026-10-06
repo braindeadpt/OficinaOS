@@ -360,7 +360,7 @@ export default function StatusPopover({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <button
             aria-hidden="true"
-            className="absolute inset-0 bg-on-surface/40"
+            className="absolute inset-0 bg-overlay"
             disabled={loading}
             onClick={handleCancelReason}
             tabIndex={-1}

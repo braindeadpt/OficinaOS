@@ -182,7 +182,7 @@ export default function AddPartDialog({
     >
       <button
         aria-label={t("close_modal")}
-        className="absolute inset-0 bg-on-surface/40"
+        className="absolute inset-0 bg-overlay"
         onClick={isFormDirty ? undefined : onClose}
         type="button"
       />

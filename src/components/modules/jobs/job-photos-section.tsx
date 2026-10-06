@@ -190,7 +190,7 @@ export default function JobPhotosSection({
                   ? t("jobs_detail_confirm_remove")
                   : t("intake.remove_photo")
               }
-              className={`absolute inset-0 flex items-center justify-center bg-on-surface/50 transition-opacity ${confirmDelete === photo.id || editMode ? "opacity-100" : "sm:opacity-0 sm:group-hover:opacity-100"}`}
+              className={`absolute inset-0 flex items-center justify-center bg-overlay transition-opacity ${confirmDelete === photo.id || editMode ? "opacity-100" : "sm:opacity-0 sm:group-hover:opacity-100"}`}
               disabled={deleting.has(photo.id)}
               onClick={(e) => {
                 e.stopPropagation();
@@ -318,7 +318,7 @@ function LightboxOverlay({
   return (
     <button
       aria-label={t("close_modal")}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-on-surface/60"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-overlay"
       onClick={handleOverlayClick}
       onKeyDown={(e) => {
         if (e.key === "Escape") {

@@ -287,7 +287,7 @@ export default function BottomNav() {
         >
           <button
             aria-label={t("close")}
-            className="absolute inset-0 bg-on-surface/40 backdrop-blur-sm"
+            className="absolute inset-0 bg-overlay backdrop-blur-sm"
             onClick={closeMoreSheet}
             type="button"
           />

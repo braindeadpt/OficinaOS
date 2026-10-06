@@ -1,0 +1,269 @@
+/*
+ * OficinaOS — design tokens · direção A «Parafuso» · v0.1 (proposta, 2026-10-06)
+ * Gerado por design-system/src/gen_tokens.py — não editar à mão; alterar directions.py e voltar a gerar.
+ * Contraste WCAG AA verificado em claro e escuro (design-system/contrast-report.md).
+ *
+ * Modo escuro:
+ *   - segue o sistema por omissão (prefers-color-scheme);
+ *   - forçar com <html data-theme="dark"> ou class="dark"; forçar claro com data-theme="light".
+ */
+
+:root {
+  /* Tipografia */
+  --oos-font-ui: "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --oos-font-display: "Manrope Variable", "Manrope", "Inter Variable", "Inter", system-ui, sans-serif;
+  --oos-font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  /* Escala tipográfica: tamanho / altura de linha */
+  --oos-text-caption: 0.6875rem;  --oos-leading-caption: 1rem;      /* 11/16 etiquetas em maiúsculas */
+  --oos-text-xs: 0.75rem;         --oos-leading-xs: 1rem;           /* 12/16 ajuda, metadados */
+  --oos-text-sm: 0.8125rem;       --oos-leading-sm: 1.125rem;       /* 13/18 tabelas densas (balcão) */
+  --oos-text-base: 0.875rem;      --oos-leading-base: 1.25rem;      /* 14/20 corpo da app */
+  --oos-text-md: 0.9375rem;       --oos-leading-md: 1.375rem;       /* 15/22 corpo portal/site */
+  --oos-text-lg: 1.125rem;        --oos-leading-lg: 1.625rem;       /* 18/26 subtítulo */
+  --oos-text-xl: 1.375rem;        --oos-leading-xl: 1.75rem;        /* 22/28 título de secção (display) */
+  --oos-text-2xl: 1.75rem;        --oos-leading-2xl: 2.125rem;      /* 28/34 título de página (display) */
+  --oos-text-3xl: 2.25rem;        --oos-leading-3xl: 2.5rem;        /* 36/40 número-herói / site */
+  --oos-text-4xl: 3rem;           --oos-leading-4xl: 3.25rem;       /* 48/52 hero do site */
+  --oos-weight-regular: 400; --oos-weight-medium: 500; --oos-weight-semibold: 600; --oos-weight-bold: 700; --oos-weight-heavy: 800;
+  --oos-tracking-tight: -0.02em; --oos-tracking-caps: 0.06em;
+
+  /* Espaçamento (base 4 px) */
+  --oos-space-0: 0; --oos-space-0_5: 0.125rem; --oos-space-1: 0.25rem; --oos-space-1_5: 0.375rem; --oos-space-2: 0.5rem;
+  --oos-space-3: 0.75rem; --oos-space-4: 1rem; --oos-space-5: 1.25rem; --oos-space-6: 1.5rem; --oos-space-8: 2rem;
+  --oos-space-10: 2.5rem; --oos-space-12: 3rem; --oos-space-16: 4rem; --oos-space-20: 5rem; --oos-space-24: 6rem;
+
+  /* Alturas de controlo */
+  --oos-control-sm: 2rem;    /* 32 px — só em tabelas densas com rato */
+  --oos-control-md: 2.5rem;  /* 40 px — predefinição no desktop */
+  --oos-control-lg: 3rem;    /* 48 px — tátil (tablet, telemóvel, portal) */
+  --oos-row-dense: 2.25rem;  /* 36 px — lista de balcão */
+  --oos-row-comfy: 3rem;     /* 48 px — lista em tablet */
+
+  /* Raio */
+  --oos-radius-xs: 4px; --oos-radius-sm: 6px; --oos-radius-md: 8px; --oos-radius-lg: 12px; --oos-radius-xl: 16px; --oos-radius-pill: 9999px;
+
+  /* Movimento */
+  --oos-duration-instant: 80ms; --oos-duration-fast: 120ms; --oos-duration-base: 180ms; --oos-duration-slow: 280ms;
+  --oos-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --oos-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --oos-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  /* Camadas */
+  --oos-z-sticky: 10; --oos-z-dropdown: 30; --oos-z-overlay: 40; --oos-z-dialog: 50; --oos-z-toast: 60;
+
+  /* Foco */
+  --oos-focus-ring: 0 0 0 2px var(--oos-color-surface), 0 0 0 4px var(--oos-color-focus);
+
+  /* Marca da loja (páginas do cliente final). O servidor substitui estes 3 valores; ver shop-accent.js */
+  --oos-shop-accent: var(--oos-color-primary);
+  --oos-shop-on-accent: var(--oos-color-on-primary);
+  --oos-shop-accent-text: var(--oos-color-primary);
+  --oos-shop-accent-border: var(--oos-color-primary);
+
+  --oos-color-bg: #F5F7FB;
+  --oos-color-surface: #FFFFFF;
+  --oos-color-surface-2: #EEF2F8;
+  --oos-color-border: #D6DDE8;
+  --oos-color-border-strong: #8792A6;
+  --oos-color-text: #111827;
+  --oos-color-text-muted: #4A5468;
+  --oos-color-text-subtle: #5F6878;
+  --oos-color-primary: #1D4ED8;
+  --oos-color-primary-hover: #1A3FB0;
+  --oos-color-on-primary: #FFFFFF;
+  --oos-color-primary-soft: #E6EDFF;
+  --oos-color-on-primary-soft: #1A3DAA;
+  --oos-color-accent: #0F766E;
+  --oos-color-focus: #1D4ED8;
+  --oos-color-success: #15803D;
+  --oos-color-warning: #A15C00;
+  --oos-color-danger: #C42424;
+  --oos-color-info: #1D4ED8;
+  --oos-color-danger-soft: #FDE3E3;
+  --oos-color-on-danger: #FFFFFF;
+  --oos-color-surface-3: #E3E8F0;
+  --oos-color-overlay: rgb(17 24 39 / 0.45);
+  --oos-color-inverse: #111827;
+  --oos-color-on-inverse: #F5F7FB;
+  --oos-color-success-soft: #DBF3E3;
+  --oos-color-warning-soft: #FCEFD2;
+  --oos-color-info-soft: #E6EDFF;
+  --oos-color-on-success: #FFFFFF;
+  --oos-color-on-warning: #FFFFFF;
+  --oos-color-selection: rgb(29 78 216 / 0.18);
+  --oos-color-on-success-soft: #0F5A31;
+  --oos-color-on-warning-soft: #764400;
+  --oos-color-on-info-soft: #1A3DAA;
+  --oos-color-on-danger-soft: #9E1A1A;
+  --oos-color-link: #1D4ED8;
+  --oos-status-intake-bg: #E6EDF6;
+  --oos-status-intake-fg: #2B4669;
+  --oos-status-intake-dot: #4F6F96;
+  --oos-status-waiting-for-parts-bg: #FCEFD2;
+  --oos-status-waiting-for-parts-fg: #764400;
+  --oos-status-waiting-for-parts-dot: #C27C0E;
+  --oos-status-in-repair-bg: #E2E9FF;
+  --oos-status-in-repair-fg: #1A3DAA;
+  --oos-status-in-repair-dot: #2F5BEA;
+  --oos-status-on-hold-bg: #F1E8FB;
+  --oos-status-on-hold-fg: #5A2A8A;
+  --oos-status-on-hold-dot: #8B5CC7;
+  --oos-status-done-bg: #DBF3E3;
+  --oos-status-done-fg: #0F5A31;
+  --oos-status-done-dot: #1F9D55;
+  --oos-status-delivered-bg: #ECEFF3;
+  --oos-status-delivered-fg: #3D4654;
+  --oos-status-delivered-dot: #7A8494;
+  --oos-status-returned-bg: #FDE3E3;
+  --oos-status-returned-fg: #9E1A1A;
+  --oos-status-returned-dot: #D93636;
+  --oos-status-cancelled-bg: #F1F2F4;
+  --oos-status-cancelled-fg: #575E6C;
+  --oos-status-cancelled-dot: #868D99;
+  --oos-shadow-sm: 0 1px 2px rgb(16 24 40 / .06), 0 1px 3px rgb(16 24 40 / .08);
+  --oos-shadow-md: 0 4px 12px -2px rgb(16 24 40 / .10), 0 2px 4px -2px rgb(16 24 40 / .06);
+  --oos-shadow-lg: 0 16px 40px -8px rgb(16 24 40 / .18);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not(.light) {
+    --oos-color-bg: #0B1120;
+    --oos-color-surface: #121A2C;
+    --oos-color-surface-2: #1A2438;
+    --oos-color-border: #2A3650;
+    --oos-color-border-strong: #6B7894;
+    --oos-color-text: #E8EDF6;
+    --oos-color-text-muted: #A6B1C5;
+    --oos-color-text-subtle: #8E9AB0;
+    --oos-color-primary: #7DA0FF;
+    --oos-color-primary-hover: #9DB7FF;
+    --oos-color-on-primary: #0B1120;
+    --oos-color-primary-soft: #1A2552;
+    --oos-color-on-primary-soft: #B6C8FF;
+    --oos-color-accent: #2DD4BF;
+    --oos-color-focus: #9DB7FF;
+    --oos-color-success: #4ADE80;
+    --oos-color-warning: #FBBF24;
+    --oos-color-danger: #F87171;
+    --oos-color-info: #7DA0FF;
+    --oos-color-danger-soft: #3C1517;
+    --oos-color-on-danger: #1A0707;
+    --oos-color-surface-3: #222D44;
+    --oos-color-overlay: rgb(0 0 0 / 0.6);
+    --oos-color-inverse: #E8EDF6;
+    --oos-color-on-inverse: #0B1120;
+    --oos-color-success-soft: #0E3220;
+    --oos-color-warning-soft: #382808;
+    --oos-color-info-soft: #1A2552;
+    --oos-color-on-success: #04210F;
+    --oos-color-on-warning: #241800;
+    --oos-color-selection: rgb(125 160 255 / 0.28);
+    --oos-color-on-success-soft: #86E2AC;
+    --oos-color-on-warning-soft: #F6C86A;
+    --oos-color-on-info-soft: #AEC1FF;
+    --oos-color-on-danger-soft: #FFB0B0;
+    --oos-color-link: #7DA0FF;
+    --oos-status-intake-bg: #1B2940;
+    --oos-status-intake-fg: #AFC6E6;
+    --oos-status-intake-dot: #6F93C2;
+    --oos-status-waiting-for-parts-bg: #382808;
+    --oos-status-waiting-for-parts-fg: #F6C86A;
+    --oos-status-waiting-for-parts-dot: #D99A1E;
+    --oos-status-in-repair-bg: #1A2552;
+    --oos-status-in-repair-fg: #AEC1FF;
+    --oos-status-in-repair-dot: #6F8FFF;
+    --oos-status-on-hold-bg: #2B1B41;
+    --oos-status-on-hold-fg: #D6BBF3;
+    --oos-status-on-hold-dot: #A57FDB;
+    --oos-status-done-bg: #0E3220;
+    --oos-status-done-fg: #86E2AC;
+    --oos-status-done-dot: #34C474;
+    --oos-status-delivered-bg: #222934;
+    --oos-status-delivered-fg: #BAC3D0;
+    --oos-status-delivered-dot: #7D8899;
+    --oos-status-returned-bg: #3C1517;
+    --oos-status-returned-fg: #FFB0B0;
+    --oos-status-returned-dot: #F05A5A;
+    --oos-status-cancelled-bg: #1D2129;
+    --oos-status-cancelled-fg: #9BA3B2;
+    --oos-status-cancelled-dot: #6B7383;
+    --oos-shadow-sm: 0 1px 2px rgb(0 0 0 / .4);
+    --oos-shadow-md: 0 4px 14px -2px rgb(0 0 0 / .5);
+    --oos-shadow-lg: 0 18px 44px -8px rgb(0 0 0 / .65);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"], :root.dark, [data-theme="dark"] {
+  --oos-color-bg: #0B1120;
+  --oos-color-surface: #121A2C;
+  --oos-color-surface-2: #1A2438;
+  --oos-color-border: #2A3650;
+  --oos-color-border-strong: #6B7894;
+  --oos-color-text: #E8EDF6;
+  --oos-color-text-muted: #A6B1C5;
+  --oos-color-text-subtle: #8E9AB0;
+  --oos-color-primary: #7DA0FF;
+  --oos-color-primary-hover: #9DB7FF;
+  --oos-color-on-primary: #0B1120;
+  --oos-color-primary-soft: #1A2552;
+  --oos-color-on-primary-soft: #B6C8FF;
+  --oos-color-accent: #2DD4BF;
+  --oos-color-focus: #9DB7FF;
+  --oos-color-success: #4ADE80;
+  --oos-color-warning: #FBBF24;
+  --oos-color-danger: #F87171;
+  --oos-color-info: #7DA0FF;
+  --oos-color-danger-soft: #3C1517;
+  --oos-color-on-danger: #1A0707;
+  --oos-color-surface-3: #222D44;
+  --oos-color-overlay: rgb(0 0 0 / 0.6);
+  --oos-color-inverse: #E8EDF6;
+  --oos-color-on-inverse: #0B1120;
+  --oos-color-success-soft: #0E3220;
+  --oos-color-warning-soft: #382808;
+  --oos-color-info-soft: #1A2552;
+  --oos-color-on-success: #04210F;
+  --oos-color-on-warning: #241800;
+  --oos-color-selection: rgb(125 160 255 / 0.28);
+  --oos-color-on-success-soft: #86E2AC;
+  --oos-color-on-warning-soft: #F6C86A;
+  --oos-color-on-info-soft: #AEC1FF;
+  --oos-color-on-danger-soft: #FFB0B0;
+  --oos-color-link: #7DA0FF;
+  --oos-status-intake-bg: #1B2940;
+  --oos-status-intake-fg: #AFC6E6;
+  --oos-status-intake-dot: #6F93C2;
+  --oos-status-waiting-for-parts-bg: #382808;
+  --oos-status-waiting-for-parts-fg: #F6C86A;
+  --oos-status-waiting-for-parts-dot: #D99A1E;
+  --oos-status-in-repair-bg: #1A2552;
+  --oos-status-in-repair-fg: #AEC1FF;
+  --oos-status-in-repair-dot: #6F8FFF;
+  --oos-status-on-hold-bg: #2B1B41;
+  --oos-status-on-hold-fg: #D6BBF3;
+  --oos-status-on-hold-dot: #A57FDB;
+  --oos-status-done-bg: #0E3220;
+  --oos-status-done-fg: #86E2AC;
+  --oos-status-done-dot: #34C474;
+  --oos-status-delivered-bg: #222934;
+  --oos-status-delivered-fg: #BAC3D0;
+  --oos-status-delivered-dot: #7D8899;
+  --oos-status-returned-bg: #3C1517;
+  --oos-status-returned-fg: #FFB0B0;
+  --oos-status-returned-dot: #F05A5A;
+  --oos-status-cancelled-bg: #1D2129;
+  --oos-status-cancelled-fg: #9BA3B2;
+  --oos-status-cancelled-dot: #6B7383;
+  --oos-shadow-sm: 0 1px 2px rgb(0 0 0 / .4);
+  --oos-shadow-md: 0 4px 14px -2px rgb(0 0 0 / .5);
+  --oos-shadow-lg: 0 18px 44px -8px rgb(0 0 0 / .65);
+  color-scheme: dark;
+}
+
+/* Base mínima, opcional mas recomendada */
+@media (prefers-reduced-motion: reduce) {
+  :root { --oos-duration-instant: 0ms; --oos-duration-fast: 0ms; --oos-duration-base: 0ms; --oos-duration-slow: 0ms; }
+}

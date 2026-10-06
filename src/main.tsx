@@ -5,8 +5,6 @@ import ReactDOM from "react-dom/client";
 import { I18nextProvider } from "react-i18next";
 import { BrowserRouter } from "react-router";
 import { Toaster } from "sonner";
-import "@fontsource-variable/karla";
-import "@fontsource-variable/manrope";
 import "@fontsource-variable/material-symbols-outlined/full.css";
 import App from "./app";
 import { ErrorBoundary } from "./components/error-boundary";

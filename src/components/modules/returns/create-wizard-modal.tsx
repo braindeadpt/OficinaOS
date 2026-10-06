@@ -85,7 +85,7 @@ export default function CreateWizardModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4">
       <div className="w-full max-w-2xl rounded-2xl bg-surface-container-lowest p-6 shadow-xl">
         {step === 1 && (
           <>

@@ -1,0 +1,117 @@
+/*
+ * OficinaOS — mapa Tailwind v4 (app React/Vite e site Astro usam ambos Tailwind 4).
+ * Uso:   @import "tailwindcss";
+ *        @import "./design-system/tokens.css";
+ *        @import "./design-system/tokens.theme.css";
+ * Dá utilitários como bg-surface, text-text-muted, bg-primary, text-on-primary, border-border,
+ * bg-status-done-bg text-status-done-fg, rounded-lg, text-sm (13/18), font-display, shadow-md, ease-standard.
+ * "inline" faz com que as classes leiam a variável em tempo real, por isso o modo escuro funciona sem dark:.
+ */
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *, .dark, .dark *));
+
+@theme inline {
+  --color-bg: var(--oos-color-bg);
+  --color-surface: var(--oos-color-surface);
+  --color-surface-2: var(--oos-color-surface-2);
+  --color-border: var(--oos-color-border);
+  --color-border-strong: var(--oos-color-border-strong);
+  --color-text: var(--oos-color-text);
+  --color-text-muted: var(--oos-color-text-muted);
+  --color-text-subtle: var(--oos-color-text-subtle);
+  --color-primary: var(--oos-color-primary);
+  --color-primary-hover: var(--oos-color-primary-hover);
+  --color-on-primary: var(--oos-color-on-primary);
+  --color-primary-soft: var(--oos-color-primary-soft);
+  --color-on-primary-soft: var(--oos-color-on-primary-soft);
+  --color-accent: var(--oos-color-accent);
+  --color-focus: var(--oos-color-focus);
+  --color-success: var(--oos-color-success);
+  --color-warning: var(--oos-color-warning);
+  --color-danger: var(--oos-color-danger);
+  --color-info: var(--oos-color-info);
+  --color-danger-soft: var(--oos-color-danger-soft);
+  --color-on-danger: var(--oos-color-on-danger);
+  --color-surface-3: var(--oos-color-surface-3);
+  --color-overlay: var(--oos-color-overlay);
+  --color-inverse: var(--oos-color-inverse);
+  --color-on-inverse: var(--oos-color-on-inverse);
+  --color-success-soft: var(--oos-color-success-soft);
+  --color-warning-soft: var(--oos-color-warning-soft);
+  --color-info-soft: var(--oos-color-info-soft);
+  --color-on-success: var(--oos-color-on-success);
+  --color-on-warning: var(--oos-color-on-warning);
+  --color-selection: var(--oos-color-selection);
+  --color-on-success-soft: var(--oos-color-on-success-soft);
+  --color-on-warning-soft: var(--oos-color-on-warning-soft);
+  --color-on-info-soft: var(--oos-color-on-info-soft);
+  --color-on-danger-soft: var(--oos-color-on-danger-soft);
+  --color-link: var(--oos-color-link);
+  --color-status-intake-bg: var(--oos-status-intake-bg);
+  --color-status-intake-fg: var(--oos-status-intake-fg);
+  --color-status-intake-dot: var(--oos-status-intake-dot);
+  --color-status-waiting-for-parts-bg: var(--oos-status-waiting-for-parts-bg);
+  --color-status-waiting-for-parts-fg: var(--oos-status-waiting-for-parts-fg);
+  --color-status-waiting-for-parts-dot: var(--oos-status-waiting-for-parts-dot);
+  --color-status-in-repair-bg: var(--oos-status-in-repair-bg);
+  --color-status-in-repair-fg: var(--oos-status-in-repair-fg);
+  --color-status-in-repair-dot: var(--oos-status-in-repair-dot);
+  --color-status-on-hold-bg: var(--oos-status-on-hold-bg);
+  --color-status-on-hold-fg: var(--oos-status-on-hold-fg);
+  --color-status-on-hold-dot: var(--oos-status-on-hold-dot);
+  --color-status-done-bg: var(--oos-status-done-bg);
+  --color-status-done-fg: var(--oos-status-done-fg);
+  --color-status-done-dot: var(--oos-status-done-dot);
+  --color-status-delivered-bg: var(--oos-status-delivered-bg);
+  --color-status-delivered-fg: var(--oos-status-delivered-fg);
+  --color-status-delivered-dot: var(--oos-status-delivered-dot);
+  --color-status-returned-bg: var(--oos-status-returned-bg);
+  --color-status-returned-fg: var(--oos-status-returned-fg);
+  --color-status-returned-dot: var(--oos-status-returned-dot);
+  --color-status-cancelled-bg: var(--oos-status-cancelled-bg);
+  --color-status-cancelled-fg: var(--oos-status-cancelled-fg);
+  --color-status-cancelled-dot: var(--oos-status-cancelled-dot);
+  --color-shop-accent: var(--oos-shop-accent);
+  --color-shop-on-accent: var(--oos-shop-on-accent);
+  --color-shop-accent-text: var(--oos-shop-accent-text);
+  --color-shop-accent-border: var(--oos-shop-accent-border);
+
+  --font-sans: var(--oos-font-ui);
+  --font-display: var(--oos-font-display);
+  --font-mono: var(--oos-font-mono);
+
+  --text-caption: var(--oos-text-caption);
+  --text-caption--line-height: var(--oos-leading-caption);
+  --text-xs: var(--oos-text-xs);
+  --text-xs--line-height: var(--oos-leading-xs);
+  --text-sm: var(--oos-text-sm);
+  --text-sm--line-height: var(--oos-leading-sm);
+  --text-base: var(--oos-text-base);
+  --text-base--line-height: var(--oos-leading-base);
+  --text-md: var(--oos-text-md);
+  --text-md--line-height: var(--oos-leading-md);
+  --text-lg: var(--oos-text-lg);
+  --text-lg--line-height: var(--oos-leading-lg);
+  --text-xl: var(--oos-text-xl);
+  --text-xl--line-height: var(--oos-leading-xl);
+  --text-2xl: var(--oos-text-2xl);
+  --text-2xl--line-height: var(--oos-leading-2xl);
+  --text-3xl: var(--oos-text-3xl);
+  --text-3xl--line-height: var(--oos-leading-3xl);
+  --text-4xl: var(--oos-text-4xl);
+  --text-4xl--line-height: var(--oos-leading-4xl);
+
+  --radius-xs: var(--oos-radius-xs);
+  --radius-sm: var(--oos-radius-sm);
+  --radius-md: var(--oos-radius-md);
+  --radius-lg: var(--oos-radius-lg);
+  --radius-xl: var(--oos-radius-xl);
+  --radius-pill: var(--oos-radius-pill);
+
+  --shadow-sm: var(--oos-shadow-sm);
+  --shadow-md: var(--oos-shadow-md);
+  --shadow-lg: var(--oos-shadow-lg);
+
+  --ease-standard: var(--oos-ease-standard);
+  --ease-enter: var(--oos-ease-enter);
+  --ease-exit: var(--oos-ease-exit);
+}

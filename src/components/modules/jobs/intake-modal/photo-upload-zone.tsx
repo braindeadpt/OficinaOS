@@ -97,7 +97,7 @@ export default function PhotoUploadZone({
                 />
                 <button
                   aria-label={t("intake.remove_photo")}
-                  className="absolute inset-0 flex items-center justify-center rounded-xl bg-on-surface/60 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
+                  className="absolute inset-0 flex items-center justify-center rounded-xl bg-overlay opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
                   onClick={() => onPhotoRemove(idx)}
                   type="button"
                 >
@@ -140,7 +140,7 @@ export default function PhotoUploadZone({
         >
           <button
             aria-label={t("intake.photo_source_cancel")}
-            className="absolute inset-0 bg-on-surface/40"
+            className="absolute inset-0 bg-overlay"
             onClick={() => setShowSourcePicker(false)}
             type="button"
           />
