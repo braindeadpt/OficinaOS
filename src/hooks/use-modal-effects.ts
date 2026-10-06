@@ -2,6 +2,19 @@ import { type RefObject, useCallback, useEffect, useRef } from "react";
 
 let scrollLockCount = 0;
 
+// Backdrop buttons carry tabIndex={-1}; they must never take initial focus
+// or be part of the Tab cycle.
+const FOCUSABLE = [
+  "button:not([disabled])",
+  "[href]",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "[tabindex]",
+]
+  .map((sel) => `${sel}:not([tabindex="-1"])`)
+  .join(", ");
+
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     scrollLockCount = 0;
@@ -47,9 +60,9 @@ export function useModalEffects(
     previousFocus.current = document.activeElement as HTMLElement;
     document.addEventListener("keydown", handleKeyDown);
     if (dialogRef?.current) {
-      const first = dialogRef.current.querySelector<HTMLElement>(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-      );
+      const first =
+        dialogRef.current.querySelector<HTMLElement>("[autofocus]") ??
+        dialogRef.current.querySelector<HTMLElement>(FOCUSABLE);
       first?.focus();
     }
     return () => {
@@ -65,9 +78,7 @@ export function useModalEffects(
 
 function trapFocus(e: KeyboardEvent, container: HTMLElement) {
   const focusable = Array.from(
-    container.querySelectorAll<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    )
+    container.querySelectorAll<HTMLElement>(FOCUSABLE)
   );
   if (focusable.length === 0) {
     return;
