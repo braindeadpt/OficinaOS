@@ -4,9 +4,9 @@
 
 # OficinaOS
 
-Sistema de gestão para oficinas de reparação de telemóveis — loja única, self-hosted, sem faturação. Regista a receção do equipamento, acompanha a reparação e entrega ao cliente, tudo numa única app acessível pelo browser.
+Sistema de gestão para oficinas de reparação de telemóveis — loja única, self-hosted. Regista a receção do equipamento, acompanha a reparação e entrega ao cliente, tudo numa única app acessível pelo browser. Faturação certificada opcional via InvoiceXpress (módulo Pro).
 
-**Três idiomas incluídos: Português (PT-PT), English, Français.**
+**Quatro idiomas incluídos: Português (PT-PT), English, Français, Español.**
 
 > **Fork de [Reparilo](https://github.com/cranknet/reparilo)** por Bechar Gherbi — adaptado para o público português, com português europeu completo e deployment Docker pronto para rede local. O nome foi alterado conforme exigido pela licença do projeto original.
 
@@ -15,11 +15,20 @@ Sistema de gestão para oficinas de reparação de telemóveis — loja única, 
 ## Funcionalidades
 
 - **Fluxo completo de reparação** — receção → diagnóstico → reparação → entrega, com fotos, linha temporal de estados e notificações ao cliente
+- **Receção completa** — checklist funcional, código/padrão de desbloqueio e assinatura digital do cliente no talão
 - **Talões e tracking por QR** — o cliente lê um QR code e vê o estado da reparação no telemóvel, sem instalar nada
+- **Pré-check público** — formulário para o cliente pedir orçamento/diagnóstico online; os pedidos entram na fila da app
+- **Orçamentos** — versões com resposta aceite/recusada registada
+- **POS de balcão** — venda de peças e acessórios, sessões de caixa e pagamentos
 - **Devoluções e garantias** — fluxo separado para retrabalho e reclamações de garantia
-- **Gestão de peças e stock** — inventário com alertas de stock baixo
+- **Compra de usados (trade-in)** — registo com dados legais do vendedor e grading do equipamento
+- **Gestão de peças e stock** — inventário com alertas de stock baixo e sugestões de reposição
+- **Impressão** — talões e etiquetas em térmicas ESC/POS de rede (58/80 mm) ou A4
+- **Relatórios e exportações** — vendas, reparações e margens por período; exportação CSV; objetivo mensal de faturação
+- **OficinaDiag** — app Windows grátis que lê o telemóvel por USB (bateria, ecrã, sensores) e envia o diagnóstico para a loja
 - **Assistente IA** (opcional) — traz a tua chave OpenAI; encriptada em AES-256 em repouso
 - **Notificações WhatsApp/email** (opcional) — templates editáveis nas definições
+- **Módulos Pro** (opcionais, via OficinaOS Cloud) — portal do cliente público, bot de WhatsApp, canal SMS, relatórios IA e faturação InvoiceXpress
 - **PWA + Android (Capacitor)** — instalável no ecrã principal em iOS/Android ou APK nativo para tablets da loja
 - **Single-tenant por design** — feito para uma loja, não é SaaS
 
