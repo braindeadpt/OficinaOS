@@ -119,8 +119,7 @@ export default function JobPartsSection({
                   {t(`part_category.${part.category}`)}
                   <Can perm={{ parts: ["viewCost"] }}>
                     {" "}
-                    · {Number(part.unitPrice).toLocaleString()} ×{" "}
-                    {part.quantity}
+                    · {fmt(Number(part.unitPrice))} × {part.quantity}
                   </Can>
                 </p>
               </div>

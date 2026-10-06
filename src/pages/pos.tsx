@@ -1,4 +1,4 @@
-import { PAYMENT_METHODS } from "@shared/constants";
+import { PAYMENT_METHODS, type PaymentMethodType } from "@shared/constants";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -93,14 +93,12 @@ export default function PosPage() {
   const [customPrice, setCustomPrice] = useState("");
   const [customQty, setCustomQty] = useState("1");
   const [showCheckout, setShowCheckout] = useState(false);
-  const [payMethod, setPayMethod] = useState<
-    "CASH" | "CARD" | "TRANSFER" | "OTHER"
-  >("CASH");
+  const [payMethod, setPayMethod] = useState<PaymentMethodType>("CASH");
   const [payAmount, setPayAmount] = useState("");
   const [payReference, setPayReference] = useState("");
   const [payments, setPayments] = useState<
     Array<{
-      method: "CASH" | "CARD" | "TRANSFER" | "OTHER";
+      method: PaymentMethodType;
       amount: number;
       reference?: string;
       uid: string;
@@ -528,9 +526,7 @@ export default function PosPage() {
                   aria-label={t("payments.method")}
                   className="h-11 flex-1 rounded-xl bg-surface-container-highest px-3 text-on-surface"
                   onChange={(e) =>
-                    setPayMethod(
-                      e.target.value as "CASH" | "CARD" | "TRANSFER" | "OTHER"
-                    )
+                    setPayMethod(e.target.value as PaymentMethodType)
                   }
                   value={payMethod}
                 >

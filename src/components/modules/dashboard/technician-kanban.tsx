@@ -224,7 +224,11 @@ export default function TechnicianKanban() {
                   </div>
                 ) : (
                   colJobs.map((job) => {
-                    const availableStatuses = JOB_STATUS_FLOW[job.status] ?? [];
+                    // Delivery is the front desk's job and always goes
+                    // through the delivery dialog (balance, payment, receipt).
+                    const availableStatuses = (
+                      JOB_STATUS_FLOW[job.status] ?? []
+                    ).filter((s) => s !== JobStatus.DELIVERED);
                     const isDropdownOpen = activeDropdown === job.id;
 
                     return (
@@ -410,7 +414,13 @@ export default function TechnicianKanban() {
                     value={laborHours}
                   />
                   <div className="mt-4 max-h-[40vh] overflow-y-auto">
-                    <FunctionalChecklist onChange={setQc} t={t} value={qc} />
+                    <FunctionalChecklist
+                      hint={t("qc_dialog.checklist_hint")}
+                      legend={t("qc_dialog.checklist_legend")}
+                      onChange={setQc}
+                      t={t}
+                      value={qc}
+                    />
                   </div>
                 </>
               )}

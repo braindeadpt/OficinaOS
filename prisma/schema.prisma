@@ -51,6 +51,8 @@ enum PaymentMethod {
   CASH
   CARD
   TRANSFER
+  MB_WAY
+  MULTIBANCO
   OTHER
 }
 

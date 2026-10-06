@@ -517,7 +517,11 @@
     "part_not_found": "Peça não encontrada",
     "password_same_as_old": "A nova password tem de ser diferente da atual",
     "photo_limit_reached": "Número máximo de fotos atingido",
-    "rate_limited": "Muitos pedidos. Por favor, tente novamente mais tarde.",
+    "rate_limited": "Demasiados pedidos em pouco tempo. Aguarde um momento e tente novamente.",
+    "rate_limited_seconds_one": "Demasiados pedidos em pouco tempo. Aguarde {{count}} segundo e tente novamente.",
+    "rate_limited_seconds_other": "Demasiados pedidos em pouco tempo. Aguarde {{count}} segundos e tente novamente.",
+    "rate_limited_minutes_one": "Demasiados pedidos em pouco tempo. Aguarde {{count}} minuto e tente novamente.",
+    "rate_limited_minutes_other": "Demasiados pedidos em pouco tempo. Aguarde {{count}} minutos e tente novamente.",
     "refund_exceeds_original": "O valor do reembolso não pode exceder o pagamento original",
     "remove_part": "Falha ao remover peça",
     "remove_repair": "Falha ao remover a reparação",
@@ -1009,6 +1013,8 @@
     "CASH": "Numerário",
     "CARD": "Cartão",
     "TRANSFER": "Transferência",
+    "MB_WAY": "MB WAY",
+    "MULTIBANCO": "Multibanco (referência)",
     "OTHER": "Outro"
   },
   "pos": {
@@ -1974,8 +1980,6 @@
   "jobs_detail_qc": "QC pós-reparação",
   "jobs_qc_title": "Verificação pós-reparação",
   "signature_clear": "Limpar",
-  "jobs_deliver_balance_warning": "Atenção: faltam {{amount}}€. Confirme que o cliente vai liquidar o valor agora.",
-  "jobs_deliver_anyway": "Entregar mesmo assim",
   "jobs_detail_signature": "Assinatura",
   "shop_revenue_goal": "Meta mensal de faturação",
   "shop_revenue_goal_help": "Faturação alvo por mês — o progresso aparece no painel. Deixa vazio para desativar.",
@@ -2155,5 +2159,26 @@
   "sms_setup_title": "Configuração – 5 minutos",
   "sms_test_sent": "SMS de teste enviado",
   "sms_webhook_not_registered": "SMS guardado, mas o webhook de entrada não foi registado – abra a aplicação através do seu endereço de rede (por exemplo, http://192.168.x.x:4000) e tente o botão de registo.",
-  "sms_webhook_registered": "Webhook de entrada registado no telefone"
+  "sms_webhook_registered": "Webhook de entrada registado no telefone",
+  "deliver_dialog": {
+    "title": "Entregar ao cliente",
+    "subtitle": "Reparação {{code}}",
+    "balance_due": "Em dívida",
+    "record_payment": "Registar pagamento agora",
+    "amount": "Valor recebido",
+    "settled_on_delivery": "O saldo fica liquidado na entrega por {{method}}, como combinado.",
+    "ack_unpaid": "Confirmo a entrega com {{amount}} por pagar",
+    "ack_required": "Confirme que entrega o aparelho com valor por pagar.",
+    "print_receipt": "Imprimir recibo e garantia",
+    "irreversible": "A entrega não pode ser anulada depois de confirmada.",
+    "confirm": "Confirmar entrega",
+    "confirm_with_payment": "Receber {{amount}} e entregar"
+  },
+  "qc_dialog": {
+    "title": "Verificação final",
+    "subtitle": "Reparação {{code}} · antes de marcar como concluída",
+    "checklist_legend": "Teste final do aparelho",
+    "checklist_hint": "Responda a todos os pontos (OK ou Falha) para concluir.",
+    "confirm": "Marcar como concluída"
+  }
 }

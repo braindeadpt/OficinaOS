@@ -518,6 +518,10 @@
     "password_same_as_old": "La nueva contraseña debe ser diferente de la contraseña actual",
     "photo_limit_reached": "Número máximo de fotos alcanzado",
     "rate_limited": "Demasiadas solicitudes. ",
+    "rate_limited_seconds_one": "Demasiadas solicitudes. Espere {{count}} segundo e inténtelo de nuevo.",
+    "rate_limited_seconds_other": "Demasiadas solicitudes. Espere {{count}} segundos e inténtelo de nuevo.",
+    "rate_limited_minutes_one": "Demasiadas solicitudes. Espere {{count}} minuto e inténtelo de nuevo.",
+    "rate_limited_minutes_other": "Demasiadas solicitudes. Espere {{count}} minutos e inténtelo de nuevo.",
     "refund_exceeds_original": "El monto del reembolso no puede exceder el pago original",
     "remove_part": "No se pudo eliminar la pieza",
     "remove_repair": "No se pudo eliminar la reparación",
@@ -1009,6 +1013,8 @@
     "CASH": "Dinero",
     "CARD": "Tarjeta",
     "TRANSFER": "Transferir",
+    "MB_WAY": "MB WAY",
+    "MULTIBANCO": "Multibanco (referencia)",
     "OTHER": "Otro"
   },
   "pos": {
@@ -1974,8 +1980,6 @@
   "jobs_detail_qc": "QC post-reparación",
   "jobs_qc_title": "Verificación post-reparación",
   "signature_clear": "Claro",
-  "jobs_deliver_balance_warning": "Advertencia: Aún debes pagar {{amount}} €. ",
-  "jobs_deliver_anyway": "Entregar de todos modos",
   "jobs_detail_signature": "Firma",
   "shop_revenue_goal": "Meta mensal de facturación",
   "shop_revenue_goal_help": "Facturación objetivo por mes — el progreso se muestra en el panel. Deja vacío para desactivar.",
@@ -2155,5 +2159,26 @@
   "sms_setup_title": "Configuración: 5 minutos",
   "sms_test_sent": "SMS de prueba enviado",
   "sms_webhook_not_registered": "SMS guardado, pero el webhook entrante no se registró: abra la aplicación a través de su dirección de red (por ejemplo, http://192.168.x.x:4000) y pruebe el botón de registro.",
-  "sms_webhook_registered": "Webhook entrante registrado en el teléfono"
+  "sms_webhook_registered": "Webhook entrante registrado en el teléfono",
+  "deliver_dialog": {
+    "title": "Entregar al cliente",
+    "subtitle": "Reparación {{code}}",
+    "balance_due": "Pendiente de pago",
+    "record_payment": "Registrar el pago ahora",
+    "amount": "Importe recibido",
+    "settled_on_delivery": "El saldo se liquida en la entrega con {{method}}, como se acordó.",
+    "ack_unpaid": "Confirmo la entrega con {{amount}} pendiente",
+    "ack_required": "Confirme que entrega el dispositivo con importe pendiente.",
+    "print_receipt": "Imprimir recibo y garantía",
+    "irreversible": "La entrega no se puede deshacer una vez confirmada.",
+    "confirm": "Confirmar entrega",
+    "confirm_with_payment": "Cobrar {{amount}} y entregar"
+  },
+  "qc_dialog": {
+    "title": "Verificación final",
+    "subtitle": "Reparación {{code}} · antes de marcarla como terminada",
+    "checklist_legend": "Prueba final del dispositivo",
+    "checklist_hint": "Responda a todos los puntos (OK o Falla) para terminar.",
+    "confirm": "Marcar como terminada"
+  }
 }

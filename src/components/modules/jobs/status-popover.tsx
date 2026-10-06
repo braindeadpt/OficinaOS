@@ -4,21 +4,29 @@ import type { Job } from "@shared/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import DeliverJobDialog from "@/components/modules/jobs/deliver-job-dialog";
 import FunctionalChecklist from "@/components/modules/jobs/intake-modal/functional-checklist";
 import type { IntakeChecklist } from "@/components/modules/jobs/intake-modal/types";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useClickOutside } from "@/hooks/use-click-outside";
+import { useModalEffects } from "@/hooks/use-modal-effects";
 import { getErrorMessage } from "@/lib/api";
 import { useJobsStore } from "@/stores/jobs";
 
 const REQUIRES_REASON: JobStatusType[] = ["ON_HOLD", "CANCELLED"];
 
 interface StatusPopoverProps {
+  /** Outstanding balance as shown on the page; falls back to job.balanceDue. */
+  balanceDue?: number;
   job: Job;
   onChanged?: () => void;
 }
 
-export default function StatusPopover({ job, onChanged }: StatusPopoverProps) {
+export default function StatusPopover({
+  balanceDue: balanceDueProp,
+  job,
+  onChanged,
+}: StatusPopoverProps) {
   const { t } = useTranslation();
   const transitionStatus = useJobsStore((s) => s.transitionStatus);
   const [open, setOpen] = useState(false);
@@ -35,14 +43,14 @@ export default function StatusPopover({ job, onChanged }: StatusPopoverProps) {
     setError(null);
   });
   const listRef = useRef<HTMLDivElement>(null);
+  const qcDialogRef = useRef<HTMLDivElement>(null);
   const [focusedIndex, setFocusedIndex] = useState(0);
+  const [delivering, setDelivering] = useState(false);
 
   const availableStatuses = JOB_STATUS_FLOW[job.status] ?? [];
-  const balanceDue = job.balanceDue ?? 0;
-  // DELIVERED goes through the pending panel too — as an outstanding-balance
-  // warning instead of a reason prompt.
-  const balanceWarning = pending === "DELIVERED" && balanceDue > 0;
-  // DONE needs labor hours + a fully answered QC checklist (server requires both).
+  const balanceDue = balanceDueProp ?? job.balanceDue ?? 0;
+  // DONE needs labor hours + a fully answered QC checklist (server requires
+  // both) — too much for a 224px popover, so it opens as a proper dialog.
   const donePanel = pending === "DONE";
 
   useEffect(() => {
@@ -90,11 +98,18 @@ export default function StatusPopover({ job, onChanged }: StatusPopoverProps) {
 
   const handleSelect = useCallback(
     (status: JobStatusType) => {
-      if (
-        REQUIRES_REASON.includes(status) ||
-        status === "DONE" ||
-        (status === "DELIVERED" && balanceDue > 0)
-      ) {
+      // Delivery is irreversible: always confirm it (balance, payment,
+      // receipt) in its own dialog — never a one-click change.
+      if (status === "DELIVERED") {
+        setOpen(false);
+        setPending(null);
+        setDelivering(true);
+        return;
+      }
+      if (status === "DONE") {
+        setOpen(false);
+      }
+      if (REQUIRES_REASON.includes(status) || status === "DONE") {
         setPending(status);
         setReason("");
         setLaborHours("");
@@ -117,15 +132,7 @@ export default function StatusPopover({ job, onChanged }: StatusPopoverProps) {
         })
         .finally(() => setLoading(false));
     },
-    [
-      job.id,
-      job.status,
-      balanceDue,
-      transitionStatus,
-      onChanged,
-      notifySuccess,
-      t,
-    ]
+    [job.id, job.status, transitionStatus, onChanged, notifySuccess, t]
   );
 
   // Returns the validated labor hours for DONE, or null (error already set).
@@ -207,8 +214,17 @@ export default function StatusPopover({ job, onChanged }: StatusPopoverProps) {
     }
   }, [open, pending]);
 
+  useModalEffects(donePanel, handleCancelReason, qcDialogRef);
+
+  const handleDelivered = useCallback(() => {
+    const previousStatus = job.status;
+    setDelivering(false);
+    onChanged?.();
+    notifySuccess(previousStatus, "DELIVERED");
+  }, [job.status, onChanged, notifySuccess]);
+
   if (availableStatuses.length === 0) {
-    return <StatusBadge status={job.status} />;
+    return <StatusBadge size="md" status={job.status} />;
   }
 
   return (
@@ -216,15 +232,15 @@ export default function StatusPopover({ job, onChanged }: StatusPopoverProps) {
       <button
         aria-expanded={open}
         aria-haspopup="listbox"
-        className="flex items-center gap-1.5 rounded-full transition-colors hover:brightness-95"
+        className="flex min-h-11 items-center gap-1.5 rounded-full transition-colors hover:brightness-95 sm:min-h-0"
         onClick={() => {
           setOpen((prev) => !prev);
           setFocusedIndex(0);
         }}
         type="button"
       >
-        <StatusBadge status={job.status} />
-        <span className="material-symbols-outlined text-on-surface-variant text-sm">
+        <StatusBadge size="md" status={job.status} />
+        <span className="material-symbols-outlined text-base text-on-surface-variant">
           {open ? "expand_less" : "expand_more"}
         </span>
       </button>
@@ -280,7 +296,7 @@ export default function StatusPopover({ job, onChanged }: StatusPopoverProps) {
             </ul>
           )}
 
-          {pending && (
+          {pending && !donePanel && (
             <div className="max-h-[70vh] space-y-3 overflow-y-auto p-4">
               <div className="flex items-center gap-2">
                 <StatusBadge status={job.status} />
@@ -289,62 +305,20 @@ export default function StatusPopover({ job, onChanged }: StatusPopoverProps) {
                 </span>
                 <StatusBadge status={pending} />
               </div>
-              {donePanel && (
-                <>
-                  <div>
-                    <label
-                      className="mb-1 block font-label text-on-surface-variant text-xs"
-                      htmlFor="labor-hours"
-                    >
-                      {t("tech_dashboard.labor_hours_label")}
-                    </label>
-                    <input
-                      className="w-full rounded-xl bg-surface-container-highest px-4 py-2.5 font-body text-on-surface text-sm"
-                      id="labor-hours"
-                      min="0.1"
-                      onChange={(e) => setLaborHours(e.target.value)}
-                      placeholder={t("tech_dashboard.labor_hours_placeholder")}
-                      step="0.1"
-                      type="number"
-                      value={laborHours}
-                    />
-                  </div>
-                  <div>
-                    <p className="mb-1 block font-label text-on-surface-variant text-xs">
-                      {t("jobs_qc_title")}
-                    </p>
-                    <FunctionalChecklist onChange={setQc} t={t} value={qc} />
-                  </div>
-                </>
-              )}
-              {balanceWarning && (
-                <div className="flex items-start gap-2 rounded-xl bg-error-container/50 px-3 py-2.5">
-                  <span className="material-symbols-outlined text-base text-on-error-container">
-                    warning
-                  </span>
-                  <p className="font-body text-on-error-container text-xs leading-snug">
-                    {t("jobs_deliver_balance_warning", {
-                      amount: balanceDue.toFixed(2),
-                    })}
-                  </p>
-                </div>
-              )}
               <label className="sr-only" htmlFor="status-reason">
                 {t("jobs_status_change_reason_label")}
               </label>
-              {!(balanceWarning || donePanel) && (
-                <textarea
-                  aria-describedby={error ? "status-reason-error" : undefined}
-                  aria-invalid={!!error}
-                  className="w-full resize-none rounded-xl bg-surface-container-highest px-4 py-3 font-body text-on-surface text-sm placeholder:text-outline"
-                  disabled={loading}
-                  id="status-reason"
-                  onChange={(e) => setReason(e.target.value)}
-                  placeholder={t("jobs_status_change_reason_placeholder")}
-                  rows={2}
-                  value={reason}
-                />
-              )}
+              <textarea
+                aria-describedby={error ? "status-reason-error" : undefined}
+                aria-invalid={!!error}
+                className="w-full resize-none rounded-xl bg-surface-container-highest px-4 py-3 font-body text-on-surface text-sm placeholder:text-outline"
+                disabled={loading}
+                id="status-reason"
+                onChange={(e) => setReason(e.target.value)}
+                placeholder={t("jobs_status_change_reason_placeholder")}
+                rows={2}
+                value={reason}
+              />
               {error && (
                 <p
                   className="font-body text-error text-xs"
@@ -374,15 +348,124 @@ export default function StatusPopover({ job, onChanged }: StatusPopoverProps) {
                       progress_activity
                     </span>
                   )}
-                  {balanceWarning
-                    ? t("jobs_deliver_anyway")
-                    : t("jobs_status_change_confirm")}
+                  {t("jobs_status_change_confirm")}
                 </button>
               </div>
             </div>
           )}
         </div>
       )}
+
+      {donePanel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            aria-hidden="true"
+            className="absolute inset-0 bg-on-surface/40"
+            disabled={loading}
+            onClick={handleCancelReason}
+            tabIndex={-1}
+            type="button"
+          />
+          <div
+            aria-labelledby="qc-dialog-title"
+            aria-modal="true"
+            className="modal-surface relative z-10 flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-surface-container-lowest shadow-2xl"
+            data-testid="qc-dialog"
+            ref={qcDialogRef}
+            role="dialog"
+          >
+            <header className="flex items-start gap-3 bg-surface-container-low px-6 py-5">
+              <span className="material-symbols-outlined mt-0.5 text-2xl text-primary">
+                fact_check
+              </span>
+              <div className="min-w-0 flex-1">
+                <h2
+                  className="font-bold font-headline text-lg text-on-surface"
+                  id="qc-dialog-title"
+                >
+                  {t("qc_dialog.title")}
+                </h2>
+                <p className="font-label text-on-surface-variant text-xs">
+                  {t("qc_dialog.subtitle", { code: job.jobCode })}
+                </p>
+              </div>
+              <button
+                aria-label={t("close")}
+                className="flex h-11 w-11 items-center justify-center rounded-full text-outline hover:bg-surface-container-high"
+                disabled={loading}
+                onClick={handleCancelReason}
+                type="button"
+              >
+                <span className="material-symbols-outlined text-xl">close</span>
+              </button>
+            </header>
+            <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
+              <div>
+                <label
+                  className="mb-1 block font-label text-on-surface-variant text-xs"
+                  htmlFor="labor-hours"
+                >
+                  {t("tech_dashboard.labor_hours_label")}
+                </label>
+                <input
+                  className="w-full rounded-xl bg-surface-container-highest px-4 py-2.5 font-body text-on-surface text-sm"
+                  id="labor-hours"
+                  inputMode="decimal"
+                  min="0.1"
+                  onChange={(e) => setLaborHours(e.target.value)}
+                  placeholder={t("tech_dashboard.labor_hours_placeholder")}
+                  step="0.1"
+                  type="number"
+                  value={laborHours}
+                />
+              </div>
+              <FunctionalChecklist
+                hint={t("qc_dialog.checklist_hint")}
+                legend={t("qc_dialog.checklist_legend")}
+                onChange={setQc}
+                t={t}
+                value={qc}
+              />
+              {error && (
+                <p className="font-body text-error text-sm" role="alert">
+                  {error}
+                </p>
+              )}
+            </div>
+            <footer className="flex flex-col-reverse gap-2 border-outline-variant/30 border-t px-6 py-4 sm:flex-row sm:justify-end">
+              <button
+                className="min-h-[44px] rounded-xl px-4 py-2 font-bold font-headline text-on-surface-variant text-sm transition-colors hover:bg-surface-container-high"
+                disabled={loading}
+                onClick={handleCancelReason}
+                type="button"
+              >
+                {t("cancel")}
+              </button>
+              <button
+                className="flex min-h-[44px] items-center justify-center gap-1 rounded-xl bg-primary px-4 py-2 font-bold font-headline text-on-primary text-sm transition-colors hover:bg-primary-container disabled:opacity-60"
+                disabled={loading}
+                onClick={handleConfirmReason}
+                type="button"
+              >
+                {loading && (
+                  <span className="material-symbols-outlined animate-spin text-sm">
+                    progress_activity
+                  </span>
+                )}
+                {t("qc_dialog.confirm")}
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
+
+      <DeliverJobDialog
+        balanceDue={balanceDue}
+        job={job}
+        onCancel={() => setDelivering(false)}
+        onDelivered={handleDelivered}
+        open={delivering}
+      />
     </div>
   );
 }

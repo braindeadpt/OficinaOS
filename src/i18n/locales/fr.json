@@ -518,6 +518,10 @@
     "password_same_as_old": "Le nouveau mot de passe doit être différent du mot de passe actuel",
     "photo_limit_reached": "Nombre maximum de photos atteint",
     "rate_limited": "Trop de demandes. ",
+    "rate_limited_seconds_one": "Trop de requêtes. Patientez {{count}} seconde puis réessayez.",
+    "rate_limited_seconds_other": "Trop de requêtes. Patientez {{count}} secondes puis réessayez.",
+    "rate_limited_minutes_one": "Trop de requêtes. Patientez {{count}} minute puis réessayez.",
+    "rate_limited_minutes_other": "Trop de requêtes. Patientez {{count}} minutes puis réessayez.",
     "refund_exceeds_original": "Le montant du remboursement ne peut pas dépasser le paiement initial",
     "remove_part": "Échec de la suppression de la pièce",
     "remove_repair": "Échec de la suppression de la réparation",
@@ -1009,6 +1013,8 @@
     "CASH": "Espèces",
     "CARD": "Carte",
     "TRANSFER": "Virement",
+    "MB_WAY": "MB WAY",
+    "MULTIBANCO": "Multibanco (référence)",
     "OTHER": "Autre"
   },
   "pos": {
@@ -1974,8 +1980,6 @@
   "jobs_detail_qc": "QC post-réparation",
   "jobs_qc_title": "Vérification post-réparation",
   "signature_clear": "Clair",
-  "jobs_deliver_balance_warning": "Attention : {{amount}} € restent à payer. ",
-  "jobs_deliver_anyway": "Livrer quand même",
   "jobs_detail_signature": "Signature",
   "shop_revenue_goal": "Objectif mensuel de chiffre d’affaires",
   "shop_revenue_goal_help": "Chiffre d’affaires cible par mois — la progression s’affiche sur le tableau de bord. Laisser vide pour désactiver.",
@@ -2155,5 +2159,26 @@
   "sms_setup_title": "Configuration — 5 minutes",
   "sms_test_sent": "Test SMS envoyé",
   "sms_webhook_not_registered": "SMS enregistré, mais le webhook entrant n'a pas été enregistré — ouvrez l'application via son adresse réseau (par exemple http://192.168.x.x:4000) et essayez le bouton d'enregistrement.",
-  "sms_webhook_registered": "Webhook entrant enregistré sur le téléphone"
+  "sms_webhook_registered": "Webhook entrant enregistré sur le téléphone",
+  "deliver_dialog": {
+    "title": "Remettre au client",
+    "subtitle": "Réparation {{code}}",
+    "balance_due": "Reste à payer",
+    "record_payment": "Enregistrer le paiement maintenant",
+    "amount": "Montant reçu",
+    "settled_on_delivery": "Le solde est réglé à la remise par {{method}}, comme convenu.",
+    "ack_unpaid": "Je confirme la remise avec {{amount}} impayés",
+    "ack_required": "Confirmez que vous remettez l'appareil avec un solde impayé.",
+    "print_receipt": "Imprimer le reçu et la garantie",
+    "irreversible": "La remise ne peut pas être annulée une fois confirmée.",
+    "confirm": "Confirmer la remise",
+    "confirm_with_payment": "Encaisser {{amount}} et remettre"
+  },
+  "qc_dialog": {
+    "title": "Vérification finale",
+    "subtitle": "Réparation {{code}} · avant de la marquer terminée",
+    "checklist_legend": "Test final de l'appareil",
+    "checklist_hint": "Répondez à chaque point (OK ou Échec) pour terminer.",
+    "confirm": "Marquer comme terminée"
+  }
 }

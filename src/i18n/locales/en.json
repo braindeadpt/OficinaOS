@@ -518,6 +518,10 @@
     "password_same_as_old": "New password must be different from current password",
     "photo_limit_reached": "Maximum number of photos reached",
     "rate_limited": "Too many requests. Please try again later.",
+    "rate_limited_seconds_one": "Too many requests. Please wait {{count}} second and try again.",
+    "rate_limited_seconds_other": "Too many requests. Please wait {{count}} seconds and try again.",
+    "rate_limited_minutes_one": "Too many requests. Please wait {{count}} minute and try again.",
+    "rate_limited_minutes_other": "Too many requests. Please wait {{count}} minutes and try again.",
     "refund_exceeds_original": "Refund amount cannot exceed the original payment",
     "remove_part": "Failed to remove part",
     "remove_repair": "Failed to remove repair",
@@ -1009,6 +1013,8 @@
     "CASH": "Cash",
     "CARD": "Card",
     "TRANSFER": "Transfer",
+    "MB_WAY": "MB WAY",
+    "MULTIBANCO": "Multibanco (reference)",
     "OTHER": "Other"
   },
   "pos": {
@@ -1974,8 +1980,6 @@
   "jobs_detail_qc": "Post-repair QC",
   "jobs_qc_title": "Post-repair check",
   "signature_clear": "Clear",
-  "jobs_deliver_balance_warning": "Warning: €{{amount}} still due. Confirm the customer will settle it now.",
-  "jobs_deliver_anyway": "Deliver anyway",
   "jobs_detail_signature": "Signature",
   "shop_revenue_goal": "Monthly revenue goal",
   "shop_revenue_goal_help": "Target revenue per month — progress is shown on the dashboard. Leave empty to disable.",
@@ -2155,5 +2159,26 @@
   "sms_setup_title": "Setup — 5 minutes",
   "sms_test_sent": "Test SMS sent",
   "sms_webhook_not_registered": "SMS saved, but the inbound webhook was not registered — open the app via its network address (e.g. http://192.168.x.x:4000) and try the register button.",
-  "sms_webhook_registered": "Inbound webhook registered on the phone"
+  "sms_webhook_registered": "Inbound webhook registered on the phone",
+  "deliver_dialog": {
+    "title": "Hand over to customer",
+    "subtitle": "Repair {{code}}",
+    "balance_due": "Balance due",
+    "record_payment": "Record payment now",
+    "amount": "Amount received",
+    "settled_on_delivery": "The balance is settled on delivery by {{method}}, as agreed.",
+    "ack_unpaid": "I confirm handing over with {{amount}} unpaid",
+    "ack_required": "Confirm you are handing over the device with an unpaid balance.",
+    "print_receipt": "Print receipt and warranty",
+    "irreversible": "Delivery cannot be undone once confirmed.",
+    "confirm": "Confirm delivery",
+    "confirm_with_payment": "Take {{amount}} and deliver"
+  },
+  "qc_dialog": {
+    "title": "Final check",
+    "subtitle": "Repair {{code}} · before marking it done",
+    "checklist_legend": "Final device test",
+    "checklist_hint": "Answer every item (OK or Fails) to finish.",
+    "confirm": "Mark as done"
+  }
 }

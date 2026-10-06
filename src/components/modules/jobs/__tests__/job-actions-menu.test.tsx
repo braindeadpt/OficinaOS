@@ -98,6 +98,13 @@ describe("JobActionsMenu", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("never offers DELIVERED as a one-click change (delivery dialog owns it)", () => {
+    render(<JobActionsMenu job={makeJob({ status: "DONE" })} />);
+    fireEvent.click(screen.getByRole("button", { name: "job_actions" }));
+    expect(screen.queryByText("status.DELIVERED")).not.toBeInTheDocument();
+    expect(screen.getByText("status.RETURNED")).toBeInTheDocument();
+  });
+
   it("closes dropdown on Escape key", () => {
     render(<JobActionsMenu job={makeJob()} />);
     fireEvent.click(screen.getByRole("button", { name: "job_actions" }));

@@ -273,7 +273,11 @@ export default function JobDetailPage() {
           </div>
           <div className="flex shrink-0 items-center gap-2 pt-1">
             <UrgentBadge visible={job.isUrgent} />
-            <StatusPopover job={job} onChanged={() => fetchJob()} />
+            <StatusPopover
+              balanceDue={balanceDue}
+              job={job}
+              onChanged={() => fetchJob()}
+            />
           </div>
         </div>
 

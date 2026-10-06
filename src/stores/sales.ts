@@ -1,3 +1,4 @@
+import type { PaymentMethodType } from "@shared/constants";
 import type { CreateSaleInput } from "@shared/schemas/sale.schema";
 import type { Sale } from "@shared/types";
 import { create } from "zustand";
@@ -41,7 +42,7 @@ interface SalesState {
   cartTotal: number;
   checkout: (
     payments: Array<{
-      method: "CASH" | "CARD" | "TRANSFER" | "OTHER";
+      method: PaymentMethodType;
       amount: number;
       reference?: string;
     }>

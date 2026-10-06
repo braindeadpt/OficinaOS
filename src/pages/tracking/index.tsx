@@ -11,7 +11,7 @@ import { useParams } from "react-router";
 import { Field } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
-import api, { type ApiError } from "@/lib/api";
+import api, { type ApiError, getErrorMessage } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth";
 
 function LanguageSwitcher() {
@@ -1128,13 +1128,17 @@ export default function TrackingPage() {
         );
         setLastSearchParams({ code, phone4 });
       } catch (err: unknown) {
-        const status =
+        // The API client turns a 429 into { code: "RATE_LIMITED", message }
+        // with the wait already spelled out.
+        const rateLimited =
           err &&
           typeof err === "object" &&
-          "response" in err &&
-          (err.response as { status?: number })?.status;
-        if (status === 429) {
-          setError(tRef.current("errors.too_many_attempts"));
+          "code" in err &&
+          err.code === "RATE_LIMITED";
+        if (rateLimited) {
+          setError(
+            getErrorMessage(err, tRef.current("errors.too_many_attempts"))
+          );
         } else {
           setError(tRef.current("tracking_job_not_found"));
         }

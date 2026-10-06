@@ -36,12 +36,41 @@ function escMultiline(s: string): string {
   return esc(s).replace(/\r?\n/g, "<br>");
 }
 
+const NON_ASCII_SPACE = /[\u00a0\u202f]/g;
+
+/** "34,90 €" — Intl currency formatting, always two decimals. */
 export function fmtMoney(
   v: number | { toNumber: () => number },
-  currency = "EUR"
+  currency = "EUR",
+  locale = "pt-PT"
 ): string {
   const n = typeof v === "number" ? v : v.toNumber();
-  return `${n.toLocaleString("en-US")} ${currency}`;
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n);
+}
+
+/**
+ * Plain-text variant for thermal printers: the cp850 code page has no "€"
+ * and no non-breaking spaces, so the ISO code follows the number —
+ * "34,90 EUR".
+ */
+export function fmtMoneyPlain(
+  v: number | { toNumber: () => number },
+  currency = "EUR",
+  locale = "pt-PT"
+): string {
+  const n = typeof v === "number" ? v : v.toNumber();
+  const amount = new Intl.NumberFormat(locale, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+    .format(n)
+    .replace(NON_ASCII_SPACE, " ");
+  return `${amount} ${currency}`;
 }
 
 export const toNum = (
@@ -94,6 +123,8 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     paymentMethods: {
       CARD: "Cartão",
       CASH: "Numerário",
+      MB_WAY: "MB WAY",
+      MULTIBANCO: "Multibanco",
       OTHER: "Outro",
       TRANSFER: "Transferência",
     },
@@ -126,6 +157,8 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     paymentMethods: {
       CARD: "Card",
       CASH: "Cash",
+      MB_WAY: "MB WAY",
+      MULTIBANCO: "Multibanco",
       OTHER: "Other",
       TRANSFER: "Transfer",
     },
@@ -158,6 +191,8 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     paymentMethods: {
       CARD: "Carte",
       CASH: "Espèces",
+      MB_WAY: "MB WAY",
+      MULTIBANCO: "Multibanco",
       OTHER: "Autre",
       TRANSFER: "Virement",
     },
@@ -190,6 +225,8 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     paymentMethods: {
       CARD: "Tarjeta",
       CASH: "Efectivo",
+      MB_WAY: "MB WAY",
+      MULTIBANCO: "Multibanco",
       OTHER: "Otro",
       TRANSFER: "Transferencia",
     },

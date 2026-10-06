@@ -11,6 +11,7 @@ import { setAppInstance } from "./jobs/app-registry.js";
 import { startCloudPoller } from "./jobs/cloud-poller.js";
 import { startOverdueScheduler } from "./jobs/overdue-scheduler.js";
 import { isFileRequestPath } from "./lib/spa-fallback.js";
+import { cacheControlFor } from "./lib/static-cache.js";
 import authPlugin from "./plugins/auth.js";
 import { localePlugin } from "./plugins/locale.js";
 import prismaPlugin from "./plugins/prisma.js";
@@ -195,6 +196,14 @@ if (IS_PROD) {
   await app.register(staticPlugin, {
     root: distRoot,
     wildcard: false,
+    // Hashed chunks are immutable; the shell, service worker and manifest
+    // are revalidated so an update reaches clients on the next load.
+    setHeaders: (reply, filePath) => {
+      reply.header(
+        "Cache-Control",
+        cacheControlFor(path.relative(distRoot, filePath))
+      );
+    },
   });
 
   app.setNotFoundHandler((request, reply) => {
@@ -210,7 +219,7 @@ if (IS_PROD) {
       /<script /g,
       `<script nonce="${request.cspNonce}" `
     );
-    reply.type("text/html").send(html);
+    reply.header("Cache-Control", "no-cache").type("text/html").send(html);
   });
 } else {
   app.setNotFoundHandler((request, reply) => {

@@ -6,6 +6,8 @@ export const addPaymentSchema = z.object({
     PaymentMethod.CASH,
     PaymentMethod.CARD,
     PaymentMethod.TRANSFER,
+    PaymentMethod.MB_WAY,
+    PaymentMethod.MULTIBANCO,
     PaymentMethod.OTHER,
   ]),
   amount: z
@@ -24,6 +26,8 @@ export const paymentOnDeliveryMethodSchema = z.enum([
   PaymentMethod.CASH,
   PaymentMethod.CARD,
   PaymentMethod.TRANSFER,
+  PaymentMethod.MB_WAY,
+  PaymentMethod.MULTIBANCO,
   PaymentMethod.OTHER,
 ]);
 

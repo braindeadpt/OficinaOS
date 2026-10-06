@@ -1,3 +1,4 @@
+import { PAYMENT_METHODS } from "@shared/constants";
 import type { Payment } from "@shared/types";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -7,7 +8,7 @@ import { useFormatCurrency } from "@/hooks/use-format-currency";
 import { fetchInvoicingStatus, issueJobInvoice } from "@/lib/api-invoicing";
 import { useJobsStore } from "@/stores/jobs";
 
-const POD_METHODS = ["CASH", "CARD", "TRANSFER", "OTHER"] as const;
+const POD_METHODS = PAYMENT_METHODS;
 const POD_HIDDEN_STATUSES = new Set([
   "DONE",
   "DELIVERED",

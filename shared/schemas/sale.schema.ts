@@ -28,6 +28,8 @@ export const salePaymentSchema = z.object({
     PaymentMethod.CASH,
     PaymentMethod.CARD,
     PaymentMethod.TRANSFER,
+    PaymentMethod.MB_WAY,
+    PaymentMethod.MULTIBANCO,
     PaymentMethod.OTHER,
   ]),
   amount: z

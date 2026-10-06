@@ -213,7 +213,7 @@ describe("createAndSendQuote", () => {
         context: expect.objectContaining({
           customerName: "Maria",
           jobCode: "JOB-2026-0001",
-          quoteAmount: "120.00",
+          quoteAmount: "120,00",
           recipientPhone: "+351 912 345 678",
         }),
       })
