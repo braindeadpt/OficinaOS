@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import type { useSettingsStore } from "@/stores/settings";
 
 interface ChannelSettingsProps {
@@ -258,39 +259,24 @@ export default function ChannelSettings({
             </div>
             {whatsAppSettings?.remarketingModule ? (
               <div className="rounded-xl bg-surface-container p-4">
-                <label className="flex cursor-pointer select-none items-center gap-3">
-                  <input
+                <div className="flex items-center gap-3">
+                  <Switch
+                    ariaLabelledBy="remarketing-enabled-label"
                     checked={whatsAppForm.remarketingEnabled}
-                    className="sr-only"
-                    onChange={(e) =>
+                    onChange={(checked) =>
                       setWhatsAppForm((f) => ({
                         ...f,
-                        remarketingEnabled: e.target.checked,
+                        remarketingEnabled: checked,
                       }))
                     }
-                    type="checkbox"
                   />
                   <span
-                    className="relative inline-block h-6 w-11 rounded-full transition-colors"
-                    style={{
-                      backgroundColor: whatsAppForm.remarketingEnabled
-                        ? "var(--color-primary)"
-                        : "var(--color-outline-variant)",
-                    }}
+                    className="font-medium text-on-surface text-sm"
+                    id="remarketing-enabled-label"
                   >
-                    <span
-                      className="absolute top-0.5 h-5 w-5 rounded-full bg-on-primary shadow-sm transition-all"
-                      style={{
-                        insetInlineStart: whatsAppForm.remarketingEnabled
-                          ? "22px"
-                          : "2px",
-                      }}
-                    />
-                  </span>
-                  <span className="font-medium text-on-surface text-sm">
                     {t("remarketing_enabled")}
                   </span>
-                </label>
+                </div>
                 <p className="mt-2 text-on-surface-variant text-xs">
                   {t("remarketing_desc")}
                 </p>

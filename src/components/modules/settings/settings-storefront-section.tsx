@@ -180,9 +180,9 @@ export default function SettingsStorefrontSection({
         <>
           <Field label={t("storefront.accent_color")}>
             <div className="flex items-center gap-2">
-              <input
+              <Input
                 aria-label={t("storefront.accent_color")}
-                className="h-9 w-12 cursor-pointer rounded-lg border border-outline-variant bg-surface"
+                className="h-9 w-12 cursor-pointer rounded-lg border border-outline-variant bg-surface p-1"
                 onChange={(e) => setAccentColor(e.target.value)}
                 type="color"
                 value={accentColor}
@@ -213,6 +213,14 @@ export default function SettingsStorefrontSection({
 
           <Field label={t("storefront.logo")}>
             <div>
+              <Input
+                accept="image/png,image/jpeg,image/webp"
+                aria-label={t("storefront.logo")}
+                className="hidden"
+                onChange={handleLogoFile}
+                ref={logoInput}
+                type="file"
+              />
               <div className="flex items-center gap-3">
                 {logoData && (
                   <img
@@ -223,13 +231,6 @@ export default function SettingsStorefrontSection({
                     width={48}
                   />
                 )}
-                <input
-                  accept="image/png,image/jpeg,image/webp"
-                  className="hidden"
-                  onChange={handleLogoFile}
-                  ref={logoInput}
-                  type="file"
-                />
                 <Button
                   icon="upload"
                   onClick={() => logoInput.current?.click()}
