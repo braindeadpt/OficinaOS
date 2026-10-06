@@ -1,10 +1,11 @@
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import CustomerSearchDropdown from "@/components/modules/jobs/intake-modal/customer-search-dropdown";
 import FunctionalChecklist from "@/components/modules/jobs/intake-modal/functional-checklist";
 import type { IntakeChecklist } from "@/components/modules/jobs/intake-modal/types";
 import QuickAddCustomer from "@/components/modules/jobs/quick-add-customer";
 import SignaturePad from "@/components/reports/signature-pad";
+import ConfirmDiscardDialog from "@/components/ui/confirm-discard-dialog";
 import { Field } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
@@ -58,9 +59,33 @@ export default function TradeInModal({ onClose, onCreated }: Props) {
   const { query, setQuery, results, isSearching, searchError } =
     useCustomerSearch();
   const [searchFocused, setSearchFocused] = useState(false);
+  const [showDiscardDialog, setShowDiscardDialog] = useState(false);
   const showDropdown = searchFocused && query.length >= 1 && !customerId;
 
-  useModalEffects(true, onClose, dialogRef);
+  const isDirty =
+    customerId !== "" ||
+    sellerIdType !== "CC" ||
+    sellerIdNumber.trim() !== "" ||
+    deviceBrand.trim() !== "" ||
+    deviceModel.trim() !== "" ||
+    imei.trim() !== "" ||
+    storage.trim() !== "" ||
+    condition !== "GOOD" ||
+    Object.keys(checklist).length > 0 ||
+    notes.trim() !== "" ||
+    purchasePrice.trim() !== "" ||
+    paymentMethod !== "CASH" ||
+    signature !== null;
+
+  const handleClose = useCallback(() => {
+    if (isDirty) {
+      setShowDiscardDialog(true);
+      return;
+    }
+    onClose();
+  }, [isDirty, onClose]);
+
+  useModalEffects(true, handleClose, dialogRef);
 
   const price = Number(purchasePrice.replace(",", "."));
   const valid =
@@ -117,8 +142,13 @@ export default function TradeInModal({ onClose, onCreated }: Props) {
       <button
         aria-label={t("close")}
         className="absolute inset-0 bg-on-surface/40"
-        onClick={onClose}
+        onClick={handleClose}
         type="button"
+      />
+      <ConfirmDiscardDialog
+        onDiscard={onClose}
+        onKeepEditing={() => setShowDiscardDialog(false)}
+        open={showDiscardDialog}
       />
       <div className="relative z-10 flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-surface-container-lowest shadow-2xl">
         <header className="flex shrink-0 items-center gap-3 bg-surface-container-low px-6 py-4">
@@ -139,7 +169,7 @@ export default function TradeInModal({ onClose, onCreated }: Props) {
           <button
             aria-label={t("close")}
             className="rounded-full p-1 text-on-surface-variant hover:bg-surface-container-high"
-            onClick={onClose}
+            onClick={handleClose}
             type="button"
           >
             <span className="material-symbols-outlined">close</span>
@@ -326,7 +356,7 @@ export default function TradeInModal({ onClose, onCreated }: Props) {
         <footer className="flex shrink-0 gap-3 border-outline-variant border-t bg-surface-container-low px-6 py-4">
           <button
             className="flex-1 rounded-xl bg-surface-container-high px-4 py-3 font-bold font-headline text-on-surface text-sm"
-            onClick={onClose}
+            onClick={handleClose}
             type="button"
           >
             {t("cancel")}

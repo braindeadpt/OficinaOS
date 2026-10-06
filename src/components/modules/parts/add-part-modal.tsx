@@ -73,7 +73,6 @@ export default function AddPartModal({
 }: AddPartModalProps) {
   const { t } = useTranslation();
   const dialogRef = useRef<HTMLDivElement>(null);
-  useModalEffects(true, onClose, dialogRef);
 
   const isEditing = !!editingPart;
 
@@ -122,6 +121,9 @@ export default function AddPartModal({
       onClose();
     }
   }, [form, editingPart, onClose]);
+
+  // Escape goes through the dirty-check confirm, not straight to onClose.
+  useModalEffects(true, handleRequestClose, dialogRef);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

@@ -19,6 +19,9 @@ const subscribers = new Set<MessageHandler>();
 let socket: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let disconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let reconnectAttempts = 0;
+
+const RECONNECT_MAX_DELAY = 30_000;
 
 const WS_URL_REPLACE = /^http/;
 
@@ -47,6 +50,7 @@ function connect() {
   socket = new WebSocket(url);
 
   socket.onopen = () => {
+    reconnectAttempts = 0;
     if (reconnectTimer) {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
@@ -65,11 +69,22 @@ function connect() {
   };
 
   socket.onclose = () => {
-    reconnectTimer = setTimeout(connect, 5000);
+    // Exponential backoff (1s → 30s) with jitter — a dead server or
+    // expired session must not trigger a connect attempt every 5s
+    // forever (battery drain on Android, log spam on the server).
+    // Hidden tabs are throttled by the browser anyway, so this stays
+    // bounded without visibility listeners.
+    const backoff = Math.min(
+      1000 * 2 ** reconnectAttempts,
+      RECONNECT_MAX_DELAY
+    );
+    reconnectAttempts += 1;
+    reconnectTimer = setTimeout(connect, backoff + Math.random() * 1000);
   };
 }
 
 function disconnect() {
+  reconnectAttempts = 0;
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;

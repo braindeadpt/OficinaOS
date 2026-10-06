@@ -3,6 +3,17 @@
 // plain-HTTP LAN installs never see it, so there is no stale-cache risk
 // on the most common deployment path.
 const CACHE = "oficinaos-v1";
+// Content-hashed assets accumulate across deploys — cap the cache so
+// storage can't grow without bound.
+const MAX_CACHE_ENTRIES = 150;
+
+async function trimCache(cache) {
+  const keys = await cache.keys();
+  const excess = keys.length - MAX_CACHE_ENTRIES;
+  for (const key of keys.slice(0, Math.max(0, excess))) {
+    await cache.delete(key);
+  }
+}
 
 self.addEventListener("install", () => self.skipWaiting());
 
@@ -27,7 +38,7 @@ async function cacheFirst(request) {
   const response = await fetch(request);
   if (response.ok) {
     const cache = await caches.open(CACHE);
-    cache.put(request, response.clone());
+    cache.put(request, response.clone()).then(() => trimCache(cache));
   }
   return response;
 }
@@ -37,7 +48,7 @@ async function networkFirst(request) {
     const response = await fetch(request);
     if (response.ok) {
       const cache = await caches.open(CACHE);
-      cache.put(request, response.clone());
+      cache.put(request, response.clone()).then(() => trimCache(cache));
     }
     return response;
   } catch {

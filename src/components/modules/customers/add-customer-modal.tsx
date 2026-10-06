@@ -40,7 +40,6 @@ export default function AddCustomerModal({
 }: AddCustomerModalProps) {
   const { t } = useTranslation();
   const dialogRef = useRef<HTMLDivElement>(null);
-  useModalEffects(open, onClose, dialogRef);
   const {
     clearError,
     create,
@@ -79,6 +78,10 @@ export default function AddCustomerModal({
     }
     onClose();
   }, [form, onClose]);
+
+  // Escape/backdrop-agnostic close goes through handleClose so a dirty
+  // form hits the discard confirm instead of vanishing silently.
+  useModalEffects(open, handleClose, dialogRef);
 
   const handleDiscard = useCallback(() => {
     setShowDiscardDialog(false);

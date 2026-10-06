@@ -51,7 +51,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const intakeRequestId = useUiStore((s) => s.intakeRequestId);
   const closeIntakeModal = useUiStore((s) => s.closeIntakeModal);
   const showPrintPreview = useUiStore((s) => s.showPrintPreview);
-  const { createJob, fetchJobs, fetchMetrics } = useJobsStore();
+  const createJob = useJobsStore((s) => s.createJob);
+  const fetchJobs = useJobsStore((s) => s.fetchJobs);
+  const fetchMetrics = useJobsStore((s) => s.fetchMetrics);
   const { pathname } = useLocation();
   const { t } = useTranslation();
 
