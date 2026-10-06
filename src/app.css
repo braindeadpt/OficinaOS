@@ -189,6 +189,31 @@ h3,
   }
 }
 
+/* Toasts: inverse surface + semantic icon (§4.8). Sonner reads these vars. */
+[data-sonner-toaster] {
+  --normal-bg: var(--oos-color-inverse);
+  --normal-text: var(--oos-color-on-inverse);
+  --normal-border: transparent;
+  --border-radius: var(--oos-radius-md);
+  font-family: var(--oos-font-ui);
+}
+
+[data-sonner-toast].oos-toast {
+  box-shadow: var(--oos-shadow-lg);
+}
+
+[data-sonner-toast][data-type="success"] [data-icon] {
+  color: var(--oos-status-done-dot);
+}
+
+[data-sonner-toast][data-type="error"] [data-icon] {
+  color: var(--oos-status-returned-dot);
+}
+
+[data-sonner-toast][data-type="warning"] [data-icon] {
+  color: var(--oos-status-waiting-for-parts-dot);
+}
+
 /* Receipts, labels and anything printed are always light (§5.7). */
 @media print {
   :root {

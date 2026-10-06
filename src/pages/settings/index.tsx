@@ -17,6 +17,7 @@ import SettingsUsersTab from "@/components/modules/settings/settings-users-tab";
 import TemplateEditor from "@/components/modules/settings/template-editor";
 import UnsavedChangesBar from "@/components/modules/settings/unsaved-changes-bar";
 import ConfirmDiscardDialog from "@/components/ui/confirm-discard-dialog";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useDirtyState } from "@/hooks/use-dirty-state";
 import { useModalEffects } from "@/hooks/use-modal-effects";
 import { useSettingsStore } from "@/stores/settings";
@@ -200,13 +201,16 @@ export default function SettingsPage() {
 
   return (
     <>
-      <div className="mb-8">
-        <h2 className="font-extrabold font-headline text-2xl text-on-surface tracking-tight md:text-3xl">
-          {t("settings_page")}
-        </h2>
-        <p className="mt-1 font-medium text-on-surface-variant text-sm md:text-base">
-          {t("settings_page_desc")}
-        </p>
+      <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h2 className="font-extrabold font-headline text-2xl text-on-surface tracking-tight md:text-3xl">
+            {t("settings_page")}
+          </h2>
+          <p className="mt-1 font-medium text-on-surface-variant text-sm md:text-base">
+            {t("settings_page_desc")}
+          </p>
+        </div>
+        <ThemeToggle className="shrink-0" hideHint />
       </div>
 
       <div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
