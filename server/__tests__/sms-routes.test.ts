@@ -58,6 +58,11 @@ vi.mock("../services/escpos.service.js", () => ({
 
 vi.mock("../repositories/settings.repository.js", () => ({
   findShopSettingsUnique: vi.fn(async () => null),
+  getOrCreateShopSettings: vi.fn(
+    async (prisma: {
+      shopSettings: { findUnique: (args: unknown) => Promise<unknown> };
+    }) => await prisma.shopSettings.findUnique({ where: { id: "default" } })
+  ),
 }));
 
 const SMS_ROW = {
@@ -72,7 +77,7 @@ const SMS_ROW = {
 function fakePrisma(row: Record<string, unknown> = SMS_ROW) {
   return {
     shopSettings: {
-      findUniqueOrThrow: vi.fn(async () => ({ ...row })),
+      findUnique: vi.fn(async () => ({ ...row })),
       upsert: vi.fn(
         async ({ create, update }: { create: object; update: object }) => ({
           ...create,

@@ -69,7 +69,7 @@ interface JobsState {
     accessories?: string[];
     intakeChecklist?: Record<string, "ok" | "fail" | null>;
     intakeSignatureDataUrl?: string;
-    estimatedCost: number;
+    estimatedCost?: number;
     estimatedDate?: string;
     depositAmount?: number;
     technicianId?: string;

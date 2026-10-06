@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@generated/client";
 import type { FastifyBaseLogger } from "fastify";
+import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import {
   type BotReplyCtx,
   composeReply,
@@ -54,9 +55,7 @@ export async function syncWhatsAppBot(
   log: FastifyBaseLogger,
   notifyCtx?: NotifyContext
 ): Promise<void> {
-  const settings = await prisma.shopSettings.findUniqueOrThrow({
-    where: { id: "default" },
-  });
+  const settings = await getOrCreateShopSettings(prisma);
 
   // Regista o phone_number_id na cloud para o webhook saber a que loja
   // entregar as mensagens. Idempotente — um POST por ciclo é barato.

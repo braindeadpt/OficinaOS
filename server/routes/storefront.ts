@@ -3,6 +3,7 @@ import { updateStorefrontSchema } from "@shared/schemas/storefront.schema";
 import type { FastifyPluginAsync } from "fastify";
 import { decryptSecret } from "../lib/crypto.js";
 import { requirePermission } from "../middlewares/rbac.js";
+import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import {
   pushStorefront,
   storefrontUrl,
@@ -79,9 +80,7 @@ export const storefrontRoutes: FastifyPluginAsync = async (app) => {
       schema: { summary: "Online store config + status", tags: ["storefront"] },
     },
     async (_req, reply) => {
-      const s = await app.prisma.shopSettings.findUniqueOrThrow({
-        where: { id: "default" },
-      });
+      const s = await getOrCreateShopSettings(app.prisma);
       const modules = Array.isArray(s.cloudEntitlements)
         ? (s.cloudEntitlements as string[])
         : [];
@@ -114,9 +113,7 @@ export const storefrontRoutes: FastifyPluginAsync = async (app) => {
           ),
         });
       }
-      const s = await app.prisma.shopSettings.findUniqueOrThrow({
-        where: { id: "default" },
-      });
+      const s = await getOrCreateShopSettings(app.prisma);
       const modules = Array.isArray(s.cloudEntitlements)
         ? (s.cloudEntitlements as string[])
         : [];
@@ -150,9 +147,7 @@ export const storefrontRoutes: FastifyPluginAsync = async (app) => {
         () => null
       );
 
-      const after = await app.prisma.shopSettings.findUniqueOrThrow({
-        where: { id: "default" },
-      });
+      const after = await getOrCreateShopSettings(app.prisma);
       return reply.send(storefrontView(after, s.cloudApiUrl));
     }
   );

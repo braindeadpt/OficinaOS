@@ -5,7 +5,7 @@ import staticPlugin from "@fastify/static";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import websocket from "@fastify/websocket";
-import Fastify from "fastify";
+import Fastify, { LogController } from "fastify";
 import { loadEnv } from "./config/env.js";
 import { setAppInstance } from "./jobs/app-registry.js";
 import { startCloudPoller } from "./jobs/cloud-poller.js";
@@ -58,7 +58,9 @@ const app = Fastify({
   // TRUST_PROXY=true explicitly.
   trustProxy: env.TRUST_PROXY ?? false,
   requestIdHeader: false,
-  requestIdLogLabel: "reqId",
+  // Top-level `requestIdLogLabel` is deprecated (FSTDEP024) — it now lives
+  // on the log controller.
+  logController: new LogController({ requestIdLogLabel: "reqId" }),
   connectionTimeout: 60_000,
   requestTimeout: 30_000,
   genReqId: () =>

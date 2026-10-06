@@ -9,7 +9,10 @@ import {
 } from "@shared/schemas/settings.schema";
 import type { FastifyPluginAsync } from "fastify";
 import { requirePermission } from "../middlewares/rbac.js";
-import { findShopSettingsUnique } from "../repositories/settings.repository.js";
+import {
+  findShopSettingsUnique,
+  getOrCreateShopSettings,
+} from "../repositories/settings.repository.js";
 import { getAppVersionInfo } from "../services/app-version.service.js";
 import { getBackupStatus } from "../services/backup-status.service.js";
 import {
@@ -284,9 +287,7 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       // Enabling remarketing requires the Pro module — enforced again by
       // the sweep on the cached entitlements.
       if (parsed.data.remarketingEnabled) {
-        const s = await app.prisma.shopSettings.findUniqueOrThrow({
-          where: { id: "default" },
-        });
+        const s = await getOrCreateShopSettings(app.prisma);
         const modules = Array.isArray(s.cloudEntitlements)
           ? (s.cloudEntitlements as string[])
           : [];
@@ -336,9 +337,7 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       // Enabling SMS requires the Pro module — inbound and outbound also
       // gate on the cached entitlements.
       if (parsed.data.enabled) {
-        const s = await app.prisma.shopSettings.findUniqueOrThrow({
-          where: { id: "default" },
-        });
+        const s = await getOrCreateShopSettings(app.prisma);
         const modules = Array.isArray(s.cloudEntitlements)
           ? (s.cloudEntitlements as string[])
           : [];
@@ -374,9 +373,7 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
     },
     async (req, reply) => {
       const body = (req.body ?? {}) as { phone?: string };
-      const row = await app.prisma.shopSettings.findUniqueOrThrow({
-        where: { id: "default" },
-      });
+      const row = await getOrCreateShopSettings(app.prisma);
       const config = decryptSmsConfig({
         gatewayPasswordEncrypted: row.smsGatewayPasswordEncrypted,
         gatewayUrl: row.smsGatewayUrl,
@@ -460,9 +457,7 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       // Enabling invoicing requires the Pro module — the issue path also
       // gates on the cached entitlements.
       if (parsed.data.enabled) {
-        const s = await app.prisma.shopSettings.findUniqueOrThrow({
-          where: { id: "default" },
-        });
+        const s = await getOrCreateShopSettings(app.prisma);
         const modules = Array.isArray(s.cloudEntitlements)
           ? (s.cloudEntitlements as string[])
           : [];
@@ -491,9 +486,7 @@ async function tryRegisterSmsWebhook(
   if (!host || LOCALHOST_RE.test(host)) {
     return false;
   }
-  const row = await prisma.shopSettings.findUniqueOrThrow({
-    where: { id: "default" },
-  });
+  const row = await getOrCreateShopSettings(prisma);
   const config = decryptSmsConfig({
     gatewayPasswordEncrypted: row.smsGatewayPasswordEncrypted,
     gatewayUrl: row.smsGatewayUrl,

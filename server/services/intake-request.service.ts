@@ -13,6 +13,7 @@ import {
 } from "../repositories/intake-request.repository.js";
 import { findUniqueSimple } from "../repositories/job.repository.js";
 import { findManyUsers } from "../repositories/notification.repository.js";
+import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import { generateIntakeRequestCode } from "../utils/intake-request-code.js";
 import { logger } from "../utils/logger.js";
 import { cloudFetch } from "./cloud.service.js";
@@ -173,9 +174,7 @@ export async function generateIntakeAiReport(
     throw new AppError("INTAKE_REQUEST_NO_DIAGNOSTIC");
   }
 
-  const settings = await prisma.shopSettings.findUniqueOrThrow({
-    where: { id: "default" },
-  });
+  const settings = await getOrCreateShopSettings(prisma);
   if (!(settings.cloudApiUrl && settings.cloudShopTokenEncrypted)) {
     throw new AppError("CLOUD_NOT_PAIRED");
   }

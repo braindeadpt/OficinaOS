@@ -15,7 +15,7 @@ const QUOTE_BADGE_CLASS: Record<QuoteStatusType, string> = {
 };
 
 interface JobQuotesSectionProps {
-  estimatedCost: number;
+  estimatedCost: number | null;
   jobId: string;
   onChanged: () => void;
 }

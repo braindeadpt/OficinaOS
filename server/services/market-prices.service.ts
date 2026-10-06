@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@generated/client";
 import type { FastifyBaseLogger } from "fastify";
+import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import { cloudFetch } from "./cloud.service.js";
 
@@ -42,10 +43,7 @@ export async function pushMarketPrices(
   token: string,
   log: FastifyBaseLogger
 ): Promise<void> {
-  const settings = await prisma.shopSettings.findUniqueOrThrow({
-    where: { id: "default" },
-    select: { sharePrices: true, pricesDirty: true },
-  });
+  const settings = await getOrCreateShopSettings(prisma);
   if (!(settings.sharePrices && settings.pricesDirty)) {
     return;
   }

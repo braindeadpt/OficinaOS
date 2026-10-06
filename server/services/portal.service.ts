@@ -2,6 +2,7 @@ import type { PrismaClient } from "@generated/client";
 import { AppError } from "@shared/errors/app-error.js";
 import type { FastifyBaseLogger } from "fastify";
 import { decryptSecret } from "../lib/crypto.js";
+import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import { cloudFetch } from "./cloud.service.js";
 import type { NotifyContext } from "./job.service.js";
 import { lookupByCodeAuth } from "./job.service.js";
@@ -20,9 +21,7 @@ const TRAILING_SLASH_RE = /\/+$/;
 async function cloudAuth(
   prisma: PrismaClient
 ): Promise<{ apiUrl: string; token: string }> {
-  const s = await prisma.shopSettings.findUniqueOrThrow({
-    where: { id: "default" },
-  });
+  const s = await getOrCreateShopSettings(prisma);
   if (!(s.cloudApiUrl && s.cloudShopTokenEncrypted)) {
     throw new AppError("CLOUD_NOT_PAIRED");
   }

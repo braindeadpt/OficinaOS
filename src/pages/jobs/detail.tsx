@@ -31,6 +31,11 @@ function toNum(v: unknown): number {
   return typeof v === "number" ? v : Number(v ?? 0);
 }
 
+/** Null when the job has no estimate yet ("por orçamentar"). */
+function optionalAmount(v: unknown): number | null {
+  return v === null || v === undefined ? null : toNum(v);
+}
+
 function UrgentBadge({ visible }: { visible: boolean }) {
   const { t } = useTranslation();
   if (!visible) {
@@ -228,6 +233,7 @@ export default function JobDetailPage() {
   );
   const deposit = toNum(job.depositAmount);
   const paidTotal = toNum(job.paidTotal);
+  const estimate = optionalAmount(job.estimatedCost);
   const balanceDue = Math.max(
     0,
     partsTotal + repairsTotal - deposit - paidTotal
@@ -288,11 +294,9 @@ export default function JobDetailPage() {
               {t("intake.estimated_cost")}
             </p>
             <p className="mt-0.5 font-bold font-headline text-lg text-on-surface">
-              {fmt(
-                typeof job.estimatedCost === "number"
-                  ? job.estimatedCost
-                  : Number(job.estimatedCost ?? 0)
-              )}
+              {estimate === null
+                ? t("intake.estimated_cost_pending")
+                : fmt(estimate)}
             </p>
           </div>
           {job.estimatedDate && (
@@ -478,7 +482,7 @@ export default function JobDetailPage() {
       {/* ── Quotes ── */}
       <div className="mt-8 rounded-2xl bg-surface-container p-6">
         <JobQuotesSection
-          estimatedCost={toNum(job.estimatedCost)}
+          estimatedCost={estimate}
           jobId={job.id}
           onChanged={() => fetchJob()}
         />

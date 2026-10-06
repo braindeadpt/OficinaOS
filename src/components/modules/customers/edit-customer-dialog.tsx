@@ -154,6 +154,7 @@ export default function EditCustomerDialog({
           <div className="space-y-4">
             <Field label={t("customer_edit_name")}>
               <Input
+                maxLength={120}
                 onChange={(e) =>
                   setForm((p) => ({ ...p, name: e.target.value }))
                 }
@@ -165,6 +166,7 @@ export default function EditCustomerDialog({
 
             <Field label={t("customer_edit_phone")}>
               <Input
+                maxLength={32}
                 onChange={(e) =>
                   setForm((p) => ({ ...p, phone: e.target.value }))
                 }
@@ -176,6 +178,7 @@ export default function EditCustomerDialog({
             <Field label={t("customer_edit_email")}>
               <Input
                 className="placeholder:text-outline"
+                maxLength={254}
                 onChange={(e) =>
                   setForm((p) => ({ ...p, email: e.target.value }))
                 }
@@ -189,6 +192,7 @@ export default function EditCustomerDialog({
               <Input
                 className="placeholder:text-outline"
                 inputMode="numeric"
+                maxLength={20}
                 onChange={(e) =>
                   setForm((p) => ({ ...p, taxId: e.target.value }))
                 }

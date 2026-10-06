@@ -43,8 +43,10 @@ export default function AddCustomerModal({
   const {
     clearError,
     create,
+    duplicate,
     error: createError,
     isCreating,
+    reuseExisting,
   } = useCreateCustomer();
 
   const [form, setForm] = useState(INITIAL_FORM);
@@ -118,6 +120,17 @@ export default function AddCustomerModal({
     }
   }, [form, create, onSuccess, onClose, t]);
 
+  const handleUseExisting = async () => {
+    try {
+      await reuseExisting();
+      setForm(INITIAL_FORM);
+      onSuccess();
+      onClose();
+    } catch {
+      // error handled by useCreateCustomer
+    }
+  };
+
   if (!open) {
     return null;
   }
@@ -171,6 +184,7 @@ export default function AddCustomerModal({
               </Label>
               <Input
                 id="add-customer-name"
+                maxLength={120}
                 onChange={(e) => updateForm("name", e.target.value)}
                 value={form.name}
               />
@@ -185,6 +199,7 @@ export default function AddCustomerModal({
               </Label>
               <Input
                 id="add-customer-phone"
+                maxLength={32}
                 onChange={(e) => updateForm("phone", e.target.value)}
                 type="tel"
                 value={form.phone}
@@ -200,6 +215,7 @@ export default function AddCustomerModal({
               </Label>
               <Input
                 id="add-customer-email"
+                maxLength={254}
                 onChange={(e) => updateForm("email", e.target.value)}
                 placeholder="email@example.com"
                 type="email"
@@ -214,6 +230,7 @@ export default function AddCustomerModal({
               <Input
                 id="add-customer-tax-id"
                 inputMode="numeric"
+                maxLength={20}
                 onChange={(e) => updateForm("taxId", e.target.value)}
                 placeholder={t("add_customer_modal.tax_id_placeholder")}
                 value={form.taxId}
@@ -246,6 +263,18 @@ export default function AddCustomerModal({
         {createError && (
           <div className="px-6 py-2" role="alert">
             <p className="text-error text-xs">{createError}</p>
+            {duplicate && (
+              <Button
+                className="mt-2"
+                disabled={isCreating}
+                onClick={handleUseExisting}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                {t("add_customer_modal.use_existing")}
+              </Button>
+            )}
           </div>
         )}
 

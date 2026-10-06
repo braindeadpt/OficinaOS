@@ -2,6 +2,7 @@ import type { JobQuote, PrismaClient } from "@generated/client";
 import { AuditAction } from "@generated/client";
 import { QuoteStatus } from "@shared/constants/quote-statuses";
 import { Role } from "@shared/constants/roles";
+import { AppError } from "@shared/errors/app-error.js";
 import type { SendQuoteInput } from "@shared/schemas/quote.schema";
 import {
   createQuote,
@@ -39,7 +40,12 @@ export async function createAndSendQuote(
     return null;
   }
 
+  // Without an explicit amount the quote falls back to the intake estimate —
+  // which may be empty ("por orçamentar"), so an amount is then required.
   const amount = input.amount ?? job.estimatedCost;
+  if (amount === null || amount === undefined) {
+    throw new AppError("QUOTE_AMOUNT_REQUIRED");
+  }
 
   const quote = await prisma.$transaction(async (tx) => {
     // Resend flow: a new quote retires the currently-pending one so the

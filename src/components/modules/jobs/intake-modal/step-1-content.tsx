@@ -126,6 +126,7 @@ function CustomerSearchField({
           aria-invalid={!!nameError}
           className={nameError ? inputErrorCls : inputCls}
           id="customer-search"
+          maxLength={120}
           onBlur={() => handleBlur("customerName")}
           onChange={(e) => {
             const val = e.target.value;
@@ -247,6 +248,7 @@ function BrandField({
         <input
           className={inputCls}
           id="device-brand"
+          maxLength={60}
           onBlur={() => handleBlur("brand")}
           onChange={(e) => {
             const val = e.target.value;
@@ -363,6 +365,7 @@ function ModelField({
           aria-invalid={!!(errors.model && touched.model)}
           className={errors.model && touched.model ? inputErrorCls : inputCls}
           id="device-model"
+          maxLength={120}
           onBlur={() => handleBlur("model")}
           onChange={(e) => {
             const val = e.target.value;
@@ -553,6 +556,7 @@ export default function Step1Content(props: Step1Props) {
                       : inputCls
                   }
                   id="customer-phone"
+                  maxLength={32}
                   onBlur={() => handleBlur("customerPhone")}
                   onChange={(e) => update("customerPhone", e.target.value)}
                   placeholder="+351..."
@@ -573,6 +577,7 @@ export default function Step1Content(props: Step1Props) {
                 <input
                   className={inputCls}
                   id="customer-email"
+                  maxLength={254}
                   onChange={(e) => update("customerEmail", e.target.value)}
                   placeholder="example@email.com"
                   type="email"
@@ -640,6 +645,7 @@ export default function Step1Content(props: Step1Props) {
               <input
                 className={inputCls}
                 id="device-color"
+                maxLength={40}
                 onChange={(e) => update("color", e.target.value)}
                 placeholder={t("intake.color_placeholder")}
                 type="text"
@@ -667,6 +673,7 @@ export default function Step1Content(props: Step1Props) {
               <input
                 className={inputCls}
                 id="device-unlock"
+                maxLength={64}
                 onChange={(e) => update("deviceUnlockCode", e.target.value)}
                 placeholder={t("intake.unlock_code_placeholder")}
                 type="text"

@@ -18,7 +18,9 @@
     "error_phone_required": "O telefone é obrigatório",
     "whatsapp_consent": "Quero receber atualizações por WhatsApp sobre a reparação",
     "tax_id": "Número fiscal (NIF)",
-    "tax_id_placeholder": "Opcional – para empresas"
+    "tax_id_placeholder": "Opcional – para empresas",
+    "duplicate_phone": "Já existe um cliente com este telefone: {{name}}",
+    "use_existing": "Usar cliente existente"
   },
   "add_new_part": "Adicionar nova peça",
   "add_part_modal": {
@@ -586,7 +588,9 @@
     "return_claim_rework_job_required": "Esta reivindicação requer um trabalho de retrabalho",
     "trade_in_not_found": "Troca não encontrada",
     "trade_in_invalid_state": "Esta troca já não pode ser modificada",
-    "trade_in_signature_required": "É necessária uma assinatura para concluir a troca"
+    "trade_in_signature_required": "É necessária uma assinatura para concluir a troca",
+    "quote_amount_required": "Indique o valor do orçamento — esta reparação ainda não tem custo estimado",
+    "duplicate_customer_phone": "Já existe um cliente com este número de telefone"
   },
   "failed_to_create_part": "Falha ao criar peça",
   "failed_to_delete_part": "Falha ao eliminar peça",
@@ -783,7 +787,8 @@
     "terms_text": "Declaro que o equipamento descrito nesta ficha me pertence, autorizo a sua reparação nas condições acordadas e aceito os termos de serviço da loja, incluindo o orçamento indicado e a obrigação de levantar o equipamento no prazo de 90 dias.",
     "signature_captured": "Assinatura registada",
     "whatsapp_consent": "O cliente autoriza notificações por WhatsApp",
-    "whatsapp_consent_hint": "Estados da reparação enviados automaticamente. Sem publicidade."
+    "whatsapp_consent_hint": "Estados da reparação enviados automaticamente. Sem publicidade.",
+    "estimated_cost_pending": "Por orçamentar"
   },
   "intake_wizard_next": "Seguinte",
   "intake_wizard_step1_title": "Cliente e dispositivo",
@@ -1825,7 +1830,12 @@
     "invalid_account": "Introduza um nome de conta InvoiceXpress válido",
     "invalid_tax_name": "Introduza um nome de taxa de IVA válido (por exemplo, IVA23)",
     "valid_quantity": "Introduza uma quantidade válida",
-    "max_value": "Deve ter no máximo {{max}}"
+    "max_value": "Deve ter no máximo {{max}}",
+    "invalid_value": "Valor inválido",
+    "invalid_number": "Introduza um número válido",
+    "invalid_option": "Opção inválida",
+    "min_items": "Selecione pelo menos {{min}}",
+    "max_items": "No máximo {{max}} elementos"
   },
   "view_all_critical": "Ver todos os atrasos",
   "warranty_returns": "Devoluções de garantia",
@@ -2019,7 +2029,8 @@
     "no_module": "Preços de mercado é um módulo Pro – peça ao seu fornecedor OficinaOS para o activar.",
     "empty": "Ainda não existem benchmarks – aparecem quando pelo menos três lojas partilham um preço para o mesmo artigo.",
     "load_error": "Não foi possível carregar os preços de mercado",
-    "action_error": "Não foi possível atualizar a partilha"
+    "action_error": "Não foi possível atualizar a partilha",
+    "range_insufficient": "Dados insuficientes"
   },
   "parts_board": {
     "nav_label": "Procuro-peça",

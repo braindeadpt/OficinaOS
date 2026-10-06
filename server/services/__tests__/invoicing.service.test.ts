@@ -41,7 +41,7 @@ function fakePrisma(overrides: Record<string, unknown> = {}) {
       update: vi.fn(async () => ({})),
     },
     shopSettings: {
-      findUniqueOrThrow: vi.fn(async () => ({ ...SETTINGS })),
+      findUnique: vi.fn(async () => ({ ...SETTINGS })),
     },
     ...overrides,
   } as never;
@@ -84,7 +84,7 @@ describe("issueInvoiceForSale", () => {
         update: vi.fn(),
       },
       shopSettings: {
-        findUniqueOrThrow: vi.fn(async () => ({
+        findUnique: vi.fn(async () => ({
           ...SETTINGS,
           cloudEntitlements: [],
         })),
@@ -114,7 +114,7 @@ describe("issueInvoiceForSale", () => {
           update: vi.fn(),
         },
         shopSettings: {
-          findUniqueOrThrow: vi.fn(async () => ({ ...SETTINGS, ...patch })),
+          findUnique: vi.fn(async () => ({ ...SETTINGS, ...patch })),
         },
       });
       await expect(

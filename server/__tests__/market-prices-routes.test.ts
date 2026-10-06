@@ -33,7 +33,7 @@ function fakePrisma(overrides: Partial<SettingsRow> = {}) {
       findMany: vi.fn(async () => []),
     },
     shopSettings: {
-      findUniqueOrThrow: vi.fn(async () => ({ ...row })),
+      findUnique: vi.fn(async () => ({ ...row })),
       update: vi.fn(({ data }: { data: Partial<SettingsRow> }) => {
         Object.assign(row, data);
         return Promise.resolve({ ...row });
@@ -162,6 +162,33 @@ describe("market-prices — GET stats", () => {
     expect(body.stats[0].ownPriceCents).toBe(12_000);
     // No local part named "Bateria Samsung" → null.
     expect(body.stats[1].ownPriceCents).toBeNull();
+  });
+
+  it("passes through null min/max when too few shops report an item", async () => {
+    fetchMock.mockReturnValueOnce(
+      cloudJson({
+        stats: [
+          {
+            avgCents: 4000,
+            category: null,
+            key: "bateria samsung",
+            kind: "part",
+            maxCents: null,
+            medianCents: 4000,
+            minCents: null,
+            name: "Bateria Samsung",
+            shopCount: 3,
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+      })
+    );
+    const app = buildApp(fakePrisma());
+    const res = await app.inject({ method: "GET", url: "/api/market-prices" });
+    expect(res.statusCode).toBe(200);
+    const [stat] = res.json().stats;
+    expect(stat.minCents).toBeNull();
+    expect(stat.maxCents).toBeNull();
   });
 
   it("cloud 402 MODULE_NOT_ENTITLED becomes local CLOUD_MODULE_REQUIRED", async () => {

@@ -48,7 +48,7 @@ function fakePrisma(row: Record<string, unknown>) {
     customer: { findMany: vi.fn(async () => []) },
     job: { findMany: vi.fn(async () => []) },
     shopSettings: {
-      findUniqueOrThrow: vi.fn(async () => row),
+      findUnique: vi.fn(async () => row),
     },
   } as never;
 }

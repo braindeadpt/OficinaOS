@@ -44,8 +44,14 @@ export function fmtMoney(
   return `${n.toLocaleString("en-US")} ${currency}`;
 }
 
-export const toNum = (v: number | { toNumber: () => number }) =>
-  typeof v === "number" ? v : v.toNumber();
+export const toNum = (
+  v: number | { toNumber: () => number } | null | undefined
+) => {
+  if (v === null || v === undefined) {
+    return 0;
+  }
+  return typeof v === "number" ? v : v.toNumber();
+};
 
 export interface ReceiptStrings {
   balanceDue: string;
@@ -402,7 +408,7 @@ export async function renderReceiptHtml(
     customer: { name: string; phone: string };
     device: { brand: { name: string }; model: string };
     reportedProblem: string;
-    estimatedCost: number | { toNumber: () => number };
+    estimatedCost: number | { toNumber: () => number } | null;
     depositAmount?: number | { toNumber: () => number } | null;
     intakeSignatureDataUrl?: string | null;
     createdAt: Date;
@@ -1034,7 +1040,7 @@ export async function renderLabelHtml(
     customer: { name: string; phone: string };
     device: { brand: { name: string }; model: string };
     reportedProblem: string;
-    estimatedCost: number | { toNumber: () => number };
+    estimatedCost: number | { toNumber: () => number } | null;
     createdAt: Date;
     partsUsed: Array<{
       partName: string;

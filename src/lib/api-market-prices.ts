@@ -5,9 +5,11 @@ export interface MarketPriceStat {
   category: string | null;
   key: string;
   kind: "repair" | "part";
-  maxCents: number;
+  /** Null when too few shops report the item (the cloud hides the range). */
+  maxCents: number | null;
   medianCents: number;
-  minCents: number;
+  /** Null when too few shops report the item (the cloud hides the range). */
+  minCents: number | null;
   name: string;
   /** Own catalog price for the same normalized item, when it exists. */
   ownPriceCents: number | null;

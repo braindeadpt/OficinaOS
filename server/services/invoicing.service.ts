@@ -2,6 +2,7 @@ import type { PrismaClient } from "@generated/client";
 import { AppError } from "@shared/errors/app-error.js";
 import type { FastifyBaseLogger } from "fastify";
 import { decryptSecret } from "../lib/crypto.js";
+import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 
 /**
  * Faturação (módulo Pro "invoicing") — emissão de documentos fiscais via
@@ -58,9 +59,9 @@ async function loadInvoicingConfig(prisma: PrismaClient): Promise<{
   apiKey: string;
   taxName: string;
 }> {
-  const settings = (await prisma.shopSettings.findUniqueOrThrow({
-    where: { id: "default" },
-  })) as unknown as SettingsLike;
+  const settings = (await getOrCreateShopSettings(
+    prisma
+  )) as unknown as SettingsLike;
   const modules = Array.isArray(settings.cloudEntitlements)
     ? (settings.cloudEntitlements as string[])
     : [];

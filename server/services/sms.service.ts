@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { PrismaClient } from "@generated/client";
 import type { FastifyBaseLogger } from "fastify";
 import { decryptSecret, isEncrypted } from "../lib/crypto.js";
+import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import {
   type BotReplyCtx,
   composeReply,
@@ -200,9 +201,7 @@ export async function handleInboundSms(
   fromPhone: string,
   text: string
 ): Promise<void> {
-  const settings = await prisma.shopSettings.findUniqueOrThrow({
-    where: { id: "default" },
-  });
+  const settings = await getOrCreateShopSettings(prisma);
   const modules = Array.isArray(settings.cloudEntitlements)
     ? (settings.cloudEntitlements as string[])
     : [];

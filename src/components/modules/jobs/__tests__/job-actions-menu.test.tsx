@@ -77,13 +77,15 @@ describe("JobActionsMenu", () => {
     expect(screen.queryByText("status.CANCELLED")).not.toBeInTheDocument();
   });
 
-  it("hides the status section for IN_REPAIR (all transitions need input)", () => {
+  it("offers only WAITING_FOR_PARTS for IN_REPAIR (the rest need input)", () => {
     render(<JobActionsMenu job={makeJob({ status: "IN_REPAIR" })} />);
     fireEvent.click(screen.getByRole("button", { name: "job_actions" }));
-    // IN_REPAIR → [ON_HOLD, DONE, CANCELLED] — all need reason/QC/dialog.
-    expect(
-      screen.queryByText("job_actions_change_status")
-    ).not.toBeInTheDocument();
+    // IN_REPAIR → [WAITING_FOR_PARTS, ON_HOLD, DONE, CANCELLED] — ON_HOLD,
+    // DONE and CANCELLED need a reason/QC/dialog.
+    expect(screen.getByText("job_actions_change_status")).toBeInTheDocument();
+    expect(screen.getByText("status.WAITING_FOR_PARTS")).toBeInTheDocument();
+    expect(screen.queryByText("status.ON_HOLD")).not.toBeInTheDocument();
+    expect(screen.queryByText("status.DONE")).not.toBeInTheDocument();
     expect(screen.getByText("job_actions_add_note")).toBeInTheDocument();
   });
 

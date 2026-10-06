@@ -1041,6 +1041,33 @@ describe("transitionStatus", () => {
     expect(prisma.job.update).toHaveBeenCalled();
   });
 
+  it("allows IN_REPAIR -> WAITING_FOR_PARTS (part found missing mid-repair)", async () => {
+    (prisma.job.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "job-1",
+      partsUsed: [],
+      repairs: [],
+      status: "IN_REPAIR",
+      technicianId: "user-1",
+    });
+    (prisma.job.update as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "job-1",
+      partsUsed: [],
+      repairs: [],
+      status: "WAITING_FOR_PARTS",
+    });
+
+    const result = await transitionStatus(
+      prisma,
+      "job-1",
+      "WAITING_FOR_PARTS",
+      "user-1",
+      mockNotifyCtx
+    );
+
+    expect(result).not.toHaveProperty("error");
+    expect(prisma.job.update).toHaveBeenCalled();
+  });
+
   it("rejects CANCELLED transition by FRONT_DESK when not creator", async () => {
     (prisma.job.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
       createdAt: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago

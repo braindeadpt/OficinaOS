@@ -14,7 +14,7 @@ export default function QuickIntakeForm() {
   const [deviceBrand, setDeviceBrand] = useState("");
   const [deviceModel, setDeviceModel] = useState("");
   const [reportedProblem, setReportedProblem] = useState("");
-  const [estimatedCost, setEstimatedCost] = useState(0);
+  const [estimatedCost, setEstimatedCost] = useState("");
   const [expanded, setExpanded] = useState(false);
   const isCreating = useJobsStore((s) => s.isCreatingJob);
 
@@ -27,14 +27,18 @@ export default function QuickIntakeForm() {
         deviceBrand,
         deviceModel,
         reportedProblem,
-        estimatedCost,
+        // Empty = "por orçamentar" — priced after diagnosis.
+        estimatedCost:
+          estimatedCost.trim() === ""
+            ? undefined
+            : Number.parseFloat(estimatedCost) || 0,
       });
       setCustomerName("");
       setCustomerPhone("");
       setDeviceBrand("");
       setDeviceModel("");
       setReportedProblem("");
-      setEstimatedCost(0);
+      setEstimatedCost("");
       setExpanded(false);
     } catch {
       // Error is handled by the store
@@ -61,6 +65,7 @@ export default function QuickIntakeForm() {
         <form className="space-y-4 px-6 pb-6" onSubmit={handleSubmit}>
           <Field label={t("front_desk.customer_name")} required>
             <Input
+              maxLength={120}
               onChange={(e) => setCustomerName(e.target.value)}
               placeholder={t("front_desk.customer_name_placeholder")}
               required
@@ -71,6 +76,7 @@ export default function QuickIntakeForm() {
           <div className="grid grid-cols-2 gap-4">
             <Field label={t("front_desk.phone")} required>
               <Input
+                maxLength={32}
                 onChange={(e) => setCustomerPhone(e.target.value)}
                 placeholder={t("front_desk.phone_placeholder")}
                 required
@@ -80,6 +86,7 @@ export default function QuickIntakeForm() {
             </Field>
             <Field label={t("front_desk.device_brand")} required>
               <Input
+                maxLength={60}
                 onChange={(e) => setDeviceBrand(e.target.value)}
                 placeholder={t("front_desk.device_brand_placeholder")}
                 required
@@ -91,6 +98,7 @@ export default function QuickIntakeForm() {
           <div className="grid grid-cols-2 gap-4">
             <Field label={t("front_desk.device_model")} required>
               <Input
+                maxLength={120}
                 onChange={(e) => setDeviceModel(e.target.value)}
                 placeholder={t("front_desk.device_model_placeholder")}
                 required
@@ -101,13 +109,8 @@ export default function QuickIntakeForm() {
             <Field label={t("front_desk.estimated_cost")}>
               <Input
                 min={0}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setEstimatedCost(
-                    val === "" ? 0 : Number.parseFloat(val) || 0
-                  );
-                }}
-                placeholder="0"
+                onChange={(e) => setEstimatedCost(e.target.value)}
+                placeholder={t("intake.estimated_cost_pending")}
                 step="0.01"
                 type="number"
                 value={estimatedCost}
@@ -116,6 +119,7 @@ export default function QuickIntakeForm() {
           </div>
           <Field label={t("front_desk.issue_description")} required>
             <Textarea
+              maxLength={2000}
               onChange={(e) => setReportedProblem(e.target.value)}
               placeholder={t("front_desk.issue_placeholder")}
               required

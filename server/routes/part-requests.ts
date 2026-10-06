@@ -8,6 +8,7 @@ import {
 import type { FastifyPluginAsync } from "fastify";
 import { decryptSecret } from "../lib/crypto.js";
 import { requirePermission } from "../middlewares/rbac.js";
+import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import { cloudFetch } from "../services/cloud.service.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
@@ -25,9 +26,7 @@ interface CloudAuth {
  * enforces it server-side (its verdict wins if the cache is stale).
  */
 async function requireMarket(prisma: PrismaClient): Promise<CloudAuth> {
-  const settings = await prisma.shopSettings.findUniqueOrThrow({
-    where: { id: "default" },
-  });
+  const settings = await getOrCreateShopSettings(prisma);
   if (!(settings.cloudApiUrl && settings.cloudShopTokenEncrypted)) {
     throw new AppError("CLOUD_NOT_PAIRED");
   }

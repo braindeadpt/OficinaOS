@@ -8,6 +8,7 @@ import {
   type MarketPriceStat,
   setPriceSharing,
 } from "@/lib/api-market-prices";
+import { formatPriceRange } from "@/lib/market-price-range";
 
 type Gate = "ok" | "not-paired" | "no-module";
 type KindFilter = "all" | "repair" | "part";
@@ -163,8 +164,11 @@ export default function MarketPricesPage() {
                     {t("market_prices.range")}
                   </p>
                   <p className="font-medium text-on-surface text-sm">
-                    {fmtCurrency(s.minCents / 100)} –{" "}
-                    {fmtCurrency(s.maxCents / 100)}
+                    {formatPriceRange(
+                      s,
+                      fmtCurrency,
+                      t("market_prices.range_insufficient")
+                    )}
                   </p>
                 </div>
               </div>

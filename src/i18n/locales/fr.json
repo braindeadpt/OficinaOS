@@ -18,7 +18,9 @@
     "error_phone_required": "Le téléphone est requis",
     "whatsapp_consent": "Recevoir les mises à jour WhatsApp de ma réparation",
     "tax_id": "Numéro fiscal (NIF)",
-    "tax_id_placeholder": "Facultatif — pour les entreprises"
+    "tax_id_placeholder": "Facultatif — pour les entreprises",
+    "duplicate_phone": "Un client avec ce téléphone existe déjà : {{name}}",
+    "use_existing": "Utiliser le client existant"
   },
   "add_new_part": "Ajouter une pièce",
   "add_part_modal": {
@@ -586,7 +588,9 @@
     "return_claim_rework_job_required": "Cette affirmation nécessite un travail de retouche",
     "trade_in_not_found": "Échange introuvable",
     "trade_in_invalid_state": "Cet échange n'est plus modifiable",
-    "trade_in_signature_required": "Une signature est requise pour finaliser l'échange"
+    "trade_in_signature_required": "Une signature est requise pour finaliser l'échange",
+    "quote_amount_required": "Indiquez le montant du devis : cette réparation n'a pas encore de coût estimé",
+    "duplicate_customer_phone": "Un client avec ce numéro de téléphone existe déjà"
   },
   "failed_to_create_part": "Échec de la création de la pièce",
   "failed_to_delete_part": "Échec de la suppression de la pièce",
@@ -783,7 +787,8 @@
     "terms_text": "Je déclare que l'appareil décrit dans ce formulaire m'appartient, j'autorise sa réparation dans les conditions convenues et j'accepte les conditions de service de la boutique, incluant le devis indiqué et la responsabilité de récupérer l'appareil sous 90 jours.",
     "signature_captured": "Signature capturée",
     "whatsapp_consent": "Le client autorise les notifications WhatsApp",
-    "whatsapp_consent_hint": "Mises à jour de l'état de réparation envoyées automatiquement. "
+    "whatsapp_consent_hint": "Mises à jour de l'état de réparation envoyées automatiquement. ",
+    "estimated_cost_pending": "À chiffrer"
   },
   "intake_wizard_next": "Suivant",
   "intake_wizard_step1_title": "Client et appareil",
@@ -1825,7 +1830,12 @@
     "invalid_account": "Entrez un nom de compte InvoiceXpress valide",
     "invalid_tax_name": "Saisissez un nom de taux de TVA valide (par exemple, IVA23)",
     "valid_quantity": "Entrez une quantité valide",
-    "max_value": "Doit être au maximum {{max}}"
+    "max_value": "Doit être au maximum {{max}}",
+    "invalid_value": "Valeur invalide",
+    "invalid_number": "Saisissez un nombre valide",
+    "invalid_option": "Option invalide",
+    "min_items": "Sélectionnez au moins {{min}}",
+    "max_items": "{{max}} éléments au maximum"
   },
   "view_all_critical": "Voir tous les en retard",
   "warranty_returns": "Retours garantie",
@@ -2019,7 +2029,8 @@
     "no_module": "Les prix du marché sont un module Pro – demandez à votre fournisseur OficinaOS de l'activer.",
     "empty": "Pas encore de références : elles apparaissent une fois qu'au moins 3 magasins partagent un prix pour le même article.",
     "load_error": "Impossible de charger les prix du marché",
-    "action_error": "Impossible de mettre à jour le partage"
+    "action_error": "Impossible de mettre à jour le partage",
+    "range_insufficient": "Données insuffisantes"
   },
   "parts_board": {
     "nav_label": "Recherche de pièce",

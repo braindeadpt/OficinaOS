@@ -18,7 +18,9 @@
     "error_phone_required": "Phone is required",
     "whatsapp_consent": "Send me WhatsApp status updates about my repair",
     "tax_id": "Tax number (NIF)",
-    "tax_id_placeholder": "Optional — for companies"
+    "tax_id_placeholder": "Optional — for companies",
+    "duplicate_phone": "A customer with this phone already exists: {{name}}",
+    "use_existing": "Use existing customer"
   },
   "add_new_part": "Add New Part",
   "add_part_modal": {
@@ -586,7 +588,9 @@
     "return_claim_rework_job_required": "This claim requires a rework job",
     "trade_in_not_found": "Trade-in not found",
     "trade_in_invalid_state": "This trade-in can no longer be modified",
-    "trade_in_signature_required": "A signature is required to complete the trade-in"
+    "trade_in_signature_required": "A signature is required to complete the trade-in",
+    "quote_amount_required": "Enter the quote amount — this repair has no estimated cost yet",
+    "duplicate_customer_phone": "A customer with this phone number already exists"
   },
   "failed_to_create_part": "Failed to create part",
   "failed_to_delete_part": "Failed to delete part",
@@ -783,7 +787,8 @@
     "terms_text": "I declare that the device described in this form belongs to me, I authorize its repair under the agreed conditions, and I accept the shop's terms of service, including the stated estimate and the responsibility of collecting the device within 90 days.",
     "signature_captured": "Signature captured",
     "whatsapp_consent": "Customer authorizes WhatsApp notifications",
-    "whatsapp_consent_hint": "Repair status updates sent automatically. No marketing."
+    "whatsapp_consent_hint": "Repair status updates sent automatically. No marketing.",
+    "estimated_cost_pending": "To be quoted"
   },
   "intake_wizard_next": "Next",
   "intake_wizard_step1_title": "Customer & Device",
@@ -1825,7 +1830,12 @@
     "invalid_account": "Enter a valid InvoiceXpress account name",
     "invalid_tax_name": "Enter a valid VAT rate name (e.g. IVA23)",
     "valid_quantity": "Enter a valid quantity",
-    "max_value": "Must be at most {{max}}"
+    "max_value": "Must be at most {{max}}",
+    "invalid_value": "Invalid value",
+    "invalid_number": "Enter a valid number",
+    "invalid_option": "Invalid option",
+    "min_items": "Select at least {{min}}",
+    "max_items": "At most {{max}} items"
   },
   "view_all_critical": "View All Overdue",
   "warranty_returns": "Warranty Returns",
@@ -2019,7 +2029,8 @@
     "no_module": "Market prices is a Pro module — ask your OficinaOS provider to enable it.",
     "empty": "No benchmarks yet — they appear once at least 3 shops share a price for the same item.",
     "load_error": "Could not load market prices",
-    "action_error": "Could not update sharing"
+    "action_error": "Could not update sharing",
+    "range_insufficient": "Insufficient data"
   },
   "parts_board": {
     "nav_label": "Part board",

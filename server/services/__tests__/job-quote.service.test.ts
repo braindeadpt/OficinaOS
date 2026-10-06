@@ -140,6 +140,19 @@ describe("createAndSendQuote", () => {
     );
   });
 
+  it("requires an explicit amount when the job has no estimate yet", async () => {
+    (prisma.job.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "job-1",
+      jobCode: "JOB-2026-0001",
+      estimatedCost: null,
+    });
+
+    await expect(
+      createAndSendQuote(prisma, "job-1", {}, "user-1", notifyCtx)
+    ).rejects.toMatchObject({ code: "QUOTE_AMOUNT_REQUIRED" });
+    expect(prisma.jobQuote.create).not.toHaveBeenCalled();
+  });
+
   it("supersedes the pending quote and bumps the version on resend", async () => {
     (prisma.job.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "job-1",

@@ -7,7 +7,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useJobsStore } from "@/stores/jobs";
 
 interface SendQuoteDialogProps {
-  defaultAmount: number;
+  /** Null when the job has no estimate yet ("por orçamentar"). */
+  defaultAmount: number | null;
   jobId: string;
   onClose: () => void;
   onSent: () => void;
@@ -31,7 +32,7 @@ export default function SendQuoteDialog({
     if (!open) {
       return;
     }
-    setAmount(String(defaultAmount));
+    setAmount(defaultAmount === null ? "" : String(defaultAmount));
     setNote("");
     setSubmitError(null);
     document.body.style.overflow = "hidden";

@@ -126,7 +126,11 @@ export function loadEnv(): Env {
   if (cached) {
     return cached;
   }
-  const parsed = schema.safeParse(process.env);
+  // Operator-facing: keep Zod's English messages here even though the
+  // server installs a global error map that emits i18n keys for API errors.
+  const parsed = schema.safeParse(process.env, {
+    error: z.locales.en().localeError,
+  });
   if (!parsed.success) {
     const errors = parsed.error.flatten().fieldErrors;
     const pretty = Object.entries(errors)

@@ -38,11 +38,21 @@ function buildJobPayload(data: IntakeFormData) {
     intakeChecklist:
       Object.keys(data.checklist).length > 0 ? data.checklist : undefined,
     intakeSignatureDataUrl: data.signature ?? undefined,
-    estimatedCost: Number.parseFloat(data.estimatedCost) || 0,
+    // Empty = "por orçamentar" (priced after diagnosis) — send nothing
+    // rather than a misleading 0.
+    estimatedCost: parseOptionalAmount(data.estimatedCost),
     estimatedDate: data.estimatedDelivery || undefined,
     isUrgent: data.isUrgent,
     depositAmount: data.deposit ? Number.parseFloat(data.deposit) : undefined,
   };
+}
+
+function parseOptionalAmount(raw: string): number | undefined {
+  if (raw.trim() === "") {
+    return;
+  }
+  const value = Number.parseFloat(raw);
+  return Number.isFinite(value) ? value : undefined;
 }
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
