@@ -51,7 +51,11 @@ const IS_PROD = env.NODE_ENV === "production";
 
 const app = Fastify({
   logger: { level: env.LOG_LEVEL },
-  trustProxy: env.TRUST_PROXY ?? IS_PROD,
+  // Opt-in only: on a direct LAN deployment every client can spoof
+  // X-Forwarded-For, bypassing all IP-keyed rate limits. Deployments
+  // behind a real proxy (Cloudflare Tunnel, Coolify) must set
+  // TRUST_PROXY=true explicitly.
+  trustProxy: env.TRUST_PROXY ?? false,
   requestIdHeader: false,
   requestIdLogLabel: "reqId",
   connectionTimeout: 60_000,
@@ -249,7 +253,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
 try {
   await app.listen({ port: env.PORT, host: env.HOST });
   app.log.info(
-    { env: env.NODE_ENV, trustProxy: Boolean(env.TRUST_PROXY ?? IS_PROD) },
+    { env: env.NODE_ENV, trustProxy: Boolean(env.TRUST_PROXY) },
     `OficinaOS server running on ${env.HOST}:${env.PORT}`
   );
 } catch (err) {

@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { loadEnv, resolveUrls } from "../config/env.js";
 import { getSessionFromRequest } from "../lib/auth.js";
 
 interface WsClient {
@@ -11,6 +12,25 @@ interface WsClient {
 
 const connections = new Set<WsClient>();
 const HEARTBEAT_MS = 30_000;
+const TRAILING_SLASHES_RE = /\/+$/;
+const trustedOrigins = new Set(
+  resolveUrls(loadEnv()).trustedOrigins.map((o) =>
+    o.replace(TRAILING_SLASHES_RE, "")
+  )
+);
+
+/**
+ * Cross-site WebSocket hijacking guard. On HTTPS deployments the session
+ * cookie is SameSite=None, so any web page could open an authenticated
+ * /ws — the Origin header must match a trusted origin when present
+ * (browsers always send it; non-browser clients may omit it).
+ */
+export function originAllowed(origin: string | undefined): boolean {
+  if (!origin) {
+    return true;
+  }
+  return trustedOrigins.has(origin.replace(TRAILING_SLASHES_RE, ""));
+}
 
 export function wsBroadcast(
   predicate: (client: WsClient) => boolean,
@@ -71,6 +91,11 @@ export const websocketPlugin: FastifyPluginAsync = async (app) => {
   });
 
   app.get("/ws", { websocket: true }, async (socket, req) => {
+    if (!originAllowed(req.headers.origin)) {
+      app.log.warn({ origin: req.headers.origin }, "WS rejected — origin");
+      socket.close(4003, "Forbidden origin");
+      return;
+    }
     const session = await getSessionFromRequest(app.auth, req);
     if (!session) {
       app.log.warn("WS connection rejected — invalid session");

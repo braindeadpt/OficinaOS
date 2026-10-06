@@ -53,6 +53,9 @@ Bloco de Notas ou VS Code) e adiciona/edita estas duas linhas:
 ```bash
 TUNNEL_TOKEN=eyJhIjoixxxxx…        # cola aqui o token do passo 2
 EXTRA_TRUSTED_ORIGINS=https://oficina.minhaloja.pt   # o teu endereço público
+TRUST_PROXY=true                   # o túnel é um proxy — sem isto os
+                                   # limites de taxa aplicam-se a todos
+                                   # os visitantes em conjunto
 ```
 
 > O `APP_URL` fica como está (`http://192.168…:4000`) — assim a loja

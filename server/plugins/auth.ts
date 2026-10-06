@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@generated/client";
-import { AppError } from "@shared/errors/app-error.js";
+import { AppError, isAppError } from "@shared/errors/app-error.js";
 import { fromNodeHeaders } from "better-auth/node";
 import type { FastifyPluginAsync } from "fastify";
 import fp from "fastify-plugin";
@@ -74,8 +74,13 @@ async function handleFailedSignIn(
     if (typeof identifier !== "string") {
       return;
     }
+    // better-auth normalizes the sign-in identifier to lowercase —
+    // "Admin" authenticates as "admin", so lockout tracking must
+    // key on the same normalized form or each casing variant gets
+    // a fresh failure budget.
+    const normalized = identifier.toLowerCase().trim();
     const user = await prisma.user.findFirst({
-      where: { OR: [{ username: identifier }, { email: identifier }] },
+      where: { OR: [{ username: normalized }, { email: normalized }] },
       select: { id: true },
     });
     if (user) {
@@ -126,8 +131,11 @@ async function checkSignInLockout(
   if (typeof identifier !== "string") {
     return;
   }
+  // Same normalization as the sign-in path — a case variant must not
+  // skip the lockout check.
+  const normalized = identifier.toLowerCase().trim();
   const user = await prisma.user.findFirst({
-    where: { OR: [{ username: identifier }, { email: identifier }] },
+    where: { OR: [{ username: normalized }, { email: normalized }] },
     select: { failedLoginAttempts: true, lockedUntil: true },
   });
   if (user && isAccountLocked(user)) {
@@ -182,6 +190,12 @@ const authPlugin: FastifyPluginAsync = async (app) => {
 
       await forwardResponse(response, reply, request.method, url.pathname);
     } catch (err) {
+      // AppErrors raised by our own guards (e.g. ACCOUNT_LOCKED from the
+      // sign-in precheck) must surface intact — wrapping them as 500
+      // would both hide the real status and mislead the client.
+      if (isAppError(err)) {
+        throw err;
+      }
       app.log.error(err, "Better Auth handler error");
       throw new AppError("INTERNAL_ERROR");
     }
@@ -221,6 +235,13 @@ const authPlugin: FastifyPluginAsync = async (app) => {
     });
     if (lockoutUser && isAccountLocked(lockoutUser)) {
       throw new AppError("ACCOUNT_LOCKED");
+    }
+
+    // The forced rotation must hold server-side too — a session with
+    // mustChangePassword can otherwise call every API route directly
+    // (the /api/auth/* endpoints it needs are exempted above).
+    if (session.mustChangePassword) {
+      throw new AppError("PASSWORD_CHANGE_REQUIRED");
     }
 
     request.user = session;

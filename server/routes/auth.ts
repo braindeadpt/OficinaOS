@@ -49,7 +49,8 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         session.user.id,
         oldPassword,
         newPassword,
-        username
+        username,
+        session.session.id
       );
 
       return reply.send(result);

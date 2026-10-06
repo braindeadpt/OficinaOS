@@ -29,6 +29,7 @@ async function fetchConversations(
 }
 
 function useConversations(_refreshKey: number) {
+  const { t } = useTranslation();
   const [conversations, setConversations] = useState<ConversationItemData[]>(
     []
   );
@@ -38,19 +39,22 @@ function useConversations(_refreshKey: number) {
   const [search, setSearch] = useState("");
   const sentinelRef = useRef<HTMLDivElement>(null);
 
-  const loadInitial = useCallback(async (searchTerm?: string) => {
-    setLoading(true);
-    try {
-      const result = await fetchConversations(undefined, searchTerm);
-      setConversations(result.items);
-      setCursor(result.nextCursor ?? null);
-      setHasMore(!!result.nextCursor);
-    } catch {
-      toast.error("Failed to load conversations");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const loadInitial = useCallback(
+    async (searchTerm?: string) => {
+      setLoading(true);
+      try {
+        const result = await fetchConversations(undefined, searchTerm);
+        setConversations(result.items);
+        setCursor(result.nextCursor ?? null);
+        setHasMore(!!result.nextCursor);
+      } catch {
+        toast.error(t("ai_agent_failed_load"));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [t]
+  );
 
   const loadMore = useCallback(async () => {
     if (!cursor || loading) {
@@ -63,11 +67,11 @@ function useConversations(_refreshKey: number) {
       setCursor(result.nextCursor ?? null);
       setHasMore(!!result.nextCursor);
     } catch {
-      toast.error("Failed to load conversations");
+      toast.error(t("ai_agent_failed_load"));
     } finally {
       setLoading(false);
     }
-  }, [cursor, loading, search]);
+  }, [cursor, loading, search, t]);
 
   useEffect(() => {
     loadInitial(search || undefined);

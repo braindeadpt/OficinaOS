@@ -46,3 +46,13 @@ export function updateUsername(
     data: { username },
   });
 }
+
+export function deleteOtherSessions(
+  prisma: DbClient,
+  userId: string,
+  keepSessionId: string
+) {
+  return prisma.session.deleteMany({
+    where: { userId, id: { not: keepSessionId } },
+  });
+}

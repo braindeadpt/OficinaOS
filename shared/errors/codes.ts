@@ -289,6 +289,10 @@ export const ERRORS = {
     status: 409,
     message: "errors.already_invoiced",
   },
+  PASSWORD_CHANGE_REQUIRED: {
+    status: 403,
+    message: "errors.password_change_required",
+  },
 } as const;
 
 export type ErrorCode = keyof typeof ERRORS;

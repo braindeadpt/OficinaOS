@@ -21,18 +21,19 @@ const ALLOWED_TABLES = new Set([
   "job_parts_waiting",
   "repair_catalog",
   "parts_catalog",
-  "audit_logs",
   "users",
 ]);
 
 const BLOCKED_TABLES = new Set([
   "accounts",
+  "audit_logs",
   "sessions",
   "verifications",
   "shop_settings",
 ]);
 
 const BLOCKED_COLUMNS: Record<string, Set<string>> = {
+  jobs: new Set(["accesscode", "deviceunlockcode", "intakesignaturedataurl"]),
   users: new Set(["password"]),
 };
 
@@ -67,10 +68,16 @@ const STATEMENT_TIMEOUT_MS = 5000;
 const SELECT_ONLY_REGEX = /^\s*SELECT\s/i;
 const SELECT_KEYWORD_RE = /\bSELECT\b/gi;
 const FROM_KEYWORD_RE = /\bFROM\b/i;
-const AS_ALIAS_RE = /.*\bas\s+/i;
-const TABLE_PREFIX_RE = /.*\./;
 const WILDCARD_COLUMN_RE = /(^|,)\s*(\w+\s*\.\s*)?\*/;
-const TABLE_REFERENCE_RE = /\b(?:FROM|JOIN|UPDATE|INTO)\s+([^\s(]+)/gi;
+const JOIN_REFERENCE_RE = /\b(?:JOIN|UPDATE|INTO)\s+([^\s(]+)/gi;
+// Everything a FROM clause contains up to the next clause keyword —
+// comma joins ("FROM a, blocked_table b") must have every segment's
+// table extracted, not just the first one.
+const FROM_CLAUSE_RE =
+  /\bFROM\s+([\s\S]*?)(?=\s\b(?:WHERE|GROUP|ORDER|LIMIT|HAVING|OFFSET|FOR)\b|\)|$)/gi;
+const FROM_IDENT_RE = /^\s*["`]?([A-Za-z_][\w.$]*)/;
+const LATERAL_ONLY_RE = /^(?:lateral|only)$/i;
+const ALIAS_TAIL_RE = /\s+as\s+[\s\S]*$/i;
 const QUOTE_RE = /["`]/g;
 const STRING_LITERAL_RE = /'(?:[^']|'')*'/g;
 const TRAILING_COMMA_RE = /,$/;
@@ -105,6 +112,13 @@ const BLOCKED_PATTERNS = [
   /\blo_get\s*\(/i,
   /\blo_unlink\s*\(/i,
   /\bquery_to_xml\s*\(/i,
+  // Row-locking clauses are mutations in disguise.
+  /\bFOR\s+(?:UPDATE|SHARE|NO\s+KEY|KEY\s+SHARE)\b/i,
+  // Server/instance info leaks — nothing an analyst query needs.
+  /\bversion\s*\(/i,
+  /\bcurrent_user\b/i,
+  /\bsession_user\b/i,
+  /\binet_server_(?:addr|port)\s*\(/i,
 ];
 
 /**
@@ -117,15 +131,43 @@ function stripStringLiterals(sql: string): string {
   return sql.replace(STRING_LITERAL_RE, "''");
 }
 
+function pushTable(tables: string[], raw: string): void {
+  const table = raw
+    .replace(QUOTE_RE, "")
+    .replace(TRAILING_COMMA_RE, "")
+    .toLowerCase();
+  if (table) {
+    tables.push(table);
+  }
+}
+
+function pushFromSegment(tables: string[], segment: string): void {
+  const trimmed = segment.trim();
+  if (trimmed.startsWith("(")) {
+    // Derived table — the inner FROM/JOIN is extracted by its
+    // own matches since every regex above is global.
+    return;
+  }
+  let ident = trimmed.match(FROM_IDENT_RE)?.[1];
+  if (ident && LATERAL_ONLY_RE.test(ident)) {
+    // FROM ONLY t / FROM LATERAL (sub) — take the next word;
+    // a parenthesized LATERAL subquery is extracted globally.
+    const rest = trimmed.slice(ident.length).trim();
+    ident = rest.startsWith("(") ? undefined : rest.match(FROM_IDENT_RE)?.[1];
+  }
+  if (ident) {
+    pushTable(tables, ident);
+  }
+}
+
 function extractTableNames(sql: string): string[] {
   const tables: string[] = [];
-  for (const match of sql.matchAll(TABLE_REFERENCE_RE)) {
-    const table = (match[1] ?? "")
-      .replace(QUOTE_RE, "")
-      .replace(TRAILING_COMMA_RE, "")
-      .toLowerCase();
-    if (table) {
-      tables.push(table);
+  for (const match of sql.matchAll(JOIN_REFERENCE_RE)) {
+    pushTable(tables, match[1] ?? "");
+  }
+  for (const match of sql.matchAll(FROM_CLAUSE_RE)) {
+    for (const segment of (match[1] ?? "").split(",")) {
+      pushFromSegment(tables, segment);
     }
   }
   return tables;
@@ -166,15 +208,20 @@ function checkBlockedColumns(
       return `Wildcard columns are not allowed on table '${table}' because it has protected columns (${protectedList})`;
     }
     for (const rawColumn of projection.split(",")) {
-      const column = rawColumn.trim().toLowerCase();
-      if (!column) {
+      // Inspect the source expression, NOT the output alias —
+      // "password AS x" must still be caught, and so must any
+      // expression embedding it (max(password), encode(...)).
+      const sourceExpr = rawColumn
+        .trim()
+        .toLowerCase()
+        .replace(ALIAS_TAIL_RE, "");
+      if (!sourceExpr) {
         continue;
       }
-      const columnName = column
-        .replace(AS_ALIAS_RE, "")
-        .replace(TABLE_PREFIX_RE, "");
-      if (blocked.has(columnName)) {
-        return `Access to column '${columnName}' on table '${table}' is not allowed`;
+      for (const blockedName of blocked) {
+        if (new RegExp(`\\b${blockedName}\\b`).test(sourceExpr)) {
+          return `Access to column '${blockedName}' on table '${table}' is not allowed`;
+        }
       }
     }
   }

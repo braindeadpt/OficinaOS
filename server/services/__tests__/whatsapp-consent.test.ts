@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   findManyOutboxEntries: vi.fn(),
   findShopSettingsUnique: vi.fn(),
   sendWhatsApp: vi.fn(),
-  updateOutboxEntry: vi.fn(),
+  transitionOutboxEntry: vi.fn(),
 }));
 
 vi.mock("../../repositories/customer.repository.js", () => ({
@@ -20,7 +20,7 @@ vi.mock("../../repositories/notification.repository.js", () => ({
   findManyOutboxEntries: mocks.findManyOutboxEntries,
   findNotificationTemplateUnique: vi.fn(),
   findOutboxEntryById: vi.fn(),
-  updateOutboxEntry: mocks.updateOutboxEntry,
+  transitionOutboxEntry: mocks.transitionOutboxEntry,
 }));
 
 vi.mock("../../repositories/settings.repository.js", () => ({
@@ -86,7 +86,7 @@ describe("assertWhatsAppConsent", () => {
 describe("processOutbox consent enforcement", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.updateOutboxEntry.mockResolvedValue({});
+    mocks.transitionOutboxEntry.mockResolvedValue(1);
     mocks.decryptWhatsAppConfig.mockReturnValue({
       apiToken: "tok",
       businessId: "biz",
@@ -130,9 +130,10 @@ describe("processOutbox consent enforcement", () => {
     await processOutbox(prisma);
 
     expect(mocks.sendWhatsApp).not.toHaveBeenCalled();
-    expect(mocks.updateOutboxEntry).toHaveBeenCalledWith(
+    expect(mocks.transitionOutboxEntry).toHaveBeenCalledWith(
       expect.anything(),
-      { id: "entry-1" },
+      "entry-1",
+      OutboxStatus.QUEUED,
       expect.objectContaining({ status: OutboxStatus.CANCELLED })
     );
   });
@@ -148,9 +149,10 @@ describe("processOutbox consent enforcement", () => {
     await processOutbox(prisma);
 
     expect(mocks.sendWhatsApp).toHaveBeenCalled();
-    expect(mocks.updateOutboxEntry).toHaveBeenCalledWith(
+    expect(mocks.transitionOutboxEntry).toHaveBeenCalledWith(
       expect.anything(),
-      { id: "entry-1" },
+      "entry-1",
+      OutboxStatus.QUEUED,
       expect.objectContaining({ status: OutboxStatus.SENT })
     );
   });

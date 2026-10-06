@@ -1,6 +1,7 @@
 import { AppError } from "@shared/errors/app-error.js";
 import { hashPassword, verifyPassword } from "better-auth/crypto";
 import {
+  deleteOtherSessions,
   findCredentialAccount,
   findUserByUsername,
   updateCredentialPassword,
@@ -16,7 +17,8 @@ export async function changePassword(
   userId: string,
   oldPassword: string,
   newPassword: string,
-  username?: string
+  username?: string,
+  currentSessionId?: string
 ) {
   if (oldPassword === newPassword) {
     throw new AppError("PASSWORD_SAME_AS_OLD");
@@ -50,6 +52,11 @@ export async function changePassword(
       await updateUsername(tx, userId, username);
     }
     await updateMustChangePassword(tx, userId, false);
+    // A stolen session cookie outlives the rotation otherwise — every
+    // other session for this user is revoked; the caller's stays.
+    if (currentSessionId) {
+      await deleteOtherSessions(tx, userId, currentSessionId);
+    }
   });
 
   return { success: true };

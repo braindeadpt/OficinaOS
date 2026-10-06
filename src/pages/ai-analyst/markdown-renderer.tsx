@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { PluggableList } from "unified";
 import "./code-highlight.css";
 
@@ -13,6 +14,7 @@ export default function MarkdownRenderer({
   content,
   className,
 }: MarkdownRendererProps) {
+  const { t } = useTranslation();
   const [mod, setMod] = useState<{
     Markdown: MdModule["default"];
     remarkPlugins: PluggableList;
@@ -50,7 +52,7 @@ export default function MarkdownRenderer({
   if (error) {
     return (
       <div className={className}>
-        <p className="text-error">Failed to load markdown renderer.</p>
+        <p className="text-error">{t("ai_agent_markdown_load_failed")}</p>
       </div>
     );
   }

@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { AppError } from "@shared/errors/app-error.js";
 import { preCheckSubmitSchema } from "@shared/schemas/intake-request.schema";
 import { quoteRespondSchema } from "@shared/schemas/quote.schema";
@@ -10,6 +11,12 @@ import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
 const JOB_CODE_RE = /^[A-Za-z0-9-]+$/;
 const PHONE4_RE = /^\d{4}$/;
+
+function tokenMatches(stored: string, provided: string): boolean {
+  const a = Buffer.from(stored);
+  const b = Buffer.from(provided);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 
 function parseQuoteRespondBody(body: unknown) {
   const raw = (body ?? {}) as Record<string, unknown>;
@@ -155,7 +162,13 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
         where: { id: "default" },
       });
       // Token errado responde 404 — não dá pistas sobre a existência da rota.
-      if (!(settings.smsEnabled && settings.smsWebhookToken === token)) {
+      if (
+        !(
+          settings.smsEnabled &&
+          settings.smsWebhookToken &&
+          tokenMatches(settings.smsWebhookToken, token)
+        )
+      ) {
         throw new AppError("NOT_FOUND");
       }
       const body = (req.body ?? {}) as {

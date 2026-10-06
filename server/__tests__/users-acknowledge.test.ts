@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   getSession: vi.fn(),
   accountFindFirst: vi.fn(),
   txAccountUpdateMany: vi.fn(),
+  txSessionDeleteMany: vi.fn(),
   txUserUpdate: vi.fn(),
   $transaction: vi.fn(),
 }));
@@ -54,6 +55,7 @@ function buildApp(userId: string | null, mustChangePassword = true) {
     (fn: (tx: unknown) => Promise<unknown>) => {
       const tx = {
         account: { updateMany: mocks.txAccountUpdateMany },
+        session: { deleteMany: mocks.txSessionDeleteMany },
         user: { update: mocks.txUserUpdate },
       };
       return fn(tx);
@@ -115,6 +117,11 @@ describe("POST /api/auth/change-password", () => {
       expect.objectContaining({
         where: { id: "user-1" },
         data: expect.objectContaining({ mustChangePassword: false }),
+      })
+    );
+    expect(mocks.txSessionDeleteMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: "user-1", id: { not: "sess-1" } },
       })
     );
   });

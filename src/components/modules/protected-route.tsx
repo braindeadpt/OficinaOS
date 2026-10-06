@@ -1,5 +1,6 @@
 import type { RoleType } from "@shared/constants";
 import type { PermissionCheck } from "@shared/permissions";
+import { useTranslation } from "react-i18next";
 import { Navigate, Outlet } from "react-router";
 import { useCan } from "@/hooks/use-can";
 import { useAuthStore } from "@/stores/auth";
@@ -11,6 +12,7 @@ interface ProtectedRouteProps {
 export default function ProtectedRoute({
   requireMustChangePassword = true,
 }: ProtectedRouteProps) {
+  const { t } = useTranslation();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isLoading = useAuthStore((s) => s.isLoading);
   const mustChangePassword = useAuthStore((s) => s.user?.mustChangePassword);
@@ -23,7 +25,7 @@ export default function ProtectedRoute({
             progress_activity
           </span>
           <span className="font-medium text-on-surface-variant">
-            Loading...
+            {t("loading")}
           </span>
         </div>
       </div>
