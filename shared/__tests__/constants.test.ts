@@ -22,6 +22,18 @@ describe("Job Status Constants", () => {
     }
   });
 
+  it("allows IN_REPAIR -> WAITING_FOR_PARTS and back", () => {
+    // A technician often only finds the missing part after opening the device.
+    expect(JOB_STATUS_FLOW.IN_REPAIR).toContain("WAITING_FOR_PARTS");
+    expect(JOB_STATUS_FLOW.WAITING_FOR_PARTS).toContain("IN_REPAIR");
+  });
+
+  it("terminal statuses have no outgoing transitions", () => {
+    expect(JOB_STATUS_FLOW.DELIVERED).toEqual([]);
+    expect(JOB_STATUS_FLOW.RETURNED).toEqual([]);
+    expect(JOB_STATUS_FLOW.CANCELLED).toEqual([]);
+  });
+
   it("active and inactive are disjoint and cover all statuses", () => {
     const active = new Set(ACTIVE_STATUSES);
     const inactive = new Set(INACTIVE_STATUSES);
