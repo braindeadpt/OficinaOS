@@ -3,7 +3,7 @@ import { z } from "zod";
 
 export const saleItemSchema = z.object({
   partId: z.string().optional(),
-  name: z.string().min(1, { error: "validations.part_name_required" }),
+  name: z.string().min(1, { error: "validations.part_name_required" }).max(120),
   category: z.enum([
     "SCREEN",
     "BATTERY",

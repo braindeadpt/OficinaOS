@@ -65,6 +65,7 @@ export default function QuickIntakeForm() {
         <form className="space-y-4 px-6 pb-6" onSubmit={handleSubmit}>
           <Field label={t("front_desk.customer_name")} required>
             <Input
+              maxLength={120}
               onChange={(e) => setCustomerName(e.target.value)}
               placeholder={t("front_desk.customer_name_placeholder")}
               required
@@ -75,6 +76,7 @@ export default function QuickIntakeForm() {
           <div className="grid grid-cols-2 gap-4">
             <Field label={t("front_desk.phone")} required>
               <Input
+                maxLength={32}
                 onChange={(e) => setCustomerPhone(e.target.value)}
                 placeholder={t("front_desk.phone_placeholder")}
                 required
@@ -84,6 +86,7 @@ export default function QuickIntakeForm() {
             </Field>
             <Field label={t("front_desk.device_brand")} required>
               <Input
+                maxLength={60}
                 onChange={(e) => setDeviceBrand(e.target.value)}
                 placeholder={t("front_desk.device_brand_placeholder")}
                 required
@@ -95,6 +98,7 @@ export default function QuickIntakeForm() {
           <div className="grid grid-cols-2 gap-4">
             <Field label={t("front_desk.device_model")} required>
               <Input
+                maxLength={120}
                 onChange={(e) => setDeviceModel(e.target.value)}
                 placeholder={t("front_desk.device_model_placeholder")}
                 required
@@ -115,6 +119,7 @@ export default function QuickIntakeForm() {
           </div>
           <Field label={t("front_desk.issue_description")} required>
             <Textarea
+              maxLength={2000}
               onChange={(e) => setReportedProblem(e.target.value)}
               placeholder={t("front_desk.issue_placeholder")}
               required

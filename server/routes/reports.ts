@@ -25,6 +25,7 @@ import {
   revenueReport,
 } from "../services/reports.service.js";
 import { getRole } from "../utils/request.js";
+import { localizeZodIssues } from "../utils/resolve-validation-messages.js";
 
 // biome-ignore lint/suspicious/useAwait: FastifyPluginAsync requires async
 export const reportsRoutes: FastifyPluginAsync = async (app) => {
@@ -43,7 +44,7 @@ export const reportsRoutes: FastifyPluginAsync = async (app) => {
       const parsed = reportsQuerySchema.safeParse(req.query);
       if (!parsed.success) {
         throw new AppError("VALIDATION_ERROR", {
-          issues: parsed.error.issues,
+          issues: localizeZodIssues(parsed.error.issues, req.locale),
         });
       }
       const q = parsed.data;
@@ -83,7 +84,7 @@ export const reportsRoutes: FastifyPluginAsync = async (app) => {
       const parsed = ordersReportQuerySchema.safeParse(req.query);
       if (!parsed.success) {
         throw new AppError("VALIDATION_ERROR", {
-          issues: parsed.error.issues,
+          issues: localizeZodIssues(parsed.error.issues, req.locale),
         });
       }
       const q = parsed.data;
@@ -125,7 +126,7 @@ export const reportsRoutes: FastifyPluginAsync = async (app) => {
       const parsed = ordersReportQuerySchema.safeParse(req.query);
       if (!parsed.success) {
         throw new AppError("VALIDATION_ERROR", {
-          issues: parsed.error.issues,
+          issues: localizeZodIssues(parsed.error.issues, req.locale),
         });
       }
       const q = parsed.data;
@@ -183,7 +184,7 @@ export const reportsRoutes: FastifyPluginAsync = async (app) => {
       const parsed = reportsQuerySchema.safeParse(req.query);
       if (!parsed.success) {
         throw new AppError("VALIDATION_ERROR", {
-          issues: parsed.error.issues,
+          issues: localizeZodIssues(parsed.error.issues, req.locale),
         });
       }
       const q = parsed.data;
@@ -220,7 +221,7 @@ export const reportsRoutes: FastifyPluginAsync = async (app) => {
       const parsed = reportsQuerySchema.safeParse(req.query);
       if (!parsed.success) {
         throw new AppError("VALIDATION_ERROR", {
-          issues: parsed.error.issues,
+          issues: localizeZodIssues(parsed.error.issues, req.locale),
         });
       }
       const q = parsed.data;
@@ -245,7 +246,7 @@ export const reportsRoutes: FastifyPluginAsync = async (app) => {
       const parsed = reportsQuerySchema.safeParse(req.query);
       if (!parsed.success) {
         throw new AppError("VALIDATION_ERROR", {
-          issues: parsed.error.issues,
+          issues: localizeZodIssues(parsed.error.issues, req.locale),
         });
       }
       const q = parsed.data;
@@ -315,7 +316,7 @@ export const reportsRoutes: FastifyPluginAsync = async (app) => {
       const parsed = closeCashSessionSchema.safeParse(req.body);
       if (!parsed.success) {
         throw new AppError("VALIDATION_ERROR", {
-          issues: parsed.error.issues,
+          issues: localizeZodIssues(parsed.error.issues, req.locale),
         });
       }
       return await closeCashSession(app.prisma, scope, parsed.data);
@@ -356,7 +357,7 @@ export const reportsRoutes: FastifyPluginAsync = async (app) => {
       const parsed = reportsQuerySchema.safeParse(req.query);
       if (!parsed.success) {
         throw new AppError("VALIDATION_ERROR", {
-          issues: parsed.error.issues,
+          issues: localizeZodIssues(parsed.error.issues, req.locale),
         });
       }
       const q = parsed.data;

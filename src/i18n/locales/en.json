@@ -1827,7 +1827,12 @@
     "invalid_account": "Enter a valid InvoiceXpress account name",
     "invalid_tax_name": "Enter a valid VAT rate name (e.g. IVA23)",
     "valid_quantity": "Enter a valid quantity",
-    "max_value": "Must be at most {{max}}"
+    "max_value": "Must be at most {{max}}",
+    "invalid_value": "Invalid value",
+    "invalid_number": "Enter a valid number",
+    "invalid_option": "Invalid option",
+    "min_items": "Select at least {{min}}",
+    "max_items": "At most {{max}} items"
   },
   "view_all_critical": "View All Overdue",
   "warranty_returns": "Warranty Returns",

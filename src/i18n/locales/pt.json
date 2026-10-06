@@ -1827,7 +1827,12 @@
     "invalid_account": "Introduza um nome de conta InvoiceXpress válido",
     "invalid_tax_name": "Introduza um nome de taxa de IVA válido (por exemplo, IVA23)",
     "valid_quantity": "Introduza uma quantidade válida",
-    "max_value": "Deve ter no máximo {{max}}"
+    "max_value": "Deve ter no máximo {{max}}",
+    "invalid_value": "Valor inválido",
+    "invalid_number": "Introduza um número válido",
+    "invalid_option": "Opção inválida",
+    "min_items": "Selecione pelo menos {{min}}",
+    "max_items": "No máximo {{max}} elementos"
   },
   "view_all_critical": "Ver todos os atrasos",
   "warranty_returns": "Devoluções de garantia",

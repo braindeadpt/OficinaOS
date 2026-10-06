@@ -130,6 +130,7 @@ export default function QuickAddCustomer({
                 className="font-body placeholder:text-outline/50"
                 disabled={isCreating}
                 iconStart="person"
+                maxLength={120}
                 onChange={(e) => update("name", e.target.value)}
                 placeholder={t("intake.full_name_placeholder")}
                 type="text"
@@ -142,6 +143,7 @@ export default function QuickAddCustomer({
                 className="font-body placeholder:text-outline/50"
                 disabled={isCreating}
                 iconStart="phone"
+                maxLength={32}
                 onChange={(e) => update("phone", e.target.value)}
                 placeholder="+351..."
                 type="tel"
@@ -154,6 +156,7 @@ export default function QuickAddCustomer({
                 className="font-body placeholder:text-outline/50"
                 disabled={isCreating}
                 iconStart="mail"
+                maxLength={254}
                 onChange={(e) => update("email", e.target.value)}
                 placeholder="email@example.com"
                 type="email"

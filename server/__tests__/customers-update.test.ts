@@ -212,3 +212,24 @@ describe("PATCH /api/customers/:id", () => {
     expect(res.statusCode).toBe(401);
   });
 });
+
+describe("customer field limits and duplicate phones", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("rejects a 5000-character customer name", async () => {
+    const app = buildApp("user-1", "OWNER");
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/customers/cust-1",
+      payload: { name: "x".repeat(5000) },
+    });
+
+    expect(res.statusCode).toBe(400);
+    const body = JSON.parse(res.body);
+    expect(body.code).toBe("VALIDATION_ERROR");
+    expect(body.details.errors.name).toBeDefined();
+    expect(mocks.updateCustomer).not.toHaveBeenCalled();
+  });
+});

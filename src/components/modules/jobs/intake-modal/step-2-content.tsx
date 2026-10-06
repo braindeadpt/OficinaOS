@@ -47,6 +47,7 @@ export default function Step2Content({
             aria-invalid={!!errors.reportedProblem}
             className={errors.reportedProblem ? textareaErrorCls : textareaCls}
             id="reported-problem"
+            maxLength={2000}
             onBlur={() => handleBlur("reportedProblem")}
             onChange={(e) => update("reportedProblem", e.target.value)}
             placeholder={t("intake.reported_problem_placeholder")}
@@ -80,6 +81,7 @@ export default function Step2Content({
           <textarea
             className={textareaCls}
             id="condition-notes"
+            maxLength={2000}
             onChange={(e) => update("conditionNotes", e.target.value)}
             placeholder={t("intake.condition_notes_placeholder")}
             rows={2}

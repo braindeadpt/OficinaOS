@@ -14,8 +14,8 @@ const repairCategoryValues = Object.values(RepairCategory) as [
 const jobStatusValues = Object.values(JobStatus) as [string, ...string[]];
 
 export const intakeRepairItemSchema = z.object({
-  repairId: z.string().optional(),
-  repairName: z.string().min(1),
+  repairId: z.string().max(64).optional(),
+  repairName: z.string().min(1).max(120),
   category: z.enum(repairCategoryValues),
   price: z.number().min(0).max(99_999_999.99),
 });
@@ -23,6 +23,7 @@ export const intakeRepairItemSchema = z.object({
 export const createJobSchema = z.object({
   customerEmail: z
     .string()
+    .max(254)
     .email({ error: "validations.email" })
     .optional()
     .or(z.literal("")),
@@ -33,7 +34,7 @@ export const createJobSchema = z.object({
     .min(1, { error: "validations.enter_phone" })
     .max(32),
   deviceBrand: z.string().min(1, { error: "validations.enter_brand" }).max(60),
-  deviceBrandId: z.string().optional(),
+  deviceBrandId: z.string().max(64).optional(),
   deviceModel: z.string().min(1, { error: "validations.enter_model" }).max(120),
   color: z.string().max(40).optional(),
   imei: imeiField,
@@ -70,7 +71,7 @@ export const createJobSchema = z.object({
   technicianId: z.string().cuid({ error: "validations.invalid_id" }).optional(),
   isUrgent: z.boolean().optional(),
   isWarrantyReturn: z.boolean().optional(),
-  warrantyForJobId: z.string().optional(),
+  warrantyForJobId: z.string().max(64).optional(),
   repairs: z.array(intakeRepairItemSchema).optional(),
 });
 
@@ -192,7 +193,7 @@ export const jobListQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   status: z.enum(jobStatusValues).optional(),
   technicianId: z.string().optional(),
-  search: z.string().optional(),
+  search: z.string().max(100).optional(),
   imei: imeiField,
 });
 

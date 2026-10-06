@@ -26,11 +26,12 @@ export const updateShopSettingsSchema = z
     shopName: z
       .string()
       .min(1, { error: "validations.shop_name_required" })
+      .max(120)
       .optional(),
-    address: z.string().optional(),
-    phone: z.string().optional(),
-    currency: z.string().optional(),
-    receiptFooter: z.string().optional(),
+    address: z.string().max(255).optional(),
+    phone: z.string().max(32).optional(),
+    currency: z.string().max(8).optional(),
+    receiptFooter: z.string().max(2000).optional(),
     // Printing presets — applied by the server-rendered receipt/label HTML.
     receiptPaper: z.enum(["58mm", "80mm", "a4"]).optional(),
     receiptShowImei: z.boolean().optional(),
@@ -42,7 +43,7 @@ export const updateShopSettingsSchema = z
     printerMode: z.enum(["browser", "escpos"]).optional(),
     printerHost: z.string().trim().max(253).nullable().optional(),
     printerPort: z.number().int().min(1).max(65_535).optional(),
-    countryCode: z.string().optional(),
+    countryCode: z.string().max(8).optional(),
     timezone: z.string().min(1).optional(),
     // Meta mensal de faturação (€). 0/null limpa a meta.
     monthlyRevenueGoal: z.number().min(0).max(99_999_999).nullable().optional(),

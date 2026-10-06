@@ -171,6 +171,7 @@ export default function AddCustomerModal({
               </Label>
               <Input
                 id="add-customer-name"
+                maxLength={120}
                 onChange={(e) => updateForm("name", e.target.value)}
                 value={form.name}
               />
@@ -185,6 +186,7 @@ export default function AddCustomerModal({
               </Label>
               <Input
                 id="add-customer-phone"
+                maxLength={32}
                 onChange={(e) => updateForm("phone", e.target.value)}
                 type="tel"
                 value={form.phone}
@@ -200,6 +202,7 @@ export default function AddCustomerModal({
               </Label>
               <Input
                 id="add-customer-email"
+                maxLength={254}
                 onChange={(e) => updateForm("email", e.target.value)}
                 placeholder="email@example.com"
                 type="email"
@@ -214,6 +217,7 @@ export default function AddCustomerModal({
               <Input
                 id="add-customer-tax-id"
                 inputMode="numeric"
+                maxLength={20}
                 onChange={(e) => updateForm("taxId", e.target.value)}
                 placeholder={t("add_customer_modal.tax_id_placeholder")}
                 value={form.taxId}
