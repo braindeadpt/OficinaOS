@@ -160,7 +160,7 @@ export default function TopBar() {
           </div>
           <div className="hidden h-8 w-px bg-outline-variant md:block" />
           <Button
-            className="hidden md:flex"
+            className="max-md:hidden"
             disabled={!canCreateJob}
             icon="add_circle"
             onClick={() => openIntakeModal()}
