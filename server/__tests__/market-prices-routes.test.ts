@@ -164,6 +164,33 @@ describe("market-prices — GET stats", () => {
     expect(body.stats[1].ownPriceCents).toBeNull();
   });
 
+  it("passes through null min/max when too few shops report an item", async () => {
+    fetchMock.mockReturnValueOnce(
+      cloudJson({
+        stats: [
+          {
+            avgCents: 4000,
+            category: null,
+            key: "bateria samsung",
+            kind: "part",
+            maxCents: null,
+            medianCents: 4000,
+            minCents: null,
+            name: "Bateria Samsung",
+            shopCount: 3,
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+      })
+    );
+    const app = buildApp(fakePrisma());
+    const res = await app.inject({ method: "GET", url: "/api/market-prices" });
+    expect(res.statusCode).toBe(200);
+    const [stat] = res.json().stats;
+    expect(stat.minCents).toBeNull();
+    expect(stat.maxCents).toBeNull();
+  });
+
   it("cloud 402 MODULE_NOT_ENTITLED becomes local CLOUD_MODULE_REQUIRED", async () => {
     fetchMock.mockReturnValueOnce(
       cloudJson({ error: { code: "MODULE_NOT_ENTITLED" } }, 402)

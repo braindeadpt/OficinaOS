@@ -23,9 +23,11 @@ interface StatRow {
   category: string | null;
   key: string;
   kind: string;
-  maxCents: number;
+  // Null when fewer than 5 shops report the item — the cloud withholds
+  // min/max so a single shop's price can't be singled out.
+  maxCents: number | null;
   medianCents: number;
-  minCents: number;
+  minCents: number | null;
   name: string;
   shopCount: number;
   updatedAt: string;

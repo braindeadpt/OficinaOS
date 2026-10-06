@@ -2029,7 +2029,8 @@
     "no_module": "Market prices is a Pro module — ask your OficinaOS provider to enable it.",
     "empty": "No benchmarks yet — they appear once at least 3 shops share a price for the same item.",
     "load_error": "Could not load market prices",
-    "action_error": "Could not update sharing"
+    "action_error": "Could not update sharing",
+    "range_insufficient": "Insufficient data"
   },
   "parts_board": {
     "nav_label": "Part board",

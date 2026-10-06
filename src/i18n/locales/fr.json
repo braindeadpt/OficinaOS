@@ -2029,7 +2029,8 @@
     "no_module": "Les prix du marché sont un module Pro – demandez à votre fournisseur OficinaOS de l'activer.",
     "empty": "Pas encore de références : elles apparaissent une fois qu'au moins 3 magasins partagent un prix pour le même article.",
     "load_error": "Impossible de charger les prix du marché",
-    "action_error": "Impossible de mettre à jour le partage"
+    "action_error": "Impossible de mettre à jour le partage",
+    "range_insufficient": "Données insuffisantes"
   },
   "parts_board": {
     "nav_label": "Recherche de pièce",

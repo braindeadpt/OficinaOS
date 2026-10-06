@@ -2029,7 +2029,8 @@
     "no_module": "Precios de mercado es un módulo Pro: pídale a su proveedor de OficinaOS que lo habilite.",
     "empty": "Aún no hay puntos de referencia: aparecen cuando al menos tres tiendas comparten el precio del mismo artículo.",
     "load_error": "No se pudieron cargar los precios del mercado.",
-    "action_error": "No se pudo actualizar el uso compartido"
+    "action_error": "No se pudo actualizar el uso compartido",
+    "range_insufficient": "Datos insuficientes"
   },
   "parts_board": {
     "nav_label": "Busco piezas",

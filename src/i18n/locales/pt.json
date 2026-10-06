@@ -2029,7 +2029,8 @@
     "no_module": "Preços de mercado é um módulo Pro – peça ao seu fornecedor OficinaOS para o activar.",
     "empty": "Ainda não existem benchmarks – aparecem quando pelo menos três lojas partilham um preço para o mesmo artigo.",
     "load_error": "Não foi possível carregar os preços de mercado",
-    "action_error": "Não foi possível atualizar a partilha"
+    "action_error": "Não foi possível atualizar a partilha",
+    "range_insufficient": "Dados insuficientes"
   },
   "parts_board": {
     "nav_label": "Procuro-peça",
