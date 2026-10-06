@@ -52,7 +52,7 @@ if (!SEED_ADMIN_PASSWORD) {
   );
 }
 const SEED_ADMIN_EMAIL =
-  process.env.SEED_ADMIN_EMAIL || "portuguesedoitbetter@gmail.com";
+  process.env.SEED_ADMIN_EMAIL?.trim() || "admin@oficinaos.local";
 
 async function main() {
   console.log("Seeding database...");

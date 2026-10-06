@@ -194,6 +194,7 @@ Todas as variáveis de ambiente estão documentadas no [`.env.example`](./.env.e
 | `DATABASE_URL` | Ligação PostgreSQL (definida pelo compose) |
 | `BETTER_AUTH_SECRET` | Segredo de sessões (gerar aleatório) |
 | `SEED_ADMIN_PASSWORD` | Palavra-passe inicial do admin — mudar no 1º login |
+| `SEED_ADMIN_EMAIL` | Opcional — email do admin inicial (por omissão `admin@oficinaos.local`) |
 | `AI_ENCRYPTION_KEY` | Chave AES-256 para guardar a OpenAI key |
 | `OPENAI_API_KEY` | Opcional — assistente IA |
 | `WHATSAPP_*`, `EMAIL_*` | Opcional — notificações ao cliente |
