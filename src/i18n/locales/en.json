@@ -586,7 +586,8 @@
     "return_claim_rework_job_required": "This claim requires a rework job",
     "trade_in_not_found": "Trade-in not found",
     "trade_in_invalid_state": "This trade-in can no longer be modified",
-    "trade_in_signature_required": "A signature is required to complete the trade-in"
+    "trade_in_signature_required": "A signature is required to complete the trade-in",
+    "quote_amount_required": "Enter the quote amount — this repair has no estimated cost yet"
   },
   "failed_to_create_part": "Failed to create part",
   "failed_to_delete_part": "Failed to delete part",
@@ -783,7 +784,8 @@
     "terms_text": "I declare that the device described in this form belongs to me, I authorize its repair under the agreed conditions, and I accept the shop's terms of service, including the stated estimate and the responsibility of collecting the device within 90 days.",
     "signature_captured": "Signature captured",
     "whatsapp_consent": "Customer authorizes WhatsApp notifications",
-    "whatsapp_consent_hint": "Repair status updates sent automatically. No marketing."
+    "whatsapp_consent_hint": "Repair status updates sent automatically. No marketing.",
+    "estimated_cost_pending": "To be quoted"
   },
   "intake_wizard_next": "Next",
   "intake_wizard_step1_title": "Customer & Device",

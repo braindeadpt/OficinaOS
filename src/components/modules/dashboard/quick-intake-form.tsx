@@ -14,7 +14,7 @@ export default function QuickIntakeForm() {
   const [deviceBrand, setDeviceBrand] = useState("");
   const [deviceModel, setDeviceModel] = useState("");
   const [reportedProblem, setReportedProblem] = useState("");
-  const [estimatedCost, setEstimatedCost] = useState(0);
+  const [estimatedCost, setEstimatedCost] = useState("");
   const [expanded, setExpanded] = useState(false);
   const isCreating = useJobsStore((s) => s.isCreatingJob);
 
@@ -27,14 +27,18 @@ export default function QuickIntakeForm() {
         deviceBrand,
         deviceModel,
         reportedProblem,
-        estimatedCost,
+        // Empty = "por orçamentar" — priced after diagnosis.
+        estimatedCost:
+          estimatedCost.trim() === ""
+            ? undefined
+            : Number.parseFloat(estimatedCost) || 0,
       });
       setCustomerName("");
       setCustomerPhone("");
       setDeviceBrand("");
       setDeviceModel("");
       setReportedProblem("");
-      setEstimatedCost(0);
+      setEstimatedCost("");
       setExpanded(false);
     } catch {
       // Error is handled by the store
@@ -101,13 +105,8 @@ export default function QuickIntakeForm() {
             <Field label={t("front_desk.estimated_cost")}>
               <Input
                 min={0}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setEstimatedCost(
-                    val === "" ? 0 : Number.parseFloat(val) || 0
-                  );
-                }}
-                placeholder="0"
+                onChange={(e) => setEstimatedCost(e.target.value)}
+                placeholder={t("intake.estimated_cost_pending")}
                 step="0.01"
                 type="number"
                 value={estimatedCost}

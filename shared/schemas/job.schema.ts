@@ -53,10 +53,14 @@ export const createJobSchema = z.object({
     .startsWith("data:image/")
     .max(600_000)
     .optional(),
+  // Optional — many shops only price a repair after diagnosis. Omitted/null
+  // means "por orçamentar" (not yet quoted).
   estimatedCost: z
     .number()
     .min(0, { error: "validations.valid_cost" })
-    .max(99_999_999.99, { error: "validations.valid_cost" }),
+    .max(99_999_999.99, { error: "validations.valid_cost" })
+    .nullable()
+    .optional(),
   estimatedDate: z.coerce.date().optional(),
   depositAmount: z
     .number()
@@ -75,7 +79,7 @@ export type CreateJobInput = z.infer<typeof createJobSchema>;
 export const updateJobSchema = z.object({
   reportedProblem: z.string().min(1).max(2000).optional(),
   conditionNotes: z.string().max(2000).optional(),
-  estimatedCost: z.number().min(0).max(99_999_999.99).optional(),
+  estimatedCost: z.number().min(0).max(99_999_999.99).nullable().optional(),
   estimatedDate: z.coerce.date().nullable().optional(),
   depositAmount: z.number().min(0).max(99_999_999.99).nullable().optional(),
   technicianId: z.string().cuid().nullable().optional(),

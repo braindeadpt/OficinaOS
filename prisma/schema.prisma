@@ -393,7 +393,8 @@ model SalePayment {
 
 // ─────────────────────────────────────────────
 // JOB
-// estimatedCost is required per PRD intake form.
+// estimatedCost is optional: shops often price only after diagnosis
+// (null = "por orçamentar").
 // finalCost is computed on read: Sum(JobRepair.price) + Sum(JobPart.totalCost).
 // accessCode should be generated with crypto.randomBytes(8).toString('hex').
 // ─────────────────────────────────────────────
@@ -431,7 +432,7 @@ model Job {
   isUrgent               Boolean   @default(false)
   status                 JobStatus @default(INTAKE)
 
-  estimatedCost Decimal  @db.Decimal(10, 2)
+  estimatedCost Decimal? @db.Decimal(10, 2)
   depositAmount Decimal? @db.Decimal(10, 2)
 
   estimatedDate DateTime? @db.Timestamptz

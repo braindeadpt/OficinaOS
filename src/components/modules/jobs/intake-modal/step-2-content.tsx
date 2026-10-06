@@ -99,7 +99,7 @@ export default function Step2Content({
                 inputMode="decimal"
                 min="0"
                 onChange={(e) => update("estimatedCost", e.target.value)}
-                placeholder="0"
+                placeholder={t("intake.estimated_cost_pending")}
                 step="0.01"
                 type="number"
                 value={form.estimatedCost}

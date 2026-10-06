@@ -586,7 +586,8 @@
     "return_claim_rework_job_required": "Este reclamo requiere un trabajo de reelaboración.",
     "trade_in_not_found": "Intercambio no encontrado",
     "trade_in_invalid_state": "Este intercambio ya no se puede modificar",
-    "trade_in_signature_required": "Se requiere una firma para completar el intercambio"
+    "trade_in_signature_required": "Se requiere una firma para completar el intercambio",
+    "quote_amount_required": "Indique el importe del presupuesto: esta reparación aún no tiene coste estimado"
   },
   "failed_to_create_part": "No se pudo crear la pieza",
   "failed_to_delete_part": "No se pudo eliminar la parte",
@@ -783,7 +784,8 @@
     "terms_text": "Declaro que el dispositivo descrito en este formulario me pertenece, autorizo ​​su reparación en las condiciones acordadas y acepto los términos de servicio de la tienda, incluido el presupuesto indicado y la responsabilidad de recoger el dispositivo dentro de los 90 días.",
     "signature_captured": "Firma capturada",
     "whatsapp_consent": "El cliente autoriza las notificaciones de WhatsApp",
-    "whatsapp_consent_hint": "Actualizaciones de estado de reparación enviadas automáticamente. "
+    "whatsapp_consent_hint": "Actualizaciones de estado de reparación enviadas automáticamente. ",
+    "estimated_cost_pending": "Por presupuestar"
   },
   "intake_wizard_next": "Próximo",
   "intake_wizard_step1_title": "Cliente y dispositivo",

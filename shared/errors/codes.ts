@@ -38,6 +38,10 @@ export const ERRORS = {
   VALIDATION_ERROR: { status: 400, message: "errors.validation_error" },
   INVALID_CUSTOMER_ID: { status: 400, message: "errors.invalid_customer_id" },
   AT_LEAST_ONE_FIELD: { status: 400, message: "errors.at_least_one_field" },
+  QUOTE_AMOUNT_REQUIRED: {
+    status: 400,
+    message: "errors.quote_amount_required",
+  },
   NO_FILE_UPLOADED: { status: 400, message: "errors.no_file_uploaded" },
   INVALID_FILE_TYPE: { status: 400, message: "errors.invalid_file_type" },
   INVALID_FILE_CONTENT: {
