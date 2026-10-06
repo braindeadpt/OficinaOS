@@ -34,6 +34,20 @@ bun run dev
 
 If you work in a git worktree, run `bun run setup-worktree` once after creating it.
 
+### Running the tests on a fresh clone
+
+The unit tests don't need a running database (`vitest.setup.ts` fills in
+placeholder env vars), but they import the generated Prisma client, which is
+not committed. Generate it once before the first run:
+
+```bash
+bun install
+bun run test:setup   # prisma generate (uses a placeholder DATABASE_URL if .env is missing)
+bun run test
+```
+
+Re-run `bun run test:setup` whenever `prisma/schema.prisma` changes.
+
 ## Development workflow
 
 ```bash

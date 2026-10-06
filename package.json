@@ -97,6 +97,7 @@
     "cap:sync": "cap sync",
     "cap:copy": "cap copy",
     "test": "vitest run",
+    "test:setup": "bun run scripts/test-setup.ts",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "check": "ultracite check",
