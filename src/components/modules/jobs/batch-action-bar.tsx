@@ -55,9 +55,15 @@ export default function BatchActionBar({
       common = new Set([...common].filter((s) => ts.has(s)));
     }
     // Transitions that require extra input (reason / labor hours / QC
-    // checklist) can't be done in bulk — the detail-page popover owns them.
+    // checklist / delivery payment) can't be done in bulk — the detail-page
+    // popover owns them. DELIVERED is irreversible and always goes through
+    // the delivery dialog (balance, payment, receipt).
     return [...common].filter(
-      (s) => s !== "CANCELLED" && s !== "ON_HOLD" && s !== "DONE"
+      (s) =>
+        s !== "CANCELLED" &&
+        s !== "ON_HOLD" &&
+        s !== "DONE" &&
+        s !== "DELIVERED"
     );
   }, [selectedJobs]);
 

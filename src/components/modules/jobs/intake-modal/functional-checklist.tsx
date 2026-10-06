@@ -6,6 +6,10 @@ import {
 } from "./types";
 
 interface FunctionalChecklistProps {
+  /** Overrides the intake hint — e.g. the final QC requires every item. */
+  hint?: string;
+  /** Overrides the intake legend ("…à entrada") when reused for final QC. */
+  legend?: string;
   onChange: (checklist: IntakeChecklist) => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
   value: IntakeChecklist;
@@ -17,6 +21,8 @@ const STATES: { key: "ok" | "fail"; labelKey: string }[] = [
 ];
 
 export default function FunctionalChecklist({
+  hint,
+  legend,
   onChange,
   t,
   value,
@@ -33,7 +39,9 @@ export default function FunctionalChecklist({
 
   return (
     <fieldset>
-      <legend className={labelCls}>{t("intake.checklist_section")}</legend>
+      <legend className={labelCls}>
+        {legend ?? t("intake.checklist_section")}
+      </legend>
       <div className="space-y-2">
         {INTAKE_CHECK_ITEMS.map((item) => {
           const current = value[item] ?? null;
@@ -74,7 +82,7 @@ export default function FunctionalChecklist({
         })}
       </div>
       <p className="ms-1 mt-1.5 font-label text-on-surface-variant text-xs">
-        {t("intake.checklist_hint")}
+        {hint ?? t("intake.checklist_hint")}
       </p>
     </fieldset>
   );
