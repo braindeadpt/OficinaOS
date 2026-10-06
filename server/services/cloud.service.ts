@@ -226,6 +226,16 @@ export async function syncCloudEntitlements(
       .catch((err) => log.warn({ err }, "storefront sync failed"));
   }
 
+  // Multi-loja: empurra o snapshot diário agregado (hoje + ontem) para o
+  // dashboard do dono na cloud. Só números — nenhum dado de clientes.
+  if (modules.includes("multi-shop")) {
+    import("./shop-metrics.service.js")
+      .then(({ syncShopMetrics }) =>
+        syncShopMetrics(prisma, settings.cloudApiUrl ?? "", token, log)
+      )
+      .catch((err) => log.warn({ err }, "shop-metrics sync failed"));
+  }
+
   // Preços de mercado: empurra o snapshot anónimo de preços quando a loja
   // optou pela partilha e há alterações pendentes.
   if (modules.includes("market-prices")) {

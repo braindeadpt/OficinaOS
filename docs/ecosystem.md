@@ -40,6 +40,7 @@ Em cada ciclo, `server/services/cloud.service.ts` faz:
 - `GET /portal/replies` + `POST /portal/replies/ack` → respostas de orçamento vindas do portal público
 - `GET /whatsapp/inbound` + `POST /whatsapp/inbound/ack` → mensagens WhatsApp recebidas
 - Push de snapshots de portal que mudaram desde o último sync
+- `POST /shops/metrics` → snapshot diário agregado (receita, reparações, vendas) se `multi-shop` ativo — só números, nunca dados de clientes
 
 ### Módulo `portal`
 
@@ -93,6 +94,13 @@ linguagem simples gerado na Cloud.
 | `whatsapp-bot` | Bot de WhatsApp | app: `server/services/whatsapp-bot.service.ts`; cloud: webhook + `WhatsAppInbound` | Live, E2E provado (SIM → APPROVED real) |
 | `diag-intake` | Receção de diagnósticos | app: `intake-request.service.ts` (fila em Pedidos); cloud: `src/routes/intake.ts` | Implementado |
 | `ai-reports` | Relatórios IA | cloud: `src/routes/reports.ts`, `src/ai-report.ts` | Implementado |
+| `market` | Procuro-peça B2B | app: `part-requests.service.ts`; cloud: `src/routes/part-requests.ts` | Live |
+| `storefront` | Loja online da loja | app: `storefront.service.ts`; cloud: `src/routes/storefront.ts`, `public/storefront.html` | Live |
+| `storefront-plus` | Personalização da montra | cor/logo/layout — `Storefront.accentColor/logoImage/template` | Live |
+| `remarketing` | Remarketing WhatsApp | app: `remarketing.service.ts` (sweep horário, template Meta) | Live |
+| `market-prices` | Preços de mercado agregados | app: `market-prices.service.ts`; cloud: `src/routes/prices.ts` (≥3 lojas por benchmark) | Live |
+| `invoicing` | Faturação InvoiceXpress | app: `invoicing.service.ts` (FR/FS, IVA incluído→líquido) | Live, validado conta demo |
+| `multi-shop` | Dashboard multi-loja | app: `shop-metrics.service.ts` (snapshot diário); cloud: `src/routes/metrics.ts` + `ShopMetric`, UI no dashboard do dono | Live |
 
 Ativar/desativar: lado da Cloud (`scripts/grant.ts` / dashboard). A app esconde
 a funcionalidade se o módulo não constar nos entitlements.
