@@ -68,7 +68,12 @@ function connect() {
     }
   };
 
-  socket.onclose = () => {
+  socket.onclose = (event) => {
+    // 4001 = server rejected the session (expired/revoked) —
+    // reconnecting just re-fails; the next login reconnects anyway.
+    if (event.code === 4001) {
+      return;
+    }
     // Exponential backoff (1s → 30s) with jitter — a dead server or
     // expired session must not trigger a connect attempt every 5s
     // forever (battery drain on Android, log spam on the server).

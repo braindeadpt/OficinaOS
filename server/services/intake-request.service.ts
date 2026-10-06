@@ -14,6 +14,7 @@ import {
 import { findUniqueSimple } from "../repositories/job.repository.js";
 import { findManyUsers } from "../repositories/notification.repository.js";
 import { generateIntakeRequestCode } from "../utils/intake-request-code.js";
+import { logger } from "../utils/logger.js";
 import { cloudFetch } from "./cloud.service.js";
 import type { NotifyContext } from "./job.service.js";
 import { notify } from "./notification-dispatch.js";
@@ -63,8 +64,11 @@ export async function submitPreCheckRequest(
           })
         : undefined
     )
-    .catch(() => {
-      /* fire-and-forget */
+    .catch((err) => {
+      logger.warn(
+        { err, eventName: "pre_check_submitted", requestId: request.id },
+        "notify dispatch failed"
+      );
     });
 
   return request;

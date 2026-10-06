@@ -6,7 +6,7 @@ import {
   findManyOutboxEntries,
   findNotificationTemplateUnique,
   findOutboxEntryById,
-  updateOutboxEntry,
+  transitionOutboxEntry,
 } from "../repositories/notification.repository.js";
 import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
@@ -94,40 +94,31 @@ async function handleRetry(
     const nextRetry = new Date(
       Date.now() + BACKOFF_MS[Math.min(currentRetries, BACKOFF_MS.length - 1)]
     );
-    await updateOutboxEntry(
-      prisma,
-      { id: entryId },
-      {
-        error: errorMessage,
-        nextRetryAt: nextRetry,
-        retryCount: currentRetries + 1,
-        status: OutboxStatus.QUEUED,
-      }
-    );
+    // Guarded on QUEUED — a concurrent cancel must not be resurrected.
+    await transitionOutboxEntry(prisma, entryId, OutboxStatus.QUEUED, {
+      error: errorMessage,
+      nextRetryAt: nextRetry,
+      retryCount: currentRetries + 1,
+      status: OutboxStatus.QUEUED,
+    });
   } else {
-    await updateOutboxEntry(
-      prisma,
-      { id: entryId },
-      {
-        error: errorMessage,
-        nextRetryAt: null,
-        status: OutboxStatus.FAILED,
-      }
-    );
+    await transitionOutboxEntry(prisma, entryId, OutboxStatus.QUEUED, {
+      error: errorMessage,
+      nextRetryAt: null,
+      status: OutboxStatus.FAILED,
+    });
   }
 }
 
 async function markSent(prisma: DbClient, entryId: string): Promise<void> {
   try {
-    await updateOutboxEntry(
-      prisma,
-      { id: entryId },
-      {
-        error: null,
-        sentAt: new Date(),
-        status: OutboxStatus.SENT,
-      }
-    );
+    // Guarded on QUEUED — if the entry was cancelled while the send
+    // was in flight, CANCELLED wins over SENT.
+    await transitionOutboxEntry(prisma, entryId, OutboxStatus.QUEUED, {
+      error: null,
+      sentAt: new Date(),
+      status: OutboxStatus.SENT,
+    });
   } catch (dbErr) {
     logger.error(
       { err: dbErr, entryId },
@@ -149,14 +140,10 @@ async function cancelIfExpired(
     entry.createdAt &&
     Date.now() - entry.createdAt.getTime() > MAX_ENTRY_AGE_MS
   ) {
-    await updateOutboxEntry(
-      prisma,
-      { id: entry.id },
-      {
-        error: "Expired: queued for more than 24h",
-        status: OutboxStatus.CANCELLED,
-      }
-    );
+    await transitionOutboxEntry(prisma, entry.id, OutboxStatus.QUEUED, {
+      error: "Expired: queued for more than 24h",
+      status: OutboxStatus.CANCELLED,
+    });
     return true;
   }
   return false;
@@ -179,14 +166,10 @@ async function cancelIfConsentMissing(
   if (!consentError) {
     return false;
   }
-  await updateOutboxEntry(
-    prisma,
-    { id: entry.id },
-    {
-      error: `Blocked: ${consentError}`,
-      status: OutboxStatus.CANCELLED,
-    }
-  );
+  await transitionOutboxEntry(prisma, entry.id, OutboxStatus.QUEUED, {
+    error: `Blocked: ${consentError}`,
+    status: OutboxStatus.CANCELLED,
+  });
   return true;
 }
 
@@ -298,21 +281,22 @@ async function processEntry(
     } else if (entry.channel === "SMS" && configs.sms) {
       await processSmsEntry(prisma, entry, configs.sms, countryCode, shopPhone);
     } else if (entry.channel === "WHATSAPP" || entry.channel === "SMS") {
-      // Canal sem config — deixa QUEUED; a expiração de 24h trata dele.
+      // Channel not configured — cancel now. Leaving it QUEUED would
+      // re-select it on every 5s poll and starve the batch of 10.
+      await transitionOutboxEntry(prisma, entry.id, OutboxStatus.QUEUED, {
+        error: `Channel ${entry.channel} is not configured`,
+        status: OutboxStatus.CANCELLED,
+      });
       return;
     } else {
       logger.warn(
         `Outbox: unexpected channel "${entry.channel}" for entry ${entry.id} — marking FAILED`
       );
       try {
-        await updateOutboxEntry(
-          prisma,
-          { id: entry.id },
-          {
-            error: `Unsupported channel: ${entry.channel}`,
-            status: OutboxStatus.FAILED,
-          }
-        );
+        await transitionOutboxEntry(prisma, entry.id, OutboxStatus.QUEUED, {
+          error: `Unsupported channel: ${entry.channel}`,
+          status: OutboxStatus.FAILED,
+        });
       } catch (dbErr) {
         logger.error(
           { err: dbErr, entryId: entry.id },
@@ -479,11 +463,15 @@ export async function cancelOutboxEntry(prisma: DbClient, id: string) {
   if (entry.status !== OutboxStatus.QUEUED) {
     throw new AppError("OUTBOX_NOT_QUEUED");
   }
-  return await updateOutboxEntry(
-    prisma,
-    { id },
-    { status: OutboxStatus.CANCELLED }
-  );
+  // Conditional transition — a worker may flip the entry between the
+  // read above and this write; only cancel while still QUEUED.
+  const count = await transitionOutboxEntry(prisma, id, OutboxStatus.QUEUED, {
+    status: OutboxStatus.CANCELLED,
+  });
+  if (count === 0) {
+    throw new AppError("OUTBOX_NOT_QUEUED");
+  }
+  return { id, status: OutboxStatus.CANCELLED };
 }
 
 export async function testNotification(prisma: DbClient, templateId: string) {

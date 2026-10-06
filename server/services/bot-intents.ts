@@ -37,7 +37,9 @@ const QUOTE_STATUS_PT: Record<string, string> = {
 
 const JOB_CODE_RE = /REP-\d{4}-\d{6}-[A-Z0-9]{3}/i;
 const QUOTE_RE = /or[çc]amento|pre[çc]o|quanto|custa/i;
-const YES_WORDS = new Set(["sim", "aceito", "ok", "confirmo", "aprovo"]);
+// "ok" is deliberately absent — a bare "ok" in casual conversation
+// must not legally accept a quote.
+const YES_WORDS = new Set(["sim", "aceito", "confirmo", "aprovo"]);
 const NO_WORDS = new Set(["não", "nao", "recuso", "rejeito"]);
 const HUMAN_RE = /ajuda|humano|atendimento|operador|pessoa|urgente/i;
 const DIGITS_RE = /\D/g;
@@ -67,10 +69,13 @@ export interface BotReplyCtx {
 
 export function rateOk(phone: string): boolean {
   const now = Date.now();
-  let b = rateBuckets.get(phone);
+  // Normalize — WhatsApp delivers "351912…" while sms-gate may send
+  // "+351912…" or "0912…"; the same sender must share one bucket.
+  const key = phone.replace(DIGITS_RE, "").slice(-9);
+  let b = rateBuckets.get(key);
   if (!b || b.resetAt < now) {
     b = { n: 0, resetAt: now + 3_600_000 };
-    rateBuckets.set(phone, b);
+    rateBuckets.set(key, b);
   }
   return ++b.n <= MSG_LIMIT_PER_HOUR;
 }

@@ -207,46 +207,63 @@ async function issueDocument(
   };
 }
 
+// In-flight issuance claims. A provider call is an irreversible
+// numbered fiscal document — two concurrent issues for the same
+// sale/job (double-click, two tabs) would emit two legal documents.
+// The check-then-write below is not atomic, so this process-level
+// claim serializes it (single-instance deployment, like the outbox
+// worker's isProcessing flag).
+const issuingKeys = new Set<string>();
+
 export async function issueInvoiceForSale(
   prisma: PrismaClient,
   saleId: string,
   log: FastifyBaseLogger
 ): Promise<IssuedInvoice> {
-  const sale = await prisma.sale.findUnique({
-    include: { customer: true, items: true },
-    where: { id: saleId },
-  });
-  if (!sale) {
-    throw new AppError("SALE_NOT_FOUND");
-  }
-  if (sale.invoiceDocId) {
+  const claimKey = `sale:${saleId}`;
+  if (issuingKeys.has(claimKey)) {
     throw new AppError("ALREADY_INVOICED");
   }
-  if (sale.items.length === 0) {
-    throw new AppError("VALIDATION_ERROR");
+  issuingKeys.add(claimKey);
+  try {
+    const sale = await prisma.sale.findUnique({
+      include: { customer: true, items: true },
+      where: { id: saleId },
+    });
+    if (!sale) {
+      throw new AppError("SALE_NOT_FOUND");
+    }
+    if (sale.invoiceDocId) {
+      throw new AppError("ALREADY_INVOICED");
+    }
+    if (sale.items.length === 0) {
+      throw new AppError("VALIDATION_ERROR");
+    }
+
+    const issued = await issueDocument(prisma, log, {
+      customer: sale.customer,
+      lines: sale.items.map((i) => ({
+        name: i.name,
+        quantity: i.quantity,
+        unitPriceGrossCents: Math.round(Number(i.unitPrice) * 100),
+      })),
+      reference: sale.saleCode,
+    });
+
+    await prisma.sale.update({
+      data: {
+        invoiceDocId: issued.docId,
+        invoiceDocType: issued.docType,
+        invoiceNumber: issued.number,
+        invoicePermalink: issued.permalink,
+        invoicedAt: new Date(),
+      },
+      where: { id: sale.id },
+    });
+    return issued;
+  } finally {
+    issuingKeys.delete(claimKey);
   }
-
-  const issued = await issueDocument(prisma, log, {
-    customer: sale.customer,
-    lines: sale.items.map((i) => ({
-      name: i.name,
-      quantity: i.quantity,
-      unitPriceGrossCents: Math.round(Number(i.unitPrice) * 100),
-    })),
-    reference: sale.saleCode,
-  });
-
-  await prisma.sale.update({
-    data: {
-      invoiceDocId: issued.docId,
-      invoiceDocType: issued.docType,
-      invoiceNumber: issued.number,
-      invoicePermalink: issued.permalink,
-      invoicedAt: new Date(),
-    },
-    where: { id: sale.id },
-  });
-  return issued;
 }
 
 export async function issueInvoiceForJob(
@@ -254,58 +271,67 @@ export async function issueInvoiceForJob(
   jobId: string,
   log: FastifyBaseLogger
 ): Promise<IssuedInvoice> {
-  const job = await prisma.job.findUnique({
-    include: { customer: true },
-    where: { id: jobId },
-  });
-  if (!job) {
-    throw new AppError("JOB_NOT_FOUND");
-  }
-  if (job.invoiceDocId) {
+  const claimKey = `job:${jobId}`;
+  if (issuingKeys.has(claimKey)) {
     throw new AppError("ALREADY_INVOICED");
   }
+  issuingKeys.add(claimKey);
+  try {
+    const job = await prisma.job.findUnique({
+      include: { customer: true },
+      where: { id: jobId },
+    });
+    if (!job) {
+      throw new AppError("JOB_NOT_FOUND");
+    }
+    if (job.invoiceDocId) {
+      throw new AppError("ALREADY_INVOICED");
+    }
 
-  const [repairs, parts] = await Promise.all([
-    prisma.jobRepair.findMany({
-      select: { price: true, repairName: true },
-      where: { jobId },
-    }),
-    prisma.jobPart.findMany({
-      select: { partName: true, quantity: true, unitPrice: true },
-      where: { jobId },
-    }),
-  ]);
-  const lines: InvoiceLine[] = [
-    ...repairs.map((r) => ({
-      name: r.repairName,
-      quantity: 1,
-      unitPriceGrossCents: Math.round(Number(r.price) * 100),
-    })),
-    ...parts.map((p) => ({
-      name: p.partName,
-      quantity: p.quantity,
-      unitPriceGrossCents: Math.round(Number(p.unitPrice) * 100),
-    })),
-  ];
-  if (lines.length === 0) {
-    throw new AppError("VALIDATION_ERROR");
+    const [repairs, parts] = await Promise.all([
+      prisma.jobRepair.findMany({
+        select: { price: true, repairName: true },
+        where: { jobId },
+      }),
+      prisma.jobPart.findMany({
+        select: { partName: true, quantity: true, unitPrice: true },
+        where: { jobId },
+      }),
+    ]);
+    const lines: InvoiceLine[] = [
+      ...repairs.map((r) => ({
+        name: r.repairName,
+        quantity: 1,
+        unitPriceGrossCents: Math.round(Number(r.price) * 100),
+      })),
+      ...parts.map((p) => ({
+        name: p.partName,
+        quantity: p.quantity,
+        unitPriceGrossCents: Math.round(Number(p.unitPrice) * 100),
+      })),
+    ];
+    if (lines.length === 0) {
+      throw new AppError("VALIDATION_ERROR");
+    }
+
+    const issued = await issueDocument(prisma, log, {
+      customer: job.customer,
+      lines,
+      reference: job.jobCode,
+    });
+
+    await prisma.job.update({
+      data: {
+        invoiceDocId: issued.docId,
+        invoiceDocType: issued.docType,
+        invoiceNumber: issued.number,
+        invoicePermalink: issued.permalink,
+        invoicedAt: new Date(),
+      },
+      where: { id: job.id },
+    });
+    return issued;
+  } finally {
+    issuingKeys.delete(claimKey);
   }
-
-  const issued = await issueDocument(prisma, log, {
-    customer: job.customer,
-    lines,
-    reference: job.jobCode,
-  });
-
-  await prisma.job.update({
-    data: {
-      invoiceDocId: issued.docId,
-      invoiceDocType: issued.docType,
-      invoiceNumber: issued.number,
-      invoicePermalink: issued.permalink,
-      invoicedAt: new Date(),
-    },
-    where: { id: job.id },
-  });
-  return issued;
 }

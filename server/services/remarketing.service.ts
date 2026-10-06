@@ -29,6 +29,7 @@ const WHITESPACE_RE = /\s+/;
 
 interface EligibleCustomer {
   id: string;
+  lastRemarketingAt: Date | null;
   name: string;
   phone: string;
 }
@@ -66,7 +67,7 @@ export async function runRemarketingSweep(
   }
 
   const customers = await prisma.$queryRaw<EligibleCustomer[]>`
-    SELECT c.id, c.name, c.phone
+    SELECT c.id, c.name, c.phone, c."lastRemarketingAt"
     FROM customers c
     WHERE c."whatsappConsent" = true
       AND (c."lastRemarketingAt" IS NULL
@@ -86,6 +87,20 @@ export async function runRemarketingSweep(
   const shopName = settings.shopName || "a nossa loja";
   let sent = 0;
   for (const customer of customers) {
+    // Atomic claim before sending — two overlapping sweeps must not
+    // double-message the same customer (Meta bills each template).
+    // Guarded on the lastRemarketingAt value we read: a count of 0
+    // means another run claimed or someone touched the row.
+    const claimed = await prisma.customer.updateMany({
+      data: { lastRemarketingAt: new Date() },
+      where: {
+        id: customer.id,
+        lastRemarketingAt: customer.lastRemarketingAt,
+      },
+    });
+    if (claimed.count === 0) {
+      continue;
+    }
     const firstName =
       customer.name.trim().split(WHITESPACE_RE)[0] || customer.name;
     const result = await sendWhatsAppTemplate(
@@ -96,12 +111,6 @@ export async function runRemarketingSweep(
       [firstName, shopName],
       settings.countryCode ?? "PT"
     );
-    // Marked on attempt: a broken template name or a Meta outage must not
-    // retry the same customer every hour for the whole cooldown window.
-    await prisma.customer.update({
-      where: { id: customer.id },
-      data: { lastRemarketingAt: new Date() },
-    });
     if (result.success) {
       sent += 1;
     } else {

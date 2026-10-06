@@ -65,6 +65,36 @@ describe("sendWhatsApp", () => {
     expect(body.to).toBe("+33612345678");
   });
 
+  it("prepends the dial code to a bare national mobile", async () => {
+    mocks.fetch.mockResolvedValue({ ok: true, status: 200 });
+
+    await sendWhatsApp(validConfig, "912345678", "Hello");
+
+    const call = mocks.fetch.mock.calls[0];
+    const body = JSON.parse(call[1].body);
+    expect(body.to).toBe("+351912345678");
+  });
+
+  it("normalizes the 00 international prefix", async () => {
+    mocks.fetch.mockResolvedValue({ ok: true, status: 200 });
+
+    await sendWhatsApp(validConfig, "00351912345678", "Hello");
+
+    const call = mocks.fetch.mock.calls[0];
+    const body = JSON.parse(call[1].body);
+    expect(body.to).toBe("+351912345678");
+  });
+
+  it("adds + to a number already carrying the dial code", async () => {
+    mocks.fetch.mockResolvedValue({ ok: true, status: 200 });
+
+    await sendWhatsApp(validConfig, "351912345678", "Hello");
+
+    const call = mocks.fetch.mock.calls[0];
+    const body = JSON.parse(call[1].body);
+    expect(body.to).toBe("+351912345678");
+  });
+
   it("returns error when API responds with non-200 status", async () => {
     mocks.fetch.mockResolvedValue({
       ok: false,

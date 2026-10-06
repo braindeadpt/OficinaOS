@@ -1,4 +1,7 @@
-import { COUNTRY_DIAL_CODES } from "@shared/constants/countries.js";
+import {
+  COUNTRY_DIAL_CODES,
+  NATIONAL_NUMBER_LENGTHS,
+} from "@shared/constants/countries.js";
 import { decryptSecret, isEncrypted } from "../lib/crypto.js";
 
 interface WhatsAppConfig {
@@ -149,8 +152,19 @@ export function formatPhone(phone: string, countryCode?: string): string {
     countryCode && COUNTRY_DIAL_CODES[countryCode]
       ? COUNTRY_DIAL_CODES[countryCode]
       : "351";
+  if (digits.startsWith("00")) {
+    // International prefix without "+": 00351912… → +351912…
+    return `+${digits.slice(2)}`;
+  }
   if (digits.startsWith("0")) {
     return `+${dialCode}${digits.slice(1)}`;
   }
+  const nationalLen = NATIONAL_NUMBER_LENGTHS[countryCode ?? ""] ?? 9;
+  if (digits.length <= nationalLen) {
+    // Bare national number — the common entry format (912345678).
+    return `+${dialCode}${digits}`;
+  }
+  // Longer than a national number: already carries a country code
+  // (with or without ours) — just needs the "+".
   return `+${digits}`;
 }

@@ -41,7 +41,7 @@ const SETTINGS = {
 function fakePrisma(customers: { id: string; name: string; phone: string }[]) {
   return {
     $queryRaw: vi.fn(async () => customers),
-    customer: { update: vi.fn(async () => ({})) },
+    customer: { updateMany: vi.fn(async () => ({ count: 1 })) },
   } as never;
 }
 
@@ -99,8 +99,8 @@ describe("runRemarketingSweep", () => {
       "PT"
     );
     expect(
-      (prisma as { customer: { update: ReturnType<typeof vi.fn> } }).customer
-        .update
+      (prisma as { customer: { updateMany: ReturnType<typeof vi.fn> } })
+        .customer.updateMany
     ).toHaveBeenCalledTimes(2);
   });
 
@@ -116,13 +116,26 @@ describe("runRemarketingSweep", () => {
     const sent = await runRemarketingSweep(prisma, log);
     expect(sent).toBe(0);
     expect(
-      (prisma as { customer: { update: ReturnType<typeof vi.fn> } }).customer
-        .update
+      (prisma as { customer: { updateMany: ReturnType<typeof vi.fn> } })
+        .customer.updateMany
     ).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ lastRemarketingAt: expect.any(Date) }),
       })
     );
+  });
+
+  it("skips a customer whose atomic claim was lost to another sweep", async () => {
+    const prisma = fakePrisma([
+      { id: "c1", name: "Maria Silva", phone: "910000001" },
+    ]);
+    (
+      prisma as { customer: { updateMany: ReturnType<typeof vi.fn> } }
+    ).customer.updateMany.mockResolvedValue({ count: 0 });
+    mocks.findShopSettingsUnique.mockResolvedValue(SETTINGS);
+    const sent = await runRemarketingSweep(prisma, log);
+    expect(sent).toBe(0);
+    expect(mocks.sendWhatsAppTemplate).not.toHaveBeenCalled();
   });
 
   it("eligibility query honours consent, cooldown and inactivity windows", async () => {

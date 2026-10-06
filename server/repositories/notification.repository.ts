@@ -96,6 +96,25 @@ export async function updateOutboxEntry(
   return await prisma.notificationOutbox.update({ where, data });
 }
 
+/**
+ * Atomic outbox state transition — only applies `data` while the entry
+ * is still in `fromStatus`. Returns the affected row count: 0 means a
+ * concurrent transition (e.g. a user cancel) won and the caller must
+ * not proceed (skip the send, don't resurrect the row).
+ */
+export async function transitionOutboxEntry(
+  prisma: DbClient,
+  entryId: string,
+  fromStatus: string,
+  data: Prisma.NotificationOutboxUpdateInput
+) {
+  const result = await prisma.notificationOutbox.updateMany({
+    data,
+    where: { id: entryId, status: fromStatus as never },
+  });
+  return result.count;
+}
+
 export async function findManyNotificationTemplatesByName(
   prisma: DbClient,
   name: string

@@ -86,6 +86,36 @@ describe("executeQueryDatabase — protected columns", () => {
     expect(executed).toBe(false);
   });
 
+  it("rejects a protected column hidden behind an output alias", async () => {
+    // Regression: "password AS x" used to check the alias "x" instead
+    // of the source column, leaking every credential hash to the model.
+    const { executed } = await run("SELECT password AS x FROM users");
+    expect(executed).toBe(false);
+  });
+
+  it("rejects a protected column inside an expression", async () => {
+    for (const sql of [
+      "SELECT max(password) FROM users",
+      "SELECT encode(password::bytea, 'base64') AS x FROM users",
+      "SELECT upper(u.password) FROM users u",
+    ]) {
+      const { executed } = await run(sql);
+      expect(executed, sql).toBe(false);
+    }
+  });
+
+  it("rejects credential-shaped columns on jobs", async () => {
+    for (const sql of [
+      'SELECT "accessCode" FROM jobs',
+      'SELECT "deviceUnlockCode" FROM jobs',
+      'SELECT "intakeSignatureDataUrl" FROM jobs',
+      'SELECT "accessCode" AS token FROM jobs',
+    ]) {
+      const { executed } = await run(sql);
+      expect(executed, sql).toBe(false);
+    }
+  });
+
   it("allows aggregates over protected tables", async () => {
     const { executed } = await run("SELECT COUNT(*) FROM users");
     expect(executed).toBe(true);
@@ -130,6 +160,27 @@ describe("executeQueryDatabase — table allow-list", () => {
     );
     expect(executed).toBe(true);
   });
+
+  it("rejects blocked tables reached via a comma join", async () => {
+    // Regression: only the first identifier after FROM was extracted,
+    // so "FROM jobs j, accounts a" validated "jobs" and skipped
+    // "accounts" — leaking every credential hash.
+    for (const sql of [
+      "SELECT a.password AS x FROM jobs j, accounts a",
+      "SELECT s.id FROM jobs j, shop_settings s",
+      "SELECT j.id FROM jobs j, audit_logs l",
+    ]) {
+      const { executed } = await run(sql);
+      expect(executed, sql).toBe(false);
+    }
+  });
+
+  it("rejects blocked tables after a join clause", async () => {
+    const { executed } = await run(
+      "SELECT a.* FROM jobs j JOIN customers c ON j.id = c.id, accounts a"
+    );
+    expect(executed).toBe(false);
+  });
 });
 
 describe("executeQueryDatabase — statement safety", () => {
@@ -149,6 +200,19 @@ describe("executeQueryDatabase — statement safety", () => {
       false
     );
     expect((await run("SELECT * FROM jobs -- comment")).executed).toBe(false);
+  });
+
+  it("rejects row-locking and instance-introspection shapes", async () => {
+    for (const sql of [
+      "SELECT id FROM jobs FOR UPDATE",
+      "SELECT id FROM jobs FOR SHARE",
+      "SELECT version()",
+      "SELECT current_user",
+      "SELECT inet_server_addr()",
+    ]) {
+      const { executed } = await run(sql);
+      expect(executed, sql).toBe(false);
+    }
   });
 
   it("rejects UNION and catalog access", async () => {

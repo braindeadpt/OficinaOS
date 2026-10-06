@@ -362,8 +362,11 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
           eventName: "warranty_return_created",
           jobId: result.id,
           recipients: { role: Role.OWNER },
-        }).catch(() => {
-          /* fire-and-forget */
+        }).catch((err) => {
+          req.log.warn(
+            { err, eventName: "warranty_return_created", jobId: result.id },
+            "notify dispatch failed"
+          );
         });
       }
 

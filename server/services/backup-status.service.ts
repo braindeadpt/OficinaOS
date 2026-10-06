@@ -30,11 +30,13 @@ export interface BackupStatus {
 }
 
 /**
- * Reads the backup sidecar status. The db-backup container writes a
- * heartbeat file plus timestamped dumps into volumes mounted under
- * /backups-status and /backups respectively (see docker-compose*.yml).
- * Missing files degrade gracefully to nulls so the UI can show
- * "backups not configured" instead of erroring.
+ * Reads the backup sidecar status. In Docker mode the db-backup
+ * container's heartbeat and dump volumes are mounted on the app at
+ * UPLOAD_DIR/backups-status and UPLOAD_DIR/backups (see
+ * docker-compose*.yml); in portable mode BACKUP.ps1 writes the same
+ * layout under app\uploads\. Missing files degrade gracefully to
+ * nulls so the UI can show "backups not configured" instead of
+ * erroring.
  */
 export async function getBackupStatus(): Promise<BackupStatus> {
   const uploadDir = path.resolve(loadEnv().UPLOAD_DIR);

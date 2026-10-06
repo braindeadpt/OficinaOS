@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   findCustomerByPhone: vi.fn(),
   findManyOutboxEntries: vi.fn(),
   findShopSettingsUnique: vi.fn(),
-  updateOutboxEntry: vi.fn(),
+  transitionOutboxEntry: vi.fn(),
   sendWhatsApp: vi.fn(),
   decryptWhatsAppConfig: vi.fn(),
   sendSms: vi.fn(),
@@ -34,7 +34,7 @@ vi.mock("../repositories/notification.repository.js", () => ({
   createOutboxEntry: mocks.createOutboxEntry,
   findManyOutboxEntries: mocks.findManyOutboxEntries,
   findOutboxEntryById: vi.fn(),
-  updateOutboxEntry: mocks.updateOutboxEntry,
+  transitionOutboxEntry: mocks.transitionOutboxEntry,
 }));
 
 vi.mock("../repositories/settings.repository.js", () => ({
@@ -128,7 +128,7 @@ describe("processOutbox", () => {
       phoneNumberId: "phone-1",
     });
     mocks.sendWhatsApp.mockResolvedValue({ success: true });
-    mocks.updateOutboxEntry.mockResolvedValue({ id: "out-1" });
+    mocks.transitionOutboxEntry.mockResolvedValue(1);
     mocks.findCustomerByPhone.mockResolvedValue({
       phone: "05551234567",
       whatsappConsent: true,
@@ -159,9 +159,10 @@ describe("processOutbox", () => {
       prisma,
       "05551234567"
     );
-    expect(mocks.updateOutboxEntry).toHaveBeenCalledWith(
+    expect(mocks.transitionOutboxEntry).toHaveBeenCalledWith(
       prisma,
-      { id: "out-1" },
+      "out-1",
+      OutboxStatus.QUEUED,
       {
         error: null,
         sentAt: expect.any(Date),
@@ -203,9 +204,10 @@ describe("processOutbox", () => {
 
     await processOutbox(prisma);
 
-    expect(mocks.updateOutboxEntry).toHaveBeenCalledWith(
+    expect(mocks.transitionOutboxEntry).toHaveBeenCalledWith(
       prisma,
-      { id: "out-2" },
+      "out-2",
+      OutboxStatus.QUEUED,
       {
         error: "WhatsApp API 403: Invalid token",
         nextRetryAt: expect.any(Date),
@@ -222,7 +224,7 @@ describe("processOutbox", () => {
 
     expect(mocks.findShopSettingsUnique).not.toHaveBeenCalled();
     expect(mocks.sendWhatsApp).not.toHaveBeenCalled();
-    expect(mocks.updateOutboxEntry).not.toHaveBeenCalled();
+    expect(mocks.transitionOutboxEntry).not.toHaveBeenCalled();
   });
 
   it("does nothing when WhatsApp config is missing", async () => {
@@ -240,7 +242,7 @@ describe("processOutbox", () => {
     await processOutbox(prisma);
 
     expect(mocks.sendWhatsApp).not.toHaveBeenCalled();
-    expect(mocks.updateOutboxEntry).not.toHaveBeenCalled();
+    expect(mocks.transitionOutboxEntry).not.toHaveBeenCalled();
   });
 
   it("does nothing when decryptWhatsAppConfig returns null", async () => {
@@ -264,7 +266,7 @@ describe("processOutbox", () => {
     await processOutbox(prisma);
 
     expect(mocks.sendWhatsApp).not.toHaveBeenCalled();
-    expect(mocks.updateOutboxEntry).not.toHaveBeenCalled();
+    expect(mocks.transitionOutboxEntry).not.toHaveBeenCalled();
   });
 
   it("does not send when WhatsApp is disabled even with credentials", async () => {
@@ -288,7 +290,7 @@ describe("processOutbox", () => {
 
     expect(mocks.decryptWhatsAppConfig).not.toHaveBeenCalled();
     expect(mocks.sendWhatsApp).not.toHaveBeenCalled();
-    expect(mocks.updateOutboxEntry).not.toHaveBeenCalled();
+    expect(mocks.transitionOutboxEntry).not.toHaveBeenCalled();
   });
 
   it("sends pending SMS entries through the gateway when entitled", async () => {
@@ -329,9 +331,10 @@ describe("processOutbox", () => {
       "PT"
     );
     expect(mocks.sendWhatsApp).not.toHaveBeenCalled();
-    expect(mocks.updateOutboxEntry).toHaveBeenCalledWith(
+    expect(mocks.transitionOutboxEntry).toHaveBeenCalledWith(
       prisma,
-      { id: "out-sms" },
+      "out-sms",
+      OutboxStatus.QUEUED,
       expect.objectContaining({ status: OutboxStatus.SENT })
     );
   });
@@ -354,7 +357,7 @@ describe("processOutbox", () => {
     await processOutbox(prisma);
 
     expect(mocks.sendSms).not.toHaveBeenCalled();
-    expect(mocks.updateOutboxEntry).not.toHaveBeenCalled();
+    expect(mocks.transitionOutboxEntry).not.toHaveBeenCalled();
   });
 
   it("cancels entries older than 24h instead of sending them", async () => {
@@ -380,14 +383,15 @@ describe("processOutbox", () => {
       businessId: "biz-1",
       phoneNumberId: "phone-1",
     });
-    mocks.updateOutboxEntry.mockResolvedValue({ id: "out-7" });
+    mocks.transitionOutboxEntry.mockResolvedValue(1);
 
     await processOutbox(prisma);
 
     expect(mocks.sendWhatsApp).not.toHaveBeenCalled();
-    expect(mocks.updateOutboxEntry).toHaveBeenCalledWith(
+    expect(mocks.transitionOutboxEntry).toHaveBeenCalledWith(
       prisma,
-      { id: "out-7" },
+      "out-7",
+      OutboxStatus.QUEUED,
       expect.objectContaining({
         error: expect.stringContaining("Expired"),
         status: OutboxStatus.CANCELLED,

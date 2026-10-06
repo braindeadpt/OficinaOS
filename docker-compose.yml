@@ -27,7 +27,11 @@ services:
       DATABASE_URL: postgresql://reparilo:reparilo@db:5432/reparilo
     volumes:
       - uploads:/app/uploads
-      - backups-heartbeat:/backups-status
+      # backup-status.service.ts reads UPLOAD_DIR/backups-status and
+      # UPLOAD_DIR/backups — mount the sidecar volumes there so the
+      # Settings → Backups indicator sees the heartbeat + dump count.
+      - backups-heartbeat:/app/uploads/backups-status
+      - backups:/app/uploads/backups
 
   db-backup:
     image: postgres:16-alpine

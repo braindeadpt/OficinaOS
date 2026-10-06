@@ -14,6 +14,7 @@ import {
   supersedeSentQuotes,
 } from "../repositories/job-quote.repository.js";
 import type { DbClient } from "../repositories/types.js";
+import { logger } from "../utils/logger.js";
 import { createAuditLog } from "./audit.service.js";
 import type { NotifyContext } from "./job.service.js";
 import { notify } from "./notification-dispatch.js";
@@ -75,8 +76,11 @@ export async function createAndSendQuote(
     eventName: "quote_sent",
     jobId,
     recipients: { role: Role.OWNER },
-  }).catch(() => {
-    /* fire-and-forget */
+  }).catch((err) => {
+    logger.warn(
+      { err, eventName: "quote_sent", jobId },
+      "notify dispatch failed"
+    );
   });
 
   return quote;
@@ -177,8 +181,11 @@ export async function respondToQuote(
       input.decision === "approve" ? "quote_approved" : "quote_rejected",
     jobId: job.id,
     recipients: { userIds: [job.createdById] },
-  }).catch(() => {
-    /* fire-and-forget */
+  }).catch((err) => {
+    logger.warn(
+      { err, eventName: `quote_${input.decision}`, jobId: job.id },
+      "notify dispatch failed"
+    );
   });
 
   return { jobExists: true, quote: updated };

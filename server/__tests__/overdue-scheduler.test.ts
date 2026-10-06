@@ -15,12 +15,14 @@ vi.mock("../services/notification-dispatch.js", () => ({
 vi.useFakeTimers();
 
 const mockFindMany = vi.fn();
-const mockJobUpdate = vi.fn().mockResolvedValue(undefined);
+const mockJobUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
 const mockLog = { error: vi.fn(), warn: vi.fn() };
 
 const mockApp = {
   log: mockLog,
-  prisma: { job: { findMany: mockFindMany, update: mockJobUpdate } },
+  prisma: {
+    job: { findMany: mockFindMany, updateMany: mockJobUpdateMany },
+  },
 } as any;
 
 import { startOverdueScheduler } from "../jobs/overdue-scheduler.js";
@@ -95,6 +97,18 @@ describe("startOverdueScheduler", () => {
 
     await vi.advanceTimersByTimeAsync(15 * 60 * 1000);
     expect(mocks.notify).toHaveBeenCalledTimes(1);
+
+    stop();
+  });
+
+  it("does not notify when the atomic claim was lost to another run", async () => {
+    mockFindMany.mockResolvedValue([{ id: "j1", jobCode: "RPR-001" }]);
+    mockJobUpdateMany.mockResolvedValue({ count: 0 });
+
+    const stop = startOverdueScheduler(mockApp);
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(mocks.notify).not.toHaveBeenCalled();
 
     stop();
   });

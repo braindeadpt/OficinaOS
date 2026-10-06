@@ -30,21 +30,36 @@ async function processOverdueJobs(app: FastifyInstance): Promise<void> {
     const batch = overdue.slice(i, i + BATCH_SIZE);
     const batchResults = await Promise.allSettled(
       batch.map((job) =>
-        notify(app, {
-          context: {
-            customerName: job.customer?.name,
-            jobCode: job.jobCode,
-            recipientPhone: job.customer?.phone,
-          },
-          eventName: "job_overdue",
-          jobId: job.id,
-          recipients: { role: Role.OWNER },
-        }).then(() =>
-          app.prisma.job.update({
+        // Atomic claim first — two overlapping runs must not both
+        // pass the eligibility filter and double-notify. Marking on
+        // attempt also prevents a broken pipeline from re-alerting
+        // every 15 minutes.
+        app.prisma.job
+          .updateMany({
             data: { lastOverdueAlertAt: new Date() },
-            where: { id: job.id },
+            where: {
+              id: job.id,
+              OR: [
+                { lastOverdueAlertAt: null },
+                { lastOverdueAlertAt: { lt: cutoff } },
+              ],
+            },
           })
-        )
+          .then((claimed) => {
+            if (claimed.count === 0) {
+              return;
+            }
+            return notify(app, {
+              context: {
+                customerName: job.customer?.name,
+                jobCode: job.jobCode,
+                recipientPhone: job.customer?.phone,
+              },
+              eventName: "job_overdue",
+              jobId: job.id,
+              recipients: { role: Role.OWNER },
+            });
+          })
       )
     );
     results.push(...batchResults);

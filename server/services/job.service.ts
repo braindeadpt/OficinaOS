@@ -48,6 +48,7 @@ import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import { generateJobCode } from "../utils/job-code.js";
 import { assertJobMutable } from "../utils/job-mutations.js";
+import { logger } from "../utils/logger.js";
 import { createAuditLog } from "./audit.service.js";
 import { notify } from "./notification-dispatch.js";
 import {
@@ -403,8 +404,12 @@ export async function create(
     eventName: "job_created",
     jobId: job.id,
     recipients: { role: Role.OWNER },
-  }).catch(() => {
-    /* fire-and-forget */
+  }).catch((err) => {
+    // Fire-and-forget on purpose — but never invisible.
+    logger.warn(
+      { err, eventName: "job_created", jobId: job.id },
+      "notify dispatch failed"
+    );
   });
 
   const fullJob = await jobFindUnique(prisma, job.id, JOB_INCLUDE);
@@ -752,8 +757,11 @@ export async function transitionStatus(
       eventName: templateName,
       jobId: id,
       recipients: { role: Role.OWNER },
-    }).catch(() => {
-      /* fire-and-forget */
+    }).catch((err) => {
+      logger.warn(
+        { err, eventName: templateName, jobId: id },
+        "notify dispatch failed"
+      );
     });
   }
 

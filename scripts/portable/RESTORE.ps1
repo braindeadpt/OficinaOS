@@ -35,10 +35,17 @@ Get-Process bun -ErrorAction SilentlyContinue |
     Where-Object { $_.Path -like "$root*" } | Stop-Process -Force
 Start-Sleep -Seconds 2
 
-# Garantir o Postgres a correr
-& "$pgbin\pg_ctl.exe" -D $pgdata status | Out-Null
+# Garantir o Postgres a correr — pg_ctl falha com acentos no caminho,
+# por isso usa-se o nome 8.3 como no INICIAR.bat (fallback ao caminho
+# longo se 8.3 estiver desativado no volume).
+$pgdata83 = $pgdata
+try {
+    $short = (New-Object -ComObject Scripting.FileSystemObject).GetFolder($pgdata).ShortPath
+    if ($short) { $pgdata83 = $short }
+} catch { }
+& "$pgbin\pg_ctl.exe" -D $pgdata83 status | Out-Null
 if ($LASTEXITCODE -ne 0) {
-    & "$pgbin\pg_ctl.exe" -D $pgdata -l (Join-Path $pgdata "postgres.log") -w start | Out-Null
+    & "$pgbin\pg_ctl.exe" -D $pgdata83 -l (Join-Path $pgdata "postgres.log") -w start | Out-Null
     if ($LASTEXITCODE -ne 0) { Write-Error "O Postgres nao arrancou. Ve data\postgres.log"; exit 1 }
 }
 
@@ -50,12 +57,35 @@ $gz = New-Object IO.Compression.GzipStream($in, [IO.Compression.CompressionMode]
 $out = [IO.File]::Create($tmp)
 try { $gz.CopyTo($out) } finally { $gz.Dispose(); $in.Dispose(); $out.Dispose() }
 
+# Dump de seguranca dos dados atuais ANTES de os destruir — fica na
+# lista do RESTORE como oficinaos-pre-restore-*.sql.gz. Se o dump
+# escolhido aplicar mal, os dados antigos nao se perderam.
+$stamp = Get-Date -Format "yyyy-MM-dd-HHmm"
+$preSql = Join-Path $env:TEMP "oficinaos-pre-restore-$stamp.sql"
+& "$pgbin\pg_dump.exe" -h 127.0.0.1 -p 5433 -U postgres -f $preSql oficinaos
+if ($LASTEXITCODE -ne 0) {
+    Remove-Item $tmp, $preSql, (Join-Path $root "STOP") -ErrorAction SilentlyContinue
+    Write-Error "O dump de seguranca falhou — restore cancelado, base de dados intacta."
+    exit 1
+}
+$preGz = Join-Path $dumpDir "oficinaos-pre-restore-$stamp.sql.gz"
+$in = [IO.File]::OpenRead($preSql)
+$gz = New-Object IO.Compression.GzipStream([IO.File]::Create($preGz), [IO.Compression.CompressionMode]::Compress)
+try { $in.CopyTo($gz) } finally { $in.Dispose(); $gz.Dispose() }
+Remove-Item $preSql -ErrorAction SilentlyContinue
+Write-Output "Dump de seguranca criado: oficinaos-pre-restore-$stamp.sql.gz"
+
 # Recriar a base de dados vazia e aplicar o dump
 & "$pgbin\dropdb.exe" -h 127.0.0.1 -p 5433 -U postgres --if-exists oficinaos
 & "$pgbin\createdb.exe" -h 127.0.0.1 -p 5433 -U postgres oficinaos
 if ($LASTEXITCODE -ne 0) { Remove-Item $tmp; Write-Error "Falhou a recriacao da base de dados"; exit 1 }
-& "$pgbin\psql.exe" -h 127.0.0.1 -p 5433 -U postgres -d oficinaos -f $tmp -q
+& "$pgbin\psql.exe" -h 127.0.0.1 -p 5433 -U postgres -d oficinaos -v ON_ERROR_STOP=1 -f $tmp -q
+$psqlCode = $LASTEXITCODE
 Remove-Item $tmp -ErrorAction SilentlyContinue
+if ($psqlCode -ne 0) {
+    Write-Error "O dump aplicou-se com erros — a base de dados pode estar incompleta. Corre RESTORE de novo e escolhe o dump de seguranca oficinaos-pre-restore-$stamp.sql.gz."
+    exit 1
+}
 
 Remove-Item (Join-Path $root "STOP") -ErrorAction SilentlyContinue
 Write-Output ""
