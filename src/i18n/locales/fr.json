@@ -2396,6 +2396,13 @@
   "sms_register_webhook": "Enregistrer un webhook sur le téléphone",
   "sms_send_test": "Envoyer des SMS tests",
   "sms_settings": "SMS (passerelle locale)",
+  "sms_setup_1": "Installez l'application gratuite « SMS Gateway for Android » (sms-gate.app) sur n'importe quel téléphone Android doté d'une carte SIM active — un ancien téléphone laissé en magasin fonctionne parfaitement.",
+  "sms_setup_2": "Dans cette application, activez « Serveur local » : il affiche l'adresse locale (par exemple 192.168.1.50:8080), un nom d'utilisateur et un mot de passe.",
+  "sms_setup_3": "Assurez-vous que le téléphone est sur le même réseau Wi-Fi que le PC exécutant OficinaOS.",
+  "sms_setup_4": "Collez l'URL (http:// + adresse), le nom d'utilisateur et le mot de passe ci-dessous, puis enregistrez.",
+  "sms_setup_5": "Utilisez « Envoyer un SMS de test » pour confirmer — et « Enregistrer le webhook sur le téléphone » pour que les réponses des clients parviennent à l'application.",
+  "sms_setup_tip": "Astuce : dans le routeur de la boutique, réservez l'IP du téléphone (réservation DHCP) pour qu'elle ne change jamais.",
+  "sms_setup_title": "Configuration — 5 minutes",
   "sms_test_sent": "Test SMS envoyé",
   "sms_webhook_not_registered": "SMS enregistré, mais le webhook entrant n'a pas été enregistré — ouvrez l'application via son adresse réseau (par exemple http://192.168.x.x:4000) et essayez le bouton d'enregistrement.",
   "sms_webhook_registered": "Webhook entrant enregistré sur le téléphone"

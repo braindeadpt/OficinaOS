@@ -135,6 +135,22 @@ function SmsCard({
           </p>
         )}
 
+        <div className="mt-3 rounded-xl bg-surface-container px-3 py-2.5">
+          <p className="font-medium text-on-surface text-xs">
+            {t("sms_setup_title")}
+          </p>
+          <ol className="mt-1.5 list-decimal space-y-1 pl-4 text-on-surface-variant text-xs">
+            <li>{t("sms_setup_1")}</li>
+            <li>{t("sms_setup_2")}</li>
+            <li>{t("sms_setup_3")}</li>
+            <li>{t("sms_setup_4")}</li>
+            <li>{t("sms_setup_5")}</li>
+          </ol>
+          <p className="mt-2 text-on-surface-variant text-xs italic">
+            {t("sms_setup_tip")}
+          </p>
+        </div>
+
         {form.enabled && (
           <div className="mt-5 space-y-4">
             <Field
