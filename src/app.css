@@ -30,6 +30,67 @@
     "opsz" 24;
 }
 
+/* Lucide icons sized like the icon font: 1em square, 24px unless a text-*
+   utility says otherwise (layered so utilities win). */
+@layer components {
+  .oos-icon {
+    display: inline-block;
+    flex-shrink: 0;
+    width: 1em;
+    height: 1em;
+    font-size: 24px;
+    line-height: 1;
+    vertical-align: -0.125em;
+  }
+}
+
+/*
+ * Text fields (design-system.md §4.2): surface box, 1 px border-strong
+ * outline, radius md, 14 px text. Focus turns the border to the focus colour
+ * plus a soft ring; errors are handled by [aria-invalid] below. Shared by the
+ * Input, Select and Textarea primitives.
+ */
+@layer components {
+  .oos-field {
+    font-size: var(--oos-text-base);
+    line-height: var(--oos-leading-base);
+    color: var(--oos-color-text);
+    background-color: var(--oos-color-surface);
+    border: 1px solid var(--oos-color-border-strong);
+    border-radius: var(--oos-radius-md);
+    transition:
+      border-color var(--oos-duration-fast) var(--oos-ease-standard),
+      box-shadow var(--oos-duration-fast) var(--oos-ease-standard);
+  }
+
+  .oos-field::placeholder {
+    color: var(--oos-color-text-subtle);
+  }
+
+  .oos-field:focus {
+    border-color: var(--oos-color-focus);
+    box-shadow: 0 0 0 3px
+      color-mix(in srgb, var(--oos-color-focus) 28%, transparent);
+  }
+
+  .oos-field:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  /* chevron-down, 16 px, in border-strong grey (readable in both themes) */
+  .oos-select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238792A6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 16px;
+  }
+
+  [dir="rtl"] .oos-select {
+    background-position: left 0.75rem center;
+  }
+}
+
 /* Layered so Tailwind utilities (text-[22px] etc.) still win over the 24px
    icon-font default — same role Google's stylesheet used to play. */
 @layer components {
@@ -91,8 +152,41 @@ h3,
   background: var(--oos-color-primary);
 }
 
-.modal-surface {
-  background-color: var(--color-surface-container-lowest);
+/*
+ * Every hand-built dialog panel carries .modal-surface: give them the spec's
+ * surface, shadow and entrance (§4.7) in one place, and a hairline border in
+ * dark mode where shadows are nearly invisible on purpose.
+ */
+.modal-surface,
+.oos-dialog {
+  background-color: var(--oos-color-surface);
+  box-shadow: var(--oos-shadow-lg);
+  animation: oosDialogIn var(--oos-duration-slow) var(--oos-ease-enter) both;
+}
+
+:root[data-theme="dark"] :is(.modal-surface, .oos-dialog) {
+  outline: 1px solid var(--oos-color-border);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) :is(.modal-surface, .oos-dialog) {
+    outline: 1px solid var(--oos-color-border);
+  }
+}
+
+.oos-dialog::backdrop {
+  background-color: var(--oos-color-overlay);
+}
+
+@keyframes oosDialogIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .cta-primary {
@@ -150,7 +244,9 @@ h3,
   .animate-pulse,
   .animate-fade-slide-up,
   .animate-fade-in,
-  .typing-dot {
+  .typing-dot,
+  .modal-surface,
+  .oos-dialog {
     animation: none;
   }
 }
@@ -180,7 +276,12 @@ h3,
  * Suppressed while focused so the primary focus ring is never doubled up.
  */
 [aria-invalid="true"]:not(:focus) {
-  box-shadow: 0 0 0 2px var(--color-error);
+  box-shadow: 0 0 0 2px var(--oos-color-danger);
+}
+
+.oos-field[aria-invalid="true"]:not(:focus) {
+  border-color: var(--oos-color-danger);
+  box-shadow: 0 0 0 1px var(--oos-color-danger);
 }
 
 @supports not (min-height: 100dvh) {

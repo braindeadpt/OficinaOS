@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Icon } from "@/components/ui/icon";
 
 interface ReadyItem {
   customerName: string;
@@ -24,9 +25,11 @@ export default function ReadyForPickup({ items }: { items: ReadyItem[] }) {
   return (
     <div className="relative overflow-hidden rounded-xl bg-surface-container-low p-6 ring-1 ring-surface-container-low/50 transition-all">
       <div className="mb-6 flex items-center gap-2">
-        <span className="material-symbols-outlined text-on-secondary-container">
-          inventory_2
-        </span>
+        <Icon
+          className="text-on-secondary-container"
+          name="inventory_2"
+          size="lg"
+        />
         <h3 className="font-extrabold font-headline text-on-surface text-sm uppercase tracking-tight">
           {t("dashboard_page.ready_for_pickup")}
         </h3>

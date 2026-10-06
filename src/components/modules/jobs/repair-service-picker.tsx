@@ -1,6 +1,7 @@
 import type { RepairCatalog } from "@shared/types";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Icon } from "@/components/ui/icon";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
 import { useRepairCatalogStore } from "@/stores/repair-catalog";
 
@@ -61,9 +62,10 @@ export default function RepairServicePicker({
   return (
     <div className={compact ? "space-y-2" : "space-y-3"} ref={containerRef}>
       <div className="relative">
-        <span className="material-symbols-outlined absolute start-3 top-1/2 -translate-y-1/2 text-outline text-sm">
-          search
-        </span>
+        <Icon
+          className="absolute start-3 top-1/2 -translate-y-1/2 text-outline text-sm"
+          name="search"
+        />
         <input
           className="h-11 w-full rounded-xl bg-surface-container-highest ps-9 pe-4 font-body text-on-surface text-sm transition-all placeholder:text-outline focus:bg-surface-container-lowest"
           onChange={(e) => {
@@ -80,9 +82,10 @@ export default function RepairServicePicker({
           <div className="absolute inset-x-0 top-full z-30 mt-1 overflow-hidden rounded-xl bg-surface-container-lowest shadow-lg ring-1 ring-outline-variant">
             {isLoading && (
               <div className="flex items-center gap-2 px-4 py-3">
-                <span className="material-symbols-outlined animate-spin text-on-surface-variant text-sm">
-                  progress_activity
-                </span>
+                <Icon
+                  className="animate-spin text-on-surface-variant text-sm"
+                  name="progress_activity"
+                />
                 <span className="font-label text-on-surface-variant text-xs">
                   {t("intake.searching")}
                 </span>
@@ -114,9 +117,7 @@ export default function RepairServicePicker({
                           </p>
                         </div>
                         {alreadySelected && (
-                          <span className="material-symbols-outlined text-primary text-sm">
-                            check
-                          </span>
+                          <Icon className="text-primary text-sm" name="check" />
                         )}
                       </button>
                     </li>

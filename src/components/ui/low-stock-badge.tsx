@@ -1,5 +1,6 @@
 import { isLowStock } from "@shared/utils/stock-level";
 import { useTranslation } from "react-i18next";
+import { Icon } from "@/components/ui/icon";
 
 interface LowStockBadgeProps {
   className?: string;
@@ -25,12 +26,7 @@ export function LowStockBadge({
     <span
       className={`inline-flex shrink-0 items-center gap-1 rounded-full bg-error-container px-2.5 py-1 font-bold text-on-error-container text-xs ${className}`}
     >
-      <span
-        aria-hidden="true"
-        className="material-symbols-outlined text-[14px]"
-      >
-        warning
-      </span>
+      <Icon className="text-[14px]" name="warning" />
       {t("parts_low_stock_badge")}
     </span>
   );

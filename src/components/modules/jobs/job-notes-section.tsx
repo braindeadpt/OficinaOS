@@ -1,6 +1,7 @@
 import type { Job } from "@shared/types";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Icon } from "@/components/ui/icon";
 import JobNoteDialog from "./job-note-dialog";
 
 interface JobNotesSectionProps {
@@ -59,9 +60,10 @@ export default function JobNotesSection({
         </div>
       ) : (
         <div className="flex flex-col items-center rounded-xl bg-surface-container-low/50 py-8">
-          <span className="material-symbols-outlined mb-2 text-3xl text-on-surface-variant/60">
-            sticky_note_2
-          </span>
+          <Icon
+            className="mb-2 text-3xl text-on-surface-variant/60"
+            name="sticky_note_2"
+          />
           <p className="font-bold font-headline text-on-surface-variant text-sm">
             {t("jobs_notes_empty")}
           </p>
@@ -73,7 +75,7 @@ export default function JobNotesSection({
         onClick={() => setShowAddDialog(true)}
         type="button"
       >
-        <span className="material-symbols-outlined text-sm">add</span>
+        <Icon className="text-sm" name="add" />
         {t("job_actions_add_note")}
       </button>
 

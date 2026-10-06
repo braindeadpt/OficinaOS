@@ -7,6 +7,7 @@ import RecentActivity from "@/components/modules/dashboard/recent-activity";
 import TechJobPipeline from "@/components/modules/dashboard/tech-job-pipeline";
 import TechnicianKanban from "@/components/modules/dashboard/technician-kanban";
 import TodaySchedule from "@/components/modules/dashboard/today-schedule";
+import { Icon } from "@/components/ui/icon";
 import MetricCard from "@/components/ui/metric-card";
 import { formatTimeAgo } from "@/lib/format-time-ago";
 import { useDashboardStore } from "@/stores/dashboard";
@@ -184,9 +185,10 @@ export default function TechnicianDashboardPage() {
   if (!techData && techLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <span className="material-symbols-outlined animate-spin text-4xl text-primary">
-          progress_activity
-        </span>
+        <Icon
+          className="animate-spin text-4xl text-primary"
+          name="progress_activity"
+        />
       </div>
     );
   }
@@ -207,9 +209,7 @@ export default function TechnicianDashboardPage() {
             className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-surface-container-highest px-4 py-2.5 font-bold font-headline text-on-secondary-fixed-variant text-sm transition-all hover:bg-surface-container-high sm:flex-none md:px-6"
             type="button"
           >
-            <span className="material-symbols-outlined text-[18px] md:text-[20px]">
-              monitoring
-            </span>
+            <Icon className="text-[18px] md:text-[20px]" name="monitoring" />
             <span className="whitespace-nowrap">
               {t("tech_dashboard.my_performance")}
             </span>
@@ -218,9 +218,7 @@ export default function TechnicianDashboardPage() {
             className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 font-bold font-headline text-on-primary text-sm transition-all hover:opacity-90 sm:flex-none md:px-8"
             type="button"
           >
-            <span className="material-symbols-outlined text-[18px] md:text-[20px]">
-              swap_horiz
-            </span>
+            <Icon className="text-[18px] md:text-[20px]" name="swap_horiz" />
             <span className="whitespace-nowrap">
               {t("tech_dashboard.update_status")}
             </span>

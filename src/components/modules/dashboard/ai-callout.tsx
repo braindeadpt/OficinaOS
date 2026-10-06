@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Icon } from "@/components/ui/icon";
 
 interface AiCalloutProps {
   insight: string;
@@ -12,7 +13,7 @@ export default function AiCallout({ insight }: AiCalloutProps) {
       <div className="rounded-[10px] bg-surface-container-low p-5">
         <div className="mb-4 flex items-center gap-4">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-on-primary md:h-12 md:w-12">
-            <span className="material-symbols-outlined">psychology</span>
+            <Icon name="psychology" size="lg" />
           </div>
           <div>
             <h4 className="font-bold font-headline text-on-surface text-sm md:text-base">
@@ -31,7 +32,7 @@ export default function AiCallout({ insight }: AiCalloutProps) {
           type="button"
         >
           {t("ask_ai")}
-          <span className="material-symbols-outlined text-sm">north_east</span>
+          <Icon className="text-sm" name="north_east" />
         </button>
       </div>
     </div>

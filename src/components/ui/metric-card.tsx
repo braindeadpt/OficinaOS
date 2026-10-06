@@ -41,19 +41,19 @@ export function MetricCard({
     <>
       <div className="flex items-start justify-between gap-3">
         <p
-          className="font-medium text-on-surface-variant text-xs uppercase tracking-wide"
+          className="font-semibold text-on-surface-variant text-xs"
           title={labelTooltip}
         >
           {label}
         </p>
         <Icon
-          className={`mt-0.5 shrink-0 ${iconColor ?? "text-on-surface-variant/40"}`}
+          className={`mt-0.5 shrink-0 ${iconColor ?? "text-on-surface-variant"}`}
           name={icon}
           size="md"
         />
       </div>
       <div className="mt-1 flex items-baseline gap-2">
-        <span className="font-extrabold font-headline text-4xl text-on-surface tabular-nums">
+        <span className="font-extrabold font-headline text-3xl text-on-surface tabular-nums">
           <AnimatedValue value={value} />
         </span>
         {unit && (
@@ -67,10 +67,8 @@ export function MetricCard({
     </>
   );
 
-  const sharedClass = `relative overflow-hidden rounded-xl bg-surface-container-low p-5 transition-all ${
-    onClick
-      ? "cursor-pointer hover:bg-surface-container-high active:scale-[0.98] w-full text-start"
-      : ""
+  const sharedClass = `relative overflow-hidden rounded-lg border border-outline-variant bg-surface-container-lowest p-5 shadow-sm transition-colors ${
+    onClick ? "cursor-pointer hover:bg-surface-container w-full text-start" : ""
   } ${className ?? ""}`;
 
   if (onClick) {

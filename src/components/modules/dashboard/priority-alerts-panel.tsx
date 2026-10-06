@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Icon } from "@/components/ui/icon";
 
 type AlertVariant = "error" | "secondary" | "tertiary";
 
@@ -48,11 +49,10 @@ export default function PriorityAlertsPanel({
                 className={`flex items-start gap-3 rounded-xl p-4 ${ALERT_STYLES[alert.variant]}`}
                 key={alert.id}
               >
-                <span
-                  className={`material-symbols-outlined ${ALERT_ICON_COLORS[alert.variant]}`}
-                >
-                  {alert.icon}
-                </span>
+                <Icon
+                  className={`${ALERT_ICON_COLORS[alert.variant]}`}
+                  name={alert.icon}
+                />
                 <div>
                   <p className="font-bold text-sm">{alert.title}</p>
                   <p className="text-xs opacity-80">{alert.description}</p>

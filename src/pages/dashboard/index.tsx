@@ -7,6 +7,7 @@ import FinancialTrend from "@/components/modules/dashboard/financial-trend";
 import JobPipeline from "@/components/modules/dashboard/job-pipeline";
 import OverdueJobs from "@/components/modules/dashboard/overdue-jobs";
 import ReadyForPickup from "@/components/modules/dashboard/ready-for-pickup";
+import { Icon } from "@/components/ui/icon";
 import MetricCard from "@/components/ui/metric-card";
 import { useCan } from "@/hooks/use-can";
 import api from "@/lib/api";
@@ -81,9 +82,7 @@ function DashboardHeader({
           onClick={() => openIntakeModal()}
           type="button"
         >
-          <span className="material-symbols-outlined text-[18px] md:text-[20px]">
-            add_box
-          </span>
+          <Icon className="text-[18px] md:text-[20px]" name="add_box" />
           <span className="whitespace-nowrap">{t("new_checkin")}</span>
         </button>
       </div>
@@ -97,9 +96,7 @@ function EmptyStateBanner({ canCreateJob }: { canCreateJob: boolean }) {
 
   return (
     <div className="mb-10 flex flex-col items-center justify-center rounded-2xl bg-surface-container-low py-16 text-center">
-      <span className="material-symbols-outlined mb-3 text-5xl text-surface-variant">
-        build
-      </span>
+      <Icon className="mb-3 text-5xl text-surface-variant" name="build" />
       <h3 className="font-bold font-headline text-lg text-on-surface">
         {t("dashboard_page.empty_title")}
       </h3>
@@ -237,9 +234,7 @@ function MetricsGrid({
           <div
             className={`flex items-center gap-1 font-bold text-xs ${revenueDir === "up" ? "text-on-secondary-container" : "text-error"}`}
           >
-            <span className="material-symbols-outlined text-[14px]">
-              trending_{revenueDir}
-            </span>
+            <Icon className="text-[14px]" name={`trending_${revenueDir}`} />
             {formatPct(revenueChangePct)}%{" "}
             {t("dashboard_page.vs_last_month_short")}
           </div>
@@ -303,9 +298,7 @@ function MetricsGrid({
           <span
             className={`font-bold text-xs ${marginDir === "up" ? "text-on-secondary-container" : "text-error"}`}
           >
-            <span className="material-symbols-outlined text-[14px]">
-              trending_{marginDir}
-            </span>
+            <Icon className="text-[14px]" name={`trending_${marginDir}`} />
             {formatPct(marginChange)}pp
           </span>
         )}

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Can } from "@/components/modules/can";
 import RestockHint from "@/components/pos/restock-hint";
 import { Button } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icon";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
@@ -296,7 +297,7 @@ export default function PosPage() {
             onClick={() => setShowCustomForm(true)}
             type="button"
           >
-            <span className="material-symbols-outlined text-[18px]">add</span>
+            <Icon className="text-[18px]" name="add" />
             {t("pos.add_custom_item")}
           </button>
         </div>
@@ -374,9 +375,7 @@ export default function PosPage() {
                   onClick={() => removeLine(idx)}
                   type="button"
                 >
-                  <span className="material-symbols-outlined text-[16px]">
-                    close
-                  </span>
+                  <Icon className="text-[16px]" name="close" />
                 </button>
               </li>
             ))}
@@ -584,9 +583,7 @@ export default function PosPage() {
                         }
                         type="button"
                       >
-                        <span className="material-symbols-outlined text-[16px]">
-                          close
-                        </span>
+                        <Icon className="text-[16px]" name="close" />
                       </button>
                     </li>
                   ))}

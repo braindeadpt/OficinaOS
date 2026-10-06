@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from "react";
+import { Icon } from "@/components/ui/icon";
 import i18n from "@/i18n";
 
 interface Props {
@@ -21,12 +22,7 @@ export class ChunkErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <div className="m-4 rounded-xl bg-error-container p-6 text-center">
-          <span
-            aria-hidden="true"
-            className="material-symbols-outlined text-3xl text-on-error-container"
-          >
-            cloud_off
-          </span>
+          <Icon className="text-3xl text-on-error-container" name="cloud_off" />
           <p className="mt-2 font-bold font-headline text-on-error-container">
             {i18n.t("errors.unexpected_title")}
           </p>

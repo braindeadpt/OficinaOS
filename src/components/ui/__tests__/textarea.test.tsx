@@ -13,7 +13,7 @@ describe("Textarea", () => {
     render(<Textarea placeholder="Test" />);
     const el = screen.getByPlaceholderText("Test");
     expect(el).toHaveClass("bg-surface-container-lowest");
-    expect(el).toHaveClass("rounded-xl");
+    expect(el).toHaveClass("oos-field");
     expect(el).toHaveClass("resize-none");
   });
 });

@@ -3,6 +3,7 @@ import type { PartsCatalog } from "@shared/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { Icon } from "@/components/ui/icon";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
 import type { ApiError } from "@/lib/api";
 import { useJobsStore } from "@/stores/jobs";
@@ -196,7 +197,7 @@ export default function AddPartDialog({
             onClick={onClose}
             type="button"
           >
-            <span className="material-symbols-outlined">close</span>
+            <Icon name="close" size="lg" />
           </button>
         </div>
 
@@ -237,9 +238,10 @@ export default function AddPartDialog({
               <div className="mt-2 max-h-48 overflow-y-auto rounded-xl bg-surface-container-low">
                 {loading && (
                   <div className="flex items-center justify-center py-4">
-                    <span className="material-symbols-outlined animate-spin text-on-surface-variant text-sm">
-                      progress_activity
-                    </span>
+                    <Icon
+                      className="animate-spin text-on-surface-variant text-sm"
+                      name="progress_activity"
+                    />
                   </div>
                 )}
                 {!loading &&
@@ -273,9 +275,7 @@ export default function AddPartDialog({
 
           {mode === "catalog" && form.partId && (
             <div className="mb-4 flex items-center gap-2 rounded-lg bg-primary/10 px-3 py-2">
-              <span className="material-symbols-outlined text-primary text-sm">
-                check_circle
-              </span>
+              <Icon className="text-primary text-sm" name="check_circle" />
               <span className="font-bold font-label text-primary text-xs">
                 {form.partName}
               </span>
@@ -284,7 +284,7 @@ export default function AddPartDialog({
                 onClick={() => setForm(INITIAL_FORM)}
                 type="button"
               >
-                <span className="material-symbols-outlined text-sm">close</span>
+                <Icon className="text-sm" name="close" />
               </button>
             </div>
           )}

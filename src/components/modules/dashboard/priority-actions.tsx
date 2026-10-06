@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Icon } from "@/components/ui/icon";
 
 interface PriorityAction {
   count: number;
@@ -52,9 +53,10 @@ export default function PriorityActions({ actions }: PriorityActionsProps) {
             >
               {t(action.labelKey)}
             </span>
-            <span className="material-symbols-outlined ms-auto text-on-surface-variant text-sm">
-              chevron_right
-            </span>
+            <Icon
+              className="ms-auto text-on-surface-variant text-sm"
+              name="chevron_right"
+            />
           </button>
         ))}
       </div>

@@ -3,6 +3,7 @@ import { JOB_STATUS_FLOW } from "@shared/constants";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { Icon } from "@/components/ui/icon";
 import { useClickOutside } from "@/hooks/use-click-outside";
 import { useTechnicians } from "@/hooks/use-technicians";
 import { useJobsStore } from "@/stores/jobs";
@@ -196,9 +197,7 @@ export default function BatchActionBar({
               onClick={() => setStatusOpen((p) => !p)}
               type="button"
             >
-              <span className="material-symbols-outlined text-sm">
-                arrow_forward
-              </span>
+              <Icon className="text-sm" name="arrow_forward" />
               {t("batch_change_status")}
             </button>
             {statusOpen && (
@@ -226,7 +225,7 @@ export default function BatchActionBar({
             onClick={() => setTechOpen((p) => !p)}
             type="button"
           >
-            <span className="material-symbols-outlined text-sm">person</span>
+            <Icon className="text-sm" name="person" />
             {t("batch_assign_tech")}
           </button>
           {techOpen && (
@@ -260,7 +259,7 @@ export default function BatchActionBar({
           onClick={onClear}
           type="button"
         >
-          <span className="material-symbols-outlined text-sm">close</span>
+          <Icon className="text-sm" name="close" />
           {t("deselect")}
         </button>
       </div>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icon";
 import { Wordmark } from "@/components/ui/wordmark";
 import { useCan } from "@/hooks/use-can";
 import { useShortcutLabel } from "@/hooks/use-shortcut-label";
@@ -82,12 +83,7 @@ export default function TopBar() {
             onClick={openCommandPalette}
             type="button"
           >
-            <span
-              aria-hidden="true"
-              className="material-symbols-outlined text-lg"
-            >
-              search
-            </span>
+            <Icon className="text-lg" name="search" />
             <span className="min-w-0 flex-1 truncate text-start text-sm">
               {t("command_palette.placeholder")}
             </span>
@@ -104,7 +100,7 @@ export default function TopBar() {
             title={t("report_problem.title")}
             type="button"
           >
-            <span className="material-symbols-outlined">bug_report</span>
+            <Icon name="bug_report" size="lg" />
           </button>
           <LanguageToggle />
           <div className="relative" ref={dropdownRef}>
@@ -114,7 +110,7 @@ export default function TopBar() {
               onClick={handleToggleAlerts}
               type="button"
             >
-              <span className="material-symbols-outlined">notifications</span>
+              <Icon name="notifications" size="lg" />
               {unreadCount > 0 && (
                 <span className="absolute end-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-error px-1 font-bold text-[10px] text-on-error">
                   {unreadCount > 9 ? "9+" : unreadCount}
@@ -130,9 +126,10 @@ export default function TopBar() {
                 </div>
                 {alerts.length === 0 ? (
                   <div className="px-4 py-8 text-center">
-                    <span className="material-symbols-outlined text-3xl text-on-surface-variant/40">
-                      notifications_off
-                    </span>
+                    <Icon
+                      className="text-3xl text-on-surface-variant/40"
+                      name="notifications_off"
+                    />
                     <p className="mt-2 text-on-surface-variant text-sm">
                       {t("no_alerts")}
                     </p>

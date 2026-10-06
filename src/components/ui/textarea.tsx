@@ -5,7 +5,7 @@ export function Textarea({ className, ...props }: TextareaProps) {
   return (
     <textarea
       className={[
-        "w-full resize-none rounded-xl border-none bg-surface-container-lowest px-4 py-3.5 text-sm transition-all",
+        "oos-field min-h-20 w-full resize-none px-3 py-2.5",
         className,
       ]
         .filter(Boolean)

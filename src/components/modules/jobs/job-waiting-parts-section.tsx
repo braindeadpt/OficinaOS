@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Can } from "@/components/modules/can";
+import { Icon } from "@/components/ui/icon";
 import { useCan } from "@/hooks/use-can";
 import { useJobsStore } from "@/stores/jobs";
 
@@ -106,7 +107,7 @@ export default function JobWaitingPartsSection({
               onClick={handleAdd}
               type="button"
             >
-              <span className="material-symbols-outlined text-sm">add</span>
+              <Icon className="text-sm" name="add" />
               {t("jobs_waiting_parts_add")}
             </button>
           </Can>
@@ -115,9 +116,10 @@ export default function JobWaitingPartsSection({
 
       {parts.length === 0 ? (
         <div className="flex flex-col items-center rounded-xl bg-surface-container-low/50 py-8">
-          <span className="material-symbols-outlined mb-2 text-3xl text-on-surface-variant/60">
-            inventory_2
-          </span>
+          <Icon
+            className="mb-2 text-3xl text-on-surface-variant/60"
+            name="inventory_2"
+          />
           <p className="font-bold font-headline text-on-surface-variant text-sm">
             {t("jobs_waiting_parts_empty_title")}
           </p>
@@ -150,9 +152,7 @@ export default function JobWaitingPartsSection({
                     title={t("jobs_waiting_parts_remove")}
                     type="button"
                   >
-                    <span className="material-symbols-outlined text-sm">
-                      close
-                    </span>
+                    <Icon className="text-sm" name="close" />
                   </button>
                 </Can>
               )}

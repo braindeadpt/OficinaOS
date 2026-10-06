@@ -1,4 +1,5 @@
 import SignaturePad from "@/components/reports/signature-pad";
+import { Icon } from "@/components/ui/icon";
 import AccessoriesPicker from "./accessories-picker";
 import FunctionalChecklist from "./functional-checklist";
 import {
@@ -198,13 +199,12 @@ export default function Step2Content({
           type="button"
         >
           <span className="flex items-center gap-2 font-label text-on-surface text-sm">
-            <span
-              className={`material-symbols-outlined text-lg ${
+            <Icon
+              className={`text-lg ${
                 form.isUrgent ? "text-error" : "text-on-surface-variant"
               }`}
-            >
-              priority_high
-            </span>
+              name="priority_high"
+            />
             {t("intake.urgent")}
           </span>
           <span
@@ -225,9 +225,7 @@ export default function Step2Content({
             <SignaturePad onChange={(v) => update("signature", v)} />
             {form.signature && (
               <p className="ms-1 mt-1 flex items-center gap-1 font-label text-success text-xs">
-                <span className="material-symbols-outlined text-sm">
-                  check_circle
-                </span>
+                <Icon className="text-sm" name="check_circle" />
                 {t("intake.signature_captured")}
               </p>
             )}

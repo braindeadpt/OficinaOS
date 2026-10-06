@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import DeliverJobDialog from "@/components/modules/jobs/deliver-job-dialog";
 import FunctionalChecklist from "@/components/modules/jobs/intake-modal/functional-checklist";
 import type { IntakeChecklist } from "@/components/modules/jobs/intake-modal/types";
+import { Icon } from "@/components/ui/icon";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useClickOutside } from "@/hooks/use-click-outside";
 import { useModalEffects } from "@/hooks/use-modal-effects";
@@ -240,9 +241,10 @@ export default function StatusPopover({
         type="button"
       >
         <StatusBadge size="md" status={job.status} />
-        <span className="material-symbols-outlined text-base text-on-surface-variant">
-          {open ? "expand_less" : "expand_more"}
-        </span>
+        <Icon
+          className="text-base text-on-surface-variant"
+          name={open ? "expand_less" : "expand_more"}
+        />
       </button>
 
       {open && (
@@ -300,9 +302,10 @@ export default function StatusPopover({
             <div className="max-h-[70vh] space-y-3 overflow-y-auto p-4">
               <div className="flex items-center gap-2">
                 <StatusBadge status={job.status} />
-                <span className="material-symbols-outlined text-on-surface-variant text-sm">
-                  arrow_forward
-                </span>
+                <Icon
+                  className="text-on-surface-variant text-sm"
+                  name="arrow_forward"
+                />
                 <StatusBadge status={pending} />
               </div>
               <label className="sr-only" htmlFor="status-reason">
@@ -344,9 +347,10 @@ export default function StatusPopover({
                   type="button"
                 >
                   {loading && (
-                    <span className="material-symbols-outlined animate-spin text-sm">
-                      progress_activity
-                    </span>
+                    <Icon
+                      className="animate-spin text-sm"
+                      name="progress_activity"
+                    />
                   )}
                   {t("jobs_status_change_confirm")}
                 </button>
@@ -375,9 +379,10 @@ export default function StatusPopover({
             role="dialog"
           >
             <header className="flex items-start gap-3 bg-surface-container-low px-6 py-5">
-              <span className="material-symbols-outlined mt-0.5 text-2xl text-primary">
-                fact_check
-              </span>
+              <Icon
+                className="mt-0.5 text-2xl text-primary"
+                name="fact_check"
+              />
               <div className="min-w-0 flex-1">
                 <h2
                   className="font-bold font-headline text-lg text-on-surface"
@@ -396,7 +401,7 @@ export default function StatusPopover({
                 onClick={handleCancelReason}
                 type="button"
               >
-                <span className="material-symbols-outlined text-xl">close</span>
+                <Icon className="text-xl" name="close" />
               </button>
             </header>
             <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
@@ -448,9 +453,10 @@ export default function StatusPopover({
                 type="button"
               >
                 {loading && (
-                  <span className="material-symbols-outlined animate-spin text-sm">
-                    progress_activity
-                  </span>
+                  <Icon
+                    className="animate-spin text-sm"
+                    name="progress_activity"
+                  />
                 )}
                 {t("qc_dialog.confirm")}
               </button>

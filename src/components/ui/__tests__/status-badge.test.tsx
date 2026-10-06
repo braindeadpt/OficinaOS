@@ -19,7 +19,7 @@ describe("StatusBadge", () => {
   it("applies IN_REPAIR color style", () => {
     render(<StatusBadge status="IN_REPAIR" />);
     const el = screen.getByText("status.IN_REPAIR");
-    expect(el).toHaveClass("bg-primary/10");
+    expect(el).toHaveClass("bg-status-in-repair-bg");
   });
 
   it("applies CANCELLED style with line-through", () => {

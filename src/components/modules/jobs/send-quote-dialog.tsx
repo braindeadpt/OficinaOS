@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Field } from "@/components/ui/field";
+import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useJobsStore } from "@/stores/jobs";
@@ -106,7 +107,7 @@ export default function SendQuoteDialog({
             onClick={onClose}
             type="button"
           >
-            <span className="material-symbols-outlined">close</span>
+            <Icon name="close" size="lg" />
           </button>
         </div>
 

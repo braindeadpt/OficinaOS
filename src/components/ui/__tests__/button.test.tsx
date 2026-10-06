@@ -22,7 +22,8 @@ describe("Button", () => {
   it("applies secondary variant", () => {
     render(<Button variant="secondary">Sec</Button>);
     const el = screen.getByRole("button");
-    expect(el).toHaveClass("bg-surface-container-highest");
+    expect(el).toHaveClass("bg-surface-container-lowest");
+    expect(el).toHaveClass("border-outline");
   });
 
   it("applies ghost variant", () => {
@@ -33,15 +34,24 @@ describe("Button", () => {
 
   it("renders icon before children when icon prop provided", () => {
     render(<Button icon="add">Add</Button>);
-    const iconSpan = screen.getByText("add");
-    expect(iconSpan).toHaveClass("material-symbols-outlined");
+    const button = screen.getByRole("button", { name: "Add" });
+    const icon = button.querySelector('svg[data-icon="add"]');
+    expect(icon).not.toBeNull();
+    expect(icon?.nextSibling?.textContent).toBe("Add");
   });
 
   it("applies sm size", () => {
     render(<Button size="sm">Small</Button>);
     const el = screen.getByRole("button");
     expect(el).toHaveClass("px-3");
-    expect(el).toHaveClass("py-2");
+    expect(el).toHaveClass("min-h-8");
+  });
+
+  it("marks a loading button busy and disabled", () => {
+    render(<Button loading>A guardar…</Button>);
+    const el = screen.getByRole("button");
+    expect(el).toHaveAttribute("aria-busy", "true");
+    expect(el).toBeDisabled();
   });
 
   it("is disabled when disabled prop is true", () => {

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { CreatedCustomerData } from "@/components/modules/jobs/quick-add-customer";
 import QuickAddCustomer from "@/components/modules/jobs/quick-add-customer";
+import { Icon } from "@/components/ui/icon";
 import type { BrandSearchResult } from "@/hooks/use-brand-search";
 import { useClickOutside } from "@/hooks/use-click-outside";
 import type { CustomerSearchResult } from "@/hooks/use-customer-search";
@@ -118,9 +119,11 @@ function CustomerSearchField({
         <span className={requiredMarkCls}>*</span>
       </label>
       <div className="relative">
-        <span className="material-symbols-outlined absolute end-4 top-1/2 -translate-y-1/2 text-outline">
-          {form.customerId ? "check_circle" : "search"}
-        </span>
+        <Icon
+          className="absolute end-4 top-1/2 -translate-y-1/2 text-outline"
+          name={form.customerId ? "check_circle" : "search"}
+          size="lg"
+        />
         <input
           aria-describedby={nameError ? "error-customer-name" : undefined}
           aria-invalid={!!nameError}
@@ -150,7 +153,7 @@ function CustomerSearchField({
             }}
             type="button"
           >
-            <span className="material-symbols-outlined text-sm">close</span>
+            <Icon className="text-sm" name="close" />
           </button>
         )}
       </div>
@@ -174,9 +177,7 @@ function CustomerSearchField({
 
       {form.customerId && (
         <div className="mt-2 flex items-center gap-2 rounded-lg bg-primary-container px-3 py-1.5">
-          <span className="material-symbols-outlined text-on-primary-container text-sm">
-            verified
-          </span>
+          <Icon className="text-on-primary-container text-sm" name="verified" />
           <span className="font-label font-medium text-on-primary-container text-xs">
             {t("intake.customer_linked")}
           </span>
@@ -242,9 +243,11 @@ function BrandField({
         {t("intake.brand")}
       </label>
       <div className="relative">
-        <span className="material-symbols-outlined absolute end-4 top-1/2 -translate-y-1/2 text-outline">
-          {form.brandId ? "check_circle" : "search"}
-        </span>
+        <Icon
+          className="absolute end-4 top-1/2 -translate-y-1/2 text-outline"
+          name={form.brandId ? "check_circle" : "search"}
+          size="lg"
+        />
         <input
           className={inputCls}
           id="device-brand"
@@ -278,7 +281,7 @@ function BrandField({
             }}
             type="button"
           >
-            <span className="material-symbols-outlined text-sm">close</span>
+            <Icon className="text-sm" name="close" />
           </button>
         )}
       </div>
@@ -355,9 +358,11 @@ function ModelField({
         <span className={requiredMarkCls}>*</span>
       </label>
       <div className="relative">
-        <span className="material-symbols-outlined absolute end-4 top-1/2 -translate-y-1/2 text-outline">
-          {form.modelId ? "check_circle" : "search"}
-        </span>
+        <Icon
+          className="absolute end-4 top-1/2 -translate-y-1/2 text-outline"
+          name={form.modelId ? "check_circle" : "search"}
+          size="lg"
+        />
         <input
           aria-describedby={
             errors.model && touched.model ? "error-model" : undefined
@@ -397,7 +402,7 @@ function ModelField({
             }}
             type="button"
           >
-            <span className="material-symbols-outlined text-sm">close</span>
+            <Icon className="text-sm" name="close" />
           </button>
         )}
       </div>
@@ -486,9 +491,7 @@ export default function Step1Content(props: Step1Props) {
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="flex items-center gap-2 font-bold font-headline text-lg text-on-surface">
-              <span className="material-symbols-outlined text-primary">
-                person
-              </span>
+              <Icon className="text-primary" name="person" size="lg" />
               {t("intake.customer_section")}
             </h2>
             <button
@@ -496,9 +499,7 @@ export default function Step1Content(props: Step1Props) {
               onClick={() => setShowQuickAdd(!showQuickAdd)}
               type="button"
             >
-              <span className="material-symbols-outlined text-sm">
-                person_add
-              </span>
+              <Icon className="text-sm" name="person_add" />
               {t("intake.add_customer")}
             </button>
           </div>
@@ -607,9 +608,7 @@ export default function Step1Content(props: Step1Props) {
 
         <div className="space-y-6">
           <h2 className="flex items-center gap-2 font-bold font-headline text-lg text-on-surface">
-            <span className="material-symbols-outlined text-primary">
-              smartphone
-            </span>
+            <Icon className="text-primary" name="smartphone" size="lg" />
             {t("intake.device_section")}
           </h2>
 

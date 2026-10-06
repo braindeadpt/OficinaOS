@@ -1,3 +1,4 @@
+import { CircleAlert } from "lucide-react";
 import {
   cloneElement,
   isValidElement,
@@ -77,7 +78,7 @@ export function Field({
     <>
       {hint && !error && (
         <p
-          className="ms-1 mt-1 font-label text-on-surface-variant text-xs"
+          className="mt-1 font-label text-on-surface-variant text-xs"
           id={hintId}
         >
           {hint}
@@ -89,12 +90,7 @@ export function Field({
           id={errorId}
           role="alert"
         >
-          <span
-            aria-hidden="true"
-            className="material-symbols-outlined shrink-0 text-[14px]"
-          >
-            error
-          </span>
+          <CircleAlert aria-hidden="true" className="mt-px size-3.5 shrink-0" />
           {error}
         </p>
       )}
@@ -130,7 +126,7 @@ export function Field({
         .filter(Boolean)
         .join(" ")}
     >
-      <Label className="ms-1 mb-2 block" htmlFor={controlId}>
+      <Label className="mb-1.5 block" htmlFor={controlId}>
         {label}
         {required && (
           <span aria-hidden="true" className="ms-1 text-error">

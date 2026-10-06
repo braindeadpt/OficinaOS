@@ -17,6 +17,7 @@ import SettingsUsersTab from "@/components/modules/settings/settings-users-tab";
 import TemplateEditor from "@/components/modules/settings/template-editor";
 import UnsavedChangesBar from "@/components/modules/settings/unsaved-changes-bar";
 import ConfirmDiscardDialog from "@/components/ui/confirm-discard-dialog";
+import { Icon } from "@/components/ui/icon";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useDirtyState } from "@/hooks/use-dirty-state";
 import { useModalEffects } from "@/hooks/use-modal-effects";
@@ -239,9 +240,7 @@ export default function SettingsPage() {
               tabIndex={activeTab === key ? 0 : -1}
               type="button"
             >
-              <span className="material-symbols-outlined text-[20px]">
-                {TAB_ICONS[key]}
-              </span>
+              <Icon className="text-[20px]" name={TAB_ICONS[key]} />
               <span className="text-xs leading-tight lg:hidden">{label}</span>
               <span className="hidden lg:inline">{label}</span>
             </button>
@@ -257,9 +256,10 @@ export default function SettingsPage() {
           >
             <div className="mb-5">
               <div className="flex items-center gap-3">
-                <span className="material-symbols-outlined text-[22px] text-primary">
-                  {TAB_ICONS[activeTab]}
-                </span>
+                <Icon
+                  className="text-[22px] text-primary"
+                  name={TAB_ICONS[activeTab]}
+                />
                 <h3
                   className="font-extrabold font-headline text-lg text-on-surface"
                   id={headingId(activeTab)}

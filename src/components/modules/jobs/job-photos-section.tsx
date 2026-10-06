@@ -3,6 +3,7 @@ import type { Job } from "@shared/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { Icon } from "@/components/ui/icon";
 import api from "@/lib/api";
 
 interface JobPhotosSectionProps {
@@ -86,9 +87,10 @@ export default function JobPhotosSection({
           {t("intake.device_photos")}
         </h2>
         <div className="flex flex-col items-center rounded-xl bg-surface-container-low/50 py-8">
-          <span className="material-symbols-outlined mb-2 text-3xl text-on-surface-variant/60">
-            photo_camera
-          </span>
+          <Icon
+            className="mb-2 text-3xl text-on-surface-variant/60"
+            name="photo_camera"
+          />
           <p className="font-bold font-headline text-on-surface-variant text-sm">
             {t("jobs_photos_empty_title")}
           </p>
@@ -102,9 +104,7 @@ export default function JobPhotosSection({
               onClick={() => fileInputRef.current?.click()}
               type="button"
             >
-              <span className="material-symbols-outlined text-sm">
-                add_a_photo
-              </span>
+              <Icon className="text-sm" name="add_a_photo" />
               {uploading ? t("loading") : t("jobs_photos_add")}
             </button>
           )}
@@ -141,9 +141,7 @@ export default function JobPhotosSection({
               onClick={() => addPhotoRef.current?.click()}
               type="button"
             >
-              <span className="material-symbols-outlined text-sm">
-                add_a_photo
-              </span>
+              <Icon className="text-sm" name="add_a_photo" />
               {uploading ? t("loading") : t("jobs_photos_add")}
             </button>
           )}
@@ -157,9 +155,7 @@ export default function JobPhotosSection({
             }}
             type="button"
           >
-            <span className="material-symbols-outlined text-sm">
-              {editMode ? "check" : "edit"}
-            </span>
+            <Icon className="text-sm" name={editMode ? "check" : "edit"} />
             {editMode ? t("done") : t("edit")}
           </button>
         </div>
@@ -199,9 +195,10 @@ export default function JobPhotosSection({
               type="button"
             >
               {deleting.has(photo.id) && (
-                <span className="material-symbols-outlined animate-spin text-lg text-on-primary">
-                  progress_activity
-                </span>
+                <Icon
+                  className="animate-spin text-lg text-on-primary"
+                  name="progress_activity"
+                />
               )}
               {!deleting.has(photo.id) && confirmDelete === photo.id && (
                 <span className="rounded-md bg-error px-2 py-1 font-bold font-label text-on-error text-xs">
@@ -209,9 +206,7 @@ export default function JobPhotosSection({
                 </span>
               )}
               {!deleting.has(photo.id) && confirmDelete !== photo.id && (
-                <span className="material-symbols-outlined text-lg text-on-primary">
-                  delete
-                </span>
+                <Icon className="text-lg text-on-primary" name="delete" />
               )}
             </button>
           </div>

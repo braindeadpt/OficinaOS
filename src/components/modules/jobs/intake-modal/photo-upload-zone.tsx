@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { Icon } from "@/components/ui/icon";
 import type { CaptureSource } from "@/hooks/use-native-camera";
 import { labelCls, MAX_PHOTOS, type PhotoPreview } from "./types";
 
@@ -66,9 +67,10 @@ export default function PhotoUploadZone({
           type="button"
         >
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-surface-container-highest">
-            <span className="material-symbols-outlined text-on-surface-variant text-xl transition-colors group-hover:text-primary">
-              add_a_photo
-            </span>
+            <Icon
+              className="text-on-surface-variant text-xl transition-colors group-hover:text-primary"
+              name="add_a_photo"
+            />
           </div>
           <div className="text-start">
             <p className="font-bold font-headline text-on-surface text-sm">
@@ -101,9 +103,7 @@ export default function PhotoUploadZone({
                   onClick={() => onPhotoRemove(idx)}
                   type="button"
                 >
-                  <span className="material-symbols-outlined text-lg text-on-primary">
-                    close
-                  </span>
+                  <Icon className="text-lg text-on-primary" name="close" />
                 </button>
               </div>
             ))}
@@ -114,9 +114,10 @@ export default function PhotoUploadZone({
                 onClick={handleAddPhoto}
                 type="button"
               >
-                <span className="material-symbols-outlined text-2xl text-on-surface-variant transition-colors hover:text-primary">
-                  add_photo_alternate
-                </span>
+                <Icon
+                  className="text-2xl text-on-surface-variant transition-colors hover:text-primary"
+                  name="add_photo_alternate"
+                />
               </button>
             )}
           </div>
@@ -153,9 +154,7 @@ export default function PhotoUploadZone({
               onClick={() => handleSourcePick("camera")}
               type="button"
             >
-              <span className="material-symbols-outlined text-primary">
-                photo_camera
-              </span>
+              <Icon className="text-primary" name="photo_camera" size="lg" />
               <span className="font-bold font-headline text-on-surface text-sm">
                 {t("intake.photo_source_camera")}
               </span>
@@ -165,9 +164,7 @@ export default function PhotoUploadZone({
               onClick={() => handleSourcePick("gallery")}
               type="button"
             >
-              <span className="material-symbols-outlined text-primary">
-                photo_library
-              </span>
+              <Icon className="text-primary" name="photo_library" size="lg" />
               <span className="font-bold font-headline text-on-surface text-sm">
                 {t("intake.photo_source_gallery")}
               </span>

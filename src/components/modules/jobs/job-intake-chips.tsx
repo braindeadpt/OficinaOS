@@ -1,5 +1,6 @@
 import type { Job } from "@shared/types";
 import { useTranslation } from "react-i18next";
+import { Icon } from "@/components/ui/icon";
 
 type ChecklistMap = Job["intakeChecklist"] | Job["qcChecklist"] | undefined;
 
@@ -34,9 +35,7 @@ function renderChecklist(
           }`}
           key={item}
         >
-          <span className="material-symbols-outlined text-sm">
-            {state === "ok" ? "check" : "close"}
-          </span>
+          <Icon className="text-sm" name={state === "ok" ? "check" : "close"} />
           {t(`intake.check_${item}`, { defaultValue: item })}
         </span>
       ))}

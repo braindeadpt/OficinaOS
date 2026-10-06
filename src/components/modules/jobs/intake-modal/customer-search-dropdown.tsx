@@ -1,3 +1,4 @@
+import { Icon } from "@/components/ui/icon";
 import type { CustomerSearchResult } from "@/hooks/use-customer-search";
 
 interface SearchDropdownProps {
@@ -29,9 +30,10 @@ export default function CustomerSearchDropdown({
     <div className="absolute inset-x-0 top-full z-20 mt-1 overflow-hidden rounded-xl bg-surface-container-lowest shadow-lg ring-1 ring-outline-variant">
       {isSearching && !searchError && (
         <div className="flex items-center gap-2 px-4 py-3">
-          <span className="material-symbols-outlined animate-spin text-on-surface-variant text-sm">
-            progress_activity
-          </span>
+          <Icon
+            className="animate-spin text-on-surface-variant text-sm"
+            name="progress_activity"
+          />
           <span className="font-label text-on-surface-variant text-xs">
             {t("intake.searching")}
           </span>
@@ -39,9 +41,7 @@ export default function CustomerSearchDropdown({
       )}
       {searchError && (
         <div className="flex items-center gap-2 px-4 py-3">
-          <span className="material-symbols-outlined text-error text-sm">
-            error
-          </span>
+          <Icon className="text-error text-sm" name="error" />
           <span className="font-label text-error text-xs">
             {t("intake.error_search_customer")}
           </span>
@@ -57,9 +57,10 @@ export default function CustomerSearchDropdown({
                 type="button"
               >
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-container">
-                  <span className="material-symbols-outlined text-on-primary-container text-sm">
-                    person
-                  </span>
+                  <Icon
+                    className="text-on-primary-container text-sm"
+                    name="person"
+                  />
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-bold font-headline text-on-surface text-sm">
@@ -80,9 +81,10 @@ export default function CustomerSearchDropdown({
         !searchError &&
         query.length >= 2 && (
           <div className="flex items-center gap-2 px-4 py-3">
-            <span className="material-symbols-outlined text-on-surface-variant text-sm">
-              person_add
-            </span>
+            <Icon
+              className="text-on-surface-variant text-sm"
+              name="person_add"
+            />
             <span className="font-label text-on-surface-variant text-xs">
               {t("intake.no_customer_found")}
             </span>

@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Icon } from "@/components/ui/icon";
 
 interface ActivityItem {
   icon: string;
@@ -25,9 +26,7 @@ export default function RecentActivity({ items }: RecentActivityProps) {
             <div
               className={`mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${item.iconColor}`}
             >
-              <span className="material-symbols-outlined text-sm">
-                {item.icon}
-              </span>
+              <Icon className="text-sm" name={item.icon} />
             </div>
             <div>
               <p className="text-on-surface text-sm">
