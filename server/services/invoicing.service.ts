@@ -92,6 +92,20 @@ function toDateString(d: Date): string {
   return `${dd}/${mm}/${d.getFullYear()}`;
 }
 
+/**
+ * The API wraps responses in a key named after the singular document type
+ * ("invoice_receipt", "simplified_invoice", "invoice") — not a generic
+ * "invoice". `path` is like "/invoice_receipts.json" or
+ * "/invoice_receipts/123/change-state.json".
+ */
+const TRAILING_S = /s$/;
+const JSON_EXT = /\.json$/;
+
+function docKey(path: string): string {
+  const collection = path.split("/")[1]?.replace(JSON_EXT, "") ?? "";
+  return collection.replace(TRAILING_S, "");
+}
+
 async function ixFetch(
   account: string,
   apiKey: string,
@@ -109,17 +123,17 @@ async function ixFetch(
   if (!res) {
     throw new AppError("INVOICING_PROVIDER_FAILED");
   }
-  const body = (await res.json().catch(() => null)) as {
-    errors?: unknown;
-    invoice?: IxDocument;
-  } | null;
+  const body = (await res.json().catch(() => null)) as Record<
+    string,
+    unknown
+  > | null;
   if (!res.ok) {
     throw new AppError("INVOICING_PROVIDER_FAILED", {
       providerStatus: res.status,
       upstream: body?.errors,
     });
   }
-  return (body?.invoice ?? body ?? {}) as IxDocument;
+  return ((body?.[docKey(path)] ?? body?.invoice ?? body) as IxDocument) ?? {};
 }
 
 /**

@@ -142,10 +142,10 @@ describe("issueInvoiceForSale", () => {
       },
     });
     fetchSpy
-      .mockResolvedValueOnce(okDoc({ invoice: { id: 42 } }))
+      .mockResolvedValueOnce(okDoc({ simplified_invoice: { id: 42 } }))
       .mockResolvedValueOnce(
         okDoc({
-          invoice: {
+          simplified_invoice: {
             id: 42,
             inverted_sequence_number: "FS 2026/3",
             permalink: "https://ix/fs3",
@@ -221,8 +221,8 @@ describe("issueInvoiceForSale", () => {
       },
     });
     fetchSpy
-      .mockResolvedValueOnce(okDoc({ invoice: { id: 7 } }))
-      .mockResolvedValueOnce(okDoc({ invoice: { id: 7 } }));
+      .mockResolvedValueOnce(okDoc({ invoice_receipt: { id: 7 } }))
+      .mockResolvedValueOnce(okDoc({ invoice_receipt: { id: 7 } }));
 
     const issued = await issueInvoiceForSale(prisma, "s1", log);
     expect(issued.docType).toBe("FR");
@@ -306,9 +306,11 @@ describe("issueInvoiceForJob", () => {
       },
     });
     fetchSpy
-      .mockResolvedValueOnce(okDoc({ invoice: { id: 55 } }))
+      .mockResolvedValueOnce(okDoc({ simplified_invoice: { id: 55 } }))
       .mockResolvedValueOnce(
-        okDoc({ invoice: { id: 55, inverted_sequence_number: "FS 2026/9" } })
+        okDoc({
+          simplified_invoice: { id: 55, inverted_sequence_number: "FS 2026/9" },
+        })
       );
 
     const issued = await issueInvoiceForJob(prisma, "j1", log);
