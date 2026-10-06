@@ -69,9 +69,10 @@ export async function sendPasswordResetEmail(
     text: `Click the link below to reset your password:\n\n${resetUrl}\n\nIf you didn't request this, you can ignore this email.`,
     html: `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
+        <p style="margin:0 0 16px;font-size:20px;font-weight:800;letter-spacing:-0.3px;color:#111827">Oficina<span style="color:#1d4ed8">OS</span></p>
         <h2 style="color:#1a1a1a">Reset your password</h2>
         <p>Click the button below to set a new password:</p>
-        <a href="${safeUrl}" style="display:inline-block;padding:12px 24px;background:#6750a4;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">Reset Password</a>
+        <a href="${safeUrl}" style="display:inline-block;padding:12px 24px;background:#1d4ed8;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">Reset Password</a>
         <p style="margin-top:16px;color:#666;font-size:14px">If you didn't request this, you can ignore this email.</p>
       </div>
     `,
