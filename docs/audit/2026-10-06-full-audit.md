@@ -20,7 +20,7 @@ check-primitives, tsc, migrações, secrets).
 | Cloud | 0 | 3 | — | — | ✅ commit `9ad2de0` |
 | Website SEO/a11y | 2 | 1 | — | — | ✅ commit `d7a6db6` |
 | Instalação/portable | 0 | 1 | 3 | — | ✅ commit `6901f67` |
-| Diag (.NET) | — | — | — | — | ⏳ relatório em curso |
+| Diag (.NET) | 0 | 3 | 7 | vários | 🔍 auditado — fixes pendentes |
 
 **Totais:** ~1171 testes passam, typecheck e ultracite limpos, 5 commits
 (`4b2f0a7`, `88dc25e`, `87784b5`, `6901f67` na app; `9ad2de0` na cloud;
@@ -132,9 +132,39 @@ check-primitives, tsc, migrações, secrets).
 
 ---
 
-## 9. Diag (.NET 8 WPF) — ⏳ em curso
+## 9. Diag (.NET 8 WPF) — 🔍 auditado, fixes pendentes
 
-Agente `368bfe59` a auditar: crash handling, privacidade dos logs, integridade de updates, UX dead-ends, integração com a app.
+~2.600 LOC C# + 2 scripts PS + workflow de release. Os utilitários iOS
+(`idevicediagnostics.exe` etc.) chegam via NuGet `iMobileDevice-net` — OK.
+
+### Altos
+
+| Achado | Evidência | Remédio |
+|---|---|---|
+| **U-1. Self-update sem verificação de integridade** — descarrega o zip da release e extrai sobre a app sem SHA-256 nem assinatura; uma conta GitHub comprometida = RCE em todas as lojas | `UpdateChecker.cs:52-76` | publicar `SHA256SUMS` como release asset + verificar antes de staging |
+| **H-1. Timer do `DeviceDetector` reentrante + sem try/catch** — polls sobrepostos corrompem `_seen`; exceção num callback do Timer termina o processo | `DeviceDetector.cs:30,76-84` | `Interlocked` guard + try/catch no `Poll` |
+| **M-1. `CloudUrl` inválido → non-start silencioso** — `new Uri` lança no ctor da MainWindow; config corrompido mata a app sem mensagem | `DiagConfig.cs:37`, `MainWindow.xaml.cs:66,475`, `SettingsDialog.xaml.cs:66` | `Uri.TryCreate` na carga e no Settings; fallback para default |
+
+### Médios
+
+| Achado | Remédio |
+|---|---|
+| **P-5/M-2. `TestServer` sem auth em porta fixa 8734** — qualquer um na LAN injeta resultados falsos num relatório para seguradora; servidor abandona-se ligado e todos os retries falham | porta aleatória + token no path + Dispose garantido |
+| **I-1. Pairing inexistente** — comentário diz que o token fica em Settings, mas não há campo; InputBox pede o token em claro a cada relatório AI | campo token no Settings + DPAPI (`ProtectedData`) + input mascarado |
+| **P-4. `CloudUrl` aceita `http://`** — Bearer token + PII em claro | recusar/avisar não-HTTPS fora de localhost |
+| **P-1/P-2/P-3. Telemetria não minimizada** — IMEI, ICCID, MACs e crash logs (paths, usernames) sobem sem preview; diag.log vai unauthenticated | resumo "o que será enviado" no SendDialog + scrub de user/serials |
+| **U-2. Script de update gerado por interpolação** — `'` em paths injeta no .ps1; relança exe mesmo com extract falhado | escape single-quote, verificar `$LASTEXITCODE`, backup p/ rollback |
+| **H-2. `DispatcherUnhandledException` engole tudo** — falhas de Export/Config só vão para diag.log | MessageBox nos caminhos acionáveis |
+| **X-3. Double-submit em Send/AI** — botões não desabilitam durante await → chamadas AI pagas duplicadas | desabilitar no handler |
+
+### Baixos (amostra)
+
+stderr de `adb`/`idevice*` nunca drenado (>64KB bloqueia), zombie collect após timeout de 30s iOS, zip de update buffered em memória, `history.jsonl` sem pruning, `_busy` pode ficar preso, `device-test.html` 100% PT, shop-code aceita ≥4 mas backend quer 6, sem retries em falhas transitórias, IPs VPN escolhidos para o `LanUrl`.
+
+### Não verificado
+
+- Se os exe iOS realmente aterram junto do single-file publish (provável mas por confirmar num `out/` real)
+- Endpoints unauthenticated `/intake/:shopCode` e `/diag-logs` na cloud — merecem rate-limit/abuse review do lado servidor
 
 ---
 
@@ -151,5 +181,5 @@ Agente `368bfe59` a auditar: crash handling, privacidade dos logs, integridade d
 2. Decidir Android `androidScheme` vs HTTP LAN (afeta deployment real)
 3. Lazy-load de locales não-default + câmara + `better-auth/client`
 4. Focus trap POS + labels de diálogos + `lang` dinâmico + Material Symbols
-5. Relatório do agente diag → corrigir achados
+5. **Diag: U-1 hash do self-update, H-1 crash do timer, M-1 CloudUrl inválido** — os 3 highs da app .NET (repo `oficinaos-diag`)
 6. Installer fallback + robocopy exit codes + docs de instalação
