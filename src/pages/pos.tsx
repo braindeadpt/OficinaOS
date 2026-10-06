@@ -1,5 +1,5 @@
 import { PAYMENT_METHODS } from "@shared/constants";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Can } from "@/components/modules/can";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
+import { useModalEffects } from "@/hooks/use-modal-effects";
 import type { ApiError } from "@/lib/api";
 import { fetchInvoicingStatus, issueSaleInvoice } from "@/lib/api-invoicing";
 import { printSaleReceipt, usesThermalPrinter } from "@/lib/print";
@@ -106,6 +107,14 @@ export default function PosPage() {
     }>
   >([]);
   const [invoicingReady, setInvoicingReady] = useState(false);
+  const customFormRef = useRef<HTMLDivElement>(null);
+  const checkoutRef = useRef<HTMLDivElement>(null);
+  useModalEffects(
+    showCustomForm,
+    () => setShowCustomForm(false),
+    customFormRef
+  );
+  useModalEffects(showCheckout, () => setShowCheckout(false), checkoutRef);
 
   useEffect(() => {
     fetchInvoicingStatus()
@@ -414,12 +423,16 @@ export default function PosPage() {
             onClick={() => setShowCustomForm(false)}
             type="button"
           />
-          <div className="modal-surface relative z-10 w-full max-w-sm rounded-xl bg-surface-container-lowest p-6 shadow-2xl">
+          <div
+            className="modal-surface relative z-10 w-full max-w-sm rounded-xl bg-surface-container-lowest p-6 shadow-2xl"
+            ref={customFormRef}
+          >
             <h2 className="font-bold font-headline text-lg text-on-surface">
               {t("pos.add_custom_item")}
             </h2>
             <div className="mt-4 space-y-3">
               <input
+                aria-label={t("pos.custom_name")}
                 className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface"
                 onChange={(e) => setCustomName(e.target.value)}
                 placeholder={t("pos.custom_name")}
@@ -427,6 +440,7 @@ export default function PosPage() {
                 value={customName}
               />
               <input
+                aria-label={t("pos.custom_price")}
                 className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface"
                 inputMode="decimal"
                 min="0"
@@ -436,10 +450,12 @@ export default function PosPage() {
                 value={customPrice}
               />
               <input
+                aria-label={t("pos.custom_qty")}
                 className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface"
                 inputMode="numeric"
                 min="1"
                 onChange={(e) => setCustomQty(e.target.value)}
+                placeholder={t("pos.custom_qty")}
                 type="number"
                 value={customQty}
               />
@@ -493,7 +509,10 @@ export default function PosPage() {
             onClick={() => setShowCheckout(false)}
             type="button"
           />
-          <div className="modal-surface relative z-10 flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-surface-container-lowest shadow-2xl">
+          <div
+            className="modal-surface relative z-10 flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-surface-container-lowest shadow-2xl"
+            ref={checkoutRef}
+          >
             <div className="border-outline-variant border-b px-6 py-4">
               <h2 className="font-bold font-headline text-lg text-on-surface">
                 {t("pos.checkout")}
@@ -506,6 +525,7 @@ export default function PosPage() {
             <div className="flex-1 overflow-y-auto p-6">
               <div className="flex gap-2">
                 <select
+                  aria-label={t("payments.method")}
                   className="h-11 flex-1 rounded-xl bg-surface-container-highest px-3 text-on-surface"
                   onChange={(e) =>
                     setPayMethod(
@@ -521,6 +541,7 @@ export default function PosPage() {
                   ))}
                 </select>
                 <input
+                  aria-label={t("pos.amount")}
                   className="h-11 w-28 rounded-xl bg-surface-container-highest px-3 text-on-surface"
                   inputMode="decimal"
                   min="0.01"
@@ -532,6 +553,7 @@ export default function PosPage() {
                 />
               </div>
               <input
+                aria-label={t("payments.reference_placeholder")}
                 className="mt-2 h-11 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface"
                 onChange={(e) => setPayReference(e.target.value)}
                 placeholder={t("payments.reference_placeholder")}

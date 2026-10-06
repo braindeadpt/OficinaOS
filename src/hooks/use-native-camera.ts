@@ -1,4 +1,3 @@
-import { Camera, MediaTypeSelection } from "@capacitor/camera";
 import { Capacitor } from "@capacitor/core";
 import { useCallback, useState } from "react";
 
@@ -37,6 +36,11 @@ export function useNativeCamera() {
       }
       setIsCapturing(true);
       try {
+        // Lazy: the camera plugin only ships code paths that run on-device;
+        // web/PWA users never download it.
+        const { Camera, MediaTypeSelection } = await import(
+          "@capacitor/camera"
+        );
         if (source === "camera") {
           const result = await Camera.takePhoto({ quality: 85 });
           const path = result.webPath;

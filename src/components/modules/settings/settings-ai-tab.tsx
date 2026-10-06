@@ -543,6 +543,16 @@ export default function SettingsAiTab({
     });
   }, [fetchAgents]);
 
+  const testStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (testStatusTimerRef.current) {
+        clearTimeout(testStatusTimerRef.current);
+      }
+    },
+    []
+  );
+
   async function handleTestConnection() {
     setTestStatus("loading");
     const result = await testAiConnection();
@@ -551,7 +561,10 @@ export default function SettingsAiTab({
     } else {
       setTestStatus("fail");
     }
-    setTimeout(() => setTestStatus("idle"), 3000);
+    if (testStatusTimerRef.current) {
+      clearTimeout(testStatusTimerRef.current);
+    }
+    testStatusTimerRef.current = setTimeout(() => setTestStatus("idle"), 3000);
   }
 
   async function handleAiSubmit(e: FormEvent) {

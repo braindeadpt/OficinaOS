@@ -65,6 +65,8 @@ echo        A app esta parada — os dados ficam nos volumes do Docker.
 
 REM ── 3. Descarregar a nova versao ───────────────────────────────────
 echo [3/4] A descarregar a versao mais recente...
+REM Instalacao em modo build? Atualiza o source e reconstroi.
+if exist "%~dp0oficinaos-src\app-source\docker-compose.yml" goto atualizar_source
 docker compose -f docker-compose.app.yml pull
 if errorlevel 1 (
     docker compose pull
@@ -76,11 +78,34 @@ if errorlevel 1 (
         exit /b 1
     )
 )
+goto reiniciar
 
+:atualizar_source
+echo        Instalacao em modo build — a descarregar o codigo novo...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest -Uri 'https://github.com/braindeadpt/OficinaOS/archive/refs/heads/main.zip' -OutFile \"$env:TEMP\oficinaos-src.zip\"; Expand-Archive -Force -LiteralPath \"$env:TEMP\oficinaos-src.zip\" -DestinationPath \"$env:TEMP\oficinaos-src\""
+if errorlevel 1 (
+    echo.
+    echo  ERRO: nao consegui descarregar o codigo.
+    echo  Verifica a ligacao a internet e repete.
+    pause
+    exit /b 1
+)
+xcopy /E /I /Y /Q "%TEMP%\oficinaos-src\OficinaOS-main" "%~dp0oficinaos-src\app-source" >nul
+rmdir /s /q "%TEMP%\oficinaos-src" "%TEMP%\oficinaos-src.zip" >nul 2>&1
+REM O .env do build vive na pasta do source — preserva o existente.
+if exist "%~dp0.env" copy /y "%~dp0.env" "%~dp0oficinaos-src\app-source\.env" >nul 2>&1
+goto reiniciar
+
+:reiniciar
 REM ── 4. Reiniciar — as migracoes da base de dados correm sozinhas ───
 echo [4/4] A reiniciar o OficinaOS...
+if exist "%~dp0oficinaos-src\app-source\docker-compose.yml" (
+    docker compose -f "%~dp0oficinaos-src\app-source\docker-compose.yml" up -d --build
+    goto build_feito
+)
 docker compose -f docker-compose.app.yml up -d 2>nul
 if errorlevel 1 docker compose up -d
+:build_feito
 if errorlevel 1 (
     echo.
     echo  ERRO: a app nao arrancou.

@@ -74,3 +74,12 @@ Capacitor para distribuir fora da Play Store — detalhes técnicos:
 `capacitor.config.ts` + `VITE_API_BASE_URL` apontado ao URL público (túnel)
 ou ao IP da LAN. Na maioria dos casos a PWA chega — sobretudo porque em
 iOS não há caminho sem App Store, e a experiência via ícone é equivalente.
+
+> **Nota técnica (porquê HTTPS no APK):** o `androidScheme` fica em `https`
+> de propósito. O login usa cookies de sessão; num WebView cuja origem é
+> `http://localhost` a falar com `http://<ip-da-loja>` (cross-site), o
+> Android não anexa cookies `SameSite=Lax` a pedidos XHR — o login nunca
+> persistiria. Com o scheme `https` a origem é segura e o servidor pode
+> emitir `SameSite=None; Secure`, que funciona. Consequência: **o APK exige
+> `VITE_API_BASE_URL` em `https://`** (túnel ou VPS) — dentro da loja, em
+> `http://`, usa-se o browser/PWA, que é same-origin e não tem este limite.

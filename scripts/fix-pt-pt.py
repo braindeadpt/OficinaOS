@@ -106,14 +106,12 @@ SUBS = [
 
 # ── 2. Overrides exatos por key ──────────────────────────────────────────
 OVERRIDES = {
-    "auth_atelier": "A funcionar na perfeição.",
     "front_desk.quick_intake": "Registo rápido",
     "front_desk.no_active_repairs": "Sem reparações ativas no momento",
     "tech_dashboard.my_repair_board": "O meu quadro de reparações",
     "tech_dashboard.kanban_intake": "Receção",
     "status.INTAKE": "Receção",
     "jobStatus.INTAKE": "Receção",
-    "auth_intake": "Receção",
     "returns_photos_intake": "Receção (prova do problema)",
     "returns_file_button": "Registar pedido de devolução",
     "reset_password_desc": "Defina uma nova palavra-passe para {{name}}. Terá de a alterar no próximo início de sessão.",
@@ -123,7 +121,6 @@ OVERRIDES = {
     "ai_agent_tool_query_database": "A consultar a base de dados",
     "profile_activity_user_sign_in": "Sessão iniciada",
     "profile_activity_user_sign_out": "Sessão terminada",
-    "loading_dashboard": "A carregar o painel...",
 
     # ── orçamento (não "cotação"/"citação") — quote de reparação ────────
     # NOTA: "cotação" só é errada nestas keys; em contexto de bolsa/câmbio
@@ -154,7 +151,6 @@ OVERRIDES = {
     # "track" neste contexto é "acompanhar" — "pista"/"rastreamento" são BR
     "jobs_detail_track": "Acompanhar",
     "tracking_track_btn": "Acompanhar",
-    "tracking_page_title": "Acompanhamento do cliente",
 
     # ── recibo digital + garantia na página de acompanhamento ───────────
     # alinhado com o recibo impresso ("Por pagar"/"Pago (sinal)")

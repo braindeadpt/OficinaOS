@@ -41,10 +41,17 @@ pause
 exit /b 1
 
 :docker_pronto
+REM Instalacao em modo build (imagem ghcr indisponivel)? O source fica em
+REM oficinaos-src\app-source — arranca esse compose.
+if exist "%~dp0oficinaos-src\app-source\docker-compose.yml" (
+    docker compose -f "%~dp0oficinaos-src\app-source\docker-compose.yml" up -d
+    goto compose_feito
+)
 echo A verificar atualizacoes...
 docker compose -f docker-compose.app.yml pull >nul 2>&1
 docker compose -f docker-compose.app.yml up -d
 if errorlevel 1 docker compose up -d
+:compose_feito
 if errorlevel 1 (
     echo ERRO ao iniciar. Se nunca instalaste, corre primeiro o INSTALAR.bat
     pause

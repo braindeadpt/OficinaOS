@@ -65,8 +65,11 @@ jobs:
           git archive HEAD -o "$env:RUNNER_TEMP\app.tar"
           tar -xf "$env:RUNNER_TEMP\app.tar" -C "$b\app"
           robocopy node_modules "$b\app\node_modules" /E /NFL /NDL /NJH /NJS /NP | Out-Null
+          if ($LASTEXITCODE -ge 8) { throw "robocopy node_modules falhou: $LASTEXITCODE" }
           robocopy dist "$b\app\dist" /E /NFL /NDL /NJH /NJS /NP | Out-Null
+          if ($LASTEXITCODE -ge 8) { throw "robocopy dist falhou: $LASTEXITCODE" }
           robocopy generated "$b\app\generated" /E /NFL /NDL /NJH /NJS /NP | Out-Null
+          if ($LASTEXITCODE -ge 8) { throw "robocopy generated falhou: $LASTEXITCODE" }
           Copy-Item bun-tmp\bun-windows-x64\bun.exe "$b\bun\"
           Expand-Archive pg.zip "$b"
           Copy-Item scripts\portable\* "$b\"

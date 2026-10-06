@@ -45,6 +45,7 @@ export default defineConfig({
             "vendor-react": ["react", "react-dom", "react-router"],
             "vendor-ui": ["sonner"],
             "vendor-i18n": ["i18next", "react-i18next", "i18next-browser-languagedetector"],
+            "vendor-auth": ["better-auth"],
           };
           for (const [chunk, packages] of Object.entries(chunks)) {
             if (packages.some((p) => pkg === p)) return chunk;

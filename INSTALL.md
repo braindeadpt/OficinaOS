@@ -37,7 +37,7 @@ Guia para Windows. Demora ~10 minutos na primeira vez.
 3. O instalador faz tudo sozinho:
    - Instala o **Docker Desktop** se não existir (gratuito, oficial)
    - Gera as passwords e segredos automaticamente
-   - **Descarrega a imagem pronta do GitHub** (segundos) — se falhar, constrói localmente (~5 min)
+   - **Descarrega a imagem pronta do GitHub** (segundos) — se falhar, descarrega o código-fonte e constrói localmente (~5-10 min; fica em `oficinaos-src\app-source` para os `INICIAR`/`PARAR`/`ATUALIZAR` funcionarem depois)
 4. No fim, o browser abre automaticamente em `http://localhost:4000`
 
 > **Se o Windows pedir para reiniciar** durante a instalação do Docker (é normal), reinicia o PC e volta a correr `INSTALAR.bat`.
@@ -145,7 +145,10 @@ Quando a app avisar que existe versão nova (ou quando quiseres): duplo clique e
 docker compose -f docker-compose.app.yml pull
 docker compose -f docker-compose.app.yml up -d
 
-:: ou, se instalaste a partir do código-fonte:
+:: ou, se instalaste em modo build (sem imagem ghcr — o ATUALIZAR.bat trata disto sozinho):
+docker compose -f oficinaos-src\app-source\docker-compose.yml up -d --build
+
+:: ou, num checkout git de desenvolvimento:
 git pull
 docker compose up -d --build
 ```

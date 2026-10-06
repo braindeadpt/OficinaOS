@@ -63,6 +63,7 @@ async function main() {
   console.log(`ℹ️ Found ${tsFiles.length} TypeScript source files to scan.`);
 
   const keysInCode = new Map<string, Set<string>>(); // key -> set of files where it is used
+  const fileContents = new Map<string, string>(); // for the literal-usage pass
   const dynamicKeys: DynamicKey[] = [];
   // Prefixes under which keys are resolved dynamically at runtime. Template
   // heads like `status.${x}` are collected automatically below; this seed list
@@ -98,6 +99,7 @@ async function main() {
   for (const filePath of tsFiles) {
     const relativePath = path.relative(process.cwd(), filePath);
     const content = await fs.readFile(filePath, "utf-8");
+    fileContents.set(relativePath, content);
 
     const sourceFile = ts.createSourceFile(
       filePath,
@@ -164,14 +166,20 @@ async function main() {
   // they resolve at runtime.
   const unusedKeys: string[] = [];
 
+  const allContent = [...fileContents.values()].join("\n");
   for (const key of existingKeys) {
     if (!keysInCode.has(key)) {
       const isDynamicCandidate = [...dynamicPrefixes].some((prefix) =>
         key.startsWith(prefix)
       );
-      if (!isDynamicCandidate) {
-        unusedKeys.push(key);
-      }
+      if (isDynamicCandidate) continue;
+      // Keys can be passed to t() through variables — e.g. error codes stored
+      // in state then translated. A quoted literal anywhere in code counts
+      // as a use.
+      const literal = new RegExp(
+        `['"\`]${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}['"\`]`
+      );
+      if (!literal.test(allContent)) unusedKeys.push(key);
     }
   }
 

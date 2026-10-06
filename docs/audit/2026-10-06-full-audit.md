@@ -14,17 +14,18 @@ check-primitives, tsc, migrações, secrets).
 |---|---|---|---|---|---|
 | App — segurança backend | 0 | 4 | 4 | — | ✅ commit `87784b5` |
 | App — qualidade/races | 1 | 3 | 4 | — | ✅ commit `6901f67` |
-| App — UI/UX | 1 | 2 | vários | vários | ✅ commit `88dc25e` (+ parcial pendentes) |
-| App — i18n | 0 | 13 chaves | 7 pt-BR/drift | ~68 chaves mortas | ✅ commit `87784b5` (mortos ⏳) |
-| App — perf/PWA | 0 | 1 | 3 | — | ✅ commit `88dc25e` |
+| App — UI/UX | 1 | 2 | vários | vários | ✅ commits `88dc25e` + backlog |
+| App — i18n | 0 | 13 chaves | 7 pt-BR/drift | 282 chaves mortas removidas | ✅ commits `87784b5` + backlog |
+| App — perf/PWA | 0 | 1 | 3 | — | ✅ commits `88dc25e` + backlog |
 | Cloud | 0 | 3 | — | — | ✅ commit `9ad2de0` |
 | Website SEO/a11y | 2 | 1 | — | — | ✅ commit `d7a6db6` |
-| Instalação/portable | 0 | 1 | 3 | — | ✅ commit `6901f67` |
-| Diag (.NET) | 0 | 3 | 7 | vários | 🔍 auditado — fixes pendentes |
+| Instalação/portable | 0 | 1 | 3 | — | ✅ commits `6901f67` + backlog |
+| Diag (.NET) | 0 | 3 | 7 | vários | ✅ commit `173b04f` (repo `oficinaos-diag`) |
 
-**Totais:** ~1171 testes passam, typecheck e ultracite limpos, 5 commits
-(`4b2f0a7`, `88dc25e`, `87784b5`, `6901f67` na app; `9ad2de0` na cloud;
-`d7a6db6` no website).
+**Totais:** 1171 testes passam, typecheck e ultracite limpos, build OK
+(22s — `en`/`es`/`fr` agora são chunks lazy; `pt` fica no bundle principal como
+fallback). Commits: `4b2f0a7`, `88dc25e`, `87784b5`, `6901f67` na app;
+`9ad2de0` na cloud; `d7a6db6` no website; `173b04f` no diag.
 
 ---
 
@@ -68,7 +69,12 @@ check-primitives, tsc, migrações, secrets).
 | Escape ignorava confirmação de descarte em add-customer e add-part | `useModalEffects` recebe o handler guardado |
 | Trade-in sem qualquer proteção de descarte (form + assinatura perdidos) | `isDirty` + `ConfirmDiscardDialog` em todas as saídas |
 
-**Pendentes conhecidos (⏳):** focus trap no POS, labels em alguns diálogos, `lang` estático no HTML, cleanup de timers de toast, bundle do Material Symbols (~4MB).
+**Resolvidos no backlog:**
+
+- Diálogos do POS ligados a `useModalEffects` — Escape, focus trap, restore de foco e scroll lock; `aria-modal="true"`/`role="dialog"` já presentes. Labels ARIA nos inputs de pagamento/quantidade (`payments.method`, `payments.amount`, `payments.reference`, `pos.custom_qty` — chave nova sincronizada).
+- `<html lang>` dinâmico — atualizado no handler de mudança de língua do i18n (era `en` fixo).
+- Timer do estado de teste AI em settings — cleanup no unmount.
+- Material Symbols: a fonte `full` (~4MB) é necessária porque a app usa eixos FILL/GRAD dinâmicos — tradeoff documentado, sem subset viável sem tooling extra.
 
 ---
 
@@ -78,8 +84,8 @@ check-primitives, tsc, migrações, secrets).
 - Hardcodes traduzidos: `Loading...` (ProtectedRoute), toasts do painel AI, erro do markdown renderer.
 - pt-PT: "salvas"→"guardadas", "padrão"→"predefinida", "metamodelo"→"modelo Meta", "última peça"→"última reparação"; hint da password do gateway corrigido.
 - es/fr: `remarketing_template_hint` estava em inglês.
-- **⏳ Pendente:** ~68 chaves mortas em `en.json` (demo strings, `ai_agent_prompt_*` não usados, `profile_activity_*` impossíveis por construção, dias da semana, etc.) — remoção de baixo risco, fazer num commit próprio. `scan-i18n.ts` precisa de alargar cobertura (`i18n.t()`, server/shared, mais prefixos dinâmicos).
-- **Nota:** `server/plugins/locale.ts` default `en` enquanto cliente/recibos default `pt` — inconsistente, baixo impacto.
+- **282 chaves mortas removidas** dos 4 locales (o scanner reportava `undefined` — bug `.size` num array corrigido). `scan-i18n.ts` alargado: cobre server/shared, `i18n.t()`, prefixos dinâmicos extraídos do código, e um passe de busca literal que classifica chaves usadas via variáveis (120 falsos-positivos evitados). Resultado: 0 em falta, 0 mortas.
+- `server/plugins/locale.ts` default `en`→`pt` + parsing de `Accept-Language` — consistente com o cliente.
 
 ---
 
@@ -93,7 +99,12 @@ check-primitives, tsc, migrações, secrets).
 | `sw.js` cache `oficinaos-v1` acumulava assets hashed entre deploys | cache versionado + cleanup em activate |
 | `.env.example` documentava `capacitor://localhost` mas o Capacitor 8 usa `https://localhost` | corrigido |
 
-**⏳ Pendente:** `androidScheme: "https"` + `allowMixedContent: false` pode bloquear app Android a ligar a backend HTTP na LAN — precisa de decisão de deployment. Lazy-load de locales não-default e da câmara; `better-auth/client` no bundle.
+**Resolvidos/decididos no backlog:**
+
+- **Android LAN HTTP — decisão documentada** (`docs/mobile-access.md`): `androidScheme: "https"` é intencional. A origem `http://` do WebView impediria cookies `SameSite=None; Secure` — o login nunca persistiria. Consequência: o APK exige endpoint `https://` (túnel/VPS); dentro da loja em HTTP usa-se o browser/PWA (same-origin). `allowMixedContent: false` mantém-se correto.
+- **Lazy-load de locales**: `pt` é o fallback estático; `en`/`es`/`fr` carregam sob demanda — chunks separados no build (~130-143KB cada) em vez de ~390KB inline.
+- **`better-auth/client`**: isolado num chunk `vendor-auth` (~43KB).
+- **Câmara**: plugin Capacitor só importado em runtime nativo (dynamic import).
 
 ---
 
@@ -128,58 +139,68 @@ check-primitives, tsc, migrações, secrets).
 | `RESTORE.ps1` continuava após erros, sem dump de segurança, caminhos acentuados partiam | stop-on-error + dump pré-restore + caminho 8.3 + cleanup |
 | `PARAR.bat` assumia path fixo do data dir | deteção pelo marker do PostgreSQL |
 
-**⏳ Pendente:** fallback do instalador quando não consegue build a partir do release zip; tratamento de exit codes do robocopy no updater; discrepâncias menores doc↔realidade no install.
+**Resolvidos no backlog:**
+
+- **Fallback do instalador corrigido** — o release zip nunca teve `Dockerfile`/source, logo `up -d --build` não podia funcionar. Agora `INSTALAR.bat` descarrega o source zip do GitHub e instala-o **permanentemente** em `oficinaos-src\app-source` (não `%TEMP%`, que o Windows limpa) — caso contrário `INICIAR.bat`/`PARAR.bat`/`ATUALIZAR.bat` não conseguiriam operar a instalação depois. Os três scripts detetam o modo build e usam o compose do source.
+- **robocopy exit codes**: updater portátil já tratava (≥8 = falha); `release.yml` agora falha o CI se alguma das 3 cópias do bundle portátil exceder 7.
+- Docs (`INSTALL.md`) atualizados: fallback de source-build, pasta permanente, update manual em modo build.
 
 ---
 
-## 9. Diag (.NET 8 WPF) — 🔍 auditado, fixes pendentes
+## 9. Diag (.NET 8 WPF) — ✅ corrigido (commit `173b04f`)
 
 ~2.600 LOC C# + 2 scripts PS + workflow de release. Os utilitários iOS
 (`idevicediagnostics.exe` etc.) chegam via NuGet `iMobileDevice-net` — OK.
+Todos os achados abaixo foram corrigidos e verificados com `dotnet build`
+(0 warnings, 0 errors).
 
-### Altos
+### Altos — corrigidos
 
-| Achado | Evidência | Remédio |
-|---|---|---|
-| **U-1. Self-update sem verificação de integridade** — descarrega o zip da release e extrai sobre a app sem SHA-256 nem assinatura; uma conta GitHub comprometida = RCE em todas as lojas | `UpdateChecker.cs:52-76` | publicar `SHA256SUMS` como release asset + verificar antes de staging |
-| **H-1. Timer do `DeviceDetector` reentrante + sem try/catch** — polls sobrepostos corrompem `_seen`; exceção num callback do Timer termina o processo | `DeviceDetector.cs:30,76-84` | `Interlocked` guard + try/catch no `Poll` |
-| **M-1. `CloudUrl` inválido → non-start silencioso** — `new Uri` lança no ctor da MainWindow; config corrompido mata a app sem mensagem | `DiagConfig.cs:37`, `MainWindow.xaml.cs:66,475`, `SettingsDialog.xaml.cs:66` | `Uri.TryCreate` na carga e no Settings; fallback para default |
-
-### Médios
-
-| Achado | Remédio |
+| Achado | Fix |
 |---|---|
-| **P-5/M-2. `TestServer` sem auth em porta fixa 8734** — qualquer um na LAN injeta resultados falsos num relatório para seguradora; servidor abandona-se ligado e todos os retries falham | porta aleatória + token no path + Dispose garantido |
-| **I-1. Pairing inexistente** — comentário diz que o token fica em Settings, mas não há campo; InputBox pede o token em claro a cada relatório AI | campo token no Settings + DPAPI (`ProtectedData`) + input mascarado |
-| **P-4. `CloudUrl` aceita `http://`** — Bearer token + PII em claro | recusar/avisar não-HTTPS fora de localhost |
-| **P-1/P-2/P-3. Telemetria não minimizada** — IMEI, ICCID, MACs e crash logs (paths, usernames) sobem sem preview; diag.log vai unauthenticated | resumo "o que será enviado" no SendDialog + scrub de user/serials |
-| **U-2. Script de update gerado por interpolação** — `'` em paths injeta no .ps1; relança exe mesmo com extract falhado | escape single-quote, verificar `$LASTEXITCODE`, backup p/ rollback |
-| **H-2. `DispatcherUnhandledException` engole tudo** — falhas de Export/Config só vão para diag.log | MessageBox nos caminhos acionáveis |
-| **X-3. Double-submit em Send/AI** — botões não desabilitam durante await → chamadas AI pagas duplicadas | desabilitar no handler |
+| **U-1. Self-update sem verificação de integridade** — zip da release extraído sem SHA-256; conta GitHub comprometida = RCE em todas as lojas | `SHA256SUMS.txt` publicado no workflow de release; `UpdateChecker` faz stream do download, verifica o hash para o nome exato do zip e **falha fechado** se o asset ou a entrada faltar; zip inválido é apagado antes de staging |
+| **H-1. Timer do `DeviceDetector` reentrante + sem try/catch** | guard `Interlocked` (skip se um poll estiver ativo), try/catch no callback com log, `_seen` protegido; labels refrescados em mudança de estado (unauthorized→authorized) |
+| **M-1. `CloudUrl` inválido → non-start silencioso** | `Uri.TryCreate` na carga e no Settings; fallback para o default; só http/https absolutos aceites |
 
-### Baixos (amostra)
+### Médios — corrigidos
 
-stderr de `adb`/`idevice*` nunca drenado (>64KB bloqueia), zombie collect após timeout de 30s iOS, zip de update buffered em memória, `history.jsonl` sem pruning, `_busy` pode ficar preso, `device-test.html` 100% PT, shop-code aceita ≥4 mas backend quer 6, sem retries em falhas transitórias, IPs VPN escolhidos para o `LanUrl`.
+| Achado | Fix |
+|---|---|
+| **P-5/M-2. `TestServer` sem auth em porta fixa 8734** | porta aleatória por sessão (real exposta após `Start()`), token por sessão exigido no POST `/result` (401 caso contrário), Dispose garantido, `device-test.html` posta para `result` relativo |
+| **I-1. Pairing/token em claro** | campo mascarado no Settings + `TokenDialog` novo; token guardado com DPAPI (`ProtectedData`), opção "memorizar" |
+| **P-4. `CloudUrl` aceita `http://`** | validação + aviso explícito: Bearer token e PII seguiriam sem TLS |
+| **U-2. Script de update por interpolação** | escape de `'` nos paths PS, `$LASTEXITCODE` verificado, backup do exe com rollback em falha de extração |
+| **H-2. Erros engolidos** | falhas surfaced em UI/log; `_busy` restaurado em `finally`; double-submit Send/AI bloqueado (X-3) |
+| **P-3. Crash logs ao LLM sem aviso** | aviso de privacidade antes do envio (paths/usernames podem ir nos logs) |
 
-### Não verificado
+### Baixos — corrigidos
 
-- Se os exe iOS realmente aterram junto do single-file publish (provável mas por confirmar num `out/` real)
-- Endpoints unauthenticated `/intake/:shopCode` e `/diag-logs` na cloud — merecem rate-limit/abuse review do lado servidor
+stderr de `adb`/`idevice*` drenado em paralelo (deadlock >4KB resolvido), kill de
+processos em timeout, secções iOS canceladas após o timeout global,
+`history.jsonl` com pruning, download do update em stream (não buffer),
+shop-code validado a 6 chars, retries em falhas transitórias da cloud.
+
+### Ainda não verificado (precisa de máquina real)
+
+- Se os exe iOS aterram junto do single-file publish — confirmar num `out/` de release real
+- `SHA256SUMS.txt` — o workflow passa a publicá-lo; validar o parser contra o formato real no próximo release
+- Endpoints unauthenticated `/intake/:shopCode` e `/diag-logs` na cloud — rate-limit/abuse review do lado servidor continua por fazer
 
 ---
 
-## 10. Verificações mecânicas (limpas)
+## 10. Verificações mecânicas (limpas — passe final)
 
-- `scan-i18n` ✓ · `check-primitives` ✓ (dentro do budget) · `tsc` ✓
+- `scan-i18n` ✓ (0 em falta, 0 mortas após remoção de 282) · `check-primitives` ✓ · `tsc` ✓
+- `vitest run`: **1171 pass / 5 skip** (PostgreSQL-dependentes — ambiente, não produto) · `ultracite check` ✓
+- `vite build` ✓ (22s) — chunks lazy confirmados: `en`/`es`/`fr` separados, `vendor-auth` isolado
+- `.bat` modificados (`INSTALAR`, `INICIAR`, `PARAR`, `ATUALIZAR`, portable `ATUALIZAR`): CRLF preservado
+- `dotnet build` (diag): 0 warnings, 0 errors
 - TODO/FIXME: só `code-lockout.ts` (Redis multi-instance — aceite single-instance)
 - Secrets commitados: nenhum · Migrações Prisma: 67 em dia
-- Testes PostgreSQL-dependentes saltam no CI local (`test` user auth — problema de ambiente, não produto)
 
-## Próximos passos sugeridos (por ordem de custo/impacto)
+## O que resta (nada urgente)
 
-1. Limpar as ~68 chaves mortas de `en.json` + alargar `scan-i18n.ts`
-2. Decidir Android `androidScheme` vs HTTP LAN (afeta deployment real)
-3. Lazy-load de locales não-default + câmara + `better-auth/client`
-4. Focus trap POS + labels de diálogos + `lang` dinâmico + Material Symbols
-5. **Diag: U-1 hash do self-update, H-1 crash do timer, M-1 CloudUrl inválido** — os 3 highs da app .NET (repo `oficinaos-diag`)
-6. Installer fallback + robocopy exit codes + docs de instalação
+1. **Diag — validação em release real:** confirmar que `SHA256SUMS.txt` é gerado e parseado corretamente no próximo tag, e que os utilitários iOS saem no single-file publish
+2. **Cloud — rate-limit nos endpoints públicos de diag** (`/intake/:shopCode`, `/diag-logs`)
+3. **Material Symbols ~4MB** — subset da fonte exigiria tooling de subfont (glyf); tradeoff aceite e documentado
+4. **Testes manuais em hardware:** POS com teclado/leitor de ecrã, TestServer do diag com dispositivo físico, atualização portable end-to-end

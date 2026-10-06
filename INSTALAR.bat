@@ -113,23 +113,54 @@ if not exist .env (
 REM ── 3. Descarregar imagem e arrancar ───────────────────────────────────
 echo [3/4] A instalar o OficinaOS ^(a 1a vez descarrega ~1GB, pode demorar^)...
 set "COMPOSE_FILE=docker-compose.app.yml"
+set "COMPOSE_DIR=%~dp0"
 docker compose -f docker-compose.app.yml pull
-if errorlevel 1 (
-    set "COMPOSE_FILE=docker-compose.yml"
-    echo        Imagem indisponivel — a construir localmente ^(~5 min^)...
-    docker compose up -d --build
-) else (
+if not errorlevel 1 (
     docker compose -f docker-compose.app.yml up -d
+    goto app_arrancada
 )
-if errorlevel 1 (
-    echo.
-    echo  ERRO: a instalacao falhou.
-    echo  Corre "docker compose logs --tail 30" para ver o erro.
-    echo  Se a porta 4000 estiver ocupada por outro programa, liberta-a
-    echo  e repete a instalacao.
-    pause
-    exit /b 1
+
+REM Fallback: a imagem pre-construida falhou — construir a partir do codigo.
+REM O bundle do instalador nao traz Dockerfile/source, por isso descarrega-se
+REM o zip do repositorio e o build corre nessa copia.
+echo        Imagem indisponivel — a construir a partir do codigo ^(~10 min^)...
+if exist "%~dp0Dockerfile" (
+    set "COMPOSE_FILE=docker-compose.yml"
+    docker compose -f docker-compose.yml up -d --build
+    goto app_arrancada
 )
+echo        A descarregar o codigo-fonte para o build local...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest -Uri 'https://github.com/braindeadpt/OficinaOS/archive/refs/heads/main.zip' -OutFile \"$env:TEMP\oficinaos-src.zip\"; Expand-Archive -Force -LiteralPath \"$env:TEMP\oficinaos-src.zip\" -DestinationPath \"$env:TEMP\oficinaos-src\""
+if errorlevel 1 goto install_fail
+REM O source fica numa pasta permanente — o INICIAR.bat precisa dele para
+REM reiniciar esta instalacao (modo build), e %TEMP% pode ser limpo.
+if not exist "%~dp0oficinaos-src" mkdir "%~dp0oficinaos-src"
+xcopy /E /I /Y /Q "%TEMP%\oficinaos-src\OficinaOS-main" "%~dp0oficinaos-src\app-source" >nul
+rmdir /s /q "%TEMP%\oficinaos-src" "%TEMP%\oficinaos-src.zip" >nul 2>&1
+set "COMPOSE_DIR=%~dp0oficinaos-src\app-source"
+if not exist "%COMPOSE_DIR%\Dockerfile" (
+    echo  ERRO: o codigo-fonte descarregado nao contem Dockerfile.
+    goto install_fail
+)
+copy /y "%~dp0.env" "%COMPOSE_DIR%\.env" >nul 2>&1
+set "COMPOSE_FILE=docker-compose.yml"
+pushd "%COMPOSE_DIR%"
+docker compose -f docker-compose.yml up -d --build
+popd
+:app_arrancada
+if errorlevel 1 goto install_fail
+goto instalacao_ok
+
+:install_fail
+echo.
+echo  ERRO: a instalacao falhou.
+echo  Corre "docker compose logs --tail 30" para ver o erro.
+echo  Se a porta 4000 estiver ocupada por outro programa, liberta-a
+echo  e repete a instalacao.
+pause
+exit /b 1
+
+:instalacao_ok
 
 REM ── Esperar que a app responda (migrations + primeiro arranque) ────────
 echo        A aguardar que a aplicacao arranque...
@@ -151,16 +182,16 @@ exit /b 1
 
 REM ── 4. Utilizador admin + dados iniciais (seed e idempotente) ──────────
 echo [4/4] A criar o utilizador inicial...
-docker compose -f %COMPOSE_FILE% exec -T app bun run db:seed
+docker compose -f "%COMPOSE_DIR%\%COMPOSE_FILE%" exec -T app bun run db:seed
 if errorlevel 1 (
     ping -n 11 127.0.0.1 >nul
-    docker compose -f %COMPOSE_FILE% exec -T app bun run db:seed
+    docker compose -f "%COMPOSE_DIR%\%COMPOSE_FILE%" exec -T app bun run db:seed
 )
 if errorlevel 1 (
     echo.
     echo  AVISO: a criacao do utilizador falhou.
     echo  Tenta mais tarde com:
-    echo    docker compose -f %COMPOSE_FILE% exec app bun run db:seed
+    echo    docker compose -f "%COMPOSE_DIR%\%COMPOSE_FILE%" exec app bun run db:seed
 )
 
 REM ── Fim ────────────────────────────────────────────────────────────────

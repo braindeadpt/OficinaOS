@@ -27,7 +27,19 @@ if errorlevel 1 (
 )
 
 REM Copia tudo por cima EXCETO a base de dados (data\) e a configuracao (.env)
+if not exist "%TEMP%\oficinaos-portable-update\oficinaos-portable" (
+    echo  ERRO: o pacote extraido nao tem o conteudo esperado — nada foi alterado.
+    pause
+    exit /b 1
+)
 robocopy "%TEMP%\oficinaos-portable-update\oficinaos-portable" "%~dp0" /E /XD data /XF .env PRIMEIRO-LOGIN.txt /NFL /NDL /NJH >nul
+REM robocopy: 0-7 = sucesso (copiado/identico/extra), >=8 = falhou a copia.
+if errorlevel 8 (
+    echo  ERRO: a copia falhou (robocopy %errorlevel%). A instalacao pode estar incompleta —
+    echo  repete o ATUALIZAR.bat; se persistir, restaura o backup manualmente.
+    pause
+    exit /b 1
+)
 if exist "%TEMP%\oficinaos-env.bak" copy /y "%TEMP%\oficinaos-env.bak" "%~dp0app\.env" >nul
 
 rmdir /s /q "%TEMP%\oficinaos-portable-update" >nul 2>&1
