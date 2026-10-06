@@ -134,6 +134,9 @@ export const ERRORS = {
   AI_DISABLED: { status: 400, message: "errors.ai_disabled" },
   AI_NOT_CONFIGURED: { status: 400, message: "errors.ai_not_configured" },
   NO_SHOP_PHONE: { status: 400, message: "errors.no_shop_phone" },
+  SMS_NOT_CONFIGURED: { status: 400, message: "errors.sms_not_configured" },
+  SMS_SEND_FAILED: { status: 502, message: "errors.sms_send_failed" },
+  SMS_WEBHOOK_FAILED: { status: 502, message: "errors.sms_webhook_failed" },
   JOB_CODE_OVERFLOW: { status: 500, message: "errors.job_code_overflow" },
   OUTBOX_NOT_QUEUED: { status: 409, message: "errors.outbox_not_queued" },
   CASH_SESSION_ALREADY_CLOSED: {

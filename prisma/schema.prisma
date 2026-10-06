@@ -99,6 +99,7 @@ enum MovementType {
 enum NotifyChannel {
   WHATSAPP
   IN_APP
+  SMS
 }
 
 enum OutboxStatus {
@@ -1084,6 +1085,16 @@ model ShopSettings {
   whatsappBusinessId        String?
   whatsappPhoneNumberId     String?
   whatsappEnabled           Boolean  @default(false)
+  // SMS via gateway local (módulo Pro "sms") — um Android na LAN com
+  // sms-gate.app em modo Local Server. O envio é HTTP direto ao telemóvel;
+  // o inbound chega por webhook registado no próprio aparelho.
+  smsEnabled                Boolean  @default(false)
+  smsGatewayUrl             String?
+  smsGatewayUser            String?
+  smsGatewayPasswordEncrypted String?
+  // Segredo no path do webhook inbound — o gateway não suporta headers
+  // de auth, por isso a rota é /api/public/sms/inbound/<token>.
+  smsWebhookToken           String?
   // Remarketing automático (Pro module "remarketing") — proactive WhatsApp
   // re-engagement for customers idle for remarketingDays, throttled by a
   // cooldown and sent as a Meta-approved template message.

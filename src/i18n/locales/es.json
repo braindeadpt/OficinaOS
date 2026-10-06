@@ -2377,5 +2377,26 @@
     "enabled": "Habilitar facturación",
     "saved": "Configuración de facturación guardada",
     "save_failed": "No se pudo guardar la configuración de facturación"
-  }
+  },
+  "channels_settings": "Canales",
+  "errors.sms_not_configured": "La puerta de enlace SMS no está configurada",
+  "errors.sms_send_failed": "No se pudo enviar el SMS a través de la puerta de enlace.",
+  "errors.sms_test_failed": "No se pudo enviar el SMS de prueba",
+  "errors.sms_webhook_failed": "No se pudo registrar el webhook en el dispositivo de puerta de enlace",
+  "sms_desc": "Envía y recibe SMS a través de un teléfono Android en la red de la tienda que ejecuta SMS Gateway (modo de servidor local). ",
+  "sms_enabled": "Habilitar canal SMS",
+  "sms_gateway_password": "Contraseña de puerta de enlace",
+  "sms_gateway_password_hint": "Contraseña que se muestra en la aplicación SMS Gateway del teléfono (credenciales del servidor local). ",
+  "sms_gateway_url": "URL de puerta de enlace",
+  "sms_gateway_url_hint": "Dirección local del teléfono que ejecuta SMS Gateway, p.e. ",
+  "sms_gateway_user": "Nombre de usuario de la puerta de enlace",
+  "sms_inbound_url": "URL de webhook entrante",
+  "sms_inbound_url_hint": "Se registra automáticamente al guardar cuando accede a la aplicación a través de su dirección de red (no localhost). ",
+  "sms_module_upsell": "El canal SMS requiere el módulo Messages Pro (sms). ",
+  "sms_register_webhook": "Registrar webhook en el teléfono",
+  "sms_send_test": "Enviar SMS de prueba",
+  "sms_settings": "SMS (puerta de enlace local)",
+  "sms_test_sent": "SMS de prueba enviado",
+  "sms_webhook_not_registered": "SMS guardado, pero el webhook entrante no se registró: abra la aplicación a través de su dirección de red (por ejemplo, http://192.168.x.x:4000) y pruebe el botón de registro.",
+  "sms_webhook_registered": "Webhook entrante registrado en el teléfono"
 }

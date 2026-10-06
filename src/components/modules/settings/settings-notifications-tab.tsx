@@ -82,10 +82,14 @@ export default function SettingsNotificationsTab({
   const whatsappTemplates = notificationTemplates.filter(
     (tpl) => tpl.channel === "WHATSAPP"
   );
+  const smsTemplates = notificationTemplates.filter(
+    (tpl) => tpl.channel === "SMS"
+  );
 
   return (
     <div className="space-y-8">
       {renderTemplateGroup(t("whatsapp_templates"), "chat", whatsappTemplates)}
+      {renderTemplateGroup(t("sms_templates"), "sms", smsTemplates)}
     </div>
   );
 }

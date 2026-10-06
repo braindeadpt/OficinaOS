@@ -4,6 +4,7 @@ import type {
   UpdateInvoicingSettingsInput,
   UpdateNotificationTemplateInput,
   UpdateShopSettingsInput,
+  UpdateSmsSettingsInput,
   UpdateWhatsAppSettingsInput,
 } from "@shared/schemas/settings.schema";
 import { decryptSecret, encryptSecret, isEncrypted } from "../lib/crypto.js";
@@ -16,6 +17,7 @@ import {
   upsertAiSettings as upsertAiSettingsRepo,
   upsertShopSettings as upsertShopSettingsRepo,
 } from "../repositories/settings.repository.js";
+import { generateSmsWebhookToken } from "./sms.service.js";
 
 function publicAiSettings<
   T extends { apiKeyEncrypted: string } | null | undefined,
@@ -318,6 +320,69 @@ export async function upsertWhatsAppSettings(
       whatsappBusinessId: data.whatsappBusinessId ?? null,
       whatsappEnabled: data.whatsappEnabled ?? false,
       whatsappPhoneNumberId: data.whatsappPhoneNumberId ?? null,
+    },
+    update: data,
+    where: { id: "default" },
+  });
+}
+
+export async function getSmsSettings(prisma: PrismaClient) {
+  const row = await findShopSettingsUnique(prisma);
+  const modules = Array.isArray(row?.cloudEntitlements)
+    ? (row.cloudEntitlements as string[])
+    : [];
+  return {
+    enabled: row?.smsEnabled ?? false,
+    gatewayUrl: row?.smsGatewayUrl ?? null,
+    gatewayUser: row?.smsGatewayUser ?? null,
+    hasPassword: Boolean(row?.smsGatewayPasswordEncrypted),
+    module: modules.includes("sms"),
+    // Path do webhook inbound — o host depende de como o staff acede à
+    // app; a UI compõe o URL completo com window.location.origin.
+    inboundPath: row?.smsWebhookToken
+      ? `/api/public/sms/inbound/${row.smsWebhookToken}`
+      : null,
+  };
+}
+
+export async function upsertSmsSettings(
+  prisma: PrismaClient,
+  input: UpdateSmsSettingsInput
+) {
+  const data: {
+    smsEnabled?: boolean;
+    smsGatewayUrl?: string | null;
+    smsGatewayUser?: string | null;
+    smsGatewayPasswordEncrypted?: string;
+    smsWebhookToken?: string;
+  } = {};
+  if (input.enabled !== undefined) {
+    data.smsEnabled = input.enabled;
+    if (input.enabled) {
+      // Token novo no enable garante um path inbound inesperável mesmo
+      // que o anterior tenha sido exposto — gerado sempre que se ativa.
+      data.smsWebhookToken = generateSmsWebhookToken();
+    }
+  }
+  if (input.gatewayUrl !== undefined) {
+    data.smsGatewayUrl = input.gatewayUrl.trim() || null;
+  }
+  if (input.gatewayUser !== undefined) {
+    data.smsGatewayUser = input.gatewayUser.trim() || null;
+  }
+  if (input.gatewayPassword !== undefined && input.gatewayPassword !== "") {
+    data.smsGatewayPasswordEncrypted = encryptSecret(input.gatewayPassword);
+  }
+
+  return await upsertShopSettingsRepo(prisma, {
+    create: {
+      id: "default",
+      shopName: "",
+      smsEnabled: data.smsEnabled ?? false,
+      smsGatewayPasswordEncrypted: data.smsGatewayPasswordEncrypted ?? null,
+      smsGatewayUrl: data.smsGatewayUrl ?? null,
+      smsGatewayUser: data.smsGatewayUser ?? null,
+      smsWebhookToken: data.smsWebhookToken ?? null,
     },
     update: data,
     where: { id: "default" },

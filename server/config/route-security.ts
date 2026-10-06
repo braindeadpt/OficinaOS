@@ -224,6 +224,20 @@ export const routeSecurity: [string, RouteSecurityOverride][] = [
       },
     },
   ],
+  // SMS inbound webhook — o gateway na LAN não tem sessão nem CSRF token.
+  // Budget por IP: um cliente que mande 20 SMS/seg só precisa que cada um
+  // chegue uma vez.
+  [
+    "/api/public/sms/inbound",
+    {
+      csrf: false,
+      rateLimit: {
+        keyGenerator: lookupKeyGenerator,
+        max: 60,
+        timeWindow: "1 minute",
+      },
+    },
+  ],
   ["/api/jobs", { rateLimit: { max: 30, timeWindow: "1 minute" } }],
   // A streaming completion is by far the most expensive request the API serves.
   ["/api/ai/chat/stream", { rateLimit: { max: 10, timeWindow: "1 minute" } }],

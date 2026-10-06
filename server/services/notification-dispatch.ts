@@ -30,6 +30,7 @@ interface NotifyEvent {
 
 interface ChannelHandlerContext {
   jobId?: string;
+  smsEnabled: boolean;
   templateBody: string;
   templateVars: Record<string, string>;
   whatsappEnabled: boolean;
@@ -142,8 +143,43 @@ const whatsAppHandler: ChannelHandler = {
   },
 };
 
+const WA_BOLD_RE = /\*/g;
+
+const smsHandler: ChannelHandler = {
+  async handle(prisma, _app, event, context) {
+    if (!context.smsEnabled) {
+      return;
+    }
+    const phone = event.context.recipientPhone;
+    if (!phone) {
+      logger.warn(
+        `[notify] SMS handler: no recipientPhone for event ${event.eventName} — skipping`
+      );
+      return;
+    }
+    // Mesmo consent gate do WhatsApp — a flag whatsappConsent é o opt-in
+    // do cliente a mensagens automáticas, qualquer que seja o canal.
+    const customer = await findCustomerByPhone(prisma, phone);
+    if (!customer?.whatsappConsent) {
+      logger.info(
+        `[notify] SMS handler: no messaging consent for ${phone} on ${event.eventName} — skipping`
+      );
+      return;
+    }
+    await queueNotification(prisma, {
+      channel: "SMS",
+      jobId: event.jobId,
+      recipientPhone: phone,
+      templateBody: context.templateBody,
+      templateName: event.eventName,
+      templateVars: context.templateVars,
+    });
+  },
+};
+
 const HANDLERS: Record<NotifyChannel, ChannelHandler> = {
   IN_APP: inAppHandler,
+  SMS: smsHandler,
   WHATSAPP: whatsAppHandler,
 };
 
@@ -161,15 +197,20 @@ async function resolveShopNotificationConfig(prisma: DbClient): Promise<{
   currency: string;
   reviewUrl: string | null;
   shopName: string;
+  smsEnabled: boolean;
   trackingBaseUrl: string | null;
   whatsappEnabled: boolean;
 }> {
   try {
     const shop = await findShopSettingsUnique(prisma);
+    const modules = Array.isArray(shop?.cloudEntitlements)
+      ? (shop.cloudEntitlements as string[])
+      : [];
     return {
       currency: shop?.currency ?? "EUR",
       reviewUrl: shop?.reviewUrl ?? null,
       shopName: shop?.shopName ?? "",
+      smsEnabled: Boolean(shop?.smsEnabled) && modules.includes("sms"),
       trackingBaseUrl: shop?.trackingBaseUrl ?? null,
       whatsappEnabled: shop?.whatsappEnabled ?? false,
     };
@@ -181,6 +222,7 @@ async function resolveShopNotificationConfig(prisma: DbClient): Promise<{
       currency: "EUR",
       reviewUrl: null,
       shopName: "",
+      smsEnabled: false,
       trackingBaseUrl: null,
       whatsappEnabled: false,
     };
@@ -273,6 +315,7 @@ export async function notify(
 
   await HANDLERS.IN_APP.handle(app.prisma, app, event, {
     jobId: event.jobId,
+    smsEnabled: shop.smsEnabled,
     templateBody: inAppBody,
     templateVars,
     whatsappEnabled: shop.whatsappEnabled,
@@ -291,7 +334,24 @@ export async function notify(
     }
     await handler.handle(app.prisma, app, event, {
       jobId: event.jobId,
+      smsEnabled: shop.smsEnabled,
       templateBody: template.body,
+      templateVars,
+      whatsappEnabled: shop.whatsappEnabled,
+    });
+  }
+
+  // SMS fallback: a loja que não criou templates SMS específicos envia o
+  // corpo WhatsApp — é texto simples; os marcadores *bold* saem porque o
+  // SMS os mostraria literalmente. Um template SMS explícito ganha
+  // sempre (já tratado no loop acima).
+  const smsTemplate = templates.find((t) => t.channel === "SMS");
+  const waTemplate = templates.find((t) => t.channel === "WHATSAPP");
+  if (!smsTemplate && waTemplate) {
+    await HANDLERS.SMS.handle(app.prisma, app, event, {
+      jobId: event.jobId,
+      smsEnabled: shop.smsEnabled,
+      templateBody: waTemplate.body.replace(WA_BOLD_RE, ""),
       templateVars,
       whatsappEnabled: shop.whatsappEnabled,
     });

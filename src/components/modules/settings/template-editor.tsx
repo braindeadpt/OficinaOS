@@ -27,7 +27,7 @@ export default function TemplateEditor({
   const { t } = useTranslation();
   const updateTemplate = useSettingsStore((s) => s.updateNotificationTemplate);
   const [name, setName] = useState("");
-  const [channel, setChannel] = useState<"WHATSAPP">("WHATSAPP");
+  const [channel, setChannel] = useState<"WHATSAPP" | "SMS">("WHATSAPP");
   const [body, setBody] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +41,7 @@ export default function TemplateEditor({
       return;
     }
     setName(template.name);
-    setChannel(template.channel as "WHATSAPP");
+    setChannel(template.channel as "WHATSAPP" | "SMS");
     setBody(template.body);
     setError(null);
   }, [open, template]);
@@ -150,10 +150,13 @@ export default function TemplateEditor({
               <select
                 className="h-12 w-full appearance-none rounded-xl bg-surface-container-highest px-4 text-on-surface"
                 id="tpl-channel"
-                onChange={(e) => setChannel(e.target.value as "WHATSAPP")}
+                onChange={(e) =>
+                  setChannel(e.target.value as "WHATSAPP" | "SMS")
+                }
                 value={channel}
               >
                 <option value="WHATSAPP">WhatsApp</option>
+                <option value="SMS">SMS</option>
               </select>
             </div>
 

@@ -4,6 +4,7 @@ import { quoteRespondSchema } from "@shared/schemas/quote.schema";
 import type { FastifyPluginAsync } from "fastify";
 import { submitPreCheckRequest } from "../services/intake-request.service.js";
 import { respondToQuote } from "../services/job-quote.service.js";
+import { handleInboundSms } from "../services/sms.service.js";
 import { codeLockout } from "../utils/code-lockout.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
@@ -137,6 +138,55 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
         type: "object",
       },
       summary: "Submit a public pre-check request",
+      tags: ["public"],
+    },
+  });
+
+  /**
+   * Webhook inbound do SMS Gateway (sms-gate) — o telemóvel na LAN faz
+   * POST do envelope {event, payload:{sender, message}}. O segredo é o
+   * próprio path: o gateway não suporta headers de auth, por isso o
+   * :token gera-se ao ativar o módulo e nunca aparece na UI de terceiros.
+   */
+  app.post("/sms/inbound/:token", {
+    handler: async (req, reply) => {
+      const { token } = req.params as { token: string };
+      const settings = await app.prisma.shopSettings.findUniqueOrThrow({
+        where: { id: "default" },
+      });
+      // Token errado responde 404 — não dá pistas sobre a existência da rota.
+      if (!(settings.smsEnabled && settings.smsWebhookToken === token)) {
+        throw new AppError("NOT_FOUND");
+      }
+      const body = (req.body ?? {}) as {
+        event?: string;
+        payload?: { message?: string; phoneNumber?: string; sender?: string };
+      };
+      if (body.event === "sms:received") {
+        const from = body.payload?.sender ?? body.payload?.phoneNumber;
+        const text = body.payload?.message;
+        if (from && text) {
+          await handleInboundSms(
+            app.prisma,
+            app.log,
+            { prisma: app.prisma, wsBroadcast: app.wsBroadcast },
+            from,
+            text
+          );
+        }
+      }
+      // Responde sempre 200 — o gateway repete o POST em erros e não nos
+      // interessa revelar falhas de parsing a quem chama.
+      return reply.send({ ok: true });
+    },
+    schema: {
+      body: { type: "object", additionalProperties: true },
+      params: {
+        properties: { token: { type: "string" } },
+        required: ["token"],
+        type: "object",
+      },
+      summary: "Inbound SMS webhook from the local sms-gate device",
       tags: ["public"],
     },
   });

@@ -4,6 +4,7 @@ import {
   updateAiSettingsSchema,
   updateInvoicingSettingsSchema,
   updateShopSettingsSchema,
+  updateSmsSettingsSchema,
   updateWhatsAppSettingsSchema,
 } from "@shared/schemas/settings.schema";
 import type { FastifyPluginAsync } from "fastify";
@@ -25,13 +26,20 @@ import {
   getAiSettings,
   getInvoicingSettings,
   getShopSettings,
+  getSmsSettings,
   getWhatsAppSettings,
   testAiConnection,
   upsertAiSettings,
   upsertInvoicingSettings,
   upsertShopSettings,
+  upsertSmsSettings,
   upsertWhatsAppSettings,
 } from "../services/settings.service.js";
+import {
+  decryptSmsConfig,
+  registerSmsWebhook,
+  sendSms,
+} from "../services/sms.service.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
 // biome-ignore lint/suspicious/useAwait: FastifyPluginAsync requires async
@@ -292,6 +300,130 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.get(
+    "/sms",
+    {
+      schema: {
+        tags: ["settings"],
+        summary: "Get SMS gateway settings — password never exposed",
+      },
+    },
+    async (_req, reply) => {
+      const settings = await getSmsSettings(app.prisma);
+      return reply.send(settings);
+    }
+  );
+
+  app.put(
+    "/sms",
+    {
+      preHandler: [requirePermission({ settings: ["edit"] })],
+      schema: {
+        tags: ["settings"],
+        summary: "Update SMS gateway settings (sms-gate local server)",
+        body: { type: "object", additionalProperties: true },
+      },
+    },
+    async (req, reply) => {
+      const parsed = updateSmsSettingsSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new AppError("VALIDATION_ERROR", {
+          errors: resolveZodErrors(
+            parsed.error.flatten().fieldErrors,
+            req.locale
+          ),
+        });
+      }
+      // Enabling SMS requires the Pro module — inbound and outbound also
+      // gate on the cached entitlements.
+      if (parsed.data.enabled) {
+        const s = await app.prisma.shopSettings.findUniqueOrThrow({
+          where: { id: "default" },
+        });
+        const modules = Array.isArray(s.cloudEntitlements)
+          ? (s.cloudEntitlements as string[])
+          : [];
+        if (!modules.includes("sms")) {
+          throw new AppError("CLOUD_MODULE_REQUIRED");
+        }
+      }
+      await upsertSmsSettings(app.prisma, parsed.data);
+
+      // Best-effort: regista o webhook inbound no telemóvel usando o
+      // Host do pedido — o endereço a que o browser chegou é também o
+      // que o telemóvel consegue alcançar na LAN. Em localhost não há
+      // como o telemóvel chegar — a UI avisa nesse caso.
+      let webhookRegistered = false;
+      const settings = await getSmsSettings(app.prisma);
+      if (settings.enabled) {
+        const host = req.headers.host ?? "";
+        webhookRegistered = await tryRegisterSmsWebhook(app.prisma, host);
+      }
+      return reply.send({ ...settings, webhookRegistered });
+    }
+  );
+
+  app.post(
+    "/sms/test",
+    {
+      preHandler: [requirePermission({ settings: ["edit"] })],
+      schema: {
+        tags: ["settings"],
+        summary: "Send a test SMS through the configured gateway",
+        body: { type: "object", additionalProperties: true },
+      },
+    },
+    async (req, reply) => {
+      const body = (req.body ?? {}) as { phone?: string };
+      const row = await app.prisma.shopSettings.findUniqueOrThrow({
+        where: { id: "default" },
+      });
+      const config = decryptSmsConfig({
+        gatewayPasswordEncrypted: row.smsGatewayPasswordEncrypted,
+        gatewayUrl: row.smsGatewayUrl,
+        gatewayUser: row.smsGatewayUser,
+      });
+      if (!config) {
+        throw new AppError("SMS_NOT_CONFIGURED");
+      }
+      const phone = body.phone ?? row.phone;
+      if (!phone) {
+        throw new AppError("NO_SHOP_PHONE");
+      }
+      const result = await sendSms(
+        config,
+        phone,
+        `Teste OficinaOS — o gateway SMS está a funcionar. (${new Date().toLocaleTimeString("pt-PT")})`,
+        row.countryCode ?? "PT"
+      );
+      if (!result.success) {
+        throw new AppError("SMS_SEND_FAILED", { detail: result.error });
+      }
+      return reply.send({ ok: true });
+    }
+  );
+
+  app.post(
+    "/sms/webhook",
+    {
+      preHandler: [requirePermission({ settings: ["edit"] })],
+      schema: {
+        tags: ["settings"],
+        summary: "Register the inbound webhook on the sms-gate device",
+      },
+    },
+    async (req, reply) => {
+      const ok = await tryRegisterSmsWebhook(
+        app.prisma,
+        req.headers.host ?? ""
+      );
+      if (!ok) {
+        throw new AppError("SMS_WEBHOOK_FAILED");
+      }
+      return reply.send({ ok: true });
+    }
+  );
+
+  app.get(
     "/invoicing",
     {
       schema: {
@@ -343,3 +475,34 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
     }
   );
 };
+
+const LOCALHOST_RE = /^(localhost|127\.|::1|\[::1\])/i;
+
+/**
+ * Regista o webhook inbound no telemóvel. O callback usa o Host do pedido
+ * — o endereço por que o browser do staff chegou à app é o mesmo que o
+ * telemóvel alcança na LAN. Quando a sessão corre em localhost o telemóvel
+ * nunca lá chega, por isso nem se tenta.
+ */
+async function tryRegisterSmsWebhook(
+  prisma: Parameters<typeof getSmsSettings>[0],
+  host: string
+): Promise<boolean> {
+  if (!host || LOCALHOST_RE.test(host)) {
+    return false;
+  }
+  const row = await prisma.shopSettings.findUniqueOrThrow({
+    where: { id: "default" },
+  });
+  const config = decryptSmsConfig({
+    gatewayPasswordEncrypted: row.smsGatewayPasswordEncrypted,
+    gatewayUrl: row.smsGatewayUrl,
+    gatewayUser: row.smsGatewayUser,
+  });
+  if (!(config && row.smsWebhookToken)) {
+    return false;
+  }
+  const callbackUrl = `http://${host}/api/public/sms/inbound/${row.smsWebhookToken}`;
+  const result = await registerSmsWebhook(config, callbackUrl);
+  return result.success;
+}

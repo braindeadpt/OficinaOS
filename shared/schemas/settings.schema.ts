@@ -86,7 +86,7 @@ export const updateShopSettingsSchema = z
 
 export const updateNotificationTemplateSchema = z.object({
   name: z.string().min(1),
-  channel: z.enum(["WHATSAPP", "IN_APP"]),
+  channel: z.enum(["WHATSAPP", "IN_APP", "SMS"]),
   body: z.string().min(1),
   isDefault: z.boolean().optional(),
 });
@@ -164,6 +164,29 @@ export const updateInvoicingSettingsSchema = z
     message: "validations.at_least_one_field",
   });
 
+// SMS via gateway local (módulo Pro "sms") — SMS Gateway for Android em
+// modo Local Server: a app envia HTTP Basic direto ao telemóvel na LAN.
+// A password é write-only (encriptada, nunca volta à UI).
+export const updateSmsSettingsSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    gatewayUrl: z
+      .union([
+        z.literal(""),
+        z
+          .string()
+          .trim()
+          .max(2048)
+          .regex(/^https?:\/\//, { error: "validations.invalid_url" }),
+      ])
+      .optional(),
+    gatewayUser: z.string().trim().max(64).optional(),
+    gatewayPassword: z.string().max(256).optional(),
+  })
+  .refine((data) => Object.values(data).some((v) => v !== undefined), {
+    message: "validations.at_least_one_field",
+  });
+
 export const pairCloudSchema = z.object({
   apiUrl: z
     .string()
@@ -181,6 +204,7 @@ export type UpdateInvoicingSettingsInput = z.infer<
   typeof updateInvoicingSettingsSchema
 >;
 export type UpdateShopSettingsInput = z.infer<typeof updateShopSettingsSchema>;
+export type UpdateSmsSettingsInput = z.infer<typeof updateSmsSettingsSchema>;
 export type UpdateNotificationTemplateInput = z.infer<
   typeof updateNotificationTemplateSchema
 >;

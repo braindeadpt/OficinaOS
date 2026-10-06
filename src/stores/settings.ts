@@ -26,6 +26,15 @@ interface InvoicingSettings {
   taxName: string;
 }
 
+interface SmsSettings {
+  enabled: boolean;
+  gatewayUrl: string | null;
+  gatewayUser: string | null;
+  hasPassword: boolean;
+  inboundPath: string | null;
+  module: boolean;
+}
+
 interface WhatsAppSettings {
   businessId: string | null;
   enabled: boolean;
@@ -52,11 +61,13 @@ interface SettingsState {
   fetchOutboxLogs: () => Promise<void>;
   fetchSettings: () => Promise<void>;
   fetchShopSettings: () => Promise<void>;
+  fetchSmsSettings: () => Promise<void>;
   fetchWhatsAppSettings: () => Promise<void>;
   invoicingSettings: InvoicingSettings | null;
   isLoading: boolean;
   notificationTemplates: NotificationTemplate[];
   outboxLogs: OutboxLog[];
+  registerSmsWebhook: () => Promise<{ ok: boolean; message?: string }>;
   saveAiSettings: (data: {
     endpointUrl?: string;
     apiKey?: string;
@@ -90,6 +101,12 @@ interface SettingsState {
     monthlyRevenueGoal?: number | null;
     reviewUrl?: string;
   }) => Promise<ShopSettings>;
+  saveSmsSettings: (data: {
+    enabled?: boolean;
+    gatewayPassword?: string;
+    gatewayUrl?: string;
+    gatewayUser?: string;
+  }) => Promise<{ webhookRegistered: boolean }>;
   saveWhatsAppSettings: (data: {
     apiToken?: string;
     businessId?: string;
@@ -101,17 +118,19 @@ interface SettingsState {
     remarketingCooldownDays?: number;
     remarketingTemplate?: string;
   }) => Promise<void>;
+  sendSmsTest: (phone?: string) => Promise<{ ok: boolean; message?: string }>;
   sendTestNotification: (templateId: string) => Promise<{
     message: string;
     success: boolean;
   }>;
   shopSettings: ShopSettings | null;
+  smsSettings: SmsSettings | null;
   testAiConnection: () => Promise<{ success: boolean; message: string }>;
   updateNotificationTemplate: (
     id: string,
     data: {
       name: string;
-      channel: "WHATSAPP";
+      channel: "WHATSAPP" | "IN_APP" | "SMS";
       body: string;
       isDefault?: boolean;
     }
@@ -125,6 +144,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   notificationTemplates: [],
   invoicingSettings: null,
   outboxLogs: [],
+  smsSettings: null,
   whatsAppSettings: null,
   isLoading: false,
   error: null,
@@ -275,6 +295,58 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     } catch (err: unknown) {
       const message = getErrorMessage(err, i18n.t("errors.fetch_settings"));
       set({ isLoading: false, error: message });
+    }
+  },
+
+  fetchSmsSettings: async () => {
+    set({ error: null });
+    try {
+      const res = await api.get("/settings/sms");
+      set({ smsSettings: res.data });
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, i18n.t("errors.fetch_settings"));
+      set({ error: message });
+    }
+  },
+
+  saveSmsSettings: async (data) => {
+    set({ error: null });
+    try {
+      const res = await api.put("/settings/sms", data);
+      const { webhookRegistered: _wr, ...settings } =
+        res.data as SmsSettings & {
+          webhookRegistered: boolean;
+        };
+      set({ smsSettings: settings });
+      return { webhookRegistered: Boolean(_wr) };
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, i18n.t("errors.save_shop_settings"));
+      set({ error: message });
+      throw new Error(message);
+    }
+  },
+
+  sendSmsTest: async (phone) => {
+    set({ error: null });
+    try {
+      await api.post("/settings/sms/test", phone ? { phone } : {});
+      return { ok: true };
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, i18n.t("errors.sms_test_failed"));
+      set({ error: message });
+      return { message, ok: false };
+    }
+  },
+
+  registerSmsWebhook: async () => {
+    set({ error: null });
+    try {
+      await api.post("/settings/sms/webhook");
+      return { ok: true };
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, i18n.t("errors.sms_webhook_failed"));
+      set({ error: message });
+      return { message, ok: false };
     }
   },
 

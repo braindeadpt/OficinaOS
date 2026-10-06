@@ -23,11 +23,16 @@ export default function NotificationsPage() {
   const initialized = useAlertsStore((s) => s.initialized);
   const unreadCount = useAlertsStore((s) => s.unreadCount);
   const {
+    smsSettings,
     whatsAppSettings,
     notificationTemplates,
+    fetchSmsSettings,
     fetchWhatsAppSettings,
     fetchNotificationTemplates,
+    registerSmsWebhook,
+    saveSmsSettings,
     saveWhatsAppSettings,
+    sendSmsTest,
     fetchOutboxLogs,
   } = useSettingsStore();
   const [outboxLoaded, setOutboxLoaded] = useState(false);
@@ -50,6 +55,9 @@ export default function NotificationsPage() {
         fetchWhatsAppSettings().catch(() => {
           /* intentionally swallowed */
         });
+        fetchSmsSettings().catch(() => {
+          /* intentionally swallowed */
+        });
       }
       fetchOutboxLogs().catch(() => {
         /* intentionally swallowed */
@@ -64,6 +72,7 @@ export default function NotificationsPage() {
   }, [
     outboxLoaded,
     canViewSettings,
+    fetchSmsSettings,
     fetchWhatsAppSettings,
     fetchOutboxLogs,
     fetchNotificationTemplates,
@@ -121,7 +130,7 @@ export default function NotificationsPage() {
             ["alerts", t("notifications"), unreadCount],
             ["outbox", t("notification_outbox"), null],
             ...(canViewSettings
-              ? ([["setup", t("whatsapp_settings"), null]] as const)
+              ? ([["setup", t("channels_settings"), null]] as const)
               : []),
           ] as const
         ).map(([key, label, count]) => (
@@ -161,7 +170,11 @@ export default function NotificationsPage() {
       {mode === "setup" && (
         <ChannelSettings
           onFetchWhatsAppSettings={fetchWhatsAppSettings}
+          onRegisterSmsWebhook={registerSmsWebhook}
+          onSaveSmsSettings={saveSmsSettings}
           onSaveWhatsAppSettings={saveWhatsAppSettings}
+          onSendSmsTest={sendSmsTest}
+          smsSettings={smsSettings}
           whatsAppSettings={whatsAppSettings}
         />
       )}

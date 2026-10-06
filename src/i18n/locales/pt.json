@@ -2377,5 +2377,26 @@
     "enabled": "Ativar faturação",
     "saved": "Definições de faturação guardadas",
     "save_failed": "Não foi possível guardar as definições de faturação"
-  }
+  },
+  "channels_settings": "Canais",
+  "errors.sms_not_configured": "O gateway SMS não está configurado",
+  "errors.sms_send_failed": "Não foi possível enviar o SMS através do gateway",
+  "errors.sms_test_failed": "Não foi possível enviar o SMS de teste",
+  "errors.sms_webhook_failed": "Não foi possível registar o webhook no dispositivo gateway",
+  "sms_desc": "Envia e recebe SMS através de um telefone Android na rede da loja que executa o SMS Gateway (modo Servidor Local). Nenhuma conta Meta é necessária.",
+  "sms_enabled": "Ativar canal SMS",
+  "sms_gateway_password": "Palavra-passe do gateway",
+  "sms_gateway_password_hint": "Palavra-passe mostrada na aplicação SMS Gateway no telefone (credenciais do servidor local). Salvo encriptado; entre novamente para alterar.",
+  "sms_gateway_url": "URL do gateway",
+  "sms_gateway_url_hint": "Endereço local do telefone que executa o SMS Gateway, p. http://192.168.1.50:8080",
+  "sms_gateway_user": "Nome de utilizador do gateway",
+  "sms_inbound_url": "URL de entrada do webhook",
+  "sms_inbound_url_hint": "Registado automaticamente ao guardar quando acede à aplicação através do seu endereço de rede (não localhost). As respostas SMS dos clientes chegam aqui.",
+  "sms_module_upsell": "O canal SMS requer o módulo Messages Pro (sms). Será ativado quando o direito for concedido.",
+  "sms_register_webhook": "Registar webhook no telefone",
+  "sms_send_test": "Enviar SMS de teste",
+  "sms_settings": "SMS (gateway local)",
+  "sms_test_sent": "SMS de teste enviado",
+  "sms_webhook_not_registered": "SMS guardado, mas o webhook de entrada não foi registado – abra a aplicação através do seu endereço de rede (por exemplo, http://192.168.x.x:4000) e tente o botão de registo.",
+  "sms_webhook_registered": "Webhook de entrada registado no telefone"
 }

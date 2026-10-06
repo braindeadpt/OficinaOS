@@ -67,6 +67,25 @@ envio DIRETO app → Graph API
 a resposta sai da app com `shop_settings.whatsappApiTokenEncrypted`
 (AES-256-GCM, chave em `AI_ENCRYPTION_KEY`, `server/lib/crypto.ts`).
 
+### Módulo `sms` (canal SMS — gateway Android local)
+
+```
+Outbound: evento → notification-dispatch → outbox →
+  POST http://<telemovel>:8080/message (Basic auth, LAN — sms-gate.app)
+Inbound:  cliente SMS → SMS Gateway for Android → webhook
+  POST /api/public/sms/inbound/:token (route-security: CSRF off + rate limit)
+  → handleInboundSms → mesmos intents do bot (bot-intents.ts partilhado
+  com whatsapp-bot) → resposta automática por SMS
+```
+
+100% LAN: nada passa pela Cloud nem pela Meta — só sai o SMS pela rede móvel.
+É o canal "de arranque" da loja que ainda não tem WhatsApp Business aprovado.
+Sem template SMS dedicado, o dispatch usa o corpo WhatsApp com `*bold*`
+removido (SMS não renderiza markdown). Gate duplo: `smsEnabled` +
+entitlement `sms`. Consentimento partilhado (`whatsappConsent` = opt-in de
+mensagens automáticas, qualquer canal). Password do gateway encriptada como
+o token Meta; token do webhook gerado por `generateSmsWebhookToken`.
+
 ### Módulos `diag-intake` + `ai-reports`
 
 `oficinaos-diag` corre 100% local no PC do cliente. Se o utilizador meter o
@@ -101,6 +120,7 @@ linguagem simples gerado na Cloud.
 | `market-prices` | Preços de mercado agregados | app: `market-prices.service.ts`; cloud: `src/routes/prices.ts` (≥3 lojas por benchmark) | Live |
 | `invoicing` | Faturação InvoiceXpress | app: `invoicing.service.ts` (FR/FS, IVA incluído→líquido) | Live, validado conta demo |
 | `multi-shop` | Dashboard multi-loja | app: `shop-metrics.service.ts` (snapshot diário); cloud: `src/routes/metrics.ts` + `ShopMetric`, UI no dashboard do dono | Live |
+| `sms` | Canal SMS (gateway Android local) | app: `sms.service.ts` + `bot-intents.ts`; gateway: sms-gate.app modo Local Server na LAN | Implementado |
 
 Ativar/desativar: lado da Cloud (`scripts/grant.ts` / dashboard). A app esconde
 a funcionalidade se o módulo não constar nos entitlements.

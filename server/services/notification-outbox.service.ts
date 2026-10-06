@@ -13,6 +13,7 @@ import type { DbClient } from "../repositories/types.js";
 import { logger } from "../utils/logger.js";
 import { renderTemplate } from "./notification-renderer.js";
 import { decryptWhatsAppConfig, sendWhatsApp } from "./notification-sender.js";
+import { decryptSmsConfig, sendSms } from "./sms.service.js";
 
 /**
  * WhatsApp consent gate. Only customers who opted in may receive messages;
@@ -66,7 +67,7 @@ export async function queueNotification(
   data: {
     jobId?: string;
     templateName: string;
-    channel: "WHATSAPP";
+    channel: "WHATSAPP" | "SMS";
     recipientPhone: string;
     templateVars: Record<string, string>;
     templateBody: string;
@@ -230,16 +231,75 @@ async function processWhatsAppEntry(
   }
 }
 
+async function processSmsEntry(
+  prisma: DbClient,
+  entry: OutboxEntry,
+  config: { password: string; url: string; user: string },
+  countryCode: string,
+  shopPhone: string | null
+): Promise<void> {
+  if (await cancelIfExpired(prisma, entry)) {
+    return;
+  }
+  const blocked = await cancelIfConsentMissing(prisma, entry, shopPhone);
+  if (blocked) {
+    return;
+  }
+  const result = await sendSms(
+    config,
+    entry.recipientPhone,
+    entry.renderedBody,
+    countryCode
+  );
+  if (result.success) {
+    await markSent(prisma, entry.id);
+    return;
+  }
+  try {
+    await handleRetry(
+      prisma,
+      entry.id,
+      entry.retryCount ?? 0,
+      result.error ?? "Unknown error"
+    );
+  } catch (retryDbErr) {
+    logger.error(
+      { err: retryDbErr, entryId: entry.id },
+      "Outbox: failed to update retry state after failed send"
+    );
+  }
+}
+
+interface ChannelConfigs {
+  sms: { password: string; url: string; user: string } | null;
+  whatsapp: {
+    apiToken: string;
+    businessId: string;
+    phoneNumberId: string;
+  } | null;
+}
+
 async function processEntry(
   prisma: DbClient,
   entry: OutboxEntry,
-  config: { apiToken: string; businessId: string; phoneNumberId: string },
+  configs: ChannelConfigs,
   countryCode: string,
   shopPhone: string | null
 ): Promise<void> {
   try {
-    if (entry.channel === "WHATSAPP") {
-      await processWhatsAppEntry(prisma, entry, config, countryCode, shopPhone);
+    if (entry.channel === "WHATSAPP" && configs.whatsapp) {
+      await processWhatsAppEntry(
+        prisma,
+        entry,
+        configs.whatsapp,
+        countryCode,
+        shopPhone
+      );
+    } else if (entry.channel === "SMS" && configs.sms) {
+      await processSmsEntry(prisma, entry, configs.sms, countryCode, shopPhone);
+    } else if (entry.channel === "WHATSAPP" || entry.channel === "SMS") {
+      // Canal sem config — deixa QUEUED; a expiração de 24h trata dele.
+      return;
     } else {
       logger.warn(
         `Outbox: unexpected channel "${entry.channel}" for entry ${entry.id} — marking FAILED`
@@ -294,19 +354,21 @@ export async function processOutbox(prisma: DbClient): Promise<void> {
       return;
     }
 
-    const config = await getWhatsAppConfig(prisma);
-    if (!config) {
+    const shopSettings = await findShopSettingsUnique(prisma);
+    const configs: ChannelConfigs = {
+      sms: getSmsConfig(shopSettings),
+      whatsapp: getWhatsAppConfig(shopSettings),
+    };
+    if (!(configs.whatsapp || configs.sms)) {
       return;
     }
-
-    const shopSettings = await findShopSettingsUnique(prisma);
     const countryCode = shopSettings?.countryCode ?? "PT";
 
     for (const entry of pending) {
       await processEntry(
         prisma,
         entry,
-        config,
+        configs,
         countryCode,
         shopSettings?.phone ?? null
       );
@@ -333,12 +395,15 @@ export function startOutboxWorker(prisma: DbClient): () => void {
   };
 }
 
-async function getWhatsAppConfig(prisma: DbClient): Promise<{
+type ShopSettingsRow = NonNullable<
+  Awaited<ReturnType<typeof findShopSettingsUnique>>
+>;
+
+function getWhatsAppConfig(row: ShopSettingsRow | null): {
   apiToken: string;
   businessId: string;
   phoneNumberId: string;
-} | null> {
-  const row = await findShopSettingsUnique(prisma);
+} | null {
   if (!row?.whatsappEnabled) {
     return null;
   }
@@ -357,6 +422,27 @@ async function getWhatsAppConfig(prisma: DbClient): Promise<{
     apiTokenEncrypted: row.whatsappApiTokenEncrypted,
     businessId: row.whatsappBusinessId,
     phoneNumberId: row.whatsappPhoneNumberId,
+  });
+}
+
+function getSmsConfig(row: ShopSettingsRow | null): {
+  password: string;
+  url: string;
+  user: string;
+} | null {
+  if (!row?.smsEnabled) {
+    return null;
+  }
+  const modules = Array.isArray(row.cloudEntitlements)
+    ? (row.cloudEntitlements as string[])
+    : [];
+  if (!modules.includes("sms")) {
+    return null;
+  }
+  return decryptSmsConfig({
+    gatewayPasswordEncrypted: row.smsGatewayPasswordEncrypted,
+    gatewayUrl: row.smsGatewayUrl,
+    gatewayUser: row.smsGatewayUser,
   });
 }
 
@@ -405,7 +491,7 @@ export async function testNotification(prisma: DbClient, templateId: string) {
   if (!template) {
     throw new AppError("TEMPLATE_NOT_FOUND");
   }
-  if (template.channel !== "WHATSAPP") {
+  if (template.channel !== "WHATSAPP" && template.channel !== "SMS") {
     throw new AppError("TEMPLATE_NOT_FOUND");
   }
   const shop = await findShopSettingsUnique(prisma);
@@ -414,7 +500,7 @@ export async function testNotification(prisma: DbClient, templateId: string) {
     throw new AppError("NO_SHOP_PHONE");
   }
   await queueNotification(prisma, {
-    channel: "WHATSAPP" as const,
+    channel: template.channel,
     recipientPhone: phone,
     templateBody: template.body,
     templateName: template.name,

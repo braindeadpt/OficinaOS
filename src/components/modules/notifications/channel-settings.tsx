@@ -1,13 +1,23 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import type { useSettingsStore } from "@/stores/settings";
 
+type Store = ReturnType<typeof useSettingsStore.getState>;
+
 interface ChannelSettingsProps {
   onFetchWhatsAppSettings: () => Promise<void>;
+  onRegisterSmsWebhook: () => Promise<{ ok: boolean; message?: string }>;
+  onSaveSmsSettings: (data: {
+    enabled?: boolean;
+    gatewayPassword?: string;
+    gatewayUrl?: string;
+    gatewayUser?: string;
+  }) => Promise<{ webhookRegistered: boolean }>;
   onSaveWhatsAppSettings: (data: {
     apiToken?: string;
     businessId?: string;
@@ -19,15 +29,202 @@ interface ChannelSettingsProps {
     remarketingCooldownDays?: number;
     remarketingTemplate?: string;
   }) => Promise<void>;
-  whatsAppSettings: ReturnType<
-    typeof useSettingsStore.getState
-  >["whatsAppSettings"];
+  onSendSmsTest: (phone?: string) => Promise<{ ok: boolean; message?: string }>;
+  smsSettings: Store["smsSettings"];
+  whatsAppSettings: Store["whatsAppSettings"];
+}
+
+function SmsCard({
+  smsSettings,
+  onSave,
+  onSendTest,
+  onRegisterWebhook,
+}: {
+  onRegisterWebhook: () => Promise<{ ok: boolean; message?: string }>;
+  onSave: ChannelSettingsProps["onSaveSmsSettings"];
+  onSendTest: ChannelSettingsProps["onSendSmsTest"];
+  smsSettings: Store["smsSettings"];
+}) {
+  const { t } = useTranslation();
+  const [form, setForm] = useState({
+    enabled: false,
+    gatewayPassword: "",
+    gatewayUrl: "",
+    gatewayUser: "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (smsSettings && !loaded) {
+      setForm((f) => ({
+        ...f,
+        enabled: smsSettings.enabled,
+        gatewayUrl: smsSettings.gatewayUrl ?? "",
+        gatewayUser: smsSettings.gatewayUser ?? "",
+      }));
+      setLoaded(true);
+    }
+  }, [smsSettings, loaded]);
+
+  const handleSave = useCallback(async () => {
+    setSaving(true);
+    try {
+      const { webhookRegistered } = await onSave({
+        enabled: form.enabled,
+        gatewayPassword: form.gatewayPassword || undefined,
+        gatewayUrl: form.gatewayUrl,
+        gatewayUser: form.gatewayUser,
+      });
+      if (form.enabled && !webhookRegistered) {
+        toast.warning(t("sms_webhook_not_registered"));
+      }
+      setForm((f) => ({ ...f, gatewayPassword: "" }));
+    } catch {
+      // Error is stored in Zustand state
+    } finally {
+      setSaving(false);
+    }
+  }, [form, onSave, t]);
+
+  const handleTest = useCallback(async () => {
+    const res = await onSendTest();
+    if (res.ok) {
+      toast.success(t("sms_test_sent"));
+    } else if (res.message) {
+      toast.error(res.message);
+    }
+  }, [onSendTest, t]);
+
+  const handleRegister = useCallback(async () => {
+    const res = await onRegisterWebhook();
+    if (res.ok) {
+      toast.success(t("sms_webhook_registered"));
+    } else {
+      toast.error(res.message ?? t("sms_webhook_not_registered"));
+    }
+  }, [onRegisterWebhook, t]);
+
+  const inboundUrl = smsSettings?.inboundPath
+    ? `${window.location.origin}${smsSettings.inboundPath}`
+    : null;
+
+  return (
+    <div className="mt-6">
+      <h3 className="font-extrabold font-headline text-lg text-on-surface tracking-tight">
+        {t("sms_settings")}
+      </h3>
+      <div className="mt-4 rounded-2xl bg-surface-container-low p-5">
+        <div className="flex items-center gap-3">
+          <Switch
+            ariaLabelledBy="sms-enabled-label"
+            checked={form.enabled}
+            onChange={(checked) => setForm((f) => ({ ...f, enabled: checked }))}
+          />
+          <span
+            className="font-medium text-on-surface text-sm"
+            id="sms-enabled-label"
+          >
+            {t("sms_enabled")}
+          </span>
+        </div>
+        <p className="mt-2 text-on-surface-variant text-xs">{t("sms_desc")}</p>
+        {!smsSettings?.module && (
+          <p className="mt-2 rounded-xl bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
+            {t("sms_module_upsell")}
+          </p>
+        )}
+
+        {form.enabled && (
+          <div className="mt-5 space-y-4">
+            <Field
+              hint={t("sms_gateway_url_hint")}
+              label={t("sms_gateway_url")}
+            >
+              <Input
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, gatewayUrl: e.target.value }))
+                }
+                placeholder="http://192.168.1.50:8080"
+                type="url"
+                value={form.gatewayUrl}
+              />
+            </Field>
+            <Field label={t("sms_gateway_user")}>
+              <Input
+                autoComplete="off"
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, gatewayUser: e.target.value }))
+                }
+                value={form.gatewayUser}
+              />
+            </Field>
+            <Field
+              hint={t("sms_gateway_password_hint")}
+              label={t("sms_gateway_password")}
+            >
+              <Input
+                autoComplete="new-password"
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, gatewayPassword: e.target.value }))
+                }
+                placeholder={smsSettings?.hasPassword ? "••••••••" : ""}
+                type="password"
+                value={form.gatewayPassword}
+              />
+            </Field>
+
+            {inboundUrl && (
+              <Field
+                hint={t("sms_inbound_url_hint")}
+                label={t("sms_inbound_url")}
+              >
+                <Input readOnly value={inboundUrl} />
+              </Field>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                className="flex min-h-11"
+                disabled={saving}
+                loading={saving}
+                onClick={handleSave}
+                size="sm"
+              >
+                {saving ? t("settings_saving") : t("save_changes")}
+              </Button>
+              <Button
+                className="flex min-h-11"
+                onClick={handleTest}
+                size="sm"
+                variant="secondary"
+              >
+                {t("sms_send_test")}
+              </Button>
+              <Button
+                className="flex min-h-11"
+                onClick={handleRegister}
+                size="sm"
+                variant="secondary"
+              >
+                {t("sms_register_webhook")}
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function ChannelSettings({
+  smsSettings,
   whatsAppSettings,
   onFetchWhatsAppSettings,
+  onRegisterSmsWebhook,
+  onSaveSmsSettings,
   onSaveWhatsAppSettings,
+  onSendSmsTest,
 }: ChannelSettingsProps) {
   const { t } = useTranslation();
   const [whatsAppForm, setWhatsAppForm] = useState({
@@ -356,6 +553,13 @@ export default function ChannelSettings({
           </div>
         )}
       </div>
+
+      <SmsCard
+        onRegisterWebhook={onRegisterSmsWebhook}
+        onSave={onSaveSmsSettings}
+        onSendTest={onSendSmsTest}
+        smsSettings={smsSettings}
+      />
     </div>
   );
 }

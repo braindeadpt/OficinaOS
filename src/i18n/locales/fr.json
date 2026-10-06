@@ -2377,5 +2377,26 @@
     "enabled": "Activer la facturation",
     "saved": "Paramètres de facturation enregistrés",
     "save_failed": "Impossible d'enregistrer les paramètres de facturation"
-  }
+  },
+  "channels_settings": "Canaux",
+  "errors.sms_not_configured": "La passerelle SMS n'est pas configurée",
+  "errors.sms_send_failed": "Impossible d'envoyer le SMS via la passerelle",
+  "errors.sms_test_failed": "Impossible d'envoyer le SMS de test",
+  "errors.sms_webhook_failed": "Impossible d'enregistrer le webhook sur le périphérique passerelle",
+  "sms_desc": "Envoie et reçoit des SMS via un téléphone Android sur le réseau de la boutique exécutant SMS Gateway (mode serveur local). ",
+  "sms_enabled": "Activer le canal SMS",
+  "sms_gateway_password": "Mot de passe de la passerelle",
+  "sms_gateway_password_hint": "Mot de passe affiché dans l'application SMS Gateway sur le téléphone (identifiants du serveur local). ",
+  "sms_gateway_url": "URL de la passerelle",
+  "sms_gateway_url_hint": "Adresse locale du téléphone exécutant SMS Gateway, par ex. ",
+  "sms_gateway_user": "Nom d'utilisateur de la passerelle",
+  "sms_inbound_url": "URL du webhook entrant",
+  "sms_inbound_url_hint": "Enregistré automatiquement lors de la sauvegarde lorsque vous accédez à l'application via son adresse réseau (pas localhost). ",
+  "sms_module_upsell": "Le canal SMS nécessite le module Messages Pro (sms). ",
+  "sms_register_webhook": "Enregistrer un webhook sur le téléphone",
+  "sms_send_test": "Envoyer des SMS tests",
+  "sms_settings": "SMS (passerelle locale)",
+  "sms_test_sent": "Test SMS envoyé",
+  "sms_webhook_not_registered": "SMS enregistré, mais le webhook entrant n'a pas été enregistré — ouvrez l'application via son adresse réseau (par exemple http://192.168.x.x:4000) et essayez le bouton d'enregistrement.",
+  "sms_webhook_registered": "Webhook entrant enregistré sur le téléphone"
 }
