@@ -46,7 +46,10 @@
     "keep_editing": "Continue a editar",
     "discard": "Descartar",
     "listed_online": "Listar na loja online",
-    "listed_online_desc": "Mostra este artigo na página pública da sua loja online"
+    "listed_online_desc": "Mostra este artigo na página pública da sua loja online",
+    "initial_stock": "Stock inicial",
+    "reorder_level": "Nível de encomenda",
+    "reorder_level_hint": "Avisa quando o stock chegar a este valor."
   },
   "add_service": "Adicionar serviço",
   "add_user": "Adicionar utilizador",
@@ -2181,5 +2184,8 @@
   "tracking_warranty_days_short_other": "{{count}} dias em peças e mão de obra",
   "tracking_guarantee_desc_one": "A sua reparação tem garantia de {{count}} dia em peças e mão de obra, a contar da entrega.",
   "tracking_guarantee_desc_other": "A sua reparação tem garantia de {{count}} dias em peças e mão de obra, a contar da entrega.",
-  "tracking_shop": "Loja"
+  "tracking_shop": "Loja",
+  "parts_stock": "Stock",
+  "parts_stock_count_one": "{{count}} em stock",
+  "parts_stock_count_other": "{{count}} em stock"
 }

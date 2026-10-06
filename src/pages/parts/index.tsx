@@ -4,7 +4,9 @@ import type { PartsCatalog } from "@shared/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router";
-import AddPartModal from "@/components/modules/parts/add-part-modal";
+import AddPartModal, {
+  type AddPartSubmitData,
+} from "@/components/modules/parts/add-part-modal";
 import RecordPurchaseDialog from "@/components/modules/parts/record-purchase-dialog";
 import RestockForecastDialog from "@/components/modules/parts/restock-forecast-dialog";
 import StockMovementsDialog from "@/components/modules/parts/stock-movements-dialog";
@@ -18,14 +20,6 @@ import { PART_CATEGORY_TONES } from "@/lib/category-display";
 import { usePartsCatalogStore } from "@/stores/parts-catalog";
 
 type SortField = "name" | "category" | "defaultPrice" | "supplier";
-
-interface AddPartForm {
-  category: PartCategoryType | "";
-  isActive: boolean;
-  listedOnline: boolean;
-  name: string;
-  supplier: string;
-}
 
 const CATEGORIES: (PartCategoryType | "ALL")[] = [
   "ALL",
@@ -100,6 +94,9 @@ function SkeletonRow({ showCost }: { showCost: boolean }) {
       </td>
       <td className="px-5 py-4">
         <div className="h-3 w-2/5 animate-pulse rounded bg-surface-container-high" />
+      </td>
+      <td className="px-5 py-4">
+        <div className="h-3 w-8 animate-pulse rounded bg-surface-container-high" />
       </td>
       {showCost && (
         <td className="px-5 py-4">
@@ -184,6 +181,16 @@ function DesktopPartRow({
       <td className="px-5 py-4">
         <span className="text-on-surface-variant text-sm">
           {part.supplier ?? "\u2014"}
+        </span>
+      </td>
+      <td className="px-5 py-4">
+        <span
+          className={`font-mono font-semibold text-sm ${
+            (part.stockQuantity ?? 0) <= 0 ? "text-error" : "text-on-surface"
+          }`}
+          data-testid="part-stock"
+        >
+          {part.stockQuantity ?? 0}
         </span>
       </td>
       {showCost && (
@@ -321,7 +328,7 @@ function MobilePartCard({
   onEdit: (part: PartsCatalog) => void;
   part: PartsCatalog;
   showCost: boolean;
-  t: (key: string) => string;
+  t: (key: string, options?: Record<string, unknown>) => string;
   togglingId: string | null;
 }) {
   const isActive = part.isActive;
@@ -362,6 +369,9 @@ function MobilePartCard({
             reorderLevel={part.reorderLevel}
             stockQuantity={part.stockQuantity}
           />
+          <span className="font-mono text-on-surface-variant text-xs">
+            {t("parts_stock_count", { count: part.stockQuantity ?? 0 })}
+          </span>
         </div>
         {showCost && (
           <span className="font-bold font-mono text-primary text-sm">
@@ -719,6 +729,9 @@ function PartsDesktopTable({
               />
             )}
           </th>
+          <th className="px-5 py-4 font-bold text-on-surface-variant text-xs uppercase tracking-wide">
+            {t("parts_stock")}
+          </th>
           {showCost && (
             <th
               aria-sort={getAriaSort(sortBy, sortDir, "defaultPrice")}
@@ -962,7 +975,12 @@ export default function PartsCatalogPage() {
     const active = parts.filter((p) => p.isActive);
     return {
       activeCount: active.length,
-      catalogValue: active.reduce((acc, p) => acc + Number(p.defaultPrice), 0),
+      // Value of what is on the shelf: unit cost × quantity in stock.
+      catalogValue: active.reduce(
+        (acc, p) =>
+          acc + Number(p.defaultPrice) * Math.max(0, p.stockQuantity ?? 0),
+        0
+      ),
       uniqueSuppliers: new Set(
         active
           .filter(
@@ -973,9 +991,7 @@ export default function PartsCatalogPage() {
     };
   }, [parts]);
 
-  const handleAddPart = async (
-    data: Omit<AddPartForm, "defaultPrice"> & { defaultPrice: number }
-  ) => {
+  const handleAddPart = async (data: AddPartSubmitData) => {
     if (!data.category) {
       showToast(t("failed_to_create_part"), true);
       return;
@@ -987,6 +1003,8 @@ export default function PartsCatalogPage() {
         name: data.name,
         supplier: data.supplier || undefined,
         listedOnline: data.listedOnline,
+        reorderLevel: data.reorderLevel,
+        stockQuantity: data.stockQuantity,
       });
       setShowAddModal(false);
       showToast(t("part_added_successfully"));
@@ -1013,14 +1031,7 @@ export default function PartsCatalogPage() {
     setEditingPart(part);
   };
 
-  const handleEditSubmit = async (data: {
-    category: PartCategoryType | "";
-    defaultPrice: number;
-    isActive: boolean;
-    listedOnline: boolean;
-    name: string;
-    supplier: string;
-  }) => {
+  const handleEditSubmit = async (data: AddPartSubmitData) => {
     if (!editingPart) {
       return;
     }
@@ -1036,6 +1047,7 @@ export default function PartsCatalogPage() {
         supplier: data.supplier || undefined,
         isActive: data.isActive,
         listedOnline: data.listedOnline,
+        reorderLevel: data.reorderLevel,
       });
       setEditingPart(null);
       showToast(t("part_updated_successfully"));

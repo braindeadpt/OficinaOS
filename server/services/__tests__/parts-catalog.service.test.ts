@@ -332,6 +332,51 @@ describe("create", () => {
     expect(result).toHaveProperty("name", "Generic Battery");
     expect(result).toHaveProperty("supplier", null);
   });
+
+  it("saves the initial stock and reorder level, with a PURCHASE movement", async () => {
+    (prisma.partsCatalog.create as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "part-3",
+      stockQuantity: 5,
+    });
+
+    await create(
+      prisma,
+      {
+        category: "SCREEN",
+        defaultPrice: 34.9,
+        name: "Ecrã iPhone 11",
+        reorderLevel: 2,
+        stockQuantity: 5,
+      },
+      "user-1"
+    );
+
+    expect(prisma.partsCatalog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ reorderLevel: 2, stockQuantity: 5 }),
+    });
+    expect(prisma.stockMovement.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        balanceAfter: 5,
+        createdById: "user-1",
+        partId: "part-3",
+        quantity: 5,
+        type: "PURCHASE",
+      }),
+    });
+  });
+
+  it("writes no movement when there is no opening stock", async () => {
+    (prisma.partsCatalog.create as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "part-4",
+      stockQuantity: 0,
+    });
+    await create(
+      prisma,
+      { category: "OTHER", defaultPrice: 1, name: "Cola B-7000" },
+      "user-1"
+    );
+    expect(prisma.stockMovement.create).not.toHaveBeenCalled();
+  });
 });
 
 describe("update", () => {

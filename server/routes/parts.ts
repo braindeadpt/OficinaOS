@@ -122,7 +122,7 @@ export const partsRoutes: FastifyPluginAsync = async (app) => {
           ),
         });
       }
-      const part = await createPart(app.prisma, parsed.data);
+      const part = await createPart(app.prisma, parsed.data, getUserId(req));
       return reply.status(201).send(part);
     }
   );

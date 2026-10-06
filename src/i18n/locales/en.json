@@ -46,7 +46,10 @@
     "keep_editing": "Keep editing",
     "discard": "Discard",
     "listed_online": "List in online store",
-    "listed_online_desc": "Shows this part on your public online store page"
+    "listed_online_desc": "Shows this part on your public online store page",
+    "initial_stock": "Opening stock",
+    "reorder_level": "Reorder level",
+    "reorder_level_hint": "Warns you when stock reaches this number."
   },
   "add_service": "Add Service",
   "add_user": "Add User",
@@ -2181,5 +2184,8 @@
   "tracking_warranty_days_short_other": "{{count}} days on parts and labour",
   "tracking_guarantee_desc_one": "Your repair has a {{count}}-day warranty on parts and labour, counted from delivery.",
   "tracking_guarantee_desc_other": "Your repair has a {{count}}-day warranty on parts and labour, counted from delivery.",
-  "tracking_shop": "Shop"
+  "tracking_shop": "Shop",
+  "parts_stock": "Stock",
+  "parts_stock_count_one": "{{count}} in stock",
+  "parts_stock_count_other": "{{count}} in stock"
 }
