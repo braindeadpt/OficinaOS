@@ -9,18 +9,18 @@ const NNBSP = "\u202f";
 describe("formatCurrency", () => {
   it("formats with the active UI language instead of a fixed market", () => {
     setFormatLocale("pt-PT");
-    expect(formatCurrency(1234.5, "EUR")).toBe(`1234,5${NBSP}€`);
+    expect(formatCurrency(1234.5, "EUR")).toBe(`1234,50${NBSP}€`);
 
     setFormatLocale("en-GB");
-    expect(formatCurrency(1234.5, "EUR")).toBe("€1,234.5");
+    expect(formatCurrency(1234.5, "EUR")).toBe("€1,234.50");
 
     setFormatLocale("fr-FR");
-    expect(formatCurrency(1234.5, "EUR")).toBe(`1${NNBSP}234,5${NBSP}€`);
+    expect(formatCurrency(1234.5, "EUR")).toBe(`1${NNBSP}234,50${NBSP}€`);
   });
 
   it("accepts an explicit locale as an override", () => {
     setFormatLocale("en-GB");
-    expect(formatCurrency(1234.5, "EUR", "pt-PT")).toBe(`1234,5${NBSP}€`);
+    expect(formatCurrency(1234.5, "EUR", "pt-PT")).toBe(`1234,50${NBSP}€`);
   });
 
   it("renders the requested currency", () => {
@@ -30,6 +30,12 @@ describe("formatCurrency", () => {
 
   it("falls back to the base language when no locale was set", () => {
     setFormatLocale("");
-    expect(formatCurrency(1234.5, "EUR")).toBe(`1234,5${NBSP}€`);
+    expect(formatCurrency(1234.5, "EUR")).toBe(`1234,50${NBSP}€`);
+  });
+
+  it("always shows two decimals (34,90 €, 120,00 €)", () => {
+    setFormatLocale("pt-PT");
+    expect(formatCurrency(34.9, "EUR")).toBe(`34,90${NBSP}€`);
+    expect(formatCurrency(120, "EUR")).toBe(`120,00${NBSP}€`);
   });
 });

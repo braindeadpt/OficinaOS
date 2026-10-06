@@ -1,5 +1,6 @@
 import type { CashReportDTO, CashSessionDTO } from "@shared/types/reports";
 import { useTranslation } from "react-i18next";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 
 interface CashClosedCardProps {
   onReopen: () => Promise<void>;
@@ -35,6 +36,7 @@ export default function CashClosedCard({
   onReopen,
 }: CashClosedCardProps) {
   const { t } = useTranslation();
+  const fmt = useFormatCurrency();
   const { counted, divergence, report } = session;
 
   const divergenceValue = divergence.cash;
@@ -82,7 +84,7 @@ export default function CashClosedCard({
             {t("reports.cashCountedCash")}
           </p>
           <p className="mt-1 font-bold font-headline text-lg text-on-surface tabular-nums">
-            {(counted.cash ?? 0).toLocaleString()}
+            {fmt(counted.cash ?? 0)}
           </p>
         </div>
         <div className="rounded-xl bg-surface-container-lowest p-3">
@@ -90,7 +92,7 @@ export default function CashClosedCard({
             {t("reports.cashClosedSystemCash")}
           </p>
           <p className="mt-1 font-bold font-headline text-lg text-on-surface tabular-nums">
-            {report.summary.cashTotal.toLocaleString()}
+            {fmt(report.summary.cashTotal)}
           </p>
         </div>
         <div className="rounded-xl bg-surface-container-lowest p-3">
@@ -102,7 +104,7 @@ export default function CashClosedCard({
             data-testid="cash-divergence-value"
           >
             {(divergenceValue ?? 0) > 0 ? "+" : ""}
-            {(divergenceValue ?? 0).toLocaleString()}
+            {fmt(divergenceValue ?? 0)}
           </p>
         </div>
       </div>

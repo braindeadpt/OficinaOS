@@ -22,7 +22,8 @@ export function formatCurrency(
   return value.toLocaleString(locale, {
     style: "currency",
     currency,
-    minimumFractionDigits: 0,
+    // Always two decimals: "34,90 €", never "34,9 €".
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
 }

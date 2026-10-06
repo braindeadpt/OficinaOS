@@ -1,6 +1,7 @@
 import type { CashReportDTO, CashSessionDTO } from "@shared/types/reports";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 import { useReportsStore } from "@/stores/reports";
 import SignaturePad from "./signature-pad";
 
@@ -27,6 +28,7 @@ export default function CashCloseCard({
   onClosed,
 }: CashCloseCardProps) {
   const { t } = useTranslation();
+  const fmt = useFormatCurrency();
   const closeCashSession = useReportsStore((s) => s.closeCashSession);
   const [countedCash, setCountedCash] = useState("");
   const [countedNonCash, setCountedNonCash] = useState("");
@@ -82,7 +84,7 @@ export default function CashCloseCard({
       </h3>
       <p className="mt-1 text-on-surface-variant text-sm">
         {t("reports.cashCloseSystemCash", {
-          amount: systemCash.toLocaleString(),
+          amount: fmt(systemCash),
         })}
       </p>
 
@@ -145,7 +147,7 @@ export default function CashCloseCard({
           data-testid="cash-divergence-preview"
         >
           {t("reports.cashDivergencePreview", {
-            amount: preview.toLocaleString(),
+            amount: fmt(preview),
           })}
         </p>
       )}
@@ -193,7 +195,7 @@ export default function CashCloseCard({
           {submitting
             ? "..."
             : t("reports.cashCloseConfirm", {
-                amount: hasCash ? cashValue.toLocaleString() : "",
+                amount: hasCash ? fmt(cashValue) : "",
               })}
         </button>
       </div>

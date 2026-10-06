@@ -29,6 +29,8 @@ vi.mock("@/components/reports/signature-pad", () => ({
 
 import CashCloseCard from "../cash-close-card";
 
+const DIVERGENCE_MINUS_12 = /reports\.cashDivergencePreview:-12,00\s€/;
+
 const openSession = {
   counted: { cash: null, nonCash: null, totalCollected: null },
   divergence: { cash: null },
@@ -60,7 +62,7 @@ describe("CashCloseCard", () => {
     fireEvent.change(cashInput, { target: { value: "100.5" } });
 
     const preview = screen.getByTestId("cash-divergence-preview");
-    expect(preview).toHaveTextContent("reports.cashDivergencePreview:-12");
+    expect(preview).toHaveTextContent(DIVERGENCE_MINUS_12);
   });
 
   it("submits close with counted values and signature", async () => {

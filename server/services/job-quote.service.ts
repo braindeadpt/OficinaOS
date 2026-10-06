@@ -76,7 +76,12 @@ export async function createAndSendQuote(
     context: {
       customerName: job.customer?.name,
       jobCode: job.jobCode,
-      quoteAmount: quote.amount.toNumber().toFixed(2),
+      // pt-PT decimals ("120,00"); the currency code is appended by the
+      // template via {{currency}}.
+      quoteAmount: new Intl.NumberFormat("pt-PT", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(quote.amount.toNumber()),
       recipientPhone: job.customer?.phone,
     },
     eventName: "quote_sent",

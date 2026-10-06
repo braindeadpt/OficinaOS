@@ -71,7 +71,7 @@ describe("buildJobReceiptEscPos", () => {
     const text = decode(buf);
     expect(text).toContain("O-2026-001");
     expect(text).toContain("123456789012345");
-    expect(text).toContain("80 EUR");
+    expect(text).toContain("80,00 EUR");
 
     const noImei = buildJobReceiptEscPos(
       { ...SETTINGS, receiptShowImei: false },
@@ -92,7 +92,7 @@ describe("buildJobReceiptEscPos", () => {
     const buf = buildJobReceiptEscPos(SETTINGS, JOB, "https://app.test", {
       hideCosts: true,
     });
-    expect(decode(buf)).not.toContain("80 EUR");
+    expect(decode(buf)).not.toContain("80,00 EUR");
   });
 
   it("emits the native QR command when tracking URL exists", () => {
@@ -128,7 +128,7 @@ describe("buildSaleReceiptEscPos", () => {
     const text = decode(buf);
     expect(text).toContain("V-2026-001");
     expect(text).toContain("Película vidro x2");
-    expect(text).toContain("20 EUR");
+    expect(text).toContain("20,00 EUR");
   });
 });
 
