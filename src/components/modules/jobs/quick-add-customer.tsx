@@ -25,7 +25,8 @@ export default function QuickAddCustomer({
   onClose,
 }: QuickAddCustomerProps) {
   const { t } = useTranslation();
-  const { clearError, create, error, isCreating } = useCreateCustomer();
+  const { clearError, create, duplicate, error, isCreating, reuseExisting } =
+    useCreateCustomer();
   const [form, setForm] = useState<CustomerFormData>({
     email: "",
     name: "",
@@ -84,6 +85,21 @@ export default function QuickAddCustomer({
     }
   }, [form, validate, create, onAdd]);
 
+  const handleUseExisting = useCallback(async () => {
+    try {
+      const customer = await reuseExisting();
+      onAdd({
+        email: customer.email ?? "",
+        id: customer.id,
+        name: customer.name,
+        phone: customer.phone,
+        whatsappConsent: form.whatsappConsent,
+      });
+    } catch {
+      // error is set in the hook
+    }
+  }, [reuseExisting, onAdd, form.whatsappConsent]);
+
   return (
     <section className="relative">
       <div className="rounded-xl bg-surface-container-lowest p-6 ring-1 ring-outline-variant">
@@ -115,6 +131,16 @@ export default function QuickAddCustomer({
             <p className="font-bold font-label text-on-error-container text-xs">
               {error}
             </p>
+            {duplicate && (
+              <button
+                className="ms-auto font-bold font-label text-on-error-container text-xs underline"
+                disabled={isCreating}
+                onClick={handleUseExisting}
+                type="button"
+              >
+                {t("add_customer_modal.use_existing")}
+              </button>
+            )}
           </div>
         )}
 

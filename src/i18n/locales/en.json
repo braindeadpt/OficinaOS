@@ -18,7 +18,9 @@
     "error_phone_required": "Phone is required",
     "whatsapp_consent": "Send me WhatsApp status updates about my repair",
     "tax_id": "Tax number (NIF)",
-    "tax_id_placeholder": "Optional — for companies"
+    "tax_id_placeholder": "Optional — for companies",
+    "duplicate_phone": "A customer with this phone already exists: {{name}}",
+    "use_existing": "Use existing customer"
   },
   "add_new_part": "Add New Part",
   "add_part_modal": {
@@ -587,7 +589,8 @@
     "trade_in_not_found": "Trade-in not found",
     "trade_in_invalid_state": "This trade-in can no longer be modified",
     "trade_in_signature_required": "A signature is required to complete the trade-in",
-    "quote_amount_required": "Enter the quote amount — this repair has no estimated cost yet"
+    "quote_amount_required": "Enter the quote amount — this repair has no estimated cost yet",
+    "duplicate_customer_phone": "A customer with this phone number already exists"
   },
   "failed_to_create_part": "Failed to create part",
   "failed_to_delete_part": "Failed to delete part",

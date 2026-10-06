@@ -43,8 +43,10 @@ export default function AddCustomerModal({
   const {
     clearError,
     create,
+    duplicate,
     error: createError,
     isCreating,
+    reuseExisting,
   } = useCreateCustomer();
 
   const [form, setForm] = useState(INITIAL_FORM);
@@ -117,6 +119,17 @@ export default function AddCustomerModal({
       // error handled by useCreateCustomer
     }
   }, [form, create, onSuccess, onClose, t]);
+
+  const handleUseExisting = async () => {
+    try {
+      await reuseExisting();
+      setForm(INITIAL_FORM);
+      onSuccess();
+      onClose();
+    } catch {
+      // error handled by useCreateCustomer
+    }
+  };
 
   if (!open) {
     return null;
@@ -250,6 +263,18 @@ export default function AddCustomerModal({
         {createError && (
           <div className="px-6 py-2" role="alert">
             <p className="text-error text-xs">{createError}</p>
+            {duplicate && (
+              <Button
+                className="mt-2"
+                disabled={isCreating}
+                onClick={handleUseExisting}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                {t("add_customer_modal.use_existing")}
+              </Button>
+            )}
           </div>
         )}
 

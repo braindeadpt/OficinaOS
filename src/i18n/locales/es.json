@@ -18,7 +18,9 @@
     "error_phone_required": "El teléfono es obligatorio",
     "whatsapp_consent": "Enviarme actualizaciones de estado de WhatsApp sobre mi reparación",
     "tax_id": "Número fiscal (NIF)",
-    "tax_id_placeholder": "Opcional — para empresas"
+    "tax_id_placeholder": "Opcional — para empresas",
+    "duplicate_phone": "Ya existe un cliente con este teléfono: {{name}}",
+    "use_existing": "Usar cliente existente"
   },
   "add_new_part": "Agregar Nueva Parte",
   "add_part_modal": {
@@ -587,7 +589,8 @@
     "trade_in_not_found": "Intercambio no encontrado",
     "trade_in_invalid_state": "Este intercambio ya no se puede modificar",
     "trade_in_signature_required": "Se requiere una firma para completar el intercambio",
-    "quote_amount_required": "Indique el importe del presupuesto: esta reparación aún no tiene coste estimado"
+    "quote_amount_required": "Indique el importe del presupuesto: esta reparación aún no tiene coste estimado",
+    "duplicate_customer_phone": "Ya existe un cliente con este número de teléfono"
   },
   "failed_to_create_part": "No se pudo crear la pieza",
   "failed_to_delete_part": "No se pudo eliminar la parte",

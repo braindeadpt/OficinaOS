@@ -232,4 +232,46 @@ describe("customer field limits and duplicate phones", () => {
     expect(body.details.errors.name).toBeDefined();
     expect(mocks.updateCustomer).not.toHaveBeenCalled();
   });
+
+  it("POST returns 409 with the existing customer id on a duplicate phone", async () => {
+    mocks.createCustomer.mockRejectedValue(
+      new AppError("DUPLICATE_CUSTOMER_PHONE", {
+        existingCustomerId: "cust-9",
+        existingCustomerName: "Maria Silva",
+      })
+    );
+
+    const app = buildApp("user-1", "OWNER");
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/customers",
+      payload: { name: "Maria", phone: "912 345 678" },
+    });
+
+    expect(res.statusCode).toBe(409);
+    const body = JSON.parse(res.body);
+    expect(body.code).toBe("DUPLICATE_CUSTOMER_PHONE");
+    expect(body.details.existingCustomerId).toBe("cust-9");
+  });
+
+  it("POST forwards the useExisting override to the service", async () => {
+    mocks.createCustomer.mockResolvedValue({
+      id: "cust-9",
+      name: "Maria Silva",
+      phone: "912345678",
+    });
+
+    const app = buildApp("user-1", "OWNER");
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/customers",
+      payload: { name: "Maria", phone: "912 345 678", useExisting: true },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(mocks.createCustomer).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ useExisting: true })
+    );
+  });
 });

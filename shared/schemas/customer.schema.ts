@@ -32,6 +32,9 @@ export const createCustomerSchema = z.object({
     .optional()
     .or(z.literal("")),
   whatsappConsent: z.boolean().optional(),
+  // A customer with the same (normalized) phone already exists → the API
+  // answers 409 with its id. Set this to reuse that customer instead.
+  useExisting: z.boolean().optional(),
 });
 
 export type CreateCustomerInput = z.infer<typeof createCustomerSchema>;

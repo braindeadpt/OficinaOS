@@ -31,4 +31,13 @@ describe("customer schema length caps", () => {
       }).success
     ).toBe(false);
   });
+
+  it("accepts the useExisting override flag", () => {
+    const parsed = createCustomerSchema.safeParse({
+      name: "Rui",
+      phone: "912345678",
+      useExisting: true,
+    });
+    expect(parsed.data?.useExisting).toBe(true);
+  });
 });

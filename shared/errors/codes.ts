@@ -87,6 +87,10 @@ export const ERRORS = {
   // ── Conflict ───────────────────────────────────────────────────────────
   CONFLICT: { status: 409, message: "errors.conflict" },
   DUPLICATE_BRAND: { status: 409, message: "errors.duplicate_brand" },
+  DUPLICATE_CUSTOMER_PHONE: {
+    status: 409,
+    message: "errors.duplicate_customer_phone",
+  },
   DUPLICATE_MODEL: { status: 409, message: "errors.duplicate_model" },
   DUPLICATE_REPAIR: { status: 409, message: "errors.duplicate_repair" },
   PART_IN_USE: { status: 409, message: "errors.part_in_use" },

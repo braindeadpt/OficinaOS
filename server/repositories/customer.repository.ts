@@ -24,6 +24,38 @@ export async function findCustomerByPhone(prisma: DbClient, phone: string) {
   return await prisma.customer.findUnique({ where: { phone } });
 }
 
+/**
+ * Finds a customer whose stored phone normalizes to the same value as
+ * `normalizedPhone` (see shared/utils/phone.ts — the SQL mirrors it), so
+ * "912 345 678" matches an existing "912345678".
+ */
+export async function findByNormalizedPhone(
+  prisma: DbClient,
+  normalizedPhone: string
+): Promise<{ id: string; name: string; phone: string } | null> {
+  const rows = await prisma.$queryRaw<
+    { id: string; name: string; phone: string }[]
+  >`
+    SELECT id, name, phone
+    FROM (
+      SELECT id, name, phone,
+             btrim(phone) AS trimmed,
+             regexp_replace(phone, '[^0-9]', '', 'g') AS digits
+      FROM customers
+    ) c
+    WHERE (
+      CASE
+        WHEN c.trimmed LIKE '+%' THEN '+' || c.digits
+        WHEN c.digits LIKE '00%' THEN '+' || substr(c.digits, 3)
+        ELSE c.digits
+      END
+    ) = ${normalizedPhone}
+    ORDER BY id
+    LIMIT 1
+  `;
+  return rows[0] ?? null;
+}
+
 export async function findUniqueWithJobs(prisma: DbClient, id: string) {
   return await prisma.customer.findUnique({
     where: { id },

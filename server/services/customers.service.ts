@@ -1,10 +1,12 @@
 import type { Prisma, PrismaClient } from "@generated/client";
+import { AppError } from "@shared/errors/app-error.js";
 import type {
   CreateCustomerInput,
   CustomerListQueryInput,
   CustomerSearchQueryInput,
   UpdateCustomerInput,
 } from "@shared/schemas/customer.schema";
+import { normalizePhone } from "@shared/utils/phone";
 import {
   count as customerCount,
   findMany as customerFindMany,
@@ -13,20 +15,34 @@ import {
   search as customerSearch,
   update as customerUpdate,
   upsert as customerUpsert,
+  findByNormalizedPhone,
   findUniqueWithJobs,
 } from "../repositories/customer.repository.js";
 
 export async function create(prisma: PrismaClient, input: CreateCustomerInput) {
   const email = input.email?.trim() || null;
 
-  const updateData: Record<string, unknown> = {};
-  if (input.name) {
-    updateData.name = input.name;
+  // Same phone in another format ("912 345 678" vs "912345678") would slip
+  // past the unique index and create a duplicate customer. Surface the
+  // existing one instead; the caller can explicitly opt to reuse it.
+  const existing = await findByNormalizedPhone(
+    prisma,
+    normalizePhone(input.phone)
+  );
+  if (existing && !input.useExisting) {
+    throw new AppError("DUPLICATE_CUSTOMER_PHONE", {
+      existingCustomerId: existing.id,
+      existingCustomerName: existing.name,
+    });
   }
+
+  // Only reached for an existing customer the caller chose to reuse — keep
+  // their name, fill in what the form added.
+  const updateData: Record<string, unknown> = {};
   if (email) {
     updateData.email = email;
   }
-  // Granting consent via the intake upsert is fine; revoking is not — a
+  // Granting consent via the quick-add upsert is fine; revoking is not — a
   // quick-add form with the box unchecked must not silently opt out an
   // existing opted-in customer. Revocation goes through update().
   if (input.whatsappConsent) {
@@ -38,10 +54,11 @@ export async function create(prisma: PrismaClient, input: CreateCustomerInput) {
     updateData.taxId = taxId;
   }
 
-  return await customerUpsert(prisma, { phone: input.phone }, updateData, {
+  const phone = existing?.phone ?? input.phone.trim();
+  return await customerUpsert(prisma, { phone }, updateData, {
     email,
     name: input.name,
-    phone: input.phone,
+    phone,
     taxId,
     whatsappConsent: input.whatsappConsent ?? false,
     whatsappConsentAt: input.whatsappConsent ? new Date() : null,

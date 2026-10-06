@@ -4,6 +4,7 @@ import { create, list, search, update } from "../customers.service";
 
 function mockPrisma() {
   return {
+    $queryRaw: vi.fn().mockResolvedValue([]),
     customer: {
       upsert: vi.fn(),
       findUnique: vi.fn(),
@@ -57,6 +58,62 @@ describe("create", () => {
     const upsertCall = (prisma.customer.upsert as ReturnType<typeof vi.fn>).mock
       .calls[0];
     expect(upsertCall[0].create.email).toBeNull();
+  });
+
+  it("rejects a phone that matches an existing customer in another format", async () => {
+    (prisma.$queryRaw as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "cust-9", name: "Maria Silva", phone: "912345678" },
+    ]);
+
+    await expect(
+      create(prisma, { name: "Maria S.", phone: "912 345 678" })
+    ).rejects.toMatchObject({
+      code: "DUPLICATE_CUSTOMER_PHONE",
+      status: 409,
+      details: {
+        existingCustomerId: "cust-9",
+        existingCustomerName: "Maria Silva",
+      },
+    });
+    expect(prisma.customer.upsert).not.toHaveBeenCalled();
+  });
+
+  it("looks the phone up by its normalized form", async () => {
+    (prisma.customer.upsert as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "cust-1",
+    });
+
+    await create(prisma, { name: "Rui", phone: " 00351 912-345-678 " });
+
+    const sqlValues = (
+      prisma.$queryRaw as ReturnType<typeof vi.fn>
+    ).mock.calls[0].slice(1);
+    expect(sqlValues).toContain("+351912345678");
+  });
+
+  it("reuses the existing customer when useExisting is set, keeping its name", async () => {
+    (prisma.$queryRaw as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "cust-9", name: "Maria Silva", phone: "912345678" },
+    ]);
+    (prisma.customer.upsert as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "cust-9",
+      name: "Maria Silva",
+      phone: "912345678",
+    });
+
+    const result = await create(prisma, {
+      name: "Maria S.",
+      phone: "912 345 678",
+      useExisting: true,
+      whatsappConsent: true,
+    });
+
+    expect(result).toHaveProperty("id", "cust-9");
+    const call = (prisma.customer.upsert as ReturnType<typeof vi.fn>).mock
+      .calls[0][0];
+    expect(call.where).toEqual({ phone: "912345678" });
+    expect(call.update).not.toHaveProperty("name");
+    expect(call.update).toHaveProperty("whatsappConsent", true);
   });
 });
 
