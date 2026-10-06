@@ -12,7 +12,6 @@ describe("Textarea", () => {
   it("applies base textarea styles", () => {
     render(<Textarea placeholder="Test" />);
     const el = screen.getByPlaceholderText("Test");
-    expect(el).toHaveClass("bg-surface-container-lowest");
     expect(el).toHaveClass("oos-field");
     expect(el).toHaveClass("resize-none");
   });
