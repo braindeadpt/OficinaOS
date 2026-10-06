@@ -10,6 +10,7 @@ import { loadEnv } from "./config/env.js";
 import { setAppInstance } from "./jobs/app-registry.js";
 import { startCloudPoller } from "./jobs/cloud-poller.js";
 import { startOverdueScheduler } from "./jobs/overdue-scheduler.js";
+import { isFileRequestPath } from "./lib/spa-fallback.js";
 import authPlugin from "./plugins/auth.js";
 import { localePlugin } from "./plugins/locale.js";
 import prismaPlugin from "./plugins/prisma.js";
@@ -195,7 +196,8 @@ if (IS_PROD) {
   });
 
   app.setNotFoundHandler((request, reply) => {
-    if (request.url.startsWith("/api/")) {
+    const pathname = request.url.split("?", 1)[0] ?? request.url;
+    if (pathname.startsWith("/api/") || isFileRequestPath(pathname)) {
       reply.status(404).send({
         code: "NOT_FOUND",
         message: `Route ${request.method} ${request.url} not found`,

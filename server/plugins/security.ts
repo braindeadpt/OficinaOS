@@ -28,6 +28,25 @@ function generateNonce(): string {
   return globalThis.crypto.randomUUID().replace(/-/g, "");
 }
 
+// An origin is only advertised in connect-src to clients that arrived on it.
+// This keeps the CSP from leaking other trusted origins (e.g. the LAN
+// APP_URL's private IP) to requests that came in via a different host (e.g.
+// the public tunnel domain). Same-origin API/WS traffic — all the frontend
+// uses (relative /api, /ws on location.host) — is covered by 'self' + ws:/wss:.
+export function originMatchesRequestHost(
+  origin: string,
+  requestHost: string | undefined
+): boolean {
+  if (!requestHost) {
+    return false;
+  }
+  try {
+    return new URL(origin).host === requestHost;
+  } catch {
+    return false;
+  }
+}
+
 const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   const env = loadEnv();
   const IS_PROD = env.NODE_ENV === "production";
@@ -43,12 +62,20 @@ const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
     const wsOrigins = IS_PROD ? "'self' wss:" : "'self' ws: wss:";
     const apiOrigin = env.API_URL ?? env.APP_URL ?? "";
+    const requestHost = request.headers.host;
     const connectSrc = [wsOrigins];
-    if (apiOrigin && IS_PROD) {
+    if (
+      apiOrigin &&
+      IS_PROD &&
+      originMatchesRequestHost(apiOrigin, requestHost)
+    ) {
       connectSrc.push(apiOrigin, apiOrigin.replace(HTTP_SCHEME_REPLACE, "ws"));
     }
     for (const origin of env.EXTRA_TRUSTED_ORIGINS) {
-      if (!connectSrc.includes(origin)) {
+      if (
+        !connectSrc.includes(origin) &&
+        originMatchesRequestHost(origin, requestHost)
+      ) {
         connectSrc.push(origin);
       }
     }

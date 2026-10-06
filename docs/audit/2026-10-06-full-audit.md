@@ -188,7 +188,26 @@ shop-code validado a 6 chars, retries em falhas transitórias da cloud.
 
 ---
 
-## 10. Verificações mecânicas (limpas — passe final)
+## 10. Pentest externo (black-box, `curl` contra `http://host.docker.internal:4000`) ✅
+
+Relatório de header/endpoint probing — 9 achados, triagem contra o desenho LAN-HTTP:
+
+| Achado reportado | Triagem | Ação |
+|---|---|---|
+| HSTS ausente (média) | **Por desenho** — `security.ts` emite HSTS+preload só quando `APP_URL` é `https://`; sobre HTTP LAN o header é inerte e induz falsa segurança | nenhuma |
+| IP interno na CSP `connect-src` (média) | **Real, baixo** — `apiOrigin`/`EXTRA_TRUSTED_ORIGINS` eram anunciados a qualquer cliente, incl. via túnel público | **fix:** origins entram no `connect-src` só quando `origin.host === Host` do pedido (`originMatchesRequestHost`); `'self'`+`ws:`/`wss:` cobre todo o tráfego same-origin do frontend |
+| 401 em `/api`, `/api/health` | esperado | nenhuma |
+| `/.env`, `/.git/config`, `/package.json`, `/robots.txt` → 200 + SPA HTML | **Real, baixo** — fallback SPA genérico; não expõe ficheiros (não existem em `dist/`) | **fix:** `isFileRequestPath` (segmento dotfile ou extensão no último segmento) → 404 JSON em vez de `index.html` |
+| `/health` público | intencional (monitorização Docker) — só `status`+`timestamp` | nenhuma |
+| Nome da app, rate-limit headers, `X-Request-ID`, `/api/auth/session` 404 | informativos / esperado | nenhuma |
+
+**Testes:** `server/__tests__/spa-fallback.test.ts` (6 testes — scoping de origins por Host e deteção de file-paths).
+
+**Não coberto pelo probe** (superfície real, já endurecida antes): `/api/public/*` com tokens timing-safe + rate-limit + code-lockout; auth/session, WS origin-check, `trustProxy` opt-in.
+
+---
+
+## 11. Verificações mecânicas (limpas — passe final)
 
 - `scan-i18n` ✓ (0 em falta, 0 mortas após remoção de 282) · `check-primitives` ✓ · `tsc` ✓
 - `vitest run`: **1171 pass / 5 skip** (PostgreSQL-dependentes — ambiente, não produto) · `ultracite check` ✓
