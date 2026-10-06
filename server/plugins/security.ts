@@ -19,6 +19,11 @@ import {
   mergeRouteConfig,
   routeSecurity,
 } from "../config/route-security.js";
+import {
+  buildRateLimitError,
+  CappedBackoffStore,
+  isRateLimitExempt,
+} from "../lib/rate-limit.js";
 
 const HTTP_SCHEME_REPLACE = /^http/;
 
@@ -88,7 +93,9 @@ const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         `img-src 'self' data: blob:`,
         `font-src 'self' data:`,
         `connect-src ${connectSrc.join(" ")}`,
-        `frame-src 'none'`,
+        // 'self' so the in-app print preview can frame /api/receipts/*; the
+        // receipt route itself only allows same-origin framing (frame-ancestors).
+        `frame-src 'self'`,
         `frame-ancestors 'none'`,
         `object-src 'none'`,
         `base-uri 'self'`,
@@ -130,9 +137,12 @@ const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     maxAge: 86_400,
   });
 
-  // ── Layer 3: Rate Limiting (global — all routes rate-limited by default) ──
+  // ── Layer 3: Rate Limiting (global — all API routes rate-limited) ───────
   // hook: 'preHandler' so the request body is parsed by the time per-route
   // keyGenerators run (sign-in rate-limits key on body.email/body.username).
+  // Static assets and the SPA shell are exempt (a page load fetches dozens
+  // of chunks); backoff windows are capped at 15 min and every rejection is
+  // a 429 with Retry-After — see server/lib/rate-limit.ts.
   await app.register(rateLimit, {
     global: true,
     hook: "preHandler",
@@ -149,12 +159,9 @@ const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     keyGenerator: (request) => request.user?.id ?? request.ip,
     exponentialBackoff: true,
     ban: 5,
-    allowList: ["/health"],
-    errorResponseBuilder: (_request, context) => ({
-      code: "RATE_LIMITED",
-      message: "errors.rate_limited",
-      details: { retryAfter: Math.ceil(context.ttl / 1000) },
-    }),
+    store: CappedBackoffStore,
+    allowList: (request) => isRateLimitExempt(request),
+    errorResponseBuilder: buildRateLimitError,
   });
 
   // ── Layer 4: CSRF Protection ───────────────────────────────────────────

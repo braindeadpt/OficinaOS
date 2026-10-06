@@ -1,4 +1,5 @@
 import axios from "axios";
+import { toast } from "sonner";
 import i18n from "@/i18n";
 
 export interface ApiError {
@@ -15,6 +16,39 @@ export function getErrorMessage(err: unknown, fallback: string): string {
     return err.message;
   }
   return fallback;
+}
+
+/**
+ * Friendly, localized text for a 429: how long to wait, from the Retry-After
+ * header (or the body's details.retryAfter), rounded to something a person
+ * at the counter can act on.
+ */
+export function rateLimitMessage(
+  retryAfterSeconds: number | undefined
+): string {
+  if (!(retryAfterSeconds && Number.isFinite(retryAfterSeconds))) {
+    return i18n.t("errors.rate_limited");
+  }
+  if (retryAfterSeconds < 60) {
+    return i18n.t("errors.rate_limited_seconds", {
+      count: Math.max(1, Math.ceil(retryAfterSeconds)),
+    });
+  }
+  return i18n.t("errors.rate_limited_minutes", {
+    count: Math.ceil(retryAfterSeconds / 60),
+  });
+}
+
+function retryAfterFrom(response: {
+  data?: { details?: { retryAfter?: unknown } };
+  headers?: Record<string, unknown>;
+}): number | undefined {
+  const header = Number(response.headers?.["retry-after"]);
+  if (Number.isFinite(header) && header > 0) {
+    return header;
+  }
+  const body = Number(response.data?.details?.retryAfter);
+  return Number.isFinite(body) && body > 0 ? body : undefined;
 }
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || "";
@@ -89,6 +123,18 @@ api.interceptors.request.use(async (config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    if (error.response?.status === 429) {
+      const retryAfter = retryAfterFrom(error.response);
+      const message = rateLimitMessage(retryAfter);
+      // One toast however many requests were rejected at once.
+      toast.error(message, { id: "rate-limited" });
+      const apiErr: ApiError = {
+        code: "RATE_LIMITED",
+        message,
+        details: { retryAfter },
+      };
+      return Promise.reject(apiErr);
+    }
     if (error.response?.status === 403) {
       const message: string = error.response?.data?.message ?? "";
       if (message.toLowerCase().includes("csrf")) {
