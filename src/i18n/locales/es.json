@@ -795,7 +795,8 @@
     "signature_captured": "Firma capturada",
     "whatsapp_consent": "El cliente autoriza las notificaciones de WhatsApp",
     "whatsapp_consent_hint": "Actualizaciones de estado de reparación enviadas automáticamente. ",
-    "estimated_cost_pending": "Por presupuestar"
+    "estimated_cost_pending": "Por presupuestar",
+    "email_placeholder": "ejemplo@correo.es"
   },
   "intake_wizard_next": "Próximo",
   "intake_wizard_step1_title": "Cliente y dispositivo",

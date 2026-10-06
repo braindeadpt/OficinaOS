@@ -14,6 +14,7 @@ import {
   type IntakeFormData,
   type IntakeModalProps,
   MAX_PHOTOS,
+  mapServerFieldErrors,
   type PhotoPreview,
   REQUIRED_FIELDS,
 } from "./types";
@@ -410,8 +411,22 @@ export function useIntakeModal({
       setIsSubmitting(true);
       try {
         await onSubmit(form);
-      } catch {
+      } catch (err: unknown) {
         setIsSubmitting(false);
+        // A server-side validation error names the field: mark it and go
+        // back to the step that holds it instead of a generic failure.
+        const mapped = mapServerFieldErrors(err);
+        if (mapped.step !== null) {
+          setErrors(mapped.errors);
+          setTouched((prev) => {
+            const next = { ...prev };
+            for (const key of Object.keys(mapped.errors)) {
+              next[key as keyof IntakeFormData] = true;
+            }
+            return next;
+          });
+          setStep(mapped.step);
+        }
         return;
       }
       setSubmissionSuccess(true);

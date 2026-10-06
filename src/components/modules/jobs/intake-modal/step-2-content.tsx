@@ -30,6 +30,9 @@ export default function Step2Content({
   touched,
   update,
 }: Step2Props) {
+  // Shown once the field was touched or the server flagged it on submit.
+  const fieldError = (key: keyof IntakeFormData) =>
+    touched[key] ? errors[key] : undefined;
   return (
     <section className="min-h-0 flex-1 overflow-y-auto bg-surface-container-low p-4 md:p-8">
       <div className="mx-auto max-w-xl space-y-6">
@@ -96,7 +99,15 @@ export default function Step2Content({
             </label>
             <div className="flex items-center gap-2">
               <input
-                className="h-12 w-full max-w-[160px] rounded-xl bg-surface-container-highest px-4 text-on-surface transition-all focus:bg-surface-container-lowest"
+                aria-describedby={
+                  fieldError("estimatedCost")
+                    ? "error-estimated-cost"
+                    : undefined
+                }
+                aria-invalid={!!fieldError("estimatedCost")}
+                className={`h-12 w-full max-w-[160px] rounded-xl bg-surface-container-highest px-4 text-on-surface transition-all focus:bg-surface-container-lowest ${
+                  fieldError("estimatedCost") ? "ring-2 ring-error" : ""
+                }`}
                 id="estimated-cost"
                 inputMode="decimal"
                 min="0"
@@ -110,6 +121,11 @@ export default function Step2Content({
                 {t("currency_eur")}
               </span>
             </div>
+            {fieldError("estimatedCost") && (
+              <p className={errorCls} id="error-estimated-cost">
+                {fieldError("estimatedCost")}
+              </p>
+            )}
           </div>
           <div>
             <label className={labelCls} htmlFor="deposit">
@@ -117,7 +133,13 @@ export default function Step2Content({
             </label>
             <div className="flex items-center gap-2">
               <input
-                className="h-12 w-full max-w-[160px] rounded-xl bg-surface-container-highest px-4 text-on-surface transition-all focus:bg-surface-container-lowest"
+                aria-describedby={
+                  fieldError("deposit") ? "error-deposit" : undefined
+                }
+                aria-invalid={!!fieldError("deposit")}
+                className={`h-12 w-full max-w-[160px] rounded-xl bg-surface-container-highest px-4 text-on-surface transition-all focus:bg-surface-container-lowest ${
+                  fieldError("deposit") ? "ring-2 ring-error" : ""
+                }`}
                 id="deposit"
                 inputMode="decimal"
                 min="0"
@@ -131,6 +153,11 @@ export default function Step2Content({
                 {t("currency_eur")}
               </span>
             </div>
+            {fieldError("deposit") && (
+              <p className={errorCls} id="error-deposit">
+                {fieldError("deposit")}
+              </p>
+            )}
           </div>
         </div>
 
@@ -139,12 +166,25 @@ export default function Step2Content({
             {t("intake.delivery_date")}
           </label>
           <input
-            className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface transition-all focus:bg-surface-container-lowest"
+            aria-describedby={
+              fieldError("estimatedDelivery")
+                ? "error-delivery-date"
+                : undefined
+            }
+            aria-invalid={!!fieldError("estimatedDelivery")}
+            className={`h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface transition-all focus:bg-surface-container-lowest ${
+              fieldError("estimatedDelivery") ? "ring-2 ring-error" : ""
+            }`}
             id="delivery-date"
             onChange={(e) => update("estimatedDelivery", e.target.value)}
             type="datetime-local"
             value={form.estimatedDelivery}
           />
+          {fieldError("estimatedDelivery") && (
+            <p className={errorCls} id="error-delivery-date">
+              {fieldError("estimatedDelivery")}
+            </p>
+          )}
         </div>
 
         <button

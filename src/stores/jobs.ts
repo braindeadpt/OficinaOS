@@ -204,7 +204,12 @@ export const useJobsStore = create<JobsState>((set) => ({
     } catch (err: unknown) {
       const message = getErrorMessage(err, i18n.t("errors.create_job"));
       set({ isCreatingJob: false, error: message });
-      throw new Error(message);
+      // Keep code/details so the intake form can mark the invalid field.
+      const apiErr = err as { code?: string; details?: unknown } | null;
+      throw Object.assign(new Error(message), {
+        code: apiErr?.code,
+        details: apiErr?.details,
+      });
     }
   },
 

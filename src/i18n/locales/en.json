@@ -795,7 +795,8 @@
     "signature_captured": "Signature captured",
     "whatsapp_consent": "Customer authorizes WhatsApp notifications",
     "whatsapp_consent_hint": "Repair status updates sent automatically. No marketing.",
-    "estimated_cost_pending": "To be quoted"
+    "estimated_cost_pending": "To be quoted",
+    "email_placeholder": "name@example.com"
   },
   "intake_wizard_next": "Next",
   "intake_wizard_step1_title": "Customer & Device",
