@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import fp from "fastify-plugin";
 
 const SUPPORTED_LOCALES = new Set(["en", "es", "fr", "pt"]);
 
@@ -21,7 +22,7 @@ function extractLocale(headers: Record<string, string | undefined>): string {
 }
 
 // biome-ignore lint/suspicious/useAwait: FastifyPluginAsync requires async
-export const localePlugin: FastifyPluginAsync = async (app) => {
+const localePluginImpl: FastifyPluginAsync = async (app) => {
   app.decorateRequest("locale", "pt");
   app.addHook("onRequest", (request, _reply, done) => {
     request.locale = extractLocale(
@@ -30,6 +31,8 @@ export const localePlugin: FastifyPluginAsync = async (app) => {
     done();
   });
 };
+
+export const localePlugin = fp(localePluginImpl, { name: "locale" });
 
 declare module "fastify" {
   interface FastifyRequest {
