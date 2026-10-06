@@ -334,5 +334,31 @@ describe.skipIf(!serverReachable)(
       );
       expect(res.rows).toEqual([]);
     });
+
+    it("upgrades untouched English defaults to PT-PT but keeps shop edits", async () => {
+      const db = getDb();
+      await db.query(
+        `UPDATE notification_templates SET body = $1
+         WHERE name = 'job_cancelled' AND channel = 'WHATSAPP'`,
+        [
+          "Hello {{customerName}}, your repair {{jobCode}} has been cancelled.{{if shopName}} — {{shopName}}{{endif}}",
+        ]
+      );
+      await db.query(
+        `UPDATE notification_templates SET body = 'Texto da loja {{jobCode}}'
+         WHERE name = 'job_returned' AND channel = 'WHATSAPP'`
+      );
+
+      const rerun = await run("bun", ["run", "prisma/seed.ts"]);
+      expect(rerun.code).toBe(0);
+
+      const res = await db.query(
+        `SELECT name, body FROM notification_templates
+         WHERE channel = 'WHATSAPP' AND name IN ('job_cancelled', 'job_returned')
+         ORDER BY name`
+      );
+      expect(res.rows[0].body).toContain("foi cancelada");
+      expect(res.rows[1].body).toBe("Texto da loja {{jobCode}}");
+    });
   }
 );
