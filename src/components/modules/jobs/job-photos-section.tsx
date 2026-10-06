@@ -99,7 +99,7 @@ export default function JobPhotosSection({
           </p>
           {!isTerminal && (
             <button
-              className="mt-3 flex min-h-[44px] items-center gap-1 rounded-lg bg-primary px-3 font-bold font-label text-on-primary text-xs uppercase tracking-wider transition-colors hover:bg-primary-container hover:text-on-primary-container disabled:opacity-60"
+              className="mt-3 flex min-h-[44px] items-center gap-1 rounded-lg bg-primary px-3 font-label font-semibold text-on-primary text-sm transition-colors hover:bg-primary-container hover:text-on-primary-container disabled:opacity-60"
               disabled={uploading}
               onClick={() => fileInputRef.current?.click()}
               type="button"
@@ -137,7 +137,7 @@ export default function JobPhotosSection({
         <div className="flex items-center gap-2">
           {!isTerminal && (
             <button
-              className="flex min-h-[44px] items-center gap-1 rounded-lg px-3 py-1 font-bold font-label text-primary text-xs uppercase tracking-wider transition-colors hover:bg-surface-container-high"
+              className="flex min-h-[44px] items-center gap-1 rounded-lg px-3 py-1 font-label font-semibold text-primary text-sm transition-colors hover:bg-surface-container-high"
               onClick={() => addPhotoRef.current?.click()}
               type="button"
             >
