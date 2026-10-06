@@ -4,7 +4,9 @@ import ts from "typescript";
 
 const LOCALES_DIR = path.join(process.cwd(), "src/i18n/locales");
 const EN_PATH = path.join(LOCALES_DIR, "en.json");
-const SRC_DIR = path.join(process.cwd(), "src");
+const SCAN_DIRS = ["src", "server", "shared"].map((d) =>
+  path.join(process.cwd(), d)
+);
 
 interface DynamicKey {
   file: string;
@@ -53,8 +55,8 @@ async function main() {
   const existingKeys = new Set(flattenKeys(enJson));
   console.log(`ℹ️ Loaded ${existingKeys.size} valid translation keys from en.json.`);
 
-  // 2. Locate all .ts and .tsx files
-  const allFiles = await getFiles(SRC_DIR);
+  // 2. Locate all .ts and .tsx files (client, server and shared code)
+  const allFiles = (await Promise.all(SCAN_DIRS.map(getFiles))).flat();
   const tsFiles = allFiles.filter(
     (f) => (f.endsWith(".ts") || f.endsWith(".tsx")) && !f.includes("__tests__") && !f.includes("i18n/config.ts")
   );
@@ -62,6 +64,35 @@ async function main() {
 
   const keysInCode = new Map<string, Set<string>>(); // key -> set of files where it is used
   const dynamicKeys: DynamicKey[] = [];
+  // Prefixes under which keys are resolved dynamically at runtime. Template
+  // heads like `status.${x}` are collected automatically below; this seed list
+  // covers keys produced outside t() (error codes, role/status maps, server
+  // validation keys resolved via resolveValidationMessage).
+  const dynamicPrefixes = new Set([
+    "status.",
+    "jobStatus.",
+    "validations.",
+    "errors.",
+    "role.",
+    "payment_method.",
+    "part_category.",
+    "repair_category.",
+    "parts_board.",
+    "tradeins.",
+    "market_prices.",
+    "quotes.status.",
+    "tech_dashboard.",
+    "front_desk.alert_",
+    "intake.accessory_",
+    "intake.check_",
+    "profile_activity_",
+    "jobs_history_action_",
+    "returns_outcome_",
+    "returns_status_",
+    "returns_fault_",
+    "parts_movement_",
+    "ai_agent_prompt_",
+  ]);
 
   // 3. Parse and walk AST of each file
   for (const filePath of tsFiles) {
@@ -98,7 +129,13 @@ async function main() {
               }
               keysInCode.get(key)!.add(`${relativePath}:${lineNumber}`);
             } else {
-              // Dynamic key / expression template literal (e.g. t(`status.${s}`))
+              // Dynamic key / expression template literal (e.g. t(`status.${s}`)).
+              // The template head ("status.") is a dynamic prefix — any locale
+              // key under it counts as used.
+              if (ts.isTemplateExpression(arg)) {
+                const head = arg.head.text.trim();
+                if (head.length > 0) dynamicPrefixes.add(head);
+              }
               dynamicKeys.push({
                 file: relativePath,
                 line: lineNumber,
@@ -123,15 +160,15 @@ async function main() {
   }
 
   // To find unused keys, we check which existingKeys are not in keysInCode.
-  // Note: Since dynamic keys are resolved at runtime, we should be careful.
-  // We can check if an unused key starts with a dynamic key pattern (e.g. status. or jobStatus. or validations. or tech_dashboard.activity_)
-  // to avoid false positives for dynamic translations.
+  // Dynamic prefixes (template heads + the seed list above) are skipped —
+  // they resolve at runtime.
   const unusedKeys: string[] = [];
-  const dynamicPrefixes = ["status.", "jobStatus.", "validations.", "tech_dashboard.activity_", "front_desk.alert_"];
 
   for (const key of existingKeys) {
     if (!keysInCode.has(key)) {
-      const isDynamicCandidate = dynamicPrefixes.some((prefix) => key.startsWith(prefix));
+      const isDynamicCandidate = [...dynamicPrefixes].some((prefix) =>
+        key.startsWith(prefix)
+      );
       if (!isDynamicCandidate) {
         unusedKeys.push(key);
       }
@@ -144,7 +181,7 @@ async function main() {
   console.log("==================================================");
   console.log(`Total Keys in Code (Static): ${keysInCode.size}`);
   console.log(`Missing Keys Identified:     ${missingKeys.size}`);
-  console.log(`Unused Keys Identified:      ${unusedKeys.size}`);
+  console.log(`Unused Keys Identified:      ${unusedKeys.length}`);
   console.log(`Dynamic Key References:      ${dynamicKeys.length}`);
   console.log("==================================================\n");
 
@@ -162,7 +199,7 @@ async function main() {
     console.log("✅ No missing translation keys detected!\n");
   }
 
-  if (unusedKeys.size > 0) {
+  if (unusedKeys.length > 0) {
     console.log("🗑️ UNUSED/DEAD TRANSLATION KEYS FOUND!");
     console.log("(Keys defined in en.json but never statically referenced in code)");
     console.log("--------------------------------------------------");
