@@ -70,7 +70,7 @@ export default function FinancialTrend({ data }: FinancialTrendProps) {
         <div className="flex h-48 items-end gap-1 px-2 sm:gap-2">
           {data.map((day) => (
             <div
-              className="flex flex-1 flex-col justify-end gap-1"
+              className="flex h-full flex-1 flex-col justify-end gap-1"
               key={day.date}
             >
               <div
