@@ -4,7 +4,7 @@ import {
 } from "@shared/constants/countries.js";
 import { decryptSecret, isEncrypted } from "../lib/crypto.js";
 
-interface WhatsAppConfig {
+export interface WhatsAppConfig {
   apiToken: string;
   businessId: string;
   phoneNumberId: string;

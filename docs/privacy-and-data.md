@@ -6,23 +6,25 @@ para donos de loja e para quem trata da conformidade RGPD.
 ## A regra de ouro
 
 **O OficinaOS corre no computador da tua loja.** Clientes, reparações,
-stock, caixa e fotos ficam nesse computador — não existem servidores
-nossos a receber nada.
+stock, caixa e fotos ficam nesse computador por defeito — o core não
+envia nada para servidores nossos.
 
 Na prática, para o RGPD isto significa:
 
 - A loja é a **responsável pelo tratamento** dos dados (como sempre foi,
   mesmo com papel e caneta)
-- Nós (quem faz o OficinaOS) **não somos subcontratantes** — nunca vemos
-  nem tocamos nos teus dados, por isso não é preciso nenhum acordo de
-  processamento (Art. 28) connosco
-- **Não há transferências internacionais de dados** para o nosso lado,
-  porque não há lado nosso — não há cloud, não há conta nossa, não há
-  telemetria
+- **Sem módulos Pro ligados, não somos subcontratantes** — não há cloud,
+  conta nossa nem telemetria, e não é preciso acordo de processamento
+  (Art. 28) connosco
+- **Se emparelhares a OficinaOS Cloud** (módulos Pro como o portal ou o
+  bot WhatsApp), passamos a ser subcontratante *apenas* desses fluxos —
+  a tabela abaixo diz exatamente o que transita. Os dados completos da
+  loja continuam no teu PC.
 
 Isto não te dispensa das obrigações normais (registar o tratamento,
 proteger o acesso, responder a pedidos de clientes), mas simplifica-as
-bastante: o tratamento acontece todo dentro da tua loja, no teu equipamento.
+bastante: o tratamento acontece quase todo dentro da tua loja, no teu
+equipamento.
 
 ## O que pode sair da loja — só se ligares
 
@@ -34,7 +36,8 @@ registo de atividades de tratamento (Art. 30):
 |---|---|---|---|
 | Acesso remoto (Cloudflare Tunnel) | Cloudflare, Inc. (EUA, com cláusulas UE) | O tráfego que passa pelo túnel: páginas e dados consultados por quem usa o acesso remoto ou os links públicos | Não ligues o profile `tunnel` |
 | Links públicos ao cliente (tracking, orçamentos, recibos, pré-check) | Cloudflare, Inc. | Os dados mostrados nessas páginas públicas | Sem túnel, os links só funcionam dentro da loja |
-| Notificações WhatsApp | Meta (WhatsApp Business) | O número de telefone do cliente e o texto da notificação (estado da reparação) | Definições → WhatsApp → desligar |
+| Notificações e bot WhatsApp | OficinaOS Cloud (relay) → Meta (WhatsApp Business) | O número de telefone do cliente e o texto da mensagem transitam pela nossa Cloud para chegar à Meta — **a Cloud não guarda nem regista o conteúdo** (logs só com id, estado e telefone mascarado). Guardamos o teu token Meta cifrado para poder enviar por ti | Definições → WhatsApp → desligar; desemparelhar a Cloud apaga o token guardado |
+| Portal do cliente / montra online | OficinaOS Cloud | Snapshot redigido da reparação ou dos produtos que publicares (sem custos internos nem notas privadas) | Remove o link público / despublica a montra |
 | Analista IA | O fornecedor que configurares (ex.: OpenAI) | O conteúdo das perguntas que fizeres à IA | Definições → IA → desligar (vem desligado) |
 | Reviews Google | Google | Apenas o link de review — nenhum dado do cliente sai, o cliente abre a página dele | Definições → Reviews → desligar |
 
@@ -75,6 +78,9 @@ Independentemente das opções ligadas:
    teu contabilista ou consultor RGPD para o procedimento formal.
 5. **Se ligares o acesso remoto**, indica a Cloudflare como
    subcontratante no teu registo (tabela acima já tem o que precisas).
+6. **Se usares módulos Pro** (Cloud emparelhada), indica também o
+   OficinaOS como subcontratante para esses fluxos — o portal, o relay
+   WhatsApp e a montra processam dados por tua conta.
 
 ## Nota técnica
 

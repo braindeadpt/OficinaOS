@@ -11,6 +11,7 @@ import type { NotifyContext } from "./job.service.js";
 import { notify } from "./notification-dispatch.js";
 
 const FETCH_TIMEOUT_MS = 10_000;
+const HINT_TTL_MS = 24 * 3600 * 1000;
 
 interface CloudErrorBody {
   error?: { code?: string; message?: string };
@@ -78,9 +79,15 @@ function toStatus(settings: {
     apiUrl: settings.cloudApiUrl,
     shopId: settings.cloudShopId,
     shopName: settings.cloudShopName,
-    modules: Array.isArray(settings.cloudEntitlements)
-      ? (settings.cloudEntitlements as string[])
-      : [],
+    // Entitlements are only a UI hint — enforcement lives server-side on
+    // each cloud endpoint. The hint expires 24h after the last successful
+    // sync so an offline shop stops showing Pro features it can't use.
+    modules:
+      settings.cloudSyncedAt &&
+      Date.now() - settings.cloudSyncedAt.getTime() < HINT_TTL_MS &&
+      Array.isArray(settings.cloudEntitlements)
+        ? (settings.cloudEntitlements as string[])
+        : [],
     syncedAt: settings.cloudSyncedAt?.toISOString() ?? null,
     reachable: null,
   };
@@ -289,6 +296,16 @@ export async function getCloudStatus(
 
 /** Remove the pairing — Pro modules stop working until re-paired. */
 export async function unpairCloud(prisma: PrismaClient): Promise<void> {
+  const settings = await getOrCreateShopSettings(prisma);
+  // Explicit unpair is a cancellation: the cloud deletes the stored Meta
+  // credentials so nothing of the shop's survives the relationship.
+  if (settings.cloudApiUrl && settings.cloudShopTokenEncrypted) {
+    const token = decryptSecret(settings.cloudShopTokenEncrypted);
+    await cloudFetch(settings.cloudApiUrl, "/shops/whatsapp-credentials", {
+      method: "DELETE",
+      token,
+    }).catch(() => null);
+  }
   await prisma.shopSettings.update({
     where: { id: "default" },
     data: {
@@ -298,6 +315,7 @@ export async function unpairCloud(prisma: PrismaClient): Promise<void> {
       cloudShopName: null,
       cloudEntitlements: Prisma.DbNull,
       cloudSyncedAt: null,
+      whatsappCredentialsAtCloud: false,
     },
   });
 }

@@ -10,7 +10,13 @@ import {
 } from "./bot-intents.js";
 import { cloudFetch } from "./cloud.service.js";
 import type { NotifyContext } from "./job.service.js";
-import { decryptWhatsAppConfig, sendWhatsApp } from "./notification-sender.js";
+import {
+  maskPhone,
+  pushCredentialsToCloud,
+  resolveWhatsAppChannel,
+  sendWhatsAppText,
+  type WhatsAppChannel,
+} from "./whatsapp-channel.js";
 
 /**
  * WhatsApp bot (módulo "whatsapp-bot"): a cloud fila mensagens inbound
@@ -32,14 +38,27 @@ const sendAttempts = new Map<string, number>();
 
 interface BotCtx extends BotReplyCtx {
   apiUrl: string;
+  channel: WhatsAppChannel;
+  settings: {
+    whatsappApiTokenEncrypted?: string | null;
+  };
   token: string;
-  waConfig: NonNullable<ReturnType<typeof decryptWhatsAppConfig>>;
 }
 
 async function send(ctx: BotCtx, to: string, text: string): Promise<boolean> {
-  const res = await sendWhatsApp(ctx.waConfig, `+${to}`, text);
+  const res = await sendWhatsAppText(
+    ctx.prisma,
+    ctx.channel,
+    `+${to}`,
+    text,
+    undefined,
+    ctx.settings
+  );
   if (!res.success) {
-    ctx.log.warn({ err: res.error, to: `+${to}` }, "whatsapp-bot send failed");
+    ctx.log.warn(
+      { err: res.error, to: maskPhone(to) },
+      "whatsapp-bot send failed"
+    );
   }
   return res.success;
 }
@@ -67,14 +86,12 @@ export async function syncWhatsAppBot(
     }).catch(() => null);
   }
 
-  const waConfig = settings.whatsappEnabled
-    ? decryptWhatsAppConfig({
-        apiTokenEncrypted: settings.whatsappApiTokenEncrypted ?? "",
-        businessId: settings.whatsappBusinessId ?? "",
-        phoneNumberId: settings.whatsappPhoneNumberId ?? "",
-      })
-    : null;
-  if (!waConfig) {
+  // Migração de credenciais: envia o token Meta à cloud na primeira
+  // oportunidade — não depende de o dono voltar a gravar as settings.
+  await pushCredentialsToCloud(prisma);
+
+  const channel = resolveWhatsAppChannel(settings);
+  if (!channel) {
     return; // módulo ativo mas WhatsApp por configurar — fila fica a aguardar
   }
 
@@ -89,15 +106,16 @@ export async function syncWhatsAppBot(
 
   const ctx: BotCtx = {
     apiUrl,
+    channel,
     currency: settings.currency ?? "EUR",
     log,
     notifyCtx,
     prisma,
+    settings,
     shopLabel:
       [settings.shopName, settings.phone].filter(Boolean).join(" · ") ||
       "a loja",
     token,
-    waConfig,
   };
 
   const ackIds: string[] = [];

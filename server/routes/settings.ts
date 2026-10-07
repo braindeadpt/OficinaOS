@@ -43,6 +43,7 @@ import {
   registerSmsWebhook,
   sendSms,
 } from "../services/sms.service.js";
+import { pushCredentialsToCloud } from "../services/whatsapp-channel.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
 // biome-ignore lint/suspicious/useAwait: FastifyPluginAsync requires async
@@ -296,7 +297,11 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
         }
       }
       const updated = await upsertWhatsAppSettings(app.prisma, parsed.data);
-      return reply.send(updated);
+      // Migração silenciosa: envia as credenciais Meta para o relay da
+      // cloud. Se falhar (cloud em baixo / sem entitlement) fica para a
+      // próxima gravação — o envio local continua a funcionar entretanto.
+      const credentialsAtCloud = await pushCredentialsToCloud(app.prisma);
+      return reply.send({ ...updated, credentialsAtCloud });
     }
   );
 
@@ -333,17 +338,6 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
             req.locale
           ),
         });
-      }
-      // Enabling SMS requires the Pro module — inbound and outbound also
-      // gate on the cached entitlements.
-      if (parsed.data.enabled) {
-        const s = await getOrCreateShopSettings(app.prisma);
-        const modules = Array.isArray(s.cloudEntitlements)
-          ? (s.cloudEntitlements as string[])
-          : [];
-        if (!modules.includes("sms")) {
-          throw new AppError("CLOUD_MODULE_REQUIRED");
-        }
       }
       await upsertSmsSettings(app.prisma, parsed.data);
 

@@ -37,7 +37,8 @@ funcional, porque:
   todo na Cloud privada
 - cada rota Pro na Cloud exige entitlement server-side → `402 MODULE_NOT_ENTITLED`
 - a app esconde os pontos de entrada quando o módulo não consta dos
-  entitlements (cache de 2 min via poller)
+  entitlements — a cache local é só um **hint de UI** com validade de 24h
+  (renovada pelo poller de ~2 min); a enforcement real é sempre na Cloud
 
 **Para módulos futuros**: a lógica de negócio (prompts IA, regras de decisão,
 agregação) entra em `oficinaos-cloud`; a app recebe só o cliente mínimo para
@@ -51,6 +52,10 @@ falar com ela. Nunca código pago compilado na app pública.
 | `whatsapp-bot` | Pergunta "está pronto?" no WhatsApp da loja e recebe resposta automática; aprova orçamento com SIM/NÃO | Notificações → Setup → WhatsApp |
 | `diag-intake` | Recebe diagnósticos do `oficinaos-diag` enviados por clientes | Fila de intake na app |
 | `ai-reports` | Relatórios de diagnóstico gerados por IA | Anexado a trabalhos/diag |
+| `remarketing` | Recontacto automático de clientes inativos via template WhatsApp aprovado | Notificações → Setup → WhatsApp |
+
+(O `sms` já não é módulo — o canal SMS via gateway Android local é grátis no
+core, porque não depende da Cloud para nada.)
 
 ## Portal do cliente (`portal`)
 
@@ -109,8 +114,11 @@ Feito na Meta App "OficinaOS" (developers.facebook.com):
 ### Setup — por loja
 
 1. Notificações → **Setup** → WhatsApp: `enabled` + API Token +
-   Phone Number ID + Business ID → a app regista o `phoneNumberId` na Cloud
-   sozinha
+   Phone Number ID + Business ID → a app faz upload das credenciais para a
+   Cloud (`POST /shops/whatsapp-credentials`, validadas contra a Graph API
+   antes de serem guardadas cifradas). A partir daí os envios saem pelo
+   relay `POST /whatsapp/send` — o token Meta deixa de viver no PC da loja
+   (é apagado após o primeiro envio Cloud bem-sucedido)
 2. Número de teste Meta: só conversa com números verificados (máx. 5) —
    adicionar em WhatsApp → API setup → "To"
 3. Número real da loja (coexistence): requer **business verification** da

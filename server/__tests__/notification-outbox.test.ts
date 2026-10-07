@@ -339,7 +339,7 @@ describe("processOutbox", () => {
     );
   });
 
-  it("leaves SMS entries queued when the module is not entitled", async () => {
+  it("sends SMS entries without cloud entitlements — SMS is core", async () => {
     mocks.findManyOutboxEntries.mockResolvedValue([
       {
         id: "out-sms2",
@@ -352,12 +352,30 @@ describe("processOutbox", () => {
     mocks.findShopSettingsUnique.mockResolvedValue({
       cloudEntitlements: [],
       smsEnabled: true,
+      smsGatewayPasswordEncrypted: "v1:enc",
+      smsGatewayUrl: "http://192.168.1.50:8080",
+      smsGatewayUser: "sms",
+    });
+    mocks.decryptSmsConfig.mockReturnValue({
+      password: "p",
+      url: "http://192.168.1.50:8080",
+      user: "sms",
+    });
+    mocks.sendSms.mockResolvedValue({ success: true });
+    mocks.findCustomerByPhone.mockResolvedValue({
+      phone: "0912345678",
+      whatsappConsent: true,
     });
 
     await processOutbox(prisma);
 
-    expect(mocks.sendSms).not.toHaveBeenCalled();
-    expect(mocks.transitionOutboxEntry).not.toHaveBeenCalled();
+    expect(mocks.sendSms).toHaveBeenCalled();
+    expect(mocks.transitionOutboxEntry).toHaveBeenCalledWith(
+      prisma,
+      "out-sms2",
+      OutboxStatus.QUEUED,
+      expect.objectContaining({ status: OutboxStatus.SENT })
+    );
   });
 
   it("cancels entries older than 24h instead of sending them", async () => {

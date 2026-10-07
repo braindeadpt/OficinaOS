@@ -56,18 +56,27 @@ estado da reparação a partir do link. MCP server é roadmap em `docs/pro-modul
 ### Módulo `whatsapp-bot`
 
 ```
-Cliente → WhatsApp Meta → POST /webhooks/whatsapp (assinatura HMAC validada
-com WA_APP_SECRET) → fila WhatsAppInbound (routing por phone_number_id,
-dedupe por wamid) → poller da app → server/services/whatsapp-bot.service.ts
-(match pelos últimos 9 dígitos do telefone → jobs ativos → resposta) →
-envio DIRETO app → Graph API
+Inbound:  Cliente → WhatsApp Meta → POST /webhooks/whatsapp (assinatura HMAC
+  validada com WA_APP_SECRET) → fila WhatsAppInbound (routing por
+  phone_number_id, dedupe por wamid) → poller da app →
+  server/services/whatsapp-bot.service.ts (match pelos últimos 9 dígitos
+  do telefone → jobs ativos → resposta)
+Outbound: app → POST /whatsapp/send (relay na Cloud, sem credenciais no
+  pedido) → Cloud envia à Graph API com o token Meta da loja
 ```
 
-**O token da Meta nunca sai da loja** — a Cloud só recebe inbound e enfileira;
-a resposta sai da app com `shop_settings.whatsappApiTokenEncrypted`
-(AES-256-GCM, chave em `AI_ENCRYPTION_KEY`, `server/lib/crypto.ts`).
+**O token Meta vive na Cloud** (`shops.whatsappAccessToken`, AES-GCM com
+`SECRETS_KEY`): a app faz upload uma vez via `POST /shops/whatsapp-credentials`
+(no setup ou no primeiro ciclo do bot) e nunca o recebe de volta. O envio é
+autorizado server-side por entitlement — a cache local de módulos é só um
+hint de UI (expira 24h após o último sync). Instalações antigas continuam a
+enviar com o token local (`whatsappApiTokenEncrypted`, AES-256-GCM em
+`AI_ENCRYPTION_KEY`) até ao primeiro envio Cloud bem-sucedido — nessa altura
+o token local é apagado. A Cloud não guarda nem regista corpos de mensagem;
+os logs levam só id/estado/erro e telefone mascarado. Unpair da loja apaga as
+credenciais na Cloud (`DELETE /shops/whatsapp-credentials`).
 
-### Módulo `sms` (canal SMS — gateway Android local)
+### Canal SMS (core — gateway Android local, sem entitlement)
 
 ```
 Outbound: evento → notification-dispatch → outbox →
@@ -81,10 +90,12 @@ Inbound:  cliente SMS → SMS Gateway for Android → webhook
 100% LAN: nada passa pela Cloud nem pela Meta — só sai o SMS pela rede móvel.
 É o canal "de arranque" da loja que ainda não tem WhatsApp Business aprovado.
 Sem template SMS dedicado, o dispatch usa o corpo WhatsApp com `*bold*`
-removido (SMS não renderiza markdown). Gate duplo: `smsEnabled` +
-entitlement `sms`. Consentimento partilhado (`whatsappConsent` = opt-in de
-mensagens automáticas, qualquer canal). Password do gateway encriptada como
-o token Meta; token do webhook gerado por `generateSmsWebhookToken`.
+removido (SMS não renderiza markdown). É **grátis no core** — o gateway é um
+Android na LAN da loja, sem dependência da Cloud, logo não fazia sentido como
+módulo pago. Gate único: `smsEnabled`. Consentimento partilhado
+(`whatsappConsent` = opt-in de mensagens automáticas, qualquer canal).
+Password do gateway encriptada (AES-256-GCM); token do webhook gerado por
+`generateSmsWebhookToken`.
 
 ### Módulos `diag-intake` + `ai-reports`
 
@@ -110,7 +121,7 @@ linguagem simples gerado na Cloud.
 | ID do módulo | Nome | Onde no código | Estado |
 |---|---|---|---|
 | `portal` | Portal do cliente | app: `server/services/portal.service.ts`; cloud: `src/routes/portal.ts`, `public/portal.html` | Live, E2E testado |
-| `whatsapp-bot` | Bot de WhatsApp | app: `server/services/whatsapp-bot.service.ts`; cloud: webhook + `WhatsAppInbound` | Live, E2E provado (SIM → APPROVED real) |
+| `whatsapp-bot` | Bot de WhatsApp | app: `whatsapp-bot.service.ts` + `whatsapp-channel.ts`; cloud: webhook + `WhatsAppInbound` + relay `POST /whatsapp/send` | Live, E2E provado (SIM → APPROVED real) |
 | `diag-intake` | Receção de diagnósticos | app: `intake-request.service.ts` (fila em Pedidos); cloud: `src/routes/intake.ts` | Implementado |
 | `ai-reports` | Relatórios IA | cloud: `src/routes/reports.ts`, `src/ai-report.ts` | Implementado |
 | `market` | Procuro-peça B2B | app: `part-requests.service.ts`; cloud: `src/routes/part-requests.ts` | Live |
@@ -120,15 +131,20 @@ linguagem simples gerado na Cloud.
 | `market-prices` | Preços de mercado agregados | app: `market-prices.service.ts`; cloud: `src/routes/prices.ts` (≥3 lojas por benchmark) | Live |
 | `invoicing` | Faturação InvoiceXpress | app: `invoicing.service.ts` (FR/FS, IVA incluído→líquido) | Live, validado conta demo |
 | `multi-shop` | Dashboard multi-loja | app: `shop-metrics.service.ts` (snapshot diário); cloud: `src/routes/metrics.ts` + `ShopMetric`, UI no dashboard do dono | Live |
-| `sms` | Canal SMS (gateway Android local) | app: `sms.service.ts` + `bot-intents.ts`; gateway: sms-gate.app modo Local Server na LAN | Implementado |
+
+(O canal `sms` saiu dos módulos Pro — é core grátis, ver secção acima.)
 
 Ativar/desativar: lado da Cloud (`scripts/grant.ts` / dashboard). A app esconde
-a funcionalidade se o módulo não constar nos entitlements.
+a funcionalidade se o módulo não constar nos entitlements — mas a cache local
+é apenas um **hint de UI com validade de 24h** (`cloudSyncedAt`): a enforcement
+real é server-side, no endpoint Cloud de cada módulo (ex.: `/whatsapp/send`
+exige `whatsapp-bot`).
 
 ## Onde está cada coisa (para quem chega ao código)
 
 - **Segurança da app**: `server/plugins/security.ts` (SSOT — relaxada para LAN HTTP de propósito, ver CLAUDE.md)
-- **Token WhatsApp encriptado**: `server/lib/crypto.ts` (AES-256-GCM)
+- **Token WhatsApp**: na Cloud (`shops.whatsappAccessToken`, AES-GCM `SECRETS_KEY`); legado local `whatsappApiTokenEncrypted` (AES-256-GCM, `server/lib/crypto.ts`) até migrar
+- **Canal WhatsApp (cloud vs local)**: `server/services/whatsapp-channel.ts`
 - **Entitlements + poller**: `server/services/cloud.service.ts`
 - **Credenciais WhatsApp na UI**: menu **Notificações → Setup → WhatsApp** (`src/components/modules/notifications/channel-settings.tsx`), API `PUT /api/settings/whatsapp`
 - **Emparelhamento na UI**: **Definições → separador Cloud** (`src/components/modules/settings/settings-cloud-tab.tsx`)

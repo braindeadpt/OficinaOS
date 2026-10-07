@@ -215,14 +215,14 @@ describe("registerSmsWebhook", () => {
 });
 
 describe("handleInboundSms", () => {
-  it("does nothing when the sms module is not entitled", async () => {
+  it("replies even without cloud entitlements — SMS is core", async () => {
     const fetchMock = fetchOk();
     vi.stubGlobal("fetch", fetchMock);
     const prisma = fakePrisma({ ...ENABLED_ROW, cloudEntitlements: [] });
 
     await handleInboundSms(prisma, log, undefined, "351912345678", "estado?");
 
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalled();
   });
 
   it("does nothing when smsEnabled is false", async () => {

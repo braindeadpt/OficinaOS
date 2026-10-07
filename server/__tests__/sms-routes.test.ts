@@ -130,7 +130,9 @@ beforeEach(() => {
 });
 
 describe("PUT /api/settings/sms", () => {
-  it("rejects enabling without the sms entitlement (402)", async () => {
+  it("enables without any cloud entitlement — SMS is core", async () => {
+    mocks.getSmsSettings.mockResolvedValue({ enabled: true });
+    mocks.decryptSmsConfig.mockReturnValue(null);
     const app = buildApp(fakePrisma({ ...SMS_ROW, cloudEntitlements: [] }));
     const res = await app.inject({
       method: "PUT",
@@ -142,9 +144,8 @@ describe("PUT /api/settings/sms", () => {
       },
       url: "/api/settings/sms",
     });
-    expect(res.statusCode).toBe(402);
-    expect(res.json().code).toBe("CLOUD_MODULE_REQUIRED");
-    expect(mocks.upsertSmsSettings).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+    expect(mocks.upsertSmsSettings).toHaveBeenCalled();
   });
 
   it("accepts disabling even without the entitlement", async () => {

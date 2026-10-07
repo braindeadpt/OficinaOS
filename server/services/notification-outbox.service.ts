@@ -12,8 +12,12 @@ import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import { logger } from "../utils/logger.js";
 import { renderTemplate } from "./notification-renderer.js";
-import { decryptWhatsAppConfig, sendWhatsApp } from "./notification-sender.js";
 import { decryptSmsConfig, sendSms } from "./sms.service.js";
+import {
+  resolveWhatsAppChannel,
+  sendWhatsAppText,
+  type WhatsAppChannel,
+} from "./whatsapp-channel.js";
 
 /**
  * WhatsApp consent gate. Only customers who opted in may receive messages;
@@ -176,9 +180,10 @@ async function cancelIfConsentMissing(
 async function processWhatsAppEntry(
   prisma: DbClient,
   entry: OutboxEntry,
-  config: { apiToken: string; businessId: string; phoneNumberId: string },
+  channel: WhatsAppChannel,
   countryCode: string,
-  shopPhone: string | null
+  shopPhone: string | null,
+  settings: ShopSettingsRow | null
 ): Promise<void> {
   if (await cancelIfExpired(prisma, entry)) {
     return;
@@ -189,11 +194,13 @@ async function processWhatsAppEntry(
   if (blocked) {
     return;
   }
-  const result = await sendWhatsApp(
-    config,
+  const result = await sendWhatsAppText(
+    prisma,
+    channel,
     entry.recipientPhone,
     entry.renderedBody,
-    countryCode
+    countryCode,
+    settings
   );
   if (result.success) {
     await markSent(prisma, entry.id);
@@ -255,11 +262,7 @@ async function processSmsEntry(
 
 interface ChannelConfigs {
   sms: { password: string; url: string; user: string } | null;
-  whatsapp: {
-    apiToken: string;
-    businessId: string;
-    phoneNumberId: string;
-  } | null;
+  whatsapp: WhatsAppChannel | null;
 }
 
 async function processEntry(
@@ -267,7 +270,8 @@ async function processEntry(
   entry: OutboxEntry,
   configs: ChannelConfigs,
   countryCode: string,
-  shopPhone: string | null
+  shopPhone: string | null,
+  shopSettings: ShopSettingsRow | null
 ): Promise<void> {
   try {
     if (entry.channel === "WHATSAPP" && configs.whatsapp) {
@@ -276,7 +280,8 @@ async function processEntry(
         entry,
         configs.whatsapp,
         countryCode,
-        shopPhone
+        shopPhone,
+        shopSettings
       );
     } else if (entry.channel === "SMS" && configs.sms) {
       await processSmsEntry(prisma, entry, configs.sms, countryCode, shopPhone);
@@ -341,7 +346,7 @@ export async function processOutbox(prisma: DbClient): Promise<void> {
     const shopSettings = await findShopSettingsUnique(prisma);
     const configs: ChannelConfigs = {
       sms: getSmsConfig(shopSettings),
-      whatsapp: getWhatsAppConfig(shopSettings),
+      whatsapp: shopSettings ? resolveWhatsAppChannel(shopSettings) : null,
     };
     if (!(configs.whatsapp || configs.sms)) {
       return;
@@ -354,7 +359,8 @@ export async function processOutbox(prisma: DbClient): Promise<void> {
         entry,
         configs,
         countryCode,
-        shopSettings?.phone ?? null
+        shopSettings?.phone ?? null,
+        shopSettings
       );
     }
   } finally {
@@ -383,44 +389,12 @@ type ShopSettingsRow = NonNullable<
   Awaited<ReturnType<typeof findShopSettingsUnique>>
 >;
 
-function getWhatsAppConfig(row: ShopSettingsRow | null): {
-  apiToken: string;
-  businessId: string;
-  phoneNumberId: string;
-} | null {
-  if (!row?.whatsappEnabled) {
-    return null;
-  }
-
-  if (
-    !(
-      row.whatsappApiTokenEncrypted &&
-      row.whatsappBusinessId &&
-      row.whatsappPhoneNumberId
-    )
-  ) {
-    return null;
-  }
-
-  return decryptWhatsAppConfig({
-    apiTokenEncrypted: row.whatsappApiTokenEncrypted,
-    businessId: row.whatsappBusinessId,
-    phoneNumberId: row.whatsappPhoneNumberId,
-  });
-}
-
 function getSmsConfig(row: ShopSettingsRow | null): {
   password: string;
   url: string;
   user: string;
 } | null {
   if (!row?.smsEnabled) {
-    return null;
-  }
-  const modules = Array.isArray(row.cloudEntitlements)
-    ? (row.cloudEntitlements as string[])
-    : [];
-  if (!modules.includes("sms")) {
     return null;
   }
   return decryptSmsConfig({

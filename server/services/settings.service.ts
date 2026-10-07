@@ -240,6 +240,7 @@ export async function getWhatsAppSettings(prisma: PrismaClient) {
   if (!row) {
     return {
       businessId: null,
+      credentialsAtCloud: false,
       enabled: false,
       hasApiToken: false,
       phoneNumberId: null,
@@ -256,6 +257,7 @@ export async function getWhatsAppSettings(prisma: PrismaClient) {
     : [];
   return {
     businessId: row.whatsappBusinessId,
+    credentialsAtCloud: row.whatsappCredentialsAtCloud,
     enabled: row.whatsappEnabled,
     hasApiToken: Boolean(row.whatsappApiTokenEncrypted),
     phoneNumberId: row.whatsappPhoneNumberId,
@@ -328,15 +330,11 @@ export async function upsertWhatsAppSettings(
 
 export async function getSmsSettings(prisma: PrismaClient) {
   const row = await findShopSettingsUnique(prisma);
-  const modules = Array.isArray(row?.cloudEntitlements)
-    ? (row.cloudEntitlements as string[])
-    : [];
   return {
     enabled: row?.smsEnabled ?? false,
     gatewayUrl: row?.smsGatewayUrl ?? null,
     gatewayUser: row?.smsGatewayUser ?? null,
     hasPassword: Boolean(row?.smsGatewayPasswordEncrypted),
-    module: modules.includes("sms"),
     // Path do webhook inbound — o host depende de como o staff acede à
     // app; a UI compõe o URL completo com window.location.origin.
     inboundPath: row?.smsWebhookToken
