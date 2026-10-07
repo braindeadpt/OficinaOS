@@ -138,13 +138,14 @@ jobs:
         # de qualquer upload.
         timeout-minutes: 15
         run: |
-          $smoke = "$env:RUNNER_TEMP\smoke"
+          # RUNNER_TEMP fica em D:\a\_temp — o initdb não consegue fazer
+          # chmod 0700 em data\ lá (ACLs do disco de trabalho do runner).
+          # Os utilizadores extraem para C:\ (INSTALL.md diz C:\OficinaOS) —
+          # o smoke replica esse caminho.
+          $smoke = "$env:SystemDrive\oficinaos-smoke"
           New-Item -ItemType Directory -Force $smoke | Out-Null
           tar -xf oficinaos-portable.zip -C $smoke
           $root = "$smoke\oficinaos-portable"
-          # O bsdtar escreve ACLs POSIX-ish que impedem o initdb de fazer
-          # chmod 0700 em data\ — /reset repõe as ACLs herdadas do runner.
-          icacls $root /reset /t /c /q | Out-Null
           Remove-Item "$root\data" -Recurse -Force -ErrorAction SilentlyContinue
           # O `choice` do autostart assume N em CI (INICIAR.bat `if defined
           # CI`); os `pause` dos caminhos de erro ficam domados com <nul.
