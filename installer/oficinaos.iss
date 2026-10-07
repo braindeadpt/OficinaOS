@@ -128,6 +128,18 @@ begin
   end;
 end;
 
+// Antes do desinstalar: o tray fica a correr de Program Files\OficinaOS\tools
+// e o [UninstallRun] só corre depois de remover ficheiros — sem o kill aqui
+// a remoção do OficinaOSTray.exe falhava.
+function InitializeUninstall(): Boolean;
+var
+  ResultCode: Integer;
+begin
+  Exec('taskkill.exe', '/F /IM OficinaOSTray.exe',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Result := True;
+end;
+
 // No fim do desinstalar: perguntar se apaga também os dados da loja.
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var

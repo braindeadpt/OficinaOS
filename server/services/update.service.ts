@@ -14,6 +14,7 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { AppError } from "@shared/errors/app-error.js";
+import { logger } from "../utils/logger.js";
 import { getAppVersionInfo } from "./app-version.service.js";
 
 // In-app updater (service & portable modes). The server can't replace its own
@@ -247,38 +248,13 @@ function secureStagingDir(dir: string, strict: boolean): void {
   }
 }
 
-export async function startUpdate(
-  fetchImpl: typeof fetch = fetch
-): Promise<UpdateState> {
-  const state = await getUpdateState();
-  if (!(state.updateAvailable && state.latest)) {
-    throw new AppError("VALIDATION_ERROR", { reason: "no update available" });
-  }
-  if (!state.canSelfUpdate) {
-    throw new AppError("VALIDATION_ERROR", {
-      reason: `self-update not supported in ${state.installMode} mode`,
-    });
-  }
-  if (isUpdateInProgress(state.status)) {
-    throw new AppError("CONFLICT", { reason: "update already running" });
-  }
-
-  const paths = buildPaths(
-    state.installMode,
-    process.cwd(),
-    process.env.ProgramData ?? ""
-  );
-  // Apagar e recriar: um utilizador local que criasse a pasta antes ficava
-  // dono dela — e o owner pode sempre reescrever a ACL (WRITE_DAC implicito).
-  // Recriada em cada update, o dono e a conta da instalacao.
-  rmSync(paths.stagingDir, { recursive: true, force: true });
-  mkdirSync(paths.stagingDir, { recursive: true });
-  secureStagingDir(paths.stagingDir, state.installMode === "service");
-  const setStatus = (s: UpdateStatus) =>
-    writeFileSync(paths.statusFile, JSON.stringify(s));
+async function applyUpdate(
+  state: UpdateState,
+  paths: Paths,
+  setStatus: (s: UpdateStatus) => void,
+  fetchImpl: typeof fetch
+): Promise<void> {
   const now = () => new Date().toISOString();
-
-  setStatus({ state: "downloading", detail: state.latest, updatedAt: now() });
   try {
     const shaFile = path.join(paths.stagingDir, UPDATE_SHA);
     await Promise.all([
@@ -305,9 +281,7 @@ export async function startUpdate(
       detail: err instanceof Error ? err.message : "download falhou",
       updatedAt: now(),
     });
-    throw new AppError("VALIDATION_ERROR", {
-      reason: "update download failed",
-    });
+    return;
   }
 
   // Run the apply script from staging — the app dir is about to be replaced.
@@ -358,6 +332,48 @@ export async function startUpdate(
     ],
     { stdio: "ignore", windowsHide: true }
   ).unref();
+}
+
+export async function startUpdate(
+  fetchImpl: typeof fetch = fetch
+): Promise<UpdateState> {
+  const state = await getUpdateState();
+  if (!(state.updateAvailable && state.latest)) {
+    throw new AppError("VALIDATION_ERROR", { reason: "no update available" });
+  }
+  if (!state.canSelfUpdate) {
+    throw new AppError("VALIDATION_ERROR", {
+      reason: `self-update not supported in ${state.installMode} mode`,
+    });
+  }
+  if (isUpdateInProgress(state.status)) {
+    throw new AppError("CONFLICT", { reason: "update already running" });
+  }
+
+  const paths = buildPaths(
+    state.installMode,
+    process.cwd(),
+    process.env.ProgramData ?? ""
+  );
+  // Apagar e recriar: um utilizador local que criasse a pasta antes ficava
+  // dono dela — e o owner pode sempre reescrever a ACL (WRITE_DAC implicito).
+  // Recriada em cada update, o dono e a conta da instalacao.
+  rmSync(paths.stagingDir, { recursive: true, force: true });
+  mkdirSync(paths.stagingDir, { recursive: true });
+  secureStagingDir(paths.stagingDir, state.installMode === "service");
+  const setStatus = (s: UpdateStatus) =>
+    writeFileSync(paths.statusFile, JSON.stringify(s));
+  const now = () => new Date().toISOString();
+
+  setStatus({ state: "downloading", detail: state.latest, updatedAt: now() });
+
+  // O download (~90 MB) corre em background — a rota responde logo e o
+  // cliente acompanha via GET /settings/update/status (o timeout de 15 s
+  // do axios cortava o POST a meio do download). Erros vão para o status
+  // file; o catch aqui só impede um unhandled rejection.
+  applyUpdate(state, paths, setStatus, fetchImpl).catch((err) =>
+    logger.error({ err }, "update apply failed")
+  );
 
   return { ...state, status: readUpdateStatus(paths.statusFile) };
 }

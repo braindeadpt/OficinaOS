@@ -90,7 +90,7 @@ if exist "%PGDATA%\PG_VERSION" if not exist "%PGDATA%\autostart.flag" (
 REM ── migracoes + arranque com respawn (start:prod = migrate + serve) ──
 cd /d "%~dp0app"
 echo  A aplicar migracoes e a arrancar...
-start "" /min cmd /c "%~dp0run-app.bat"
+start "OficinaOS" /min cmd /c "%~dp0run-app.bat"
 
 REM ── esperar a app e semear o admin ───────────────────────────────────
 set /a TENT=0

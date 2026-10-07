@@ -59,7 +59,8 @@ if ($Stop) { Stop-Transcript | Out-Null; exit 0 }
 if ($Uninstall) {
     Remove-OurServices
     Remove-NetFirewallRule -DisplayName "OficinaOS" -ErrorAction SilentlyContinue
-    schtasks /delete /tn "OficinaOS Backup" /f 2>$null | Out-Null
+    Unregister-ScheduledTask -TaskName "OficinaOS Backup" -Confirm:$false `
+        -ErrorAction SilentlyContinue
     Write-Output "Servicos e regras removidos. Dados ficam em $dataRoot"
     Stop-Transcript | Out-Null
     exit 0
@@ -162,10 +163,15 @@ Remove-NetFirewallRule -DisplayName "OficinaOS" -ErrorAction SilentlyContinue
 New-NetFirewallRule -DisplayName "OficinaOS" -Direction Inbound -Protocol TCP `
     -LocalPort 4000 -Action Allow -Profile Any | Out-Null
 
-# Backup diario as 03:30 como SYSTEM (o equivalente ao sidecar do Docker)
+# Backup diario as 03:30 como SYSTEM (o equivalente ao sidecar do Docker).
+# schtasks /tr partia as aspas no PS 5.1 e a tarefa nunca era criada —
+# os cmdlets agendam o mesmo sem parsing de linha de comando.
 $backupPs1 = Join-Path $root "tools\backup.ps1"
-schtasks /create /tn "OficinaOS Backup" /sc daily /st 03:30 /ru SYSTEM /f `
-    /tr "powershell -NoProfile -ExecutionPolicy Bypass -File `"$backupPs1`"" | Out-Null
+$backupAction = New-ScheduledTaskAction -Execute "powershell.exe" `
+    -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$backupPs1`""
+$backupTrigger = New-ScheduledTaskTrigger -Daily -At 03:30
+Register-ScheduledTask -TaskName "OficinaOS Backup" -Action $backupAction `
+    -Trigger $backupTrigger -User "SYSTEM" -RunLevel Highest -Force | Out-Null
 
 # Esperar a app ficar pronta (migracoes correm no arranque via start:prod)
 $ready = $false

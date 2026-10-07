@@ -21,6 +21,15 @@ param(
 # update continuava com ficheiros novos e velhos misturados.
 $ErrorActionPreference = 'Stop'
 
+# Resolver relativos ANTES de mudar de cwd: "-ZipPath .\app-update.zip"
+# resolvia contra o TEMP em vez da pasta do chamador e o update nao
+# encontrava o zip. StatusPath pode ainda nao existir — dai o
+# GetUnresolvedProviderPathFromPSPath em vez de Resolve-Path.
+$ZipPath      = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ZipPath)
+$StatusPath   = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($StatusPath)
+$BackupScript = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($BackupScript)
+$InstallRoot  = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($InstallRoot)
+
 # cwd neutro: se o processo nascer com cwd dentro de InstallRoot\app (via
 # Win32_Process.Create), o Rename-Item app->app.prev falha com "pasta em uso".
 Set-Location $env:TEMP

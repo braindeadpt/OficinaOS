@@ -205,7 +205,7 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
         summary: "Start a lightweight in-app update (backup + rollback)",
       },
     },
-    async (_req, reply) => reply.send(await startUpdate())
+    async (_req, reply) => reply.code(202).send(await startUpdate())
   );
 
   app.put(

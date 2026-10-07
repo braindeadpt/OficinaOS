@@ -14,6 +14,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Guard — package.json version must match the tag
+        # Sem isto a v1.0.10 saiu a reportar "1.0.9": o update-check via a
+        # versão nova como update disponível e o botão reaplicava o zip
+        # para sempre.
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$pkg" != "$tag" ]; then
+            echo "::error::package.json tem $pkg mas a tag é $GITHUB_REF_NAME — bump da version antes de taggar"
+            exit 1
+          fi
+
       - name: Build installer bundle
         run: |
           mkdir -p bundle/scripts
