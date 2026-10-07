@@ -1,4 +1,5 @@
 import pkg from "../../package.json";
+import { logger } from "../utils/logger.js";
 import { isNewerVersion } from "../utils/version.js";
 
 // The app phones home to GitHub Releases at most once a day. A failed check
@@ -77,7 +78,8 @@ async function fetchLatestRelease(
       checkedAt: Date.now(),
       ttl: OK_TTL_MS,
     };
-  } catch {
+  } catch (err) {
+    logger.warn({ err }, "update check: GitHub releases lookup failed");
     return {
       latest: null,
       releaseUrl: null,

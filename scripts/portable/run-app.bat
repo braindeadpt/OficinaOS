@@ -10,7 +10,7 @@ cd /d "%~dp0"
 del "%~dp0STOP" >nul 2>&1
 :loop
 if exist "%~dp0STOP" exit /b 0
-"%~dp0bun\bun.exe" --cwd "%~dp0app" run start:prod
+"%~dp0bun\bun.exe" run --cwd "%~dp0app" start:prod
 echo  [%date% %time%] A app parou inesperadamente — a reiniciar em 5s...
 ping -n 6 127.0.0.1 >nul
 goto loop
