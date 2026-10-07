@@ -18,6 +18,9 @@ $ip = (Get-NetIPAddress -AddressFamily IPv4 |
 if (-not $ip) { $ip = "localhost" }
 
 $adminPass = "braindead"
+# Password do Postgres portatil — vai para o DATABASE_URL e para o
+# app\.pgpass que o INICIAR.bat usa no initdb --pwfile e no psql.
+$pgPass = New-Secret 24
 
 $envContent = @"
 # OficinaOS (portatil) — gerado automaticamente. NAO partilhar.
@@ -26,7 +29,7 @@ PORT=4000
 HOST=0.0.0.0
 LOG_LEVEL=info
 
-DATABASE_URL=postgresql://postgres@127.0.0.1:5433/oficinaos
+DATABASE_URL=postgresql://postgres:${pgPass}@127.0.0.1:5433/oficinaos
 
 APP_URL=http://${ip}:4000
 EXTRA_TRUSTED_ORIGINS=http://localhost:4000,http://127.0.0.1:4000
@@ -43,6 +46,7 @@ TZ=Europe/Lisbon
 
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllText($envPath, $envContent, $utf8NoBom)
+[System.IO.File]::WriteAllText((Join-Path $root "app\.pgpass"), "$pgPass`n", $utf8NoBom)
 
 $loginTxt = @"
 OficinaOS — primeiro acesso

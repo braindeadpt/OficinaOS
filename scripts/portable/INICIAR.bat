@@ -27,8 +27,9 @@ if not exist "%~dp0app\.env" (
     )
 )
 REM ── Postgres portatil: initdb na 1a vez, depois start ────────────────
-REM listen_addresses=127.0.0.1 + auth=trust: so processos deste PC ligam,
-REM sem gestao de passwords. A app fica exposta na LAN, a BD nao.
+REM listen_addresses=127.0.0.1 + scram-sha-256: so quem tem a password do
+REM .env/.pgpass liga — nem outros processos deste PC. A app fica exposta
+REM na LAN, a BD nao.
 REM O initdb/postgres falham com acentos no caminho (Windows passa-o em
 REM CP1252 e o backend le-o como UTF-8). Usar sempre o nome curto 8.3 —
 REM e ASCII puro e aponta para a mesma pasta.
@@ -40,7 +41,7 @@ if not exist "%PGDATA%\PG_VERSION" (
     rmdir /s /q "%PGDATA%"
     mkdir "%PGDATA%"
     REM o log tem de ficar FORA de data\ — initdb exige a pasta vazia
-    "%PGBIN%\initdb.exe" -D "%PGDATA%" -U postgres -E UTF8 --locale=C --auth=trust >"%~dp0initdb.log" 2>&1
+    "%PGBIN%\initdb.exe" -D "%PGDATA%" -U postgres -E UTF8 --locale=C --auth=scram-sha-256 --pwfile="%~dp0app\.pgpass" >"%~dp0initdb.log" 2>&1
     if not exist "%PGDATA%\PG_VERSION" (
         echo  ERRO: a inicializacao da base de dados falhou. Ve initdb.log
         echo  DICA: se a pasta tiver acentos, extrai para C:\OficinaOS e tenta de novo.
@@ -62,9 +63,19 @@ if errorlevel 1 (
     )
 )
 
-"%PGBIN%\psql.exe" -h 127.0.0.1 -p 5433 -U postgres -tAc "SELECT 1 FROM pg_database WHERE datname='oficinaos'" 2>nul | findstr /b "1" >nul
+REM Clusters pre-v1.0.12 tinham auth=trust — migrar para scram (o postgres
+REM ja esta a correr neste ponto, que e o que o harden-pg.ps1 precisa).
+if exist "%PGDATA%\PG_VERSION" if not exist "%~dp0app\.pgpass" (
+    powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0harden-pg.ps1"
+)
+REM password do postgres para o psql/createdb abaixo (novas ou migradas)
+if exist "%~dp0app\.pgpass" set /p PGPASSWORD=<"%~dp0app\.pgpass"
+
+REM -w: nunca pedir password interactivamente — sem .pgpass falha rapido
+REM em vez de pendurar a consola a espera de input.
+"%PGBIN%\psql.exe" -w -h 127.0.0.1 -p 5433 -U postgres -tAc "SELECT 1 FROM pg_database WHERE datname='oficinaos'" 2>nul | findstr /b "1" >nul
 if errorlevel 1 (
-    "%PGBIN%\createdb.exe" -h 127.0.0.1 -p 5433 -U postgres oficinaos >nul 2>&1
+    "%PGBIN%\createdb.exe" -w -h 127.0.0.1 -p 5433 -U postgres oficinaos >nul 2>&1
 )
 
 REM ── backup diario (equivalente ao sidecar db-backup do Docker) ───────

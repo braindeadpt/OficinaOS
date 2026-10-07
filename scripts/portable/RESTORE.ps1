@@ -7,6 +7,12 @@ $pgbin = Join-Path $root "pgsql\bin"
 $pgdata = Join-Path $root "data"
 $dumpDir = Join-Path $root "app\uploads\backups"
 
+# Password do postgres (scram desde a v1.0.12) — escrita pelo gerar-env.ps1
+# ou pelo harden-pg.ps1 nas instalacoes migradas.
+if (Test-Path (Join-Path $root "app\.pgpass")) {
+    $env:PGPASSWORD = (Get-Content (Join-Path $root "app\.pgpass") -First 1).Trim()
+}
+
 $dumps = Get-ChildItem $dumpDir -Filter "oficinaos-*.sql.gz" -ErrorAction SilentlyContinue |
     Sort-Object LastWriteTime -Descending
 if (-not $dumps) {

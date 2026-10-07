@@ -11,6 +11,12 @@ $retentionDays = 14
 
 New-Item -ItemType Directory -Force $dumpDir, $hbDir | Out-Null
 
+# Password do postgres (scram desde a v1.0.12) — escrita pelo gerar-env.ps1
+# ou pelo harden-pg.ps1 nas instalacoes migradas.
+if (Test-Path (Join-Path $root "app\.pgpass")) {
+    $env:PGPASSWORD = (Get-Content (Join-Path $root "app\.pgpass") -First 1).Trim()
+}
+
 $stamp = (Get-Date).ToUniversalTime().ToString("yyyyMMdd-HHmmss")
 $target = Join-Path $dumpDir "oficinaos-$stamp.sql.gz"
 $tmp = Join-Path $env:TEMP "oficinaos-dump-$stamp.sql"

@@ -38,7 +38,7 @@ $appDir  = Join-Path $InstallRoot 'app'
 $prevDir = Join-Path $InstallRoot 'app.prev'
 $keepDir = Join-Path $env:TEMP ('oficinaos-keep-' + [guid]::NewGuid().ToString('N'))
 # Ficheiros mutaveis dentro de app\ que nao vem no zip de update.
-$preserve = @('.env', 'PRIMEIRO-LOGIN.txt', 'uploads')
+$preserve = @('.env', '.pgpass', 'PRIMEIRO-LOGIN.txt', 'uploads')
 
 function Set-Status([string]$state, [string]$detail) {
   $body = @{
@@ -116,6 +116,15 @@ function Restore-Preserved {
       Copy-Item (Join-Path $src '*') $dst -Recurse -Force
     } else {
       Copy-Item $src $dst -Force
+    }
+  }
+  # Service mode: o .env re-posto herda a ACL de Program Files (Users leem).
+  # Fechar como o setup-service.ps1 faz — so admins + contas de servico.
+  if ($Mode -eq 'service') {
+    $envFile = Join-Path $appDir '.env'
+    if (Test-Path $envFile) {
+      & icacls.exe $envFile /inheritance:r /grant "Administrators:F" "SYSTEM:F" `
+        "NETWORK SERVICE:F" | Out-Null
     }
   }
 }

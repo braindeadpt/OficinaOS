@@ -12,6 +12,13 @@ $retentionDays = 14
 
 New-Item -ItemType Directory -Force $dumpDir, $hbDir | Out-Null
 
+# Password do postgres (scram desde a v1.0.12) — le do DATABASE_URL no .env.
+$envFile = Join-Path $root "app\.env"
+if (Test-Path $envFile) {
+    $m = [regex]::Match([IO.File]::ReadAllText($envFile), 'postgresql://postgres:([^@\s]+)@')
+    if ($m.Success) { $env:PGPASSWORD = $m.Groups[1].Value }
+}
+
 $stamp = (Get-Date).ToUniversalTime().ToString("yyyyMMdd-HHmmss")
 $target = Join-Path $dumpDir "oficinaos-$stamp.sql.gz"
 $tmp = Join-Path $env:TEMP "oficinaos-dump-$stamp.sql"
