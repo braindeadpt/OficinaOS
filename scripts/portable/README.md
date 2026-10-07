@@ -12,7 +12,8 @@ oficinaos-portable/
 ├── bun\bun.exe         runtime (bun-windows-x64, GitHub releases)
 ├── pgsql\              PostgreSQL 17 oficial (binários EDB zip)
 ├── app\                código da release + node_modules + dist + generated/
-│   └── .env            gerado na 1ª execução por gerar-env.ps1
+│   ├── .env            gerado na 1ª execução por gerar-env.ps1
+│   └── .pgpass         password do Postgres (a mesma do DATABASE_URL)
 ├── data\               dados do Postgres (a base de dados — isto é o importante)
 ├── backups\ dentro de app\uploads\backups\   dumps diários .sql.gz
 ├── INICIAR.bat         arranca tudo
@@ -21,7 +22,7 @@ oficinaos-portable/
 ├── BACKUP.bat          backup manual (corre sozinho a cada arranque)
 ├── RESTAURAR.bat       repõe a BD a partir de um backup (interativo)
 ├── run-app.bat         wrapper com respawn (usado pelo INICIAR)
-├── BACKUP.ps1 / RESTORE.ps1 / gerar-env.ps1   lógica real
+├── BACKUP.ps1 / RESTORE.ps1 / gerar-env.ps1 / harden-pg.ps1   lógica real
 └── STOP                flag criada pelo PARAR (impede respawn)
 ```
 
@@ -29,9 +30,13 @@ oficinaos-portable/
 
 **Arranque (`INICIAR.bat`)**
 1. Se `:4000/health` responde → já está a correr, abre o browser e sai
-2. Gera `app\.env` na primeira vez (segredos aleatórios + `DATABASE_URL=postgresql://postgres@127.0.0.1:5433/oficinaos`)
-3. `initdb` na primeira vez → `data\` com `listen_addresses=127.0.0.1`, porta 5433, auth `trust`
-   → **só processos deste PC ligam à BD**; a app continua exposta à LAN em `:4000`
+2. Gera `app\.env` na primeira vez (segredos aleatórios + `DATABASE_URL` com
+   password gerada) e `app\.pgpass` com a password do Postgres
+3. `initdb` na primeira vez → `data\` com `listen_addresses=127.0.0.1`, porta
+   5433, auth `scram-sha-256` → **só liga quem tem a password** (noutros
+   processos deste PC incluídos); a app continua exposta à LAN em `:4000`
+   → instalações anteriores com `trust` são migradas automaticamente pelo
+   `harden-pg.ps1` no primeiro arranque (ALTER USER + rewrite do pg_hba)
 4. `pg_ctl start`, `createdb oficinaos` se faltar
 5. Backup diário (`BACKUP.ps1`) — equivalente ao sidecar `db-backup` do Docker
 6. Na primeira vez pergunta se arranca com o Windows (Scheduled Task `ONLOGON`; a resposta fica em `data\autostart.flag` e nunca mais pergunta)

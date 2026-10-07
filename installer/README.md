@@ -21,6 +21,13 @@ em cima do bundle portátil (Bun + PostgreSQL + app já compilados).
 — o nome é anunciado por mDNS (`MDNS_HOSTNAME=oficinaos`), logo tablets e
 telemóveis ligam sempre ao mesmo endereço mesmo que o router mude o IP do PC.
 
+## Segurança local (desde v1.0.12)
+
+O Postgres exige password (`scram-sha-256`) — gerada na instalação e guardada
+no `.env`; clusters antigos em `trust` migram sozinhos no re-setup. `data\`,
+`backups\` e `app\.env` têm ACL restrita (só Administrators, SYSTEM e NETWORK
+SERVICE) — dados de clientes não são legíveis por outros utilizadores do PC.
+
 ## Desinstalar
 
 Remove serviços, regra de firewall, tarefa de backup e ficheiros; pergunta se

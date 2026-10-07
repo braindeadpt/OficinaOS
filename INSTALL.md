@@ -132,7 +132,7 @@ Dentro de `oficinaos-portable\`:
 | | Setup.exe | Portátil |
 |---|---|---|
 | Requer administrador | sim, na instalação | **não** |
-| Tamanho do download | ~339 MB | ~540 MB uma vez |
+| Tamanho do download | ~285 MB | ~470 MB uma vez |
 | Arranque com o PC | automático (serviço Windows) | automático se aceitares a tarefa agendada |
 | Regra de firewall para a LAN | criada na instalação | o Windows pergunta uma vez — escolher Permitir |
 | Backups automáticos | diário às 03:30 (`ProgramData\OficinaOS\backups`) | a cada arranque + `BACKUP.bat` |
