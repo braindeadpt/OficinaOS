@@ -5,6 +5,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
@@ -215,7 +216,7 @@ async function downloadFile(
   );
 }
 
-function secureStagingDir(dir: string): void {
+function secureStagingDir(dir: string, strict: boolean): void {
   // O staging dir recebe o zip antes da verificacao — so a conta da
   // instalacao, SYSTEM e Administradores podem escrever. Sem isto, qualquer
   // utilizador local podia substituir o zip entre o download e o swap.
@@ -233,8 +234,16 @@ function secureStagingDir(dir: string): void {
       ],
       { stdio: "ignore" }
     );
-  } catch {
-    // icacls/whoami indisponivel — nao bloqueia o update
+  } catch (err) {
+    // Em modo servico o staging vive em ProgramData (qualquer user escreve
+    // la): sem a ACL o ataque fica em aberto — abortar, nao continuar.
+    if (strict) {
+      throw new AppError("INTERNAL_ERROR", {
+        reason: `staging ACL failed: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      });
+    }
   }
 }
 
@@ -259,8 +268,12 @@ export async function startUpdate(
     process.cwd(),
     process.env.ProgramData ?? ""
   );
+  // Apagar e recriar: um utilizador local que criasse a pasta antes ficava
+  // dono dela — e o owner pode sempre reescrever a ACL (WRITE_DAC implicito).
+  // Recriada em cada update, o dono e a conta da instalacao.
+  rmSync(paths.stagingDir, { recursive: true, force: true });
   mkdirSync(paths.stagingDir, { recursive: true });
-  secureStagingDir(paths.stagingDir);
+  secureStagingDir(paths.stagingDir, state.installMode === "service");
   const setStatus = (s: UpdateStatus) =>
     writeFileSync(paths.statusFile, JSON.stringify(s));
   const now = () => new Date().toISOString();
