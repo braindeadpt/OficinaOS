@@ -75,9 +75,26 @@ jobs:
           Copy-Item scripts\portable\* "$b\"
           tar -a -cf oficinaos-portable.zip -C "$env:RUNNER_TEMP" oficinaos-portable
 
-      - name: Build lightweight app-update zip (app payload only — in-app updater)
+      - name: Build lightweight app-update zip (prod deps only — in-app updater)
+        # Mesmo layout que app\ no bundle mas sem devDependencies
+        # (vite/vitest/ts/biome/etc — centenas de MB). O prisma CLI fica
+        # porque é dependency — o arranque corre `prisma migrate deploy`.
+        env:
+          DATABASE_URL: postgresql://localhost:5432/build
         run: |
-          tar -a -cf oficinaos-app-update.zip -C "$env:RUNNER_TEMP\oficinaos-portable" app
+          $l = "$env:RUNNER_TEMP\oficinaos-app-update"
+          New-Item -ItemType Directory -Force "$l\app" | Out-Null
+          git archive HEAD -o "$env:RUNNER_TEMP\app-light.tar"
+          tar -xf "$env:RUNNER_TEMP\app-light.tar" -C "$l\app"
+          Push-Location "$l\app"
+          bun install --production --ignore-scripts
+          Pop-Location
+          robocopy dist "$l\app\dist" /E /NFL /NDL /NJH /NJS /NP | Out-Null
+          if ($LASTEXITCODE -ge 8) { throw "robocopy dist falhou: $LASTEXITCODE" }
+          robocopy generated "$l\app\generated" /E /NFL /NDL /NJH /NJS /NP | Out-Null
+          if ($LASTEXITCODE -ge 8) { throw "robocopy generated falhou: $LASTEXITCODE" }
+          $global:LASTEXITCODE = 0
+          tar -a -cf oficinaos-app-update.zip -C $l app
           (Get-FileHash oficinaos-app-update.zip -Algorithm SHA256).Hash |
             Out-File -Encoding ascii oficinaos-app-update.zip.sha256
 
