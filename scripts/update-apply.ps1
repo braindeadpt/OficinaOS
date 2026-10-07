@@ -4,7 +4,8 @@
 # para a app (nova ou antiga) ler quando voltar.
 #
 # Fluxo: backup -> parar -> preservar .env/uploads -> trocar app\ ->
-# arrancar -> health check -> se falhar, repoe app.prev e arranca a antiga.
+# arrancar -> health check -> se falhar, repoe app.prev, resolve migracoes
+# falhadas (P3009) e arranca a antiga.
 param(
   [Parameter(Mandatory = $true)][string]$Mode,
   [Parameter(Mandatory = $true)][string]$InstallRoot,
@@ -15,6 +16,10 @@ param(
   [string]$ServiceName = "OficinaOS",
   [int]$HealthTimeoutSec = 180
 )
+
+# Sem isto, um Copy-Item/Rename-Item que falhe a meio passa despercebido e o
+# update continuava com ficheiros novos e velhos misturados.
+$ErrorActionPreference = 'Stop'
 
 $appDir  = Join-Path $InstallRoot 'app'
 $prevDir = Join-Path $InstallRoot 'app.prev'
@@ -31,24 +36,38 @@ function Set-Status([string]$state, [string]$detail) {
   [IO.File]::WriteAllText($StatusPath, $body)
 }
 
+function Stop-AppProcesses {
+  # WinSW mata o bun filho ao parar o servico, mas um orfao que fique vivo
+  # tranca os ficheiros e a troca de app\ falha a meio.
+  Get-Process bun -ErrorAction SilentlyContinue |
+    Where-Object { $_.Path -like "$InstallRoot*" } |
+    Stop-Process -Force -ErrorAction SilentlyContinue
+}
+
 function Stop-OficinaOS {
   if ($Mode -eq 'service') {
-    Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
-    $w = 0
-    while ((Get-Service $ServiceName).Status -ne 'Stopped' -and $w -lt 60) {
-      Start-Sleep -Seconds 2; $w += 2
+    $svc = Get-Service $ServiceName -ErrorAction SilentlyContinue
+    if ($svc -and $svc.Status -ne 'Stopped') {
+      Stop-Service -Name $ServiceName -Force
+      $w = 0
+      while ((Get-Service $ServiceName).Status -ne 'Stopped' -and $w -lt 60) {
+        Start-Sleep -Seconds 2; $w += 2
+      }
+      if ((Get-Service $ServiceName).Status -ne 'Stopped') {
+        throw "o servico $ServiceName nao parou em 60s — update cancelado antes de mexer em ficheiros"
+      }
     }
+    Stop-AppProcesses
   } else {
     # Sentinel que impede o respawn do run-app.bat; depois mata o bun desta pasta.
     [IO.File]::WriteAllText((Join-Path $InstallRoot 'STOP'), 'stopped')
-    Get-Process bun -ErrorAction SilentlyContinue |
-      Where-Object { $_.Path -like "$InstallRoot*" } | Stop-Process -Force
+    Stop-AppProcesses
   }
 }
 
 function Start-OficinaOS {
   if ($Mode -eq 'service') {
-    Start-Service -Name $ServiceName -ErrorAction SilentlyContinue
+    Start-Service -Name $ServiceName
   } else {
     Remove-Item (Join-Path $InstallRoot 'STOP') -Force -ErrorAction SilentlyContinue
     Start-Process cmd -ArgumentList '/c', "`"$InstallRoot\run-app.bat`"" -WindowStyle Hidden
@@ -69,10 +88,51 @@ function Test-Healthy([int]$timeoutSec) {
 function Restore-Preserved {
   foreach ($item in $preserve) {
     $src = Join-Path $keepDir $item
-    if (Test-Path $src) {
-      Copy-Item $src (Join-Path $appDir $item) -Recurse -Force
+    if (-not (Test-Path $src)) { continue }
+    $dst = Join-Path $appDir $item
+    if (Test-Path $src -PathType Container) {
+      # Copia o CONTEUDO da pasta para dentro do destino — no PS 5.1,
+      # Copy-Item dir->dir existente aninhava ($dst\uploads\uploads).
+      New-Item -ItemType Directory -Force $dst | Out-Null
+      Copy-Item (Join-Path $src '*') $dst -Recurse -Force
+    } else {
+      Copy-Item $src $dst -Force
     }
   }
+}
+
+function Resolve-FailedMigrations {
+  # Uma migracao que falhou a meio fica com uma linha "em curso" em
+  # _prisma_migrations e QUALQUER `migrate deploy` rebenta com P3009 —
+  # sem isto, a versao antiga tambem nao arrancava no rollback.
+  $envFile = Join-Path $appDir '.env'
+  $psql    = Join-Path $InstallRoot 'pgsql\bin\psql.exe'
+  $bun     = Join-Path $InstallRoot 'bun\bun.exe'
+  if (-not ((Test-Path $envFile) -and (Test-Path $psql) -and (Test-Path $bun))) { return }
+  $line = Get-Content $envFile |
+    Where-Object { $_ -match '^\s*DATABASE_URL\s*=' } | Select-Object -First 1
+  if (-not $line) { return }
+  $dbUrl = ($line -replace '^\s*DATABASE_URL\s*=\s*', '').Trim().Trim('"').Trim("'")
+  if (-not $dbUrl) { return }
+  # stderr de comandos nativos (psql, prisma) com EAP=Stop pode virar
+  # NativeCommandError — relaxa-se so nestas chamadas.
+  $eap = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    $failed = & $psql $dbUrl -t -A -c `
+      "SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL" 2>$null
+    $psqlOk = ($LASTEXITCODE -eq 0)
+    $env:DATABASE_URL = $dbUrl
+    Push-Location $appDir
+    try {
+      if ($psqlOk) {
+        foreach ($m in $failed) {
+          $name = $m.Trim()
+          if ($name) { & $bun x prisma migrate resolve --rolled-back $name 2>&1 | Out-Null }
+        }
+      }
+    } finally { Pop-Location }
+  } finally { $ErrorActionPreference = $eap }
 }
 
 function Restore-Previous([string]$reason) {
@@ -81,6 +141,7 @@ function Restore-Previous([string]$reason) {
   if (Test-Path $appDir) { Remove-Item $appDir -Recurse -Force }
   Rename-Item $prevDir $appDir
   Restore-Preserved
+  Resolve-FailedMigrations
   Start-OficinaOS
   Set-Status 'rolled_back' $reason
 }
@@ -88,8 +149,14 @@ function Restore-Previous([string]$reason) {
 try {
   # 1. Backup (DB ainda a correr — pg_dump funciona com a app no ar)
   Set-Status 'backing_up' 'A guardar a base de dados antes de atualizar'
-  & $BackupScript 2>&1 | Out-Null
-  if ($LASTEXITCODE -ne 0) { throw "backup falhou (exit $LASTEXITCODE) — update cancelado" }
+  # EAP relaxado aqui: stderr de nativos dentro do backup nao pode virar throw.
+  $eap = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    & $BackupScript 2>&1 | Out-Null
+    $backupRc = $LASTEXITCODE
+  } finally { $ErrorActionPreference = $eap }
+  if ($backupRc -ne 0) { throw "backup falhou (exit $backupRc) — update cancelado" }
 
   # 2. Parar
   Set-Status 'stopping' 'A parar o OficinaOS'
@@ -111,11 +178,12 @@ try {
     Expand-Archive -LiteralPath $ZipPath -DestinationPath $InstallRoot -Force
     Restore-Preserved
   } catch {
+    $msg = $_.Exception.Message
     if (Test-Path $appDir) { Remove-Item $appDir -Recurse -Force }
     Rename-Item $prevDir $appDir
     Restore-Preserved
-    Start-OficinaOS
-    throw "extracao falhou: $($_.Exception.Message) — versao anterior reposta"
+    try { Start-OficinaOS } catch { }
+    throw "extracao falhou: $msg — versao anterior reposta"
   }
 
   # 5. Arrancar + health check (migracoes correm no arranque)
