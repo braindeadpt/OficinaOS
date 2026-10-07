@@ -93,24 +93,26 @@ export function buildPaths(
   appDir: string,
   programData: string
 ): Paths {
-  const installRoot = path.dirname(appDir);
+  // Windows-only paths (Program Files, ProgramData, .ps1 scripts) — force
+  // win32 semantics so behaviour is identical wherever the caller runs.
+  const installRoot = path.win32.dirname(appDir);
   const workDir =
     mode === "service"
-      ? path.join(programData, "OficinaOS")
-      : path.join(installRoot, "data");
-  const stagingDir = path.join(workDir, "update");
+      ? path.win32.join(programData, "OficinaOS")
+      : path.win32.join(installRoot, "data");
+  const stagingDir = path.win32.join(workDir, "update");
   return {
     appDir,
     installRoot,
     workDir,
     stagingDir,
-    statusFile: path.join(stagingDir, "status.json"),
-    zipFile: path.join(stagingDir, UPDATE_ZIP),
+    statusFile: path.win32.join(stagingDir, "status.json"),
+    zipFile: path.win32.join(stagingDir, UPDATE_ZIP),
     backupScript:
       mode === "service"
-        ? path.join(installRoot, "tools", "backup.ps1")
-        : path.join(installRoot, "BACKUP.ps1"),
-    applyScript: path.join(stagingDir, "update-apply.ps1"),
+        ? path.win32.join(installRoot, "tools", "backup.ps1")
+        : path.win32.join(installRoot, "BACKUP.ps1"),
+    applyScript: path.win32.join(stagingDir, "update-apply.ps1"),
   };
 }
 

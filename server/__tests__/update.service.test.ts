@@ -67,18 +67,20 @@ describe("buildPaths", () => {
     );
     expect(p.installRoot).toBe("C:\\Program Files\\OficinaOS");
     expect(p.stagingDir).toBe(
-      path.join("C:\\ProgramData", "OficinaOS", "update")
+      path.win32.join("C:\\ProgramData", "OficinaOS", "update")
     );
     expect(p.backupScript).toBe(
-      path.join("C:\\Program Files\\OficinaOS", "tools", "backup.ps1")
+      path.win32.join("C:\\Program Files\\OficinaOS", "tools", "backup.ps1")
     );
   });
 
   it("portable mode keeps state under <root>/data and root backup", () => {
     const p = buildPaths("portable", "C:\\oficinaos\\app", "");
     expect(p.installRoot).toBe("C:\\oficinaos");
-    expect(p.stagingDir).toBe(path.join("C:\\oficinaos", "data", "update"));
-    expect(p.backupScript).toBe(path.join("C:\\oficinaos", "BACKUP.ps1"));
+    expect(p.stagingDir).toBe(
+      path.win32.join("C:\\oficinaos", "data", "update")
+    );
+    expect(p.backupScript).toBe(path.win32.join("C:\\oficinaos", "BACKUP.ps1"));
   });
 });
 
