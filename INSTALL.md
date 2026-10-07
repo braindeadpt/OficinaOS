@@ -23,14 +23,39 @@ Guia para Windows. Demora ~10 minutos na primeira vez.
 | **3. Máquina dedicada** | Um mini-PC ou NAS com Docker sempre ligado corre a app; todos acedem por browser. Ideal para não depender do PC do balcão |
 | **4. Acesso pela internet** | Cloudflare Tunnel grátis — HTTPS automático, sem abrir portas no router, funciona com CGNAT. Guia: **[docs/remote-access.md](docs/remote-access.md)**. Também dá links públicos aos clientes (tracking, orçamentos, QR de garantia) |
 
-## 1. Descarregar
+## Instalação recomendada — `OficinaOS-Setup.exe`
+
+O caminho mais simples para um PC de balcão: um instalador Windows normal que
+deixa o OficinaOS a correr como serviço — **sem Docker, sem janelas de consola,
+arranca sozinho com o PC**.
+
+1. Descarrega **[OficinaOS-Setup](https://github.com/braindeadpt/OficinaOS/releases/latest)** (ficheiro `OficinaOS-Setup-*.exe` na release mais recente)
+2. Duplo clique → se o SmartScreen avisar: **Mais informações → Executar mesmo assim**
+3. Pede administrador **uma vez** (serviços + firewall) e no fim a app abre no browser
+4. Fica um **ícone na bandeja** junto ao relógio: abrir a app, ver o estado, fazer backup, parar/arrancar
+
+Depois da instalação:
+
+- **Neste PC:** `http://localhost:4000`
+- **Noutros aparelhos da loja** (tablet, telemóvel): `http://oficinaos.local:4000` — nome estável que funciona mesmo que o PC mude de IP. A página **Ajuda → QR code** tem um código para apontar com a câmara e ligar sem escrever nada
+- **Atualizar:** descarrega o `OficinaOS-Setup` da versão nova e corre por cima — os dados ficam
+- **Backups automáticos:** diário às 03:30 para `C:\ProgramData\OficinaOS\backups` (copia para uma pen/disco externo com regularidade)
+- **Desinstalar:** "Aplicações" nas Definições do Windows — pergunta se queres apagar também os dados
+
+Documentação técnica do instalador: [installer/README.md](installer/README.md)
+
+## Instalação via Docker (alternativa)
+
+Para NAS, servidores ou quem já usa Docker.
+
+### 1. Descarregar
 
 1. Descarrega o instalador: **[oficinaos-install.zip](https://github.com/braindeadpt/OficinaOS/releases/latest/download/oficinaos-install.zip)** — este link descarrega sempre a versão mais recente
 2. Extrai o ZIP para uma pasta, ex.: `C:\OficinaOS`
 
 > Alternativa: na página do GitHub, botão verde **Code → Download ZIP** dá o código completo (mais pesado — usa-o só se o instalador falhar).
 
-## 2. Instalar
+### 2. Instalar
 
 1. Dentro da pasta, **duplo clique em `INSTALAR.bat`**
 2. Se o Windows Defender SmartScreen avisar: **Mais informações → Executar mesmo assim**

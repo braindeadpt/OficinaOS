@@ -701,6 +701,8 @@
   "help_problem_3_a": "Toque em \"Redefinir palavra-passe\" no ecrã de início de sessão, ou peça ao administrador. Nunca partilhe a sua palavra-passe.",
   "help_problem_4_q": "Nada ajudou",
   "help_problem_4_a": "Contacte quem instalou o OficinaOS na sua loja.",
+  "help_qr_scan": "Aponte a câmara do seu telemóvel ou tablet para o código para abrir o OficinaOS nesse dispositivo.",
+  "help_qr_alt": "QR code com endereço do OficinaOS",
   "help_back_to_app": "Voltar",
   "home": "Casa",
   "hours_short": "horas",

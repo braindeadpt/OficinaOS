@@ -701,6 +701,8 @@
   "help_problem_3_a": "Touchez « Réinitialiser le mot de passe » sur l'écran de connexion, ou demandez à l'administrateur. Ne partagez jamais votre mot de passe.",
   "help_problem_4_q": "Rien n'a aidé",
   "help_problem_4_a": "Contactez celui qui a installé OficinaOS dans votre boutique.",
+  "help_qr_scan": "Pointez l'appareil photo de votre téléphone ou de votre tablette sur le code pour ouvrir OficinaOS sur cet appareil.",
+  "help_qr_alt": "Code QR avec l'adresse OficinaOS",
   "help_back_to_app": "Retour",
   "home": "Accueil",
   "hours_short": "heures",

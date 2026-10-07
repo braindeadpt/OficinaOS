@@ -1,5 +1,6 @@
 import { LANGUAGES } from "@shared/constants";
-import { useState } from "react";
+import QRCode from "qrcode";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
@@ -101,6 +102,35 @@ export default function HelpPage() {
   const isRemote = window.location.protocol === "https:" && !isLocalAddress;
   const platform = detectPlatform();
 
+  // QR encodes the best URL the SERVER knows — the mDNS name when set, else
+  // APP_URL — never "localhost" (useless when /help is opened on the server).
+  const [qrTarget, setQrTarget] = useState(origin);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/public/access-info")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body: { urls?: string[] } | null) => {
+        const best = body?.urls?.[0];
+        if (!cancelled && best) {
+          setQrTarget(best);
+        }
+      })
+      .catch(() => {
+        // Offline or old server — the origin fallback stays.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    QRCode.toDataURL(qrTarget, { margin: 1, width: 176 })
+      .then(setQrDataUrl)
+      .catch(() => setQrDataUrl(null));
+  }, [qrTarget]);
+
   const copyAddress = async () => {
     try {
       await navigator.clipboard.writeText(origin);
@@ -192,6 +222,25 @@ export default function HelpPage() {
               {copied ? t("help_address_copied") : t("help_address_copy")}
             </button>
           </div>
+          {qrDataUrl && (
+            <div className="mt-4 flex items-center gap-4">
+              <img
+                alt={t("help_qr_alt")}
+                className="h-[120px] w-[120px] shrink-0 rounded-xl bg-white p-2"
+                height={120}
+                src={qrDataUrl}
+                width={120}
+              />
+              <div className="min-w-0">
+                <p className="text-on-surface-variant text-sm">
+                  {t("help_qr_scan")}
+                </p>
+                <code className="mt-1 block truncate font-mono text-on-surface text-xs">
+                  {qrTarget}
+                </code>
+              </div>
+            </div>
+          )}
         </Section>
 
         <Section icon="storefront" title={t("help_shop_title")}>

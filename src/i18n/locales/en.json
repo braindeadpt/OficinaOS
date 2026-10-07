@@ -701,6 +701,8 @@
   "help_problem_3_a": "Use \"Forgot password\" on the sign-in screen, or ask the administrator. Never share your password.",
   "help_problem_4_q": "Nothing helped",
   "help_problem_4_a": "Contact whoever installed OficinaOS in your shop.",
+  "help_qr_scan": "Point your phone or tablet camera at the code to open OficinaOS on that device.",
+  "help_qr_alt": "QR code with the OficinaOS address",
   "help_back_to_app": "Back",
   "home": "Home",
   "hours_short": "hrs",

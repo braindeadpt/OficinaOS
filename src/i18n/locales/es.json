@@ -701,6 +701,8 @@
   "help_problem_3_a": "Toca \"Restablecer contraseña\" en la pantalla de inicio de sesión, o pregunta al administrador. Nunca compartas tu contraseña.",
   "help_problem_4_q": "Nada ayudó",
   "help_problem_4_a": "Contacta con quien instaló OficinaOS en tu tienda.",
+  "help_qr_scan": "Apunte la cámara de su teléfono o tableta al código para abrir OficinaOS en ese dispositivo.",
+  "help_qr_alt": "Código QR con la dirección de OficinaOS",
   "help_back_to_app": "Atrás",
   "home": "Hogar",
   "hours_short": "horas",

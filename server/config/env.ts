@@ -72,6 +72,15 @@ const schema = z
     // ── Filesystem ────────────────────────────────────────────
     UPLOAD_DIR: z.string().default("./uploads"),
 
+    // ── LAN discovery (optional) ──────────────────────────────
+    // Advertises <MDNS_HOSTNAME>.local via mDNS so devices keep connecting
+    // when the PC's IP changes. Off by default — set by the Windows
+    // installer/portable env; meaningless inside NAT'd Docker.
+    MDNS_HOSTNAME: z
+      .string()
+      .regex(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/i, "must be a DNS label")
+      .optional(),
+
     // ── Email (optional) ──────────────────────────────────────
     SMTP_HOST: z.string().optional(),
     SMTP_PORT: z.coerce.number().int().positive().optional(),

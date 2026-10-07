@@ -79,3 +79,70 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release upload "${{ github.ref_name }}" oficinaos-portable.zip --clobber
+
+      - name: Share bundle with the installer job
+        uses: actions/upload-artifact@v4
+        with:
+          name: portable-bundle
+          path: ${{ runner.temp }}/oficinaos-portable
+          retention-days: 1
+
+  setup:
+    name: Build OficinaOS-Setup.exe (Inno Setup + services)
+    runs-on: windows-latest
+    needs: portable
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: portable-bundle
+          path: installer/stage-tmp
+
+      - name: Assemble installer stage (app + runtimes + tools)
+        run: |
+          $s = "installer\stage"
+          New-Item -ItemType Directory -Force "$s\app", "$s\bun", "$s\pgsql", "$s\tools" | Out-Null
+          robocopy installer\stage-tmp\app "$s\app" /E /NFL /NDL /NJH /NJS /NP | Out-Null
+          if ($LASTEXITCODE -ge 8) { throw "robocopy app falhou: $LASTEXITCODE" }
+          robocopy installer\stage-tmp\bun "$s\bun" /E /NFL /NDL /NJH /NJS /NP | Out-Null
+          if ($LASTEXITCODE -ge 8) { throw "robocopy bun falhou: $LASTEXITCODE" }
+          robocopy installer\stage-tmp\pgsql "$s\pgsql" /E /NFL /NDL /NJH /NJS /NP | Out-Null
+          if ($LASTEXITCODE -ge 8) { throw "robocopy pgsql falhou: $LASTEXITCODE" }
+          Copy-Item installer\setup-service.ps1, installer\backup.ps1, `
+            installer\OficinaOS.xml "$s\tools\"
+
+      - name: Download WinSW (service wrapper, .NET4 — corre em qualquer Windows)
+        run: |
+          Invoke-WebRequest "https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW.NET4.exe" `
+            -OutFile "installer\stage\tools\OficinaOS.exe"
+
+      - name: Compile tray app (.NET Framework 4 csc — sem deps)
+        run: |
+          $csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+          & $csc /target:winexe /nologo `
+            /win32icon:"installer\OficinaOS.ico" `
+            /out:"installer\stage\tools\OficinaOSTray.exe" `
+            /r:System.Windows.Forms.dll /r:System.Drawing.dll `
+            installer\tray\OficinaOSTray.cs
+          if ($LASTEXITCODE -ne 0) { throw "csc falhou" }
+
+      - name: Install Inno Setup 6
+        run: choco install innosetup --no-progress -y
+
+      - name: Compile installer
+        run: |
+          $v = "${{ github.ref_name }}".TrimStart('v')
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" `
+            "/DMyAppVersion=$v" "/DSourceDir=stage" `
+            /Q installer\oficinaos.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC falhou" }
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.ref_name }}" dist/OficinaOS-Setup.exe --clobber
+          (Get-FileHash dist/OficinaOS-Setup.exe -Algorithm SHA256).Hash |
+            Out-File -Encoding ascii dist/OficinaOS-Setup.exe.sha256
+          gh release upload "${{ github.ref_name }}" dist/OficinaOS-Setup.exe.sha256 --clobber

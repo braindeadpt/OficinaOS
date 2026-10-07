@@ -1,0 +1,17 @@
+<service>
+  <id>OficinaOS</id>
+  <name>OficinaOS</name>
+  <description>Servidor OficinaOS — gestao de loja de reparacoes (app web na porta 4000)</description>
+  <executable>%BASE%\..\bun\bun.exe</executable>
+  <arguments>run start:prod</arguments>
+  <workingdirectory>%BASE%\..\app</workingdirectory>
+  <logpath>%ProgramData%\OficinaOS\logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>8</keepFiles>
+  </log>
+  <depend>OficinaOS-DB</depend>
+  <startmode>Automatic</startmode>
+  <onfailure action="restart" delay="10 sec"/>
+  <stoptimeout>30 sec</stoptimeout>
+</service>

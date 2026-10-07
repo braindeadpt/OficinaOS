@@ -10,6 +10,7 @@ import { loadEnv } from "./config/env.js";
 import { setAppInstance } from "./jobs/app-registry.js";
 import { startCloudPoller } from "./jobs/cloud-poller.js";
 import { startOverdueScheduler } from "./jobs/overdue-scheduler.js";
+import { startMdnsResponder } from "./lib/mdns.js";
 import { isFileRequestPath } from "./lib/spa-fallback.js";
 import { cacheControlFor } from "./lib/static-cache.js";
 import authPlugin from "./plugins/auth.js";
@@ -258,6 +259,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
     stopRemarketing();
     stopOutboxWorker();
     clearInterval(cleanupHandle);
+    mdns?.close();
     await app.close();
     process.exit(0);
   });
@@ -273,3 +275,9 @@ try {
   app.log.error(err);
   process.exit(1);
 }
+
+// mDNS: advertises <MDNS_HOSTNAME>.local so LAN devices survive IP changes.
+// Non-fatal — another responder may already own port 5353.
+const mdns = env.MDNS_HOSTNAME
+  ? startMdnsResponder(env.MDNS_HOSTNAME, app.log)
+  : null;
