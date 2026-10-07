@@ -72,6 +72,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0BACKUP.ps1" >nul 2>&1
 
 REM ── auto-arranque com o PC: pergunta uma vez, resposta fica em data\ ──
 if exist "%PGDATA%\PG_VERSION" if not exist "%PGDATA%\autostart.flag" (
+    REM Em CI (GitHub Actions) nao ha consola para o `choice` — assume N.
+    if defined CI (
+        echo n>"%PGDATA%\autostart.flag"
+    ) else (
     echo.
     choice /c SN /n /m "Iniciar o OficinaOS automaticamente quando o PC liga? [S/N] "
     if errorlevel 2 (
@@ -84,6 +88,7 @@ if exist "%PGDATA%\PG_VERSION" if not exist "%PGDATA%\autostart.flag" (
             echo s>"%PGDATA%\autostart.flag"
             echo        OK — arranca sozinho a partir do proximo arranque.
         )
+    )
     )
 )
 

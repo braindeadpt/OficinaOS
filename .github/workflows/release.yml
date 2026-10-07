@@ -142,10 +142,12 @@ jobs:
           New-Item -ItemType Directory -Force $smoke | Out-Null
           tar -xf oficinaos-portable.zip -C $smoke
           $root = "$smoke\oficinaos-portable"
-          # O INICIAR pergunta o autostart com `choice` (lê a consola, não o
-          # stdin — não dá para responder com pipe). A flag "n" salta a
-          # pergunta; os `pause` dos caminhos de erro ficam domados com <nul.
-          "n" | Out-File -Encoding ascii "$root\data\autostart.flag"
+          # O bsdtar escreve ACLs POSIX-ish que impedem o initdb de fazer
+          # chmod 0700 em data\ — /reset repõe as ACLs herdadas do runner.
+          icacls $root /reset /t /c /q | Out-Null
+          Remove-Item "$root\data" -Recurse -Force -ErrorAction SilentlyContinue
+          # O `choice` do autostart assume N em CI (INICIAR.bat `if defined
+          # CI`); os `pause` dos caminhos de erro ficam domados com <nul.
           cmd /c "`"$root\INICIAR.bat`" <nul"
           if ($LASTEXITCODE -ne 0) { throw "INICIAR.bat falhou: $LASTEXITCODE" }
           # O INICIAR já esperou pelo /health — reconfirmar de fora.
