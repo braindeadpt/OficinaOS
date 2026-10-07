@@ -235,4 +235,6 @@ jobs:
     steps:
       - env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release edit "${{ github.ref_name }}" --draft=false
+        # sem checkout neste job — -R resolve o repo senao gh falha com
+        # "not a git repository"
+        run: gh release edit "${{ github.ref_name }}" --draft=false -R "${{ github.repository }}"
