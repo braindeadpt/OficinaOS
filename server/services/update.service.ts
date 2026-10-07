@@ -168,9 +168,11 @@ export function isUpdateInProgress(status: UpdateStatus): boolean {
   return IN_PROGRESS.has(status.state);
 }
 
-export function verifySha256(file: string, expectedHex: string): boolean {
+export function verifySha256(file: string, expected: string): boolean {
   const actual = createHash("sha256").update(readFileSync(file)).digest("hex");
-  return actual === expectedHex.trim().toLowerCase();
+  // sha256sum format ("hash  filename") or bare hash — first token is the digest
+  const hex = expected.trim().toLowerCase().split(" ")[0];
+  return actual === hex;
 }
 
 export async function getUpdateState(): Promise<UpdateState> {

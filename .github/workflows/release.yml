@@ -121,12 +121,18 @@ jobs:
         # instalação actualizada ficam sempre com o mesmo conteúdo.
         run: |
           tar -a -cf oficinaos-app-update.zip -C "$env:RUNNER_TEMP\oficinaos-portable" app
-          (Get-FileHash oficinaos-app-update.zip -Algorithm SHA256).Hash |
+          # Formato sha256sum ("hash  ficheiro") — `sha256sum -c` funciona direto.
+          $h = (Get-FileHash oficinaos-app-update.zip -Algorithm SHA256).Hash.ToLower()
+          "$h  oficinaos-app-update.zip" |
             Out-File -Encoding ascii oficinaos-app-update.zip.sha256
+          $h = (Get-FileHash oficinaos-portable.zip -Algorithm SHA256).Hash.ToLower()
+          "$h  oficinaos-portable.zip" |
+            Out-File -Encoding ascii oficinaos-portable.zip.sha256
           # O updater também sai como asset avulso (+ sha256) — instalações de
           # versões sem o script (v1.0.9) podem fazer o bootstrap manual.
           Copy-Item scripts\update-apply.ps1 update-apply.ps1
-          (Get-FileHash update-apply.ps1 -Algorithm SHA256).Hash |
+          $h = (Get-FileHash update-apply.ps1 -Algorithm SHA256).Hash.ToLower()
+          "$h  update-apply.ps1" |
             Out-File -Encoding ascii update-apply.ps1.sha256
 
       - name: Upload to release
@@ -134,6 +140,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "${{ github.ref_name }}" oficinaos-portable.zip `
+            oficinaos-portable.zip.sha256 `
             oficinaos-app-update.zip oficinaos-app-update.zip.sha256 `
             update-apply.ps1 update-apply.ps1.sha256 --clobber
 
@@ -202,6 +209,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "${{ github.ref_name }}" dist/OficinaOS-Setup.exe --clobber
-          (Get-FileHash dist/OficinaOS-Setup.exe -Algorithm SHA256).Hash |
+          $h = (Get-FileHash dist/OficinaOS-Setup.exe -Algorithm SHA256).Hash.ToLower()
+          "$h  OficinaOS-Setup.exe" |
             Out-File -Encoding ascii dist/OficinaOS-Setup.exe.sha256
           gh release upload "${{ github.ref_name }}" dist/OficinaOS-Setup.exe.sha256 --clobber

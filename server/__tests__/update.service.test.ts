@@ -154,6 +154,14 @@ describe("verifySha256", () => {
     expect(verifySha256(f, hex.toUpperCase())).toBe(true);
   });
 
+  it("accepts sha256sum format (hash + filename)", () => {
+    const dir = mkTmp();
+    const f = path.join(dir, "file.bin");
+    writeFileSync(f, "conteudo");
+    const hex = createHash("sha256").update("conteudo").digest("hex");
+    expect(verifySha256(f, `${hex}  file.bin`)).toBe(true);
+  });
+
   it("rejects a mismatched digest", () => {
     const dir = mkTmp();
     const f = path.join(dir, "file.bin");
