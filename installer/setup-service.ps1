@@ -148,7 +148,14 @@ if ($dbExists -notmatch "1") {
 
 # App — WinSW instala OficinaOS.exe + OficinaOS.xml do mesmo diretorio
 & $winsw install | Out-Null
-Start-Service -Name $svcApp
+# Com EAP=Stop um Start-Service falhado abortava o script — firewall, tarefa
+# de backup e seed nunca corriam. O health check abaixo e que decide se a app
+# esta realmente no ar; aqui so se regista a falha e segue.
+try {
+    Start-Service -Name $svcApp
+} catch {
+    Write-Output "Start-Service $svcApp falhou: $($_.Exception.Message) — o health check decide"
+}
 
 # Firewall — sem esta regra os tablets/telemoveis da loja nao ligam
 Remove-NetFirewallRule -DisplayName "OficinaOS" -ErrorAction SilentlyContinue
@@ -176,8 +183,22 @@ if (-not $ready) {
 }
 
 # Seed do admin (idempotente) + nota de primeiro acesso no Ambiente de Trabalho
+# EAP=Continue localmente: no PS 5.1 o stderr de um nativo redirecionado com
+# 2>&1 vira ErrorRecord e, com EAP=Stop, rebenta antes do exit code — o admin
+# nunca era criado (o seed escreve progresso em stderr mesmo em sucesso).
+$seedRc = 0
 Push-Location $appDir
-try { & $bun run db:seed 2>&1 | Out-Null } finally { Pop-Location }
+try {
+    $eap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & $bun run db:seed 2>&1 | Out-Null
+        $seedRc = $LASTEXITCODE
+    } finally { $ErrorActionPreference = $eap }
+} finally { Pop-Location }
+if ($seedRc -ne 0) {
+    Write-Error "db:seed falhou (exit $seedRc) — ver $logDir\setup.log"
+}
 
 $loginTxt = @"
 OficinaOS — primeiro acesso

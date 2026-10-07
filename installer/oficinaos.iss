@@ -65,7 +65,26 @@ Filename: "http://localhost:4000"; Description: "Abrir o OficinaOS"; \
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\tools\setup-service.ps1"" -Uninstall"; \
   Flags: waituntilterminated runhidden; RunOnceId: "RemoveServices"
 
+[UninstallDelete]
+; ficheiros criados em runtime (.env, logs, app.prev de updates) ficam fora do
+; manifesto do instalador — sem isto sobrava lixo em Program Files\OficinaOS
+Type: filesandordirs; Name: "{app}"
+
 [Code]
+var
+  PostInstallFailed: Boolean;
+
+// Setup correu até ao fim mas a configuracao pos-install falhou — o chamador
+// (ATUALIZAR.bat / deploy silencioso) tem de distinguir "ficheiros copiados,
+// servico falhou" de sucesso real.
+function GetCustomSetupExitCode: Integer;
+begin
+  if PostInstallFailed then
+    Result := 1
+  else
+    Result := 0;
+end;
+
 // Antes de copiar ficheiros num upgrade: parar os serviços para libertar locks.
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
@@ -77,6 +96,9 @@ begin
       '-NoProfile -ExecutionPolicy Bypass -File "' +
       ExpandConstant('{app}\tools\setup-service.ps1') + '" -Stop',
       '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  // Com o tray aberto, a copia por cima falhava com exit 5 (ficheiro em uso).
+  Exec('taskkill.exe', '/F /IM OficinaOSTray.exe',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;
 
 // Pós-instalação: corre setup-service.ps1 com exit code visível — se falhar,
@@ -92,12 +114,17 @@ begin
     if not Exec('powershell.exe',
       '-NoProfile -ExecutionPolicy Bypass -File "' +
       ExpandConstant('{app}\tools\setup-service.ps1') + '"',
-      '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
-      MsgBox('A configuração do OficinaOS não terminou corretamente.' + #13#10 +
+      '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then begin
+      PostInstallFailed := True;
+      // SuppressibleMsgBox respeita /SUPPRESSMSGBOXES — com MsgBox a instalacao
+      // silenciosa ficava pendurada à espera de um clique que nunca vinha.
+      SuppressibleMsgBox(
+        'A configuração do OficinaOS não terminou corretamente.' + #13#10 +
         'Registo: ' + ExpandConstant('{commonappdata}') +
         '\OficinaOS\logs\setup.log' + #13#10 +
         'Volte a correr o instalador ou contacte o suporte.',
-        mbError, MB_OK);
+        mbError, MB_OK, IDOK);
+    end;
   end;
 end;
 
@@ -109,11 +136,13 @@ begin
   if CurUninstallStep = usPostUninstall then begin
     DataDir := ExpandConstant('{commonappdata}\OficinaOS');
     if DirExists(DataDir) then begin
-      if MsgBox('Desinstalar concluído.' + #13#10 + #13#10 +
+      // Silencioso: SuppressibleMsgBox devolve IDNO — dados da loja ficam.
+      if SuppressibleMsgBox(
+        'Desinstalar concluído.' + #13#10 + #13#10 +
         'Apagar também TODOS os dados da loja em ' + DataDir +
         ' (base de dados, backups, uploads)?' + #13#10 +
         'Esta ação não pode ser anulada.',
-        mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+        mbConfirmation, MB_YESNO or MB_DEFBUTTON2, IDNO) = IDYES then
         DelTree(DataDir, True, True, True);
     end;
   end;

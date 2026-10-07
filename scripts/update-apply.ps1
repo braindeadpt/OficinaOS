@@ -21,6 +21,10 @@ param(
 # update continuava com ficheiros novos e velhos misturados.
 $ErrorActionPreference = 'Stop'
 
+# cwd neutro: se o processo nascer com cwd dentro de InstallRoot\app (via
+# Win32_Process.Create), o Rename-Item app->app.prev falha com "pasta em uso".
+Set-Location $env:TEMP
+
 $appDir  = Join-Path $InstallRoot 'app'
 $prevDir = Join-Path $InstallRoot 'app.prev'
 $keepDir = Join-Path $env:TEMP ('oficinaos-keep-' + [guid]::NewGuid().ToString('N'))
@@ -178,16 +182,31 @@ try {
   # 4. Trocar app\ (mantem app.prev para rollback)
   Set-Status 'applying' 'A instalar a nova versao'
   if (Test-Path $prevDir) { Remove-Item $prevDir -Recurse -Force }
-  Rename-Item $appDir $prevDir
   try {
-    # O zip contem a pasta app\ — extrai para o root e recria app\
-    Expand-Archive -LiteralPath $ZipPath -DestinationPath $InstallRoot -Force
+    # O rename fica DENTRO do try: se falhar (pasta em uso / cwd em app\),
+    # o catch repoe o estado e arranca o servico em vez de o deixar parado.
+    Rename-Item $appDir $prevDir
+    # O zip contem a pasta app\ — extrai para o root e recria app\.
+    # Expand-Archive do PS 5.1 falha em zips criados com `tar -a -cf`
+    # ("Cannot find path ...\app\.bun-version") e demorava ~450-640s.
+    # tar.exe (bsdtar) vem no Windows 10+; ZipFile fica como fallback.
+    $tarExe = Join-Path $env:SystemRoot 'System32\tar.exe'
+    if (Test-Path $tarExe) {
+      & $tarExe -xf $ZipPath -C $InstallRoot
+      if ($LASTEXITCODE -ne 0) { throw "tar -xf falhou (exit $LASTEXITCODE)" }
+    } else {
+      Add-Type -AssemblyName System.IO.Compression.FileSystem
+      [System.IO.Compression.ZipFile]::ExtractToDirectory($ZipPath, $InstallRoot)
+    }
     Restore-Preserved
   } catch {
     $msg = $_.Exception.Message
-    if (Test-Path $appDir) { Remove-Item $appDir -Recurse -Force }
-    Rename-Item $prevDir $appDir
-    Restore-Preserved
+    try {
+      if (Test-Path $appDir) { Remove-Item $appDir -Recurse -Force }
+      if (Test-Path $prevDir) { Rename-Item $prevDir $appDir }
+      Restore-Preserved
+    } catch { }
+    # O rearranque tenta SEMPRE — mesmo que a reposicao falhe a meio.
     try { Start-OficinaOS } catch { }
     throw "extracao falhou: $msg — versao anterior reposta"
   }

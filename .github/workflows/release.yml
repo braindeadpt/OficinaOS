@@ -153,6 +153,9 @@ jobs:
           name: portable-bundle
           path: ${{ runner.temp }}/oficinaos-portable
           retention-days: 1
+          # v1.0.9 saiu sem node_modules\.bin (o upload-artifact exclui ficheiros
+          # escondidos por defeito) — sem o prisma CLI o serviço crash-loopava.
+          include-hidden-files: true
 
   setup:
     name: Build OficinaOS-Setup.exe (Inno Setup + services)
@@ -165,6 +168,14 @@ jobs:
         with:
           name: portable-bundle
           path: installer/stage-tmp
+
+      - name: Verify hidden files survived the artifact round-trip
+        # Falhava o .bin no caminho artefacto→Setup.exe: sem o prisma CLI
+        # o serviço entrava em crash-loop na primeira instalação.
+        run: |
+          if (-not (Test-Path "installer\stage-tmp\app\node_modules\.bin\prisma*")) {
+            throw "o artefacto chegou sem app\node_modules\.bin\prisma — include-hidden-files?"
+          }
 
       - name: Assemble installer stage (app + runtimes + tools)
         run: |

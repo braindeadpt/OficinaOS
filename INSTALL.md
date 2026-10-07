@@ -180,7 +180,7 @@ Documentação técnica do bundle: [scripts/portable/README.md](scripts/portable
 > Invoke-WebRequest "$base/update-apply.ps1" -OutFile update-apply.ps1
 > Invoke-WebRequest "$base/oficinaos-app-update.zip" -OutFile app-update.zip
 > # opcional: verifica os .sha256 antes de correr
-> .\update-apply.ps1 -Mode service `
+> powershell -ExecutionPolicy Bypass -File .\update-apply.ps1 -Mode service `
 >   -InstallRoot "C:\Program Files\OficinaOS" `
 >   -ZipPath .\app-update.zip `
 >   -StatusPath "C:\ProgramData\OficinaOS\update-status.json" `
