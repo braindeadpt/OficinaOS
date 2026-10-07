@@ -81,7 +81,7 @@ if exist "%PGDATA%\PG_VERSION" if not exist "%PGDATA%\autostart.flag" (
     if errorlevel 2 (
         echo n>"%PGDATA%\autostart.flag"
     ) else (
-        schtasks /create /tn "OficinaOS" /tr "\"%~dp0INICIAR.bat\"" /sc onlogon /f >nul 2>&1
+        call :registar_arranque
         if errorlevel 1 (
             echo        AVISO: nao consegui registar o arranque automatico.
         ) else (
@@ -118,3 +118,10 @@ echo  ============================================
 if exist "%~dp0PRIMEIRO-LOGIN.txt" type "%~dp0PRIMEIRO-LOGIN.txt"
 start "" "http://localhost:4000"
 exit /b 0
+
+:registar_arranque
+REM Register-ScheduledTask em vez de schtasks /tr — o /tr "\"...\"" partia
+REM as aspas em caminhos com espacos e a tarefa nunca era criada (o mesmo
+REM bug do B13 no setup-service.ps1). Sem admin: tarefa do proprio user.
+powershell -NoProfile -Command "$a = New-ScheduledTaskAction -Execute '%~dp0INICIAR.bat'; $t = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME; Register-ScheduledTask -TaskName 'OficinaOS' -Action $a -Trigger $t -Force" >nul 2>&1
+exit /b %errorlevel%
