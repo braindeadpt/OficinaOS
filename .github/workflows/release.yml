@@ -111,6 +111,8 @@ jobs:
           if ($LASTEXITCODE -ge 8) { throw "robocopy pgsql falhou: $LASTEXITCODE" }
           Copy-Item installer\setup-service.ps1, installer\backup.ps1, `
             installer\OficinaOS.xml "$s\tools\"
+          # robocopy sai 1 em sucesso ("files copied") — resetar senão o step falha
+          $global:LASTEXITCODE = 0
 
       - name: Download WinSW (service wrapper, .NET4 — corre em qualquer Windows)
         run: |
