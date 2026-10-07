@@ -75,10 +75,18 @@ jobs:
           Copy-Item scripts\portable\* "$b\"
           tar -a -cf oficinaos-portable.zip -C "$env:RUNNER_TEMP" oficinaos-portable
 
+      - name: Build lightweight app-update zip (app payload only — in-app updater)
+        run: |
+          tar -a -cf oficinaos-app-update.zip -C "$env:RUNNER_TEMP\oficinaos-portable" app
+          (Get-FileHash oficinaos-app-update.zip -Algorithm SHA256).Hash |
+            Out-File -Encoding ascii oficinaos-app-update.zip.sha256
+
       - name: Upload to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ github.ref_name }}" oficinaos-portable.zip --clobber
+        run: |
+          gh release upload "${{ github.ref_name }}" oficinaos-portable.zip `
+            oficinaos-app-update.zip oficinaos-app-update.zip.sha256 --clobber
 
       - name: Share bundle with the installer job
         uses: actions/upload-artifact@v4

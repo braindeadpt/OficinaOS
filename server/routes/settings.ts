@@ -13,7 +13,6 @@ import {
   findShopSettingsUnique,
   getOrCreateShopSettings,
 } from "../repositories/settings.repository.js";
-import { getAppVersionInfo } from "../services/app-version.service.js";
 import { getBackupStatus } from "../services/backup-status.service.js";
 import {
   getCloudStatus,
@@ -43,6 +42,7 @@ import {
   registerSmsWebhook,
   sendSms,
 } from "../services/sms.service.js";
+import { getUpdateState, startUpdate } from "../services/update.service.js";
 import { pushCredentialsToCloud } from "../services/whatsapp-channel.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
@@ -182,7 +182,30 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
         summary: "Check GitHub Releases for a newer OficinaOS version",
       },
     },
-    async (_req, reply) => reply.send(await getAppVersionInfo())
+    async (_req, reply) => reply.send(await getUpdateState())
+  );
+
+  app.get(
+    "/update/status",
+    {
+      schema: {
+        tags: ["settings"],
+        summary: "In-app update progress (state machine + version info)",
+      },
+    },
+    async (_req, reply) => reply.send(await getUpdateState())
+  );
+
+  app.post(
+    "/update",
+    {
+      preHandler: [requirePermission({ settings: ["edit"] })],
+      schema: {
+        tags: ["settings"],
+        summary: "Start a lightweight in-app update (backup + rollback)",
+      },
+    },
+    async (_req, reply) => reply.send(await startUpdate())
   );
 
   app.put(
