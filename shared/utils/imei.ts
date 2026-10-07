@@ -45,3 +45,15 @@ export const imeiField = z
   .optional()
   .or(z.literal(""))
   .refine((v) => !v || isValidImei(v), { error: "validations.imei_invalid" });
+
+/**
+ * Generic device identifier (Job.imei): real IMEI for phones — Luhn is
+ * enforced in the service where the device category is known — or a
+ * free serial number for laptops, TVs, GPS, consoles, etc.
+ */
+export const serialField = z
+  .string()
+  .trim()
+  .max(32, { error: "validations.identifier_too_long" })
+  .optional()
+  .or(z.literal(""));

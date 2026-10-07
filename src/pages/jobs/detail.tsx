@@ -1,3 +1,4 @@
+import { isImeiCategory } from "@shared/constants/device-categories";
 import type { Customer, Job } from "@shared/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -283,7 +284,9 @@ export default function JobDetailPage() {
           {job.imei && (
             <div>
               <p className="font-label text-[11px] text-on-surface-variant uppercase tracking-widest">
-                IMEI
+                {isImeiCategory(job.device?.category)
+                  ? "IMEI"
+                  : t("intake.serial_number")}
               </p>
               <p className="mt-0.5 font-bold font-headline text-lg text-on-surface">
                 {job.imei}

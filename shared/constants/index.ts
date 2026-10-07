@@ -3,6 +3,8 @@ export { AI_MODELS } from "./ai-models";
 export { COUNTRIES } from "./countries";
 export type { CurrencyCode } from "./currencies";
 export { CURRENCIES } from "./currencies";
+export type { DeviceCategory } from "./device-categories";
+export { DEVICE_CATEGORIES, isImeiCategory } from "./device-categories";
 export { DEVICE_ICONS } from "./device-icons";
 export type { JobStatusType } from "./job-statuses";
 export {

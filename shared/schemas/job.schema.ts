@@ -4,7 +4,8 @@ import {
   QC_CHECK_ITEMS,
   RepairCategory,
 } from "@shared/constants";
-import { imeiField } from "@shared/utils/imei";
+import { DEVICE_CATEGORIES } from "@shared/constants/device-categories";
+import { serialField } from "@shared/utils/imei";
 import { z } from "zod";
 
 const repairCategoryValues = Object.values(RepairCategory) as [
@@ -36,8 +37,11 @@ export const createJobSchema = z.object({
   deviceBrand: z.string().min(1, { error: "validations.enter_brand" }).max(60),
   deviceBrandId: z.string().max(64).optional(),
   deviceModel: z.string().min(1, { error: "validations.enter_model" }).max(120),
+  // When the intake creates a brand-new device model, the picked type is
+  // stored on it. Existing models keep their own category.
+  deviceCategory: z.enum(DEVICE_CATEGORIES).optional(),
   color: z.string().max(40).optional(),
-  imei: imeiField,
+  imei: serialField,
   reportedProblem: z
     .string()
     .min(1, { error: "validations.describe_problem" })
@@ -86,7 +90,7 @@ export const updateJobSchema = z.object({
   technicianId: z.string().cuid().nullable().optional(),
   isUrgent: z.boolean().optional(),
   color: z.string().max(40).optional(),
-  imei: imeiField,
+  imei: serialField,
   deviceUnlockCode: z.string().max(64).nullable().optional(),
   accessories: z.array(z.string().max(40)).max(12).optional(),
   intakeChecklist: z
@@ -194,7 +198,7 @@ export const jobListQuerySchema = z.object({
   status: z.enum(jobStatusValues).optional(),
   technicianId: z.string().optional(),
   search: z.string().max(100).optional(),
-  imei: imeiField,
+  imei: serialField,
 });
 
 export type UpdateJobInput = z.infer<typeof updateJobSchema>;

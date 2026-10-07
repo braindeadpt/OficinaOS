@@ -1,3 +1,4 @@
+import { DEVICE_ICONS } from "@shared/constants";
 import { Icon } from "@/components/ui/icon";
 import type { ModelSearchResult } from "@/hooks/use-model-search";
 
@@ -74,7 +75,9 @@ export default function ModelSearchDropdown({
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary-container">
                   <Icon
                     className="text-on-secondary-container text-sm"
-                    name="phone_iphone"
+                    name={
+                      DEVICE_ICONS[m.category ?? "phone"] ?? DEVICE_ICONS.phone
+                    }
                   />
                 </span>
                 <span className="truncate font-bold font-headline text-on-surface text-sm">

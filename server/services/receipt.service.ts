@@ -635,7 +635,7 @@ ${shopHeader}
 <table><tr><td>${s.job}</td><td style="text-align:right">${esc(job.jobCode)}</td></tr>
 <tr><td>${s.customer}</td><td style="text-align:right">${esc(job.customer.name)}</td></tr>
 <tr><td>${s.phone}</td><td style="text-align:right">${esc(job.customer.phone)}</td></tr>
-<tr><td>${s.device}</td><td style="text-align:right">${esc(job.device.brand.name)} ${esc(job.device.model)}</td></tr>${prefs.showImei && job.imei ? `<tr><td>IMEI</td><td style="text-align:right">${esc(job.imei)}</td></tr>` : ""}</table>
+<tr><td>${s.device}</td><td style="text-align:right">${esc(job.device.brand.name)} ${esc(job.device.model)}</td></tr>${prefs.showImei && job.imei ? `<tr><td>IMEI/SN</td><td style="text-align:right">${esc(job.imei)}</td></tr>` : ""}</table>
 <div class="sep"></div>
 ${prefs.showProblem ? `<p style="text-align:left"><strong>${s.problem}:</strong> ${esc(job.reportedProblem)}</p><div class="sep"></div>` : ""}
 ${costsSectionHtml(ctx)}
@@ -750,7 +750,7 @@ ${
   <div class="col">
     <div class="lbl">${s.device}</div>
     <div><strong>${esc(job.device.brand.name)} ${esc(job.device.model)}</strong></div>
-    ${prefs.showImei && job.imei ? `<div>IMEI: ${esc(job.imei)}</div>` : ""}
+    ${prefs.showImei && job.imei ? `<div>IMEI/SN: ${esc(job.imei)}</div>` : ""}
   </div>
 </div>
 ${prefs.showProblem ? `<div class="problem"><strong>${s.problem}:</strong> ${esc(job.reportedProblem)}</div>` : ""}

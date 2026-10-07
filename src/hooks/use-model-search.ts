@@ -3,6 +3,7 @@ import api, { type ApiError } from "@/lib/api";
 
 export interface ModelSearchResult {
   brandId: string;
+  category: string | null;
   id: string;
   model: string;
 }
@@ -88,7 +89,10 @@ export function useModelSearch(brandId: string, debounceMs = 250) {
   }, []);
 
   const createModel = useCallback(
-    async (modelName: string): Promise<ModelSearchResult | null> => {
+    async (
+      modelName: string,
+      category?: string
+    ): Promise<ModelSearchResult | null> => {
       if (!brandId) {
         return null;
       }
@@ -96,6 +100,7 @@ export function useModelSearch(brandId: string, debounceMs = 250) {
       setCreateError(null);
       try {
         const res = await api.post(`/brands/${brandId}/models`, {
+          category,
           model: modelName,
         });
         const device = res.data as ModelSearchResult;

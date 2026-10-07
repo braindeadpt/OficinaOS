@@ -444,8 +444,9 @@ async function seedDevices() {
     for (const model of models) {
       await prisma.device.upsert({
         where: { brandId_model: { brandId: brand.id, model } },
-        update: {},
-        create: { brandId: brand.id, model },
+        // Backfill category on seed rows created before the field existed.
+        update: { category: "phone" },
+        create: { brandId: brand.id, model, category: "phone" },
       });
     }
   }

@@ -1,5 +1,6 @@
 import type { Job, PrismaClient } from "@generated/client";
 import { AuditAction, Prisma, type RepairCategory } from "@generated/client";
+import { isImeiCategory } from "@shared/constants/device-categories";
 import type { JobStatusType } from "@shared/constants/job-statuses";
 import {
   ACTIVE_STATUSES,
@@ -17,7 +18,7 @@ import type {
   JobListQueryInput,
   UpdateJobInput,
 } from "@shared/schemas/job.schema";
-import { normalizeImei } from "@shared/utils/imei";
+import { isValidImei, normalizeImei } from "@shared/utils/imei";
 import {
   findMany as auditFindMany,
   findManyWithInclude as auditFindManyWithInclude,
@@ -276,6 +277,52 @@ export async function getMetrics(prisma: PrismaClient) {
   return metrics;
 }
 
+/** Phones keep strict IMEI normalization; other equipment stores serials as typed. */
+function normalizeIdentifier(
+  raw: string,
+  category: string | null | undefined
+): string {
+  return isImeiCategory(category) ? normalizeImei(raw) : raw.trim();
+}
+
+/**
+ * Device + identifier resolution for job creation: upserts the model
+ * (stamping the picked category on new models) and Luhn-checks the IMEI
+ * on phones. Null category = legacy row from the phone-only days.
+ */
+async function resolveJobDevice(
+  prisma: PrismaClient,
+  brandId: string,
+  input: CreateJobInput
+) {
+  const device = await upsertDevice(
+    prisma,
+    { brandId_model: { brandId, model: input.deviceModel } },
+    input.deviceCategory ? { category: input.deviceCategory } : {},
+    {
+      brand: { connect: { id: brandId } },
+      model: input.deviceModel,
+      category: input.deviceCategory ?? null,
+    }
+  );
+  if (
+    input.imei &&
+    isImeiCategory(device.category) &&
+    !isValidImei(input.imei)
+  ) {
+    return {
+      error: "VALIDATION_ERROR" as const,
+      errors: { imei: ["validations.imei_invalid"] },
+    };
+  }
+  return {
+    device,
+    identifier: input.imei
+      ? normalizeIdentifier(input.imei, device.category)
+      : null,
+  };
+}
+
 export async function create(
   prisma: PrismaClient,
   input: CreateJobInput,
@@ -340,12 +387,11 @@ export async function create(
     }
   }
 
-  const device = await upsertDevice(
-    prisma,
-    { brandId_model: { brandId, model: input.deviceModel } },
-    {},
-    { brand: { connect: { id: brandId } }, model: input.deviceModel }
-  );
+  const resolved = await resolveJobDevice(prisma, brandId, input);
+  if ("error" in resolved) {
+    return resolved;
+  }
+  const { device, identifier: deviceIdentifier } = resolved;
 
   const { accessCode, jobCode } = await generateJobCode(prisma);
 
@@ -362,7 +408,7 @@ export async function create(
         intakeSignatureDataUrl: input.intakeSignatureDataUrl ?? null,
         createdBy: { connect: { id: userId } },
         customer: { connect: { id: customer.id } },
-        imei: input.imei ? normalizeImei(input.imei) : null,
+        imei: deviceIdentifier,
         depositAmount: input.depositAmount ?? null,
         device: { connect: { id: device.id } },
         estimatedCost: input.estimatedCost,
@@ -430,7 +476,10 @@ function hasNonSpecialFieldChanges(input: UpdateJobInput): boolean {
   return Object.keys(input).some((k) => !UPDATE_SPECIAL_FIELDS.has(k));
 }
 
-function buildJobUpdateData(input: UpdateJobInput): Prisma.JobUpdateInput {
+function buildJobUpdateData(
+  input: UpdateJobInput,
+  deviceCategory: string | null | undefined
+): Prisma.JobUpdateInput {
   const {
     depositAmount,
     estimatedDate,
@@ -447,7 +496,7 @@ function buildJobUpdateData(input: UpdateJobInput): Prisma.JobUpdateInput {
   }
 
   if (imei !== undefined) {
-    data.imei = imei ? normalizeImei(imei) : null;
+    data.imei = imei ? normalizeIdentifier(imei, deviceCategory) : null;
   }
 
   if (estimatedDate === null) {
@@ -493,7 +542,22 @@ export async function update(
     }
   }
 
-  const data = buildJobUpdateData(input);
+  let deviceCategory: string | null | undefined;
+  if (input.imei) {
+    const device = await prisma.device.findUnique({
+      where: { id: job.deviceId },
+      select: { category: true },
+    });
+    deviceCategory = device?.category;
+    if (isImeiCategory(deviceCategory) && !isValidImei(input.imei)) {
+      return {
+        error: "VALIDATION_ERROR" as const,
+        errors: { imei: ["validations.imei_invalid"] },
+      };
+    }
+  }
+
+  const data = buildJobUpdateData(input, deviceCategory);
 
   const { technicianId } = input;
 

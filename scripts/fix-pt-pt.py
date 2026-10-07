@@ -122,6 +122,10 @@ OVERRIDES = {
     "profile_activity_user_sign_in": "Sessão iniciada",
     "profile_activity_user_sign_out": "Sessão terminada",
 
+    # Google Translate traduz "tablet" para "Comprimido" (o medicamento) —
+    # em pt-PT o equipamento é "tablet" mesmo.
+    "device_category.tablet": "Tablet",
+
     # ── orçamento (não "cotação"/"citação") — quote de reparação ────────
     # NOTA: "cotação" só é errada nestas keys; em contexto de bolsa/câmbio
     # é o termo correto, por isso overrides por key em vez de SUB global.

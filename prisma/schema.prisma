@@ -269,6 +269,9 @@ model Device {
   id        String   @id @default(cuid())
   brandId   String
   model     String
+  // Device type — values from shared/constants/device-categories.ts
+  // (phone|tablet|laptop|desktop|tv|console|gps|watch|other). String column
+  // on purpose: new types don't need a migration. Null = legacy phone row.
   category  String?
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -412,9 +415,10 @@ model Job {
   deviceId String
   device   Device  @relation(fields: [deviceId], references: [id], onDelete: Restrict)
   color    String?
-  // IMEI/serial captured at intake (nullable — shops may not always record it).
-  // 15 digits for IMEI; VarChar(16) tolerates 16-digit MEID with check digit.
-  imei     String? @db.VarChar(16)
+  // IMEI (phones, Luhn-checked) or serial number (other equipment) captured
+  // at intake — nullable, shops may not always record it. VarChar(32) covers
+  // 16-digit MEID and common laptop/TV/GPS serial formats.
+  imei     String? @db.VarChar(32)
 
   reportedProblem String    @db.Text
   conditionNotes  String?   @db.Text

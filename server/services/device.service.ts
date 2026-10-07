@@ -47,7 +47,7 @@ export async function searchModels(
     return await findDevicesRepo(
       prisma,
       { brandId },
-      { id: true, brandId: true, model: true },
+      { id: true, brandId: true, model: true, category: true },
       { model: "asc" },
       limit
     );
@@ -55,7 +55,7 @@ export async function searchModels(
   return await findDevicesRepo(
     prisma,
     { brandId, model: { startsWith: q, mode: "insensitive" } },
-    { id: true, brandId: true, model: true },
+    { id: true, brandId: true, model: true, category: true },
     { model: "asc" },
     limit
   );
@@ -106,6 +106,7 @@ export async function createModel(
     return await createDeviceRepo(prisma, {
       brand: { connect: { id: brandId } },
       model: input.model,
+      category: input.category ?? null,
     });
   } catch (err) {
     if (

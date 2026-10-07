@@ -220,6 +220,8 @@ export function useIntakeModal({
         ...prev,
         model: model.model,
         modelId: model.id,
+        // Category lives on the model — an existing model brings its own.
+        deviceCategory: model.category ?? prev.deviceCategory,
       }));
       setErrors((prev) => {
         if (!prev.model) {
@@ -249,16 +251,17 @@ export function useIntakeModal({
   }, [createBrand, brandAddQuery, clearBrandSearch, setModelQuery]);
 
   const handleModelAdd = useCallback(async () => {
-    const model = await createModel(modelAddQuery);
+    const model = await createModel(modelAddQuery, form.deviceCategory);
     if (model) {
       setForm((prev) => ({
         ...prev,
         model: model.model,
         modelId: model.id,
+        deviceCategory: model.category ?? prev.deviceCategory,
       }));
       clearModelSearch();
     }
-  }, [createModel, modelAddQuery, clearModelSearch]);
+  }, [createModel, modelAddQuery, clearModelSearch, form.deviceCategory]);
 
   const handleQuickAdd = useCallback(
     (data: CreatedCustomerData) => {

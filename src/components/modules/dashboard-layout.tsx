@@ -30,6 +30,7 @@ function buildJobPayload(data: IntakeFormData) {
     deviceBrand: data.brand || "Unknown",
     deviceBrandId: data.brandId || undefined,
     deviceModel: data.model,
+    deviceCategory: data.deviceCategory || undefined,
     color: data.color || undefined,
     imei: data.imei || undefined,
     reportedProblem: data.reportedProblem,

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DEVICE_CATEGORIES } from "../constants/device-categories";
 
 export const brandSearchQuerySchema = z.object({
   q: z.string().default(""),
@@ -24,6 +25,8 @@ export const createModelSchema = z.object({
     .trim()
     .min(1, { error: "validations.enter_model" })
     .max(200, { error: "validations.model_too_long" }),
+  // Optional — a shop adding a model quickly may not pick; null = unknown.
+  category: z.enum(DEVICE_CATEGORIES).optional(),
 });
 
 export const brandIdParamSchema = z.string().min(1);

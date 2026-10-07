@@ -209,7 +209,7 @@ export function buildJobReceiptEscPos(
   t.row(s.phone, job.customer.phone);
   t.row(s.device, `${job.device.brand.name} ${job.device.model}`);
   if (prefs.showImei && job.imei) {
-    t.row("IMEI", job.imei);
+    t.row("IMEI/SN", job.imei);
   }
   if (prefs.showProblem) {
     t.sep();

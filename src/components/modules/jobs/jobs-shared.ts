@@ -68,7 +68,10 @@ function inferDeviceType(brand: string): string {
 
 export function jobToRow(job: Job): JobRow {
   const brandName = job.device?.brand?.name ?? "";
-  const deviceType = job.device ? inferDeviceType(brandName) : "phone";
+  // The model's stored category wins; rows without one (legacy) fall back
+  // to the brand-name guess.
+  const deviceType =
+    job.device?.category ?? (job.device ? inferDeviceType(brandName) : "phone");
 
   return {
     id: job.jobCode ?? job.id,

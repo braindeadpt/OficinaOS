@@ -1,3 +1,7 @@
+import {
+  DEVICE_CATEGORIES,
+  isImeiCategory,
+} from "@shared/constants/device-categories";
 import { useState } from "react";
 import type { CreatedCustomerData } from "@/components/modules/jobs/quick-add-customer";
 import QuickAddCustomer from "@/components/modules/jobs/quick-add-customer";
@@ -432,6 +436,45 @@ function ModelField({
   );
 }
 
+function IdentifierField({
+  errors,
+  form,
+  t,
+  touched,
+  update,
+}: Pick<Step1Props, "errors" | "form" | "t" | "touched" | "update">) {
+  const isImei = isImeiCategory(form.deviceCategory);
+
+  return (
+    <div className="sm:col-span-2">
+      <label className={labelCls} htmlFor="device-imei">
+        {isImei ? t("intake.imei") : t("intake.serial_number")}
+      </label>
+      <input
+        aria-describedby={
+          errors.imei && touched.imei ? "error-device-imei" : undefined
+        }
+        aria-invalid={!!(errors.imei && touched.imei)}
+        className={errors.imei && touched.imei ? inputErrorCls : inputCls}
+        id="device-imei"
+        inputMode={isImei ? "numeric" : "text"}
+        maxLength={32}
+        onChange={(e) => update("imei", e.target.value)}
+        placeholder={
+          isImei ? t("intake.imei_placeholder") : t("intake.serial_placeholder")
+        }
+        type="text"
+        value={form.imei}
+      />
+      {errors.imei && touched.imei && (
+        <p className={errorCls} id="error-device-imei">
+          {errors.imei}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function Step1Content(props: Step1Props) {
   const {
     brandAddQuery,
@@ -655,6 +698,24 @@ export default function Step1Content(props: Step1Props) {
               update={update}
             />
             <div className="sm:col-span-2">
+              <label className={labelCls} htmlFor="device-category">
+                {t("intake.device_type")}
+              </label>
+              <select
+                className={inputCls}
+                disabled={Boolean(form.modelId)}
+                id="device-category"
+                onChange={(e) => update("deviceCategory", e.target.value)}
+                value={form.deviceCategory}
+              >
+                {DEVICE_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {t(`device_category.${cat}`)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="sm:col-span-2">
               <label className={labelCls} htmlFor="device-color">
                 {t("intake.device_color")}
               </label>
@@ -668,31 +729,13 @@ export default function Step1Content(props: Step1Props) {
                 value={form.color}
               />
             </div>
-            <div className="sm:col-span-2">
-              <label className={labelCls} htmlFor="device-imei">
-                {t("intake.imei")}
-              </label>
-              <input
-                aria-describedby={
-                  errors.imei && touched.imei ? "error-device-imei" : undefined
-                }
-                aria-invalid={!!(errors.imei && touched.imei)}
-                className={
-                  errors.imei && touched.imei ? inputErrorCls : inputCls
-                }
-                id="device-imei"
-                inputMode="numeric"
-                onChange={(e) => update("imei", e.target.value)}
-                placeholder={t("intake.imei_placeholder")}
-                type="text"
-                value={form.imei}
-              />
-              {errors.imei && touched.imei && (
-                <p className={errorCls} id="error-device-imei">
-                  {errors.imei}
-                </p>
-              )}
-            </div>
+            <IdentifierField
+              errors={errors}
+              form={form}
+              t={t}
+              touched={touched}
+              update={update}
+            />
             <div className="sm:col-span-2">
               <label className={labelCls} htmlFor="device-unlock">
                 {t("intake.unlock_code")}

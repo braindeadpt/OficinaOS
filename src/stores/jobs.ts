@@ -61,6 +61,7 @@ interface JobsState {
     deviceBrand: string;
     deviceBrandId?: string;
     deviceModel: string;
+    deviceCategory?: string;
     color?: string;
     imei?: string;
     reportedProblem: string;

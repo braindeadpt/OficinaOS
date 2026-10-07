@@ -18,6 +18,7 @@ export interface IntakeFormData {
   customerName: string;
   customerPhone: string;
   deposit: string;
+  deviceCategory: string;
   deviceUnlockCode: string;
   estimatedCost: string;
   estimatedDelivery: string;
@@ -79,6 +80,7 @@ export const INITIAL_FORM: IntakeFormData = {
   customerName: "",
   customerPhone: "",
   deposit: "",
+  deviceCategory: "phone",
   estimatedCost: "",
   estimatedDelivery: defaultDeliveryDatetime(),
   isUrgent: false,
