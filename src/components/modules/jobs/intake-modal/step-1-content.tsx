@@ -5,7 +5,9 @@ import {
 import { useState } from "react";
 import type { CreatedCustomerData } from "@/components/modules/jobs/quick-add-customer";
 import QuickAddCustomer from "@/components/modules/jobs/quick-add-customer";
+import { Field } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icon";
+import { Select } from "@/components/ui/select";
 import type { BrandSearchResult } from "@/hooks/use-brand-search";
 import { useClickOutside } from "@/hooks/use-click-outside";
 import type { CustomerSearchResult } from "@/hooks/use-customer-search";
@@ -697,14 +699,9 @@ export default function Step1Content(props: Step1Props) {
               touched={touched}
               update={update}
             />
-            <div className="sm:col-span-2">
-              <label className={labelCls} htmlFor="device-category">
-                {t("intake.device_type")}
-              </label>
-              <select
-                className={inputCls}
+            <Field className="sm:col-span-2" label={t("intake.device_type")}>
+              <Select
                 disabled={Boolean(form.modelId)}
-                id="device-category"
                 onChange={(e) => update("deviceCategory", e.target.value)}
                 value={form.deviceCategory}
               >
@@ -713,8 +710,8 @@ export default function Step1Content(props: Step1Props) {
                     {t(`device_category.${cat}`)}
                   </option>
                 ))}
-              </select>
-            </div>
+              </Select>
+            </Field>
             <div className="sm:col-span-2">
               <label className={labelCls} htmlFor="device-color">
                 {t("intake.device_color")}
