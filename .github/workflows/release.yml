@@ -155,13 +155,19 @@ jobs:
           $r = Invoke-WebRequest -UseBasicParsing http://localhost:4000/health -TimeoutSec 10
           if ($r.StatusCode -ne 200) { throw "/health devolveu $($r.StatusCode)" }
           cmd /c "`"$root\PARAR.bat`" <nul"
-          Start-Sleep -Seconds 3
-          if (Get-Process bun -ErrorAction SilentlyContinue |
-              Where-Object { $_.Path -like "$root\*" }) {
-            throw "bun continua vivo depois do PARAR.bat"
-          }
-          & "$root\pgsql\bin\pg_ctl.exe" -D "$root\data" status | Out-Null
-          if ($LASTEXITCODE -eq 0) { throw "postgres continua vivo depois do PARAR.bat" }
+          # O `timeout /t 3` do PARAR sai logo com stdin redirecionado, e o
+          # pg_ctl stop pode demorar (checkpoint) — espera com deadline em
+          # vez de um sleep fixo que ganhava a corrida ao shutdown.
+          $deadline = (Get-Date).AddSeconds(30)
+          do {
+            Start-Sleep -Seconds 2
+            $bunAlive = Get-Process bun -ErrorAction SilentlyContinue |
+              Where-Object { $_.Path -like "$root\*" }
+            & "$root\pgsql\bin\pg_ctl.exe" -D "$root\data" status | Out-Null
+            $pgAlive = $LASTEXITCODE -eq 0
+          } while (($bunAlive -or $pgAlive) -and (Get-Date) -lt $deadline)
+          if ($bunAlive) { throw "bun continua vivo depois do PARAR.bat" }
+          if ($pgAlive) { throw "postgres continua vivo depois do PARAR.bat" }
           $global:LASTEXITCODE = 0
 
       - name: Build app-update zip + updater asset (in-app updater)
