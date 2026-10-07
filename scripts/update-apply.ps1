@@ -1,7 +1,7 @@
 ﻿# update-apply.ps1 — aplica um update leve do OficinaOS com rollback automatico.
-# E spawnado detached pelo servidor ANTES de ele parar (a app nao se pode
-# substituir a si propria em runtime). Escreve o progresso em StatusPath
-# para a app (nova ou antiga) ler quando voltar.
+# E lancado via Win32_Process.Create (update-launch.ps1) ANTES de o servidor
+# parar — fora da arvore do bun.exe, senao o stop matava o proprio script.
+# Escreve o progresso em StatusPath para a app (nova ou antiga) ler.
 #
 # Fluxo: backup -> parar -> preservar .env/uploads -> trocar app\ ->
 # arrancar -> health check -> se falhar, repoe app.prev, resolve migracoes
@@ -37,11 +37,17 @@ function Set-Status([string]$state, [string]$detail) {
 }
 
 function Stop-AppProcesses {
-  # WinSW mata o bun filho ao parar o servico, mas um orfao que fique vivo
-  # tranca os ficheiros e a troca de app\ falha a meio.
-  Get-Process bun -ErrorAction SilentlyContinue |
-    Where-Object { $_.Path -like "$InstallRoot*" } |
-    Stop-Process -Force -ErrorAction SilentlyContinue
+  # So o bun DESTA instalacao: o prefixo com '\' final evita apanhar
+  # C:\OficinaOS-outracoisa\bun.exe, e o CIM evita o acesso negado de
+  # Get-Process .Path em processos de outras contas. O updater proprio
+  # e powershell.exe fora desta arvore — nao se mata a si mesmo.
+  $root = $InstallRoot.TrimEnd('\') + '\'
+  Get-CimInstance Win32_Process -Filter "Name='bun.exe'" -ErrorAction SilentlyContinue |
+    Where-Object {
+      $_.ExecutablePath -and
+      $_.ExecutablePath.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)
+    } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 }
 
 function Stop-OficinaOS {

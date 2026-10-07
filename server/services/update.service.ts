@@ -18,7 +18,8 @@ import { getAppVersionInfo } from "./app-version.service.js";
 // In-app updater (service & portable modes). The server can't replace its own
 // files while running, so it downloads the light app-update zip, verifies the
 // sha256 published with the release, then spawns a detached PowerShell script
-// (scripts/update-apply.ps1) that does backup -> stop -> swap -> health check
+// (scripts/update-launch.ps1 -> Win32_Process.Create -> update-apply.ps1,
+// outside our process tree — a detached child would die with the service)
 // -> rollback. Progress lives in a JSON status file that survives restarts —
 // the updated server reads it when it comes back up.
 
@@ -82,6 +83,7 @@ interface Paths {
   applyScript: string;
   backupScript: string;
   installRoot: string;
+  launchScript: string;
   stagingDir: string;
   statusFile: string;
   workDir: string;
@@ -113,6 +115,7 @@ export function buildPaths(
         ? path.win32.join(installRoot, "tools", "backup.ps1")
         : path.win32.join(installRoot, "BACKUP.ps1"),
     applyScript: path.win32.join(stagingDir, "update-apply.ps1"),
+    launchScript: path.win32.join(appDir, "scripts", "update-launch.ps1"),
   };
 }
 
@@ -180,9 +183,9 @@ export async function getUpdateState(): Promise<UpdateState> {
   const installMode = detectInstallMode();
   const appDir = process.cwd();
   const paths = buildPaths(installMode, appDir, process.env.ProgramData ?? "");
-  const scriptShips = existsSync(
-    path.join(appDir, "scripts", "update-apply.ps1")
-  );
+  const scriptShips =
+    existsSync(path.join(appDir, "scripts", "update-apply.ps1")) &&
+    existsSync(path.join(appDir, "scripts", "update-launch.ps1"));
   const canSelfUpdate =
     (installMode === "service" || installMode === "portable") && scriptShips;
   return {
@@ -212,6 +215,29 @@ async function downloadFile(
   );
 }
 
+function secureStagingDir(dir: string): void {
+  // O staging dir recebe o zip antes da verificacao — so a conta da
+  // instalacao, SYSTEM e Administradores podem escrever. Sem isto, qualquer
+  // utilizador local podia substituir o zip entre o download e o swap.
+  try {
+    const user = execFileSync("whoami", { encoding: "utf-8" }).trim();
+    execFileSync(
+      "icacls",
+      [
+        dir,
+        "/inheritance:r",
+        "/grant:r",
+        `${user}:(OI)(CI)F`,
+        "*S-1-5-18:(OI)(CI)F",
+        "*S-1-5-32-544:(OI)(CI)F",
+      ],
+      { stdio: "ignore" }
+    );
+  } catch {
+    // icacls/whoami indisponivel — nao bloqueia o update
+  }
+}
+
 export async function startUpdate(
   fetchImpl: typeof fetch = fetch
 ): Promise<UpdateState> {
@@ -234,6 +260,7 @@ export async function startUpdate(
     process.env.ProgramData ?? ""
   );
   mkdirSync(paths.stagingDir, { recursive: true });
+  secureStagingDir(paths.stagingDir);
   const setStatus = (s: UpdateStatus) =>
     writeFileSync(paths.statusFile, JSON.stringify(s));
   const now = () => new Date().toISOString();
@@ -277,7 +304,31 @@ export async function startUpdate(
   );
 
   setStatus({ state: "starting", detail: "", updatedAt: now() });
-  const child = spawn(
+  // Win32_Process.Create (update-launch.ps1) cria o updater fora da nossa
+  // arvore — detached NAO muda o pai no Windows e um processo filho do
+  // bun.exe morria com ele no Stop-Service, a meio da troca de ficheiros.
+  const q = (s: string) => `"${s.replace(/"/g, '""')}"`;
+  const applyCmd = [
+    "powershell",
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-WindowStyle",
+    "Hidden",
+    "-File",
+    q(paths.applyScript),
+    "-Mode",
+    state.installMode,
+    "-InstallRoot",
+    q(paths.installRoot),
+    "-ZipPath",
+    q(paths.zipFile),
+    "-StatusPath",
+    q(paths.statusFile),
+    "-BackupScript",
+    q(paths.backupScript),
+  ].join(" ");
+  spawn(
     "powershell",
     [
       "-NoProfile",
@@ -286,21 +337,14 @@ export async function startUpdate(
       "-WindowStyle",
       "Hidden",
       "-File",
-      paths.applyScript,
-      "-Mode",
-      state.installMode,
-      "-InstallRoot",
-      paths.installRoot,
-      "-ZipPath",
-      paths.zipFile,
+      paths.launchScript,
+      "-CommandLine",
+      applyCmd,
       "-StatusPath",
       paths.statusFile,
-      "-BackupScript",
-      paths.backupScript,
     ],
-    { detached: true, stdio: "ignore", windowsHide: true }
-  );
-  child.unref();
+    { stdio: "ignore", windowsHide: true }
+  ).unref();
 
   return { ...state, status: readUpdateStatus(paths.statusFile) };
 }
