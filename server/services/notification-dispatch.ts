@@ -203,14 +203,11 @@ async function resolveShopNotificationConfig(prisma: DbClient): Promise<{
 }> {
   try {
     const shop = await findShopSettingsUnique(prisma);
-    const modules = Array.isArray(shop?.cloudEntitlements)
-      ? (shop.cloudEntitlements as string[])
-      : [];
     return {
       currency: shop?.currency ?? "EUR",
       reviewUrl: shop?.reviewUrl ?? null,
       shopName: shop?.shopName ?? "",
-      smsEnabled: Boolean(shop?.smsEnabled) && modules.includes("sms"),
+      smsEnabled: Boolean(shop?.smsEnabled),
       trackingBaseUrl: shop?.trackingBaseUrl ?? null,
       whatsappEnabled: shop?.whatsappEnabled ?? false,
     };

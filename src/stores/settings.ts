@@ -32,11 +32,11 @@ interface SmsSettings {
   gatewayUser: string | null;
   hasPassword: boolean;
   inboundPath: string | null;
-  module: boolean;
 }
 
 interface WhatsAppSettings {
   businessId: string | null;
+  credentialsAtCloud: boolean;
   enabled: boolean;
   hasApiToken: boolean;
   phoneNumberId: string | null;

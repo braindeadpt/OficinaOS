@@ -2,9 +2,9 @@ import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import {
-  decryptWhatsAppConfig,
-  sendWhatsAppTemplate,
-} from "./notification-sender.js";
+  resolveWhatsAppChannel,
+  sendWhatsAppTemplateVia,
+} from "./whatsapp-channel.js";
 
 /**
  * Remarketing automático (módulo Pro "remarketing"): uma sweep por hora
@@ -43,10 +43,7 @@ export async function runRemarketingSweep(
     !(
       settings?.remarketingEnabled &&
       settings.whatsappEnabled &&
-      settings.remarketingTemplate &&
-      settings.whatsappApiTokenEncrypted &&
-      settings.whatsappBusinessId &&
-      settings.whatsappPhoneNumberId
+      settings.remarketingTemplate
     )
   ) {
     return 0;
@@ -54,15 +51,13 @@ export async function runRemarketingSweep(
   const modules = Array.isArray(settings.cloudEntitlements)
     ? (settings.cloudEntitlements as string[])
     : [];
+  // Hint de UI — a enforcement real é server-side: o envio passa pelo
+  // relay da cloud quando as credenciais migraram.
   if (!modules.includes(MODULE)) {
     return 0;
   }
-  const config = decryptWhatsAppConfig({
-    apiTokenEncrypted: settings.whatsappApiTokenEncrypted,
-    businessId: settings.whatsappBusinessId,
-    phoneNumberId: settings.whatsappPhoneNumberId,
-  });
-  if (!config) {
+  const channel = resolveWhatsAppChannel(settings);
+  if (!channel) {
     return 0;
   }
 
@@ -103,13 +98,15 @@ export async function runRemarketingSweep(
     }
     const firstName =
       customer.name.trim().split(WHITESPACE_RE)[0] || customer.name;
-    const result = await sendWhatsAppTemplate(
-      config,
+    const result = await sendWhatsAppTemplateVia(
+      prisma,
+      channel,
       customer.phone,
       settings.remarketingTemplate,
       TEMPLATE_LANG,
       [firstName, shopName],
-      settings.countryCode ?? "PT"
+      settings.countryCode ?? "PT",
+      settings
     );
     if (result.success) {
       sent += 1;

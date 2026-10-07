@@ -13,7 +13,6 @@ import {
   findShopSettingsUnique,
   getOrCreateShopSettings,
 } from "../repositories/settings.repository.js";
-import { getAppVersionInfo } from "../services/app-version.service.js";
 import { getBackupStatus } from "../services/backup-status.service.js";
 import {
   getCloudStatus,
@@ -43,6 +42,8 @@ import {
   registerSmsWebhook,
   sendSms,
 } from "../services/sms.service.js";
+import { getUpdateState, startUpdate } from "../services/update.service.js";
+import { pushCredentialsToCloud } from "../services/whatsapp-channel.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
 // biome-ignore lint/suspicious/useAwait: FastifyPluginAsync requires async
@@ -181,7 +182,30 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
         summary: "Check GitHub Releases for a newer OficinaOS version",
       },
     },
-    async (_req, reply) => reply.send(await getAppVersionInfo())
+    async (_req, reply) => reply.send(await getUpdateState())
+  );
+
+  app.get(
+    "/update/status",
+    {
+      schema: {
+        tags: ["settings"],
+        summary: "In-app update progress (state machine + version info)",
+      },
+    },
+    async (_req, reply) => reply.send(await getUpdateState())
+  );
+
+  app.post(
+    "/update",
+    {
+      preHandler: [requirePermission({ settings: ["edit"] })],
+      schema: {
+        tags: ["settings"],
+        summary: "Start a lightweight in-app update (backup + rollback)",
+      },
+    },
+    async (_req, reply) => reply.send(await startUpdate())
   );
 
   app.put(
@@ -296,7 +320,11 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
         }
       }
       const updated = await upsertWhatsAppSettings(app.prisma, parsed.data);
-      return reply.send(updated);
+      // Migração silenciosa: envia as credenciais Meta para o relay da
+      // cloud. Se falhar (cloud em baixo / sem entitlement) fica para a
+      // próxima gravação — o envio local continua a funcionar entretanto.
+      const credentialsAtCloud = await pushCredentialsToCloud(app.prisma);
+      return reply.send({ ...updated, credentialsAtCloud });
     }
   );
 
@@ -333,17 +361,6 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
             req.locale
           ),
         });
-      }
-      // Enabling SMS requires the Pro module — inbound and outbound also
-      // gate on the cached entitlements.
-      if (parsed.data.enabled) {
-        const s = await getOrCreateShopSettings(app.prisma);
-        const modules = Array.isArray(s.cloudEntitlements)
-          ? (s.cloudEntitlements as string[])
-          : [];
-        if (!modules.includes("sms")) {
-          throw new AppError("CLOUD_MODULE_REQUIRED");
-        }
       }
       await upsertSmsSettings(app.prisma, parsed.data);
 

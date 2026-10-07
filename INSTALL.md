@@ -38,7 +38,7 @@ Depois da instalação:
 
 - **Neste PC:** `http://localhost:4000`
 - **Noutros aparelhos da loja** (tablet, telemóvel): `http://oficinaos.local:4000` — nome estável que funciona mesmo que o PC mude de IP. A página **Ajuda → QR code** tem um código para apontar com a câmara e ligar sem escrever nada
-- **Atualizar:** descarrega o `OficinaOS-Setup` da versão nova e corre por cima — os dados ficam
+- **Atualizar:** quando a app avisar que existe versão nova, o dono da loja (admin) tem um botão **"Atualizar"** no aviso — descarrega só a parte da app (~200 MB em vez de ~600 MB), faz backup da base de dados antes e, se a nova versão não arrancar, repõe automaticamente a anterior. Também podes atualizar à mão: descarrega o `OficinaOS-Setup` da versão nova e corre por cima — os dados ficam
 - **Backups automáticos:** diário às 03:30 para `C:\ProgramData\OficinaOS\backups` (copia para uma pen/disco externo com regularidade)
 - **Desinstalar:** "Aplicações" nas Definições do Windows — pergunta se queres apagar também os dados
 
@@ -161,7 +161,9 @@ Documentação técnica do bundle: [scripts/portable/README.md](scripts/portable
 
 ## Atualizar para uma versão nova
 
-Quando a app avisar que existe versão nova (ou quando quiseres): duplo clique em **`ATUALIZAR.bat`** — faz backup da base de dados, descarrega a imagem nova e reinicia. As migrações da base de dados correm sozinhas no arranque.
+**Botão "Atualizar" dentro da app** (instalação por `OficinaOS-Setup.exe` ou modo portátil): quando o aviso de versão nova aparece, o admin tem um botão "Atualizar" — descarrega só o pacote da app com verificação SHA-256, faz backup da base de dados antes de mexer, e repõe a versão anterior automaticamente se a nova não arrancar (`/health` falha ou a migração rebenta). A app fica offline ~1-2 minutos durante a troca.
+
+**Docker / à mão:** duplo clique em **`ATUALIZAR.bat`** — faz backup da base de dados, descarrega a imagem nova e reinicia. As migrações da base de dados correm sozinhas no arranque.
 
 À mão, se preferires:
 

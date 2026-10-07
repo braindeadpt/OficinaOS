@@ -129,11 +129,6 @@ function SmsCard({
           </span>
         </div>
         <p className="mt-2 text-on-surface-variant text-xs">{t("sms_desc")}</p>
-        {!smsSettings?.module && (
-          <p className="mt-2 rounded-xl bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
-            {t("sms_module_upsell")}
-          </p>
-        )}
 
         <div className="mt-3 rounded-xl bg-surface-container px-3 py-2.5">
           <p className="font-medium text-on-surface text-xs">
@@ -470,6 +465,17 @@ export default function ChannelSettings({
                 value={whatsAppForm.apiToken}
               />
             </div>
+            {whatsAppSettings?.credentialsAtCloud ? (
+              <p className="rounded-xl bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
+                {t("whatsapp_relay_active")}
+              </p>
+            ) : (
+              whatsAppSettings?.hasApiToken && (
+                <p className="rounded-xl bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
+                  {t("whatsapp_relay_pending")}
+                </p>
+              )
+            )}
             {whatsAppSettings?.remarketingModule ? (
               <div className="rounded-xl bg-surface-container p-4">
                 <div className="flex items-center gap-3">

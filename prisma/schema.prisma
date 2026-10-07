@@ -1092,7 +1092,11 @@ model ShopSettings {
   whatsappBusinessId        String?
   whatsappPhoneNumberId     String?
   whatsappEnabled           Boolean  @default(false)
-  // SMS via gateway local (módulo Pro "sms") — um Android na LAN com
+  // True quando as credenciais Meta foram aceites pela cloud —
+  // outbound passa a ir por POST /whatsapp/send e o token local é
+  // apagado após o primeiro envio bem-sucedido.
+  whatsappCredentialsAtCloud Boolean @default(false)
+  // SMS via gateway local (core, grátis) — um Android na LAN com
   // sms-gate.app em modo Local Server. O envio é HTTP direto ao telemóvel;
   // o inbound chega por webhook registado no próprio aparelho.
   smsEnabled                Boolean  @default(false)
