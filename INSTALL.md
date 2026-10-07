@@ -7,11 +7,10 @@ Guia para Windows. Demora ~10 minutos na primeira vez.
 | Requisito | Detalhe |
 |---|---|
 | **PC** | Windows 10/11 **64-bit** — o PC que fica ligado na loja |
-| **RAM** | 4 GB livres (o Docker usa ~1.5 GB) |
-| **Disco** | ~5 GB livres (Docker + app + base de dados) |
-| **Permissões** | Administrador, só durante a instalação do Docker |
-| **Internet** | Só na **primeira instalação** — depois funciona offline na rede local |
-| **Docker** | Instalado automaticamente pelo `INSTALAR.bat` — não precisas de saber o que é |
+| **RAM** | 4 GB livres |
+| **Disco** | ~3 GB livres (app + base de dados + backups) |
+| **Permissões** | Administrador, só durante a instalação pelo `OficinaOS-Setup.exe` — sem admin usa a **instalação portátil** |
+| **Internet** | Só na **primeira instalação** e para atualizar — depois funciona offline na rede local |
 | **Outros dispositivos** | **Nada** — só um browser |
 
 ## Cenários de uso
@@ -95,14 +94,22 @@ No primeiro acesso a app **obriga a definir um novo nome de utilizador e uma nov
 | "Virtualization support not detected" / Docker não arranca | O `INSTALAR.bat` deteta isto e oferece alternativa — ver **Instalação portátil** abaixo |
 | Desinstalar por completo | `docker compose down -v` na pasta + apagar a pasta (⚠️ apaga a base de dados) |
 
-## Instalação portátil (sem Docker)
+## Instalação portátil (sem admin, sem instalar nada)
 
-Para PCs onde o Docker não funciona — tipicamente porque a **virtualização de hardware (VT-x/SVM) está desativada na BIOS** ou o processador não a suporta. O `INSTALAR.bat` deteta isto automaticamente e propõe duas opções:
+O `OficinaOS-Setup.exe` é o caminho recomendado — mas o **modo portátil** existe para as situações em que o instalador não serve:
 
-- **Ativar na BIOS** — reiniciar, premir F2/F10/DEL/ESC, procurar "Intel VT-x" / "Virtualization Technology" / "SVM Mode" em Advanced/Security, ativar e gravar (F10). Depois o caminho Docker normal funciona.
-- **Instalação portátil** — um pacote que traz tudo embutido (Bun + PostgreSQL), sem Docker, sem admin, sem serviços Windows. Funciona em qualquer Windows 10/11 64-bit.
+- **Sem administrador** — não tens a password de admin do PC da loja (o Setup precisa dela para serviços e firewall; o portátil não precisa de nada)
+- **Não queres instalar nada** — nada fica registado no sistema: sem serviços, sem entradas em "Aplicações", é só extrair e correr
+- **Fallback** — o instalador falha naquela máquina concreta (antivírus ou políticas da empresa a bloquear serviços), ou queres experimentar a app sem compromisso
 
-No caminho portátil o instalador descarrega `oficinaos-portable.zip` (~540 MB), extrai para `oficinaos-portable\` e arranca. A app é exatamente a mesma — mesmo código, mesma base de dados PostgreSQL, mesmas funcionalidades, mesmas migrações automáticas.
+Descarrega [`oficinaos-portable.zip`](https://github.com/braindeadpt/OficinaOS/releases/latest/download/oficinaos-portable.zip), extrai para uma pasta e corre `INICIAR.bat`. A app é exatamente a mesma — mesmo código, mesma base de dados PostgreSQL, mesmas funcionalidades — e o botão **"Atualizar"** dentro da app também funciona (descarrega só a parte da app com verificação SHA-256, backup e rollback automático).
+
+Duas diferenças práticas face ao Setup.exe:
+
+- O arranque automático é uma **tarefa agendada opcional** (o `INICIAR.bat` pergunta na 1ª execução) em vez de um serviço Windows
+- Como ninguém abre a firewall por ti, o Windows pergunta **uma vez** se permite a ligação — escolhe **Permitir** (rede privada) para os tablets da loja ligarem
+
+> Se vieste do erro **"virtualization support not detected"** do caminho Docker (BIOS com VT-x/SVM desligado), o portátil também resolve — mas o Setup.exe é ainda mais simples, porque também não precisa de Docker.
 
 ### Uso diário (modo portátil)
 
@@ -120,17 +127,18 @@ Dentro de `oficinaos-portable\`:
 - **Se a app crashar**: reinicia sozinha passados 5 segundos (wrapper de respawn)
 - **Backups**: feitos automaticamente a cada arranque para `app\uploads\backups\` (retenção 14 dias) — o indicador de backups na app funciona igual
 
-### Diferenças vs instalação Docker
+### Diferenças vs instalação por Setup.exe
 
-| | Docker | Portátil |
+| | Setup.exe | Portátil |
 |---|---|---|
-| Funciona sem virtualização/BIOS | não | **sim** |
-| Tamanho do download | ~1 GB (Docker + imagem) | ~540 MB uma vez; cada update re-descarrega tudo |
-| Arranque com o PC | automático | automático se aceitares a tarefa agendada |
-| Backups off-site (rclone) | suportado | não — copia `app\uploads\backups\` para um disco/pen manualmente |
-| Update automático (Watchtower) | opcional | não — sempre manual via `ATUALIZAR.bat` |
-| Tunnel Cloudflare (acesso remoto) | incluído no compose | instalação manual do cloudflared |
-| Acesso de outros dispositivos na LAN | `http://<IP>:4000` | igual |
+| Requer administrador | sim, na instalação | **não** |
+| Tamanho do download | ~339 MB | ~540 MB uma vez |
+| Arranque com o PC | automático (serviço Windows) | automático se aceitares a tarefa agendada |
+| Regra de firewall para a LAN | criada na instalação | o Windows pergunta uma vez — escolher Permitir |
+| Backups automáticos | diário às 03:30 (`ProgramData\OficinaOS\backups`) | a cada arranque + `BACKUP.bat` |
+| Atualizar | botão "Atualizar" na app, ou Setup por cima | botão "Atualizar" na app, ou `ATUALIZAR.bat` |
+| Ícone na bandeja | sim | não |
+| Acesso de outros dispositivos na LAN | `http://oficinaos.local:4000` ou IP | igual |
 
 ### Restaurar um backup (modo portátil)
 
