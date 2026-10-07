@@ -45,13 +45,20 @@ Da B guardamos a regra de raios generosos no portal (que é mobile) e o tom de v
 ## 2. Marca
 
 ### 2.1 Logótipo
-- **Símbolo:** quadrado de 32 com raio 8 em `#1D4ED8` (escuro: `#2F5BEA`). Leva um disco branco (r = 10,5) e uma ranhura em cruz com rotação de −20°. Ficheiros: `logos/a-symbol.svg`, `logos/a-symbol-dark.svg` e `logos/a-favicon.svg` (o mesmo ficheiro).
-- **Wordmark:** «Oficina» + «OS» em Manrope ExtraBold (800), com tracking −0,6 a 30 px. «OS» vai na cor primária. Está convertido em contornos (não depende da fonte): `logos/a-lockup-light.svg` e `logos/a-lockup-dark.svg`.
+> **Logótipo final A «Parafuso pentalobe» — aprovado por Pedro a 2026-10-07.** Substitui a ranhura em cruz (−20°) e a antiga chave inglesa teal. Escolhido sem telemóvel para servir lojas de telemóveis **e** de computadores.
+
+- **Símbolo:** quadrado de 32 com raio 8 em `#1D4ED8` (igual no claro e no escuro). Leva a cabeça do parafuso vista de cima: disco branco (r = 10,5), um bisel (anel `#1D4ED8` a 30 %, r = 9) e um escareado (anel a 20 %, r = 5,9) à volta do encaixe pentalobe. O encaixe tem núcleo grande e cinco lóbulos curtos e achatados com entalhes côncavos (um lóbulo para cima), para se ler como peça mecânica e não como flor ou estrela.
+- **Fundo escuro:** `logos/final-a/symbol-dark.svg` (o mesmo quadrado com um filete `#7DA0FF` a 45 % para se destacar de `#0B1120`).
+- **Favicon (16 px):** `logos/final-a/favicon.svg` é uma versão simplificada: cabeça maior (r = 11,6), raio 7, sem bisel nem escareado, encaixe mais gordo. `favicon.ico` tem 16, 32 e 48 px.
+- **Wordmark:** «Oficina» + «OS» em Manrope ExtraBold (800), tracking −0,6 a 30 px, convertido em contornos. «OS» vai em `#1D4ED8` no claro e `#7DA0FF` no escuro; «Oficina» em `#111827` / `#E8EDF6`. Ficheiros: `logos/final-a/lockup-light.svg` e `lockup-dark.svg` (197×48).
+- **Ícones de app:** `png/apple-touch-icon.png` (180, a toda a área), `png/icon-192.png`, `png/icon-512.png`, `png/icon-maskable-512.png` (cabeça a 80 % dentro do círculo seguro), e em `windows/` o `app.ico` (16–256) e os logótipos MSIX do Diag.
+- **Social:** `png/facebook-avatar-1080.png` (fica bem no recorte circular do Facebook), `png/fb-cover-{pt,en,es,fr}.png` (1640×664, fundo `#0B1120`, mesmo texto das capas antigas) e `png/og-cover.png` (1200×630).
+- **Gerador:** `src/logo_final_a.py` gera tudo (SVG e PNG a partir da mesma lista de formas, PIL com *supersampling*). Os SVG antigos `logos/a-*.svg` ficam só como histórico da exploração.
+- **Em código:** quando o símbolo vai em linha para seguir o tema, o quadrado e o encaixe usam `var(--oos-logo-mark)` (`#1D4ED8` nos dois modos).
 - **Grafia:** sempre «OficinaOS» (sem espaço, O e OS maiúsculos). Nunca «Oficina OS», «OFICINAOS» nem «oficinaOS//cloud».
 - **Área de proteção:** ¼ da altura do símbolo à volta de todo o lockup.
-- **Tamanhos mínimos:** símbolo a 16 px (favicon); lockup com 24 px de altura.
-- **Não fazer:** rodar, trocar as cores do «OS», pôr o símbolo sem o quadrado em fundos de cor, usar a ranhura direita (um «+» lê-se como «adicionar» ou «farmácia»), voltar à chave inglesa ou à roda dentada.
-- **Favicon:** `favicon.svg` (o símbolo), mais `favicon.ico` 32×32 e `apple-touch-icon.png` 180×180 gerados a partir dele (o portal dá hoje 404 no `favicon.ico`).
+- **Tamanhos mínimos:** símbolo a 16 px (com o favicon simplificado); lockup com 24 px de altura.
+- **Não fazer:** rodar o encaixe, esticar os lóbulos (passa a parecer uma flor), trocar as cores do «OS», pôr o símbolo sem o quadrado em fundos de cor, voltar à ranhura em cruz, à chave inglesa ou à roda dentada.
 
 ### 2.2 Sub-marcas
 Não se criam logótipos novos. Usa-se texto ao lado do lockup, em Inter 500 `text-muted`: «OficinaOS **Cloud**», «OficinaOS **Diag**».
@@ -446,7 +453,7 @@ Copiar esta pasta (ou publicá-la como pacote `@oficinaos/design-tokens`) para c
 ```
 - O site passa a **claro por omissão**, com modo escuro pelo sistema. O preto + teal sai. O teal fica como `accent`, só para «grátis» e destaques, nunca em botões.
 - Substituir `zinc-*` → `text`/`text-muted`/`border`/`surface-*`, `teal-*` → `primary` (CTA) ou `accent` (destaque), e `focus:outline-teal-400` → `focus-visible:shadow-focus`. O seletor de idioma ativo fica `bg-primary text-on-primary` (resolve o B-5).
-- Logótipo: `public/favicon.svg` ← `logos/a-favicon.svg`. Os componentes de cabeçalho e rodapé usam `a-lockup-light.svg`/`-dark.svg` com `<picture>` + `prefers-color-scheme`, ou o SVG *inline* com `fill="currentColor"` no «Oficina».
+- Logótipo: `public/favicon.svg` ← `logos/final-a/favicon.svg`. Os componentes de cabeçalho e rodapé usam `final-a/lockup-light.svg`/`-dark.svg` com `<picture>` + `prefers-color-scheme`, ou o SVG *inline* com `fill="currentColor"` no «Oficina».
 - Gerar de novo `og-cover-{pt,en,es}.png` e `fb-cover-*` com o lockup novo. Criar a página `/brand` com o lockup, as cores e as regras de §2 (para imprensa e parceiros).
 
 ### 9.3 Cloud (HTML estático em `public/*.html`)
