@@ -11,6 +11,7 @@ import { Icon } from "@/components/ui/icon";
 import MetricCard from "@/components/ui/metric-card";
 import { useCan } from "@/hooks/use-can";
 import api from "@/lib/api";
+import { currencySymbol, formatNumber } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth";
 import { useDashboardStore } from "@/stores/dashboard";
 import { useSettingsStore } from "@/stores/settings";
@@ -135,6 +136,7 @@ function MetricsGrid({
   const canViewReturns = useCan({ returns: ["viewSelf"] });
   const canViewShop = useCan({ returns: ["viewShop"] });
   const [warrantyCost, setWarrantyCost] = useState<number | null>(null);
+  const currency = useSettingsStore((s) => s.shopSettings?.currency) ?? "EUR";
 
   useEffect(() => {
     if (!(canViewShop && data)) {
@@ -227,8 +229,8 @@ function MetricsGrid({
         iconColor="text-on-secondary-container"
         label={t("revenue_this_month")}
         labelTooltip={t("dashboard_page.revenue_tooltip")}
-        unit={t("currency_eur")}
-        value={data ? String(data.revenueThisMonth) : "--"}
+        unit={currencySymbol(currency)}
+        value={data ? data.revenueThisMonth.toFixed(2) : "--"}
       >
         {data && data.revenueThisMonth > 0 && (
           <div
@@ -242,7 +244,7 @@ function MetricsGrid({
         {warrantyCost !== null && (
           <p className="mt-1 text-on-surface-variant text-xs">
             {t("dashboard_page.warranty_cost_inline", {
-              amount: String(warrantyCost),
+              amount: formatNumber(warrantyCost, 2),
             })}
           </p>
         )}
@@ -251,7 +253,7 @@ function MetricsGrid({
             <div className="flex items-center justify-between font-label text-on-surface-variant text-xs">
               <span>
                 {t("dashboard_page.goal_label", {
-                  goal: data.monthlyRevenueGoal.toLocaleString(),
+                  goal: formatNumber(data.monthlyRevenueGoal),
                 })}
               </span>
               <span className="font-bold">

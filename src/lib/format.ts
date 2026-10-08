@@ -27,3 +27,29 @@ export function formatCurrency(
     maximumFractionDigits: 2,
   });
 }
+
+/**
+ * Symbol for a currency code in the active locale ("€" for EUR in pt-PT).
+ * Falls back to the ISO code when Intl has no symbol for it.
+ */
+export function currencySymbol(
+  currency = "EUR",
+  locale = activeLocale()
+): string {
+  return (
+    new Intl.NumberFormat(locale, { style: "currency", currency })
+      .formatToParts(0)
+      .find((part) => part.type === "currency")?.value ?? currency
+  );
+}
+
+/**
+ * Locale-aware plain number ("1 234,56" in pt-PT, "1,234.56" in en-US).
+ * toFixed() always emits "." — use this anywhere a number is shown to users.
+ */
+export function formatNumber(value: number, fractionDigits = 0): string {
+  return value.toLocaleString(activeLocale(), {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  });
+}

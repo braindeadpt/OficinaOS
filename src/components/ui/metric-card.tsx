@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Icon } from "@/components/ui/icon";
 import { useCountUp } from "@/hooks/use-count-up";
+import { formatNumber } from "@/lib/format";
 
 interface MetricCardProps {
   children?: ReactNode;
@@ -22,7 +23,7 @@ function AnimatedValue({ value }: { value: string }) {
     return <>{value}</>;
   }
   const decimals = value.includes(".") ? value.split(".")[1].length : 0;
-  return <>{animated.toFixed(decimals)}</>;
+  return <>{formatNumber(animated, decimals)}</>;
 }
 
 export function MetricCard({
