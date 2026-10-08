@@ -15,4 +15,4 @@
 - **No barrel files** — explicit imports only.
 - **Deploy:** `docker compose up -d` (Postgres + app on :4000).
 - **Windows scripts:** never share `.bat`/`.ps1` via `raw.githubusercontent.com` (serves LF, breaks cmd.exe) — only inside release zips or as release assets.
-- **Login for QA:** username `admin` + `SEED_ADMIN_PASSWORD` from `.env`.
+- **Login for QA:** set `SEED_ADMIN_PASSWORD` in `.env` and run `bun run db:seed` on an empty DB → username `admin` + that password. Without it (real installs) the app opens the first-run setup screen (`/setup`, loopback or `SETUP_TOKEN` only).

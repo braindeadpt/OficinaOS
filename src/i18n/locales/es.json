@@ -608,7 +608,9 @@
     "trade_in_invalid_state": "Este intercambio ya no se puede modificar",
     "trade_in_signature_required": "Se requiere una firma para completar el intercambio",
     "quote_amount_required": "Indique el importe del presupuesto: esta reparación aún no tiene coste estimado",
-    "duplicate_customer_phone": "Ya existe un cliente con este número de teléfono"
+    "duplicate_customer_phone": "Ya existe un cliente con este número de teléfono",
+    "setup_already_done": "El taller ya está configurado. Inicie sesión.",
+    "setup_not_local": "Por seguridad, la primera configuración solo puede hacerse en el ordenador donde está instalado OficinaOS."
   },
   "failed_to_create_part": "No se pudo crear la pieza",
   "failed_to_delete_part": "No se pudo eliminar la parte",
@@ -1873,7 +1875,9 @@
     "invalid_number": "Introduzca un número válido",
     "invalid_option": "Opción no válida",
     "min_items": "Seleccione al menos {{min}}",
-    "max_items": "Como máximo {{max}} elementos"
+    "max_items": "Como máximo {{max}} elementos",
+    "setup_login_invalid": "Introduzca un email válido o un usuario de 3 a 30 letras, números o _.",
+    "passwords_dont_match": "Las contraseñas no coinciden."
   },
   "view_all_critical": "Ver todos los atrasados",
   "warranty_returns": "Devoluciones en garantía",
@@ -2223,5 +2227,27 @@
   "tracking_shop": "Tienda",
   "parts_stock": "Stock",
   "parts_stock_count_one": "{{count}} en stock",
-  "parts_stock_count_other": "{{count}} en stock"
+  "parts_stock_count_other": "{{count}} en stock",
+  "setup_title": "Crear su taller",
+  "setup_subtitle": "Es la primera vez que OficinaOS se inicia en este ordenador. Cree la cuenta de propietario: la usará para entrar y para crear las cuentas del equipo.",
+  "setup_shop_name": "Nombre de la tienda",
+  "setup_shop_name_placeholder": "Ej.: TecFix Centro",
+  "setup_your_name": "Su nombre",
+  "setup_your_name_placeholder": "Ej.: Ana García",
+  "setup_login": "Usuario o email",
+  "setup_login_placeholder": "Ej.: ana o ana@mitienda.es",
+  "setup_login_hint": "Entrará con esto. Usuario: solo letras, números y _ (de 3 a 30 caracteres).",
+  "setup_password": "Contraseña",
+  "setup_confirm_password": "Confirmar contraseña",
+  "setup_password_hint": "Al menos 8 caracteres, con una mayúscula, una minúscula y un número.",
+  "setup_passwords_mismatch": "Las contraseñas no coinciden.",
+  "setup_submit": "Crear taller y entrar",
+  "setup_submitting": "Creando el taller...",
+  "setup_checking": "Comprobando la configuración...",
+  "setup_error": "No se pudo crear el taller. Inténtelo de nuevo.",
+  "setup_login_after_failed": "El taller se creó, pero no se pudo entrar automáticamente. Inicie sesión con los datos que acaba de definir.",
+  "setup_not_local_title": "Abra esta página en el ordenador de la tienda",
+  "setup_not_local_desc": "Por seguridad, la primera configuración solo puede hacerse en el ordenador donde está instalado OficinaOS. En ese ordenador, abra http://localhost:4000 en el navegador.",
+  "setup_not_local_hint": "¿Instalación con Docker o en otro servidor? Use el enlace de configuración con el código SETUP_TOKEN del archivo .env (por ejemplo, en PRIMEIRO-LOGIN.txt).",
+  "setup_retry": "Comprobar de nuevo"
 }

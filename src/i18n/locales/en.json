@@ -608,7 +608,9 @@
     "trade_in_invalid_state": "This trade-in can no longer be modified",
     "trade_in_signature_required": "A signature is required to complete the trade-in",
     "quote_amount_required": "Enter the quote amount — this repair has no estimated cost yet",
-    "duplicate_customer_phone": "A customer with this phone number already exists"
+    "duplicate_customer_phone": "A customer with this phone number already exists",
+    "setup_already_done": "This shop is already set up. Please sign in.",
+    "setup_not_local": "For security, first-time setup can only be done on the computer where OficinaOS is installed."
   },
   "failed_to_create_part": "Failed to create part",
   "failed_to_delete_part": "Failed to delete part",
@@ -1873,7 +1875,9 @@
     "invalid_number": "Enter a valid number",
     "invalid_option": "Invalid option",
     "min_items": "Select at least {{min}}",
-    "max_items": "At most {{max}} items"
+    "max_items": "At most {{max}} items",
+    "setup_login_invalid": "Enter a valid email or a username of 3 to 30 letters, numbers or _.",
+    "passwords_dont_match": "Passwords do not match."
   },
   "view_all_critical": "View All Overdue",
   "warranty_returns": "Warranty Returns",
@@ -2223,5 +2227,27 @@
   "tracking_shop": "Shop",
   "parts_stock": "Stock",
   "parts_stock_count_one": "{{count}} in stock",
-  "parts_stock_count_other": "{{count}} in stock"
+  "parts_stock_count_other": "{{count}} in stock",
+  "setup_title": "Create your shop",
+  "setup_subtitle": "This is the first time OficinaOS runs on this computer. Create the owner account — you will use it to sign in and to create your team's accounts.",
+  "setup_shop_name": "Shop name",
+  "setup_shop_name_placeholder": "e.g. TecFix Downtown",
+  "setup_your_name": "Your name",
+  "setup_your_name_placeholder": "e.g. Ana Silva",
+  "setup_login": "Username or email",
+  "setup_login_placeholder": "e.g. ana or ana@myshop.com",
+  "setup_login_hint": "You will sign in with this. Username: letters, numbers and _ only (3 to 30 characters).",
+  "setup_password": "Password",
+  "setup_confirm_password": "Confirm password",
+  "setup_password_hint": "At least 8 characters, with an uppercase letter, a lowercase letter and a number.",
+  "setup_passwords_mismatch": "Passwords do not match.",
+  "setup_submit": "Create shop and sign in",
+  "setup_submitting": "Creating your shop...",
+  "setup_checking": "Checking setup...",
+  "setup_error": "Could not create the shop. Please try again.",
+  "setup_login_after_failed": "Your shop was created, but automatic sign-in failed. Sign in with the details you just set.",
+  "setup_not_local_title": "Open this page on the shop computer",
+  "setup_not_local_desc": "For security, first-time setup can only be done on the computer where OficinaOS is installed. On that computer, open http://localhost:4000 in the browser.",
+  "setup_not_local_hint": "Installed with Docker or on another server? Use the setup link with the SETUP_TOKEN code from the .env file (e.g. in PRIMEIRO-LOGIN.txt).",
+  "setup_retry": "Check again"
 }

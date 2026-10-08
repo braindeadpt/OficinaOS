@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import LanguageToggle from "@/components/modules/language-toggle";
 import api from "@/lib/api";
 import { useAuthStore } from "@/stores/auth";
@@ -339,9 +339,31 @@ export default function LoginPage() {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const navigate = useNavigate();
 
+  const location = useLocation();
+  const notice = (location.state as { notice?: string } | null)?.notice;
+
   const login = useAuthStore((s) => s.login);
   const error = useAuthStore((s) => s.error);
   const clearError = useAuthStore((s) => s.clearError);
+
+  // Fresh install (no users yet): the first screen is «Criar a sua oficina»,
+  // not a login nobody has credentials for.
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get<{ needsSetup: boolean }>("/setup/status")
+      .then((res) => {
+        if (!cancelled && res.data.needsSetup) {
+          navigate("/setup", { replace: true });
+        }
+      })
+      .catch(() => {
+        // Older server or network hiccup — keep the normal login.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate]);
 
   async function handleSignIn(e: React.FormEvent) {
     e.preventDefault();
@@ -420,6 +442,15 @@ export default function LoginPage() {
                   {t("auth_identify")}
                 </p>
               </div>
+
+              {notice === "setup_login_after_failed" && (
+                <p
+                  className="mb-5 rounded-lg bg-primary-container px-4 py-3 text-on-primary-container text-sm"
+                  role="status"
+                >
+                  {t("setup_login_after_failed")}
+                </p>
+              )}
 
               <SignInForm
                 error={error}

@@ -155,6 +155,31 @@ export const routeSecurity: [string, RouteSecurityOverride][] = [
     },
   ],
   ["/api/auth/*", { csrf: false, allowSensitiveKeys: true }],
+  // First-run setup — unauthenticated by nature (no user exists yet), so it
+  // is keyed on IP with a small budget. allowSensitiveKeys: the body carries
+  // the new owner's password. CSRF stays on (the SPA fetches a token first).
+  [
+    "/api/setup/status",
+    {
+      csrf: false,
+      rateLimit: {
+        keyGenerator: lookupKeyGenerator,
+        max: 30,
+        timeWindow: "1 minute",
+      },
+    },
+  ],
+  [
+    "/api/setup",
+    {
+      allowSensitiveKeys: true,
+      rateLimit: {
+        keyGenerator: lookupKeyGenerator,
+        max: 10,
+        timeWindow: "15 minutes",
+      },
+    },
+  ],
   [
     "/api/users/:id/reset-password",
     {

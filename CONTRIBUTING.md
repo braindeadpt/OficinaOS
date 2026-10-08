@@ -23,7 +23,8 @@ cd OficinaOS
 bun install
 
 cp .env.example .env
-# Fill in DATABASE_URL, BETTER_AUTH_SECRET, AI_ENCRYPTION_KEY, SEED_ADMIN_PASSWORD.
+# Fill in DATABASE_URL, BETTER_AUTH_SECRET, AI_ENCRYPTION_KEY, and SEED_ADMIN_PASSWORD
+# (dev only — or leave it unset and create the owner on the /setup screen).
 # Generate secrets with:
 #   node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"
 

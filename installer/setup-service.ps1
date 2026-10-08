@@ -109,7 +109,7 @@ BETTER_AUTH_SECRET=$(New-Secret)
 AI_ENCRYPTION_KEY=$(New-Secret)
 COOKIE_SECRET=$(New-Secret)
 
-SEED_ADMIN_PASSWORD=braindead
+SETUP_TOKEN=$(New-Secret 40)
 
 UPLOAD_DIR=$dataRoot\uploads
 TZ=Europe/Lisbon
@@ -138,6 +138,16 @@ if (-not $pgPass) {
     Write-Output "Password do Postgres gerada e guardada no .env."
 }
 $env:PGPASSWORD = $pgPass
+
+# Instalacoes antigas tinham SEED_ADMIN_PASSWORD=braindead no .env. O seed ja
+# nao cria o admin quando existe algum utilizador, mas a linha sai na mesma.
+$envText = [IO.File]::ReadAllText($envPath)
+if ($envText -match '(?m)^SEED_ADMIN_PASSWORD=braindead\s*$') {
+    $envText = $envText -replace '(?m)^SEED_ADMIN_PASSWORD=braindead\r?\n?', ''
+    [IO.File]::WriteAllText($envPath, $envText,
+        (New-Object System.Text.UTF8Encoding($false)))
+    Write-Output "Removida do .env a palavra-passe inicial antiga."
+}
 
 # ACL: data\ (cluster) e backups\ (dumps) tem dados de clientes — fechar a
 # Administrators/SYSTEM/NETWORK SERVICE (o ProgramData da leitura a Users
@@ -246,7 +256,9 @@ if (-not $ready) {
     Write-Error "A app nao respondeu em 3 minutos — ver $logDir\setup.log e $logDir\OficinaOS.*.log"
 }
 
-# Seed do admin (idempotente) + nota de primeiro acesso no Ambiente de Trabalho
+# Seed dos dados iniciais (idempotente; ja nao cria nenhum admin — o 1o
+# utilizador e criado no ecra "Criar a sua oficina") + nota de primeiro
+# acesso no Ambiente de Trabalho
 # EAP=Continue localmente: no PS 5.1 o stderr de um nativo redirecionado com
 # 2>&1 vira ErrorRecord e, com EAP=Stop, rebenta antes do exit code — o admin
 # nunca era criado (o seed escreve progresso em stderr mesmo em sucesso).
@@ -269,10 +281,10 @@ OficinaOS — primeiro acesso
 ============================
 Neste PC          : http://localhost:4000
 Noutros aparelhos : http://oficinaos.local:4000
-Utilizador        : admin
-Palavra-passe     : braindead
 
-A app obriga a trocar a palavra-passe no primeiro inicio de sessao.
+Nao ha utilizador nem palavra-passe pre-definidos. Na primeira vez abra
+http://localhost:4000 NESTE PC: a app mostra o ecra "Criar a sua oficina",
+onde escolhe o nome da loja, o seu utilizador e a sua palavra-passe.
 "@
 [System.IO.File]::WriteAllText(
     (Join-Path ([Environment]::GetFolderPath("CommonDesktopDirectory")) "PRIMEIRO-LOGIN.txt"),

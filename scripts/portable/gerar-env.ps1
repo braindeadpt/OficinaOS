@@ -17,7 +17,10 @@ $ip = (Get-NetIPAddress -AddressFamily IPv4 |
     } | Select-Object -First 1).IPAddress
 if (-not $ip) { $ip = "localhost" }
 
-$adminPass = "braindead"
+# Sem credencial pre-definida: no 1o arranque a app abre "Criar a sua
+# oficina" (so a partir deste PC). O token permite faze-lo noutro aparelho
+# ate a oficina ser criada.
+$setupToken = New-Secret 40
 # Password do Postgres portatil — vai para o DATABASE_URL e para o
 # app\.pgpass que o INICIAR.bat usa no initdb --pwfile e no psql.
 $pgPass = New-Secret 24
@@ -38,7 +41,7 @@ BETTER_AUTH_SECRET=$(New-Secret)
 AI_ENCRYPTION_KEY=$(New-Secret)
 COOKIE_SECRET=$(New-Secret)
 
-SEED_ADMIN_PASSWORD=$adminPass
+SETUP_TOKEN=$setupToken
 
 UPLOAD_DIR=./uploads
 TZ=Europe/Lisbon
@@ -49,13 +52,13 @@ $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllText((Join-Path $root "app\.pgpass"), "$pgPass`n", $utf8NoBom)
 
 $loginTxt = @"
-OficinaOS — primeiro acesso
+OficinaOS - primeiro acesso
 ============================
 Endereco neste PC : http://localhost:4000
 Endereco na rede  : http://${ip}:4000
-Utilizador        : admin
-Palavra-passe     : $adminPass
 
-A app obriga a trocar a palavra-passe no primeiro inicio de sessao.
+Nao ha utilizador nem palavra-passe pre-definidos. Na primeira vez a app
+abre neste PC o ecra "Criar a sua oficina": escolhe o nome da loja, o teu
+utilizador e a tua palavra-passe.
 "@
 [System.IO.File]::WriteAllText((Join-Path $root "PRIMEIRO-LOGIN.txt"), $loginTxt, $utf8NoBom)

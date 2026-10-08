@@ -66,15 +66,15 @@ cd OficinaOS
 
 cp .env.example .env
 # Edita o .env — preenche BETTER_AUTH_SECRET, AI_ENCRYPTION_KEY,
-# SEED_ADMIN_PASSWORD e APP_URL (o IP da máquina na rede local).
+# COOKIE_SECRET, SETUP_TOKEN e APP_URL (o IP da máquina na rede local).
 # Gera segredos com:
 #   node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"
 
 docker compose up -d --build
-docker compose exec app bun run db:seed   # só na 1ª vez
+docker compose exec app bun run db:seed   # só na 1ª vez (dados iniciais)
 ```
 
-Depois abre `http://<IP-da-máquina>:4000` (ex.: `http://192.168.1.33:4000`) e inicia sessão com **`admin` / `braindead`** — a app obriga a definir novo utilizador e nova palavra-passe no primeiro login.
+Depois abre `http://<IP-da-máquina>:4000/setup?token=<SETUP_TOKEN>` (o valor que puseste no `.env`) e cria a oficina no ecrã **«Criar a sua oficina»**: nome da loja, o teu nome, utilizador/email e palavra-passe. Não há credenciais pré-definidas. Em Docker o token é sempre preciso (o browser chega ao contentor pela rede do Docker, não como `127.0.0.1`); depois de criado o primeiro utilizador o ecrã deixa de existir.
 
 ### Comandos Docker
 
@@ -193,8 +193,9 @@ Todas as variáveis de ambiente estão documentadas no [`.env.example`](./.env.e
 | `APP_URL` | URL público da app (ex.: `http://192.168.1.33:4000`) |
 | `DATABASE_URL` | Ligação PostgreSQL (definida pelo compose) |
 | `BETTER_AUTH_SECRET` | Segredo de sessões (gerar aleatório) |
-| `SEED_ADMIN_PASSWORD` | Palavra-passe inicial do admin — mudar no 1º login |
-| `SEED_ADMIN_EMAIL` | Opcional — email do admin inicial (por omissão `admin@oficinaos.local`) |
+| `SETUP_TOKEN` | Opcional — código de uso único para o ecrã «Criar a sua oficina» a partir de outro aparelho (Docker/servidor). Sem ele, só funciona em `localhost` |
+| `SEED_ADMIN_PASSWORD` | Só dev/CI/E2E — se definido, o `db:seed` cria o utilizador `admin` (com troca obrigatória) quando a base de dados não tem utilizadores |
+| `SEED_ADMIN_EMAIL` | Opcional, com o anterior — email do admin semeado (por omissão `admin@oficinaos.local`) |
 | `AI_ENCRYPTION_KEY` | Chave AES-256 para guardar a OpenAI key |
 | `OPENAI_API_KEY` | Opcional — assistente IA |
 | `WHATSAPP_*`, `EMAIL_*` | Opcional — notificações ao cliente |

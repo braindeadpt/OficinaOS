@@ -89,7 +89,18 @@ const schema = z
     EMAIL_FROM: z.string().optional(),
 
     // ── Seeding (optional) ────────────────────────────────────
+    // Only for dev/CI/E2E — production installs create the first owner on
+    // the first-run setup screen instead of seeding a known password.
     SEED_ADMIN_PASSWORD: z.string().optional(),
+
+    // ── First-run setup (optional) ────────────────────────────
+    // One-time token that lets /setup run from a non-loopback address
+    // (e.g. Docker, where the browser on the host is not 127.0.0.1 to the
+    // container). Dead once the first user exists.
+    SETUP_TOKEN: z.preprocess(
+      (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+      z.string().min(16).optional()
+    ),
 
     // ── In-app feedback → GitHub issues (optional) ───────────
     GITHUB_FEEDBACK_TOKEN: z.string().optional(),

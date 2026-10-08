@@ -40,33 +40,28 @@ const auth = betterAuth({
 });
 
 const SEED_ADMIN_USERNAME = "admin";
-// Default seed password — the app forces a username + password change on
-// first login, so this value is only a bootstrap credential. Outside dev it
-// must come from the environment so a predictable password is never seeded.
-const SEED_ADMIN_PASSWORD =
-  process.env.SEED_ADMIN_PASSWORD ||
-  (process.env.NODE_ENV === "production" ? "" : "braindead");
-if (!SEED_ADMIN_PASSWORD) {
-  throw new Error(
-    "SEED_ADMIN_PASSWORD is required when NODE_ENV=production — refusing to seed the default password"
-  );
-}
+// The admin is only seeded when SEED_ADMIN_PASSWORD is set (dev, CI, E2E).
+// Real installs leave it unset: the app shows the first-run setup screen
+// («Criar a sua oficina») while there are no users, so no install ships
+// with a known password.
+const SEED_ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD?.trim() ?? "";
 const SEED_ADMIN_EMAIL =
   process.env.SEED_ADMIN_EMAIL?.trim() || "admin@oficinaos.local";
 
-async function main() {
-  console.log("Seeding database...");
+async function seedAdmin() {
+  if (!SEED_ADMIN_PASSWORD) {
+    console.log(
+      "SEED_ADMIN_PASSWORD not set — skipping admin seed (the app opens the first-run setup screen while there are no users)."
+    );
+    return;
+  }
 
-  const existing = await prisma.user.findUnique({
-    where: { username: SEED_ADMIN_USERNAME },
-  });
-
-  if (existing) {
-    console.log(`Admin user already exists: ${existing.username}`);
-    console.log("Skipping admin seed. Seeding notification templates...");
-    await seedNotificationTemplates();
-    await seedAgentDefinitions();
-    await seedDevices();
+  // Any existing user means the shop is already set up — never add a
+  // second account with a known password (e.g. after the owner renamed
+  // "admin" on first login, a username lookup would miss it).
+  const userCount = await prisma.user.count();
+  if (userCount > 0) {
+    console.log(`Users already exist (${userCount}) — skipping admin seed.`);
     return;
   }
 
@@ -90,16 +85,22 @@ async function main() {
 
     console.log(`Admin user created: ${result.user.username}`);
     console.log(
-      "Seed complete. Login with the configured password and change it on first access."
+      "Login with the configured password and change it on first access."
     );
   } catch (error) {
     console.error("Failed to create admin user:", error);
     process.exit(1);
   }
+}
 
+async function main() {
+  console.log("Seeding database...");
+
+  await seedAdmin();
   await seedNotificationTemplates();
   await seedAgentDefinitions();
   await seedDevices();
+  console.log("Seed complete.");
 }
 
 /**
