@@ -46,6 +46,8 @@ function buildJobPayload(data: IntakeFormData) {
     estimatedDate: data.estimatedDelivery || undefined,
     isUrgent: data.isUrgent,
     depositAmount: data.deposit ? Number.parseFloat(data.deposit) : undefined,
+    hasLoanerDevice: data.hasLoanerDevice || undefined,
+    loanerNote: data.loanerNote || undefined,
   };
 }
 

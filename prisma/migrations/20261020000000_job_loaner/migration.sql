@@ -1,0 +1,2 @@
+ALTER TABLE "jobs" ADD COLUMN "hasLoanerDevice" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "jobs" ADD COLUMN "loanerNote" TEXT;

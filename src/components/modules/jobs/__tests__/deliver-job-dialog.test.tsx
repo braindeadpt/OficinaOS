@@ -30,6 +30,11 @@ vi.mock("@/lib/print", () => ({
 
 import DeliverJobDialog from "../deliver-job-dialog";
 
+const QUOTED_RE = /deliver_dialog\.quoted_given/;
+const DEPOSIT_RE = /deliver_dialog\.deposit/;
+const LOANER_RE = /deliver_dialog\.loaner/;
+const LOANER_NOTE_RE = /Nokia 105/;
+
 const job = { id: "job-1", jobCode: "R-0001", status: "DONE" as const };
 
 function renderDialog(balanceDue: number, onDelivered = vi.fn()) {
@@ -104,5 +109,34 @@ describe("DeliverJobDialog", () => {
     await waitFor(() => expect(onDelivered).toHaveBeenCalled());
     expect(mockAddPayment).not.toHaveBeenCalled();
     expect(mockTransitionStatus).toHaveBeenCalledWith("job-1", "DELIVERED");
+  });
+
+  it("shows the agreed quote, deposit and loaner device", () => {
+    render(
+      <DeliverJobDialog
+        balanceDue={70}
+        job={{
+          ...job,
+          depositAmount: 30,
+          estimatedCost: 100,
+          hasLoanerDevice: true,
+          loanerNote: "Nokia 105",
+        }}
+        onCancel={vi.fn()}
+        onDelivered={vi.fn()}
+        open
+      />
+    );
+    expect(screen.getByText(QUOTED_RE)).toBeInTheDocument();
+    expect(screen.getByText(DEPOSIT_RE)).toBeInTheDocument();
+    expect(screen.getByText(LOANER_RE)).toBeInTheDocument();
+    expect(screen.getByText(LOANER_NOTE_RE)).toBeInTheDocument();
+  });
+
+  it("hides the intake summary when nothing was agreed", () => {
+    renderDialog(0);
+    expect(screen.queryByText(QUOTED_RE)).toBeNull();
+    expect(screen.queryByText(DEPOSIT_RE)).toBeNull();
+    expect(screen.queryByText(LOANER_RE)).toBeNull();
   });
 });

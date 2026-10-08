@@ -73,6 +73,8 @@ interface JobsState {
     estimatedCost?: number;
     estimatedDate?: string;
     depositAmount?: number;
+    hasLoanerDevice?: boolean;
+    loanerNote?: string;
     technicianId?: string;
     isUrgent?: boolean;
     isWarrantyReturn?: boolean;

@@ -90,6 +90,8 @@ export interface ReceiptStrings {
   items: string;
   job: string;
   label: string;
+  loaner: string;
+  loanerYes: string;
   paid: string;
   paidDeposit: string;
   paymentMethods: Record<string, string>;
@@ -118,6 +120,8 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     items: "Itens",
     job: "Reparação",
     label: "Etiqueta",
+    loaner: "Equip. empréstimo",
+    loanerYes: "Sim",
     paid: "Pago",
     paidDeposit: "Pago (sinal)",
     paymentMethods: {
@@ -152,6 +156,8 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     items: "Items",
     job: "Job",
     label: "Label",
+    loaner: "Loaner device",
+    loanerYes: "Yes",
     paid: "Paid",
     paidDeposit: "Paid (deposit)",
     paymentMethods: {
@@ -186,6 +192,8 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     items: "Articles",
     job: "Réparation",
     label: "Étiquette",
+    loaner: "Appareil de prêt",
+    loanerYes: "Oui",
     paid: "Payé",
     paidDeposit: "Payé (acompte)",
     paymentMethods: {
@@ -220,6 +228,8 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     items: "Artículos",
     job: "Reparación",
     label: "Etiqueta",
+    loaner: "Dispositivo de préstamo",
+    loanerYes: "Sí",
     paid: "Pagado",
     paidDeposit: "Pagado (anticipo)",
     paymentMethods: {
@@ -426,6 +436,27 @@ function warrantySectionHtml(
  * Signature is already a data:image/... URL — the zod create schema enforces
  * the prefix, and we re-check here before embedding it verbatim.
  */
+interface LoanerJob {
+  hasLoanerDevice?: boolean | null;
+  loanerNote?: string | null;
+}
+
+/** Thermal row for the loaned device — note, or a plain "yes". */
+function loanerRowHtml(job: LoanerJob, s: ReceiptStrings): string {
+  if (!job.hasLoanerDevice) {
+    return "";
+  }
+  return `<tr><td>${s.loaner}</td><td style="text-align:right">${esc(job.loanerNote || s.loanerYes)}</td></tr>`;
+}
+
+/** A4 line for the loaned device. */
+function loanerDivHtml(job: LoanerJob, s: ReceiptStrings): string {
+  if (!job.hasLoanerDevice) {
+    return "";
+  }
+  return `<div>${s.loaner}: ${esc(job.loanerNote || s.loanerYes)}</div>`;
+}
+
 function signatureSectionHtml(
   dataUrl: string | null | undefined,
   termsSigned: string
@@ -447,6 +478,8 @@ export async function renderReceiptHtml(
     reportedProblem: string;
     estimatedCost: number | { toNumber: () => number } | null;
     depositAmount?: number | { toNumber: () => number } | null;
+    hasLoanerDevice?: boolean | null;
+    loanerNote?: string | null;
     intakeSignatureDataUrl?: string | null;
     createdAt: Date;
     payments?: Array<{
@@ -635,7 +668,7 @@ ${shopHeader}
 <table><tr><td>${s.job}</td><td style="text-align:right">${esc(job.jobCode)}</td></tr>
 <tr><td>${s.customer}</td><td style="text-align:right">${esc(job.customer.name)}</td></tr>
 <tr><td>${s.phone}</td><td style="text-align:right">${esc(job.customer.phone)}</td></tr>
-<tr><td>${s.device}</td><td style="text-align:right">${esc(job.device.brand.name)} ${esc(job.device.model)}</td></tr>${prefs.showImei && job.imei ? `<tr><td>IMEI/SN</td><td style="text-align:right">${esc(job.imei)}</td></tr>` : ""}</table>
+<tr><td>${s.device}</td><td style="text-align:right">${esc(job.device.brand.name)} ${esc(job.device.model)}</td></tr>${prefs.showImei && job.imei ? `<tr><td>IMEI/SN</td><td style="text-align:right">${esc(job.imei)}</td></tr>` : ""}${loanerRowHtml(job, s)}</table>
 <div class="sep"></div>
 ${prefs.showProblem ? `<p style="text-align:left"><strong>${s.problem}:</strong> ${esc(job.reportedProblem)}</p><div class="sep"></div>` : ""}
 ${costsSectionHtml(ctx)}
@@ -751,6 +784,7 @@ ${
     <div class="lbl">${s.device}</div>
     <div><strong>${esc(job.device.brand.name)} ${esc(job.device.model)}</strong></div>
     ${prefs.showImei && job.imei ? `<div>IMEI/SN: ${esc(job.imei)}</div>` : ""}
+    ${loanerDivHtml(job, s)}
   </div>
 </div>
 ${prefs.showProblem ? `<div class="problem"><strong>${s.problem}:</strong> ${esc(job.reportedProblem)}</div>` : ""}

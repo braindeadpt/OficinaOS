@@ -441,6 +441,11 @@ model Job {
   estimatedCost Decimal? @db.Decimal(10, 2)
   depositAmount Decimal? @db.Decimal(10, 2)
 
+  // Loaner device handed to the customer while theirs is in repair
+  // (loanerNote = which device / serial of the loaned one).
+  hasLoanerDevice Boolean @default(false)
+  loanerNote      String? @db.Text
+
   estimatedDate DateTime? @db.Timestamptz
   createdAt     DateTime  @default(now()) @db.Timestamptz
   updatedAt     DateTime  @updatedAt @db.Timestamptz

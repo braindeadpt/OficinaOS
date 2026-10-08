@@ -19,6 +19,10 @@ const AMOUNT_REGEX = /^\d*([.,]\d{0,2})?$/;
 interface DeliverJobDialogProps {
   balanceDue: number;
   job: Pick<Job, "id" | "jobCode" | "status"> & {
+    depositAmount?: unknown;
+    estimatedCost?: unknown;
+    hasLoanerDevice?: boolean;
+    loanerNote?: string | null;
     paymentOnDeliveryMethod?: string | null;
   };
   onCancel: () => void;
@@ -29,6 +33,56 @@ interface DeliverJobDialogProps {
 
 function parseAmount(raw: string): number {
   return Number.parseFloat(raw.replace(",", "."));
+}
+
+interface IntakeSummaryJob {
+  depositAmount?: unknown;
+  estimatedCost?: unknown;
+  hasLoanerDevice?: boolean;
+  loanerNote?: string | null;
+}
+
+/** What was agreed at intake — quote given, deposit left, loaner device. */
+function IntakeSummary({
+  fmt,
+  job,
+  t,
+}: {
+  fmt: (v: number) => string;
+  job: IntakeSummaryJob;
+  t: (key: string, opts?: Record<string, unknown>) => string;
+}) {
+  const quotedAmount = job.estimatedCost ? Number(job.estimatedCost) : 0;
+  const depositAmount = job.depositAmount ? Number(job.depositAmount) : 0;
+  if (!(quotedAmount > 0 || depositAmount > 0 || job.hasLoanerDevice)) {
+    return null;
+  }
+  return (
+    <div className="flex flex-wrap gap-x-6 gap-y-1 rounded-xl bg-surface-container-highest px-4 py-2.5 font-body text-on-surface-variant text-xs">
+      {quotedAmount > 0 && (
+        <span>
+          {t("deliver_dialog.quoted_given")}:{" "}
+          <span className="font-semibold text-on-surface">
+            {fmt(quotedAmount)}
+          </span>
+        </span>
+      )}
+      {depositAmount > 0 && (
+        <span>
+          {t("deliver_dialog.deposit")}:{" "}
+          <span className="font-semibold text-on-surface">
+            {fmt(depositAmount)}
+          </span>
+        </span>
+      )}
+      {job.hasLoanerDevice && (
+        <span>
+          {t("deliver_dialog.loaner")}
+          {job.loanerNote ? `: ${job.loanerNote}` : ""}
+        </span>
+      )}
+    </div>
+  );
 }
 
 function isPaymentMethod(value: unknown): value is PaymentMethodType {
@@ -247,6 +301,9 @@ export default function DeliverJobDialog({
               {fmt(balanceDue)}
             </span>
           </div>
+
+          {/* What was agreed at intake: quote given, deposit left, loaner. */}
+          <IntakeSummary fmt={fmt} job={job} t={t} />
 
           {owes && (
             <div className="space-y-4">

@@ -72,6 +72,8 @@ export const createJobSchema = z.object({
     .min(0, { error: "validations.valid_deposit" })
     .max(99_999_999.99)
     .optional(),
+  hasLoanerDevice: z.boolean().optional(),
+  loanerNote: z.string().max(200).optional(),
   technicianId: z.string().cuid({ error: "validations.invalid_id" }).optional(),
   isUrgent: z.boolean().optional(),
   isWarrantyReturn: z.boolean().optional(),
@@ -87,6 +89,8 @@ export const updateJobSchema = z.object({
   estimatedCost: z.number().min(0).max(99_999_999.99).nullable().optional(),
   estimatedDate: z.coerce.date().nullable().optional(),
   depositAmount: z.number().min(0).max(99_999_999.99).nullable().optional(),
+  hasLoanerDevice: z.boolean().optional(),
+  loanerNote: z.string().max(200).nullable().optional(),
   technicianId: z.string().cuid().nullable().optional(),
   isUrgent: z.boolean().optional(),
   color: z.string().max(40).optional(),

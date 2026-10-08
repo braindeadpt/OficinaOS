@@ -139,6 +139,21 @@ function warrantyLines(
   }
 }
 
+function deviceRows(
+  t: Ticket,
+  job: JobReceiptData,
+  s: ReceiptStrings,
+  showImei: boolean
+): void {
+  t.row(s.device, `${job.device.brand.name} ${job.device.model}`);
+  if (showImei && job.imei) {
+    t.row("IMEI/SN", job.imei);
+  }
+  if (job.hasLoanerDevice) {
+    t.wrap(`${s.loaner}: ${job.loanerNote || s.loanerYes}`);
+  }
+}
+
 function jobCostsSection(
   t: Ticket,
   job: JobReceiptData,
@@ -207,10 +222,7 @@ export function buildJobReceiptEscPos(
   t.row(s.job, job.jobCode);
   t.row(s.customer, job.customer.name);
   t.row(s.phone, job.customer.phone);
-  t.row(s.device, `${job.device.brand.name} ${job.device.model}`);
-  if (prefs.showImei && job.imei) {
-    t.row("IMEI/SN", job.imei);
-  }
+  deviceRows(t, job, s, prefs.showImei);
   if (prefs.showProblem) {
     t.sep();
     t.wrap(`${s.problem}: ${job.reportedProblem}`);

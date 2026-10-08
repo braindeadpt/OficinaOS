@@ -38,6 +38,43 @@ describe("createJobSchema — estimatedCost", () => {
   });
 });
 
+describe("createJobSchema — loaner device", () => {
+  it("accepts a job without loaner fields", () => {
+    const parsed = createJobSchema.safeParse(VALID_JOB);
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.hasLoanerDevice).toBeUndefined();
+  });
+
+  it("accepts a loaner flag and note", () => {
+    const parsed = createJobSchema.safeParse({
+      ...VALID_JOB,
+      hasLoanerDevice: true,
+      loanerNote: "Nokia 105 — loja",
+    });
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.hasLoanerDevice).toBe(true);
+    expect(parsed.data?.loanerNote).toBe("Nokia 105 — loja");
+  });
+
+  it("rejects an oversized loaner note", () => {
+    expect(
+      createJobSchema.safeParse({
+        ...VALID_JOB,
+        loanerNote: "x".repeat(201),
+      }).success
+    ).toBe(false);
+  });
+
+  it("lets an update clear the note and unset the flag", () => {
+    const parsed = updateJobSchema.safeParse({
+      hasLoanerDevice: false,
+      loanerNote: null,
+    });
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.loanerNote).toBeNull();
+  });
+});
+
 describe("createJobSchema — length caps", () => {
   it("rejects an oversized customer name", () => {
     expect(

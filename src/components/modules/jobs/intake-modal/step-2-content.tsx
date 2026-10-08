@@ -5,6 +5,7 @@ import FunctionalChecklist from "./functional-checklist";
 import {
   errorCls,
   type IntakeFormData,
+  inputCls,
   labelCls,
   requiredMarkCls,
   textareaCls,
@@ -162,6 +163,14 @@ export default function Step2Content({
           </div>
         </div>
 
+        <LoanerField
+          fieldError={fieldError}
+          form={form}
+          handleBlur={handleBlur}
+          t={t}
+          update={update}
+        />
+
         <div>
           <label className={labelCls} htmlFor="delivery-date">
             {t("intake.delivery_date")}
@@ -233,5 +242,86 @@ export default function Step2Content({
         </div>
       </div>
     </section>
+  );
+}
+
+interface LoanerFieldProps {
+  fieldError: (key: keyof IntakeFormData) => string | undefined;
+  form: IntakeFormData;
+  handleBlur: (field: keyof IntakeFormData) => void;
+  t: (key: string, opts?: Record<string, unknown>) => string;
+  update: <K extends keyof IntakeFormData>(
+    key: K,
+    value: IntakeFormData[K]
+  ) => void;
+}
+
+function LoanerField({
+  fieldError,
+  form,
+  handleBlur,
+  t,
+  update,
+}: LoanerFieldProps) {
+  const active = form.hasLoanerDevice;
+  return (
+    <div className="space-y-4">
+      <button
+        aria-pressed={active}
+        className={`flex w-full items-center justify-between rounded-xl px-4 py-3 transition-colors ${
+          active
+            ? "bg-primary-container ring-2 ring-primary/40"
+            : "bg-surface-container-highest hover:bg-surface-container"
+        }`}
+        onClick={() => update("hasLoanerDevice", !active)}
+        type="button"
+      >
+        <span className="flex items-center gap-2 font-label text-on-surface text-sm">
+          <Icon
+            className={`text-lg ${
+              active ? "text-primary" : "text-on-surface-variant"
+            }`}
+            name="phone_iphone"
+          />
+          {t("intake.loaner_device")}
+        </span>
+        <span
+          className={`font-label text-xs ${
+            active ? "font-bold text-primary" : "text-on-surface-variant"
+          }`}
+        >
+          {active ? t("intake.loaner_on") : t("intake.loaner_off")}
+        </span>
+      </button>
+
+      {active && (
+        <div>
+          <label className={labelCls} htmlFor="loaner-note">
+            {t("intake.loaner_note")}
+          </label>
+          <input
+            aria-describedby={
+              fieldError("loanerNote") ? "error-loaner-note" : undefined
+            }
+            aria-invalid={!!fieldError("loanerNote")}
+            className={`${inputCls}${
+              fieldError("loanerNote") ? "ring-2 ring-error" : ""
+            }`}
+            id="loaner-note"
+            maxLength={200}
+            onBlur={() => handleBlur("loanerNote")}
+            onChange={(e) => update("loanerNote", e.target.value)}
+            placeholder={t("intake.loaner_note_placeholder")}
+            type="text"
+            value={form.loanerNote}
+          />
+          {fieldError("loanerNote") && (
+            <p className={errorCls} id="error-loaner-note">
+              {fieldError("loanerNote")}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

@@ -108,6 +108,47 @@ describe("renderReceiptHtml section toggles", () => {
   });
 });
 
+describe("renderReceiptHtml loaner device", () => {
+  const render = async (jobPatch: Record<string, unknown>, paper = "80mm") => {
+    const prisma = mockPrisma({ ...FULL_SETTINGS, receiptPaper: paper });
+    return await renderReceiptHtml(
+      prisma,
+      { ...BASE_JOB, ...jobPatch },
+      "",
+      {}
+    );
+  };
+
+  it("shows the loaner note on the thermal receipt", async () => {
+    const html = await render({
+      hasLoanerDevice: true,
+      loanerNote: "Nokia 105",
+    });
+    expect(html).toContain("Equip. empréstimo");
+    expect(html).toContain("Nokia 105");
+  });
+
+  it("falls back to a generic label when there is no note", async () => {
+    const html = await render({ hasLoanerDevice: true, loanerNote: null });
+    expect(html).toContain("Equip. empréstimo");
+    expect(html).toContain("Sim");
+  });
+
+  it("shows the loaner on the A4 receipt", async () => {
+    const html = await render(
+      { hasLoanerDevice: true, loanerNote: "Moto G" },
+      "a4"
+    );
+    expect(html).toContain("Equip. empréstimo");
+    expect(html).toContain("Moto G");
+  });
+
+  it("omits the loaner row when no device was loaned", async () => {
+    const html = await render({ hasLoanerDevice: false });
+    expect(html).not.toContain("empréstimo");
+  });
+});
+
 describe("renderLabelHtml label sizes", () => {
   it("defaults to the 40x20 sheet", async () => {
     const html = await renderLabelHtml(mockPrisma(null), BASE_JOB, "", {});

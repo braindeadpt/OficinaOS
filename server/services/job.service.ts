@@ -410,6 +410,8 @@ export async function create(
         customer: { connect: { id: customer.id } },
         imei: deviceIdentifier,
         depositAmount: input.depositAmount ?? null,
+        hasLoanerDevice: input.hasLoanerDevice ?? false,
+        loanerNote: input.loanerNote ?? null,
         device: { connect: { id: device.id } },
         estimatedCost: input.estimatedCost,
         estimatedDate: input.estimatedDate

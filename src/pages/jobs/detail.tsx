@@ -51,6 +51,24 @@ function UrgentBadge({ visible }: { visible: boolean }) {
   );
 }
 
+/** Loaned-device spec cell — hidden unless a loaner was given at intake. */
+function LoanerSpec({ job }: { job: Job }) {
+  const { t } = useTranslation();
+  if (!job.hasLoanerDevice) {
+    return null;
+  }
+  return (
+    <div>
+      <p className="font-label text-[11px] text-on-surface-variant uppercase tracking-widest">
+        {t("jobs_detail_loaner")}
+      </p>
+      <p className="mt-0.5 font-bold font-headline text-lg text-on-surface">
+        {job.loanerNote || t("jobs_detail_loaner_yes")}
+      </p>
+    </div>
+  );
+}
+
 function invoiceProps(job: Job) {
   return {
     invoiceNumber: job.invoiceNumber ?? null,
@@ -318,6 +336,7 @@ export default function JobDetailPage() {
               </p>
             </div>
           )}
+          <LoanerSpec job={job} />
           {job.deviceUnlockCode && (
             <div>
               <p className="font-label text-[11px] text-on-surface-variant uppercase tracking-widest">
