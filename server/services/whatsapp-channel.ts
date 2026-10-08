@@ -1,7 +1,12 @@
 import { decryptSecret, isEncrypted } from "../lib/crypto.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
+import { isModuleEnabled } from "../utils/modules.js";
 import { cloudFetch } from "./cloud.service.js";
+import {
+  type EvolutionConfig,
+  sendEvolutionText,
+} from "./evolution.service.js";
 import {
   decryptWhatsAppConfig,
   formatPhone,
@@ -19,21 +24,60 @@ import {
  */
 export type WhatsAppChannel =
   | { apiUrl: string; mode: "cloud"; shopToken: string }
-  | { config: WhatsAppConfig; mode: "local" };
+  | { config: WhatsAppConfig; mode: "local" }
+  | { config: EvolutionConfig; mode: "evolution" };
 
 interface SettingsLike {
   cloudApiUrl?: string | null;
+  cloudEntitlements?: unknown;
   cloudShopTokenEncrypted?: string | null;
+  evolutionApiKeyEncrypted?: string | null;
+  evolutionInstance?: string | null;
+  evolutionUrl?: string | null;
   whatsappApiTokenEncrypted?: string | null;
   whatsappBusinessId?: string | null;
   whatsappCredentialsAtCloud?: boolean | null;
   whatsappEnabled?: boolean | null;
+  whatsappLocalDisclaimerAt?: Date | null;
   whatsappPhoneNumberId?: string | null;
+  whatsappTransport?: string | null;
 }
 
 export interface SendResult {
   error?: string;
   success: boolean;
+}
+
+/**
+ * Transporte "evolution" (WhatsApp local, Pro): precisa do entitlement
+ * "whatsapp-bot" e do disclaimer aceite — sem ambos resolve para null e
+ * o outbox cancela os envios (mesmo efeito de revogar o módulo).
+ */
+function resolveEvolutionChannel(
+  settings: SettingsLike
+): WhatsAppChannel | null {
+  if (
+    settings.whatsappTransport !== "evolution" ||
+    !settings.whatsappLocalDisclaimerAt ||
+    !isModuleEnabled(settings, "whatsapp-bot") ||
+    !settings.evolutionUrl
+  ) {
+    return null;
+  }
+  const apiKey = settings.evolutionApiKeyEncrypted
+    ? decryptSecret(settings.evolutionApiKeyEncrypted)
+    : null;
+  if (!apiKey) {
+    return null;
+  }
+  return {
+    config: {
+      apiKey,
+      baseUrl: settings.evolutionUrl,
+      instance: settings.evolutionInstance ?? "oficinaos",
+    },
+    mode: "evolution",
+  };
 }
 
 /** Cloud first when credentials migrated; otherwise the legacy local config. */
@@ -42,6 +86,9 @@ export function resolveWhatsAppChannel(
 ): WhatsAppChannel | null {
   if (!settings.whatsappEnabled) {
     return null;
+  }
+  if (settings.whatsappTransport === "evolution") {
+    return resolveEvolutionChannel(settings);
   }
   if (
     settings.whatsappCredentialsAtCloud &&
@@ -126,6 +173,13 @@ export async function sendWhatsAppText(
 ): Promise<SendResult> {
   if (channel.mode === "local") {
     return sendWhatsApp(channel.config, to, message, countryCode);
+  }
+  if (channel.mode === "evolution") {
+    return sendEvolutionText(
+      channel.config,
+      formatPhone(to, countryCode),
+      message
+    );
   }
   const res = await sendViaCloud(channel, {
     text: message,
@@ -218,6 +272,14 @@ export async function sendWhatsAppTemplateVia(
       params,
       countryCode
     );
+  }
+  // Baileys não conhece templates Meta — o remarketing precisa do modo
+  // oficial. Falha explícita em vez de enviar texto por render.
+  if (channel.mode === "evolution") {
+    return {
+      error: "Templates Meta indisponíveis no transporte local (Evolution)",
+      success: false,
+    };
   }
   const res = await sendViaCloud(channel, {
     template: { language: languageCode, name: templateName, params },

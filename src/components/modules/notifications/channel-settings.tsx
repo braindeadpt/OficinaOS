@@ -5,8 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import type { useSettingsStore } from "@/stores/settings";
+import { EvolutionSection } from "./evolution-section";
 
 type Store = ReturnType<typeof useSettingsStore.getState>;
 
@@ -29,6 +31,11 @@ interface ChannelSettingsProps {
     remarketingDays?: number;
     remarketingCooldownDays?: number;
     remarketingTemplate?: string;
+    transport?: "meta" | "evolution";
+    evolutionUrl?: string;
+    evolutionInstance?: string;
+    evolutionApiKey?: string;
+    disclaimerAccepted?: boolean;
   }) => Promise<void>;
   onSendSmsTest: (phone?: string) => Promise<{ ok: boolean; message?: string }>;
   smsSettings: Store["smsSettings"];
@@ -242,6 +249,215 @@ function SmsCard({
   );
 }
 
+/** Campos do transporte oficial Meta (IDs, token, relay, remarketing). */
+function MetaWhatsAppFields({
+  form,
+  settings,
+  setForm,
+}: {
+  form: WhatsAppFormState;
+  settings: Store["whatsAppSettings"];
+  setForm: React.Dispatch<React.SetStateAction<WhatsAppFormState>>;
+}) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <div>
+        <div className="flex items-center gap-2">
+          <label
+            className="mb-1.5 block font-medium text-on-surface text-sm"
+            htmlFor="wa-business-id"
+          >
+            {t("whatsapp_business_id")}
+          </label>
+          <span
+            className="material-symbols-outlined mb-1.5 cursor-help text-on-surface-variant text-xs"
+            title={t(
+              "whatsapp_business_id_help",
+              "Your WhatsApp Business Account ID from Meta Business Manager"
+            )}
+          >
+            help
+          </span>
+        </div>
+        <input
+          className="min-h-11 w-full rounded-xl bg-surface-container px-4 py-2.5 text-on-surface text-sm focus:bg-surface-container-lowest"
+          id="wa-business-id"
+          onChange={(e) =>
+            setForm((f) => ({ ...f, businessId: e.target.value }))
+          }
+          type="text"
+          value={form.businessId}
+        />
+      </div>
+      <div>
+        <div className="flex items-center gap-2">
+          <label
+            className="mb-1.5 block font-medium text-on-surface text-sm"
+            htmlFor="wa-phone-id"
+          >
+            {t("whatsapp_phone_number_id")}
+          </label>
+          <span
+            className="material-symbols-outlined mb-1.5 cursor-help text-on-surface-variant text-xs"
+            title={t(
+              "whatsapp_phone_id_help",
+              "Your registered phone number ID from WhatsApp Business API"
+            )}
+          >
+            help
+          </span>
+        </div>
+        <input
+          className="min-h-11 w-full rounded-xl bg-surface-container px-4 py-2.5 text-on-surface text-sm focus:bg-surface-container-lowest"
+          id="wa-phone-id"
+          onChange={(e) =>
+            setForm((f) => ({ ...f, phoneNumberId: e.target.value }))
+          }
+          type="text"
+          value={form.phoneNumberId}
+        />
+      </div>
+      <div>
+        <div className="flex items-center gap-2">
+          <label
+            className="mb-1.5 block font-medium text-on-surface text-sm"
+            htmlFor="wa-api-token"
+          >
+            {t("whatsapp_api_token")}
+          </label>
+          <span
+            className="material-symbols-outlined mb-1.5 cursor-help text-on-surface-variant text-xs"
+            title={t(
+              "whatsapp_api_token_help",
+              "Your permanent access token from Meta Developers dashboard"
+            )}
+          >
+            help
+          </span>
+        </div>
+        <input
+          autoComplete="off"
+          className="min-h-11 w-full rounded-xl bg-surface-container px-4 py-2.5 text-on-surface text-sm focus:bg-surface-container-lowest"
+          id="wa-api-token"
+          onChange={(e) => setForm((f) => ({ ...f, apiToken: e.target.value }))}
+          placeholder={settings?.hasApiToken ? "••••••••" : ""}
+          type="password"
+          value={form.apiToken}
+        />
+      </div>
+      {settings?.credentialsAtCloud ? (
+        <p className="rounded-xl bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
+          {t("whatsapp_relay_active")}
+        </p>
+      ) : (
+        settings?.hasApiToken && (
+          <p className="rounded-xl bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
+            {t("whatsapp_relay_pending")}
+          </p>
+        )
+      )}
+      {settings?.remarketingModule ? (
+        <div className="rounded-xl bg-surface-container p-4">
+          <div className="flex items-center gap-3">
+            <Switch
+              ariaLabelledBy="remarketing-enabled-label"
+              checked={form.remarketingEnabled}
+              onChange={(checked) =>
+                setForm((f) => ({ ...f, remarketingEnabled: checked }))
+              }
+            />
+            <span
+              className="font-medium text-on-surface text-sm"
+              id="remarketing-enabled-label"
+            >
+              {t("remarketing_enabled")}
+            </span>
+          </div>
+          <p className="mt-2 text-on-surface-variant text-xs">
+            {t("remarketing_desc")}
+          </p>
+
+          {form.remarketingEnabled && (
+            <div className="mt-4 space-y-3">
+              <Field
+                hint={t("remarketing_days_hint")}
+                label={t("remarketing_days")}
+              >
+                <Input
+                  inputMode="numeric"
+                  max={365}
+                  min={30}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, remarketingDays: e.target.value }))
+                  }
+                  type="number"
+                  value={form.remarketingDays}
+                />
+              </Field>
+              <Field
+                hint={t("remarketing_cooldown_hint")}
+                label={t("remarketing_cooldown")}
+              >
+                <Input
+                  inputMode="numeric"
+                  max={365}
+                  min={30}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      remarketingCooldownDays: e.target.value,
+                    }))
+                  }
+                  type="number"
+                  value={form.remarketingCooldownDays}
+                />
+              </Field>
+              <Field
+                hint={t("remarketing_template_hint")}
+                label={t("remarketing_template")}
+              >
+                <Input
+                  autoComplete="off"
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      remarketingTemplate: e.target.value,
+                    }))
+                  }
+                  placeholder="oficinaos_remarketing"
+                  value={form.remarketingTemplate}
+                />
+              </Field>
+            </div>
+          )}
+        </div>
+      ) : (
+        <p className="rounded-xl bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
+          {t("remarketing_upsell")}
+        </p>
+      )}
+    </>
+  );
+}
+
+interface WhatsAppFormState {
+  apiToken: string;
+  businessId: string;
+  disclaimerAccepted: boolean;
+  enabled: boolean;
+  evolutionApiKey: string;
+  evolutionInstance: string;
+  evolutionUrl: string;
+  phoneNumberId: string;
+  remarketingCooldownDays: string;
+  remarketingDays: string;
+  remarketingEnabled: boolean;
+  remarketingTemplate: string;
+  trackingBaseUrl: string;
+  transport: "meta" | "evolution";
+}
+
 export default function ChannelSettings({
   smsSettings,
   whatsAppSettings,
@@ -252,7 +468,7 @@ export default function ChannelSettings({
   onSendSmsTest,
 }: ChannelSettingsProps) {
   const { t } = useTranslation();
-  const [whatsAppForm, setWhatsAppForm] = useState({
+  const [whatsAppForm, setWhatsAppForm] = useState<WhatsAppFormState>({
     apiToken: "",
     businessId: "",
     phoneNumberId: "",
@@ -262,6 +478,11 @@ export default function ChannelSettings({
     remarketingDays: "90",
     remarketingCooldownDays: "180",
     remarketingTemplate: "oficinaos_remarketing",
+    transport: "meta",
+    evolutionUrl: "",
+    evolutionInstance: "",
+    evolutionApiKey: "",
+    disclaimerAccepted: false,
   });
   const [whatsAppSaving, setWhatsAppSaving] = useState(false);
   const [whatsAppLoaded, setWhatsAppLoaded] = useState(false);
@@ -294,6 +515,11 @@ export default function ChannelSettings({
         ),
         remarketingTemplate:
           whatsAppSettings.remarketingTemplate ?? "oficinaos_remarketing",
+        transport: whatsAppSettings.transport ?? "meta",
+        evolutionUrl: whatsAppSettings.evolutionUrl ?? "",
+        evolutionInstance: whatsAppSettings.evolutionInstance ?? "",
+        evolutionApiKey: prev.evolutionApiKey || "",
+        disclaimerAccepted: false,
       }));
     }
   }, [whatsAppSettings, whatsAppSaving]);
@@ -316,6 +542,15 @@ export default function ChannelSettings({
                 Number.parseInt(whatsAppForm.remarketingCooldownDays, 10) ||
                 180,
               remarketingTemplate: whatsAppForm.remarketingTemplate,
+            }
+          : {}),
+        transport: whatsAppForm.transport,
+        ...(whatsAppForm.transport === "evolution"
+          ? {
+              evolutionUrl: whatsAppForm.evolutionUrl,
+              evolutionInstance: whatsAppForm.evolutionInstance,
+              evolutionApiKey: whatsAppForm.evolutionApiKey || undefined,
+              disclaimerAccepted: whatsAppForm.disclaimerAccepted,
             }
           : {}),
       });
@@ -368,68 +603,22 @@ export default function ChannelSettings({
 
         {whatsAppForm.enabled && (
           <div className="mt-5 space-y-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <label
-                  className="mb-1.5 block font-medium text-on-surface text-sm"
-                  htmlFor="wa-business-id"
-                >
-                  {t("whatsapp_business_id")}
-                </label>
-                <span
-                  className="material-symbols-outlined mb-1.5 cursor-help text-on-surface-variant text-xs"
-                  title={t(
-                    "whatsapp_business_id_help",
-                    "Your WhatsApp Business Account ID from Meta Business Manager"
-                  )}
-                >
-                  help
-                </span>
-              </div>
-              <input
-                className="min-h-11 w-full rounded-xl bg-surface-container px-4 py-2.5 text-on-surface text-sm focus:bg-surface-container-lowest"
-                id="wa-business-id"
+            <Field label={t("whatsapp_transport")}>
+              <Select
                 onChange={(e) =>
                   setWhatsAppForm((f) => ({
                     ...f,
-                    businessId: e.target.value,
+                    transport: e.target.value as "meta" | "evolution",
                   }))
                 }
-                type="text"
-                value={whatsAppForm.businessId}
-              />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <label
-                  className="mb-1.5 block font-medium text-on-surface text-sm"
-                  htmlFor="wa-phone-id"
-                >
-                  {t("whatsapp_phone_number_id")}
-                </label>
-                <span
-                  className="material-symbols-outlined mb-1.5 cursor-help text-on-surface-variant text-xs"
-                  title={t(
-                    "whatsapp_phone_id_help",
-                    "Your registered phone number ID from WhatsApp Business API"
-                  )}
-                >
-                  help
-                </span>
-              </div>
-              <input
-                className="min-h-11 w-full rounded-xl bg-surface-container px-4 py-2.5 text-on-surface text-sm focus:bg-surface-container-lowest"
-                id="wa-phone-id"
-                onChange={(e) =>
-                  setWhatsAppForm((f) => ({
-                    ...f,
-                    phoneNumberId: e.target.value,
-                  }))
-                }
-                type="text"
-                value={whatsAppForm.phoneNumberId}
-              />
-            </div>
+                value={whatsAppForm.transport}
+              >
+                <option value="meta">{t("whatsapp_transport_meta")}</option>
+                <option value="evolution">
+                  {t("whatsapp_transport_local")}
+                </option>
+              </Select>
+            </Field>
             <Field
               hint={t(
                 "whatsapp_tracking_url_help",
@@ -449,137 +638,36 @@ export default function ChannelSettings({
                 value={whatsAppForm.trackingBaseUrl}
               />
             </Field>
-            <div>
-              <div className="flex items-center gap-2">
-                <label
-                  className="mb-1.5 block font-medium text-on-surface text-sm"
-                  htmlFor="wa-api-token"
-                >
-                  {t("whatsapp_api_token")}
-                </label>
-                <span
-                  className="material-symbols-outlined mb-1.5 cursor-help text-on-surface-variant text-xs"
-                  title={t(
-                    "whatsapp_api_token_help",
-                    "Your permanent access token from Meta Developers dashboard"
-                  )}
-                >
-                  help
-                </span>
-              </div>
-              <input
-                autoComplete="off"
-                className="min-h-11 w-full rounded-xl bg-surface-container px-4 py-2.5 text-on-surface text-sm focus:bg-surface-container-lowest"
-                id="wa-api-token"
-                onChange={(e) =>
-                  setWhatsAppForm((f) => ({ ...f, apiToken: e.target.value }))
+            {whatsAppForm.transport === "evolution" ? (
+              <EvolutionSection
+                disclaimerStored={whatsAppSettings?.disclaimerAccepted ?? false}
+                form={whatsAppForm}
+                hasApiKey={whatsAppSettings?.hasEvolutionApiKey ?? false}
+                moduleEnabled={whatsAppSettings?.whatsappModule ?? false}
+                onChange={(patch) =>
+                  setWhatsAppForm((f) => ({ ...f, ...patch }))
                 }
-                placeholder={whatsAppSettings?.hasApiToken ? "••••••••" : ""}
-                type="password"
-                value={whatsAppForm.apiToken}
+                savedInstance={whatsAppSettings?.evolutionInstance ?? null}
+                savedUrl={whatsAppSettings?.evolutionUrl ?? null}
               />
-            </div>
-            {whatsAppSettings?.credentialsAtCloud ? (
-              <p className="rounded-xl bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
-                {t("whatsapp_relay_active")}
-              </p>
             ) : (
-              whatsAppSettings?.hasApiToken && (
-                <p className="rounded-xl bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
-                  {t("whatsapp_relay_pending")}
-                </p>
-              )
-            )}
-            {whatsAppSettings?.remarketingModule ? (
-              <div className="rounded-xl bg-surface-container p-4">
-                <div className="flex items-center gap-3">
-                  <Switch
-                    ariaLabelledBy="remarketing-enabled-label"
-                    checked={whatsAppForm.remarketingEnabled}
-                    onChange={(checked) =>
-                      setWhatsAppForm((f) => ({
-                        ...f,
-                        remarketingEnabled: checked,
-                      }))
-                    }
-                  />
-                  <span
-                    className="font-medium text-on-surface text-sm"
-                    id="remarketing-enabled-label"
-                  >
-                    {t("remarketing_enabled")}
-                  </span>
-                </div>
-                <p className="mt-2 text-on-surface-variant text-xs">
-                  {t("remarketing_desc")}
-                </p>
-
-                {whatsAppForm.remarketingEnabled && (
-                  <div className="mt-4 space-y-3">
-                    <Field
-                      hint={t("remarketing_days_hint")}
-                      label={t("remarketing_days")}
-                    >
-                      <Input
-                        inputMode="numeric"
-                        max={365}
-                        min={30}
-                        onChange={(e) =>
-                          setWhatsAppForm((f) => ({
-                            ...f,
-                            remarketingDays: e.target.value,
-                          }))
-                        }
-                        type="number"
-                        value={whatsAppForm.remarketingDays}
-                      />
-                    </Field>
-                    <Field
-                      hint={t("remarketing_cooldown_hint")}
-                      label={t("remarketing_cooldown")}
-                    >
-                      <Input
-                        inputMode="numeric"
-                        max={365}
-                        min={30}
-                        onChange={(e) =>
-                          setWhatsAppForm((f) => ({
-                            ...f,
-                            remarketingCooldownDays: e.target.value,
-                          }))
-                        }
-                        type="number"
-                        value={whatsAppForm.remarketingCooldownDays}
-                      />
-                    </Field>
-                    <Field
-                      hint={t("remarketing_template_hint")}
-                      label={t("remarketing_template")}
-                    >
-                      <Input
-                        autoComplete="off"
-                        onChange={(e) =>
-                          setWhatsAppForm((f) => ({
-                            ...f,
-                            remarketingTemplate: e.target.value,
-                          }))
-                        }
-                        placeholder="oficinaos_remarketing"
-                        value={whatsAppForm.remarketingTemplate}
-                      />
-                    </Field>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p className="rounded-xl bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
-                {t("remarketing_upsell")}
-              </p>
+              <MetaWhatsAppFields
+                form={whatsAppForm}
+                setForm={setWhatsAppForm}
+                settings={whatsAppSettings}
+              />
             )}
 
             <Button
               className="flex min-h-11"
-              disabled={whatsAppSaving}
+              disabled={
+                whatsAppSaving ||
+                (whatsAppForm.transport === "evolution" &&
+                  !(
+                    whatsAppForm.disclaimerAccepted ||
+                    whatsAppSettings?.disclaimerAccepted
+                  ))
+              }
               loading={whatsAppSaving}
               onClick={handleWhatsAppSave}
               size="sm"

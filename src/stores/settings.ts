@@ -38,8 +38,12 @@ interface SmsSettings {
 interface WhatsAppSettings {
   businessId: string | null;
   credentialsAtCloud: boolean;
+  disclaimerAccepted: boolean;
   enabled: boolean;
+  evolutionInstance: string | null;
+  evolutionUrl: string | null;
   hasApiToken: boolean;
+  hasEvolutionApiKey: boolean;
   phoneNumberId: string | null;
   remarketingCooldownDays: number;
   remarketingDays: number;
@@ -47,7 +51,23 @@ interface WhatsAppSettings {
   remarketingModule: boolean;
   remarketingTemplate: string | null;
   trackingBaseUrl: string | null;
+  transport: "meta" | "evolution";
+  whatsappModule: boolean;
 }
+
+interface EvolutionPairingResult {
+  error?: string;
+  ok: boolean;
+  pairingCode?: string;
+  qrBase64?: string;
+}
+
+type EvolutionStatus =
+  | "open"
+  | "connecting"
+  | "close"
+  | "unreachable"
+  | "unconfigured";
 
 interface SettingsState {
   aiSettings: AiSettings | null;
@@ -55,6 +75,7 @@ interface SettingsState {
     id: string
   ) => Promise<{ success: boolean; message?: string }>;
   clearError: () => void;
+  disconnectWhatsAppLocal: () => Promise<{ ok: boolean }>;
   error: string | null;
   fetchAiSettings: () => Promise<void>;
   fetchInvoicingSettings: () => Promise<void>;
@@ -63,11 +84,13 @@ interface SettingsState {
   fetchSettings: () => Promise<void>;
   fetchShopSettings: () => Promise<void>;
   fetchSmsSettings: () => Promise<void>;
+  fetchWhatsAppLocalStatus: () => Promise<{ state: EvolutionStatus }>;
   fetchWhatsAppSettings: () => Promise<void>;
   invoicingSettings: InvoicingSettings | null;
   isLoading: boolean;
   notificationTemplates: NotificationTemplate[];
   outboxLogs: OutboxLog[];
+  pairWhatsAppLocal: () => Promise<EvolutionPairingResult>;
   registerSmsWebhook: () => Promise<{ ok: boolean; message?: string }>;
   saveAiSettings: (data: {
     endpointUrl?: string;
@@ -118,6 +141,11 @@ interface SettingsState {
     remarketingDays?: number;
     remarketingCooldownDays?: number;
     remarketingTemplate?: string;
+    transport?: "meta" | "evolution";
+    evolutionUrl?: string;
+    evolutionInstance?: string;
+    evolutionApiKey?: string;
+    disclaimerAccepted?: boolean;
   }) => Promise<void>;
   sendSmsTest: (phone?: string) => Promise<{ ok: boolean; message?: string }>;
   sendTestNotification: (templateId: string) => Promise<{
@@ -360,6 +388,36 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       const message = getErrorMessage(err, i18n.t("errors.save_shop_settings"));
       set({ error: message });
       throw new Error(message);
+    }
+  },
+
+  pairWhatsAppLocal: async () => {
+    try {
+      const res = await api.post("/settings/whatsapp/evolution/pair");
+      return res.data as EvolutionPairingResult;
+    } catch (err: unknown) {
+      return {
+        error: getErrorMessage(err, i18n.t("errors.save_shop_settings")),
+        ok: false,
+      };
+    }
+  },
+
+  disconnectWhatsAppLocal: async () => {
+    try {
+      const res = await api.post("/settings/whatsapp/evolution/disconnect");
+      return res.data as { ok: boolean };
+    } catch {
+      return { ok: false };
+    }
+  },
+
+  fetchWhatsAppLocalStatus: async () => {
+    try {
+      const res = await api.get("/settings/whatsapp/evolution/status");
+      return res.data as { state: EvolutionStatus };
+    } catch {
+      return { state: "unreachable" };
     }
   },
 

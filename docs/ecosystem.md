@@ -76,7 +76,27 @@ o token local é apagado. A Cloud não guarda nem regista corpos de mensagem;
 os logs levam só id/estado/erro e telefone mascarado. Unpair da loja apaga as
 credenciais na Cloud (`DELETE /shops/whatsapp-credentials`).
 
-### Canal SMS (core — gateway Android local, sem entitlement)
+#### Transporte alternativo: WhatsApp local (Evolution API)
+
+`whatsappTransport` em ShopSettings: `"meta"` (default — fluxo acima) ou
+`"evolution"` — Evolution API v2 (Baileys/WhatsApp Web, **não-oficial**)
+a correr na LAN da loja (`docker compose --profile wa-local up -d`,
+serviços `evolution` + `evolution-db` com Postgres próprio — nunca toca
+na BD da app). O envio é `POST {evolutionUrl}/message/sendText/{instance}`
+via `server/services/evolution.service.ts`; pairing por QR/pairingCode em
+`POST /settings/whatsapp/evolution/pair`, health check em
+`GET /settings/whatsapp/evolution/status` (open/connecting/close) e
+`DELETE`-like logout em `/evolution/disconnect`.
+
+Gates (app-side — Pro "por convenção", como os outros módulos locais):
+entitlement `whatsapp-bot` + `whatsappLocalDisclaimerAt` obrigatórios no
+PUT e revalidados em `resolveWhatsAppChannel` antes de cada envio; sem
+eles o canal resolve null e o outbox cancela. `syncFullHistory=false` —
+nada do histórico do cliente é importado. Remarketing exige templates
+Meta → recusado no modo local. A sessão/chaves nunca saem da loja (RGPD
+limpo); risco de ban do número fica documentado no disclaimer do UI.
+
+### Canal SMS (módulo Pro `sms` — gateway Android local)
 
 ```
 Outbound: evento → notification-dispatch → outbox →
@@ -90,12 +110,12 @@ Inbound:  cliente SMS → SMS Gateway for Android → webhook
 100% LAN: nada passa pela Cloud nem pela Meta — só sai o SMS pela rede móvel.
 É o canal "de arranque" da loja que ainda não tem WhatsApp Business aprovado.
 Sem template SMS dedicado, o dispatch usa o corpo WhatsApp com `*bold*`
-removido (SMS não renderiza markdown). É **grátis no core** — o gateway é um
-Android na LAN da loja, sem dependência da Cloud, logo não fazia sentido como
-módulo pago. Gate único: `smsEnabled`. Consentimento partilhado
-(`whatsappConsent` = opt-in de mensagens automáticas, qualquer canal).
-Password do gateway encriptada (AES-256-GCM); token do webhook gerado por
-`generateSmsWebhookToken`.
+removido (SMS não renderiza markdown). Corre localmente mas é **módulo Pro
+`sms`** — entitlement cached em `cloudEntitlements`, verificado no PUT de
+settings, no teste e no outbox (entries são canceladas sem o módulo).
+Consentimento partilhado (`whatsappConsent` = opt-in de mensagens
+automáticas, qualquer canal). Password do gateway encriptada
+(AES-256-GCM); token do webhook gerado por `generateSmsWebhookToken`.
 
 ### Módulos `diag-intake` + `ai-reports`
 

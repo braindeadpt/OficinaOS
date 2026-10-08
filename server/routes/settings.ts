@@ -8,6 +8,7 @@ import {
   updateWhatsAppSettingsSchema,
 } from "@shared/schemas/settings.schema";
 import type { FastifyPluginAsync } from "fastify";
+import { decryptSecret } from "../lib/crypto.js";
 import { requirePermission } from "../middlewares/rbac.js";
 import {
   findShopSettingsUnique,
@@ -24,6 +25,12 @@ import {
   buildTestTicketEscPos,
   sendToPrinter,
 } from "../services/escpos.service.js";
+import {
+  disconnectEvolutionInstance,
+  type EvolutionConfig,
+  getEvolutionState,
+  pairEvolutionInstance,
+} from "../services/evolution.service.js";
 import {
   getAiSettings,
   getInvoicingSettings,
@@ -46,6 +53,47 @@ import { getUpdateState, startUpdate } from "../services/update.service.js";
 import { pushCredentialsToCloud } from "../services/whatsapp-channel.js";
 import { isModuleEnabled } from "../utils/modules.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
+
+/**
+ * Transporte local (Evolution): módulo Pro "whatsapp-bot" + disclaimer
+ * aceite — o resolve no outbox revalida ambos antes de cada envio.
+ * Remarketing usa templates Meta, que não existem no modo local.
+ */
+function assertEvolutionGates(
+  data: {
+    disclaimerAccepted?: boolean;
+    enabled?: boolean;
+    remarketingEnabled?: boolean;
+    transport?: string;
+  },
+  settings: {
+    whatsappLocalDisclaimerAt?: Date | null;
+    whatsappTransport?: string;
+  },
+  modules: string[]
+): void {
+  const wantsEvolution =
+    (data.transport ?? settings.whatsappTransport) === "evolution";
+  if (!wantsEvolution) {
+    return;
+  }
+  if (data.enabled && !modules.includes("whatsapp-bot")) {
+    throw new AppError("CLOUD_MODULE_REQUIRED");
+  }
+  if (
+    data.enabled &&
+    !(data.disclaimerAccepted || settings.whatsappLocalDisclaimerAt)
+  ) {
+    throw new AppError("VALIDATION_ERROR", {
+      errors: { disclaimerAccepted: ["validations.disclaimer_required"] },
+    });
+  }
+  if (data.remarketingEnabled) {
+    throw new AppError("VALIDATION_ERROR", {
+      errors: { remarketingEnabled: ["validations.invalid_option"] },
+    });
+  }
+}
 
 // biome-ignore lint/suspicious/useAwait: FastifyPluginAsync requires async
 export const settingsRoutes: FastifyPluginAsync = async (app) => {
@@ -311,21 +359,103 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       }
       // Enabling remarketing requires the Pro module — enforced again by
       // the sweep on the cached entitlements.
-      if (parsed.data.remarketingEnabled) {
-        const s = await getOrCreateShopSettings(app.prisma);
-        const modules = Array.isArray(s.cloudEntitlements)
-          ? (s.cloudEntitlements as string[])
-          : [];
-        if (!modules.includes("remarketing")) {
-          throw new AppError("CLOUD_MODULE_REQUIRED");
-        }
+      const s = await getOrCreateShopSettings(app.prisma);
+      const modules = Array.isArray(s.cloudEntitlements)
+        ? (s.cloudEntitlements as string[])
+        : [];
+      if (parsed.data.remarketingEnabled && !modules.includes("remarketing")) {
+        throw new AppError("CLOUD_MODULE_REQUIRED");
       }
+      assertEvolutionGates(parsed.data, s, modules);
       const updated = await upsertWhatsAppSettings(app.prisma, parsed.data);
       // Migração silenciosa: envia as credenciais Meta para o relay da
       // cloud. Se falhar (cloud em baixo / sem entitlement) fica para a
       // próxima gravação — o envio local continua a funcionar entretanto.
       const credentialsAtCloud = await pushCredentialsToCloud(app.prisma);
       return reply.send({ ...updated, credentialsAtCloud });
+    }
+  );
+
+  // Evolution API (WhatsApp local, Pro "whatsapp-bot") — o serviço corre
+  // na LAN da loja; estes endpoints fazem pairing (QR/código), health
+  // check e disconnect. O envio em si passa pelo resolveWhatsAppChannel.
+  async function evolutionConfigOrNull(): Promise<EvolutionConfig | null> {
+    const s = await getOrCreateShopSettings(app.prisma);
+    const apiKey = s.evolutionApiKeyEncrypted
+      ? decryptSecret(s.evolutionApiKeyEncrypted)
+      : null;
+    if (!(s.evolutionUrl && apiKey)) {
+      return null;
+    }
+    return {
+      apiKey,
+      baseUrl: s.evolutionUrl,
+      instance: s.evolutionInstance ?? "oficinaos",
+    };
+  }
+
+  app.get(
+    "/whatsapp/evolution/status",
+    { schema: { tags: ["settings"], summary: "Evolution session state" } },
+    async (_req, reply) => {
+      const config = await evolutionConfigOrNull();
+      if (!config) {
+        return reply.send({ state: "unconfigured" });
+      }
+      return reply.send({
+        state: await getEvolutionState(
+          config.baseUrl,
+          config.apiKey,
+          config.instance
+        ),
+      });
+    }
+  );
+
+  app.post(
+    "/whatsapp/evolution/pair",
+    {
+      preHandler: [requirePermission({ settings: ["edit"] })],
+      schema: {
+        tags: ["settings"],
+        summary: "Create/fetch QR + pairing code for the local session",
+      },
+    },
+    async (_req, reply) => {
+      const s = await getOrCreateShopSettings(app.prisma);
+      if (!isModuleEnabled(s, "whatsapp-bot")) {
+        throw new AppError("CLOUD_MODULE_REQUIRED");
+      }
+      const config = await evolutionConfigOrNull();
+      if (!config) {
+        throw new AppError("VALIDATION_ERROR", {
+          errors: { evolutionUrl: ["validations.invalid_url"] },
+        });
+      }
+      const pairing = await pairEvolutionInstance(config);
+      if ("error" in pairing) {
+        return reply.send({ ok: false, error: pairing.error });
+      }
+      return reply.send({ ok: true, ...pairing });
+    }
+  );
+
+  app.post(
+    "/whatsapp/evolution/disconnect",
+    {
+      preHandler: [requirePermission({ settings: ["edit"] })],
+      schema: {
+        tags: ["settings"],
+        summary: "Logout the local WhatsApp session",
+      },
+    },
+    async (_req, reply) => {
+      const config = await evolutionConfigOrNull();
+      if (!config) {
+        return reply.send({ ok: true });
+      }
+      const { success } = await disconnectEvolutionInstance(config);
+      return reply.send({ ok: success });
     }
   );
 

@@ -242,8 +242,12 @@ export async function getWhatsAppSettings(prisma: PrismaClient) {
     return {
       businessId: null,
       credentialsAtCloud: false,
+      disclaimerAccepted: false,
       enabled: false,
+      evolutionInstance: null,
+      evolutionUrl: null,
       hasApiToken: false,
+      hasEvolutionApiKey: false,
       phoneNumberId: null,
       remarketingCooldownDays: 180,
       remarketingDays: 90,
@@ -251,6 +255,8 @@ export async function getWhatsAppSettings(prisma: PrismaClient) {
       remarketingModule: false,
       remarketingTemplate: null,
       trackingBaseUrl: null,
+      transport: "meta",
+      whatsappModule: false,
     };
   }
   const modules = Array.isArray(row.cloudEntitlements)
@@ -259,8 +265,12 @@ export async function getWhatsAppSettings(prisma: PrismaClient) {
   return {
     businessId: row.whatsappBusinessId,
     credentialsAtCloud: row.whatsappCredentialsAtCloud,
+    disclaimerAccepted: Boolean(row.whatsappLocalDisclaimerAt),
     enabled: row.whatsappEnabled,
+    evolutionInstance: row.evolutionInstance,
+    evolutionUrl: row.evolutionUrl,
     hasApiToken: Boolean(row.whatsappApiTokenEncrypted),
+    hasEvolutionApiKey: Boolean(row.evolutionApiKeyEncrypted),
     phoneNumberId: row.whatsappPhoneNumberId,
     remarketingCooldownDays: row.remarketingCooldownDays,
     remarketingDays: row.remarketingDays,
@@ -268,24 +278,56 @@ export async function getWhatsAppSettings(prisma: PrismaClient) {
     remarketingModule: modules.includes("remarketing"),
     remarketingTemplate: row.remarketingTemplate,
     trackingBaseUrl: row.trackingBaseUrl,
+    transport: row.whatsappTransport,
+    whatsappModule: modules.includes("whatsapp-bot"),
   };
+}
+
+interface WhatsAppUpsertData {
+  evolutionApiKeyEncrypted?: string;
+  evolutionInstance?: string | null;
+  evolutionUrl?: string | null;
+  remarketingCooldownDays?: number;
+  remarketingDays?: number;
+  remarketingEnabled?: boolean;
+  remarketingTemplate?: string | null;
+  trackingBaseUrl?: string | null;
+  whatsappApiTokenEncrypted?: string;
+  whatsappBusinessId?: string;
+  whatsappEnabled?: boolean;
+  whatsappLocalDisclaimerAt?: Date;
+  whatsappPhoneNumberId?: string;
+  whatsappTransport?: string;
+}
+
+/** Campos do transporte local (Evolution) — separados para baixar a complexidade do upsert. */
+function applyEvolutionFields(
+  data: WhatsAppUpsertData,
+  input: UpdateWhatsAppSettingsInput
+): void {
+  if (input.transport !== undefined) {
+    data.whatsappTransport = input.transport;
+  }
+  if (input.evolutionUrl !== undefined) {
+    data.evolutionUrl = input.evolutionUrl.trim() || null;
+  }
+  if (input.evolutionInstance !== undefined) {
+    data.evolutionInstance = input.evolutionInstance.trim() || null;
+  }
+  if (input.evolutionApiKey !== undefined && input.evolutionApiKey !== "") {
+    data.evolutionApiKeyEncrypted = encryptSecret(input.evolutionApiKey);
+  }
+  if (input.disclaimerAccepted === true) {
+    // Timestamp do aceite — o transporte local só resolve com ele.
+    data.whatsappLocalDisclaimerAt = new Date();
+  }
 }
 
 export async function upsertWhatsAppSettings(
   prisma: PrismaClient,
   input: UpdateWhatsAppSettingsInput
 ) {
-  const data: {
-    remarketingCooldownDays?: number;
-    remarketingDays?: number;
-    remarketingEnabled?: boolean;
-    remarketingTemplate?: string | null;
-    trackingBaseUrl?: string | null;
-    whatsappApiTokenEncrypted?: string;
-    whatsappBusinessId?: string;
-    whatsappEnabled?: boolean;
-    whatsappPhoneNumberId?: string;
-  } = {};
+  const data: WhatsAppUpsertData = {};
   if (input.enabled !== undefined) {
     data.whatsappEnabled = input.enabled;
   }
@@ -313,20 +355,30 @@ export async function upsertWhatsAppSettings(
   if (input.apiToken !== undefined && input.apiToken !== "") {
     data.whatsappApiTokenEncrypted = encryptSecret(input.apiToken);
   }
+  applyEvolutionFields(data, input);
 
   return await upsertShopSettingsRepo(prisma, {
-    create: {
-      id: "default",
-      shopName: "",
-      trackingBaseUrl: data.trackingBaseUrl ?? null,
-      whatsappApiTokenEncrypted: data.whatsappApiTokenEncrypted ?? null,
-      whatsappBusinessId: data.whatsappBusinessId ?? null,
-      whatsappEnabled: data.whatsappEnabled ?? false,
-      whatsappPhoneNumberId: data.whatsappPhoneNumberId ?? null,
-    },
-    update: data,
+    create: whatsAppCreateData(data),
+    update: data as Record<string, unknown>,
     where: { id: "default" },
   });
+}
+
+function whatsAppCreateData(data: WhatsAppUpsertData) {
+  return {
+    evolutionApiKeyEncrypted: data.evolutionApiKeyEncrypted ?? null,
+    evolutionInstance: data.evolutionInstance ?? null,
+    evolutionUrl: data.evolutionUrl ?? null,
+    id: "default",
+    shopName: "",
+    trackingBaseUrl: data.trackingBaseUrl ?? null,
+    whatsappApiTokenEncrypted: data.whatsappApiTokenEncrypted ?? null,
+    whatsappBusinessId: data.whatsappBusinessId ?? null,
+    whatsappEnabled: data.whatsappEnabled ?? false,
+    whatsappLocalDisclaimerAt: data.whatsappLocalDisclaimerAt ?? null,
+    whatsappPhoneNumberId: data.whatsappPhoneNumberId ?? null,
+    whatsappTransport: data.whatsappTransport ?? "meta",
+  };
 }
 
 export async function getSmsSettings(prisma: PrismaClient) {

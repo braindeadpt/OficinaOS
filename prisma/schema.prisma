@@ -1101,6 +1101,16 @@ model ShopSettings {
   // outbound passa a ir por POST /whatsapp/send e o token local é
   // apagado após o primeiro envio bem-sucedido.
   whatsappCredentialsAtCloud Boolean @default(false)
+  // Transporte WhatsApp (módulo Pro "whatsapp-bot"): "meta" = Cloud API
+  // oficial (relay na cloud ou credenciais locais legadas);
+  // "evolution" = Evolution API self-hosted na LAN da loja (Baileys —
+  // não-oficial, risco de ban). Envio só com whatsapp-bot entitlement
+  // + disclaimer aceite (whatsappLocalDisclaimerAt).
+  whatsappTransport          String    @default("meta")
+  evolutionUrl               String?
+  evolutionInstance          String?
+  evolutionApiKeyEncrypted   String?
+  whatsappLocalDisclaimerAt  DateTime? @db.Timestamptz
   // SMS via gateway local (core, grátis) — um Android na LAN com
   // sms-gate.app em modo Local Server. O envio é HTTP direto ao telemóvel;
   // o inbound chega por webhook registado no próprio aparelho.

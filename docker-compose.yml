@@ -75,6 +75,59 @@ services:
           sleep 86400
         done
 
+  # Optional WhatsApp local transport (Pro module "whatsapp-bot" +
+  # disclaimer in Settings). Evolution API v2 (Baileys) with its own
+  # Postgres — it never touches the app database. Start with:
+  #   docker compose --profile wa-local up -d
+  # then set URL http://evolution:8080 + EVOLUTION_API_KEY in Settings.
+  evolution:
+    image: evoapicloud/evolution-api:v2.3.6
+    restart: unless-stopped
+    profiles: ["wa-local"]
+    depends_on:
+      evolution-db:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: "8080"
+      AUTHENTICATION_API_KEY: "${EVOLUTION_API_KEY:-}"
+      AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES: "false"
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://evolution:${EVOLUTION_DB_PASSWORD:-evolution}@evolution-db:5432/evolution
+      DATABASE_CONNECTION_CLIENT_NAME: evolution
+      DATABASE_SAVE_DATA_INSTANCE: "true"
+      DATABASE_SAVE_DATA_NEW_MESSAGE: "false"
+      DATABASE_SAVE_MESSAGE_UPDATE: "false"
+      DATABASE_SAVE_DATA_CONTACTS: "false"
+      DATABASE_SAVE_DATA_CHATS: "false"
+      DATABASE_SAVE_DATA_LABELS: "false"
+      DATABASE_SAVE_DATA_HISTORIC: "false"
+      STORE_MESSAGES: "false"
+      STORE_CONTACTS: "false"
+      STORE_CHATS: "false"
+      # QR fica válido ~20s e roda sozinho; histórico nunca é importado.
+      QRCODE_LIMIT: "30"
+      SYNC_FULL_HISTORY: "false"
+      LOG_LEVEL: "ERROR"
+    expose:
+      - "8080"
+
+  evolution-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    profiles: ["wa-local"]
+    environment:
+      POSTGRES_USER: evolution
+      POSTGRES_PASSWORD: ${EVOLUTION_DB_PASSWORD:-evolution}
+      POSTGRES_DB: evolution
+    volumes:
+      - evolution-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evolution -d evolution"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   # Optional public HTTPS access via Cloudflare Tunnel — no port-forward,
   # works behind CGNAT. Create the tunnel in Cloudflare Zero Trust, point the
   # public hostname at http://app:4000, set TUNNEL_TOKEN in .env, then:
@@ -95,3 +148,4 @@ volumes:
   uploads:
   backups:
   backups-heartbeat:
+  evolution-data:

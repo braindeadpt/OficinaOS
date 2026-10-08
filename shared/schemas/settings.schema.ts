@@ -129,6 +129,35 @@ export const updateWhatsAppSettingsSchema = z
           }),
       ])
       .optional(),
+    // Transporte WhatsApp: "meta" = Cloud API oficial (default);
+    // "evolution" = Evolution API self-hosted na LAN (não-oficial,
+    // risco de ban — exige disclaimerAccepted e módulo whatsapp-bot,
+    // verificado na route).
+    transport: z.enum(["meta", "evolution"]).optional(),
+    evolutionUrl: z
+      .union([
+        z.literal(""),
+        z
+          .string()
+          .trim()
+          .max(2048)
+          .regex(/^https?:\/\//, { error: "validations.invalid_url" }),
+      ])
+      .optional(),
+    evolutionInstance: z
+      .union([
+        z.literal(""),
+        z
+          .string()
+          .trim()
+          .max(64)
+          .regex(/^[a-z0-9-]+$/i, { error: "validations.invalid_instance" }),
+      ])
+      .optional(),
+    evolutionApiKey: z.string().max(256).optional(),
+    // Checkbox obrigatória antes de ativar o modo local — grava
+    // whatsappLocalDisclaimerAt no servidor.
+    disclaimerAccepted: z.boolean().optional(),
   })
   .refine((data) => Object.values(data).some((v) => v !== undefined), {
     message: "validations.at_least_one_field",
