@@ -126,9 +126,24 @@ export default function HelpPage() {
   }, []);
 
   useEffect(() => {
+    // The QR resolves asynchronously; ignore it once the page unmounts so a
+    // late setState never runs after teardown (flaky "window is not defined"
+    // unhandled rejection in help-page.test.tsx on CI).
+    let cancelled = false;
     QRCode.toDataURL(qrTarget, { margin: 1, width: 176 })
-      .then(setQrDataUrl)
-      .catch(() => setQrDataUrl(null));
+      .then((url) => {
+        if (!cancelled) {
+          setQrDataUrl(url);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setQrDataUrl(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [qrTarget]);
 
   const copyAddress = async () => {
