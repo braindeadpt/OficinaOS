@@ -2,16 +2,24 @@ import type { JobStatusType } from "@shared/constants";
 import { useTranslation } from "react-i18next";
 import { STATUS_TONES } from "@/lib/status-colors";
 
-type BadgeSize = "sm" | "md";
+type BadgeSize = "sm" | "md" | "lg";
 
 /**
  * Status chip (design-system.md §4.4): pill, icon + label, colours from the
- * status tokens. `sm` is the 22 px table version, `md` the 26 px default.
+ * status tokens. `sm` is the 22 px table version, `md` the 26 px default,
+ * `lg` the 40 px header control on the job detail page.
  * Sentence case — the label is information, not a shout.
  */
 const SIZE_CLASSES: Record<BadgeSize, string> = {
   sm: "h-[22px] gap-1 px-2 text-xs",
   md: "h-[26px] gap-1.5 px-2.5 text-xs",
+  lg: "h-10 gap-2 px-4 text-sm",
+};
+
+const GLYPH_CLASSES: Record<BadgeSize, string> = {
+  sm: "size-[13px]",
+  md: "size-[13px]",
+  lg: "size-[18px]",
 };
 
 interface StatusBadgeProps {
@@ -43,7 +51,7 @@ export function StatusBadge({
     >
       <Glyph
         aria-hidden="true"
-        className="size-[13px] shrink-0"
+        className={`${GLYPH_CLASSES[size]} shrink-0`}
         strokeWidth={2.25}
       />
       {t(`status.${status}`)}

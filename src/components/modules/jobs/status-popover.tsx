@@ -225,7 +225,7 @@ export default function StatusPopover({
   }, [job.status, onChanged, notifySuccess]);
 
   if (availableStatuses.length === 0) {
-    return <StatusBadge size="md" status={job.status} />;
+    return <StatusBadge size="lg" status={job.status} />;
   }
 
   return (
@@ -233,16 +233,16 @@ export default function StatusPopover({
       <button
         aria-expanded={open}
         aria-haspopup="listbox"
-        className="flex min-h-11 items-center gap-1.5 rounded-full transition-colors hover:brightness-95 sm:min-h-0"
+        className="flex items-center gap-1.5 rounded-full bg-surface-container-lowest py-1 ps-1 pe-3 shadow-sm ring-1 ring-outline-variant transition-all hover:shadow-md hover:ring-primary/50"
         onClick={() => {
           setOpen((prev) => !prev);
           setFocusedIndex(0);
         }}
         type="button"
       >
-        <StatusBadge size="md" status={job.status} />
+        <StatusBadge size="lg" status={job.status} />
         <Icon
-          className="text-base text-on-surface-variant"
+          className="text-on-surface-variant text-xl"
           name={open ? "expand_less" : "expand_more"}
         />
       </button>
