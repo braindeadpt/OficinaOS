@@ -1,5 +1,7 @@
 import SignaturePad from "@/components/reports/signature-pad";
+import { Field } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icon";
+import { Input } from "@/components/ui/input";
 import AccessoriesPicker from "./accessories-picker";
 import FunctionalChecklist from "./functional-checklist";
 import {
@@ -295,19 +297,13 @@ function LoanerField({
       </button>
 
       {active && (
-        <div>
-          <label className={labelCls} htmlFor="loaner-note">
-            {t("intake.loaner_note")}
-          </label>
-          <input
-            aria-describedby={
-              fieldError("loanerNote") ? "error-loaner-note" : undefined
-            }
-            aria-invalid={!!fieldError("loanerNote")}
-            className={`${inputCls}${
-              fieldError("loanerNote") ? "ring-2 ring-error" : ""
-            }`}
-            id="loaner-note"
+        <Field
+          error={fieldError("loanerNote")}
+          id="loaner-note"
+          label={t("intake.loaner_note")}
+        >
+          <Input
+            className={inputCls}
             maxLength={200}
             onBlur={() => handleBlur("loanerNote")}
             onChange={(e) => update("loanerNote", e.target.value)}
@@ -315,12 +311,7 @@ function LoanerField({
             type="text"
             value={form.loanerNote}
           />
-          {fieldError("loanerNote") && (
-            <p className={errorCls} id="error-loaner-note">
-              {fieldError("loanerNote")}
-            </p>
-          )}
-        </div>
+        </Field>
       )}
     </div>
   );
