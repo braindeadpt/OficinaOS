@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const passwordPolicy = z
+export const passwordPolicy = z
   .string()
   .min(8, { error: "validations.password_min" })
   .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, {
@@ -87,6 +87,40 @@ export const userListQuerySchema = z.object({
   search: z.string().optional(),
 });
 
+// First-run setup: creates the shop's first OWNER. `login` is either a
+// username or an email — the server derives the other one.
+const SETUP_USERNAME_PATTERN = /^[a-zA-Z0-9_]+$/;
+
+export const setupSchema = z
+  .object({
+    shopName: z
+      .string()
+      .trim()
+      .min(1, { error: "validations.required" })
+      .max(120),
+    name: z.string().trim().min(1, { error: "validations.required" }).max(100),
+    login: z
+      .string()
+      .trim()
+      .min(3, { error: "validations.username_min" })
+      .max(254)
+      .refine(
+        (v) =>
+          v.includes("@")
+            ? z.email().safeParse(v).success
+            : SETUP_USERNAME_PATTERN.test(v) && v.length <= 30,
+        { error: "validations.setup_login_invalid" }
+      ),
+    password: passwordPolicy,
+    confirmPassword: z.string().min(1, { error: "validations.required" }),
+    token: z.string().max(256).optional(),
+  })
+  .refine((v) => v.password === v.confirmPassword, {
+    error: "validations.passwords_dont_match",
+    path: ["confirmPassword"],
+  });
+
+export type SetupInput = z.infer<typeof setupSchema>;
 export type SignInInput = z.infer<typeof signInSchema>;
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;

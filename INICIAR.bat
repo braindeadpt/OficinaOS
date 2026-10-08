@@ -10,7 +10,7 @@ REM Ja esta a correr?
 curl -sf --max-time 3 http://localhost:4000/health >nul 2>&1
 if not errorlevel 1 (
     echo O OficinaOS ja esta a correr.
-    start "" "http://localhost:4000"
+    call :abrir_app
     exit /b 0
 )
 
@@ -72,5 +72,19 @@ pause
 exit /b 0
 
 :app_pronta
-start "" "http://localhost:4000"
+call :abrir_app
+exit /b 0
+
+REM ── Abrir o browser ────────────────────────────────────────────────────
+REM Em Docker o browser deste PC nao chega a app como 127.0.0.1, por isso o
+REM ecra "Criar a sua oficina" precisa do SETUP_TOKEN do .env. Depois de a
+REM oficina estar criada, /setup reencaminha sozinho para o login.
+:abrir_app
+set "OOS_URL=http://localhost:4000"
+if exist "%~dp0.env" (
+    for /f "usebackq tokens=1,* delims==" %%a in (`findstr /b /c:"SETUP_TOKEN=" "%~dp0.env"`) do (
+        if not "%%b"=="" set "OOS_URL=http://localhost:4000/setup?token=%%b"
+    )
+)
+start "" "!OOS_URL!"
 exit /b 0

@@ -608,7 +608,9 @@
     "trade_in_invalid_state": "Cet échange n'est plus modifiable",
     "trade_in_signature_required": "Une signature est requise pour finaliser l'échange",
     "quote_amount_required": "Indiquez le montant du devis : cette réparation n'a pas encore de coût estimé",
-    "duplicate_customer_phone": "Un client avec ce numéro de téléphone existe déjà"
+    "duplicate_customer_phone": "Un client avec ce numéro de téléphone existe déjà",
+    "setup_already_done": "L'atelier est déjà configuré. Connectez-vous.",
+    "setup_not_local": "Par sécurité, la première configuration ne peut se faire que sur l'ordinateur où OficinaOS est installé."
   },
   "failed_to_create_part": "Échec de la création de la pièce",
   "failed_to_delete_part": "Échec de la suppression de la pièce",
@@ -1873,7 +1875,9 @@
     "invalid_number": "Saisissez un nombre valide",
     "invalid_option": "Option invalide",
     "min_items": "Sélectionnez au moins {{min}}",
-    "max_items": "{{max}} éléments au maximum"
+    "max_items": "{{max}} éléments au maximum",
+    "setup_login_invalid": "Saisissez un email valide ou un identifiant de 3 à 30 lettres, chiffres ou _.",
+    "passwords_dont_match": "Les mots de passe ne correspondent pas."
   },
   "view_all_critical": "Voir tous les en retard",
   "warranty_returns": "Retours garantie",
@@ -2223,5 +2227,27 @@
   "tracking_shop": "Boutique",
   "parts_stock": "Stock",
   "parts_stock_count_one": "{{count}} en stock",
-  "parts_stock_count_other": "{{count}} en stock"
+  "parts_stock_count_other": "{{count}} en stock",
+  "setup_title": "Créer votre atelier",
+  "setup_subtitle": "C'est le premier démarrage d'OficinaOS sur cet ordinateur. Créez le compte propriétaire : il servira à vous connecter et à créer les comptes de l'équipe.",
+  "setup_shop_name": "Nom de la boutique",
+  "setup_shop_name_placeholder": "Ex. : TecFix Centre",
+  "setup_your_name": "Votre nom",
+  "setup_your_name_placeholder": "Ex. : Ana Martin",
+  "setup_login": "Identifiant ou email",
+  "setup_login_placeholder": "Ex. : ana ou ana@maboutique.fr",
+  "setup_login_hint": "Vous vous connecterez avec ceci. Identifiant : lettres, chiffres et _ uniquement (3 à 30 caractères).",
+  "setup_password": "Mot de passe",
+  "setup_confirm_password": "Confirmer le mot de passe",
+  "setup_password_hint": "Au moins 8 caractères, avec une majuscule, une minuscule et un chiffre.",
+  "setup_passwords_mismatch": "Les mots de passe ne correspondent pas.",
+  "setup_submit": "Créer l'atelier et se connecter",
+  "setup_submitting": "Création de l'atelier...",
+  "setup_checking": "Vérification de la configuration...",
+  "setup_error": "Impossible de créer l'atelier. Réessayez.",
+  "setup_login_after_failed": "L'atelier a été créé, mais la connexion automatique a échoué. Connectez-vous avec les informations que vous venez de définir.",
+  "setup_not_local_title": "Ouvrez cette page sur l'ordinateur de la boutique",
+  "setup_not_local_desc": "Par sécurité, la première configuration ne peut se faire que sur l'ordinateur où OficinaOS est installé. Sur cet ordinateur, ouvrez http://localhost:4000 dans le navigateur.",
+  "setup_not_local_hint": "Installation Docker ou sur un autre serveur ? Utilisez le lien de configuration avec le code SETUP_TOKEN du fichier .env (par exemple dans PRIMEIRO-LOGIN.txt).",
+  "setup_retry": "Vérifier à nouveau"
 }

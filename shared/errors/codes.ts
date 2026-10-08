@@ -29,6 +29,8 @@ export const ERRORS = {
   },
   PASSWORD_SAME_AS_OLD: { status: 400, message: "errors.password_same_as_old" },
   NO_PASSWORD_SET: { status: 400, message: "errors.no_password_set" },
+  SETUP_ALREADY_DONE: { status: 409, message: "errors.setup_already_done" },
+  SETUP_NOT_LOCAL: { status: 403, message: "errors.setup_not_local" },
   CANNOT_END_CURRENT_SESSION: {
     status: 400,
     message: "errors.cannot_end_current_session",

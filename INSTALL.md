@@ -66,12 +66,11 @@ Para NAS, servidores ou quem já usa Docker.
 
 > **Se o Windows pedir para reiniciar** durante a instalação do Docker (é normal), reinicia o PC e volta a correr `INSTALAR.bat`.
 
-## 3. Primeiro login
+## 3. Primeiro acesso — «Criar a sua oficina»
 
-- **Utilizador:** `admin`
-- **Palavra-passe:** `braindead`
+Não há utilizador nem palavra-passe pré-definidos. Na primeira vez que a app abre (em qualquer modo de instalação: Setup.exe, Docker ou portátil), aparece o ecrã **«Criar a sua oficina»**: escreves o nome da loja, o teu nome, o utilizador (ou email) com que vais entrar e a tua palavra-passe. A app cria a conta de **dono** e entra logo no painel. As contas da equipa criam-se depois em **Definições → Utilizadores**.
 
-No primeiro acesso a app **obriga a definir um novo nome de utilizador e uma nova palavra-passe** — escolhe os teus e guarda-os. Depois disso, `admin`/`braindead` deixa de funcionar.
+Por segurança, este ecrã **só funciona no PC onde o OficinaOS está instalado** (`http://localhost:4000`) — o instalador e o `INICIAR.bat` já abrem o browser aí. Na instalação via Docker, o browser abre com uma ligação de configuração de uso único (`/setup?token=…`, também escrita no `PRIMEIRO-LOGIN.txt`); o código vem da variável `SETUP_TOKEN` do `.env`. Assim que a oficina está criada, o ecrã deixa de existir e passa a aparecer o login normal.
 
 ## 4. Uso diário
 
@@ -81,7 +80,7 @@ No primeiro acesso a app **obriga a definir um novo nome de utilizador e uma nov
 | `PARAR.bat` | Desligar (os dados ficam guardados) |
 | `ATUALIZAR.bat` | Atualizar para a versão mais recente |
 
-**Outros dispositivos da loja** (tablet, telemóvel do técnico, outro PC): abrir `http://<IP-do-PC>:4000` — o endereço exato está no `PRIMEIRO-LOGIN.txt`. Não precisam de instalar nada.
+**Outros dispositivos da loja** (tablet, telemóvel do técnico, outro PC): abrir `http://<IP-do-PC>:4000` — o endereço exato está no `PRIMEIRO-LOGIN.txt` (crie primeiro a oficina no PC da loja). Não precisam de instalar nada.
 
 ## Problemas comuns
 

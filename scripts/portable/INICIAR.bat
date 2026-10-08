@@ -108,7 +108,8 @@ cd /d "%~dp0app"
 echo  A aplicar migracoes e a arrancar...
 start "OficinaOS" /min cmd /c "%~dp0run-app.bat"
 
-REM ── esperar a app e semear o admin ───────────────────────────────────
+REM ── esperar a app e semear os dados iniciais (sem admin: o 1o ────────
+REM    utilizador e criado no ecra "Criar a sua oficina")
 set /a TENT=0
 :esperar_app
 ping -n 6 127.0.0.1 >nul

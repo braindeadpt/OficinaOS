@@ -17,7 +17,7 @@ if not errorlevel 1 (
     echo  O OficinaOS ja esta a correr neste PC.
     echo  Abre http://localhost:4000 no browser.
     echo.
-    start "" "http://localhost:4000"
+    call :abrir_app
     pause
     exit /b 0
 )
@@ -180,8 +180,9 @@ pause
 exit /b 1
 :app_pronta
 
-REM ── 4. Utilizador admin + dados iniciais (seed e idempotente) ──────────
-echo [4/4] A criar o utilizador inicial...
+REM ── 4. Dados iniciais (seed e idempotente; o 1o utilizador e criado no ──
+REM    ecra "Criar a sua oficina", sem palavra-passe pre-definida)
+echo [4/4] A preparar os dados iniciais...
 docker compose -f "%COMPOSE_DIR%\%COMPOSE_FILE%" exec -T app bun run db:seed
 if errorlevel 1 (
     ping -n 11 127.0.0.1 >nul
@@ -189,7 +190,7 @@ if errorlevel 1 (
 )
 if errorlevel 1 (
     echo.
-    echo  AVISO: a criacao do utilizador falhou.
+    echo  AVISO: a preparacao dos dados iniciais falhou.
     echo  Tenta mais tarde com:
     echo    docker compose -f "%COMPOSE_DIR%\%COMPOSE_FILE%" exec app bun run db:seed
 )
@@ -207,7 +208,7 @@ if exist PRIMEIRO-LOGIN.txt (
 echo.
 echo  Para uso diario: duplo clique em INICIAR.bat
 echo.
-start "" "http://localhost:4000"
+call :abrir_app
 pause
 exit /b 0
 
@@ -281,4 +282,18 @@ if errorlevel 1 (
 )
 del "%TEMP%\oficinaos-portable.zip" >nul 2>&1
 call "%~dp0oficinaos-portable\INICIAR.bat"
+exit /b 0
+
+REM ── Abrir o browser ────────────────────────────────────────────────────
+REM Em Docker o browser deste PC nao chega a app como 127.0.0.1, por isso o
+REM ecra "Criar a sua oficina" precisa do SETUP_TOKEN do .env. Depois de a
+REM oficina estar criada, /setup reencaminha sozinho para o login.
+:abrir_app
+set "OOS_URL=http://localhost:4000"
+if exist "%~dp0.env" (
+    for /f "usebackq tokens=1,* delims==" %%a in (`findstr /b /c:"SETUP_TOKEN=" "%~dp0.env"`) do (
+        if not "%%b"=="" set "OOS_URL=http://localhost:4000/setup?token=%%b"
+    )
+)
+start "" "!OOS_URL!"
 exit /b 0

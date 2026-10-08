@@ -608,7 +608,9 @@
     "trade_in_invalid_state": "Esta troca já não pode ser modificada",
     "trade_in_signature_required": "É necessária uma assinatura para concluir a troca",
     "quote_amount_required": "Indique o valor do orçamento — esta reparação ainda não tem custo estimado",
-    "duplicate_customer_phone": "Já existe um cliente com este número de telefone"
+    "duplicate_customer_phone": "Já existe um cliente com este número de telefone",
+    "setup_already_done": "A oficina já foi configurada. Inicie sessão.",
+    "setup_not_local": "Por segurança, a primeira configuração só pode ser feita no computador onde o OficinaOS está instalado."
   },
   "failed_to_create_part": "Falha ao criar peça",
   "failed_to_delete_part": "Falha ao eliminar peça",
@@ -1873,7 +1875,9 @@
     "invalid_number": "Introduza um número válido",
     "invalid_option": "Opção inválida",
     "min_items": "Selecione pelo menos {{min}}",
-    "max_items": "No máximo {{max}} elementos"
+    "max_items": "No máximo {{max}} elementos",
+    "setup_login_invalid": "Introduza um email válido ou um nome de utilizador com 3 a 30 letras, números ou _.",
+    "passwords_dont_match": "As palavras-passe não coincidem."
   },
   "view_all_critical": "Ver todos os atrasos",
   "warranty_returns": "Devoluções de garantia",
@@ -2223,5 +2227,27 @@
   "tracking_shop": "Loja",
   "parts_stock": "Stock",
   "parts_stock_count_one": "{{count}} em stock",
-  "parts_stock_count_other": "{{count}} em stock"
+  "parts_stock_count_other": "{{count}} em stock",
+  "setup_title": "Criar a sua oficina",
+  "setup_subtitle": "É a primeira vez que o OficinaOS arranca neste computador. Crie a conta de dono — vai usá-la para entrar e para criar as contas da equipa.",
+  "setup_shop_name": "Nome da loja",
+  "setup_shop_name_placeholder": "Ex.: TecFix Benfica",
+  "setup_your_name": "O seu nome",
+  "setup_your_name_placeholder": "Ex.: Ana Silva",
+  "setup_login": "Utilizador ou email",
+  "setup_login_placeholder": "Ex.: ana ou ana@aminhaloja.pt",
+  "setup_login_hint": "É com isto que vai entrar. Utilizador: só letras, números e _ (3 a 30 caracteres).",
+  "setup_password": "Palavra-passe",
+  "setup_confirm_password": "Confirmar palavra-passe",
+  "setup_password_hint": "Pelo menos 8 caracteres, com uma maiúscula, uma minúscula e um número.",
+  "setup_passwords_mismatch": "As palavras-passe não coincidem.",
+  "setup_submit": "Criar oficina e entrar",
+  "setup_submitting": "A criar a oficina...",
+  "setup_checking": "A verificar a configuração...",
+  "setup_error": "Não foi possível criar a oficina. Tente novamente.",
+  "setup_login_after_failed": "A oficina foi criada, mas não foi possível entrar automaticamente. Inicie sessão com os dados que acabou de definir.",
+  "setup_not_local_title": "Abra esta página no computador da loja",
+  "setup_not_local_desc": "Por segurança, a primeira configuração só pode ser feita no computador onde o OficinaOS está instalado. Nesse computador, abra http://localhost:4000 no navegador.",
+  "setup_not_local_hint": "Instalação em Docker ou noutro servidor? Use a ligação de configuração com o código SETUP_TOKEN que está no ficheiro .env (por exemplo, no PRIMEIRO-LOGIN.txt).",
+  "setup_retry": "Verificar novamente"
 }

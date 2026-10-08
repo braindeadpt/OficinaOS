@@ -40,6 +40,7 @@ import { reportsRoutes } from "./routes/reports.js";
 import { returnClaimsRoutes } from "./routes/return-claims.js";
 import { saleRoutes } from "./routes/sales.js";
 import { settingsRoutes } from "./routes/settings.js";
+import { setupRoutes } from "./routes/setup.js";
 import { storefrontRoutes } from "./routes/storefront.js";
 import { tradeInsRoutes } from "./routes/trade-ins.js";
 import { usersRoutes } from "./routes/users.js";
@@ -132,6 +133,7 @@ await app.register(localePlugin);
 
 await app.register(prismaPlugin);
 await app.register(authRoutes);
+await app.register(setupRoutes);
 await app.register(authPlugin);
 await app.register(websocketPlugin);
 (app.decorate as (name: string, value: unknown) => void)(

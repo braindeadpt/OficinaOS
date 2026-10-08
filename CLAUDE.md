@@ -108,7 +108,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 ## QA & Dev
 
 - After creating a new worktree, run `bun run setup-worktree`
-- Use Chrome DevTools for QA — login with `admin` and the configured `SEED_ADMIN_PASSWORD`
+- Use Chrome DevTools for QA — login with `admin` and the configured `SEED_ADMIN_PASSWORD` (seeded only when it is set and the DB has no users — otherwise the app opens the first-run setup at `/setup`)
 - Always collect and flag console errors
 - When running tests, build, or lint — always collect output in a single run
 - Check existing code for navigation patterns and follow them

@@ -71,11 +71,22 @@ export const useAuthStore = create<AuthState>((set) => ({
   login: async (username, password, rememberMe) => {
     set({ isLoading: true, error: null });
     try {
-      await api.post("/auth/sign-in/username", {
-        username,
-        password,
-        rememberMe,
-      });
+      // The first-run setup lets the owner pick an email as their login,
+      // so an identifier with "@" signs in through the email endpoint.
+      const identifier = username.trim();
+      if (identifier.includes("@")) {
+        await api.post("/auth/sign-in/email", {
+          email: identifier,
+          password,
+          rememberMe,
+        });
+      } else {
+        await api.post("/auth/sign-in/username", {
+          username: identifier,
+          password,
+          rememberMe,
+        });
+      }
       const res = await api.get("/auth/get-session");
       const user = res.data.user;
       if (!user) {
