@@ -2184,6 +2184,7 @@
   "errors.sms_webhook_failed": "No se pudo registrar el webhook en el dispositivo de puerta de enlace",
   "sms_desc": "Envía y recibe SMS a través de un teléfono Android en la red de la tienda que ejecuta SMS Gateway (modo de servidor local). ",
   "sms_enabled": "Habilitar canal SMS",
+  "sms_module_locked": "Las notificaciones por SMS son un módulo Pro: pídale a su proveedor de OficinaOS que lo habilite en su cuenta.",
   "sms_gateway_password": "Contraseña de puerta de enlace",
   "sms_gateway_password_hint": "Contraseña que se muestra en la aplicación SMS Gateway del teléfono (credenciales del servidor local). ",
   "sms_gateway_url": "URL de puerta de enlace",

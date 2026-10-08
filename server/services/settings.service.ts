@@ -17,6 +17,7 @@ import {
   upsertAiSettings as upsertAiSettingsRepo,
   upsertShopSettings as upsertShopSettingsRepo,
 } from "../repositories/settings.repository.js";
+import { isModuleEnabled } from "../utils/modules.js";
 import { generateSmsWebhookToken } from "./sms.service.js";
 
 function publicAiSettings<
@@ -335,6 +336,9 @@ export async function getSmsSettings(prisma: PrismaClient) {
     gatewayUrl: row?.smsGatewayUrl ?? null,
     gatewayUser: row?.smsGatewayUser ?? null,
     hasPassword: Boolean(row?.smsGatewayPasswordEncrypted),
+    // Módulo Pro "sms" — sem entitlement a UI mostra o bloco locked e os
+    // envios param (notification-dispatch / outbox revalidam também).
+    moduleEnabled: isModuleEnabled(row, "sms"),
     // Path do webhook inbound — o host depende de como o staff acede à
     // app; a UI compõe o URL completo com window.location.origin.
     inboundPath: row?.smsWebhookToken

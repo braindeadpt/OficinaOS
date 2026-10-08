@@ -44,6 +44,7 @@ import {
 } from "../services/sms.service.js";
 import { getUpdateState, startUpdate } from "../services/update.service.js";
 import { pushCredentialsToCloud } from "../services/whatsapp-channel.js";
+import { isModuleEnabled } from "../utils/modules.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
 // biome-ignore lint/suspicious/useAwait: FastifyPluginAsync requires async
@@ -362,6 +363,15 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
           ),
         });
       }
+      // Ativar SMS exige o módulo Pro — o envio revalida no dispatch e
+      // no outbox, por isso um grant expirado para a feature mesmo que
+      // o toggle fique ligado.
+      if (parsed.data.enabled === true) {
+        const s = await getOrCreateShopSettings(app.prisma);
+        if (!isModuleEnabled(s, "sms")) {
+          throw new AppError("CLOUD_MODULE_REQUIRED");
+        }
+      }
       await upsertSmsSettings(app.prisma, parsed.data);
 
       // Best-effort: regista o webhook inbound no telemóvel usando o
@@ -391,6 +401,9 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       const body = (req.body ?? {}) as { phone?: string };
       const row = await getOrCreateShopSettings(app.prisma);
+      if (!isModuleEnabled(row, "sms")) {
+        throw new AppError("CLOUD_MODULE_REQUIRED");
+      }
       const config = decryptSmsConfig({
         gatewayPasswordEncrypted: row.smsGatewayPasswordEncrypted,
         gatewayUrl: row.smsGatewayUrl,

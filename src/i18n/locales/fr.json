@@ -2184,6 +2184,7 @@
   "errors.sms_webhook_failed": "Impossible d'enregistrer le webhook sur le périphérique passerelle",
   "sms_desc": "Envoie et reçoit des SMS via un téléphone Android sur le réseau de la boutique exécutant SMS Gateway (mode serveur local). ",
   "sms_enabled": "Activer le canal SMS",
+  "sms_module_locked": "Les notifications SMS sont un module Pro — demandez à votre fournisseur OficinaOS de l’activer sur votre compte.",
   "sms_gateway_password": "Mot de passe de la passerelle",
   "sms_gateway_password_hint": "Mot de passe affiché dans l'application SMS Gateway sur le téléphone (identifiants du serveur local). ",
   "sms_gateway_url": "URL de la passerelle",

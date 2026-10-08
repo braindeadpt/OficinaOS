@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
+import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import type { useSettingsStore } from "@/stores/settings";
@@ -108,6 +109,9 @@ function SmsCard({
   const inboundUrl = smsSettings?.inboundPath
     ? `${window.location.origin}${smsSettings.inboundPath}`
     : null;
+  // Sem o módulo Pro "sms" o card mostra o estado locked — o backend
+  // recusa o enable e os envios revalidam o entitlement no dispatch.
+  const moduleLocked = smsSettings?.moduleEnabled === false;
 
   return (
     <div className="mt-6">
@@ -118,7 +122,8 @@ function SmsCard({
         <div className="flex items-center gap-3">
           <Switch
             ariaLabelledBy="sms-enabled-label"
-            checked={form.enabled}
+            checked={form.enabled && !moduleLocked}
+            disabled={moduleLocked}
             onChange={(checked) => setForm((f) => ({ ...f, enabled: checked }))}
           />
           <span
@@ -130,23 +135,32 @@ function SmsCard({
         </div>
         <p className="mt-2 text-on-surface-variant text-xs">{t("sms_desc")}</p>
 
-        <div className="mt-3 rounded-xl bg-surface-container px-3 py-2.5">
-          <p className="font-medium text-on-surface text-xs">
-            {t("sms_setup_title")}
-          </p>
-          <ol className="mt-1.5 list-decimal space-y-1 pl-4 text-on-surface-variant text-xs">
-            <li>{t("sms_setup_1")}</li>
-            <li>{t("sms_setup_2")}</li>
-            <li>{t("sms_setup_3")}</li>
-            <li>{t("sms_setup_4")}</li>
-            <li>{t("sms_setup_5")}</li>
-          </ol>
-          <p className="mt-2 text-on-surface-variant text-xs italic">
-            {t("sms_setup_tip")}
-          </p>
-        </div>
+        {moduleLocked && (
+          <div className="mt-3 flex items-center gap-2 rounded-xl bg-surface-container px-3 py-2.5 text-on-surface-variant text-xs">
+            <Icon className="shrink-0" name="lock" size="sm" />
+            {t("sms_module_locked")}
+          </div>
+        )}
 
-        {form.enabled && (
+        {!moduleLocked && (
+          <div className="mt-3 rounded-xl bg-surface-container px-3 py-2.5">
+            <p className="font-medium text-on-surface text-xs">
+              {t("sms_setup_title")}
+            </p>
+            <ol className="mt-1.5 list-decimal space-y-1 pl-4 text-on-surface-variant text-xs">
+              <li>{t("sms_setup_1")}</li>
+              <li>{t("sms_setup_2")}</li>
+              <li>{t("sms_setup_3")}</li>
+              <li>{t("sms_setup_4")}</li>
+              <li>{t("sms_setup_5")}</li>
+            </ol>
+            <p className="mt-2 text-on-surface-variant text-xs italic">
+              {t("sms_setup_tip")}
+            </p>
+          </div>
+        )}
+
+        {form.enabled && !moduleLocked && (
           <div className="mt-5 space-y-4">
             <Field
               hint={t("sms_gateway_url_hint")}

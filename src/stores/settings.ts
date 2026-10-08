@@ -32,6 +32,7 @@ interface SmsSettings {
   gatewayUser: string | null;
   hasPassword: boolean;
   inboundPath: string | null;
+  moduleEnabled: boolean;
 }
 
 interface WhatsAppSettings {

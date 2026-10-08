@@ -13,7 +13,7 @@ import type { NotifyContext } from "./job.service.js";
 import { formatPhone } from "./notification-sender.js";
 
 /**
- * Canal SMS (core, grátis) via SMS Gateway for Android em modo Local
+ * Canal SMS (módulo Pro) via SMS Gateway for Android em modo Local
  * Server (sms-gate.app / capcom6). O telemóvel da loja expõe uma API HTTP
  * na LAN: a app envia com POST /message (Basic auth) e recebe inbound
  * através de um webhook que regista no próprio aparelho. Nada passa pela

@@ -2184,6 +2184,7 @@
   "errors.sms_webhook_failed": "Could not register the webhook on the gateway device",
   "sms_desc": "Sends and receives SMS through an Android phone on the shop network running SMS Gateway (Local Server mode). No Meta account needed.",
   "sms_enabled": "Enable SMS channel",
+  "sms_module_locked": "SMS notifications are a Pro module — ask your OficinaOS provider to enable it on your account.",
   "sms_gateway_password": "Gateway password",
   "sms_gateway_password_hint": "Password shown in the SMS Gateway app on the phone (Local Server credentials). Saved encrypted; enter again to change.",
   "sms_gateway_url": "Gateway URL",

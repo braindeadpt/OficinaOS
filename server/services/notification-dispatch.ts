@@ -9,6 +9,7 @@ import {
 import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import { logger } from "../utils/logger.js";
+import { isModuleEnabled } from "../utils/modules.js";
 import { queueNotification } from "./notification-outbox.service.js";
 import { renderTemplate } from "./notification-renderer.js";
 
@@ -207,7 +208,9 @@ async function resolveShopNotificationConfig(prisma: DbClient): Promise<{
       currency: shop?.currency ?? "EUR",
       reviewUrl: shop?.reviewUrl ?? null,
       shopName: shop?.shopName ?? "",
-      smsEnabled: Boolean(shop?.smsEnabled),
+      // Módulo Pro "sms": expirado/revogado para os envios mesmo que o
+      // toggle local continue ligado — retoma sozinho quando renova.
+      smsEnabled: Boolean(shop?.smsEnabled) && isModuleEnabled(shop, "sms"),
       trackingBaseUrl: shop?.trackingBaseUrl ?? null,
       whatsappEnabled: shop?.whatsappEnabled ?? false,
     };

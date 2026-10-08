@@ -2184,6 +2184,7 @@
   "errors.sms_webhook_failed": "Não foi possível registar o webhook no dispositivo gateway",
   "sms_desc": "Envia e recebe SMS através de um telefone Android na rede da loja que executa o SMS Gateway (modo Servidor Local). Nenhuma conta Meta é necessária.",
   "sms_enabled": "Ativar canal SMS",
+  "sms_module_locked": "As notificações por SMS são um módulo Pro — peça ao seu fornecedor OficinaOS para o ativar na sua conta.",
   "sms_gateway_password": "Palavra-passe do gateway",
   "sms_gateway_password_hint": "Palavra-passe mostrada na aplicação SMS Gateway no telemóvel (credenciais do servidor local). Guardada de forma encriptada; introduza novamente para alterar.",
   "sms_gateway_url": "URL do gateway",

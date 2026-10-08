@@ -130,10 +130,10 @@ beforeEach(() => {
 });
 
 describe("PUT /api/settings/sms", () => {
-  it("enables without any cloud entitlement — SMS is core", async () => {
+  it("enables when the sms module is granted", async () => {
     mocks.getSmsSettings.mockResolvedValue({ enabled: true });
     mocks.decryptSmsConfig.mockReturnValue(null);
-    const app = buildApp(fakePrisma({ ...SMS_ROW, cloudEntitlements: [] }));
+    const app = buildApp(fakePrisma());
     const res = await app.inject({
       method: "PUT",
       payload: {
@@ -146,6 +146,23 @@ describe("PUT /api/settings/sms", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(mocks.upsertSmsSettings).toHaveBeenCalled();
+  });
+
+  it("rejects enabling without the sms entitlement", async () => {
+    const app = buildApp(fakePrisma({ ...SMS_ROW, cloudEntitlements: [] }));
+    const res = await app.inject({
+      method: "PUT",
+      payload: {
+        enabled: true,
+        gatewayPassword: "x",
+        gatewayUrl: "http://192.168.1.50:8080",
+        gatewayUser: "sms",
+      },
+      url: "/api/settings/sms",
+    });
+    expect(res.statusCode).toBe(402);
+    expect(res.json().code).toBe("CLOUD_MODULE_REQUIRED");
+    expect(mocks.upsertSmsSettings).not.toHaveBeenCalled();
   });
 
   it("accepts disabling even without the entitlement", async () => {
@@ -202,6 +219,18 @@ describe("PUT /api/settings/sms", () => {
 });
 
 describe("POST /api/settings/sms/test", () => {
+  it("rejects the test send without the sms entitlement", async () => {
+    const app = buildApp(fakePrisma({ ...SMS_ROW, cloudEntitlements: [] }));
+    const res = await app.inject({
+      method: "POST",
+      payload: { phone: "912345678" },
+      url: "/api/settings/sms/test",
+    });
+    expect(res.statusCode).toBe(402);
+    expect(res.json().code).toBe("CLOUD_MODULE_REQUIRED");
+    expect(mocks.sendSms).not.toHaveBeenCalled();
+  });
+
   it("fails cleanly when the gateway is not configured", async () => {
     mocks.decryptSmsConfig.mockReturnValue(null);
     const app = buildApp(fakePrisma());

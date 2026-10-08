@@ -11,6 +11,7 @@ import {
 import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import { logger } from "../utils/logger.js";
+import { isModuleEnabled } from "../utils/modules.js";
 import { renderTemplate } from "./notification-renderer.js";
 import { decryptSmsConfig, sendSms } from "./sms.service.js";
 import {
@@ -394,7 +395,7 @@ function getSmsConfig(row: ShopSettingsRow | null): {
   url: string;
   user: string;
 } | null {
-  if (!row?.smsEnabled) {
+  if (!(row?.smsEnabled && isModuleEnabled(row, "sms"))) {
     return null;
   }
   return decryptSmsConfig({
