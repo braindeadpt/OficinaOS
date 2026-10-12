@@ -28,7 +28,7 @@ runtime. O diag é standalone até o utilizador escolher «Enviar à loja».
 
 ### Emparelhamento (uma vez por loja)
 
-1. Dono cria conta em `cloud.oficinaos.app` → dashboard gera código de emparelhamento (15 min)
+1. Dono cria conta em `cloud.oficinaos.app` → dashboard gera código de emparelhamento (24 h)
 2. Na app: **Definições → separador Cloud** → colar código → `POST /pairing/redeem` → token permanente da loja
 3. A partir daí a app faz sync a cada **~2 minutos** (`server/services/cloud.service.ts` → poller)
 
