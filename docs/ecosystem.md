@@ -173,6 +173,7 @@ exige `whatsapp-bot`).
 - **Docs ao utilizador**: `oficinaos-website` `/docs` + `/docs/{portal,whatsapp,diag}` — o site, não os `.md`, é a fonte para clientes
 - **Docs técnicas**: `reparilo/docs/` (pro-modules.md, remote-access.md, mobile-access.md, privacy-and-data.md, este mapa)
 - **Roadmap aprovado (não implementado)**: `docs/marketplace.md` — classificados B2B entre lojas, pós-beta; `oficinaos-diag/docs/roadmap.md` — licença scrcpy (Apache-2.0, OK comercial) + plano do auto-orçamento determinístico
+- **Ideia registada (não aprovada)**: `docs/ai-counter.md` — "Balcão IA" WhatsApp: orçamentos estimados, agendamento, LLM fallback. Só avança com tração no free + interesse Pro
 
 ## Regras transversais (aplicam-se a todos os repos)
 
