@@ -1,9 +1,11 @@
+import { useState } from "react";
 import SignaturePad from "@/components/reports/signature-pad";
 import { Field } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import AccessoriesPicker from "./accessories-picker";
 import FunctionalChecklist from "./functional-checklist";
+import RemoteSignatureDialog from "./remote-signature-dialog";
 import {
   errorCls,
   type IntakeFormData,
@@ -36,6 +38,7 @@ export default function Step2Content({
   // Shown once the field was touched or the server flagged it on submit.
   const fieldError = (key: keyof IntakeFormData) =>
     touched[key] ? errors[key] : undefined;
+  const [remoteSignOpen, setRemoteSignOpen] = useState(false);
   return (
     <section className="min-h-0 flex-1 overflow-y-auto bg-surface-container-low p-4 md:p-8">
       <div className="mx-auto max-w-xl space-y-6">
@@ -239,7 +242,23 @@ export default function Step2Content({
                 {t("intake.signature_captured")}
               </p>
             )}
+            <button
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-surface-container-highest px-4 py-2.5 font-label text-on-surface-variant text-sm transition-colors hover:bg-surface-container hover:text-on-surface"
+              onClick={() => setRemoteSignOpen(true)}
+              type="button"
+            >
+              <Icon className="text-lg" name="qr_code" />
+              {t("intake.sign_remote_button")}
+            </button>
           </div>
+          <RemoteSignatureDialog
+            onClose={() => setRemoteSignOpen(false)}
+            onSignature={(v) => {
+              update("signature", v);
+              setRemoteSignOpen(false);
+            }}
+            open={remoteSignOpen}
+          />
         </div>
       </div>
     </section>

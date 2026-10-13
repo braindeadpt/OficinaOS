@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { intakeRequestsRoutes } from "../routes/intake-requests.js";
 import { jobRoutes } from "../routes/jobs.js";
 import { publicRoutes } from "../routes/public.js";
+import { signatureSessionRoutes } from "../routes/signature-sessions.js";
 
 // Regression coverage for the public customer endpoints: they must NOT be
 // caught by the jobs plugin's requirePermission hook — an anonymous customer
@@ -17,6 +18,10 @@ const mocks = vi.hoisted(() => ({
   renderReceiptHtml: vi.fn(),
   respondToQuote: vi.fn(),
   submitPreCheckRequest: vi.fn(),
+  getPublicSignatureSession: vi.fn(),
+  submitSignatureSession: vi.fn(),
+  createSignatureSession: vi.fn(),
+  getSignatureSession: vi.fn(),
 }));
 
 vi.mock("../services/job.service.js", () => ({
@@ -40,6 +45,13 @@ vi.mock("../services/intake-request.service.js", () => ({
   listIntakeRequests: mocks.listIntakeRequests,
   dismissIntakeRequest: mocks.dismissIntakeRequest,
   convertIntakeRequest: mocks.convertIntakeRequest,
+}));
+
+vi.mock("../services/signature-session.service.js", () => ({
+  getPublicSignatureSession: mocks.getPublicSignatureSession,
+  submitSignatureSession: mocks.submitSignatureSession,
+  createSignatureSession: mocks.createSignatureSession,
+  getSignatureSession: mocks.getSignatureSession,
 }));
 
 function buildApp() {
@@ -72,6 +84,7 @@ function buildApp() {
   app.register(jobRoutes, { prefix: "/api/jobs" });
   app.register(publicRoutes, { prefix: "/api/public" });
   app.register(intakeRequestsRoutes, { prefix: "/api/intake-requests" });
+  app.register(signatureSessionRoutes, { prefix: "/api/sign-sessions" });
   return app;
 }
 
@@ -314,6 +327,67 @@ describe("public pre-check endpoint", () => {
     expect(res.statusCode).toBe(201);
     expect(res.json().ok).toBe(true);
     expect(mocks.submitPreCheckRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe("public signature endpoints", () => {
+  const TOKEN = "a".repeat(64);
+
+  it("GET /api/public/sign/:token does not 401 for anonymous customers", async () => {
+    mocks.getPublicSignatureSession.mockResolvedValue({ signed: false });
+    const app = buildApp();
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/public/sign/${TOKEN}`,
+    });
+
+    expect(res.statusCode).not.toBe(401);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().signed).toBe(false);
+  });
+
+  it("POST /api/public/sign/:token accepts an anonymous signature", async () => {
+    mocks.submitSignatureSession.mockResolvedValue({ ok: true });
+    const app = buildApp();
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/public/sign/${TOKEN}`,
+      payload: { signatureDataUrl: "data:image/png;base64,AAAA" },
+    });
+
+    expect(res.statusCode).not.toBe(401);
+    expect(res.statusCode).toBe(201);
+    expect(mocks.submitSignatureSession).toHaveBeenCalledWith(
+      expect.anything(),
+      TOKEN,
+      "data:image/png;base64,AAAA"
+    );
+  });
+
+  it("POST /api/sign-sessions rejects anonymous callers", async () => {
+    const app = buildApp();
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/sign-sessions",
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(mocks.createSignatureSession).not.toHaveBeenCalled();
+  });
+
+  it("GET /api/sign-sessions/:token rejects anonymous callers", async () => {
+    const app = buildApp();
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/sign-sessions/${TOKEN}`,
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(mocks.getSignatureSession).not.toHaveBeenCalled();
   });
 });
 

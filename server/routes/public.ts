@@ -9,6 +9,10 @@ import { lanIpv4Addresses } from "../lib/mdns.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import { submitPreCheckRequest } from "../services/intake-request.service.js";
 import { respondToQuote } from "../services/job-quote.service.js";
+import {
+  getPublicSignatureSession,
+  submitSignatureSession,
+} from "../services/signature-session.service.js";
 import { handleInboundSms } from "../services/sms.service.js";
 import { codeLockout } from "../utils/code-lockout.js";
 import { parseImageDataUrl, toPublicShop } from "../utils/public-shop.js";
@@ -217,6 +221,51 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
         type: "object",
       },
       summary: "Submit a public pre-check request",
+      tags: ["public"],
+    },
+  });
+
+  /**
+   * Remote intake signature — the customer scans the QR shown in the intake
+   * modal and signs on their own phone at /sign/:token. The token is the
+   * only secret; expired and unknown tokens return the same 410 so probing
+   * reveals nothing about which sessions exist.
+   */
+  app.get("/sign/:token", {
+    handler: (req) => {
+      const { token } = req.params as { token: string };
+      return getPublicSignatureSession(app.prisma, token);
+    },
+    schema: {
+      params: {
+        properties: { token: { type: "string" } },
+        required: ["token"],
+        type: "object",
+      },
+      summary: "Signature session status for the public signing page",
+      tags: ["public"],
+    },
+  });
+
+  app.post("/sign/:token", {
+    handler: async (req, reply) => {
+      const { token } = req.params as { token: string };
+      const body = (req.body ?? {}) as { signatureDataUrl?: unknown };
+      await submitSignatureSession(app.prisma, token, body.signatureDataUrl);
+      return reply.status(201).send({ ok: true });
+    },
+    schema: {
+      body: {
+        properties: { signatureDataUrl: { type: "string" } },
+        required: ["signatureDataUrl"],
+        type: "object",
+      },
+      params: {
+        properties: { token: { type: "string" } },
+        required: ["token"],
+        type: "object",
+      },
+      summary: "Submit the customer signature for a session",
       tags: ["public"],
     },
   });

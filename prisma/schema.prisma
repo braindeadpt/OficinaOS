@@ -1294,6 +1294,25 @@ model TradeIn {
 }
 
 // ─────────────────────────────────────────────
+// SIGNATURE SESSION (remote intake signature)
+// ─────────────────────────────────────────────
+
+// Relay for signing on the customer's own phone: the intake modal shows a QR
+// to /sign/{token}, the customer draws on a public page, and the modal polls
+// until signatureDataUrl lands — then it is stored on the job's
+// intakeSignatureDataUrl and the session row is left to expire. The token is
+// the only secret; no job or customer data rides on it.
+model SignatureSession {
+  id               String    @id @default(cuid())
+  token            String    @unique
+  signatureDataUrl String?   @db.Text
+  createdAt        DateTime  @default(now()) @db.Timestamptz
+  expiresAt        DateTime  @db.Timestamptz
+
+  @@map("signature_sessions")
+}
+
+// ─────────────────────────────────────────────
 // VERIFICATION (Better Auth)
 // ─────────────────────────────────────────────
 

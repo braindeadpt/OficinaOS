@@ -251,6 +251,19 @@ export const routeSecurity: [string, RouteSecurityOverride][] = [
       },
     },
   ],
+  // Public remote signature (/sign/:token) — anonymous customer page; the
+  // bearer token is the secret, the IP budget just caps probing/retries.
+  [
+    "/api/public/sign",
+    {
+      csrf: false,
+      rateLimit: {
+        keyGenerator: lookupKeyGenerator,
+        max: 30,
+        timeWindow: "15 minutes",
+      },
+    },
+  ],
   // SMS inbound webhook — o gateway na LAN não tem sessão nem CSRF token.
   // Budget por IP: um cliente que mande 20 SMS/seg só precisa que cada um
   // chegue uma vez.

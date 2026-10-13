@@ -266,6 +266,16 @@ export const ERRORS = {
     message: "errors.trade_in_signature_required",
   },
 
+  // ── Remote signature sessions (public /sign/:token page) ─────────────────
+  SIGNATURE_SESSION_EXPIRED: {
+    status: 410,
+    message: "errors.signature_session_expired",
+  },
+  SIGNATURE_ALREADY_SUBMITTED: {
+    status: 409,
+    message: "errors.signature_already_submitted",
+  },
+
   // ── Part-request board (procuro-peça, Pro module: market) ──────────────
   PART_REQUEST_NOT_FOUND: {
     status: 404,
