@@ -4,7 +4,7 @@
 // signature lands and when the job is submitted — any drift invalidates the
 // link instead of silently signing a different document.
 
-export const INTAKE_DOCUMENT_VERSION = 1;
+export const INTAKE_DOCUMENT_VERSION = 2;
 
 export interface IntakeRepairLine {
   name: string;
@@ -23,7 +23,6 @@ export interface IntakeDocument {
   deviceBrand: string;
   deviceCategory: string | null;
   deviceModel: string;
-  deviceUnlockCode: string | null;
   estimatedCost: number | null;
   estimatedDelivery: string | null;
   imei: string | null;
@@ -33,6 +32,9 @@ export interface IntakeDocument {
   problem: string;
   repairs: IntakeRepairLine[];
   termsText: string;
+  // Never the code itself — only that one was collected. The PIN/pattern is
+  // a device credential, not part of what the customer signs over.
+  unlockCodeProvided: boolean;
   urgent: boolean;
   v: number;
   warrantyReturn: boolean;
@@ -94,7 +96,7 @@ export function buildIntakeDocument(
     deviceCategory: input.deviceCategory ?? null,
     color: emptyToNull(input.color),
     imei: emptyToNull(input.imei),
-    deviceUnlockCode: emptyToNull(input.deviceUnlockCode),
+    unlockCodeProvided: emptyToNull(input.deviceUnlockCode) !== null,
     problem: input.reportedProblem.trim(),
     conditionNotes: emptyToNull(input.conditionNotes),
     accessories: [...(input.accessories ?? [])].sort(),

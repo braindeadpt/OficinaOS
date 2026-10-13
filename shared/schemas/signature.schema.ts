@@ -15,7 +15,7 @@ export const intakeDocumentSchema = z.object({
   deviceBrand: z.string().min(1).max(60),
   deviceCategory: z.string().max(40).nullable(),
   deviceModel: z.string().min(1).max(120),
-  deviceUnlockCode: z.string().max(64).nullable(),
+  unlockCodeProvided: z.boolean(),
   estimatedCost: z.number().min(0).nullable(),
   estimatedDelivery: z.string().max(40).nullable(),
   imei: z.string().max(64).nullable(),

@@ -312,6 +312,25 @@ describe("invalidateSignatureSession", () => {
   });
 });
 
+describe("unlock code privacy", () => {
+  it("never stores the device PIN in the signed document", async () => {
+    const withPin = buildIntakeDocument(
+      { ...SOURCE, deviceUnlockCode: "864209" },
+      "Termos de entrada",
+      "pt"
+    );
+    expect(withPin.unlockCodeProvided).toBe(true);
+    expect(JSON.stringify(withPin)).not.toContain("864209");
+
+    // …and the snapshot persisted on the session carries no PIN either.
+    const prisma = mockPrisma();
+    await createSignatureSession(prisma, withPin);
+    const created = vi.mocked(prisma.signatureSession.create).mock
+      .calls[0][0] as { data: { snapshot: unknown } };
+    expect(JSON.stringify(created.data.snapshot)).not.toContain("864209");
+  });
+});
+
 describe("document hashing", () => {
   it("is deterministic regardless of key order", () => {
     const reordered = Object.fromEntries(
@@ -349,12 +368,11 @@ describe("publicDocumentView", () => {
       ...DOC,
       customerEmail: "maria@example.com",
       imei: "356789104567890",
-      deviceUnlockCode: "1234",
     });
     const serialized = JSON.stringify(view);
     expect(serialized).not.toContain("maria@example.com");
     expect(serialized).not.toContain("356789104567890");
-    expect(serialized).not.toContain("1234");
+    expect(serialized).not.toContain("unlock");
     expect(serialized).not.toContain("customerPhone");
     expect(view.termsText).toBe("Termos de entrada");
   });
