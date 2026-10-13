@@ -251,7 +251,10 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
     handler: async (req, reply) => {
       const { token } = req.params as { token: string };
       const body = (req.body ?? {}) as { signatureDataUrl?: unknown };
-      await submitSignatureSession(app.prisma, token, body.signatureDataUrl);
+      await submitSignatureSession(app.prisma, token, body.signatureDataUrl, {
+        ip: req.ip,
+        userAgent: req.headers["user-agent"],
+      });
       return reply.status(201).send({ ok: true });
     },
     schema: {

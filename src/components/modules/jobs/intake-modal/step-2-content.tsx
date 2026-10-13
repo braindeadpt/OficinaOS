@@ -1,8 +1,11 @@
+import { buildIntakeDocument } from "@shared/intake-document.js";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import SignaturePad from "@/components/reports/signature-pad";
 import { Field } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
+import { buildJobPayload } from "@/lib/build-job-payload";
 import AccessoriesPicker from "./accessories-picker";
 import FunctionalChecklist from "./functional-checklist";
 import RemoteSignatureDialog from "./remote-signature-dialog";
@@ -35,6 +38,14 @@ export default function Step2Content({
   touched,
   update,
 }: Step2Props) {
+  const { i18n } = useTranslation();
+  // The frozen intake document a remote signature session signs over — same
+  // builder the server uses to verify the ficha didn't drift before submit.
+  const intakeDocument = buildIntakeDocument(
+    buildJobPayload(form),
+    t("intake.terms_text"),
+    i18n.language
+  );
   // Shown once the field was touched or the server flagged it on submit.
   const fieldError = (key: keyof IntakeFormData) =>
     touched[key] ? errors[key] : undefined;
@@ -252,9 +263,11 @@ export default function Step2Content({
             </button>
           </div>
           <RemoteSignatureDialog
+            document={intakeDocument}
             onClose={() => setRemoteSignOpen(false)}
-            onSignature={(v) => {
+            onSignature={(v, token) => {
               update("signature", v);
+              update("signatureSessionToken", token);
               setRemoteSignOpen(false);
             }}
             open={remoteSignOpen}

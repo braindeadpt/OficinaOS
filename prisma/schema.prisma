@@ -448,6 +448,17 @@ model Job {
   // Customer signature captured at intake (PNG data URL) — printed on the
   // receipt as proof the customer accepted the repair terms.
   intakeSignatureDataUrl String? @db.Text
+  // What the customer actually signed: the frozen document (terms text +
+  // ficha fields as shown) and the SHA-256 of its canonical form plus the
+  // signature image. Editing the shop's terms later cannot rewrite this —
+  // signed jobs keep the snapshot they were signed over.
+  intakeTermsSnapshot Json?
+  intakeDocumentHash  String?
+  signedAt            DateTime? @db.Timestamptz
+  signedVia           String? // in_person | remote
+  // Remote-signing provenance, captured when the signature is submitted.
+  signedIp        String?
+  signedUserAgent String? @db.Text
   // Post-repair QC checklist captured when marking the job DONE
   // ({key: "ok"|"fail"}) — mirrors intakeChecklist.
   qcChecklist Json?
@@ -1325,8 +1336,18 @@ model SignatureSession {
   id               String    @id @default(cuid())
   token            String    @unique
   signatureDataUrl String?   @db.Text
-  createdAt        DateTime  @default(now()) @db.Timestamptz
-  expiresAt        DateTime  @db.Timestamptz
+  // Frozen intake document the customer is shown on /sign — created with the
+  // session so later edits to terms or the ficha invalidate the link instead
+  // of silently changing what gets signed.
+  snapshot      Json?
+  // sha256(canonical(snapshot) + signature image) + provenance, set when the
+  // signature lands — copied onto the job at intake.
+  documentHash    String?
+  signedAt        DateTime? @db.Timestamptz
+  signerIp        String?
+  signerUserAgent String?   @db.Text
+  createdAt       DateTime  @default(now()) @db.Timestamptz
+  expiresAt       DateTime  @db.Timestamptz
 
   @@map("signature_sessions")
 }

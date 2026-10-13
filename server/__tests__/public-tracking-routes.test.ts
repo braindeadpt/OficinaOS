@@ -362,7 +362,8 @@ describe("public signature endpoints", () => {
     expect(mocks.submitSignatureSession).toHaveBeenCalledWith(
       expect.anything(),
       TOKEN,
-      "data:image/png;base64,AAAA"
+      "data:image/png;base64,AAAA",
+      expect.objectContaining({ ip: expect.any(String) })
     );
   });
 

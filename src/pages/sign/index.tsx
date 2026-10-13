@@ -35,13 +35,27 @@ interface PublicShop {
   name: string | null;
 }
 
+/** Redacted view of the frozen document — what the customer is signing. */
+interface PublicDocument {
+  accessories: string[];
+  customerName: string;
+  deposit: number | null;
+  device: string;
+  estimatedCost: number | null;
+  estimatedDelivery: string | null;
+  problem: string;
+  termsText: string;
+  urgent: boolean;
+}
+
 type PageState = "loading" | "ready" | "signed" | "done" | "expired";
 
 export default function SignPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { token } = useParams<{ token: string }>();
   const [state, setState] = useState<PageState>("loading");
   const [shopName, setShopName] = useState<string | null>(null);
+  const [document, setDocument] = useState<PublicDocument | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,7 +76,11 @@ export default function SignPage() {
         setState("expired");
         return;
       }
-      const { signed } = sessionRes.value.data as { signed: boolean };
+      const { signed, document: doc } = sessionRes.value.data as {
+        signed: boolean;
+        document: PublicDocument | null;
+      };
+      setDocument(doc);
       setState(signed ? "signed" : "ready");
     });
     return () => {
@@ -181,8 +199,59 @@ export default function SignPage() {
                   </p>
                 </div>
 
+                {document && (
+                  <dl className="mb-6 space-y-2 rounded-xl bg-surface-container-lowest p-4 text-sm ring-1 ring-outline-variant">
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-on-surface-variant">
+                        {t("sign_doc_customer")}
+                      </dt>
+                      <dd className="font-medium text-on-surface">
+                        {document.customerName}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-on-surface-variant">
+                        {t("sign_doc_device")}
+                      </dt>
+                      <dd className="font-medium text-on-surface">
+                        {document.device}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <dt className="shrink-0 text-on-surface-variant">
+                        {t("sign_doc_problem")}
+                      </dt>
+                      <dd className="text-right font-medium text-on-surface">
+                        {document.problem}
+                      </dd>
+                    </div>
+                    {document.estimatedCost !== null && (
+                      <div className="flex justify-between gap-4">
+                        <dt className="text-on-surface-variant">
+                          {t("sign_doc_estimate")}
+                        </dt>
+                        <dd className="font-medium text-on-surface">
+                          {document.estimatedCost.toFixed(2)} €
+                        </dd>
+                      </div>
+                    )}
+                    {document.estimatedDelivery && (
+                      <div className="flex justify-between gap-4">
+                        <dt className="text-on-surface-variant">
+                          {t("sign_doc_delivery")}
+                        </dt>
+                        <dd className="font-medium text-on-surface">
+                          {new Date(document.estimatedDelivery).toLocaleString(
+                            i18n.language
+                          )}
+                        </dd>
+                      </div>
+                    )}
+                  </dl>
+                )}
+
                 <p className="mb-6 rounded-xl bg-surface-container-lowest p-4 font-body text-on-surface-variant text-xs leading-relaxed ring-1 ring-outline-variant">
-                  {t("intake.terms_text")}
+                  {document?.termsText ?? t("intake.terms_text")}
                 </p>
 
                 <SignaturePad onChange={setSignature} />

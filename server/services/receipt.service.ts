@@ -104,6 +104,7 @@ export interface ReceiptStrings {
   scanQr: string;
   servedBy: string;
   signatureLabel: string;
+  signedDoc: string;
   termsSigned: string;
   total: string;
   warranty: string;
@@ -141,6 +142,7 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     scanQr: "Leia o código QR para acompanhar a sua reparação",
     servedBy: "Atendido por",
     signatureLabel: "Assinatura do cliente",
+    signedDoc: "Documento assinado",
     termsSigned:
       "Declaro que o equipamento descrito é meu e aceito os termos de reparação da loja.",
     total: "Total",
@@ -177,6 +179,7 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     scanQr: "Scan QR to track your repair",
     servedBy: "Served by",
     signatureLabel: "Customer signature",
+    signedDoc: "Signed document",
     termsSigned:
       "I declare the described device is mine and accept the shop's repair terms.",
     total: "Total",
@@ -213,6 +216,7 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     scanQr: "Scannez le QR pour suivre votre réparation",
     servedBy: "Servi par",
     signatureLabel: "Signature du client",
+    signedDoc: "Document signé",
     termsSigned:
       "Je déclare que l'appareil décrit m'appartient et j'accepte les conditions de réparation.",
     total: "Total",
@@ -249,6 +253,7 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     scanQr: "Escanea el QR para seguir tu reparación",
     servedBy: "Atendido por",
     signatureLabel: "Firma del cliente",
+    signedDoc: "Documento firmado",
     termsSigned:
       "Declaro que el dispositivo descrito es mío y acepto las condiciones de reparación.",
     total: "Total",
@@ -457,14 +462,30 @@ function loanerDivHtml(job: LoanerJob, s: ReceiptStrings): string {
   return `<div>${s.loaner}: ${esc(job.loanerNote || s.loanerYes)}</div>`;
 }
 
+/** "Signed document a1b2c3d4e5f6 · 03/11/2026 14:22" — the integrity seal. */
+function signatureSealHtml(
+  job: { intakeDocumentHash?: string | null; signedAt?: Date | null },
+  s: ReceiptStrings
+): string {
+  if (!job.intakeDocumentHash) {
+    return "";
+  }
+  const when = job.signedAt
+    ? ` · ${new Date(job.signedAt).toLocaleString(s.dateLocale)}`
+    : "";
+  const seal = `${s.signedDoc} #${job.intakeDocumentHash.slice(0, 12)}${when}`;
+  return `<p style="text-align:left;font-size:9px;color:#777">${esc(seal)}</p>`;
+}
+
 function signatureSectionHtml(
   dataUrl: string | null | undefined,
-  termsSigned: string
+  termsSigned: string,
+  sealHtml = ""
 ): string {
   if (!dataUrl?.startsWith("data:image/")) {
     return "";
   }
-  return `<p style="text-align:left;font-size:10px;color:#555">${esc(termsSigned)}</p><div style="text-align:center"><img src="${dataUrl}" style="max-width:200px;max-height:60px" alt="signature" /></div><div class="sep"></div>`;
+  return `<p style="text-align:left;font-size:10px;color:#555">${esc(termsSigned)}</p><div style="text-align:center"><img src="${dataUrl}" style="max-width:200px;max-height:60px" alt="signature" /></div>${sealHtml}<div class="sep"></div>`;
 }
 
 export async function renderReceiptHtml(
@@ -481,6 +502,8 @@ export async function renderReceiptHtml(
     hasLoanerDevice?: boolean | null;
     loanerNote?: string | null;
     intakeSignatureDataUrl?: string | null;
+    intakeDocumentHash?: string | null;
+    signedAt?: Date | null;
     createdAt: Date;
     payments?: Array<{
       amount: number | { toNumber: () => number };
@@ -633,7 +656,11 @@ function renderThermalReceiptDocument(ctx: ReceiptRenderContext): string {
       )
     : "";
   const signatureHtml = prefs.showSignature
-    ? signatureSectionHtml(job.intakeSignatureDataUrl, s.termsSigned)
+    ? signatureSectionHtml(
+        job.intakeSignatureDataUrl,
+        s.termsSigned,
+        signatureSealHtml(job, s)
+      )
     : "";
   const qrImg = ctx.qrBuf
     ? `<div class="qr"><img src="data:image/png;base64,${ctx.qrBuf.toString("base64")}" alt="QR Code" /></div>`
@@ -746,7 +773,7 @@ ${
     ? `<img src="${job.intakeSignatureDataUrl}" alt="signature" />`
     : `<div class="line">${s.signatureLabel}</div>`;
   const signatureHtml = prefs.showSignature
-    ? `<div class="sign"><p class="terms">${esc(s.termsSigned)}</p><div class="box">${signatureBox}</div></div>`
+    ? `<div class="sign"><p class="terms">${esc(s.termsSigned)}</p><div class="box">${signatureBox}</div>${signatureSealHtml(job, s)}</div>`
     : "";
 
   const qrHtml =

@@ -14,49 +14,12 @@ import UpdateBanner from "@/components/modules/update-banner";
 import { ShopSettingsProvider } from "@/components/providers/shop-settings-provider";
 import { ChunkErrorBoundary } from "@/components/ui/chunk-error-boundary";
 import api, { getErrorMessage } from "@/lib/api";
+import { buildJobPayload } from "@/lib/build-job-payload";
 import { useJobsStore } from "@/stores/jobs";
 import { useUiStore } from "@/stores/ui";
 
 interface DashboardLayoutProps {
   children: ReactNode;
-}
-
-function buildJobPayload(data: IntakeFormData) {
-  return {
-    customerEmail: data.customerEmail || undefined,
-    customerId: data.customerId || undefined,
-    customerName: data.customerName,
-    customerPhone: data.customerPhone,
-    deviceBrand: data.brand || "Unknown",
-    deviceBrandId: data.brandId || undefined,
-    deviceModel: data.model,
-    deviceCategory: data.deviceCategory || undefined,
-    color: data.color || undefined,
-    imei: data.imei || undefined,
-    reportedProblem: data.reportedProblem,
-    conditionNotes: data.conditionNotes || undefined,
-    deviceUnlockCode: data.deviceUnlockCode || undefined,
-    accessories: data.accessories.length > 0 ? data.accessories : undefined,
-    intakeChecklist:
-      Object.keys(data.checklist).length > 0 ? data.checklist : undefined,
-    intakeSignatureDataUrl: data.signature ?? undefined,
-    // Empty = "por orçamentar" (priced after diagnosis) — send nothing
-    // rather than a misleading 0.
-    estimatedCost: parseOptionalAmount(data.estimatedCost),
-    estimatedDate: data.estimatedDelivery || undefined,
-    isUrgent: data.isUrgent,
-    depositAmount: data.deposit ? Number.parseFloat(data.deposit) : undefined,
-    hasLoanerDevice: data.hasLoanerDevice || undefined,
-    loanerNote: data.loanerNote || undefined,
-  };
-}
-
-function parseOptionalAmount(raw: string): number | undefined {
-  if (raw.trim() === "") {
-    return;
-  }
-  const value = Number.parseFloat(raw);
-  return Number.isFinite(value) ? value : undefined;
 }
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
@@ -69,7 +32,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const fetchJobs = useJobsStore((s) => s.fetchJobs);
   const fetchMetrics = useJobsStore((s) => s.fetchMetrics);
   const { pathname } = useLocation();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   // The job was already created — a failed convert link shouldn't block the
   // intake flow, so this reports but never throws.
@@ -92,7 +55,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const handleIntakeSubmit = useCallback(
     async (data: IntakeFormData) => {
       try {
-        const job = await createJob(buildJobPayload(data));
+        // The terms text is frozen into the signed document — send exactly
+        // what the signature pad showed, in the UI language the customer saw.
+        const job = await createJob({
+          ...buildJobPayload(data),
+          intakeTermsText: t("intake.terms_text"),
+          intakeLocale: i18n.language,
+        });
         toast.success(t("jobs_created_success", { id: job.jobCode || job.id }));
         await markRequestConverted(job.id);
         showPrintPreview(job.id);
@@ -128,6 +97,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       showPrintPreview,
       markRequestConverted,
       t,
+      i18n.language,
     ]
   );
 

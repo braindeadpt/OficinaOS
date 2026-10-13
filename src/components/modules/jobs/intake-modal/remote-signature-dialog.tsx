@@ -1,3 +1,4 @@
+import { canonicalize, type IntakeDocument } from "@shared/intake-document.js";
 import QRCode from "qrcode";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -8,8 +9,10 @@ import api from "@/lib/api";
 const POLL_MS = 2000;
 
 interface RemoteSignatureDialogProps {
+  /** Frozen ficha + terms the customer signs — edits invalidate the link. */
+  document: IntakeDocument;
   onClose: () => void;
-  onSignature: (dataUrl: string) => void;
+  onSignature: (dataUrl: string, token: string) => void;
   open: boolean;
 }
 
@@ -29,8 +32,13 @@ interface SessionStatus {
  * to the intake form, which saves it on the job as usual. The link the phone
  * opens must be reachable from the customer's device, so the base URL comes
  * from /public/access-info (mDNS/LAN URLs), never the staff device's origin.
+ *
+ * The session freezes the intake document: the customer signs exactly what
+ * was on screen when the QR was generated. If the ficha is edited while a
+ * session is open, the link is invalidated and a new one must be generated.
  */
 export default function RemoteSignatureDialog({
+  document,
   onSignature,
   onClose,
   open,
@@ -40,6 +48,11 @@ export default function RemoteSignatureDialog({
   const [expired, setExpired] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const sessionRef = useRef<string | null>(null);
+  // The document the live session was created over — any drift invalidates.
+  // Kept in a ref so form edits don't restart the session — they kill it.
+  const frozenDocRef = useRef<string | null>(null);
+  const documentRef = useRef(document);
+  documentRef.current = document;
   const onSignatureRef = useRef(onSignature);
   onSignatureRef.current = onSignature;
 
@@ -47,13 +60,15 @@ export default function RemoteSignatureDialog({
     setQrDataUrl(null);
     setExpired(false);
     setLoadError(false);
+    const doc = documentRef.current;
     try {
       const [sessionRes, infoRes] = await Promise.all([
-        api.post("/sign-sessions"),
+        api.post("/sign-sessions", { document: doc }),
         api.get("/public/access-info"),
       ]);
       const { token } = sessionRes.data as { token: string };
       sessionRef.current = token;
+      frozenDocRef.current = canonicalize(doc);
 
       const urls = (infoRes.data as AccessInfo).urls ?? [];
       // mDNS hostname survives DHCP; plain IPs are the fallback for phones
@@ -71,13 +86,32 @@ export default function RemoteSignatureDialog({
   useEffect(() => {
     if (!open) {
       sessionRef.current = null;
+      frozenDocRef.current = null;
       return;
     }
     startSession();
     return () => {
       sessionRef.current = null;
+      frozenDocRef.current = null;
     };
   }, [open, startSession]);
+
+  // A ficha edit while the link is live invalidates it — the customer would
+  // otherwise sign a document that no longer matches the submitted job.
+  useEffect(() => {
+    if (!(open && qrDataUrl && sessionRef.current && frozenDocRef.current)) {
+      return;
+    }
+    if (canonicalize(document) === frozenDocRef.current) {
+      return;
+    }
+    const token = sessionRef.current;
+    sessionRef.current = null;
+    frozenDocRef.current = null;
+    api.post(`/sign-sessions/${token}/invalidate`).catch(() => undefined);
+    setQrDataUrl(null);
+    setExpired(true);
+  }, [open, qrDataUrl, document]);
 
   useEffect(() => {
     if (!(open && qrDataUrl)) {
@@ -93,7 +127,7 @@ export default function RemoteSignatureDialog({
         const data = res.data as SessionStatus;
         if (data.signed && data.signatureDataUrl) {
           clearInterval(poll);
-          onSignatureRef.current(data.signatureDataUrl);
+          onSignatureRef.current(data.signatureDataUrl, token);
           return;
         }
         if (new Date(data.expiresAt).getTime() < Date.now()) {
@@ -157,6 +191,25 @@ export default function RemoteSignatureDialog({
           className="animate-spin text-3xl text-on-surface-variant"
           name="progress_activity"
         />
+      </div>
+    );
+  }
+
+  // Expired can also mean "ficha changed" — the distinction matters to the
+  // staff member who just edited a field, so it gets its own state.
+  if (expired && !qrDataUrl && !loadError) {
+    content = (
+      <div className="mt-4 flex flex-col items-center gap-2">
+        <p className="text-center text-error text-sm" role="alert">
+          {t("intake.sign_remote_invalidated")}
+        </p>
+        <button
+          className="font-label text-primary text-sm underline"
+          onClick={startSession}
+          type="button"
+        >
+          {t("intake.sign_remote_retry")}
+        </button>
       </div>
     );
   }

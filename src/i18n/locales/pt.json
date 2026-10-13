@@ -435,6 +435,7 @@
   "empty_catalog_title": "O seu catálogo está vazio",
   "enable_user": "Ativar utilizador",
   "errors": {
+    "signature_stale": "A ficha de entrada mudou depois de este link ser criado — gere um novo link de assinatura e peça ao cliente para assinar de novo",
     "account_disabled": "A conta está desativada",
     "account_locked": "Conta temporariamente bloqueada devido a muitas tentativas de início de sessão falhadas. Por favor, tente novamente mais tarde.",
     "add_note": "Falha ao adicionar nota",
@@ -718,6 +719,7 @@
   "warranty_returns_empty": "Nenhuma garantia retorna para rastrear.",
   "yes": "Sim",
   "intake": {
+    "sign_remote_invalidated": "A ficha de entrada mudou — o código foi invalidado. Gere um novo.",
     "customer_section": "Cliente",
     "customer_search": "Pesquisar nome do cliente",
     "customer_search_placeholder": "Comece a digitar o nome...",
@@ -1190,6 +1192,11 @@
   "sign_page_already_signed_body": "Esta assinatura já foi submetida — não há mais nada a fazer.",
   "sign_page_expired_title": "Link expirado",
   "sign_page_expired_body": "Este link de assinatura expirou — peça à loja um novo código.",
+  "sign_doc_delivery": "Previsto para",
+  "sign_doc_estimate": "Orçamento",
+  "sign_doc_problem": "Problema reportado",
+  "sign_doc_device": "Equipamento",
+  "sign_doc_customer": "Cliente",
   "pre_check_subtitle": "Diga-nos qual é o equipamento e o problema — respondemos com um orçamento.",
   "pre_check_success_body": "Recebemos o seu pedido e entraremos em contacto em breve. Guarde este código de referência.",
   "pre_check_success_code_label": "A sua referência",
