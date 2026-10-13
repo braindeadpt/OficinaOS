@@ -58,6 +58,16 @@ export const createJobSchema = z.object({
     .startsWith("data:image/")
     .max(600_000)
     .optional(),
+  // Remote signing: the session token whose frozen document must match this
+  // ficha — a drifted form means the customer signed something else.
+  signatureSessionToken: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
+  // The exact terms text shown to the customer (in-person signing) — stored
+  // verbatim in the signed document snapshot.
+  intakeTermsText: z.string().max(4000).optional(),
+  intakeLocale: z.string().max(10).optional(),
   // Optional — many shops only price a repair after diagnosis. Omitted/null
   // means "por orçamentar" (not yet quoted).
   estimatedCost: z
@@ -66,7 +76,9 @@ export const createJobSchema = z.object({
     .max(99_999_999.99, { error: "validations.valid_cost" })
     .nullable()
     .optional(),
-  estimatedDate: z.coerce.date().optional(),
+  // Raw datetime-local string ("YYYY-MM-DDTHH:mm") — the intake document
+  // hashes it verbatim, so it must not be coerced into a tz-shifted Date here.
+  estimatedDate: z.string().max(40).optional(),
   depositAmount: z
     .number()
     .min(0, { error: "validations.valid_deposit" })

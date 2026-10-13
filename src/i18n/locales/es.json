@@ -435,6 +435,7 @@
   "empty_catalog_title": "Tu catálogo está vacio",
   "enable_user": "Habilitar usuario",
   "errors": {
+    "signature_stale": "La ficha cambió después de crear este enlace — genera un nuevo enlace de firma y pide al cliente que firme de nuevo",
     "account_disabled": "La cuenta ha sido deshabilitada",
     "account_locked": "Cuenta bloqueada temporalmente debido a demasiados intentos fallidos de inicio de sesión. Inténtalo de nuevo más tarde.",
     "add_note": "No se ha podido añadir la nota",
@@ -718,6 +719,7 @@
   "warranty_returns_empty": "No hay devoluciones en garantía en seguimiento.",
   "yes": "Sí",
   "intake": {
+    "sign_remote_invalidated": "La ficha cambió — el código fue invalidado. Genera uno nuevo.",
     "customer_section": "Cliente",
     "customer_search": "Buscar nombre de cliente",
     "customer_search_placeholder": "Comience a escribir el nombre...",
@@ -1190,6 +1192,11 @@
   "sign_page_already_signed_body": "Esta firma ya fue enviada — no hay nada más que hacer.",
   "sign_page_expired_title": "Enlace caducado",
   "sign_page_expired_body": "Este enlace de firma ha caducado — pida a la tienda un nuevo código.",
+  "sign_doc_delivery": "Previsto para",
+  "sign_doc_estimate": "Presupuesto",
+  "sign_doc_problem": "Problema reportado",
+  "sign_doc_device": "Dispositivo",
+  "sign_doc_customer": "Cliente",
   "pre_check_subtitle": "Cuéntanos qué le pasa a tu dispositivo y te responderemos con un presupuesto.",
   "pre_check_success_body": "Hemos recibido tu solicitud y te contactaremos en breve. Guarda este código de referencia.",
   "pre_check_success_code_label": "Tu referencia",

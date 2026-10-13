@@ -12,6 +12,7 @@ import {
 import type { RoleType } from "@shared/constants/roles";
 import { Role } from "@shared/constants/roles";
 import { AppError } from "@shared/errors/app-error.js";
+import { buildIntakeDocument } from "@shared/intake-document.js";
 import type {
   CreateJobInput,
   IntakeRepairItem,
@@ -57,6 +58,10 @@ import {
   computeJobBalance,
   settlePaymentOnDelivery,
 } from "./payment.service.js";
+import {
+  consumeSignatureSession,
+  intakeDocumentHash,
+} from "./signature-session.service.js";
 import { resolveTechnicianNames } from "./technician-names.js";
 
 export interface NotifyContext {
@@ -323,6 +328,65 @@ async function resolveJobDevice(
   };
 }
 
+interface JobSignatureData {
+  intakeDocumentHash?: string | null;
+  intakeSignatureDataUrl: string | null;
+  intakeTermsSnapshot?: Prisma.InputJsonValue;
+  signedAt?: Date | null;
+  signedIp?: string | null;
+  signedUserAgent?: string | null;
+  signedVia?: string;
+}
+
+// In-person signature: the document is rebuilt from the same payload being
+// submitted, so the hash on the job proves what was signed.
+function inPersonSignatureData(input: CreateJobInput): JobSignatureData {
+  if (!input.intakeSignatureDataUrl || input.signatureSessionToken) {
+    return { intakeSignatureDataUrl: input.intakeSignatureDataUrl ?? null };
+  }
+  const document = buildIntakeDocument(
+    input,
+    input.intakeTermsText ?? "",
+    input.intakeLocale ?? "pt"
+  );
+  return {
+    intakeSignatureDataUrl: input.intakeSignatureDataUrl,
+    intakeTermsSnapshot: document as unknown as Prisma.InputJsonValue,
+    intakeDocumentHash: intakeDocumentHash(
+      document,
+      input.intakeSignatureDataUrl
+    ),
+    signedAt: new Date(),
+    signedVia: "in_person",
+  };
+}
+
+// Remote signature: consumes the signed session inside the job transaction —
+// the submitted ficha must still match the frozen document, or the link is
+// stale and the customer signs a fresh one.
+async function remoteSignatureData(
+  tx: Pick<PrismaClient, "signatureSession">,
+  input: CreateJobInput
+): Promise<JobSignatureData | null> {
+  if (!input.signatureSessionToken) {
+    return null;
+  }
+  const session = await consumeSignatureSession(
+    tx,
+    input.signatureSessionToken,
+    input
+  );
+  return {
+    intakeSignatureDataUrl: session.signatureDataUrl,
+    intakeTermsSnapshot: session.snapshot as unknown as Prisma.InputJsonValue,
+    intakeDocumentHash: session.documentHash,
+    signedAt: session.signedAt,
+    signedVia: "remote",
+    signedIp: session.signerIp,
+    signedUserAgent: session.signerUserAgent,
+  };
+}
+
 export async function create(
   prisma: PrismaClient,
   input: CreateJobInput,
@@ -395,7 +459,16 @@ export async function create(
 
   const { accessCode, jobCode } = await generateJobCode(prisma);
 
+  // Signature provenance — the signature is bound to the document the
+  // customer saw: a remote session carries the frozen snapshot (and its
+  // signer IP/user-agent), in-person signing snapshots the ficha being
+  // submitted. Either way the hash on the job proves the document.
+  const signatureData = inPersonSignatureData(input);
+
   const job = await prisma.$transaction(async (tx) => {
+    // Throws SIGNATURE_STALE when the ficha drifted since the link was
+    // created — the customer must sign a fresh document.
+    const remoteData = await remoteSignatureData(tx, input);
     const created = await jobCreateJob(
       tx,
       {
@@ -405,7 +478,7 @@ export async function create(
         conditionNotes: input.conditionNotes ?? null,
         deviceUnlockCode: input.deviceUnlockCode ?? null,
         intakeChecklist: input.intakeChecklist ?? undefined,
-        intakeSignatureDataUrl: input.intakeSignatureDataUrl ?? null,
+        ...(remoteData ?? signatureData),
         createdBy: { connect: { id: userId } },
         customer: { connect: { id: customer.id } },
         imei: deviceIdentifier,
@@ -907,6 +980,9 @@ const LOOKUP_INCLUDE_AUTH = {
 async function buildJobLookupPayload(
   prisma: PrismaClient,
   jobId: string,
+  // Anonymous tracking masks the customer name; staff and portal lookups
+  // keep it whole — pass maskCustomer: false there.
+  options: { maskCustomer: boolean },
   job: {
     jobCode: string;
     status: string;
@@ -1005,7 +1081,13 @@ async function buildJobLookupPayload(
 
   return {
     createdAt: job.createdAt,
-    customer: { name: job.customer.name },
+    // Public tracking: code + phone4 already proves ownership, so the payload
+    // stays minimal — first name + last initial only, never a contact field.
+    customer: {
+      name: options.maskCustomer
+        ? maskCustomerName(job.customer.name)
+        : job.customer.name,
+    },
     receipt: {
       balanceDue: Math.max(0, receiptTotal - receiptPaid),
       currency: shopSettings?.currency ?? "EUR",
@@ -1059,6 +1141,21 @@ async function buildJobLookupPayload(
   };
 }
 
+const NAME_SPLIT_RE = /\s+/;
+
+/** "Ana Maria Silva" → "Ana S." — enough to reassure, nothing to harvest. */
+function maskCustomerName(name: string): string {
+  const parts = name.trim().split(NAME_SPLIT_RE).filter(Boolean);
+  if (parts.length === 0) {
+    return "";
+  }
+  const last = parts.at(-1);
+  if (parts.length === 1 || !last) {
+    return parts[0];
+  }
+  return `${parts[0]} ${last.charAt(0).toUpperCase()}.`;
+}
+
 function customerPhoneMatches(phone: string | null, phone4: string): boolean {
   if (!phone) {
     return false;
@@ -1084,12 +1181,15 @@ export async function lookupByCode(
   const payload = await buildJobLookupPayload(
     prisma,
     job.id,
-    job as unknown as Parameters<typeof buildJobLookupPayload>[2]
+    { maskCustomer: true },
+    job as unknown as Parameters<typeof buildJobLookupPayload>[3]
   );
   return { jobExists: true, job: payload };
 }
 
 const LOOKUP_INCLUDE_RECEIPT = {
+  intakeDocumentHash: true,
+  signedAt: true,
   customer: { select: { name: true, phone: true } },
   device: { select: { model: true, brand: { select: { name: true } } } },
   payments: { select: { amount: true, method: true, createdAt: true } },
@@ -1134,7 +1234,8 @@ export async function lookupByCodeAuth(
   return buildJobLookupPayload(
     prisma,
     job.id,
-    job as unknown as Parameters<typeof buildJobLookupPayload>[2]
+    { maskCustomer: false },
+    job as unknown as Parameters<typeof buildJobLookupPayload>[3]
   );
 }
 

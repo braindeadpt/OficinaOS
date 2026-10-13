@@ -275,6 +275,12 @@ export const ERRORS = {
     status: 409,
     message: "errors.signature_already_submitted",
   },
+  // The ficha drifted after the signing link was created — the signature is
+  // bound to the frozen document, so a changed ficha needs a fresh link.
+  SIGNATURE_STALE: {
+    status: 409,
+    message: "errors.signature_stale",
+  },
 
   // ── Part-request board (procuro-peça, Pro module: market) ──────────────
   PART_REQUEST_NOT_FOUND: {

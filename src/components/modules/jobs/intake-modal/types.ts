@@ -32,6 +32,8 @@ export interface IntakeFormData {
   photos: File[];
   reportedProblem: string;
   signature: string | null;
+  // Remote-signing session whose frozen document this ficha must match.
+  signatureSessionToken: string | null;
 }
 
 export const MAX_PHOTOS = 5;
@@ -94,6 +96,7 @@ export const INITIAL_FORM: IntakeFormData = {
   photos: [],
   reportedProblem: "",
   signature: null,
+  signatureSessionToken: null,
 };
 
 export interface IntakeModalProps {
@@ -148,6 +151,7 @@ const SERVER_FIELD_MAP: Record<string, ServerFieldTarget> = {
   imei: ["imei", 1],
   intakeChecklist: ["checklist", 2],
   intakeSignatureDataUrl: ["signature", 2],
+  signatureSessionToken: ["signature", 2],
   reportedProblem: ["reportedProblem", 2],
 };
 

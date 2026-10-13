@@ -197,6 +197,23 @@ function jobCostsSection(
   }
 }
 
+function signatureSection(t: Ticket, job: JobReceiptData, s: ReceiptStrings) {
+  t.sep();
+  t.wrap(s.termsSigned);
+  t.text("\n");
+  t.center(s.signatureLabel);
+  t.text("______________________________\n");
+  // Integrity seal: the signed-document hash + timestamp, when present.
+  if (!job.intakeDocumentHash) {
+    return;
+  }
+  const when = job.signedAt
+    ? ` ${new Date(job.signedAt).toLocaleString(s.dateLocale)}`
+    : "";
+  t.wrap(`${s.signedDoc} #${job.intakeDocumentHash.slice(0, 12)}${when}`);
+  t.text("\n");
+}
+
 export function buildJobReceiptEscPos(
   settings: ShopSettings | null,
   job: JobReceiptData,
@@ -242,11 +259,7 @@ export function buildJobReceiptEscPos(
     );
   }
   if (prefs.showSignature) {
-    t.sep();
-    t.wrap(s.termsSigned);
-    t.text("\n");
-    t.center(s.signatureLabel);
-    t.text("______________________________\n");
+    signatureSection(t, job, s);
   }
   const url = trackingUrl(
     job.jobCode,

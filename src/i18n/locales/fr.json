@@ -435,6 +435,7 @@
   "empty_catalog_title": "Votre catalogue est vide",
   "enable_user": "Activer l'utilisateur",
   "errors": {
+    "signature_stale": "La fiche a changé après la création de ce lien — générez un nouveau lien de signature et demandez au client de signer à nouveau",
     "account_disabled": "Le compte est désactivé",
     "account_locked": "Compte temporairement verrouillé en raison d'un trop grand nombre de tentatives de connexion infructueuses. ",
     "add_note": "Échec de l'ajout d'une note",
@@ -718,6 +719,7 @@
   "warranty_returns_empty": "Aucune garantie ne revient à suivre.",
   "yes": "Oui",
   "intake": {
+    "sign_remote_invalidated": "La fiche a changé — le code a été invalidé. Générez-en un nouveau.",
     "customer_section": "Client",
     "customer_search": "Rechercher un client existant...",
     "customer_search_placeholder": "Commencez à taper le nom...",
@@ -1190,6 +1192,11 @@
   "sign_page_already_signed_body": "Cette signature a déjà été soumise — rien d'autre à faire.",
   "sign_page_expired_title": "Lien expiré",
   "sign_page_expired_body": "Ce lien de signature a expiré — demandez un nouveau code à la boutique.",
+  "sign_doc_delivery": "Prévu pour",
+  "sign_doc_estimate": "Devis",
+  "sign_doc_problem": "Problème signalé",
+  "sign_doc_device": "Appareil",
+  "sign_doc_customer": "Client",
   "pre_check_subtitle": "Parlez-nous de votre appareil et nous vous répondrons avec un devis.",
   "pre_check_success_body": "Nous avons reçu votre demande et vous contacterons sous peu. Gardez ce code de référence.",
   "pre_check_success_code_label": "Votre référence",

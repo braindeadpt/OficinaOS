@@ -207,7 +207,8 @@ describe("lookupByCode", () => {
     expect(result.jobExists).toBe(true);
     expect(result.job).not.toBeNull();
     expect(result.job?.jobCode).toBe("ABC123");
-    expect(result.job?.customer).toEqual({ name: "John Doe" });
+    // Public tracking masks the name — first name + last initial only.
+    expect(result.job?.customer).toEqual({ name: "John D." });
   });
 
   it("normalizes phone by stripping non-digits before comparison", async () => {

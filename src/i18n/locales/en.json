@@ -435,6 +435,7 @@
   "empty_catalog_title": "Your catalog is empty",
   "enable_user": "Enable user",
   "errors": {
+    "signature_stale": "The intake form changed after this link was created — generate a new signing link and have the customer sign again",
     "account_disabled": "Account is disabled",
     "account_locked": "Account temporarily locked due to too many failed login attempts. Please try again later.",
     "add_note": "Failed to add note",
@@ -718,6 +719,7 @@
   "warranty_returns_empty": "No warranty returns to track.",
   "yes": "Yes",
   "intake": {
+    "sign_remote_invalidated": "The intake form changed — the code was invalidated. Generate a new one.",
     "customer_section": "Customer",
     "customer_search": "Search Customer Name",
     "customer_search_placeholder": "Start typing name...",
@@ -1190,6 +1192,11 @@
   "sign_page_already_signed_body": "This signature was already submitted — nothing else to do.",
   "sign_page_expired_title": "Link expired",
   "sign_page_expired_body": "This signing link has expired — ask the shop to show you a new code.",
+  "sign_doc_delivery": "Promised for",
+  "sign_doc_estimate": "Estimate",
+  "sign_doc_problem": "Reported problem",
+  "sign_doc_device": "Device",
+  "sign_doc_customer": "Customer",
   "pre_check_subtitle": "Tell us about your device and we'll get back to you with an estimate.",
   "pre_check_success_body": "We've received your request and will contact you shortly. Keep this reference code.",
   "pre_check_success_code_label": "Your reference",

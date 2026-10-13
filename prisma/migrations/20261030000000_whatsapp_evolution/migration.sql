@@ -1,6 +1,6 @@
 -- WhatsApp local (Evolution API) — transporte alternativo do módulo Pro
 -- "whatsapp-bot" que corre na LAN da loja.
-ALTER TABLE "ShopSettings"
+ALTER TABLE "shop_settings"
   ADD COLUMN "whatsappTransport" TEXT NOT NULL DEFAULT 'meta',
   ADD COLUMN "evolutionUrl" TEXT,
   ADD COLUMN "evolutionInstance" TEXT,

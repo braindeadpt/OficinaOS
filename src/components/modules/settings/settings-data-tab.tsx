@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import api from "@/lib/api";
@@ -147,7 +148,7 @@ function ImportCard({ entity }: { entity: Entity }) {
       <p className="mt-1 text-on-surface-variant text-xs">
         {t("data_io.import_desc")}
       </p>
-      <input
+      <Input
         accept=".csv,.xls,.xlsx"
         className="hidden"
         onChange={onFile}
