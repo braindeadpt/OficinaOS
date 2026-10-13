@@ -14,6 +14,7 @@ import JobPaymentsSection from "@/components/modules/jobs/job-payments-section";
 import JobPhotosSection from "@/components/modules/jobs/job-photos-section";
 import JobPortalLink from "@/components/modules/jobs/job-portal-link";
 import JobQuotesSection from "@/components/modules/jobs/job-quotes-section";
+import JobReferralsSection from "@/components/modules/jobs/job-referrals-section";
 import JobRepairsSection from "@/components/modules/jobs/job-repairs-section";
 import JobReturnsHistorySection from "@/components/modules/jobs/job-returns-history-section";
 import JobWaitingPartsSection from "@/components/modules/jobs/job-waiting-parts-section";
@@ -520,6 +521,11 @@ export default function JobDetailPage() {
       {/* ── Waiting parts ── */}
       <div className="mt-8 rounded-2xl bg-surface-container p-6">
         <JobWaitingPartsSection job={job} onChanged={() => fetchJob()} />
+      </div>
+
+      {/* ── Referrals — encaminhar para outra loja ── */}
+      <div className="mt-8 rounded-2xl bg-surface-container p-6">
+        <JobReferralsSection jobId={job.id} />
       </div>
 
       {/* ── Notes ── */}

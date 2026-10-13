@@ -48,6 +48,18 @@ export const NAV_ITEMS: NavItem[] = [
     perm: { jobs: ["view"] },
   },
   {
+    icon: "local_shipping",
+    labelKey: "suppliers.nav_label",
+    to: "/suppliers",
+    perm: { parts: ["viewCatalog"] },
+  },
+  {
+    icon: "assignment_return",
+    labelKey: "rmas.nav_label",
+    to: "/rmas",
+    perm: { parts: ["viewCatalog"] },
+  },
+  {
     icon: "people",
     labelKey: "customers",
     to: "/customers",

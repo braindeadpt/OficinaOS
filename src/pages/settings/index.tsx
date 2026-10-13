@@ -10,6 +10,7 @@ import ResetPasswordModal from "@/components/modules/settings/reset-password-mod
 import type { SettingsAiTabHandle } from "@/components/modules/settings/settings-ai-tab";
 import SettingsAiTab from "@/components/modules/settings/settings-ai-tab";
 import SettingsCloudTab from "@/components/modules/settings/settings-cloud-tab";
+import SettingsDataTab from "@/components/modules/settings/settings-data-tab";
 import SettingsNotificationsTab from "@/components/modules/settings/settings-notifications-tab";
 import type { SettingsShopTabHandle } from "@/components/modules/settings/settings-shop-tab";
 import SettingsShopTab from "@/components/modules/settings/settings-shop-tab";
@@ -24,7 +25,7 @@ import { useModalEffects } from "@/hooks/use-modal-effects";
 import { useSettingsStore } from "@/stores/settings";
 import { useUsersStore } from "@/stores/users";
 
-type SettingsTab = "ai" | "cloud" | "shop" | "notifications" | "users";
+type SettingsTab = "ai" | "cloud" | "shop" | "notifications" | "users" | "data";
 
 const TAB_KEYS: SettingsTab[] = [
   "ai",
@@ -32,6 +33,7 @@ const TAB_KEYS: SettingsTab[] = [
   "shop",
   "notifications",
   "users",
+  "data",
 ];
 
 const TAB_ICONS: Record<SettingsTab, string> = {
@@ -40,6 +42,7 @@ const TAB_ICONS: Record<SettingsTab, string> = {
   shop: "storefront",
   notifications: "notifications",
   users: "group",
+  data: "database",
 };
 
 export default function SettingsPage() {
@@ -69,6 +72,7 @@ export default function SettingsPage() {
     shop: null,
     notifications: null,
     users: null,
+    data: null,
   });
   const aiTabRef = useRef<SettingsAiTabHandle>(null);
   const shopTabRef = useRef<SettingsShopTabHandle>(null);
@@ -118,6 +122,7 @@ export default function SettingsPage() {
     { key: "shop", label: t("shop_information") },
     { key: "notifications", label: t("notifications_settings") },
     { key: "users", label: t("users_management") },
+    { key: "data", label: t("data_io.tab") },
   ];
 
   const sectionDescriptions: Record<SettingsTab, string> = {
@@ -126,6 +131,7 @@ export default function SettingsPage() {
     shop: t("shop_information_desc"),
     notifications: t("notifications_settings_desc"),
     users: t("users_management_desc"),
+    data: t("data_io.tab_desc"),
   };
 
   const isFormTab = activeTab === "ai" || activeTab === "shop";
@@ -313,6 +319,7 @@ export default function SettingsPage() {
                 }}
               />
             )}
+            {activeTab === "data" && <SettingsDataTab />}
           </div>
 
           <UnsavedChangesBar

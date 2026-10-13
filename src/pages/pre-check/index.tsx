@@ -54,7 +54,7 @@ const INITIAL: FormState = {
   whatsappOptIn: false,
 };
 
-export default function PreCheckPage() {
+export default function PreCheckPage({ embed = false }: { embed?: boolean }) {
   const { t } = useTranslation();
   const [form, setForm] = useState<FormState>(INITIAL);
   const [submitting, setSubmitting] = useState(false);
@@ -107,24 +107,26 @@ export default function PreCheckPage() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
-      <nav className="sticky top-0 z-50 w-full bg-background">
-        <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-2.5">
-            <img
-              alt=""
-              aria-hidden="true"
-              className="h-8 w-8"
-              height={32}
-              src="/logo-mark.svg"
-              width={32}
-            />
-            <span className="font-bold font-headline text-2xl text-primary-container tracking-tight">
-              OficinaOS
-            </span>
+      {!embed && (
+        <nav className="sticky top-0 z-50 w-full bg-background">
+          <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4">
+            <div className="flex items-center gap-2.5">
+              <img
+                alt=""
+                aria-hidden="true"
+                className="h-8 w-8"
+                height={32}
+                src="/logo-mark.svg"
+                width={32}
+              />
+              <span className="font-bold font-headline text-2xl text-primary-container tracking-tight">
+                OficinaOS
+              </span>
+            </div>
+            <LanguageSwitcher />
           </div>
-          <LanguageSwitcher />
-        </div>
-      </nav>
+        </nav>
+      )}
 
       <main className="flex flex-grow items-center justify-center px-4 py-12">
         <div className="w-full max-w-xl">

@@ -65,6 +65,11 @@ const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const nonce = generateNonce();
     request.cspNonce = nonce;
 
+    // /embed/* pages exist to be iframed on the shop's own website — they get
+    // a permissive frame-ancestors. Everything else stays clickjacking-proof.
+    const isEmbed = (request.raw.url ?? "")
+      .split("?", 1)[0]
+      .startsWith("/embed");
     const wsOrigins = IS_PROD ? "'self' wss:" : "'self' ws: wss:";
     const apiOrigin = env.API_URL ?? env.APP_URL ?? "";
     const requestHost = request.headers.host;
@@ -96,7 +101,7 @@ const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         // 'self' so the in-app print preview can frame /api/receipts/*; the
         // receipt route itself only allows same-origin framing (frame-ancestors).
         `frame-src 'self'`,
-        `frame-ancestors 'none'`,
+        `frame-ancestors ${isEmbed ? "*" : "'none'"}`,
         `object-src 'none'`,
         `base-uri 'self'`,
         `form-action 'self'`,
@@ -104,6 +109,15 @@ const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       ].join(";")
     );
 
+    done();
+  });
+
+  // XFO doesn't understand the /embed exception, so strip it there — CSP
+  // frame-ancestors is the governing policy on modern browsers anyway.
+  app.addHook("onSend", (request, reply, _payload, done) => {
+    if ((request.raw.url ?? "").split("?", 1)[0].startsWith("/embed")) {
+      reply.removeHeader("x-frame-options");
+    }
     done();
   });
 

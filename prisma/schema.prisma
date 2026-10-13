@@ -98,6 +98,21 @@ enum MovementType {
   ADJUSTMENT
 }
 
+enum SupplierRmaStatus {
+  OPEN
+  SENT
+  RECEIVED
+  RESOLVED
+  CANCELLED
+}
+
+enum ReferralStatus {
+  SENT
+  ACCEPTED
+  COMPLETED
+  CANCELLED
+}
+
 enum NotifyChannel {
   WHATSAPP
   IN_APP
@@ -201,6 +216,8 @@ model User {
   inAppNotifications    InAppNotification[]
   returnClaimsOpened    ReturnClaim[]       @relation("ReturnClaimOpenedBy")
   returnClaimsResolved  ReturnClaim[]       @relation("ReturnClaimResolvedBy")
+  supplierRmas          SupplierRma[]
+  jobReferrals          JobReferral[]
 
   @@map("users")
 }
@@ -498,6 +515,7 @@ model Job {
   reworkClaim         ReturnClaim?  @relation("ReworkJobReturnClaim")
 
   intakeRequests IntakeRequest[]
+  referrals      JobReferral[]
 
   @@index([customerId])
   @@index([deviceId])
@@ -666,6 +684,7 @@ model PartsCatalog {
   jobParts       JobPart[]
   saleItems      SaleItem[]
   stockMovements StockMovement[]
+  supplierRmas   SupplierRma[]
 
   @@index([name])
   @@index([category])
@@ -1329,4 +1348,85 @@ model Verification {
   @@index([identifier])
   @@index([userId])
   @@map("verifications")
+}
+
+// ─────────────────────────────────────────────
+// SUPPLIER — peças e serviços externos
+// ─────────────────────────────────────────────
+
+model Supplier {
+  id       String  @id @default(cuid())
+  name     String
+  email    String?
+  phone    String?
+  taxId    String?
+  address  String?
+  notes    String? @db.Text
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  rmas SupplierRma[]
+
+  @@index([name])
+  @@map("suppliers")
+}
+
+// ─────────────────────────────────────────────
+// SUPPLIER RMA — devoluções de peças ao fornecedor
+// ─────────────────────────────────────────────
+
+model SupplierRma {
+  id         String   @id @default(cuid())
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+
+  partId String?
+  part   PartsCatalog? @relation(fields: [partId], references: [id], onDelete: SetNull)
+
+  description String          @db.Text
+  quantity    Int             @default(1)
+  status      SupplierRmaStatus @default(OPEN)
+  reference   String?
+  reason      String?         @db.Text
+  notes       String?         @db.Text
+  sentAt      DateTime?       @db.Timestamptz
+  resolvedAt  DateTime?       @db.Timestamptz
+
+  createdById String
+  createdBy   User   @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now()) @db.Timestamptz
+  updatedAt   DateTime @updatedAt @db.Timestamptz
+
+  @@index([supplierId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("supplier_rmas")
+}
+
+// ─────────────────────────────────────────────
+// JOB REFERRAL — encaminhar reparação a outra loja
+// ─────────────────────────────────────────────
+
+model JobReferral {
+  id   String @id @default(cuid())
+  jobId String
+  job   Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  toShopName    String
+  toShopContact String?
+  reason        String? @db.Text
+  status        ReferralStatus @default(SENT)
+  notes         String?        @db.Text
+  resolvedAt    DateTime?      @db.Timestamptz
+
+  createdById String
+  createdBy   User   @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now()) @db.Timestamptz
+  updatedAt   DateTime @updatedAt @db.Timestamptz
+
+  @@index([jobId])
+  @@index([status])
+  @@map("job_referrals")
 }

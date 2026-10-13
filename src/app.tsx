@@ -43,6 +43,8 @@ const ReportsPage = lazy(() => import("@/pages/reports"));
 const RequestsPage = lazy(() => import("@/pages/requests"));
 const SettingsPage = lazy(() => import("@/pages/settings"));
 const SignPage = lazy(() => import("@/pages/sign"));
+const SupplierRmasPage = lazy(() => import("@/pages/rmas"));
+const SuppliersPage = lazy(() => import("@/pages/suppliers"));
 const TrackingPage = lazy(() => import("@/pages/tracking"));
 
 const DASHBOARD_LAZY_MAP: Record<
@@ -239,6 +241,22 @@ export default function App() {
                 }
                 path="/parts"
               />
+              <Route
+                element={
+                  <DashboardLayout>
+                    <SuppliersPage />
+                  </DashboardLayout>
+                }
+                path="/suppliers"
+              />
+              <Route
+                element={
+                  <DashboardLayout>
+                    <SupplierRmasPage />
+                  </DashboardLayout>
+                }
+                path="/rmas"
+              />
             </Route>
             <Route
               element={
@@ -340,6 +358,7 @@ export default function App() {
           <Route element={<TrackingPage />} path="/tracking/:jobCode?" />
           <Route element={<SignPage />} path="/sign/:token" />
           <Route element={<PreCheckPage />} path="/pre-check" />
+          <Route element={<PreCheckPage embed />} path="/embed/pre-check" />
           <Route element={<HelpPage />} path="/help" />
           <Route element={<NotFoundPage />} path="*" />
         </Routes>
