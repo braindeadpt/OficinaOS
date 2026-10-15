@@ -6,6 +6,7 @@ export type { DbClient } from "../repositories/types.js";
 
 interface AuditInput {
   action: AuditAction;
+  createdAt?: Date;
   fromValue?: string;
   jobId: string | null;
   metadata?: Record<string, unknown>;

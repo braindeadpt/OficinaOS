@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import type { Job, PrismaClient } from "@generated/client";
 import { AuditAction, Prisma, type RepairCategory } from "@generated/client";
 import { isImeiCategory } from "@shared/constants/device-categories";
@@ -20,6 +21,7 @@ import type {
   UpdateJobInput,
 } from "@shared/schemas/job.schema";
 import { isValidImei, normalizeImei } from "@shared/utils/imei";
+import { normalizePhone } from "@shared/utils/phone";
 import {
   findMany as auditFindMany,
   findManyWithInclude as auditFindManyWithInclude,
@@ -27,6 +29,7 @@ import {
 import {
   findUnique as customerFindUnique,
   upsert as customerUpsert,
+  findByNormalizedPhone,
 } from "../repositories/customer.repository.js";
 import {
   createBrand,
@@ -538,6 +541,107 @@ export async function create(
   const fullJob = await jobFindUnique(prisma, job.id, JOB_INCLUDE);
 
   return { ...(fullJob ?? job), finalCost: computeFinalCost(fullJob ?? job) };
+}
+
+const GENERIC_IMPORT_BRAND = "Outra";
+
+export interface ImportedJobInput {
+  createdAt?: string;
+  customerEmail?: string;
+  customerName: string;
+  customerPhone: string;
+  deliveredAt?: string;
+  deviceBrand?: string;
+  deviceModel: string;
+  externalRef?: string;
+  jobCode?: string;
+  problem: string;
+  status?: JobStatusType;
+}
+
+/**
+ * Historical import (CSV/Excel migrations from another system). Shares the
+ * normal creation path pieces — normalized-phone customer match,
+ * case-insensitive brand, device upsert — but skips signatures and
+ * notifications, and carries the legacy dates over: the job's createdAt and,
+ * for DELIVERED history, a STATUS_CHANGED audit row stamped at deliveredAt
+ * so the export's deliveredAt round-trips.
+ */
+export function createImportedJob(
+  prisma: PrismaClient,
+  input: ImportedJobInput,
+  userId: string
+) {
+  const status = input.status ?? "DELIVERED";
+  const createdAt = input.createdAt ? new Date(input.createdAt) : undefined;
+  const deliveredAt = input.deliveredAt ? new Date(input.deliveredAt) : null;
+
+  return prisma.$transaction(async (tx) => {
+    const customer =
+      (await findByNormalizedPhone(tx, normalizePhone(input.customerPhone))) ??
+      (await tx.customer.create({
+        data: {
+          name: input.customerName.trim(),
+          phone: input.customerPhone.trim(),
+          email: input.customerEmail?.trim() || null,
+        },
+      }));
+
+    const brandName = input.deviceBrand?.trim() || GENERIC_IMPORT_BRAND;
+    const brand =
+      (await findBrandFirst(tx, {
+        name: { equals: brandName, mode: "insensitive" },
+      })) ?? (await createBrand(tx, { name: brandName }));
+
+    const device = await upsertDevice(
+      tx,
+      { brandId_model: { brandId: brand.id, model: input.deviceModel } },
+      {},
+      {
+        brand: { connect: { id: brand.id } },
+        model: input.deviceModel,
+        category: null,
+      }
+    );
+
+    const jobCode =
+      input.jobCode ?? (await generateJobCode(tx as PrismaClient)).jobCode;
+    const accessCode = crypto.randomBytes(8).toString("hex");
+
+    const job = await tx.job.create({
+      data: {
+        jobCode,
+        accessCode,
+        externalRef: input.externalRef ?? null,
+        customerId: customer.id,
+        deviceId: device.id,
+        reportedProblem: input.problem.trim(),
+        status,
+        createdById: userId,
+        ...(createdAt ? { createdAt } : {}),
+      },
+    });
+
+    await createAuditLog(tx, {
+      action: AuditAction.JOB_CREATED,
+      jobId: job.id,
+      toValue: jobCode,
+      userId,
+      ...(createdAt ? { createdAt } : {}),
+    });
+
+    if ((status === "DELIVERED" || deliveredAt) && deliveredAt) {
+      await createAuditLog(tx, {
+        action: AuditAction.STATUS_CHANGED,
+        jobId: job.id,
+        toValue: "DELIVERED",
+        userId,
+        createdAt: deliveredAt,
+      });
+    }
+
+    return job;
+  });
 }
 
 const UPDATE_SPECIAL_FIELDS = new Set([
