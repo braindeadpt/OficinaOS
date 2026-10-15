@@ -114,6 +114,55 @@ describe("suppliers routes", () => {
     });
     expect(res.statusCode).toBe(404);
   });
+
+  it("accepts null to clear nullable fields on update", async () => {
+    const update = vi.fn(async (args: { data: Record<string, unknown> }) => ({
+      id: "s1",
+      ...args.data,
+    }));
+    const app = buildApp(
+      {
+        supplier: {
+          findUnique: vi.fn(async () => ({ id: "s1", email: "a@b.c" })),
+          update,
+        },
+      },
+      [{ plugin: suppliersRoutes, prefix: "/api/suppliers" }]
+    );
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/suppliers/s1",
+      payload: { email: null, phone: null },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(update.mock.calls[0]?.[0].data.email).toBeNull();
+    expect(update.mock.calls[0]?.[0].data.phone).toBeNull();
+  });
+
+  it("returns supplier detail with linked parts and rmas", async () => {
+    const findUnique = vi.fn(async () => ({
+      id: "s1",
+      name: "ACME",
+      parts: [{ id: "p1", name: "Screen" }],
+      rmas: [{ id: "r1", status: "OPEN" }],
+    }));
+    const app = buildApp({ supplier: { findUnique } }, [
+      { plugin: suppliersRoutes, prefix: "/api/suppliers" },
+    ]);
+    const res = await app.inject({ method: "GET", url: "/api/suppliers/s1" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.parts).toHaveLength(1);
+    expect(res.json().data.rmas).toHaveLength(1);
+  });
+
+  it("returns 404 for a missing supplier detail", async () => {
+    const app = buildApp(
+      { supplier: { findUnique: vi.fn(async () => null) } },
+      [{ plugin: suppliersRoutes, prefix: "/api/suppliers" }]
+    );
+    const res = await app.inject({ method: "GET", url: "/api/suppliers/nope" });
+    expect(res.statusCode).toBe(404);
+  });
 });
 
 describe("supplier RMAs", () => {
@@ -177,6 +226,84 @@ describe("supplier RMAs", () => {
     expect(res.statusCode).toBe(200);
     expect(update.mock.calls[0]?.[0].data.sentAt).toBeInstanceOf(Date);
   });
+
+  it.each([
+    ["OPEN", "RECEIVED"],
+    ["SENT", "RESOLVED"],
+    ["RECEIVED", "SENT"],
+    ["SENT", "OPEN"],
+  ])("rejects %s → %s with 409 INVALID_TRANSITION", async (from, to) => {
+    const update = vi.fn();
+    const prisma = {
+      supplierRma: {
+        findUnique: vi.fn(async () => ({ id: "r1", status: from })),
+        update,
+      },
+    };
+    const app = buildApp(prisma, [
+      { plugin: supplierRmasRoutes, prefix: "/api/supplier-rmas" },
+    ]);
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/supplier-rmas/r1",
+      payload: { status: to },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("INVALID_TRANSITION");
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("allows RECEIVED → RESOLVED and stamps resolvedAt", async () => {
+    const update = vi.fn(
+      async (_args: { data: { resolvedAt?: Date } }) => ({})
+    );
+    const prisma = {
+      supplierRma: {
+        findUnique: vi.fn(async () => ({ id: "r1", status: "RECEIVED" })),
+        update,
+      },
+    };
+    const app = buildApp(prisma, [
+      { plugin: supplierRmasRoutes, prefix: "/api/supplier-rmas" },
+    ]);
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/supplier-rmas/r1",
+      payload: { status: "RESOLVED" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(update.mock.calls[0]?.[0].data.resolvedAt).toBeInstanceOf(Date);
+  });
+
+  it("reopens a terminal RMA to OPEN and clears sentAt/resolvedAt", async () => {
+    const update = vi.fn(
+      async (_args: {
+        data: { sentAt?: unknown; resolvedAt?: unknown };
+      }) => ({})
+    );
+    const prisma = {
+      supplierRma: {
+        findUnique: vi.fn(async () => ({
+          id: "r1",
+          status: "RESOLVED",
+          sentAt: new Date(),
+          resolvedAt: new Date(),
+        })),
+        update,
+      },
+    };
+    const app = buildApp(prisma, [
+      { plugin: supplierRmasRoutes, prefix: "/api/supplier-rmas" },
+    ]);
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/supplier-rmas/r1",
+      payload: { status: "OPEN" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(update.mock.calls[0]?.[0].data.sentAt).toBeNull();
+    expect(update.mock.calls[0]?.[0].data.resolvedAt).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -184,12 +311,11 @@ describe("supplier RMAs", () => {
 // ---------------------------------------------------------------------------
 
 describe("job referrals", () => {
-  it("creates a referral and leaves a job note", async () => {
+  it("creates a referral and leaves a job note in one transaction", async () => {
     const jobNoteCreate = vi.fn(
       async (_args: { data: { content: string } }) => ({})
     );
-    const prisma = {
-      job: { findUnique: vi.fn(async () => ({ id: "j1" })) },
+    const tx = {
       jobReferral: {
         create: vi.fn(async (args: { data: Record<string, unknown> }) => ({
           id: "ref1",
@@ -197,6 +323,13 @@ describe("job referrals", () => {
         })),
       },
       jobNote: { create: jobNoteCreate },
+    };
+    const $transaction = vi.fn(
+      async (fn: (txArg: typeof tx) => Promise<unknown>) => fn(tx)
+    );
+    const prisma = {
+      job: { findUnique: vi.fn(async () => ({ id: "j1" })) },
+      $transaction,
     };
     const app = buildApp(prisma, [{ plugin: referralsRoutes, prefix: "/api" }]);
     const res = await app.inject({
@@ -206,6 +339,8 @@ describe("job referrals", () => {
     });
     expect(res.statusCode).toBe(201);
     expect(res.json().data.toShopName).toBe("MicroLab");
+    expect($transaction).toHaveBeenCalledOnce();
+    expect(tx.jobReferral.create).toHaveBeenCalledOnce();
     expect(jobNoteCreate.mock.calls[0]?.[0].data.content).toContain("MicroLab");
   });
 
@@ -236,6 +371,74 @@ describe("job referrals", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().data).toHaveLength(1);
+  });
+
+  it.each([
+    ["SENT", "COMPLETED"],
+    ["ACCEPTED", "SENT"],
+    ["COMPLETED", "ACCEPTED"],
+    ["CANCELLED", "COMPLETED"],
+  ])("rejects %s → %s with 409 INVALID_TRANSITION", async (from, to) => {
+    const updateFn = vi.fn();
+    const prisma = {
+      jobReferral: {
+        findUnique: vi.fn(async () => ({ id: "r1", status: from })),
+        update: updateFn,
+      },
+    };
+    const app = buildApp(prisma, [{ plugin: referralsRoutes, prefix: "/api" }]);
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/referrals/r1",
+      payload: { status: to },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("INVALID_TRANSITION");
+    expect(updateFn).not.toHaveBeenCalled();
+  });
+
+  it("allows ACCEPTED → COMPLETED and stamps resolvedAt", async () => {
+    const updateFn = vi.fn(
+      async (_args: { data: { resolvedAt?: Date } }) => ({})
+    );
+    const prisma = {
+      jobReferral: {
+        findUnique: vi.fn(async () => ({ id: "r1", status: "ACCEPTED" })),
+        update: updateFn,
+      },
+    };
+    const app = buildApp(prisma, [{ plugin: referralsRoutes, prefix: "/api" }]);
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/referrals/r1",
+      payload: { status: "COMPLETED" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(updateFn.mock.calls[0]?.[0].data.resolvedAt).toBeInstanceOf(Date);
+  });
+
+  it("reopens a terminal referral to SENT and clears resolvedAt", async () => {
+    const updateFn = vi.fn(
+      async (_args: { data: { resolvedAt?: unknown } }) => ({})
+    );
+    const prisma = {
+      jobReferral: {
+        findUnique: vi.fn(async () => ({
+          id: "r1",
+          status: "CANCELLED",
+          resolvedAt: new Date(),
+        })),
+        update: updateFn,
+      },
+    };
+    const app = buildApp(prisma, [{ plugin: referralsRoutes, prefix: "/api" }]);
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/referrals/r1",
+      payload: { status: "SENT" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(updateFn.mock.calls[0]?.[0].data.resolvedAt).toBeNull();
   });
 });
 

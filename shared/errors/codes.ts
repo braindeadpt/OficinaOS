@@ -105,6 +105,7 @@ export const ERRORS = {
     status: 409,
     message: "errors.conflict_status_transition",
   },
+  INVALID_TRANSITION: { status: 409, message: "errors.invalid_transition" },
   PHOTO_LIMIT_REACHED: { status: 409, message: "errors.photo_limit_reached" },
   USERNAME_EXISTS: { status: 409, message: "errors.username_exists" },
   EMAIL_EXISTS: { status: 409, message: "errors.email_exists" },

@@ -1,5 +1,23 @@
 import { z } from "zod";
 
+const ORIGIN_LIST_SPLIT = /[\s,]+/;
+
+// Every non-empty token must be a valid http(s) URL — the value feeds CSP
+// frame-ancestors on /embed/*, so garbage must be rejected at the API edge.
+function isOriginList(value: string): boolean {
+  return value
+    .split(ORIGIN_LIST_SPLIT)
+    .filter(Boolean)
+    .every((token) => {
+      try {
+        const url = new URL(token);
+        return url.protocol === "http:" || url.protocol === "https:";
+      } catch {
+        return false;
+      }
+    });
+}
+
 export const updateAiSettingsSchema = z
   .object({
     endpointUrl: z
@@ -60,6 +78,14 @@ export const updateShopSettingsSchema = z
           .regex(/^https?:\/\//, { error: "validations.invalid_url" }),
       ])
       .optional(),
+    // Origins allowed to iframe the /embed/* widget (frame-ancestors). One
+    // per line or comma-separated; empty/null = any site may embed it.
+    embedAllowedOrigins: z
+      .string()
+      .max(4000)
+      .refine(isOriginList, { error: "validations.invalid_url" })
+      .nullable()
+      .optional(),
   })
   .refine(
     (data) =>
@@ -81,7 +107,8 @@ export const updateShopSettingsSchema = z
       data.countryCode !== undefined ||
       data.timezone !== undefined ||
       data.monthlyRevenueGoal !== undefined ||
-      data.reviewUrl !== undefined,
+      data.reviewUrl !== undefined ||
+      data.embedAllowedOrigins !== undefined,
     { message: "validations.at_least_one_field" }
   );
 

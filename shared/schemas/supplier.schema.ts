@@ -9,7 +9,14 @@ export const createSupplierSchema = z.object({
   notes: z.string().max(2000).optional(),
 });
 
-export const updateSupplierSchema = createSupplierSchema.partial().extend({
+export const updateSupplierSchema = z.object({
+  name: z.string().min(1).max(120).optional(),
+  // Nullable on update — null clears the field; undefined leaves it.
+  email: z.string().email().max(160).nullable().optional(),
+  phone: z.string().max(40).nullable().optional(),
+  taxId: z.string().max(20).nullable().optional(),
+  address: z.string().max(240).nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
   isActive: z.boolean().optional(),
 });
 

@@ -13,6 +13,7 @@ import { requirePermission } from "../middlewares/rbac.js";
 import {
   createRma,
   createSupplier,
+  getSupplierDetail,
   listRmas,
   listSuppliers,
   updateRma,
@@ -48,6 +49,12 @@ export const suppliersRoutes: FastifyPluginAsync = async (app) => {
       includeInactive: q.includeInactive === "true",
     });
     return reply.send({ data: suppliers });
+  });
+
+  app.get("/:id", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const supplier = await getSupplierDetail(app.prisma, id);
+    return reply.send({ data: supplier });
   });
 
   app.post(

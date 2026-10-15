@@ -72,8 +72,15 @@ export default function JobReferralsSection({ jobId }: { jobId: string }) {
     try {
       await api.patch(`/referrals/${id}`, { status });
       load();
-    } catch {
-      toast.error(t("referrals.save_failed"));
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      toast.error(
+        t(
+          code === "INVALID_TRANSITION"
+            ? "errors.invalid_transition"
+            : "referrals.save_failed"
+        )
+      );
     }
   };
 

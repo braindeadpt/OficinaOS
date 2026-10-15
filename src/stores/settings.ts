@@ -124,6 +124,7 @@ interface SettingsState {
     printerPort?: number;
     monthlyRevenueGoal?: number | null;
     reviewUrl?: string;
+    embedAllowedOrigins?: string | null;
   }) => Promise<ShopSettings>;
   saveSmsSettings: (data: {
     enabled?: boolean;

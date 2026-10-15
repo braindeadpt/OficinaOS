@@ -3,10 +3,11 @@ import {
   type ImportRowError,
   type ImportSummary,
 } from "@shared/schemas/data-io.schema";
-import { type ChangeEvent, useRef, useState } from "react";
+import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -19,6 +20,7 @@ import {
   readTableFile,
   remapChunkErrors,
 } from "@/lib/import-table";
+import { useSettingsStore } from "@/stores/settings";
 
 type Entity = "parts" | "repairs" | "jobs";
 
@@ -64,6 +66,8 @@ async function csvToXlsxBlob(
   );
   return writeXlsxFile(rows, { sheet }).toBlob();
 }
+
+const TRAILING_SLASHES = /\/+$/;
 
 const ENTITY_LABELS: Record<Entity, string> = {
   parts: "data_io.parts",
@@ -264,11 +268,31 @@ function ImportCard({ entity }: { entity: Entity }) {
 
 function EmbedCard() {
   const { t } = useTranslation();
+  const shopSettings = useSettingsStore((s) => s.shopSettings);
+  const fetchShopSettings = useSettingsStore((s) => s.fetchShopSettings);
+  const saveShopSettings = useSettingsStore((s) => s.saveShopSettings);
+  const [copied, setCopied] = useState(false);
+  const [origins, setOrigins] = useState<string | null>(null);
+  const [savingOrigins, setSavingOrigins] = useState(false);
+
+  useEffect(() => {
+    if (!shopSettings) {
+      fetchShopSettings();
+    }
+  }, [shopSettings, fetchShopSettings]);
+
+  // The widget URL must be the shop's PUBLIC address — window.location is
+  // wherever staff happen to be (LAN IP, tunnel), which won't resolve for
+  // website visitors.
+  const baseUrl = (
+    shopSettings?.trackingBaseUrl?.replace(TRAILING_SLASHES, "") ||
+    window.location.origin
+  ).trim();
   const snippet = `<iframe
-  src="${window.location.origin}/embed/pre-check"
+  src="${baseUrl}/embed/pre-check"
   style="width:100%;max-width:560px;height:720px;border:0;border-radius:12px"
   title="OficinaOS"></iframe>`;
-  const [copied, setCopied] = useState(false);
+  const isHttps = baseUrl.startsWith("https://");
 
   const copy = async () => {
     try {
@@ -277,6 +301,24 @@ function EmbedCard() {
       setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.error(t("data_io.copy_failed"));
+    }
+  };
+
+  const saveOrigins = async () => {
+    if (origins === null || savingOrigins || !shopSettings) {
+      return;
+    }
+    setSavingOrigins(true);
+    try {
+      await saveShopSettings({
+        shopName: shopSettings.shopName,
+        embedAllowedOrigins: origins,
+      });
+      toast.success(t("data_io.embed_origins_saved"));
+    } catch {
+      toast.error(t("data_io.embed_origins_failed"));
+    } finally {
+      setSavingOrigins(false);
     }
   };
 
@@ -299,12 +341,42 @@ function EmbedCard() {
       <p className="mt-1 text-on-surface-variant text-xs">
         {t("data_io.embed_desc")}
       </p>
+      {!isHttps && (
+        <p className="mt-2 flex items-start gap-1.5 text-warning text-xs">
+          <Icon className="shrink-0" name="warning" size="sm" />
+          <span>{t("data_io.embed_https_warn")}</span>
+        </p>
+      )}
       <Textarea
         className="mt-3 font-mono text-xs"
         readOnly
         rows={5}
         value={snippet}
       />
+      <Field label={t("data_io.embed_origins_label")}>
+        <Textarea
+          className="font-mono text-xs"
+          onChange={(e) => setOrigins(e.target.value)}
+          placeholder="https://a-sua-loja.pt"
+          rows={2}
+          value={origins ?? shopSettings?.embedAllowedOrigins ?? ""}
+        />
+      </Field>
+      <p className="mt-1 text-on-surface-variant text-xs">
+        {t("data_io.embed_origins_hint")}
+      </p>
+      <div className="mt-2 flex justify-end">
+        <Button
+          disabled={origins === null}
+          loading={savingOrigins}
+          onClick={saveOrigins}
+          size="sm"
+          type="button"
+          variant="secondary"
+        >
+          {t("save")}
+        </Button>
+      </div>
     </div>
   );
 }
