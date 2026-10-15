@@ -33,6 +33,8 @@
     "default_price": "Unit Price",
     "supplier": "Supplier",
     "supplier_placeholder": "e.g. iFixit, MobileDefenders",
+    "supplier_link": "Supplier record",
+    "supplier_none": "No linked supplier",
     "optional": "Optional",
     "active_status": "Show in Inventory",
     "active_status_desc": "Makes the part visible in inventory lists",

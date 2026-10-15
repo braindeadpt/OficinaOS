@@ -10,6 +10,7 @@ interface PartsCatalogState {
     category: string;
     defaultPrice: number;
     supplier?: string;
+    supplierId?: string | null;
     listedOnline?: boolean;
     reorderLevel?: number;
     stockQuantity?: number;

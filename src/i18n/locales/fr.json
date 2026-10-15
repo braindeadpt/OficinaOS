@@ -33,6 +33,8 @@
     "default_price": "Prix par défaut",
     "supplier": "Fournisseur",
     "supplier_placeholder": "par ex. ",
+    "supplier_link": "Fiche fournisseur",
+    "supplier_none": "Aucun fournisseur lié",
     "optional": "Facultatif",
     "active_status": "Statut actif",
     "active_status_desc": "Visible dans les listes d'inventaire",

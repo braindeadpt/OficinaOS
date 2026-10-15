@@ -4,9 +4,15 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("react-i18next", () => ({
+  initReactI18next: { init: () => undefined, type: "3rdParty" },
   useTranslation: () => ({
     t: (key: string) => key,
   }),
+}));
+
+// The modal fetches the supplier list for the link select.
+vi.mock("@/lib/api", () => ({
+  default: { get: vi.fn(async () => ({ data: { data: [] } })) },
 }));
 
 import AddPartModal from "../add-part-modal";

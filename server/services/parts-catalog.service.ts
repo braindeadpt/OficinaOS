@@ -86,6 +86,15 @@ export async function create(
   input: CreatePartInput,
   userId?: string
 ) {
+  if (input.supplierId) {
+    const supplier = await prisma.supplier.findUnique({
+      where: { id: input.supplierId },
+      select: { id: true },
+    });
+    if (!supplier) {
+      throw new AppError("NOT_FOUND");
+    }
+  }
   const initialStock = input.stockQuantity ?? 0;
   const data = {
     category: input.category,
@@ -95,6 +104,9 @@ export async function create(
     reorderLevel: input.reorderLevel ?? 0,
     stockQuantity: initialStock,
     supplier: input.supplier ?? null,
+    ...(input.supplierId
+      ? { supplierRef: { connect: { id: input.supplierId } } }
+      : {}),
   };
   // The initial count used to be dropped (stock always started at 0). When
   // there is opening stock it is recorded as a PURCHASE so the movement
@@ -131,6 +143,15 @@ export async function update(
   const part = await findPartUnique(prisma, id);
   if (!part) {
     return null;
+  }
+  if (input.supplierId) {
+    const supplier = await prisma.supplier.findUnique({
+      where: { id: input.supplierId },
+      select: { id: true },
+    });
+    if (!supplier) {
+      throw new AppError("NOT_FOUND");
+    }
   }
 
   const stockDelta =

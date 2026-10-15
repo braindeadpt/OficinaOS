@@ -220,7 +220,11 @@ describe("export hardening", () => {
 describe("parts import", () => {
   function prismaWithParts(
     existing: unknown[],
-    opts: { lockedStock?: number; updateMisses?: boolean } = {}
+    opts: {
+      lockedStock?: number;
+      updateMisses?: boolean;
+      suppliers?: { id: string }[];
+    } = {}
   ) {
     const tx = {
       partsCatalog: {
@@ -248,6 +252,7 @@ describe("parts import", () => {
           create: tx.partsCatalog.create,
         },
         auditLog: { create: vi.fn(async () => ({})) },
+        supplier: { findMany: vi.fn(async () => opts.suppliers ?? []) },
         $transaction: vi.fn(async (fn: (t: unknown) => unknown) => fn(tx)),
       },
       tx,
@@ -416,6 +421,39 @@ describe("parts import", () => {
     const meta = auditCalls[0][0].data.metadata;
     expect(meta).toMatchObject({ created: 1, entity: "parts", errors: 1 });
     expect(meta).not.toHaveProperty("rows");
+  });
+
+  it("links supplierId when the supplier name hits exactly one record", async () => {
+    const { prisma, tx } = prismaWithParts([], { suppliers: [{ id: "s1" }] });
+    const app = buildApp(prisma);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/import/parts",
+      payload: { rows: [{ name: "Screen", supplier: " acme " }] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().created).toBe(1);
+    const calls = tx.partsCatalog.create.mock.calls as unknown as [
+      { data: { supplier: string; supplierId: string | null } },
+    ][];
+    expect(calls[0][0].data.supplier).toBe(" acme ");
+    expect(calls[0][0].data.supplierId).toBe("s1");
+  });
+
+  it("leaves supplierId null when the supplier name is ambiguous", async () => {
+    const { prisma, tx } = prismaWithParts([], {
+      suppliers: [{ id: "s1" }, { id: "s2" }],
+    });
+    const app = buildApp(prisma);
+    await app.inject({
+      method: "POST",
+      url: "/api/import/parts",
+      payload: { rows: [{ name: "Screen", supplier: "ACME" }] },
+    });
+    const calls = tx.partsCatalog.create.mock.calls as unknown as [
+      { data: { supplierId: string | null } },
+    ][];
+    expect(calls[0][0].data.supplierId).toBeNull();
   });
 });
 

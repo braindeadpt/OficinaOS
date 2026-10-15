@@ -20,6 +20,7 @@ function mockPrisma() {
       fields: { reorderLevel: "partsCatalog.reorderLevel" },
     },
     stockMovement: { create: vi.fn() },
+    supplier: { findUnique: vi.fn() },
     $transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(mock)),
   };
   return mock as unknown as PrismaClient;
@@ -377,6 +378,49 @@ describe("create", () => {
     );
     expect(prisma.stockMovement.create).not.toHaveBeenCalled();
   });
+
+  it("connects the supplier record when supplierId is provided", async () => {
+    (prisma.supplier.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "s1",
+    });
+    (prisma.partsCatalog.create as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "part-5",
+      stockQuantity: 0,
+    });
+
+    await create(
+      prisma,
+      {
+        category: "SCREEN",
+        defaultPrice: 10,
+        name: "Screen",
+        supplierId: "s1",
+      },
+      "user-1"
+    );
+
+    expect(prisma.partsCatalog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        supplierRef: { connect: { id: "s1" } },
+      }),
+    });
+  });
+
+  it("404s when supplierId does not match a supplier", async () => {
+    (prisma.supplier.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(
+      null
+    );
+
+    await expect(
+      create(prisma, {
+        category: "SCREEN",
+        defaultPrice: 10,
+        name: "Screen",
+        supplierId: "ghost",
+      })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(prisma.partsCatalog.create).not.toHaveBeenCalled();
+  });
 });
 
 describe("update", () => {
@@ -455,6 +499,22 @@ describe("update", () => {
         type: "ADJUSTMENT",
       },
     });
+  });
+
+  it("passes supplierId through — null clears the link", async () => {
+    (
+      prisma.partsCatalog.findUnique as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({ id: "part-1", stockQuantity: 0 });
+    (prisma.partsCatalog.update as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "part-1",
+    });
+
+    await update(prisma, "part-1", { supplierId: null }, "user-1");
+    expect(prisma.partsCatalog.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ supplierId: null }),
+      })
+    );
   });
 
   it("does not write a movement when stockQuantity is unchanged", async () => {
