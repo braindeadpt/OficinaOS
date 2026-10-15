@@ -1,7 +1,7 @@
 import type { PartCategoryType } from "@shared/constants";
 import { PartCategory } from "@shared/constants";
 import type { PartsCatalog } from "@shared/types";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import ConfirmDiscardDialog from "@/components/ui/confirm-discard-dialog";
@@ -11,6 +11,12 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useModalEffects } from "@/hooks/use-modal-effects";
+import api from "@/lib/api";
+
+interface SupplierOption {
+  id: string;
+  name: string;
+}
 
 interface AddPartFormData {
   category: PartCategoryType | "";
@@ -22,15 +28,19 @@ interface AddPartFormData {
   /** Opening stock — create only; later changes go through stock movements. */
   stockQuantity: string;
   supplier: string;
+  /** Linked Supplier record — "" means none. */
+  supplierId: string;
 }
 
 export type AddPartSubmitData = Omit<
   AddPartFormData,
-  "defaultPrice" | "reorderLevel" | "stockQuantity"
+  "defaultPrice" | "reorderLevel" | "stockQuantity" | "supplierId"
 > & {
   defaultPrice: number;
   reorderLevel: number;
   stockQuantity?: number;
+  /** null clears the supplier link on update. */
+  supplierId: string | null;
 };
 
 interface AddPartModalProps {
@@ -48,6 +58,7 @@ const INITIAL_FORM: AddPartFormData = {
   category: "",
   defaultPrice: "",
   supplier: "",
+  supplierId: "",
   isActive: true,
   listedOnline: false,
   reorderLevel: "",
@@ -65,6 +76,7 @@ function isDirty(
       Number.parseFloat(form.defaultPrice) !==
         Number(editingPart.defaultPrice) ||
       form.supplier !== (editingPart.supplier ?? "") ||
+      form.supplierId !== (editingPart.supplierId ?? "") ||
       form.isActive !== editingPart.isActive ||
       form.listedOnline !== editingPart.listedOnline ||
       form.reorderLevel !== String(editingPart.reorderLevel ?? 0)
@@ -75,6 +87,7 @@ function isDirty(
     form.category !== INITIAL_FORM.category ||
     form.defaultPrice !== INITIAL_FORM.defaultPrice ||
     form.supplier !== INITIAL_FORM.supplier ||
+    form.supplierId !== INITIAL_FORM.supplierId ||
     form.isActive !== INITIAL_FORM.isActive ||
     form.listedOnline !== INITIAL_FORM.listedOnline ||
     form.reorderLevel !== INITIAL_FORM.reorderLevel ||
@@ -99,6 +112,7 @@ export default function AddPartModal({
         category: editingPart.category as PartCategoryType,
         defaultPrice: String(editingPart.defaultPrice),
         supplier: editingPart.supplier ?? "",
+        supplierId: editingPart.supplierId ?? "",
         isActive: editingPart.isActive,
         listedOnline: editingPart.listedOnline,
         reorderLevel: String(editingPart.reorderLevel ?? 0),
@@ -111,6 +125,16 @@ export default function AddPartModal({
     Partial<Record<"name" | "category" | "defaultPrice", string>>
   >({});
   const [showConfirmClose, setShowConfirmClose] = useState(false);
+  const [supplierOptions, setSupplierOptions] = useState<SupplierOption[]>([]);
+
+  // Active suppliers for the link select — failure is non-fatal, the
+  // free-text supplier field still works.
+  useEffect(() => {
+    api
+      .get("/suppliers")
+      .then((res) => setSupplierOptions(res.data?.data ?? []))
+      .catch(() => setSupplierOptions([]));
+  }, []);
 
   const update = useCallback(
     <K extends keyof AddPartFormData>(key: K, value: AddPartFormData[K]) => {
@@ -167,6 +191,7 @@ export default function AddPartModal({
       category: form.category as PartCategoryType,
       defaultPrice: priceVal,
       supplier: form.supplier,
+      supplierId: form.supplierId || null,
       isActive: form.isActive,
       listedOnline: form.listedOnline,
       reorderLevel: Number.parseInt(form.reorderLevel, 10) || 0,
@@ -345,6 +370,39 @@ export default function AddPartModal({
                 placeholder={t("add_part_modal.supplier_placeholder")}
                 value={form.supplier}
               />
+            </div>
+
+            <div>
+              <Label className="mb-2 block" htmlFor="part-supplier-link">
+                {t("add_part_modal.supplier_link")}{" "}
+                <span className="font-normal text-on-surface-variant text-xs normal-case tracking-normal">
+                  ({t("add_part_modal.optional")})
+                </span>
+              </Label>
+              <div className="relative">
+                <Select
+                  id="part-supplier-link"
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    update("supplierId", id);
+                    const picked = supplierOptions.find((s) => s.id === id);
+                    if (picked) {
+                      update("supplier", picked.name);
+                    }
+                  }}
+                  value={form.supplierId}
+                >
+                  <option value="">{t("add_part_modal.supplier_none")}</option>
+                  {supplierOptions.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </Select>
+                <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2">
+                  <Icon name="expand_more" size="sm" />
+                </span>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

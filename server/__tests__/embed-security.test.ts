@@ -43,13 +43,18 @@ describe("parseOriginList", () => {
   });
 });
 
-async function buildApp(embedAllowedOrigins?: string | null) {
+async function buildApp(
+  embedAllowedOrigins?: string | null,
+  findUnique?: ReturnType<typeof vi.fn>
+) {
   const app = Fastify();
   app.decorate("prisma", {
     shopSettings: {
-      findUnique: vi.fn(async () =>
-        embedAllowedOrigins === undefined ? null : { embedAllowedOrigins }
-      ),
+      findUnique:
+        findUnique ??
+        vi.fn(async () =>
+          embedAllowedOrigins === undefined ? null : { embedAllowedOrigins }
+        ),
     },
     auditLog: { create: vi.fn(async () => ({})) },
   } as never);
@@ -99,5 +104,57 @@ describe("embed CSP / X-Frame-Options", () => {
       "frame-ancestors 'none'"
     );
     expect(res.headers["x-frame-options"]).toBeDefined();
+  });
+
+  it("reuses the last good origins when the DB lookup fails", async () => {
+    const findUnique = vi
+      .fn()
+      .mockResolvedValueOnce({ embedAllowedOrigins: "https://loja.pt" })
+      .mockRejectedValueOnce(new Error("db down"));
+    const app = await buildApp(undefined, findUnique);
+    const first = await app.inject({ method: "GET", url: "/embed/pre-check" });
+    expect(first.headers["content-security-policy"]).toContain(
+      "frame-ancestors https://loja.pt"
+    );
+    // Push the cache past its 60s TTL so the next request hits the DB — the
+    // failure must not downgrade the policy to '*'.
+    const now = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 61_000);
+    const res = await app.inject({ method: "GET", url: "/embed/pre-check" });
+    now.mockRestore();
+    expect(res.headers["content-security-policy"]).toContain(
+      "frame-ancestors https://loja.pt"
+    );
+  });
+
+  it("falls back to '*' without caching it when the first lookup fails", async () => {
+    const findUnique = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("db down"))
+      .mockResolvedValueOnce({ embedAllowedOrigins: "https://loja.pt" });
+    const app = await buildApp(undefined, findUnique);
+    const first = await app.inject({ method: "GET", url: "/embed/pre-check" });
+    expect(first.headers["content-security-policy"]).toContain(
+      "frame-ancestors *"
+    );
+    // Nothing was cached, so the very next request retries the DB read.
+    const second = await app.inject({ method: "GET", url: "/embed/pre-check" });
+    expect(second.headers["content-security-policy"]).toContain(
+      "frame-ancestors https://loja.pt"
+    );
+    expect(findUnique).toHaveBeenCalledTimes(2);
+  });
+
+  it("drops the cached origins when shop settings are saved", async () => {
+    const findUnique = vi
+      .fn()
+      .mockResolvedValueOnce({ embedAllowedOrigins: "https://loja.pt" })
+      .mockResolvedValueOnce({ embedAllowedOrigins: "https://novo.pt" });
+    const app = await buildApp(undefined, findUnique);
+    await app.inject({ method: "GET", url: "/embed/pre-check" });
+    app.resetEmbedOriginsCache();
+    const res = await app.inject({ method: "GET", url: "/embed/pre-check" });
+    expect(res.headers["content-security-policy"]).toContain(
+      "frame-ancestors https://novo.pt"
+    );
   });
 });

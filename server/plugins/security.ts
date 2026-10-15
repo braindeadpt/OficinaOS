@@ -99,7 +99,12 @@ const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // frame-ancestors for /embed/* comes from the shop's embedAllowedOrigins
   // setting — a DB read per request would be wasteful, so cache it briefly.
+  // The cache is only ever written on success; a DB error falls back to the
+  // last good value (or '*' uncached if we never read one).
   let embedOriginsCache: { at: number; value: string } | null = null;
+  app.decorate("resetEmbedOriginsCache", () => {
+    embedOriginsCache = null;
+  });
   async function embedFrameAncestors(request: FastifyRequest): Promise<string> {
     if (
       embedOriginsCache &&
@@ -107,7 +112,7 @@ const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     ) {
       return embedOriginsCache.value;
     }
-    let origins: string[] = [];
+    let origins: string[];
     try {
       const settings = await request.server.prisma.shopSettings.findUnique({
         where: { id: "default" },
@@ -117,8 +122,9 @@ const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     } catch (err) {
       request.log.warn(
         { err },
-        "embedAllowedOrigins lookup failed — allowing any origin"
+        "embedAllowedOrigins lookup failed — reusing last good value"
       );
+      return embedOriginsCache?.value ?? "*";
     }
     const value = origins.length > 0 ? origins.join(" ") : "*";
     embedOriginsCache = { at: Date.now(), value };
@@ -512,6 +518,9 @@ export function logAuditRequest(request: FastifyRequest, reply: FastifyReply) {
 export default fp(securityPlugin, { name: "security-plugin" });
 
 declare module "fastify" {
+  interface FastifyInstance {
+    resetEmbedOriginsCache: () => void;
+  }
   interface FastifyRequest {
     cspNonce: string;
   }

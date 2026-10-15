@@ -151,6 +151,10 @@ export async function updateRma(
   if (!existing) {
     throw new AppError("NOT_FOUND");
   }
+  const include = {
+    supplier: { select: { id: true, name: true } },
+    part: { select: { id: true, name: true } },
+  };
   const data: Record<string, unknown> = { ...input };
   if (input.status && input.status !== existing.status) {
     if (!RMA_TRANSITIONS[existing.status]?.includes(input.status)) {
@@ -167,13 +171,16 @@ export async function updateRma(
         data.resolvedAt = new Date();
       }
     }
+    // Atomic claim: two concurrent transitions must not both pass the check
+    // above — the write only lands if the status is still what we read.
+    const claimed = await prisma.supplierRma.updateMany({
+      where: { id, status: existing.status },
+      data,
+    });
+    if (claimed.count === 0) {
+      throw new AppError("INVALID_TRANSITION");
+    }
+    return prisma.supplierRma.findUniqueOrThrow({ where: { id }, include });
   }
-  return prisma.supplierRma.update({
-    where: { id },
-    data,
-    include: {
-      supplier: { select: { id: true, name: true } },
-      part: { select: { id: true, name: true } },
-    },
-  });
+  return prisma.supplierRma.update({ where: { id }, data, include });
 }

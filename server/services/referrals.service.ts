@@ -72,6 +72,9 @@ export async function update(
   if (!existing) {
     throw new AppError("NOT_FOUND");
   }
+  const include = {
+    createdBy: { select: { id: true, name: true, username: true } },
+  };
   const data: Record<string, unknown> = { ...input };
   if (input.status && input.status !== existing.status) {
     if (!REFERRAL_TRANSITIONS[existing.status]?.includes(input.status)) {
@@ -82,12 +85,16 @@ export async function update(
     } else if (TERMINAL_REFERRAL_STATUSES.has(input.status)) {
       data.resolvedAt = new Date();
     }
+    // Atomic claim: a concurrent transition between the read and this write
+    // must not overwrite — update only if the status still matches.
+    const claimed = await prisma.jobReferral.updateMany({
+      where: { id, status: existing.status },
+      data,
+    });
+    if (claimed.count === 0) {
+      throw new AppError("INVALID_TRANSITION");
+    }
+    return prisma.jobReferral.findUniqueOrThrow({ where: { id }, include });
   }
-  return prisma.jobReferral.update({
-    where: { id },
-    data,
-    include: {
-      createdBy: { select: { id: true, name: true, username: true } },
-    },
-  });
+  return prisma.jobReferral.update({ where: { id }, data, include });
 }
