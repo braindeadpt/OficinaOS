@@ -3,6 +3,8 @@
  * keyed by header name, ready to POST to /api/import/*.
  */
 
+import type { ImportRowError } from "@shared/schemas/data-io.schema";
+
 const BOM_RE = /^﻿/;
 const XLSX_RE = /\.xlsx$/i;
 const XLS_RE = /\.xls$/i;
@@ -123,21 +125,32 @@ function parseLine(line: string, delimiter: Delimiter): string[] {
   return cells;
 }
 
-export function parseCsv(text: string): string[][] {
+export interface ParsedTable {
+  /** Physical 1-based file line each row came from (header is line 1). */
+  lines: number[];
+  rows: string[][];
+}
+
+// Empty lines are skipped but their physical line number is remembered —
+// server error rows must map back to the line the user sees in the sheet.
+function parseCsvDetailed(text: string): ParsedTable {
   const src = text.replace(BOM_RE, "");
   const lines = splitLines(src);
-  if (lines.length === 0) {
-    return [];
-  }
   const delimiter = detectDelimiter(lines[0] ?? "");
   const rows: string[][] = [];
-  for (const line of lines) {
+  const lineNos: number[] = [];
+  for (const [idx, line] of lines.entries()) {
     const cells = parseLine(line, delimiter);
     if (cells.length > 1 || cells[0] !== "") {
       rows.push(cells);
+      lineNos.push(idx + 1);
     }
   }
-  return rows;
+  return { lines: lineNos, rows };
+}
+
+export function parseCsv(text: string): string[][] {
+  return parseCsvDetailed(text).rows;
 }
 
 /**
@@ -177,8 +190,11 @@ function parseWithComma(v: string): number | null {
     : null;
 }
 
+const CURRENCY_TOKEN = /€\s*|\s*€/g;
+
 export function parsePtNumber(raw: string): number | null {
-  const v = raw.trim();
+  // Tolerate a currency symbol glued to the value: "12,50 €" / "€12,50".
+  const v = raw.trim().replace(CURRENCY_TOKEN, "").trim();
   if (v === "") {
     return null;
   }
@@ -263,25 +279,36 @@ export function xlsxUncompressedSize(buf: ArrayBuffer): number {
   return total;
 }
 
-function toObjects(table: string[][]): Record<string, string>[] {
-  if (table.length < 2) {
-    return [];
+// Our own exports prefix formula-dangerous cells with ' — strip it back on
+// import so a round-trip doesn't corrupt names ("'=CMD()" -> "=CMD()").
+const EXPORTED_GUARD = /^'(?=[=+\-@\t\r])/;
+
+export interface ImportedTable {
+  /** Physical file line of each row — header is 1, first data row is 2. */
+  lines: number[];
+  rows: Record<string, string>[];
+}
+
+function toObjects(table: ParsedTable): ImportedTable {
+  if (table.rows.length < 2) {
+    return { lines: [], rows: [] };
   }
-  const headers = table[0].map((h) =>
+  const headers = table.rows[0].map((h) =>
     h.trim().toLowerCase().replace(/\s+/g, "_")
   );
-  return table.slice(1).map((cells) => {
+  const rows = table.rows.slice(1).map((cells) => {
     const obj: Record<string, string> = {};
     headers.forEach((h, i) => {
       if (h) {
-        obj[h] = (cells[i] ?? "").trim();
+        obj[h] = (cells[i] ?? "").trim().replace(EXPORTED_GUARD, "");
       }
     });
     return obj;
   });
+  return { lines: table.lines.slice(1), rows };
 }
 
-async function readXlsx(file: File): Promise<string[][]> {
+async function readXlsx(file: File): Promise<ParsedTable> {
   const buf = await file.arrayBuffer();
   if (xlsxUncompressedSize(buf) > MAX_XLSX_UNCOMPRESSED_BYTES) {
     throw new ImportFileError("data_io.xlsx_too_large");
@@ -289,13 +316,18 @@ async function readXlsx(file: File): Promise<string[][]> {
   const { default: readXlsxFile } = await import("read-excel-file/browser");
   const sheets = await readXlsxFile(file);
   const rows = sheets[0]?.data ?? [];
-  return rows.map((r) => r.map((c) => (c === null ? "" : String(c))));
+  return {
+    // Sheet row numbers are contiguous — nothing is skipped.
+    lines: rows.map((_, i) => i + 1),
+    rows: rows.map((r) => r.map((c) => (c === null ? "" : String(c)))),
+  };
 }
 
-/** Reads a CSV/TSV/XLSX file into row objects keyed by lowercased headers. */
-export async function readTableFile(
-  file: File
-): Promise<Record<string, string>[]> {
+/**
+ * Reads a CSV/TSV/XLSX file into row objects keyed by lowercased headers,
+ * keeping the physical file line of each row for error reporting.
+ */
+export async function readTableFile(file: File): Promise<ImportedTable> {
   if (XLS_RE.test(file.name)) {
     // read-excel-file understands .xlsx only — .xls is the old binary format.
     throw new ImportFileError("data_io.xls_unsupported");
@@ -307,8 +339,8 @@ export async function readTableFile(
     return toObjects(await readXlsx(file));
   }
   const text = decodeTableBuffer(await file.arrayBuffer());
-  const table = parseCsv(text);
-  if (table.length - 1 > MAX_IMPORT_ROWS) {
+  const table = parseCsvDetailed(text);
+  if (table.rows.length - 1 > MAX_IMPORT_ROWS) {
     throw new ImportFileError("data_io.too_many_rows");
   }
   return toObjects(table);
@@ -447,4 +479,20 @@ export function mapRows(
     }
     return out;
   });
+}
+
+/**
+ * Server error rows are 1-based within the POSTed chunk (index + 2).
+ * Map them back to the real file line — chunkLines[i] is the physical line
+ * of chunk row i, so both the chunk offset and skipped empty lines are
+ * accounted for.
+ */
+export function remapChunkErrors(
+  errors: ImportRowError[] | undefined,
+  chunkLines: number[]
+): ImportRowError[] {
+  return (errors ?? []).map((e) => ({
+    ...e,
+    row: chunkLines[e.row - 2] ?? e.row,
+  }));
 }

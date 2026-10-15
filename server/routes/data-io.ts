@@ -108,7 +108,13 @@ export const dataIoRoutes: FastifyPluginAsync = async (app) => {
       await createAuditLog(app.prisma, {
         action: AuditAction.DATA_IMPORTED,
         jobId: null,
-        metadata: { entity: "parts", rows: rows.length },
+        metadata: {
+          entity: "parts",
+          created: summary.created,
+          updated: summary.updated,
+          skipped: summary.skipped,
+          errors: summary.errors.length,
+        },
         userId: getUserId(req),
       });
       return reply.send(summary);
@@ -124,7 +130,13 @@ export const dataIoRoutes: FastifyPluginAsync = async (app) => {
       await createAuditLog(app.prisma, {
         action: AuditAction.DATA_IMPORTED,
         jobId: null,
-        metadata: { entity: "repairs", rows: rows.length },
+        metadata: {
+          entity: "repairs",
+          created: summary.created,
+          updated: summary.updated,
+          skipped: summary.skipped,
+          errors: summary.errors.length,
+        },
         userId: getUserId(req),
       });
       return reply.send(summary);
@@ -145,7 +157,13 @@ export const dataIoRoutes: FastifyPluginAsync = async (app) => {
       await createAuditLog(app.prisma, {
         action: AuditAction.DATA_IMPORTED,
         jobId: null,
-        metadata: { entity: "jobs", rows: rows.length },
+        metadata: {
+          entity: "jobs",
+          created: summary.created,
+          updated: summary.updated,
+          skipped: summary.skipped,
+          errors: summary.errors.length,
+        },
         userId: getUserId(req),
       });
       return reply.send(summary);

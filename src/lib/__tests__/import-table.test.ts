@@ -7,6 +7,7 @@ import {
   parseCsv,
   parsePtNumber,
   readTableFile,
+  remapChunkErrors,
   xlsxUncompressedSize,
 } from "../import-table";
 
@@ -69,6 +70,14 @@ describe("parsePtNumber — Portuguese format", () => {
   ])("returns null for %j — never 0", (input) => {
     expect(parsePtNumber(input)).toBeNull();
   });
+
+  it.each([
+    ["12,50 €", 12.5],
+    ["€12,50", 12.5],
+    ["€ 1.234,56", 1234.56],
+  ])("accepts the € symbol in %j", (input, expected) => {
+    expect(parsePtNumber(input)).toBe(expected);
+  });
 });
 
 describe("mapRows", () => {
@@ -95,7 +104,7 @@ describe("readTableFile", () => {
     new File([content], name);
 
   it("reads a UTF-8 CSV", async () => {
-    const rows = await readTableFile(csvFile("nome;preço\nX;1,5"));
+    const { rows } = await readTableFile(csvFile("nome;preço\nX;1,5"));
     expect(rows).toEqual([{ nome: "X", preço: "1,5" }]);
   });
 
@@ -106,7 +115,7 @@ describe("readTableFile", () => {
     for (let i = 0; i < raw.length; i++) {
       buf[i] = raw.charCodeAt(i); // raw is already latin-1 range
     }
-    const rows = await readTableFile(csvFile(buf.buffer));
+    const { rows } = await readTableFile(csvFile(buf.buffer));
     expect(rows).toEqual([{ nome: "Bateria", preço: "12,50", stock: "3" }]);
   });
 
@@ -147,8 +156,31 @@ describe("readTableFile", () => {
         { value: 12.5, type: Number },
       ],
     ]).toBuffer();
-    const rows = await readTableFile(new File([new Uint8Array(buf)], "t.xlsx"));
+    const { rows } = await readTableFile(
+      new File([new Uint8Array(buf)], "t.xlsx")
+    );
     expect(rows).toEqual([{ nome: "Bateria", preço: "12.5" }]);
+  });
+
+  it("tracks the physical file line of each row across blank lines", async () => {
+    const { rows, lines } = await readTableFile(
+      csvFile("nome\n\nEcrã\n\nBateria\n")
+    );
+    // header=1, blanks at 2 and 4 are skipped but still counted
+    expect(rows).toEqual([{ nome: "Ecrã" }, { nome: "Bateria" }]);
+    expect(lines).toEqual([3, 5]);
+  });
+
+  it("strips the export ' guard on formula-like cells (round-trip)", async () => {
+    const { rows } = await readTableFile(
+      csvFile("nome;fornecedor\n'=CMD();'+351911")
+    );
+    expect(rows).toEqual([{ fornecedor: "+351911", nome: "=CMD()" }]);
+  });
+
+  it("keeps a leading ' that is not an export guard", async () => {
+    const { rows } = await readTableFile(csvFile("nome\n'd'Oliveira"));
+    expect(rows).toEqual([{ nome: "'d'Oliveira" }]);
   });
 
   it("rejects an xlsx whose uncompressed size exceeds 50 MB", async () => {
@@ -171,6 +203,38 @@ describe("readTableFile", () => {
     await expect(
       readTableFile(new File([buf], "bomb.xlsx"))
     ).rejects.toMatchObject({ key: "data_io.xlsx_too_large" });
+  });
+});
+
+describe("remapChunkErrors — chunk-local row → file line", () => {
+  it("reports the real file line for an error in a later chunk", () => {
+    // 600 data rows: header is line 1, so file line = dataIndex + 2.
+    // Chunk 2 covers data rows 501–600 → file lines 502–601.
+    const allLines = Array.from({ length: 600 }, (_, i) => i + 2);
+    const chunkLines = allLines.slice(500, 600);
+    // Error on data row 550 → index 49 within chunk 2 → server reports 51.
+    const errors = remapChunkErrors(
+      [{ field: "price", message: "bad", row: 51 }],
+      chunkLines
+    );
+    expect(errors[0]?.row).toBe(551);
+  });
+
+  it("accounts for blank lines the parser skipped", () => {
+    // File: header(1), data(2), blank(3), data(4) — data row 2 is line 4.
+    const errors = remapChunkErrors(
+      [{ field: "", message: "bad", row: 3 }],
+      [2, 4]
+    );
+    expect(errors[0]?.row).toBe(4);
+  });
+
+  it("keeps the server row when the line map is shorter", () => {
+    const errors = remapChunkErrors(
+      [{ field: "", message: "x", row: 9 }],
+      [2, 3]
+    );
+    expect(errors[0]?.row).toBe(9);
   });
 });
 

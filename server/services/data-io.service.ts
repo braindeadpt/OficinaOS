@@ -276,8 +276,11 @@ function partPatch(row: PartImportRow): Record<string, unknown> {
 
 /**
  * Per-row transaction: catalog field patch +, when the stock column is
- * present and differs, an ADJUSTMENT StockMovement with the signed delta —
- * the ledger keeps the who/when/why instead of a silent overwrite.
+ * present and differs from the LOCKED balance, an ADJUSTMENT StockMovement
+ * with the signed delta — the ledger keeps the who/when/why instead of a
+ * silent overwrite. The balance is read with FOR UPDATE inside the
+ * transaction so a sale that lands between the name lookup and this write
+ * can't produce a fake delta or a ledger balance that never existed.
  */
 async function updatePartFromRow(
   prisma: PrismaClient,
@@ -290,29 +293,46 @@ async function updatePartFromRow(
     if (Object.keys(patch).length > 0) {
       await tx.partsCatalog.update({ where: { id: existing.id }, data: patch });
     }
-    if (row.stock !== undefined && row.stock !== existing.stockQuantity) {
-      const delta = row.stock - existing.stockQuantity;
-      const updated = await tx.$queryRaw<
-        Array<{ stockQuantity: number | string }>
-      >`
-        UPDATE "parts_catalog"
-        SET "stockQuantity" = "stockQuantity" + ${delta}
-        WHERE "id" = ${existing.id}
-          AND "stockQuantity" + ${delta} >= 0
-        RETURNING "stockQuantity"
-      `;
-      const balanceAfter = Number(updated[0]?.stockQuantity ?? row.stock);
-      await tx.stockMovement.create({
-        data: {
-          partId: existing.id,
-          type: "ADJUSTMENT",
-          quantity: delta,
-          balanceAfter,
-          note: "import",
-          createdById: userId,
-        },
-      });
+    if (row.stock === undefined) {
+      return;
     }
+    const locked = await tx.$queryRaw<
+      Array<{ stockQuantity: number | string }>
+    >`
+      SELECT "stockQuantity" FROM "parts_catalog"
+      WHERE "id" = ${existing.id}
+      FOR UPDATE
+    `;
+    const current = Number(locked[0]?.stockQuantity);
+    if (!Number.isFinite(current)) {
+      throw new Error("part_vanished_between_lookup_and_write");
+    }
+    const delta = row.stock - current;
+    if (delta === 0) {
+      return;
+    }
+    const updated = await tx.$queryRaw<
+      Array<{ stockQuantity: number | string }>
+    >`
+      UPDATE "parts_catalog"
+      SET "stockQuantity" = ${row.stock}
+      WHERE "id" = ${existing.id}
+      RETURNING "stockQuantity"
+    `;
+    const balanceAfter = Number(updated[0]?.stockQuantity);
+    if (updated.length === 0 || !Number.isFinite(balanceAfter)) {
+      throw new Error("part_vanished_between_lookup_and_write");
+    }
+    await tx.stockMovement.create({
+      data: {
+        partId: existing.id,
+        type: "ADJUSTMENT",
+        quantity: delta,
+        balanceAfter,
+        note: "import",
+        createdById: userId,
+      },
+    });
   });
 }
 
@@ -353,16 +373,33 @@ export async function importParts(
         await updatePartFromRow(prisma, existing, row, userId);
         summary.updated += 1;
       } else {
-        await prisma.partsCatalog.create({
-          data: {
-            name: row.name.trim(),
-            category: (row.category ?? "OTHER") as PartCategoryType,
-            defaultPrice: row.price ?? 0,
-            stockQuantity: row.stock ?? 0,
-            reorderLevel: row.reorderLevel ?? 0,
-            supplier: row.supplier ?? null,
-            isActive: row.active ?? true,
-          },
+        // A brand-new part that arrives with stock still needs the ledger
+        // entry — the opening balance is an ADJUSTMENT like any other.
+        await prisma.$transaction(async (tx) => {
+          const part = await tx.partsCatalog.create({
+            data: {
+              name: row.name.trim(),
+              category: (row.category ?? "OTHER") as PartCategoryType,
+              defaultPrice: row.price ?? 0,
+              stockQuantity: row.stock ?? 0,
+              reorderLevel: row.reorderLevel ?? 0,
+              supplier: row.supplier ?? null,
+              isActive: row.active ?? true,
+            },
+          });
+          const stock = row.stock ?? 0;
+          if (stock > 0) {
+            await tx.stockMovement.create({
+              data: {
+                partId: part.id,
+                type: "ADJUSTMENT",
+                quantity: stock,
+                balanceAfter: stock,
+                note: "import",
+                createdById: userId,
+              },
+            });
+          }
         });
         summary.created += 1;
       }

@@ -294,7 +294,16 @@ describe("data-io routes", () => {
       stockMovement: {
         create: vi.fn(async (_a: { data: Record<string, unknown> }) => ({})),
       },
-      $queryRaw: vi.fn(async () => [{ stockQuantity: 5 }]),
+      // SELECT ... FOR UPDATE (locked balance 3) vs UPDATE ... RETURNING
+      // (absolute write to the file value 5).
+      $queryRaw: vi.fn((query: TemplateStringsArray | string) => {
+        const text = Array.isArray(query) ? query.join(" ") : String(query);
+        return Promise.resolve(
+          text.includes("FOR UPDATE")
+            ? [{ stockQuantity: 3 }]
+            : [{ stockQuantity: 5 }]
+        );
+      }),
     };
     const prisma = {
       partsCatalog: {

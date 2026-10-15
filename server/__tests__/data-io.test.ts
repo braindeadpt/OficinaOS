@@ -218,14 +218,27 @@ describe("export hardening", () => {
 // ---------------------------------------------------------------------------
 
 describe("parts import", () => {
-  function prismaWithParts(existing: unknown[]) {
+  function prismaWithParts(
+    existing: unknown[],
+    opts: { lockedStock?: number; updateMisses?: boolean } = {}
+  ) {
     const tx = {
       partsCatalog: {
         update: vi.fn(async (_a: { data: Record<string, unknown> }) => ({})),
-        create: vi.fn(async () => ({})),
+        create: vi.fn(async () => ({ id: "p-new" })),
       },
       stockMovement: { create: vi.fn(async () => ({})) },
-      $queryRaw: vi.fn(async () => [{ stockQuantity: 10 }]),
+      // First raw call is SELECT ... FOR UPDATE (the real balance), the
+      // second is UPDATE ... RETURNING (the absolute write).
+      $queryRaw: vi.fn((query: TemplateStringsArray | string) => {
+        const text = Array.isArray(query) ? query.join(" ") : String(query);
+        if (text.includes("FOR UPDATE")) {
+          return Promise.resolve([{ stockQuantity: opts.lockedStock ?? 10 }]);
+        }
+        return Promise.resolve(
+          opts.updateMisses ? [] : [{ stockQuantity: 10 }]
+        );
+      }),
     };
     return {
       prisma: {
@@ -294,6 +307,115 @@ describe("parts import", () => {
     expect(body.errors[0].row).toBe(2);
     expect(body.errors[1].row).toBe(4);
     expect(body.errors[1].field).toBe("price");
+  });
+
+  it("a new part with stock>0 records an opening ADJUSTMENT", async () => {
+    const { prisma, tx } = prismaWithParts([]);
+    const app = buildApp(prisma);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/import/parts",
+      payload: { rows: [{ name: "Screen", stock: 7 }] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().created).toBe(1);
+    expect(tx.stockMovement.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        partId: "p-new",
+        type: "ADJUSTMENT",
+        quantity: 7,
+        balanceAfter: 7,
+        note: "import",
+      }),
+    });
+  });
+
+  it("a new part with no stock column writes no movement", async () => {
+    const { prisma, tx } = prismaWithParts([]);
+    const app = buildApp(prisma);
+    await app.inject({
+      method: "POST",
+      url: "/api/import/parts",
+      payload: { rows: [{ name: "Screen" }] },
+    });
+    expect(tx.stockMovement.create).not.toHaveBeenCalled();
+  });
+
+  it("computes the delta from the locked balance, not the stale lookup", async () => {
+    // findMany saw stock 5, but a sale landed before our write — the row is
+    // locked at 3. Delta must be 10-3=+7 with balanceAfter=10 (absolute).
+    const { prisma, tx } = prismaWithParts([{ id: "p1", stockQuantity: 5 }], {
+      lockedStock: 3,
+    });
+    const app = buildApp(prisma);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/import/parts",
+      payload: { rows: [{ name: "Screen", stock: 10 }] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().updated).toBe(1);
+    expect(tx.stockMovement.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          balanceAfter: 10,
+          quantity: 7,
+          type: "ADJUSTMENT",
+        }),
+      })
+    );
+  });
+
+  it("writes no movement when the locked balance already matches", async () => {
+    const { prisma, tx } = prismaWithParts([{ id: "p1", stockQuantity: 10 }], {
+      lockedStock: 10,
+    });
+    const app = buildApp(prisma);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/import/parts",
+      payload: { rows: [{ name: "Screen", stock: 10 }] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().updated).toBe(1);
+    expect(tx.stockMovement.create).not.toHaveBeenCalled();
+  });
+
+  it("a failed absolute UPDATE is a row error, not a fake ledger entry", async () => {
+    const { prisma, tx } = prismaWithParts([{ id: "p1", stockQuantity: 3 }], {
+      lockedStock: 3,
+      updateMisses: true,
+    });
+    const app = buildApp(prisma);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/import/parts",
+      payload: { rows: [{ name: "Screen", stock: 10 }] },
+    });
+    const body = res.json();
+    expect(body.updated).toBe(0);
+    expect(body.errors).toHaveLength(1);
+    expect(tx.stockMovement.create).not.toHaveBeenCalled();
+  });
+
+  it("audits the import with outcome counts, not raw row count", async () => {
+    const { prisma } = prismaWithParts([]);
+    const app = buildApp(prisma);
+    await app.inject({
+      method: "POST",
+      url: "/api/import/parts",
+      payload: {
+        rows: [{ name: "Screen" }, { name: "" }],
+      },
+    });
+    const auditCalls = prisma.auditLog.create.mock.calls as unknown as [
+      {
+        data: { metadata: { created: number; entity: string; errors: number } };
+      },
+    ][];
+    const meta = auditCalls[0][0].data.metadata;
+    expect(meta).toMatchObject({ created: 1, entity: "parts", errors: 1 });
+    expect(meta).not.toHaveProperty("rows");
   });
 });
 

@@ -17,6 +17,7 @@ import {
   mapRows,
   parseCsv,
   readTableFile,
+  remapChunkErrors,
 } from "@/lib/import-table";
 
 type Entity = "parts" | "repairs" | "jobs";
@@ -160,7 +161,8 @@ function ImportCard({ entity }: { entity: Entity }) {
     setBusy(true);
     setLastErrors([]);
     try {
-      const rows = mapRows(entity, await readTableFile(file));
+      const table = await readTableFile(file);
+      const rows = mapRows(entity, table.rows);
       if (rows.length === 0) {
         toast.error(t("data_io.empty_file"));
         return;
@@ -179,7 +181,13 @@ function ImportCard({ entity }: { entity: Entity }) {
         totals.created += r.created ?? 0;
         totals.updated += r.updated ?? 0;
         totals.skipped += r.skipped ?? 0;
-        totals.errors.push(...(r.errors ?? []));
+        // Server rows are 1-based inside this chunk — remap to file lines.
+        totals.errors.push(
+          ...remapChunkErrors(
+            r.errors,
+            table.lines.slice(i, i + IMPORT_CHUNK_SIZE)
+          )
+        );
       }
       setLastErrors(totals.errors);
       toast.success(
