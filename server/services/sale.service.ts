@@ -47,6 +47,7 @@ export async function create(
     : [];
   const catalogById = new Map(catalogParts.map((p) => [p.id, p]));
 
+  const toCents = (n: number) => Math.round(n * 100);
   const items = input.items.map((item) => {
     const part = item.partId ? catalogById.get(item.partId) : undefined;
     if (item.partId && !part) {
@@ -65,7 +66,7 @@ export async function create(
     return {
       balanceAfter: 0,
       category: item.category,
-      lineTotal: item.unitPrice * item.quantity,
+      lineTotal: (toCents(item.unitPrice) * item.quantity) / 100,
       name: item.name,
       partId: item.partId ?? null,
       quantity: item.quantity,

@@ -170,7 +170,12 @@ const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       typeof DEFAULT_SECURITY.rateLimit === "object"
         ? (DEFAULT_SECURITY.rateLimit as { timeWindow: string }).timeWindow
         : "1 minute",
-    keyGenerator: (request) => request.user?.id ?? request.ip,
+    // NOTE: keyed on IP, not user — this preHandler was registered before
+    // the auth plugin sets request.user, so request.user is always null
+    // here. IP keying is intended (single shop behind NAT shares the
+    // budget) and sensitive endpoints carry their own per-identifier
+    // limits + lockout.
+    keyGenerator: (request) => request.ip,
     exponentialBackoff: true,
     ban: 5,
     store: CappedBackoffStore,
@@ -336,6 +341,15 @@ const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // ── Layer 8: Audit Logging (fire-and-forget off the hot path) ──────────
 
+  const AUDITED_ROUTES = [
+    "/api/auth",
+    "/api/users",
+    "/api/jobs/:id/status",
+    "/api/payments",
+    "/api/sales",
+    "/api/settings",
+    "/api/return-claims",
+  ];
   app.addHook("onResponse", (request, reply, done) => {
     done();
     if (!MUTATION_METHODS.has(request.method)) {
@@ -345,8 +359,15 @@ const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!userId) {
       return;
     }
+    if (reply.statusCode >= 400) {
+      return;
+    }
+    const routeUrl = request.routeOptions?.url ?? request.url;
+    if (!AUDITED_ROUTES.some((p) => routeUrl.startsWith(p))) {
+      return;
+    }
 
-    const action = `${request.method} ${request.routeOptions?.url ?? request.url}`;
+    const action = `${request.method} ${routeUrl}`;
     const statusCode = reply.statusCode;
 
     setImmediate(() => {

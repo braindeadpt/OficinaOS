@@ -968,6 +968,7 @@
   "jobs_technician_assign_error": "No se pudo asignar el técnico",
   "jobs_technician_assigned_success": "Técnico asignado",
   "keep_editing": "Seguir editando",
+  "lan_insecure_banner": "Está utilizando una conexión HTTP insegura en una red local. Evite acceder a través de Internet.",
   "language_switch": "Cambiar idioma",
   "language_switch_to": "Cambiar a {{lang}}",
   "load_more": "Cargar más",

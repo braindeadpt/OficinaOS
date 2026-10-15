@@ -8,6 +8,7 @@ vi.mock("node:fs/promises", () => ({
   default: {
     mkdir: vi.fn().mockResolvedValue(undefined),
     writeFile: vi.fn().mockResolvedValue(undefined),
+    rename: vi.fn().mockResolvedValue(undefined),
     unlink: vi.fn().mockResolvedValue(undefined),
   },
 }));
@@ -61,9 +62,14 @@ describe("uploadAvatar", () => {
     const result = await uploadAvatar(prisma, "user-1", file);
 
     expect(result).toEqual({ image: "avatars/user-1.jpg" });
+    const dest = path.resolve("./test-uploads", "avatars/user-1.jpg");
     expect(fs.writeFile).toHaveBeenCalledWith(
-      path.resolve("./test-uploads", "avatars/user-1.jpg"),
+      expect.stringContaining(`${dest}.`),
       buffer
+    );
+    expect(fs.rename).toHaveBeenCalledWith(
+      expect.stringContaining(`${dest}.`),
+      dest
     );
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: "user-1" },

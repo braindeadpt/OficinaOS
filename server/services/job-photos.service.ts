@@ -18,6 +18,7 @@ import { createAuditLog } from "./audit.service.js";
 const UPLOAD_BASE = path.resolve(loadEnv().UPLOAD_DIR);
 const PHOTO_SUBDIR = "job-photos";
 const MAX_PHOTOS = 5;
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 const ALLOWED_MIMES = ["image/jpeg", "image/png", "image/webp"];
 
 function extFromMime(mime: string): string {
@@ -58,6 +59,9 @@ export async function upload(
   }
 
   const buffer = await file.toBuffer();
+  if (buffer.length > MAX_PHOTO_BYTES) {
+    return { error: "FILE_TOO_LARGE" as const };
+  }
   if (!validateMagicBytes(buffer, file.mimetype)) {
     return { error: "INVALID_FILE_CONTENT" as const };
   }
@@ -103,7 +107,14 @@ export async function remove(
     return null;
   }
 
-  const fullPath = path.join(UPLOAD_BASE, photo.path);
+  const fullPath = path.resolve(UPLOAD_BASE, photo.path);
+  if (
+    fullPath !== UPLOAD_BASE &&
+    !fullPath.startsWith(UPLOAD_BASE + path.sep)
+  ) {
+    await deletePhotoById(prisma, photoId);
+    return true;
+  }
   await fs.unlink(fullPath).catch(() => undefined);
 
   await deletePhotoById(prisma, photoId);

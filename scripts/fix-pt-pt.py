@@ -51,9 +51,8 @@ SUBS = [
     ("Editando", "A editar"), ("Abandonando", "A abandonar"),
     ("Buscando", "A procurar"), ("Pesquisando", "A pesquisar"),
 
-    # senha → palavra-passe
-    ("senhas", "palavras-passe"), ("Senhas", "Palavras-passe"),
-    ("senha", "palavra-passe"), ("Senha", "Palavra-passe"),
+    # NOTE: senha → palavra-passe é aplicado via regex \b em fix() abaixo
+    # (replace simples corrompia "desenhada" → "depalavra-passeda")
 
     # e-mail → email (AO90)
     ("e-mail", "email"), ("E-mail", "Email"),
@@ -168,6 +167,12 @@ OVERRIDES = {
 RE_ATRAS = re.compile(r"(\{\{\w+\}\})(\w+) atrás")
 
 changed = []
+RE_SENHA = [
+    (re.compile(r"\bsenhas\b"), "palavras-passe"),
+    (re.compile(r"\bSenhas\b"), "Palavras-passe"),
+    (re.compile(r"\bsenha\b"), "palavra-passe"),
+    (re.compile(r"\bSenha\b"), "Palavra-passe"),
+]
 def fix(v):
     if not isinstance(v, str):
         return v
@@ -175,6 +180,8 @@ def fix(v):
     for old, new in SUBS:
         if old in nv:
             nv = nv.replace(old, new)
+    for rx, new in RE_SENHA:
+        nv = rx.sub(new, nv)
     return nv
 
 def walk(o, path=""):
@@ -201,7 +208,7 @@ text = json.dumps(d, ensure_ascii=False)
 left = {}
 for name, pat in {
     "gerúndio": r"\b[A-ZÀ-Ü]?[a-zà-ü]+(?:ando|endo|indo)\b",
-    "senha": r"[Ss]enha", "usuário": r"[Uu]suário", "estoque": r"[Ee]stoque",
+    "senha": r"\b[Ss]enha\b", "usuário": r"[Uu]suário", "estoque": r"[Ee]stoque",
     "e-mail": r"e-mail", "login": r"\blogin\b", "Ingestão": r"[Ii]ngest",
     "reparo": r"\breparo\b", "parte": r"\bparte\b", "exclu/delet": r"[Ee]xclu|[Dd]elet",
     "Conectado": r"[Cc]onectado", "Configurações": r"[Cc]onfigurações",

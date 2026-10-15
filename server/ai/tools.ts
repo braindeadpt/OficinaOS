@@ -383,11 +383,15 @@ export async function executeQueryDatabase(
 
   try {
     // SET LOCAL is transaction-scoped, so the ceiling applies to this query
-    // only and never leaks onto the pooled connection.
+    // only and never leaks onto the pooled connection. READ ONLY is belt
+    // and braces: the static checks above already admit SELECT alone, but a
+    // read-only transaction also neuters side-effecting functions
+    // (nextval, setval, …) even if analysis ever misses them.
     const result = await prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe(
         `SET LOCAL statement_timeout = ${STATEMENT_TIMEOUT_MS}`
       );
+      await tx.$executeRawUnsafe("SET TRANSACTION READ ONLY");
       return await tx.$queryRawUnsafe(finalSql);
     });
     return {

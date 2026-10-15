@@ -101,9 +101,23 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     ]
   );
 
+  const isInsecureLan =
+    typeof window !== "undefined" &&
+    window.location.protocol === "http:" &&
+    window.location.hostname !== "localhost" &&
+    window.location.hostname !== "127.0.0.1";
+
   return (
     <ShopSettingsProvider>
       <div className="min-h-screen overflow-x-hidden bg-background text-on-background">
+        {isInsecureLan && (
+          <div
+            className="bg-error-container px-4 py-2 text-center font-bold text-on-error-container text-xs"
+            role="alert"
+          >
+            {t("lan_insecure_banner")}
+          </div>
+        )}
         <Sidebar />
         <TopBar />
         <main className="min-h-screen p-4 pt-20 pb-24 md:p-8 md:pt-24 md:pb-24 lg:ms-64 lg:pb-8">
