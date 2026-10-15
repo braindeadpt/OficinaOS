@@ -968,6 +968,7 @@
   "jobs_technician_assign_error": "Failed to assign technician",
   "jobs_technician_assigned_success": "Technician assigned",
   "keep_editing": "Keep Editing",
+  "lan_insecure_banner": "You are using an insecure HTTP connection on a local network. Avoid accessing over the internet.",
   "language_switch": "Switch language",
   "language_switch_to": "Switch to {{lang}}",
   "load_more": "Load more",

@@ -8,6 +8,7 @@ vi.mock("node:fs/promises", () => ({
   default: {
     mkdir: vi.fn().mockResolvedValue(undefined),
     writeFile: vi.fn().mockResolvedValue(undefined),
+    rename: vi.fn().mockResolvedValue(undefined),
     unlink: vi.fn().mockResolvedValue(undefined),
   },
 }));
@@ -61,9 +62,14 @@ describe("uploadAvatar", () => {
     const result = await uploadAvatar(prisma, "user-1", file);
 
     expect(result).toEqual({ image: "avatars/user-1.jpg" });
+    const dest = path.resolve("./test-uploads", "avatars/user-1.jpg");
     expect(fs.writeFile).toHaveBeenCalledWith(
-      path.resolve("./test-uploads", "avatars/user-1.jpg"),
+      expect.stringContaining(`${dest}.`),
       buffer
+    );
+    expect(fs.rename).toHaveBeenCalledWith(
+      expect.stringContaining(`${dest}.`),
+      dest
     );
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: "user-1" },
@@ -146,6 +152,20 @@ describe("uploadAvatar", () => {
     const result = await uploadAvatar(prisma, "user-1", file);
 
     expect(result).toEqual({ image: "avatars/user-1.webp" });
+  });
+
+  it("removes the tmp file and rethrows when rename fails", async () => {
+    const prisma = makePrisma(null);
+    const buffer = makeBuffer(JPEG_MAGIC, 10);
+    const file = makeFile("image/jpeg", buffer);
+    vi.mocked(fs.rename).mockRejectedValueOnce(new Error("rename boom"));
+
+    await expect(uploadAvatar(prisma, "user-1", file)).rejects.toThrow(
+      "rename boom"
+    );
+    expect(fs.unlink).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(fs.unlink).mock.calls[0][0]).toContain(".tmp");
+    expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
   it("rejects WEBP with invalid marker", async () => {

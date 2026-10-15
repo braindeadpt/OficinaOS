@@ -19,6 +19,11 @@ function getTransporter(): Transporter {
       host: env.SMTP_HOST,
       port: env.SMTP_PORT ?? 587,
       secure: env.SMTP_PORT === 465,
+      // Never let a dead SMTP server hang a request past Fastify's own
+      // 30s request timeout.
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 15_000,
       auth: {
         user: env.SMTP_USER,
         pass: env.SMTP_PASS,

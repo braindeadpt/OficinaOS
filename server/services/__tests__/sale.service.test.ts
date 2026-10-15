@@ -193,6 +193,65 @@ describe("create sale", () => {
     expect(result.saleCode).toBe("SALE-2026-000001");
   });
 
+  it("sums totals in integer cents (3x0.10 + 1x0.20 = 0.50 exact)", async () => {
+    const prisma = makePrisma([]);
+    const input = {
+      items: [
+        {
+          category: "OTHER" as const,
+          name: "Cable",
+          quantity: 3,
+          unitPrice: 0.1,
+        },
+        {
+          category: "OTHER" as const,
+          name: "Adapter",
+          quantity: 1,
+          unitPrice: 0.2,
+        },
+      ],
+      payments: [{ amount: 0.5, method: "CASH" as const }],
+    };
+
+    await create(prisma, makeApp(), input, "user-1");
+
+    expect(prisma.sale.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ total: 0.5 }),
+      })
+    );
+  });
+
+  it("does not drift on float-hostile sums (0.10 + 0.20 = 0.30 exact)", async () => {
+    const prisma = makePrisma([]);
+    const input = {
+      items: [
+        {
+          category: "OTHER" as const,
+          name: "Cable",
+          quantity: 1,
+          unitPrice: 0.1,
+        },
+        {
+          category: "OTHER" as const,
+          name: "Adapter",
+          quantity: 1,
+          unitPrice: 0.2,
+        },
+      ],
+      payments: [{ amount: 0.3, method: "CASH" as const }],
+    };
+
+    await create(prisma, makeApp(), input, "user-1");
+
+    // Per-line float addition would give 0.30000000000000004.
+    expect(prisma.sale.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ total: 0.3 }),
+      })
+    );
+  });
+
   it("skips ledger entries for ad-hoc items", async () => {
     const prisma = makePrisma([]);
     const input = {

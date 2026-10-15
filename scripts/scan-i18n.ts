@@ -154,9 +154,14 @@ async function main() {
   }
 
   // 4. Analyze results
+  // i18next plural calls (t("key", { count })) resolve to key_one /
+  // key_other / … at runtime, so a base key with plural siblings present
+  // is not missing.
+  const hasKey = (key: string): boolean =>
+    existingKeys.has(key) || existingKeys.has(`${key}_one`);
   const missingKeys = new Map<string, Set<string>>();
   for (const [key, locations] of keysInCode.entries()) {
-    if (!existingKeys.has(key)) {
+    if (!hasKey(key)) {
       missingKeys.set(key, locations);
     }
   }

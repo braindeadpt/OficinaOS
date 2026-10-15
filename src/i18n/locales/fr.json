@@ -968,6 +968,7 @@
   "jobs_technician_assign_error": "Échec de l'affectation du technicien",
   "jobs_technician_assigned_success": "Technicien affecté",
   "keep_editing": "Continuer à modifier",
+  "lan_insecure_banner": "Vous utilisez une connexion HTTP non sécurisée sur un réseau local. Évitez d'y accéder via Internet.",
   "language_switch": "Changer de langue",
   "language_switch_to": "Passer à {{lang}}",
   "load_more": "Charger plus",

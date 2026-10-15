@@ -48,15 +48,34 @@ export async function uploadAvatar(
   }
 
   const ext = MIME_EXT[file.mimetype];
-  const uploadDir = loadEnv().UPLOAD_DIR;
-  await fs.mkdir(path.resolve(uploadDir, "avatars"), { recursive: true });
-
-  if (user.image && !user.image.startsWith("data:")) {
-    await removeFile(path.resolve(loadEnv().UPLOAD_DIR, user.image));
-  }
+  const uploadBase = path.resolve(loadEnv().UPLOAD_DIR);
+  await fs.mkdir(path.join(uploadBase, "avatars"), { recursive: true });
 
   const relativePath = `avatars/${userId}.${ext}`;
-  await fs.writeFile(path.resolve(loadEnv().UPLOAD_DIR, relativePath), buffer);
+  const dest = path.resolve(uploadBase, relativePath);
+  if (dest !== uploadBase && !dest.startsWith(uploadBase + path.sep)) {
+    return { error: "INVALID_FILE_TYPE" as const };
+  }
+  const tmpPath = `${dest}.${Date.now()}.tmp`;
+  await fs.writeFile(tmpPath, buffer);
+  try {
+    await fs.rename(tmpPath, dest);
+  } catch (err) {
+    // Don't leave an orphan .tmp file behind; the original error still throws.
+    await removeFile(tmpPath);
+    throw err;
+  }
+
+  if (
+    user.image &&
+    !user.image.startsWith("data:") &&
+    user.image !== relativePath
+  ) {
+    const oldPath = path.resolve(uploadBase, user.image);
+    if (oldPath !== uploadBase && oldPath.startsWith(uploadBase + path.sep)) {
+      await removeFile(oldPath);
+    }
+  }
 
   await updateUserImage(prisma, userId, relativePath);
 
