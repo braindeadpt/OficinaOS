@@ -49,6 +49,39 @@ export async function updateSupplier(
   return prisma.supplier.update({ where: { id }, data: input });
 }
 
+/** Detail view: supplier + linked catalog parts + recent RMAs. */
+export async function getSupplierDetail(prisma: PrismaClient, id: string) {
+  const supplier = await prisma.supplier.findUnique({
+    where: { id },
+    include: {
+      parts: {
+        where: { isActive: true },
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          name: true,
+          category: true,
+          defaultPrice: true,
+          stockQuantity: true,
+        },
+        take: 500,
+      },
+      rmas: {
+        orderBy: { createdAt: "desc" },
+        include: {
+          part: { select: { id: true, name: true } },
+          createdBy: { select: { id: true, name: true, username: true } },
+        },
+        take: 200,
+      },
+    },
+  });
+  if (!supplier) {
+    throw new AppError("NOT_FOUND");
+  }
+  return supplier;
+}
+
 export function listRmas(
   prisma: PrismaClient,
   opts: { supplierId?: string; status?: string }
@@ -98,6 +131,17 @@ export async function createRma(
 
 const TERMINAL_RMA_STATUSES = new Set(["RESOLVED", "CANCELLED"]);
 
+// RMA lifecycle: OPEN → SENT → RECEIVED → RESOLVED, CANCELLED from any
+// non-terminal state. A terminal RMA can only be reopened to OPEN, which
+// clears sentAt/resolvedAt — anything else is INVALID_TRANSITION (409).
+const RMA_TRANSITIONS: Record<string, string[]> = {
+  OPEN: ["SENT", "CANCELLED"],
+  SENT: ["RECEIVED", "CANCELLED"],
+  RECEIVED: ["RESOLVED", "CANCELLED"],
+  RESOLVED: ["OPEN"],
+  CANCELLED: ["OPEN"],
+};
+
 export async function updateRma(
   prisma: PrismaClient,
   id: string,
@@ -107,23 +151,36 @@ export async function updateRma(
   if (!existing) {
     throw new AppError("NOT_FOUND");
   }
+  const include = {
+    supplier: { select: { id: true, name: true } },
+    part: { select: { id: true, name: true } },
+  };
   const data: Record<string, unknown> = { ...input };
-  if (input.status === "SENT" && !existing.sentAt) {
-    data.sentAt = new Date();
+  if (input.status && input.status !== existing.status) {
+    if (!RMA_TRANSITIONS[existing.status]?.includes(input.status)) {
+      throw new AppError("INVALID_TRANSITION");
+    }
+    if (input.status === "OPEN") {
+      data.sentAt = null;
+      data.resolvedAt = null;
+    } else {
+      if (input.status === "SENT") {
+        data.sentAt = new Date();
+      }
+      if (TERMINAL_RMA_STATUSES.has(input.status)) {
+        data.resolvedAt = new Date();
+      }
+    }
+    // Atomic claim: two concurrent transitions must not both pass the check
+    // above — the write only lands if the status is still what we read.
+    const claimed = await prisma.supplierRma.updateMany({
+      where: { id, status: existing.status },
+      data,
+    });
+    if (claimed.count === 0) {
+      throw new AppError("INVALID_TRANSITION");
+    }
+    return prisma.supplierRma.findUniqueOrThrow({ where: { id }, include });
   }
-  if (
-    input.status &&
-    TERMINAL_RMA_STATUSES.has(input.status) &&
-    !existing.resolvedAt
-  ) {
-    data.resolvedAt = new Date();
-  }
-  return prisma.supplierRma.update({
-    where: { id },
-    data,
-    include: {
-      supplier: { select: { id: true, name: true } },
-      part: { select: { id: true, name: true } },
-    },
-  });
+  return prisma.supplierRma.update({ where: { id }, data, include });
 }

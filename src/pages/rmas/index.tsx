@@ -221,8 +221,15 @@ export default function SupplierRmasPage() {
     try {
       await api.patch(`/supplier-rmas/${rma.id}`, { status });
       load();
-    } catch {
-      toast.error(t("rmas.save_failed"));
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      toast.error(
+        t(
+          code === "INVALID_TRANSITION"
+            ? "errors.invalid_transition"
+            : "rmas.save_failed"
+        )
+      );
     }
   };
 

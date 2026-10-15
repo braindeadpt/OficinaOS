@@ -2,6 +2,7 @@ import { isAppError } from "@shared/errors/app-error.js";
 import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
 import { dataIoRoutes } from "../routes/data-io.js";
+import { partsRoutes } from "../routes/parts.js";
 import { referralsRoutes } from "../routes/referrals.js";
 import { supplierRmasRoutes, suppliersRoutes } from "../routes/suppliers.js";
 
@@ -114,6 +115,153 @@ describe("suppliers routes", () => {
     });
     expect(res.statusCode).toBe(404);
   });
+
+  it("accepts null to clear nullable fields on update", async () => {
+    const update = vi.fn(async (args: { data: Record<string, unknown> }) => ({
+      id: "s1",
+      ...args.data,
+    }));
+    const app = buildApp(
+      {
+        supplier: {
+          findUnique: vi.fn(async () => ({ id: "s1", email: "a@b.c" })),
+          update,
+        },
+      },
+      [{ plugin: suppliersRoutes, prefix: "/api/suppliers" }]
+    );
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/suppliers/s1",
+      payload: { email: null, phone: null },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(update.mock.calls[0]?.[0].data.email).toBeNull();
+    expect(update.mock.calls[0]?.[0].data.phone).toBeNull();
+  });
+
+  it("returns supplier detail with linked parts and rmas", async () => {
+    const findUnique = vi.fn(async () => ({
+      id: "s1",
+      name: "ACME",
+      parts: [{ id: "p1", name: "Screen" }],
+      rmas: [{ id: "r1", status: "OPEN" }],
+    }));
+    const app = buildApp({ supplier: { findUnique } }, [
+      { plugin: suppliersRoutes, prefix: "/api/suppliers" },
+    ]);
+    const res = await app.inject({ method: "GET", url: "/api/suppliers/s1" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.parts).toHaveLength(1);
+    expect(res.json().data.rmas).toHaveLength(1);
+  });
+
+  it("returns 404 for a missing supplier detail", async () => {
+    const app = buildApp(
+      { supplier: { findUnique: vi.fn(async () => null) } },
+      [{ plugin: suppliersRoutes, prefix: "/api/suppliers" }]
+    );
+    const res = await app.inject({ method: "GET", url: "/api/suppliers/nope" });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+describe("parts ↔ supplier link", () => {
+  it("creates a part with supplierId and it shows on the supplier detail", async () => {
+    const create = vi.fn(async (a: { data: Record<string, unknown> }) => ({
+      id: "p1",
+      ...a.data,
+    }));
+    const supplierFindUnique = vi.fn(
+      async (): Promise<Record<string, unknown> | null> => ({ id: "s1" })
+    );
+    const prisma = {
+      supplier: { findUnique: supplierFindUnique },
+      partsCatalog: { create },
+      stockMovement: { create: vi.fn(async () => ({})) },
+    };
+    const app = buildApp(prisma, [
+      { plugin: suppliersRoutes, prefix: "/api/suppliers" },
+      { plugin: partsRoutes, prefix: "/api/parts" },
+    ]);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/parts",
+      payload: {
+        name: "Screen",
+        category: "SCREEN",
+        defaultPrice: 10,
+        supplierId: "s1",
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(create.mock.calls[0]?.[0].data.supplierRef).toEqual({
+      connect: { id: "s1" },
+    });
+
+    // The part then appears on GET /api/suppliers/:id via include.parts.
+    supplierFindUnique.mockResolvedValue({
+      id: "s1",
+      name: "ACME",
+      parts: [{ id: "p1", name: "Screen", supplierId: "s1" }],
+      rmas: [],
+    });
+    const detail = await app.inject({
+      method: "GET",
+      url: "/api/suppliers/s1",
+    });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json().data.parts[0]).toMatchObject({
+      id: "p1",
+      supplierId: "s1",
+    });
+  });
+
+  it("clears the link when supplierId is patched to null", async () => {
+    const update = vi.fn(async (_a: { data: Record<string, unknown> }) => ({
+      id: "p1",
+      supplierId: null,
+    }));
+    const prisma = {
+      partsCatalog: {
+        findUnique: vi.fn(async () => ({ id: "p1", stockQuantity: 0 })),
+        update,
+      },
+      stockMovement: { create: vi.fn() },
+    };
+    const app = buildApp(prisma, [
+      { plugin: partsRoutes, prefix: "/api/parts" },
+    ]);
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/parts/p1",
+      payload: { supplierId: null },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(update.mock.calls[0]?.[0].data.supplierId).toBeNull();
+  });
+
+  it("404s when supplierId points at a missing supplier", async () => {
+    const prisma = {
+      supplier: { findUnique: vi.fn(async () => null) },
+      partsCatalog: { create: vi.fn() },
+      stockMovement: { create: vi.fn() },
+    };
+    const app = buildApp(prisma, [
+      { plugin: partsRoutes, prefix: "/api/parts" },
+    ]);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/parts",
+      payload: {
+        name: "Screen",
+        category: "SCREEN",
+        defaultPrice: 10,
+        supplierId: "ghost",
+      },
+    });
+    expect(res.statusCode).toBe(404);
+  });
 });
 
 describe("supplier RMAs", () => {
@@ -157,13 +305,17 @@ describe("supplier RMAs", () => {
   });
 
   it("stamps sentAt when status becomes SENT", async () => {
-    const update = vi.fn(async (_args: { data: { sentAt?: Date } }) => ({
-      id: "r1",
-    }));
+    const updateMany = vi.fn(
+      async (_args: {
+        data: { sentAt?: Date };
+        where: { status?: string };
+      }) => ({ count: 1 })
+    );
     const prisma = {
       supplierRma: {
         findUnique: vi.fn(async () => ({ id: "r1", status: "OPEN" })),
-        update,
+        findUniqueOrThrow: vi.fn(async () => ({ id: "r1", status: "SENT" })),
+        updateMany,
       },
     };
     const app = buildApp(prisma, [
@@ -175,7 +327,107 @@ describe("supplier RMAs", () => {
       payload: { status: "SENT" },
     });
     expect(res.statusCode).toBe(200);
-    expect(update.mock.calls[0]?.[0].data.sentAt).toBeInstanceOf(Date);
+    expect(updateMany.mock.calls[0]?.[0].where.status).toBe("OPEN");
+    expect(updateMany.mock.calls[0]?.[0].data.sentAt).toBeInstanceOf(Date);
+  });
+
+  it.each([
+    ["OPEN", "RECEIVED"],
+    ["SENT", "RESOLVED"],
+    ["RECEIVED", "SENT"],
+    ["SENT", "OPEN"],
+  ])("rejects %s → %s with 409 INVALID_TRANSITION", async (from, to) => {
+    const updateMany = vi.fn();
+    const prisma = {
+      supplierRma: {
+        findUnique: vi.fn(async () => ({ id: "r1", status: from })),
+        updateMany,
+      },
+    };
+    const app = buildApp(prisma, [
+      { plugin: supplierRmasRoutes, prefix: "/api/supplier-rmas" },
+    ]);
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/supplier-rmas/r1",
+      payload: { status: to },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("INVALID_TRANSITION");
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
+  it("409s when a concurrent transition wins the status claim", async () => {
+    const prisma = {
+      supplierRma: {
+        findUnique: vi.fn(async () => ({ id: "r1", status: "OPEN" })),
+        updateMany: vi.fn(async () => ({ count: 0 })),
+      },
+    };
+    const app = buildApp(prisma, [
+      { plugin: supplierRmasRoutes, prefix: "/api/supplier-rmas" },
+    ]);
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/supplier-rmas/r1",
+      payload: { status: "SENT" },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("INVALID_TRANSITION");
+  });
+
+  it("allows RECEIVED → RESOLVED and stamps resolvedAt", async () => {
+    const updateMany = vi.fn(
+      async (_args: { data: { resolvedAt?: Date } }) => ({ count: 1 })
+    );
+    const prisma = {
+      supplierRma: {
+        findUnique: vi.fn(async () => ({ id: "r1", status: "RECEIVED" })),
+        findUniqueOrThrow: vi.fn(async () => ({ id: "r1" })),
+        updateMany,
+      },
+    };
+    const app = buildApp(prisma, [
+      { plugin: supplierRmasRoutes, prefix: "/api/supplier-rmas" },
+    ]);
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/supplier-rmas/r1",
+      payload: { status: "RESOLVED" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(updateMany.mock.calls[0]?.[0].data.resolvedAt).toBeInstanceOf(Date);
+  });
+
+  it("reopens a terminal RMA to OPEN and clears sentAt/resolvedAt", async () => {
+    const updateMany = vi.fn(
+      async (_args: { data: { sentAt?: unknown; resolvedAt?: unknown } }) => ({
+        count: 1,
+      })
+    );
+    const prisma = {
+      supplierRma: {
+        findUnique: vi.fn(async () => ({
+          id: "r1",
+          status: "RESOLVED",
+          sentAt: new Date(),
+          resolvedAt: new Date(),
+        })),
+        findUniqueOrThrow: vi.fn(async () => ({ id: "r1" })),
+        updateMany,
+      },
+    };
+    const app = buildApp(prisma, [
+      { plugin: supplierRmasRoutes, prefix: "/api/supplier-rmas" },
+    ]);
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/supplier-rmas/r1",
+      payload: { status: "OPEN" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(updateMany.mock.calls[0]?.[0].data.sentAt).toBeNull();
+    expect(updateMany.mock.calls[0]?.[0].data.resolvedAt).toBeNull();
   });
 });
 
@@ -184,12 +436,11 @@ describe("supplier RMAs", () => {
 // ---------------------------------------------------------------------------
 
 describe("job referrals", () => {
-  it("creates a referral and leaves a job note", async () => {
+  it("creates a referral and leaves a job note in one transaction", async () => {
     const jobNoteCreate = vi.fn(
       async (_args: { data: { content: string } }) => ({})
     );
-    const prisma = {
-      job: { findUnique: vi.fn(async () => ({ id: "j1" })) },
+    const tx = {
       jobReferral: {
         create: vi.fn(async (args: { data: Record<string, unknown> }) => ({
           id: "ref1",
@@ -197,6 +448,13 @@ describe("job referrals", () => {
         })),
       },
       jobNote: { create: jobNoteCreate },
+    };
+    const $transaction = vi.fn(
+      async (fn: (txArg: typeof tx) => Promise<unknown>) => fn(tx)
+    );
+    const prisma = {
+      job: { findUnique: vi.fn(async () => ({ id: "j1" })) },
+      $transaction,
     };
     const app = buildApp(prisma, [{ plugin: referralsRoutes, prefix: "/api" }]);
     const res = await app.inject({
@@ -206,6 +464,8 @@ describe("job referrals", () => {
     });
     expect(res.statusCode).toBe(201);
     expect(res.json().data.toShopName).toBe("MicroLab");
+    expect($transaction).toHaveBeenCalledOnce();
+    expect(tx.jobReferral.create).toHaveBeenCalledOnce();
     expect(jobNoteCreate.mock.calls[0]?.[0].data.content).toContain("MicroLab");
   });
 
@@ -236,6 +496,93 @@ describe("job referrals", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().data).toHaveLength(1);
+  });
+
+  it.each([
+    ["SENT", "COMPLETED"],
+    ["ACCEPTED", "SENT"],
+    ["COMPLETED", "ACCEPTED"],
+    ["CANCELLED", "COMPLETED"],
+  ])("rejects %s → %s with 409 INVALID_TRANSITION", async (from, to) => {
+    const updateMany = vi.fn();
+    const prisma = {
+      jobReferral: {
+        findUnique: vi.fn(async () => ({ id: "r1", status: from })),
+        updateMany,
+      },
+    };
+    const app = buildApp(prisma, [{ plugin: referralsRoutes, prefix: "/api" }]);
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/referrals/r1",
+      payload: { status: to },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("INVALID_TRANSITION");
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
+  it("409s when a concurrent transition wins the status claim", async () => {
+    const prisma = {
+      jobReferral: {
+        findUnique: vi.fn(async () => ({ id: "r1", status: "SENT" })),
+        updateMany: vi.fn(async () => ({ count: 0 })),
+      },
+    };
+    const app = buildApp(prisma, [{ plugin: referralsRoutes, prefix: "/api" }]);
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/referrals/r1",
+      payload: { status: "ACCEPTED" },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("INVALID_TRANSITION");
+  });
+
+  it("allows ACCEPTED → COMPLETED and stamps resolvedAt", async () => {
+    const updateMany = vi.fn(
+      async (_args: { data: { resolvedAt?: Date } }) => ({ count: 1 })
+    );
+    const prisma = {
+      jobReferral: {
+        findUnique: vi.fn(async () => ({ id: "r1", status: "ACCEPTED" })),
+        findUniqueOrThrow: vi.fn(async () => ({ id: "r1" })),
+        updateMany,
+      },
+    };
+    const app = buildApp(prisma, [{ plugin: referralsRoutes, prefix: "/api" }]);
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/referrals/r1",
+      payload: { status: "COMPLETED" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(updateMany.mock.calls[0]?.[0].data.resolvedAt).toBeInstanceOf(Date);
+  });
+
+  it("reopens a terminal referral to SENT and clears resolvedAt", async () => {
+    const updateMany = vi.fn(
+      async (_args: { data: { resolvedAt?: unknown } }) => ({ count: 1 })
+    );
+    const prisma = {
+      jobReferral: {
+        findUnique: vi.fn(async () => ({
+          id: "r1",
+          status: "CANCELLED",
+          resolvedAt: new Date(),
+        })),
+        findUniqueOrThrow: vi.fn(async () => ({ id: "r1" })),
+        updateMany,
+      },
+    };
+    const app = buildApp(prisma, [{ plugin: referralsRoutes, prefix: "/api" }]);
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/referrals/r1",
+      payload: { status: "SENT" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(updateMany.mock.calls[0]?.[0].data.resolvedAt).toBeNull();
   });
 });
 

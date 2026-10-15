@@ -324,6 +324,9 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
         });
       }
       const updated = await upsertShopSettings(app.prisma, parsed.data);
+      // The widget CSP caches embedAllowedOrigins for 60s — drop it so a
+      // save takes effect on the next request instead of up to a minute late.
+      app.resetEmbedOriginsCache();
       return reply.send(updated);
     }
   );

@@ -254,7 +254,10 @@ function emptySummary(): ImportSummary {
 // Parts / repairs
 // ---------------------------------------------------------------------------
 
-function partPatch(row: PartImportRow): Record<string, unknown> {
+function partPatch(
+  row: PartImportRow,
+  supplierId: string | null
+): Record<string, unknown> {
   const patch: Record<string, unknown> = {};
   if (row.category !== undefined) {
     patch.category = row.category as PartCategoryType;
@@ -267,11 +270,43 @@ function partPatch(row: PartImportRow): Record<string, unknown> {
   }
   if (row.supplier !== undefined) {
     patch.supplier = row.supplier;
+    patch.supplierId = supplierId;
   }
   if (row.active !== undefined) {
     patch.isActive = row.active;
   }
   return patch;
+}
+
+/**
+ * A supplier column links the part to a Supplier record only when the name
+ * hits exactly one row (case-insensitive, trimmed) — an ambiguous or
+ * unknown name keeps the free-text value and leaves supplierId null rather
+ * than guessing. Cached per import so 500 rows with the same supplier cost
+ * one query.
+ */
+function makeSupplierResolver(prisma: PrismaClient) {
+  const cache = new Map<string, string | null>();
+  return async (name: string | undefined): Promise<string | null> => {
+    if (name === undefined) {
+      return null;
+    }
+    const key = name.trim().toLowerCase();
+    if (!key) {
+      return null;
+    }
+    const hit = cache.get(key);
+    if (hit !== undefined) {
+      return hit;
+    }
+    const matches = await prisma.supplier.findMany({
+      where: { name: { equals: name.trim(), mode: "insensitive" } },
+      select: { id: true },
+    });
+    const id = matches.length === 1 ? (matches[0]?.id ?? null) : null;
+    cache.set(key, id);
+    return id;
+  };
 }
 
 /**
@@ -286,10 +321,11 @@ async function updatePartFromRow(
   prisma: PrismaClient,
   existing: { id: string; stockQuantity: number },
   row: PartImportRow,
-  userId: string
+  userId: string,
+  supplierId: string | null
 ) {
   await prisma.$transaction(async (tx) => {
-    const patch = partPatch(row);
+    const patch = partPatch(row, supplierId);
     if (Object.keys(patch).length > 0) {
       await tx.partsCatalog.update({ where: { id: existing.id }, data: patch });
     }
@@ -343,6 +379,7 @@ export async function importParts(
   locale: string
 ): Promise<ImportSummary> {
   const summary = emptySummary();
+  const resolveSupplierId = makeSupplierResolver(prisma);
   for (const [index, raw] of rows.entries()) {
     const rowNo = index + 2;
     const parsed = partImportRowSchema.safeParse(raw);
@@ -369,8 +406,9 @@ export async function importParts(
         continue;
       }
       const existing = matches[0];
+      const supplierId = await resolveSupplierId(row.supplier);
       if (existing) {
-        await updatePartFromRow(prisma, existing, row, userId);
+        await updatePartFromRow(prisma, existing, row, userId, supplierId);
         summary.updated += 1;
       } else {
         // A brand-new part that arrives with stock still needs the ledger
@@ -384,6 +422,7 @@ export async function importParts(
               stockQuantity: row.stock ?? 0,
               reorderLevel: row.reorderLevel ?? 0,
               supplier: row.supplier ?? null,
+              supplierId,
               isActive: row.active ?? true,
             },
           });

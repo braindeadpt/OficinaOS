@@ -688,6 +688,10 @@ model PartsCatalog {
   category            PartCategory
   defaultPrice        Decimal      @db.Decimal(10, 2)
   supplier            String?
+  // Link to a registered Supplier record — the free-text `supplier` field
+  // stays for display/imports; the FK enables the supplier detail view.
+  supplierId          String?
+  supplierRef         Supplier?    @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   stockQuantity       Int          @default(0)
   reorderLevel        Int          @default(0)
   isActive            Boolean      @default(true)
@@ -705,6 +709,7 @@ model PartsCatalog {
 
   @@index([name])
   @@index([category])
+  @@index([supplierId])
   @@map("parts_catalog")
 }
 
@@ -1167,6 +1172,10 @@ model ShopSettings {
   // Public base URL used to build customer-facing links (e.g. WhatsApp
   // tracking links). Optional: shops on a LAN may not expose one.
   trackingBaseUrl           String?
+  // Origins allowed to iframe /embed/* pages (CSP frame-ancestors) — one
+  // origin per line, e.g. "https://loja-exemplo.pt". Empty = '*' (any site
+  // may embed the public widget; it exposes no shop data).
+  embedAllowedOrigins       String?
   // Public review link (e.g. Google Business "write a review" URL) shown on
   // the tracking page after delivery and in the delivered notification.
   reviewUrl                 String?
@@ -1394,7 +1403,8 @@ model Supplier {
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 
-  rmas SupplierRma[]
+  rmas  SupplierRma[]
+  parts PartsCatalog[]
 
   @@index([name])
   @@map("suppliers")
@@ -1427,7 +1437,9 @@ model SupplierRma {
   updatedAt   DateTime @updatedAt @db.Timestamptz
 
   @@index([supplierId])
+  @@index([partId])
   @@index([status])
+  @@index([createdById])
   @@index([createdAt])
   @@map("supplier_rmas")
 }
@@ -1455,5 +1467,6 @@ model JobReferral {
 
   @@index([jobId])
   @@index([status])
+  @@index([createdById])
   @@map("job_referrals")
 }
