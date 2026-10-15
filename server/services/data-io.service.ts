@@ -1,63 +1,75 @@
 import type { PrismaClient } from "@generated/client";
+import { AuditAction } from "@generated/client";
 import type { PartCategoryType, RepairCategoryType } from "@shared/constants";
+import type { JobStatusType } from "@shared/constants/job-statuses";
 import type {
+  ImportRowError,
+  ImportSummary,
   JobImportRow,
   PartImportRow,
   RepairImportRow,
 } from "@shared/schemas/data-io.schema";
-import { generateJobCode } from "../utils/job-code.js";
+import {
+  jobImportRowSchema,
+  partImportRowSchema,
+  repairImportRowSchema,
+} from "@shared/schemas/data-io.schema";
+import type { z } from "zod";
+import { resolveValidationMessage } from "../utils/resolve-validation-messages.js";
+import { createImportedJob } from "./job.service.js";
 
-const PART_CATEGORIES = new Set([
-  "SCREEN",
-  "BATTERY",
-  "CHARGING_PORT",
-  "CAMERA",
-  "SPEAKER",
-  "MICROPHONE",
-  "MOTHERBOARD",
-  "HOUSING",
-  "BUTTON",
-  "OTHER",
-]);
-
-const REPAIR_CATEGORIES = new Set([
-  "HARDWARE",
-  "SOFTWARE",
-  "DIAGNOSTIC",
-  "OTHER",
-]);
-
-const GENERIC_BRAND = "Outra";
 const CSV_NEEDS_QUOTES = /[",\n\r;]/;
 const CSV_QUOTE = /"/g;
+// Cells that open with these run as formulas/commands in Excel and Sheets —
+// third-party text (e.g. the public pre-check form) can weaponise an export.
+const CSV_FORMULA_PREFIX = /^[=+\-@\t\r]/;
+
+/** Page size for streamed exports — no 50k-row findMany held in memory. */
+const EXPORT_PAGE_SIZE = 1000;
 
 function csvEscape(value: unknown): string {
   if (value === null || value === undefined) {
     return "";
   }
-  const s = String(value);
+  let s = String(value);
+  if (CSV_FORMULA_PREFIX.test(s)) {
+    s = `'${s}`;
+  }
   return CSV_NEEDS_QUOTES.test(s) ? `"${s.replace(CSV_QUOTE, '""')}"` : s;
 }
 
-function toCsv(headers: string[], rows: unknown[][]): string {
-  const lines = [headers.map(csvEscape).join(";")];
-  for (const row of rows) {
-    lines.push(row.map(csvEscape).join(";"));
-  }
-  // BOM so Excel opens the file with the right encoding
-  return `﻿${lines.join("\r\n")}`;
+export interface ExportResult {
+  csv: string;
+  rows: number;
 }
 
-export async function exportJobsCsv(prisma: PrismaClient): Promise<string> {
-  const jobs = await prisma.job.findMany({
-    orderBy: { createdAt: "desc" },
-    include: {
-      customer: { select: { name: true, phone: true, email: true } },
-      device: { include: { brand: { select: { name: true } } } },
+/** First DELIVERED transition per job, from the audit trail. */
+async function deliveredAtByJob(
+  prisma: PrismaClient,
+  jobIds: string[]
+): Promise<Map<string, Date>> {
+  const rows = await prisma.auditLog.findMany({
+    where: {
+      jobId: { in: jobIds },
+      action: AuditAction.STATUS_CHANGED,
+      toValue: "DELIVERED",
     },
-    take: 50_000,
+    orderBy: { createdAt: "asc" },
+    select: { jobId: true, createdAt: true },
   });
-  return toCsv(
+  const map = new Map<string, Date>();
+  for (const r of rows) {
+    if (r.jobId && !map.has(r.jobId)) {
+      map.set(r.jobId, r.createdAt);
+    }
+  }
+  return map;
+}
+
+export async function exportJobsCsv(
+  prisma: PrismaClient
+): Promise<ExportResult> {
+  const lines = [
     [
       "jobCode",
       "createdAt",
@@ -70,211 +82,480 @@ export async function exportJobsCsv(prisma: PrismaClient): Promise<string> {
       "problem",
       "estimatedCost",
       "deliveredAt",
-    ],
-    jobs.map((j) => [
-      j.jobCode,
-      j.createdAt.toISOString(),
-      j.status,
-      j.customer.name,
-      j.customer.phone,
-      j.customer.email,
-      j.device.brand.name,
-      j.device.model,
-      j.reportedProblem,
-      j.estimatedCost?.toString(),
-      undefined,
-    ])
-  );
+    ]
+      .map(csvEscape)
+      .join(";"),
+  ];
+  let count = 0;
+  let cursor: string | undefined;
+  for (;;) {
+    const page = await prisma.job.findMany({
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      include: {
+        customer: { select: { name: true, phone: true, email: true } },
+        device: { include: { brand: { select: { name: true } } } },
+      },
+      take: EXPORT_PAGE_SIZE,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    });
+    if (page.length === 0) {
+      break;
+    }
+    const delivered = await deliveredAtByJob(
+      prisma,
+      page.map((j) => j.id)
+    );
+    for (const j of page) {
+      lines.push(
+        [
+          j.jobCode,
+          j.createdAt.toISOString(),
+          j.status,
+          j.customer.name,
+          j.customer.phone,
+          j.customer.email,
+          j.device.brand.name,
+          j.device.model,
+          j.reportedProblem,
+          j.estimatedCost?.toString(),
+          delivered.get(j.id)?.toISOString(),
+        ]
+          .map(csvEscape)
+          .join(";")
+      );
+      count += 1;
+    }
+    if (page.length < EXPORT_PAGE_SIZE) {
+      break;
+    }
+    cursor = page.at(-1)?.id;
+  }
+  return { csv: `﻿${lines.join("\r\n")}`, rows: count };
 }
 
-export async function exportPartsCsv(prisma: PrismaClient): Promise<string> {
-  const parts = await prisma.partsCatalog.findMany({
-    orderBy: { name: "asc" },
-    take: 50_000,
+export async function exportPartsCsv(
+  prisma: PrismaClient
+): Promise<ExportResult> {
+  const lines = [
+    ["name", "category", "price", "stock", "reorderLevel", "supplier", "active"]
+      .map(csvEscape)
+      .join(";"),
+  ];
+  let count = 0;
+  let cursor: string | undefined;
+  for (;;) {
+    const page = await prisma.partsCatalog.findMany({
+      orderBy: { id: "asc" },
+      take: EXPORT_PAGE_SIZE,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    });
+    if (page.length === 0) {
+      break;
+    }
+    for (const p of page) {
+      lines.push(
+        [
+          p.name,
+          p.category,
+          p.defaultPrice.toString(),
+          p.stockQuantity,
+          p.reorderLevel,
+          p.supplier,
+          p.isActive ? 1 : 0,
+        ]
+          .map(csvEscape)
+          .join(";")
+      );
+      count += 1;
+    }
+    if (page.length < EXPORT_PAGE_SIZE) {
+      break;
+    }
+    cursor = page.at(-1)?.id;
+  }
+  return { csv: `﻿${lines.join("\r\n")}`, rows: count };
+}
+
+export async function exportRepairsCsv(
+  prisma: PrismaClient
+): Promise<ExportResult> {
+  const lines = [
+    ["name", "category", "price", "warrantyDays", "active"]
+      .map(csvEscape)
+      .join(";"),
+  ];
+  let count = 0;
+  let cursor: string | undefined;
+  for (;;) {
+    const page = await prisma.repairCatalog.findMany({
+      orderBy: { id: "asc" },
+      take: EXPORT_PAGE_SIZE,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    });
+    if (page.length === 0) {
+      break;
+    }
+    for (const r of page) {
+      lines.push(
+        [
+          r.name,
+          r.category,
+          r.defaultPrice.toString(),
+          r.warrantyDays,
+          r.isActive ? 1 : 0,
+        ]
+          .map(csvEscape)
+          .join(";")
+      );
+      count += 1;
+    }
+    if (page.length < EXPORT_PAGE_SIZE) {
+      break;
+    }
+    cursor = page.at(-1)?.id;
+  }
+  return { csv: `﻿${lines.join("\r\n")}`, rows: count };
+}
+
+// ---------------------------------------------------------------------------
+// Row-level import helpers
+// ---------------------------------------------------------------------------
+
+function pushIssues(
+  error: z.ZodError,
+  row: number,
+  errors: ImportRowError[],
+  locale: string
+) {
+  for (const issue of error.issues) {
+    errors.push({
+      row,
+      field: String(issue.path[0] ?? ""),
+      message: resolveValidationMessage(issue.message, locale),
+    });
+  }
+}
+
+function pushRowError(
+  row: number,
+  field: string,
+  key: string,
+  errors: ImportRowError[],
+  locale: string
+) {
+  errors.push({ row, field, message: resolveValidationMessage(key, locale) });
+}
+
+function emptySummary(): ImportSummary {
+  return { created: 0, updated: 0, skipped: 0, errors: [] };
+}
+
+// ---------------------------------------------------------------------------
+// Parts / repairs
+// ---------------------------------------------------------------------------
+
+function partPatch(row: PartImportRow): Record<string, unknown> {
+  const patch: Record<string, unknown> = {};
+  if (row.category !== undefined) {
+    patch.category = row.category as PartCategoryType;
+  }
+  if (row.price !== undefined) {
+    patch.defaultPrice = row.price;
+  }
+  if (row.reorderLevel !== undefined) {
+    patch.reorderLevel = row.reorderLevel;
+  }
+  if (row.supplier !== undefined) {
+    patch.supplier = row.supplier;
+  }
+  if (row.active !== undefined) {
+    patch.isActive = row.active;
+  }
+  return patch;
+}
+
+/**
+ * Per-row transaction: catalog field patch +, when the stock column is
+ * present and differs from the LOCKED balance, an ADJUSTMENT StockMovement
+ * with the signed delta — the ledger keeps the who/when/why instead of a
+ * silent overwrite. The balance is read with FOR UPDATE inside the
+ * transaction so a sale that lands between the name lookup and this write
+ * can't produce a fake delta or a ledger balance that never existed.
+ */
+async function updatePartFromRow(
+  prisma: PrismaClient,
+  existing: { id: string; stockQuantity: number },
+  row: PartImportRow,
+  userId: string
+) {
+  await prisma.$transaction(async (tx) => {
+    const patch = partPatch(row);
+    if (Object.keys(patch).length > 0) {
+      await tx.partsCatalog.update({ where: { id: existing.id }, data: patch });
+    }
+    if (row.stock === undefined) {
+      return;
+    }
+    const locked = await tx.$queryRaw<
+      Array<{ stockQuantity: number | string }>
+    >`
+      SELECT "stockQuantity" FROM "parts_catalog"
+      WHERE "id" = ${existing.id}
+      FOR UPDATE
+    `;
+    const current = Number(locked[0]?.stockQuantity);
+    if (!Number.isFinite(current)) {
+      throw new Error("part_vanished_between_lookup_and_write");
+    }
+    const delta = row.stock - current;
+    if (delta === 0) {
+      return;
+    }
+    const updated = await tx.$queryRaw<
+      Array<{ stockQuantity: number | string }>
+    >`
+      UPDATE "parts_catalog"
+      SET "stockQuantity" = ${row.stock}
+      WHERE "id" = ${existing.id}
+      RETURNING "stockQuantity"
+    `;
+    const balanceAfter = Number(updated[0]?.stockQuantity);
+    if (updated.length === 0 || !Number.isFinite(balanceAfter)) {
+      throw new Error("part_vanished_between_lookup_and_write");
+    }
+    await tx.stockMovement.create({
+      data: {
+        partId: existing.id,
+        type: "ADJUSTMENT",
+        quantity: delta,
+        balanceAfter,
+        note: "import",
+        createdById: userId,
+      },
+    });
   });
-  return toCsv(
-    [
-      "name",
-      "category",
-      "price",
-      "stock",
-      "reorderLevel",
-      "supplier",
-      "active",
-    ],
-    parts.map((p) => [
-      p.name,
-      p.category,
-      p.defaultPrice.toString(),
-      p.stockQuantity,
-      p.reorderLevel,
-      p.supplier,
-      p.isActive ? 1 : 0,
-    ])
-  );
-}
-
-export async function exportRepairsCsv(prisma: PrismaClient): Promise<string> {
-  const repairs = await prisma.repairCatalog.findMany({
-    orderBy: { name: "asc" },
-    take: 50_000,
-  });
-  return toCsv(
-    ["name", "category", "price", "warrantyDays", "active"],
-    repairs.map((r) => [
-      r.name,
-      r.category,
-      r.defaultPrice.toString(),
-      r.warrantyDays,
-      r.isActive ? 1 : 0,
-    ])
-  );
-}
-
-export interface ImportSummary {
-  created: number;
-  errors: { index: number; message: string }[];
-  updated: number;
 }
 
 export async function importParts(
   prisma: PrismaClient,
-  rows: PartImportRow[]
+  rows: unknown[],
+  userId: string,
+  locale: string
 ): Promise<ImportSummary> {
-  const summary: ImportSummary = { created: 0, updated: 0, errors: [] };
-  for (const [index, row] of rows.entries()) {
+  const summary = emptySummary();
+  for (const [index, raw] of rows.entries()) {
+    const rowNo = index + 2;
+    const parsed = partImportRowSchema.safeParse(raw);
+    if (!parsed.success) {
+      pushIssues(parsed.error, rowNo, summary.errors, locale);
+      continue;
+    }
+    const row = parsed.data;
     try {
-      const category: PartCategoryType =
-        row.category && PART_CATEGORIES.has(row.category.toUpperCase())
-          ? (row.category.toUpperCase() as PartCategoryType)
-          : "OTHER";
-      const data = {
-        category,
-        ...(row.price === undefined ? {} : { defaultPrice: row.price }),
-        ...(row.stock === undefined ? {} : { stockQuantity: row.stock }),
-        ...(row.supplier ? { supplier: row.supplier } : {}),
-      };
-      const existing = await prisma.partsCatalog.findFirst({
-        where: { name: { equals: row.name, mode: "insensitive" } },
+      // Name matches are case-insensitive; more than one hit means the
+      // catalogue is ambiguous — a blind update would write to a random one.
+      const matches = await prisma.partsCatalog.findMany({
+        where: { name: { equals: row.name.trim(), mode: "insensitive" } },
+        select: { id: true, stockQuantity: true },
       });
+      if (matches.length > 1) {
+        pushRowError(
+          rowNo,
+          "name",
+          "validations.import_duplicate",
+          summary.errors,
+          locale
+        );
+        continue;
+      }
+      const existing = matches[0];
       if (existing) {
-        await prisma.partsCatalog.update({
-          where: { id: existing.id },
-          data,
-        });
+        await updatePartFromRow(prisma, existing, row, userId);
         summary.updated += 1;
       } else {
-        await prisma.partsCatalog.create({
-          data: { name: row.name, defaultPrice: 0, ...data },
+        // A brand-new part that arrives with stock still needs the ledger
+        // entry — the opening balance is an ADJUSTMENT like any other.
+        await prisma.$transaction(async (tx) => {
+          const part = await tx.partsCatalog.create({
+            data: {
+              name: row.name.trim(),
+              category: (row.category ?? "OTHER") as PartCategoryType,
+              defaultPrice: row.price ?? 0,
+              stockQuantity: row.stock ?? 0,
+              reorderLevel: row.reorderLevel ?? 0,
+              supplier: row.supplier ?? null,
+              isActive: row.active ?? true,
+            },
+          });
+          const stock = row.stock ?? 0;
+          if (stock > 0) {
+            await tx.stockMovement.create({
+              data: {
+                partId: part.id,
+                type: "ADJUSTMENT",
+                quantity: stock,
+                balanceAfter: stock,
+                note: "import",
+                createdById: userId,
+              },
+            });
+          }
         });
         summary.created += 1;
       }
-    } catch (err) {
-      summary.errors.push({
-        index,
-        message: err instanceof Error ? err.message : "error",
-      });
+    } catch {
+      pushRowError(
+        rowNo,
+        "",
+        "validations.import_error",
+        summary.errors,
+        locale
+      );
     }
   }
   return summary;
+}
+
+function repairPatch(row: RepairImportRow): Record<string, unknown> {
+  const patch: Record<string, unknown> = {};
+  if (row.category !== undefined) {
+    patch.category = row.category as RepairCategoryType;
+  }
+  if (row.price !== undefined) {
+    patch.defaultPrice = row.price;
+  }
+  if (row.warrantyDays !== undefined) {
+    patch.warrantyDays = row.warrantyDays;
+  }
+  if (row.active !== undefined) {
+    patch.isActive = row.active;
+  }
+  return patch;
 }
 
 export async function importRepairs(
   prisma: PrismaClient,
-  rows: RepairImportRow[]
+  rows: unknown[],
+  locale: string
 ): Promise<ImportSummary> {
-  const summary: ImportSummary = { created: 0, updated: 0, errors: [] };
-  for (const [index, row] of rows.entries()) {
+  const summary = emptySummary();
+  for (const [index, raw] of rows.entries()) {
+    const rowNo = index + 2;
+    const parsed = repairImportRowSchema.safeParse(raw);
+    if (!parsed.success) {
+      pushIssues(parsed.error, rowNo, summary.errors, locale);
+      continue;
+    }
+    const row = parsed.data;
     try {
-      const category: RepairCategoryType =
-        row.category && REPAIR_CATEGORIES.has(row.category.toUpperCase())
-          ? (row.category.toUpperCase() as RepairCategoryType)
-          : "OTHER";
-      const data = {
-        category,
-        ...(row.price === undefined ? {} : { defaultPrice: row.price }),
-        ...(row.warrantyDays === undefined
-          ? {}
-          : { warrantyDays: row.warrantyDays }),
-      };
-      const existing = await prisma.repairCatalog.findFirst({
-        where: { name: { equals: row.name, mode: "insensitive" } },
+      const matches = await prisma.repairCatalog.findMany({
+        where: { name: { equals: row.name.trim(), mode: "insensitive" } },
+        select: { id: true },
       });
+      if (matches.length > 1) {
+        pushRowError(
+          rowNo,
+          "name",
+          "validations.import_duplicate",
+          summary.errors,
+          locale
+        );
+        continue;
+      }
+      const existing = matches[0];
+      const patch = repairPatch(row);
       if (existing) {
-        await prisma.repairCatalog.update({
-          where: { id: existing.id },
-          data,
-        });
+        if (Object.keys(patch).length > 0) {
+          await prisma.repairCatalog.update({
+            where: { id: existing.id },
+            data: patch,
+          });
+        }
         summary.updated += 1;
       } else {
         await prisma.repairCatalog.create({
-          data: { name: row.name, defaultPrice: 0, ...data },
+          data: {
+            name: row.name.trim(),
+            category: (row.category ?? "OTHER") as RepairCategoryType,
+            defaultPrice: row.price ?? 0,
+            warrantyDays: row.warrantyDays ?? 0,
+            isActive: row.active ?? true,
+          },
         });
         summary.created += 1;
       }
-    } catch (err) {
-      summary.errors.push({
-        index,
-        message: err instanceof Error ? err.message : "error",
-      });
+    } catch {
+      pushRowError(
+        rowNo,
+        "",
+        "validations.import_error",
+        summary.errors,
+        locale
+      );
     }
   }
   return summary;
 }
 
+// ---------------------------------------------------------------------------
+// Jobs — historical import with dedupe on jobCode / externalRef
+// ---------------------------------------------------------------------------
+
 export async function importJobs(
   prisma: PrismaClient,
-  rows: JobImportRow[],
-  userId: string
+  rows: unknown[],
+  userId: string,
+  locale: string
 ): Promise<ImportSummary> {
-  const summary: ImportSummary = { created: 0, updated: 0, errors: [] };
-  for (const [index, row] of rows.entries()) {
+  const summary = emptySummary();
+  for (const [index, raw] of rows.entries()) {
+    const rowNo = index + 2;
+    const parsed = jobImportRowSchema.safeParse(raw);
+    if (!parsed.success) {
+      pushIssues(parsed.error, rowNo, summary.errors, locale);
+      continue;
+    }
+    const row: JobImportRow = parsed.data;
     try {
-      await prisma.$transaction(async (tx) => {
-        const phone = row.customerPhone.trim();
-        const customer =
-          (await tx.customer.findUnique({ where: { phone } })) ??
-          (await tx.customer.create({
-            data: {
-              name: row.customerName.trim(),
-              phone,
-              email: row.customerEmail?.trim() || null,
-            },
-          }));
-
-        const brand = await tx.brand.upsert({
-          where: { name: row.deviceBrand?.trim() || GENERIC_BRAND },
-          create: { name: row.deviceBrand?.trim() || GENERIC_BRAND },
-          update: {},
+      // Reimport safety: a jobCode or externalRef already on file means this
+      // row was loaded before — skip it instead of creating a duplicate.
+      if (row.jobCode) {
+        const dupe = await prisma.job.findUnique({
+          where: { jobCode: row.jobCode },
+          select: { id: true },
         });
-        const device = await tx.device.upsert({
-          where: {
-            brandId_model: { brandId: brand.id, model: row.deviceModel.trim() },
-          },
-          create: { brandId: brand.id, model: row.deviceModel.trim() },
-          update: {},
+        if (dupe) {
+          summary.skipped += 1;
+          continue;
+        }
+      }
+      if (row.externalRef) {
+        const dupe = await prisma.job.findUnique({
+          where: { externalRef: row.externalRef },
+          select: { id: true },
         });
-        const { jobCode, accessCode } = await generateJobCode(
-          tx as PrismaClient
-        );
-        await tx.job.create({
-          data: {
-            jobCode,
-            accessCode,
-            customerId: customer.id,
-            deviceId: device.id,
-            reportedProblem: row.problem.trim(),
-            status: "INTAKE",
-            createdById: userId,
-          },
-        });
-      });
+        if (dupe) {
+          summary.skipped += 1;
+          continue;
+        }
+      }
+      await createImportedJob(
+        prisma,
+        {
+          ...row,
+          status: row.status as JobStatusType | undefined,
+        },
+        userId
+      );
       summary.created += 1;
-    } catch (err) {
-      summary.errors.push({
-        index,
-        message: err instanceof Error ? err.message : "error",
-      });
+    } catch {
+      pushRowError(
+        rowNo,
+        "",
+        "validations.import_error",
+        summary.errors,
+        locale
+      );
     }
   }
   return summary;

@@ -8,6 +8,10 @@ type AuditLogInclude = Prisma.AuditLogInclude;
 
 interface CreateAuditLogInput {
   action: AuditAction;
+  // Optional override for historical imports — when a legacy job is loaded
+  // with its original dates, the audit entries keep those dates instead of
+  // "now".
+  createdAt?: Date;
   fromValue?: string;
   jobId: string | null;
   metadata?: Record<string, unknown>;
@@ -31,6 +35,7 @@ export async function create(
       metadata: (data.metadata ?? undefined) as
         | Prisma.InputJsonValue
         | undefined,
+      ...(data.createdAt ? { createdAt: data.createdAt } : {}),
     },
   });
 }

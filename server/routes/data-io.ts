@@ -1,11 +1,13 @@
+import { AuditAction } from "@generated/client";
 import { AppError } from "@shared/errors/app-error.js";
 import {
   importJobsSchema,
   importPartsSchema,
   importRepairsSchema,
 } from "@shared/schemas/data-io.schema";
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { requirePermission } from "../middlewares/rbac.js";
+import { createAuditLog } from "../services/audit.service.js";
 import {
   exportJobsCsv,
   exportPartsCsv,
@@ -17,15 +19,30 @@ import {
 import { getUserId } from "../utils/request.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
-function csvReply(
-  reply: import("fastify").FastifyReply,
-  name: string,
-  csv: string
-) {
+// Bulk import/export moves personal data in both directions — OWNER only.
+const dataIoPermission = requirePermission({ settings: ["edit"] });
+
+// Import bodies can be large (≤1000 rows of JSON per chunk); 5 MB is the cap.
+const IMPORT_BODY_LIMIT = 5 * 1024 * 1024;
+
+function csvReply(reply: FastifyReply, name: string, csv: string) {
   return reply
     .header("Content-Disposition", `attachment; filename="${name}.csv"`)
     .type("text/csv; charset=utf-8")
     .send(csv);
+}
+
+function parseImportBody(
+  schema: typeof importPartsSchema,
+  req: FastifyRequest
+) {
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    throw new AppError("VALIDATION_ERROR", {
+      errors: resolveZodErrors(parsed.error.flatten().fieldErrors, req.locale),
+    });
+  }
+  return parsed.data.rows;
 }
 
 // Import/export em massa — CSV/XLSX (o XLSX é convertido no cliente para
@@ -34,75 +51,122 @@ function csvReply(
 export const dataIoRoutes: FastifyPluginAsync = async (app) => {
   app.get(
     "/export/jobs.csv",
-    { preHandler: requirePermission({ jobs: ["view"] }) },
-    async (_req, reply) =>
-      csvReply(reply, "reparacoes", await exportJobsCsv(app.prisma))
+    { preHandler: dataIoPermission },
+    async (req, reply) => {
+      const { csv, rows } = await exportJobsCsv(app.prisma);
+      await createAuditLog(app.prisma, {
+        action: AuditAction.DATA_EXPORTED,
+        jobId: null,
+        metadata: { entity: "jobs", rows },
+        userId: getUserId(req),
+      });
+      return csvReply(reply, "reparacoes", csv);
+    }
   );
 
   app.get(
     "/export/parts.csv",
-    { preHandler: requirePermission({ parts: ["viewCatalog"] }) },
-    async (_req, reply) =>
-      csvReply(reply, "pecas", await exportPartsCsv(app.prisma))
+    { preHandler: dataIoPermission },
+    async (req, reply) => {
+      const { csv, rows } = await exportPartsCsv(app.prisma);
+      await createAuditLog(app.prisma, {
+        action: AuditAction.DATA_EXPORTED,
+        jobId: null,
+        metadata: { entity: "parts", rows },
+        userId: getUserId(req),
+      });
+      return csvReply(reply, "pecas", csv);
+    }
   );
 
   app.get(
     "/export/repairs.csv",
-    { preHandler: requirePermission({ repairs: ["viewCatalog"] }) },
-    async (_req, reply) =>
-      csvReply(reply, "servicos", await exportRepairsCsv(app.prisma))
+    { preHandler: dataIoPermission },
+    async (req, reply) => {
+      const { csv, rows } = await exportRepairsCsv(app.prisma);
+      await createAuditLog(app.prisma, {
+        action: AuditAction.DATA_EXPORTED,
+        jobId: null,
+        metadata: { entity: "repairs", rows },
+        userId: getUserId(req),
+      });
+      return csvReply(reply, "servicos", csv);
+    }
   );
 
   app.post(
     "/import/parts",
-    { preHandler: requirePermission({ parts: ["manageCatalog"] }) },
+    { bodyLimit: IMPORT_BODY_LIMIT, preHandler: dataIoPermission },
     async (req, reply) => {
-      const parsed = importPartsSchema.safeParse(req.body);
-      if (!parsed.success) {
-        throw new AppError("VALIDATION_ERROR", {
-          errors: resolveZodErrors(
-            parsed.error.flatten().fieldErrors,
-            req.locale
-          ),
-        });
-      }
-      return reply.send(await importParts(app.prisma, parsed.data.rows));
+      const rows = parseImportBody(importPartsSchema, req);
+      const summary = await importParts(
+        app.prisma,
+        rows,
+        getUserId(req),
+        req.locale
+      );
+      await createAuditLog(app.prisma, {
+        action: AuditAction.DATA_IMPORTED,
+        jobId: null,
+        metadata: {
+          entity: "parts",
+          created: summary.created,
+          updated: summary.updated,
+          skipped: summary.skipped,
+          errors: summary.errors.length,
+        },
+        userId: getUserId(req),
+      });
+      return reply.send(summary);
     }
   );
 
   app.post(
     "/import/repairs",
-    { preHandler: requirePermission({ repairs: ["manageCatalog"] }) },
+    { bodyLimit: IMPORT_BODY_LIMIT, preHandler: dataIoPermission },
     async (req, reply) => {
-      const parsed = importRepairsSchema.safeParse(req.body);
-      if (!parsed.success) {
-        throw new AppError("VALIDATION_ERROR", {
-          errors: resolveZodErrors(
-            parsed.error.flatten().fieldErrors,
-            req.locale
-          ),
-        });
-      }
-      return reply.send(await importRepairs(app.prisma, parsed.data.rows));
+      const rows = parseImportBody(importRepairsSchema, req);
+      const summary = await importRepairs(app.prisma, rows, req.locale);
+      await createAuditLog(app.prisma, {
+        action: AuditAction.DATA_IMPORTED,
+        jobId: null,
+        metadata: {
+          entity: "repairs",
+          created: summary.created,
+          updated: summary.updated,
+          skipped: summary.skipped,
+          errors: summary.errors.length,
+        },
+        userId: getUserId(req),
+      });
+      return reply.send(summary);
     }
   );
 
   app.post(
     "/import/jobs",
-    { preHandler: requirePermission({ jobs: ["create"] }) },
+    { bodyLimit: IMPORT_BODY_LIMIT, preHandler: dataIoPermission },
     async (req, reply) => {
-      const parsed = importJobsSchema.safeParse(req.body);
-      if (!parsed.success) {
-        throw new AppError("VALIDATION_ERROR", {
-          errors: resolveZodErrors(
-            parsed.error.flatten().fieldErrors,
-            req.locale
-          ),
-        });
-      }
-      return reply.send(
-        await importJobs(app.prisma, parsed.data.rows, getUserId(req))
+      const rows = parseImportBody(importJobsSchema, req);
+      const summary = await importJobs(
+        app.prisma,
+        rows,
+        getUserId(req),
+        req.locale
       );
+      await createAuditLog(app.prisma, {
+        action: AuditAction.DATA_IMPORTED,
+        jobId: null,
+        metadata: {
+          entity: "jobs",
+          created: summary.created,
+          updated: summary.updated,
+          skipped: summary.skipped,
+          errors: summary.errors.length,
+        },
+        userId: getUserId(req),
+      });
+      return reply.send(summary);
     }
   );
 };

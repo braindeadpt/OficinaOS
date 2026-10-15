@@ -1,3 +1,8 @@
+import {
+  IMPORT_CHUNK_SIZE,
+  type ImportRowError,
+  type ImportSummary,
+} from "@shared/schemas/data-io.schema";
 import { type ChangeEvent, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -7,9 +12,22 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import api from "@/lib/api";
-import { mapRows, parseCsv, readTableFile } from "@/lib/import-table";
+import {
+  ImportFileError,
+  mapRows,
+  parseCsv,
+  readTableFile,
+  remapChunkErrors,
+} from "@/lib/import-table";
 
 type Entity = "parts" | "repairs" | "jobs";
+
+/** CSV columns that carry numbers — written as real Numbers into XLSX. */
+const XLSX_NUMERIC_COLUMNS: Record<Entity, Set<string>> = {
+  parts: new Set(["price", "stock", "reorderlevel", "reorder_level"]),
+  repairs: new Set(["price", "warrantydays", "warranty_days"]),
+  jobs: new Set(["estimatedcost"]),
+};
 
 function downloadBlob(name: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
@@ -21,10 +39,28 @@ function downloadBlob(name: string, blob: Blob) {
 }
 
 /** Server exports CSV only — for Excel we convert it client-side. */
-async function csvToXlsxBlob(csv: string, sheet: string): Promise<Blob> {
+async function csvToXlsxBlob(
+  csv: string,
+  sheet: string,
+  numericColumns: Set<string>
+): Promise<Blob> {
   const { default: writeXlsxFile } = await import("write-excel-file/browser");
-  const rows = parseCsv(csv).map((row) =>
-    row.map((value) => ({ type: String, value }))
+  const table = parseCsv(csv);
+  const headers = (table[0] ?? []).map((h) => h.trim().toLowerCase());
+  const rows = table.map((row, rowIndex) =>
+    row.map((value, colIndex) => {
+      if (
+        rowIndex > 0 &&
+        numericColumns.has(headers[colIndex] ?? "") &&
+        value !== ""
+      ) {
+        const n = Number(value);
+        if (Number.isFinite(n)) {
+          return { type: Number, value: n };
+        }
+      }
+      return { type: String, value };
+    })
   );
   return writeXlsxFile(rows, { sheet }).toBlob();
 }
@@ -53,7 +89,11 @@ function ExportCard({ entity }: { entity: Entity }) {
           new Blob([csv], { type: "text/csv; charset=utf-8" })
         );
       } else {
-        const blob = await csvToXlsxBlob(csv, entity);
+        const blob = await csvToXlsxBlob(
+          csv,
+          entity,
+          XLSX_NUMERIC_COLUMNS[entity]
+        );
         downloadBlob(`${entity}-export.xlsx`, blob);
       }
     } catch {
@@ -95,10 +135,21 @@ function ExportCard({ entity }: { entity: Entity }) {
   );
 }
 
+/** One row per import error: sheet row number, field and the message. */
+function errorsToCsv(errors: ImportRowError[]): string {
+  const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const lines = ["row;field;error"];
+  for (const e of errors) {
+    lines.push([e.row, e.field, e.message].map(esc).join(";"));
+  }
+  return `﻿${lines.join("\r\n")}`;
+}
+
 function ImportCard({ entity }: { entity: Entity }) {
   const { t } = useTranslation();
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [lastErrors, setLastErrors] = useState<ImportRowError[]>([]);
   const label = t(ENTITY_LABELS[entity]);
 
   const onFile = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -108,38 +159,67 @@ function ImportCard({ entity }: { entity: Entity }) {
       return;
     }
     setBusy(true);
+    setLastErrors([]);
     try {
-      const rows = mapRows(entity, await readTableFile(file));
+      const table = await readTableFile(file);
+      const rows = mapRows(entity, table.rows);
       if (rows.length === 0) {
         toast.error(t("data_io.empty_file"));
         return;
       }
-      const res = await api.post(`/import/${entity}`, { rows });
-      const r = res.data as {
-        created?: number;
-        updated?: number;
-        errors?: { row: number; message: string }[];
+      // Send in chunks so a big file never hits the 5 MB body limit.
+      const totals: ImportSummary = {
+        created: 0,
+        updated: 0,
+        skipped: 0,
+        errors: [],
       };
-      const errs = r.errors ?? [];
+      for (let i = 0; i < rows.length; i += IMPORT_CHUNK_SIZE) {
+        const chunk = rows.slice(i, i + IMPORT_CHUNK_SIZE);
+        const res = await api.post(`/import/${entity}`, { rows: chunk });
+        const r = res.data as Partial<ImportSummary>;
+        totals.created += r.created ?? 0;
+        totals.updated += r.updated ?? 0;
+        totals.skipped += r.skipped ?? 0;
+        // Server rows are 1-based inside this chunk — remap to file lines.
+        totals.errors.push(
+          ...remapChunkErrors(
+            r.errors,
+            table.lines.slice(i, i + IMPORT_CHUNK_SIZE)
+          )
+        );
+      }
+      setLastErrors(totals.errors);
       toast.success(
         t("data_io.import_done", {
-          created: r.created ?? 0,
-          updated: r.updated ?? 0,
+          created: totals.created,
+          updated: totals.updated,
         })
       );
-      if (errs.length > 0) {
+      if (totals.errors.length > 0) {
         toast.warning(
           t("data_io.import_errors", {
-            count: errs.length,
-            first: `${errs[0].row}: ${errs[0].message}`,
+            count: totals.errors.length,
+            first: `${totals.errors[0].row}: ${totals.errors[0].message}`,
           })
         );
       }
-    } catch {
-      toast.error(t("data_io.import_failed"));
+    } catch (err) {
+      toast.error(
+        t(err instanceof ImportFileError ? err.key : "data_io.import_failed")
+      );
     } finally {
       setBusy(false);
     }
+  };
+
+  const downloadErrors = () => {
+    downloadBlob(
+      `${entity}-import-errors.csv`,
+      new Blob([errorsToCsv(lastErrors)], {
+        type: "text/csv; charset=utf-8",
+      })
+    );
   };
 
   return (
@@ -149,23 +229,35 @@ function ImportCard({ entity }: { entity: Entity }) {
         {t("data_io.import_desc")}
       </p>
       <Input
-        accept=".csv,.xls,.xlsx"
+        accept=".csv,.xlsx"
         className="hidden"
         onChange={onFile}
         ref={fileRef}
         type="file"
       />
-      <Button
-        className="mt-4"
-        icon="upload"
-        loading={busy}
-        onClick={() => fileRef.current?.click()}
-        size="sm"
-        type="button"
-        variant="secondary"
-      >
-        {t("data_io.pick_file")}
-      </Button>
+      <div className="mt-4 flex items-center gap-2">
+        <Button
+          icon="upload"
+          loading={busy}
+          onClick={() => fileRef.current?.click()}
+          size="sm"
+          type="button"
+          variant="secondary"
+        >
+          {t("data_io.pick_file")}
+        </Button>
+        {lastErrors.length > 0 && (
+          <Button
+            icon="download"
+            onClick={downloadErrors}
+            size="sm"
+            type="button"
+            variant="secondary"
+          >
+            {t("data_io.download_errors", { count: lastErrors.length })}
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

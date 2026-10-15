@@ -259,6 +259,13 @@ describe("data-io routes", () => {
           },
         ]),
       },
+      auditLog: {
+        create: vi.fn(
+          async (a: {
+            data: { action: string; metadata?: Record<string, unknown> };
+          }) => a.data
+        ),
+      },
     };
     const app = buildApp(prisma, [{ plugin: dataIoRoutes, prefix: "/api" }]);
     const res = await app.inject({
@@ -271,6 +278,10 @@ describe("data-io routes", () => {
     expect(body).toContain("name;category;price");
     // quote escaping: embedded double-quotes double up
     expect(body).toContain('"Screen ""OLED"""');
+    // export is audited with entity + row count only
+    const audit = prisma.auditLog.create.mock.calls[0]?.[0]?.data;
+    expect(audit.action).toBe("DATA_EXPORTED");
+    expect(audit?.metadata).toEqual({ entity: "parts", rows: 1 });
   });
 
   it("imports parts, updating existing by name", async () => {
@@ -278,15 +289,33 @@ describe("data-io routes", () => {
       async (_args: { data: Record<string, unknown> }) => ({})
     );
     const create = vi.fn(async (_args: { data: { category: string } }) => ({}));
+    const tx = {
+      partsCatalog: { update, create },
+      stockMovement: {
+        create: vi.fn(async (_a: { data: Record<string, unknown> }) => ({})),
+      },
+      // SELECT ... FOR UPDATE (locked balance 3) vs UPDATE ... RETURNING
+      // (absolute write to the file value 5).
+      $queryRaw: vi.fn((query: TemplateStringsArray | string) => {
+        const text = Array.isArray(query) ? query.join(" ") : String(query);
+        return Promise.resolve(
+          text.includes("FOR UPDATE")
+            ? [{ stockQuantity: 3 }]
+            : [{ stockQuantity: 5 }]
+        );
+      }),
+    };
     const prisma = {
       partsCatalog: {
-        findFirst: vi
+        findMany: vi
           .fn()
-          .mockResolvedValueOnce({ id: "p1" })
-          .mockResolvedValueOnce(null),
+          .mockResolvedValueOnce([{ id: "p1", stockQuantity: 3 }])
+          .mockResolvedValueOnce([]),
         update,
         create,
       },
+      $transaction: vi.fn(async (fn: (t: unknown) => unknown) => fn(tx)),
+      auditLog: { create: vi.fn(async () => ({})) },
     };
     const app = buildApp(prisma, [{ plugin: dataIoRoutes, prefix: "/api" }]);
     const res = await app.inject({
@@ -302,17 +331,25 @@ describe("data-io routes", () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.updated).toBe(1);
-    expect(body.created).toBe(1);
-    // unknown category falls back to OTHER
-    expect(create.mock.calls[0]?.[0].data.category).toBe("OTHER");
+    // "weirdcat" is not a valid category — the row fails per-line validation
+    expect(body.created).toBe(0);
+    expect(body.errors).toHaveLength(1);
+    expect(body.errors[0].row).toBe(3);
+    expect(body.errors[0].field).toBe("category");
+    // stock delta 3 → 5 written as an ADJUSTMENT movement, never a silent set
+    expect(tx.stockMovement.create.mock.calls[0]?.[0]?.data).toMatchObject({
+      partId: "p1",
+      type: "ADJUSTMENT",
+      quantity: 2,
+    });
   });
 
-  it("rejects import payloads that fail schema", async () => {
+  it("rejects import payloads that fail the envelope schema", async () => {
     const app = buildApp({}, [{ plugin: dataIoRoutes, prefix: "/api" }]);
     const res = await app.inject({
       method: "POST",
       url: "/api/import/parts",
-      payload: { rows: [{ name: "" }] },
+      payload: { rows: "not-an-array" },
     });
     expect(res.statusCode).toBe(400);
     expect(res.json().code).toBe("VALIDATION_ERROR");

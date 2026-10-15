@@ -150,6 +150,8 @@ enum AuditAction {
   API_MUTATION
   QUOTE_SENT
   QUOTE_RESPONDED
+  DATA_EXPORTED
+  DATA_IMPORTED
 }
 
 enum QuoteStatus {
@@ -425,6 +427,10 @@ model Job {
   id         String @id @default(cuid())
   jobCode    String @unique
   accessCode String
+  // Reference from the shop's previous system (CSV/Excel migrations) —
+  // used to deduplicate reimports. Unique so two jobs can never carry the
+  // same legacy ref; NULLs don't collide in Postgres.
+  externalRef String? @unique @db.VarChar(80)
 
   customerId String
   customer   Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
