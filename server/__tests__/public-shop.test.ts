@@ -64,6 +64,12 @@ describe("toPublicShop", () => {
     expect(parseImageDataUrl("data:text/html;base64,PGgxPg==")).toBeNull();
     expect(parseImageDataUrl(null)).toBeNull();
   });
+
+  it("rejects SVG logos (script-capable when opened directly)", () => {
+    expect(
+      parseImageDataUrl("data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=")
+    ).toBeNull();
+  });
 });
 
 describe("GET /api/public/shop", () => {

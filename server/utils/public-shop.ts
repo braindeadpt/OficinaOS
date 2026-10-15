@@ -1,8 +1,10 @@
 // Shop identity safe to show to anonymous customers (tracking page,
 // lookup response): what is printed on a receipt anyway, nothing private.
 
-const DATA_URL_RE =
-  /^data:(image\/(?:png|jpeg|webp|gif|svg\+xml));base64,(.+)$/;
+// NOTE: no svg+xml — a directly-opened SVG document would run embedded
+// scripts in the shop origin (stored XSS). The upload schema already
+// rejects SVG, so no legitimate row can contain one; fail closed here too.
+const DATA_URL_RE = /^data:(image\/(?:png|jpeg|webp|gif));base64,(.+)$/;
 
 export function parseImageDataUrl(
   value: string | null | undefined
