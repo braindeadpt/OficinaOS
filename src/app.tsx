@@ -45,6 +45,7 @@ const SettingsPage = lazy(() => import("@/pages/settings"));
 const SignPage = lazy(() => import("@/pages/sign"));
 const SupplierRmasPage = lazy(() => import("@/pages/rmas"));
 const SuppliersPage = lazy(() => import("@/pages/suppliers"));
+const SupplierDetailPage = lazy(() => import("@/pages/suppliers/detail"));
 const TrackingPage = lazy(() => import("@/pages/tracking"));
 
 const DASHBOARD_LAZY_MAP: Record<
@@ -248,6 +249,14 @@ export default function App() {
                   </DashboardLayout>
                 }
                 path="/suppliers"
+              />
+              <Route
+                element={
+                  <DashboardLayout>
+                    <SupplierDetailPage />
+                  </DashboardLayout>
+                }
+                path="/suppliers/:id"
               />
               <Route
                 element={

@@ -1,5 +1,6 @@
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -63,14 +64,25 @@ function SupplierModal({
     }
     setBusy(true);
     try {
-      const payload = {
-        name: form.name.trim(),
-        email: form.email.trim() || undefined,
-        phone: form.phone.trim() || undefined,
-        taxId: form.taxId.trim() || undefined,
-        address: form.address.trim() || undefined,
-        notes: form.notes.trim() || undefined,
-      };
+      // On edit, emptied fields go as null so the server clears them —
+      // undefined would leave the old value untouched.
+      const payload = supplier
+        ? {
+            name: form.name.trim(),
+            email: form.email.trim() || null,
+            phone: form.phone.trim() || null,
+            taxId: form.taxId.trim() || null,
+            address: form.address.trim() || null,
+            notes: form.notes.trim() || null,
+          }
+        : {
+            name: form.name.trim(),
+            email: form.email.trim() || undefined,
+            phone: form.phone.trim() || undefined,
+            taxId: form.taxId.trim() || undefined,
+            address: form.address.trim() || undefined,
+            notes: form.notes.trim() || undefined,
+          };
       if (supplier) {
         await api.patch(`/suppliers/${supplier.id}`, payload);
       } else {
@@ -270,7 +282,12 @@ export default function SuppliersPage() {
               >
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-bold text-on-surface text-sm">
-                    {s.name}
+                    <Link
+                      className="hover:text-primary hover:underline"
+                      to={`/suppliers/${s.id}`}
+                    >
+                      {s.name}
+                    </Link>
                     {!s.isActive && (
                       <span className="ml-2 rounded-full bg-surface-container-high px-2 py-0.5 text-on-surface-variant text-xs">
                         {t("suppliers.inactive")}

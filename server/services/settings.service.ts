@@ -89,6 +89,28 @@ export async function getShopSettings(prisma: PrismaClient) {
   return rest;
 }
 
+const ORIGIN_LIST_SPLIT = /[\s,]+/;
+
+/** One canonical origin per line; empty/whitespace clears the setting. */
+function normalizeOriginList(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  const origins = value
+    .split(ORIGIN_LIST_SPLIT)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => {
+      try {
+        return new URL(s).origin;
+      } catch {
+        return null;
+      }
+    })
+    .filter((o): o is string => o !== null);
+  return origins.length > 0 ? Array.from(new Set(origins)).join("\n") : null;
+}
+
 const shopCreate = (input: UpdateShopSettingsInput) => ({
   address: input.address ?? null,
   countryCode: input.countryCode ?? "PT",
@@ -108,6 +130,7 @@ const shopCreate = (input: UpdateShopSettingsInput) => ({
   printerPort: input.printerPort ?? 9100,
   monthlyRevenueGoal: input.monthlyRevenueGoal ?? null,
   reviewUrl: input.reviewUrl?.trim() || null,
+  embedAllowedOrigins: normalizeOriginList(input.embedAllowedOrigins),
   shopName: input.shopName,
 });
 
@@ -133,6 +156,10 @@ const shopUpdate = (input: UpdateShopSettingsInput) => ({
       : input.monthlyRevenueGoal || null,
   reviewUrl:
     input.reviewUrl === undefined ? undefined : input.reviewUrl.trim() || null,
+  embedAllowedOrigins:
+    input.embedAllowedOrigins === undefined
+      ? undefined
+      : normalizeOriginList(input.embedAllowedOrigins),
   shopName: input.shopName,
 });
 

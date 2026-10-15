@@ -35,6 +35,43 @@ function generateNonce(): string {
   return globalThis.crypto.randomUUID().replace(/-/g, "");
 }
 
+// Segment-aware: /embed and /embed/* are iframable widget pages; a sibling
+// like /embedxyz is not.
+export function isEmbedPath(path: string): boolean {
+  return path === "/embed" || path.startsWith("/embed/");
+}
+
+const ORIGIN_SPLIT = /[\s,]+/;
+
+/**
+ * Parse the shop's embedAllowedOrigins setting (one origin per line) into
+ * canonical scheme://host[:port] origins. Anything that isn't a valid
+ * http(s) origin is dropped — a typo must not weaken or break the CSP.
+ */
+export function parseOriginList(raw: string | null | undefined): string[] {
+  if (!raw) {
+    return [];
+  }
+  const origins: string[] = [];
+  for (const token of raw.split(ORIGIN_SPLIT)) {
+    const t = token.trim();
+    if (!t) {
+      continue;
+    }
+    try {
+      const url = new URL(t);
+      if (url.protocol === "http:" || url.protocol === "https:") {
+        origins.push(url.origin);
+      }
+    } catch {
+      // invalid entry — ignored
+    }
+  }
+  return Array.from(new Set(origins));
+}
+
+const EMBED_ORIGINS_TTL_MS = 60_000;
+
 // An origin is only advertised in connect-src to clients that arrived on it.
 // This keeps the CSP from leaking other trusted origins (e.g. the LAN
 // APP_URL's private IP) to requests that came in via a different host (e.g.
@@ -60,18 +97,47 @@ const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   // HTTPS on the public origin gates TLS-only headers and cookie flags.
   const IS_HTTPS = (env.APP_URL ?? "").startsWith("https://");
 
+  // frame-ancestors for /embed/* comes from the shop's embedAllowedOrigins
+  // setting — a DB read per request would be wasteful, so cache it briefly.
+  let embedOriginsCache: { at: number; value: string } | null = null;
+  async function embedFrameAncestors(request: FastifyRequest): Promise<string> {
+    if (
+      embedOriginsCache &&
+      Date.now() - embedOriginsCache.at < EMBED_ORIGINS_TTL_MS
+    ) {
+      return embedOriginsCache.value;
+    }
+    let origins: string[] = [];
+    try {
+      const settings = await request.server.prisma.shopSettings.findUnique({
+        where: { id: "default" },
+        select: { embedAllowedOrigins: true },
+      });
+      origins = parseOriginList(settings?.embedAllowedOrigins);
+    } catch (err) {
+      request.log.warn(
+        { err },
+        "embedAllowedOrigins lookup failed — allowing any origin"
+      );
+    }
+    const value = origins.length > 0 ? origins.join(" ") : "*";
+    embedOriginsCache = { at: Date.now(), value };
+    return value;
+  }
+
   // ── Layer 1: Security Headers ──────────────────────────────────────────
   // Nonce-based CSP: generate a unique nonce per request and set the
   // Content-Security-Policy header manually so we can inject it into HTML.
-  app.addHook("onRequest", (request, reply, done) => {
+  app.addHook("onRequest", async (request, reply) => {
     const nonce = generateNonce();
     request.cspNonce = nonce;
 
     // /embed/* pages exist to be iframed on the shop's own website — they get
-    // a permissive frame-ancestors. Everything else stays clickjacking-proof.
-    const isEmbed = (request.raw.url ?? "")
-      .split("?", 1)[0]
-      .startsWith("/embed");
+    // a configurable frame-ancestors. Everything else stays clickjacking-proof.
+    const isEmbed = isEmbedPath((request.raw.url ?? "").split("?", 1)[0]);
+    const frameAncestors = isEmbed
+      ? await embedFrameAncestors(request)
+      : "'none'";
     const wsOrigins = IS_PROD ? "'self' wss:" : "'self' ws: wss:";
     const apiOrigin = env.API_URL ?? env.APP_URL ?? "";
     const requestHost = request.headers.host;
@@ -103,21 +169,19 @@ const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         // 'self' so the in-app print preview can frame /api/receipts/*; the
         // receipt route itself only allows same-origin framing (frame-ancestors).
         `frame-src 'self'`,
-        `frame-ancestors ${isEmbed ? "*" : "'none'"}`,
+        `frame-ancestors ${frameAncestors}`,
         `object-src 'none'`,
         `base-uri 'self'`,
         `form-action 'self'`,
         ...(IS_HTTPS ? ["upgrade-insecure-requests"] : []),
       ].join(";")
     );
-
-    done();
   });
 
   // XFO doesn't understand the /embed exception, so strip it there — CSP
   // frame-ancestors is the governing policy on modern browsers anyway.
   app.addHook("onSend", (request, reply, _payload, done) => {
-    if ((request.raw.url ?? "").split("?", 1)[0].startsWith("/embed")) {
+    if (isEmbedPath((request.raw.url ?? "").split("?", 1)[0])) {
       reply.removeHeader("x-frame-options");
     }
     done();
