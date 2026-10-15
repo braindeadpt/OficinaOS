@@ -8,6 +8,8 @@ import type {
   FastifyError,
   FastifyInstance,
   FastifyPluginAsync,
+  FastifyReply,
+  FastifyRequest,
 } from "fastify";
 import fp from "fastify-plugin";
 import { loadEnv, resolveUrls } from "../config/env.js";
@@ -340,53 +342,108 @@ const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   });
 
   // ── Layer 8: Audit Logging (fire-and-forget off the hot path) ──────────
-
-  const AUDITED_ROUTES = [
-    "/api/auth",
-    "/api/users",
-    "/api/jobs/:id/status",
-    "/api/payments",
-    "/api/sales",
-    "/api/settings",
-    "/api/return-claims",
-  ];
   app.addHook("onResponse", (request, reply, done) => {
     done();
-    if (!MUTATION_METHODS.has(request.method)) {
-      return;
-    }
-    const userId = request.user?.id;
-    if (!userId) {
-      return;
-    }
-    if (reply.statusCode >= 400) {
-      return;
-    }
-    const routeUrl = request.routeOptions?.url ?? request.url;
-    if (!AUDITED_ROUTES.some((p) => routeUrl.startsWith(p))) {
-      return;
-    }
-
-    const action = `${request.method} ${routeUrl}`;
-    const statusCode = reply.statusCode;
-
-    setImmediate(() => {
-      request.server.prisma.auditLog
-        .create({
-          data: {
-            userId,
-            action: "API_MUTATION",
-            toValue: action,
-            jobId: null,
-            metadata: { requestId: request.id, statusCode },
-          },
-        })
-        .catch((err) => {
-          request.log.error({ err }, "Failed to write audit log");
-        });
-    });
+    logAuditRequest(request, reply);
   });
 };
+
+// Denylist: noisy routes with no audit value (mark-as-read, dashboard
+// polls, AI chat/sessions, feedback, anonymous public pages). Every other
+// authenticated mutation is audited — GDPR erasures, fiscal documents,
+// data-io import/export, stock and price changes, etc.
+export const NOISY_ROUTES = [
+  "/api/notifications",
+  "/api/dashboard",
+  "/api/ai",
+  "/api/feedback",
+  "/api/public",
+];
+
+// Bulk CSV exports exfiltrate personal/fiscal data in one click (RGPD), so
+// they are audited even though they are GETs. Every other audited request
+// must be a mutation.
+const AUDITED_GET_PREFIXES = ["/api/export"];
+
+// Segment-aware prefix match: "/api/users" matches "/api/users/123" but
+// never a sibling like "/api/users-x".
+export function matchesRoutePrefix(routeUrl: string, prefix: string): boolean {
+  return routeUrl === prefix || routeUrl.startsWith(`${prefix}/`);
+}
+
+// Validation failures (400/404/409/422) carry no audit value. Auth failures
+// (401/403) do — they are RBAC probing — and are recorded with their
+// statusCode in metadata.
+const SKIPPED_STATUS_CODES = new Set([400, 404, 409, 422]);
+
+export interface AuditDecision {
+  method: string;
+  routeUrl: string;
+  statusCode: number;
+  userId: string | null | undefined;
+}
+
+export function shouldAuditRequest({
+  method,
+  routeUrl,
+  userId,
+  statusCode,
+}: AuditDecision): boolean {
+  if (!userId) {
+    return false;
+  }
+  if (SKIPPED_STATUS_CODES.has(statusCode)) {
+    return false;
+  }
+  const path = routeUrl.split("?", 1)[0] ?? routeUrl;
+  if (NOISY_ROUTES.some((p) => matchesRoutePrefix(path, p))) {
+    return false;
+  }
+  if (MUTATION_METHODS.has(method)) {
+    return true;
+  }
+  return (
+    method === "GET" &&
+    AUDITED_GET_PREFIXES.some((p) => matchesRoutePrefix(path, p))
+  );
+}
+
+export function logAuditRequest(request: FastifyRequest, reply: FastifyReply) {
+  const userId = request.user?.id;
+  if (!userId) {
+    return;
+  }
+  const routeUrl = request.routeOptions?.url ?? request.url;
+  if (
+    !shouldAuditRequest({
+      method: request.method,
+      routeUrl,
+      userId,
+      statusCode: reply.statusCode,
+    })
+  ) {
+    return;
+  }
+
+  const action = `${request.method} ${routeUrl}`;
+  const statusCode = reply.statusCode;
+
+  setImmediate(() => {
+    request.server.prisma.auditLog
+      .create({
+        data: {
+          userId,
+          action: "API_MUTATION",
+          toValue: action,
+          jobId: null,
+          metadata: { requestId: request.id, statusCode },
+        },
+      })
+      .catch((err) => {
+        request.log.error({ err }, "Failed to write audit log");
+      });
+  });
+}
 
 export default fp(securityPlugin, { name: "security-plugin" });
 

@@ -58,7 +58,13 @@ export async function uploadAvatar(
   }
   const tmpPath = `${dest}.${Date.now()}.tmp`;
   await fs.writeFile(tmpPath, buffer);
-  await fs.rename(tmpPath, dest);
+  try {
+    await fs.rename(tmpPath, dest);
+  } catch (err) {
+    // Don't leave an orphan .tmp file behind; the original error still throws.
+    await removeFile(tmpPath);
+    throw err;
+  }
 
   if (
     user.image &&

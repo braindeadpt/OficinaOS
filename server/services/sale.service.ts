@@ -63,10 +63,15 @@ export async function create(
     ) {
       throw new AppError("FORBIDDEN");
     }
+    // Integer-cent arithmetic: accumulate in cents and divide once at the
+    // end, so 3×0.10 + 1×0.20 lands on exactly 0.5 instead of drifting in
+    // floats.
+    const lineCents = toCents(item.unitPrice) * item.quantity;
     return {
       balanceAfter: 0,
       category: item.category,
-      lineTotal: (toCents(item.unitPrice) * item.quantity) / 100,
+      lineCents,
+      lineTotal: lineCents / 100,
       name: item.name,
       partId: item.partId ?? null,
       quantity: item.quantity,
@@ -74,7 +79,8 @@ export async function create(
     };
   });
 
-  const total = items.reduce((s, i) => s + i.lineTotal, 0);
+  const totalCents = items.reduce((s, i) => s + i.lineCents, 0);
+  const total = totalCents / 100;
   const customerId = input.customerId?.trim() || null;
 
   return prisma
