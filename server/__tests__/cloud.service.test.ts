@@ -184,6 +184,11 @@ describe("getCloudStatus", () => {
 
 describe("unpairCloud", () => {
   it("clears all cloud fields", async () => {
+    // The fixture URL must never reach the network during unit tests.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => okJson({}))
+    );
     const { prisma, row } = fakePrisma({
       cloudApiUrl: "https://x",
       cloudShopTokenEncrypted: "v1:a:b:c",

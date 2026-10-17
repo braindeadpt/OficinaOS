@@ -2,6 +2,7 @@ import type { JobStatusType } from "@shared/constants";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router";
+import { RecordWorkflow } from "@/components/modules/tasks/record-workflow";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useCustomersStore } from "@/stores/customers";
 
@@ -91,6 +92,11 @@ export default function CustomerDetailPage() {
         </Link>
       </div>
 
+      <RecordWorkflow
+        entityId={currentCustomer.id}
+        entityType="CUSTOMER"
+        expanded
+      />
       <div className="rounded-xl bg-surface-container-low p-6">
         <div className="mb-4 flex items-center justify-between">
           <h1 className="font-extrabold font-headline text-2xl text-on-surface">

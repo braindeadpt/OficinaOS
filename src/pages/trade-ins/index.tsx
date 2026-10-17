@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { RecordWorkflow } from "@/components/modules/tasks/record-workflow";
+import { WorkflowStatesManager } from "@/components/modules/tasks/workflow-states-manager";
 import TradeInModal from "@/components/modules/trade-ins/trade-in-modal";
 import ConfirmDiscardDialog from "@/components/ui/confirm-discard-dialog";
 import { Icon } from "@/components/ui/icon";
@@ -86,6 +88,7 @@ export default function TradeInsPage() {
 
   return (
     <>
+      <WorkflowStatesManager entityType="TRADE_IN" />
       <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <h2 className="font-extrabold font-headline text-2xl text-on-surface tracking-tight md:text-3xl">
@@ -205,6 +208,10 @@ export default function TradeInsPage() {
                   >
                     <td className="px-5 py-4 font-bold font-headline text-on-surface">
                       {item.code}
+                      <RecordWorkflow
+                        entityId={item.id}
+                        entityType="TRADE_IN"
+                      />
                     </td>
                     <td className="px-5 py-4">
                       <p className="font-medium text-on-surface">

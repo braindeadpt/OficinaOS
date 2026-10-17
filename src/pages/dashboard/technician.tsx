@@ -7,6 +7,7 @@ import RecentActivity from "@/components/modules/dashboard/recent-activity";
 import TechJobPipeline from "@/components/modules/dashboard/tech-job-pipeline";
 import TechnicianKanban from "@/components/modules/dashboard/technician-kanban";
 import TodaySchedule from "@/components/modules/dashboard/today-schedule";
+import { TaskPanel } from "@/components/modules/tasks/task-panel";
 import { Icon } from "@/components/ui/icon";
 import MetricCard from "@/components/ui/metric-card";
 import { formatTimeAgo } from "@/lib/format-time-ago";
@@ -195,6 +196,7 @@ export default function TechnicianDashboardPage() {
 
   return (
     <>
+      <TaskPanel />
       <div className="mb-8 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <h2 className="font-extrabold font-headline text-2xl text-on-surface tracking-tight md:text-3xl">

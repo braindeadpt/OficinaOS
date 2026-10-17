@@ -35,6 +35,7 @@ export const SUPPLIER_RMA_STATUSES = [
 
 export const createSupplierRmaSchema = z.object({
   supplierId: z.string().min(1),
+  jobCode: z.string().trim().min(1).max(80).optional(),
   partId: z.string().optional(),
   description: z.string().min(1).max(500),
   quantity: z.number().int().min(1).max(9999).optional(),
@@ -53,5 +54,6 @@ export const updateSupplierRmaSchema = z.object({
 
 export const listSupplierRmasQuerySchema = z.object({
   supplierId: z.string().optional(),
+  jobId: z.string().optional(),
   status: z.enum(SUPPLIER_RMA_STATUSES).optional(),
 });

@@ -60,6 +60,24 @@ describe("job-photos service", () => {
   });
 
   describe("upload", () => {
+    it("preserves the selected repair phase on the uploaded photo", async () => {
+      mocks.jobFindUnique.mockResolvedValue({
+        id: "job-1",
+        status: "IN_REPAIR",
+      });
+      mocks.jobPhotoCount.mockResolvedValue(0);
+      mocks.jobPhotoCreate.mockResolvedValue({ id: "p1", stage: "REPAIR" });
+      await upload(
+        mockPrisma,
+        "job-1",
+        makeFile("image/jpeg", jpegBuffer()),
+        "u1",
+        { stage: "REPAIR" }
+      );
+      expect(mocks.jobPhotoCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({ stage: "REPAIR" }),
+      });
+    });
     it("adds a photo to a job", async () => {
       mocks.jobFindUnique.mockResolvedValue({ id: "job-1", status: "INTAKE" });
       mocks.jobPhotoCount.mockResolvedValue(0);

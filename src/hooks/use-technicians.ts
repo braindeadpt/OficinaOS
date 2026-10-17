@@ -16,7 +16,10 @@ export function useTechnicians() {
   const technicians = useMemo(
     () =>
       users
-        .filter((u) => u.role === Role.TECHNICIAN && u.isActive)
+        .filter(
+          (u) =>
+            u.isActive && (u.role === Role.TECHNICIAN || u.role === Role.OWNER)
+        )
         .map((u) => ({ id: u.id, name: u.name || u.username })),
     [users]
   );

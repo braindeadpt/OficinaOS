@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import ClaimsFilters from "@/components/modules/returns/claims-filters";
 import ClaimsTable from "@/components/modules/returns/claims-table";
+import { WorkflowStatesManager } from "@/components/modules/tasks/workflow-states-manager";
 import { Icon } from "@/components/ui/icon";
 import { fetchReturnClaims } from "@/lib/api-return-claims";
 import type {
@@ -39,6 +40,7 @@ export default function ReturnsListPage() {
 
   return (
     <>
+      <WorkflowStatesManager entityType="RETURN" />
       <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <h2 className="font-extrabold font-headline text-2xl text-on-surface tracking-tight md:text-3xl">

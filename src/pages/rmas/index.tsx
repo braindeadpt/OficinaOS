@@ -1,6 +1,9 @@
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Link, useSearchParams } from "react-router";
 import { toast } from "sonner";
+import { RecordWorkflow } from "@/components/modules/tasks/record-workflow";
+import { WorkflowStatesManager } from "@/components/modules/tasks/workflow-states-manager";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icon";
@@ -23,6 +26,7 @@ interface Rma {
   createdAt: string;
   description: string;
   id: string;
+  job?: { id: string; jobCode: string } | null;
   part: Part | null;
   quantity: number;
   reason: string | null;
@@ -36,11 +40,13 @@ interface Rma {
 const STATUSES = ["OPEN", "SENT", "RECEIVED", "RESOLVED", "CANCELLED"];
 
 function RmaModal({
+  jobCode,
   suppliers,
   parts,
   onClose,
   onSaved,
 }: {
+  jobCode: string;
   suppliers: Supplier[];
   parts: Part[];
   onClose: () => void;
@@ -49,6 +55,7 @@ function RmaModal({
   const { t } = useTranslation();
   const [form, setForm] = useState({
     supplierId: "",
+    jobCode,
     partId: "",
     description: "",
     quantity: "1",
@@ -68,6 +75,7 @@ function RmaModal({
     try {
       await api.post("/supplier-rmas", {
         supplierId: form.supplierId,
+        jobCode: form.jobCode.trim() || undefined,
         partId: form.partId || undefined,
         description: form.description.trim(),
         quantity: Number.parseInt(form.quantity, 10) || 1,
@@ -126,6 +134,12 @@ function RmaModal({
                 </option>
               ))}
             </Select>
+          </Field>
+          <Field label={t("rmas.job_code")}>
+            <Input
+              onChange={(e) => set({ jobCode: e.target.value })}
+              value={form.jobCode}
+            />
           </Field>
           <Field label={t("rmas.part")}>
             <Select
@@ -186,6 +200,9 @@ function RmaModal({
 
 export default function SupplierRmasPage() {
   const { t } = useTranslation();
+  const [params] = useSearchParams();
+  const jobId = params.get("jobId") || undefined;
+  const jobCode = params.get("jobCode") || "";
   const [rmas, setRmas] = useState<Rma[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [parts, setParts] = useState<Part[]>([]);
@@ -196,22 +213,31 @@ export default function SupplierRmasPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [r, s, p] = await Promise.all([
+      const [r, s, p] = await Promise.allSettled([
         api.get("/supplier-rmas", {
-          params: { status: statusFilter || undefined },
+          params: { status: statusFilter || undefined, jobId },
         }),
         api.get("/suppliers"),
-        api.get("/parts", { params: { limit: 500 } }),
+        api.get("/parts", { params: { limit: 100 } }),
       ]);
-      setRmas(r.data?.data ?? []);
-      setSuppliers(s.data?.data ?? []);
-      setParts(p.data?.parts ?? []);
+      if (r.status === "fulfilled") {
+        setRmas(r.value.data?.data ?? []);
+      }
+      if (s.status === "fulfilled") {
+        setSuppliers(s.value.data?.data ?? []);
+      }
+      if (p.status === "fulfilled") {
+        setParts(p.value.data?.parts ?? []);
+      }
+      if ([r, s, p].some((result) => result.status === "rejected")) {
+        toast.error(t("rmas.load_failed"));
+      }
     } catch {
       toast.error(t("rmas.load_failed"));
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, t]);
+  }, [statusFilter, jobId, t]);
 
   useEffect(() => {
     load();
@@ -235,6 +261,7 @@ export default function SupplierRmasPage() {
 
   return (
     <>
+      <WorkflowStatesManager entityType="RMA" />
       <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <h2 className="font-extrabold font-headline text-2xl text-on-surface tracking-tight md:text-3xl">
@@ -301,6 +328,15 @@ export default function SupplierRmasPage() {
                 key={rma.id}
               >
                 <div className="min-w-0 flex-1">
+                  <RecordWorkflow entityId={rma.id} entityType="RMA" />
+                  {rma.job && (
+                    <Link
+                      className="text-primary text-sm underline"
+                      to={`/jobs/${rma.job.id}`}
+                    >
+                      {rma.job.jobCode}
+                    </Link>
+                  )}
                   <p className="truncate font-bold text-on-surface text-sm">
                     {rma.description}
                     <span className="ml-2 font-normal text-on-surface-variant">
@@ -338,6 +374,7 @@ export default function SupplierRmasPage() {
 
       {showModal && (
         <RmaModal
+          jobCode={jobCode}
           onClose={() => setShowModal(false)}
           onSaved={load}
           parts={parts}

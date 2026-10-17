@@ -8,6 +8,8 @@ import {
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 import { toast } from "sonner";
+import { RecordWorkflow } from "@/components/modules/tasks/record-workflow";
+import { WorkflowStatesManager } from "@/components/modules/tasks/workflow-states-manager";
 import { useCan } from "@/hooks/use-can";
 import api from "@/lib/api";
 import MarkdownRenderer from "@/pages/ai-analyst/markdown-renderer";
@@ -258,6 +260,7 @@ export default function RequestsPage() {
                   <span className="text-on-surface-variant text-xs">
                     {fmtDate(r.createdAt)}
                   </span>
+                  <RecordWorkflow entityId={r.id} entityType="REQUEST" />
                   {r.scheduledFor && (
                     <span
                       className="flex items-center gap-1 rounded-lg bg-secondary-container/40 px-2 py-0.5 font-medium text-on-secondary-container text-xs"
@@ -475,6 +478,7 @@ export default function RequestsPage() {
 
   return (
     <div>
+      <WorkflowStatesManager entityType="REQUEST" />
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="font-extrabold font-headline text-2xl text-on-surface tracking-tight md:text-3xl">

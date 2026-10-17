@@ -355,3 +355,64 @@ describe("testAiConnection", () => {
     expect(result.message).toBe("Network error");
   });
 });
+
+describe("AI provider changes", () => {
+  it("clears the previous provider key and disables AI when changing host without a new key", async () => {
+    const prisma = mockPrisma();
+    vi.mocked(prisma.aiSettings.findUnique).mockResolvedValue({
+      endpointUrl: "https://api.openai.com/v1",
+      apiKeyEncrypted: "old-provider-secret",
+    } as never);
+    vi.mocked(prisma.aiSettings.upsert).mockResolvedValue({
+      apiKeyEncrypted: "",
+      enabled: false,
+    } as never);
+    await upsertAiSettings(prisma, {
+      endpointUrl: "https://generativelanguage.googleapis.com/v1beta/openai/",
+      enabled: true,
+    });
+    expect(prisma.aiSettings.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          apiKeyEncrypted: "",
+          enabled: false,
+        }),
+      })
+    );
+  });
+  it("keeps a stored key when saving the same provider", async () => {
+    const prisma = mockPrisma();
+    vi.mocked(prisma.aiSettings.findUnique).mockResolvedValue({
+      endpointUrl: "https://api.openai.com/v1",
+      apiKeyEncrypted: "old-provider-secret",
+    } as never);
+    await upsertAiSettings(prisma, {
+      endpointUrl: "https://api.openai.com/v1/",
+      model: "gpt-4o-mini",
+    });
+    expect(
+      vi.mocked(prisma.aiSettings.upsert).mock.calls[0]?.[0].update
+    ).not.toHaveProperty("apiKeyEncrypted");
+  });
+  it("probes the Gemini chat endpoint with its own key", async () => {
+    const prisma = mockPrisma();
+    vi.mocked(prisma.aiSettings.findUnique).mockResolvedValue({
+      endpointUrl: "https://generativelanguage.googleapis.com/v1beta/openai/",
+      apiKeyEncrypted: "gemini-key",
+      model: "gemini-3.5-flash-lite",
+    } as never);
+    vi.mocked(global.fetch).mockResolvedValue({ ok: true } as Response);
+    expect((await testAiConnection(prisma)).success).toBe(true);
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      new URL(
+        "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+      ),
+      expect.objectContaining({
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer gemini-key",
+        },
+      })
+    );
+  });
+});

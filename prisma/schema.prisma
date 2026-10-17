@@ -80,6 +80,9 @@ enum ReturnClaimStatus {
 }
 
 enum PhotoStage {
+  INTAKE
+  REPAIR
+  FINAL
   RETURN_INTAKE
   RETURN_RESOLUTION
 }
@@ -220,6 +223,9 @@ model User {
   returnClaimsResolved  ReturnClaim[]       @relation("ReturnClaimResolvedBy")
   supplierRmas          SupplierRma[]
   jobReferrals          JobReferral[]
+  tasksAssigned         WorkshopTask[]      @relation("TaskAssignee")
+  tasksCreated          WorkshopTask[]      @relation("TaskCreator")
+  taskRules             TaskRule[]
 
   @@map("users")
 }
@@ -424,9 +430,9 @@ model SalePayment {
 // ─────────────────────────────────────────────
 
 model Job {
-  id         String @id @default(cuid())
-  jobCode    String @unique
-  accessCode String
+  id          String  @id @default(cuid())
+  jobCode     String  @unique
+  accessCode  String
   // Reference from the shop's previous system (CSV/Excel migrations) —
   // used to deduplicate reimports. Unique so two jobs can never carry the
   // same legacy ref; NULLs don't collide in Postgres.
@@ -443,31 +449,31 @@ model Job {
   // 16-digit MEID and common laptop/TV/GPS serial formats.
   imei     String? @db.VarChar(32)
 
-  reportedProblem String    @db.Text
-  conditionNotes  String?   @db.Text
+  reportedProblem        String    @db.Text
+  conditionNotes         String?   @db.Text
   // Unlock PIN/pattern collected at intake so the technician can test the device.
-  deviceUnlockCode String?
+  deviceUnlockCode       String?
   // Accessories handed in with the device (charger, case, SIM, box...).
-  accessories      String[] @default([])
+  accessories            String[]  @default([])
   // Intake functional checklist: {key: "ok"|"fail"|null} — null = not tested.
-  intakeChecklist  Json?
+  intakeChecklist        Json?
   // Customer signature captured at intake (PNG data URL) — printed on the
   // receipt as proof the customer accepted the repair terms.
-  intakeSignatureDataUrl String? @db.Text
+  intakeSignatureDataUrl String?   @db.Text
   // What the customer actually signed: the frozen document (terms text +
   // ficha fields as shown) and the SHA-256 of its canonical form plus the
   // signature image. Editing the shop's terms later cannot rewrite this —
   // signed jobs keep the snapshot they were signed over.
-  intakeTermsSnapshot Json?
-  intakeDocumentHash  String?
-  signedAt            DateTime? @db.Timestamptz
-  signedVia           String? // in_person | remote
+  intakeTermsSnapshot    Json?
+  intakeDocumentHash     String?
+  signedAt               DateTime? @db.Timestamptz
+  signedVia              String? // in_person | remote
   // Remote-signing provenance, captured when the signature is submitted.
-  signedIp        String?
-  signedUserAgent String? @db.Text
+  signedIp               String?
+  signedUserAgent        String?   @db.Text
   // Post-repair QC checklist captured when marking the job DONE
   // ({key: "ok"|"fail"}) — mirrors intakeChecklist.
-  qcChecklist Json?
+  qcChecklist            Json?
   // Urgent flag — customer waiting / priority queue. Surfaced as a badge.
   isUrgent               Boolean   @default(false)
   status                 JobStatus @default(INTAKE)
@@ -500,13 +506,13 @@ model Job {
 
   lastOverdueAlertAt DateTime? @db.Timestamptz
 
-  isWarrantyReturn Boolean @default(false)
+  isWarrantyReturn  Boolean   @default(false)
   // Public portal link published to OficinaOS Cloud (module: portal).
   // accessCode is the unguessable token in the public URL.
   portalPublishedAt DateTime? @db.Timestamptz
-  warrantyForJobId String?
-  warrantyForJob   Job?    @relation("WarrantyReturn", fields: [warrantyForJobId], references: [id], onDelete: SetNull)
-  warrantyReturns  Job[]   @relation("WarrantyReturn")
+  warrantyForJobId  String?
+  warrantyForJob    Job?      @relation("WarrantyReturn", fields: [warrantyForJobId], references: [id], onDelete: SetNull)
+  warrantyReturns   Job[]     @relation("WarrantyReturn")
 
   createdById String
   createdBy   User    @relation("CreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
@@ -533,6 +539,8 @@ model Job {
 
   intakeRequests IntakeRequest[]
   referrals      JobReferral[]
+  supplierRmas   SupplierRma[]
+  tasks          WorkshopTask[]
 
   @@index([customerId])
   @@index([deviceId])
@@ -696,7 +704,7 @@ model PartsCatalog {
   reorderLevel        Int          @default(0)
   isActive            Boolean      @default(true)
   // Pro module "storefront" — public on the shop's online store page.
-  listedOnline          Boolean      @default(false)
+  listedOnline        Boolean      @default(false)
   // Set when an OWNER low-stock alert fires; gates re-alerts (24h window).
   lastLowStockAlertAt DateTime?    @db.Timestamptz
   createdAt           DateTime     @default(now()) @db.Timestamptz
@@ -1106,112 +1114,112 @@ model AiInstruction {
 // ─────────────────────────────────────────────
 
 model ShopSettings {
-  id                        String   @id
-  shopName                  String   @default("")
-  logoPath                  String?
-  address                   String?
-  phone                     String?
-  countryCode               String   @default("PT")
-  currency                  String   @default("EUR")
-  defaultWarrantyDays       Int      @default(30)
-  timezone                  String? // IANA name, e.g. "Africa/Algiers". Null -> env TZ fallback.
-  receiptFooter             String?  @db.Text
+  id                          String    @id
+  shopName                    String    @default("")
+  logoPath                    String?
+  address                     String?
+  phone                       String?
+  countryCode                 String    @default("PT")
+  currency                    String    @default("EUR")
+  defaultWarrantyDays         Int       @default(30)
+  timezone                    String? // IANA name, e.g. "Africa/Algiers". Null -> env TZ fallback.
+  receiptFooter               String?   @db.Text
   // Printing — presets applied by the server-rendered receipt/label HTML.
   // receiptPaper: "58mm" | "80mm" (thermal roll) | "a4" (full document).
-  receiptPaper              String   @default("80mm")
-  receiptShowImei           Boolean  @default(true)
-  receiptShowProblem        Boolean  @default(true)
-  receiptShowSignature      Boolean  @default(true)
-  receiptShowQr             Boolean  @default(true)
-  receiptShowWarranty       Boolean  @default(true)
+  receiptPaper                String    @default("80mm")
+  receiptShowImei             Boolean   @default(true)
+  receiptShowProblem          Boolean   @default(true)
+  receiptShowSignature        Boolean   @default(true)
+  receiptShowQr               Boolean   @default(true)
+  receiptShowWarranty         Boolean   @default(true)
   // Job label sheet size: "40x20" | "57x32" | "62x29" (mm).
-  labelSize                 String   @default("40x20")
+  labelSize                   String    @default("40x20")
   // Direct network printing: "browser" (OS print dialog, any printer) or
   // "escpos" (server sends ESC/POS over TCP to printerHost:printerPort).
-  printerMode               String   @default("browser")
-  printerHost               String?
-  printerPort               Int      @default(9100)
+  printerMode                 String    @default("browser")
+  printerHost                 String?
+  printerPort                 Int       @default(9100)
   // Meta mensal de faturação — progresso mostrado no dashboard do gerente.
   // Null = sem meta definida (não mostrar nada).
-  monthlyRevenueGoal        Decimal? @db.Decimal(10, 2)
-  whatsappApiTokenEncrypted String?
-  whatsappBusinessId        String?
-  whatsappPhoneNumberId     String?
-  whatsappEnabled           Boolean  @default(false)
+  monthlyRevenueGoal          Decimal?  @db.Decimal(10, 2)
+  whatsappApiTokenEncrypted   String?
+  whatsappBusinessId          String?
+  whatsappPhoneNumberId       String?
+  whatsappEnabled             Boolean   @default(false)
   // True quando as credenciais Meta foram aceites pela cloud —
   // outbound passa a ir por POST /whatsapp/send e o token local é
   // apagado após o primeiro envio bem-sucedido.
-  whatsappCredentialsAtCloud Boolean @default(false)
+  whatsappCredentialsAtCloud  Boolean   @default(false)
   // Transporte WhatsApp (módulo Pro "whatsapp-bot"): "meta" = Cloud API
   // oficial (relay na cloud ou credenciais locais legadas);
   // "evolution" = Evolution API self-hosted na LAN da loja (Baileys —
   // não-oficial, risco de ban). Envio só com whatsapp-bot entitlement
   // + disclaimer aceite (whatsappLocalDisclaimerAt).
-  whatsappTransport          String    @default("meta")
-  evolutionUrl               String?
-  evolutionInstance          String?
-  evolutionApiKeyEncrypted   String?
-  whatsappLocalDisclaimerAt  DateTime? @db.Timestamptz
+  whatsappTransport           String    @default("meta")
+  evolutionUrl                String?
+  evolutionInstance           String?
+  evolutionApiKeyEncrypted    String?
+  whatsappLocalDisclaimerAt   DateTime? @db.Timestamptz
   // SMS via gateway local (core, grátis) — um Android na LAN com
   // sms-gate.app em modo Local Server. O envio é HTTP direto ao telemóvel;
   // o inbound chega por webhook registado no próprio aparelho.
-  smsEnabled                Boolean  @default(false)
-  smsGatewayUrl             String?
-  smsGatewayUser            String?
+  smsEnabled                  Boolean   @default(false)
+  smsGatewayUrl               String?
+  smsGatewayUser              String?
   smsGatewayPasswordEncrypted String?
   // Segredo no path do webhook inbound — o gateway não suporta headers
   // de auth, por isso a rota é /api/public/sms/inbound/<token>.
-  smsWebhookToken           String?
+  smsWebhookToken             String?
   // Remarketing automático (Pro module "remarketing") — proactive WhatsApp
   // re-engagement for customers idle for remarketingDays, throttled by a
   // cooldown and sent as a Meta-approved template message.
-  remarketingEnabled        Boolean  @default(false)
-  remarketingDays           Int      @default(90)
-  remarketingCooldownDays   Int      @default(180)
-  remarketingTemplate       String?
+  remarketingEnabled          Boolean   @default(false)
+  remarketingDays             Int       @default(90)
+  remarketingCooldownDays     Int       @default(180)
+  remarketingTemplate         String?
   // Public base URL used to build customer-facing links (e.g. WhatsApp
   // tracking links). Optional: shops on a LAN may not expose one.
-  trackingBaseUrl           String?
+  trackingBaseUrl             String?
   // Origins allowed to iframe /embed/* pages (CSP frame-ancestors) — one
   // origin per line, e.g. "https://loja-exemplo.pt". Empty = '*' (any site
   // may embed the public widget; it exposes no shop data).
-  embedAllowedOrigins       String?
+  embedAllowedOrigins         String?
   // Public review link (e.g. Google Business "write a review" URL) shown on
   // the tracking page after delivery and in the delivered notification.
-  reviewUrl                 String?
+  reviewUrl                   String?
   // OficinaOS Cloud pairing — Pro modules live server-side; the shop token
   // is stored encrypted like the AI key. Entitlements are cached and polled.
-  cloudApiUrl               String?
-  cloudShopTokenEncrypted   String?
-  cloudShopId               String?
-  cloudShopName             String?
-  cloudEntitlements         Json?
-  cloudSyncedAt             DateTime? @db.Timestamptz
+  cloudApiUrl                 String?
+  cloudShopTokenEncrypted     String?
+  cloudShopId                 String?
+  cloudShopName               String?
+  cloudEntitlements           Json?
+  cloudSyncedAt               DateTime? @db.Timestamptz
   // Loja online (Pro module "storefront") — public page on the cloud.
-  storePublished            Boolean  @default(false)
-  storeDescription          String?  @db.Text
-  storeSlug                 String?
-  storeEmail                String?
+  storePublished              Boolean   @default(false)
+  storeDescription            String?   @db.Text
+  storeSlug                   String?
+  storeEmail                  String?
   // Push to the cloud on the next entitlement sync when true.
-  storeDirty                Boolean  @default(true)
+  storeDirty                  Boolean   @default(true)
   // Storefront+ (Pro module "storefront-plus") — paid store theme.
-  storeAccentColor          String?
-  storeTemplate             String?
+  storeAccentColor            String?
+  storeTemplate               String?
   // Shop logo as a data URL (≤~280KB); pushed to the cloud on sync.
-  storeLogoData             String?  @db.Text
+  storeLogoData               String?   @db.Text
   // Preços de mercado (Pro module "market-prices") — anonymous opt-in
   // contribution of catalog prices to the cloud aggregate.
-  sharePrices               Boolean  @default(false)
+  sharePrices                 Boolean   @default(false)
   // Push the price snapshot on the next entitlement sync when true.
-  pricesDirty               Boolean  @default(true)
+  pricesDirty                 Boolean   @default(true)
   // Faturação (Pro module "invoicing") — InvoiceXpress account + key stay
   // local and encrypted; the app calls their API directly.
-  invoicingEnabled          Boolean  @default(false)
-  invoicingAccount          String?
-  invoicingApiKeyEncrypted  String?  @db.Text
-  invoicingTaxName          String   @default("IVA23")
-  createdAt                 DateTime @default(now()) @db.Timestamptz
-  updatedAt                 DateTime @updatedAt @db.Timestamptz
+  invoicingEnabled            Boolean   @default(false)
+  invoicingAccount            String?
+  invoicingApiKeyEncrypted    String?   @db.Text
+  invoicingTaxName            String    @default("IVA23")
+  createdAt                   DateTime  @default(now()) @db.Timestamptz
+  updatedAt                   DateTime  @updatedAt @db.Timestamptz
 
   @@map("shop_settings")
 }
@@ -1225,27 +1233,27 @@ model ShopSettings {
 // ─────────────────────────────────────────────
 
 model CashSession {
-  id          String           @id @default(cuid())
-  day         DateTime         @db.Timestamptz
-  timezone    String
-  status      CashSessionStatus @default(OPEN)
+  id       String            @id @default(cuid())
+  day      DateTime          @db.Timestamptz
+  timezone String
+  status   CashSessionStatus @default(OPEN)
 
-  report               Json
-  countedCash          Decimal?  @db.Decimal(10, 2)
-  countedNonCash       Decimal?  @db.Decimal(10, 2)
+  report                Json
+  countedCash           Decimal? @db.Decimal(10, 2)
+  countedNonCash        Decimal? @db.Decimal(10, 2)
   countedTotalCollected Decimal? @db.Decimal(10, 2)
-  cashDivergence       Decimal?  @db.Decimal(10, 2)
-  note                 String?   @db.Text
-  signatureDataUrl     String?   @db.Text
+  cashDivergence        Decimal? @db.Decimal(10, 2)
+  note                  String?  @db.Text
+  signatureDataUrl      String?  @db.Text
 
-  openedById  String
-  openedBy    User     @relation("CashSessionOpenedBy", fields: [openedById], references: [id], onDelete: Restrict)
-  openedAt    DateTime @default(now()) @db.Timestamptz
+  openedById String
+  openedBy   User     @relation("CashSessionOpenedBy", fields: [openedById], references: [id], onDelete: Restrict)
+  openedAt   DateTime @default(now()) @db.Timestamptz
 
   closedById  String?
-  closedBy    User?    @relation("CashSessionClosedBy", fields: [closedById], references: [id], onDelete: Restrict)
+  closedBy    User?     @relation("CashSessionClosedBy", fields: [closedById], references: [id], onDelete: Restrict)
   closedAt    DateTime? @db.Timestamptz
-  reopenCount Int      @default(0)
+  reopenCount Int       @default(0)
 
   @@unique([day, timezone])
   @@index([status])
@@ -1311,10 +1319,10 @@ model TradeInCounter {
 }
 
 model TradeIn {
-  id                  String                @id @default(cuid())
-  code                String                @unique
+  id                  String               @id @default(cuid())
+  code                String               @unique
   customerId          String
-  customer            Customer              @relation(fields: [customerId], references: [id])
+  customer            Customer             @relation(fields: [customerId], references: [id])
   // Registo legal de bens em 2ª mão — identificação do vendedor.
   sellerIdType        String
   sellerIdNumber      String
@@ -1324,15 +1332,15 @@ model TradeIn {
   storage             String?
   condition           TradeInCondition
   functionalChecklist Json?
-  notes               String?               @db.Text
-  purchasePrice       Decimal               @db.Decimal(10, 2)
+  notes               String?              @db.Text
+  purchasePrice       Decimal              @db.Decimal(10, 2)
   paymentMethod       TradeInPaymentMethod
-  status              TradeInStatus         @default(OFFERED)
-  signatureDataUrl    String?               @db.Text
+  status              TradeInStatus        @default(OFFERED)
+  signatureDataUrl    String?              @db.Text
   createdById         String?
-  createdBy           User?                 @relation("TradeInCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt           DateTime              @default(now()) @db.Timestamptz
-  updatedAt           DateTime              @updatedAt @db.Timestamptz
+  createdBy           User?                @relation("TradeInCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt           DateTime             @default(now()) @db.Timestamptz
+  updatedAt           DateTime             @updatedAt @db.Timestamptz
 
   @@index([status, createdAt])
   @@map("trade_ins")
@@ -1354,15 +1362,15 @@ model SignatureSession {
   // Frozen intake document the customer is shown on /sign — created with the
   // session so later edits to terms or the ficha invalidate the link instead
   // of silently changing what gets signed.
-  snapshot      Json?
+  snapshot         Json?
   // sha256(canonical(snapshot) + signature image) + provenance, set when the
   // signature lands — copied onto the job at intake.
-  documentHash    String?
-  signedAt        DateTime? @db.Timestamptz
-  signerIp        String?
-  signerUserAgent String?   @db.Text
-  createdAt       DateTime  @default(now()) @db.Timestamptz
-  expiresAt       DateTime  @db.Timestamptz
+  documentHash     String?
+  signedAt         DateTime? @db.Timestamptz
+  signerIp         String?
+  signerUserAgent  String?   @db.Text
+  createdAt        DateTime  @default(now()) @db.Timestamptz
+  expiresAt        DateTime  @db.Timestamptz
 
   @@map("signature_sessions")
 }
@@ -1391,6 +1399,8 @@ model Verification {
 // ─────────────────────────────────────────────
 
 model Supplier {
+  purchaseOrders PurchaseOrder[]
+
   id       String  @id @default(cuid())
   name     String
   email    String?
@@ -1419,25 +1429,29 @@ model SupplierRma {
   supplierId String
   supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
 
+  jobId String?
+  job   Job?    @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
   partId String?
   part   PartsCatalog? @relation(fields: [partId], references: [id], onDelete: SetNull)
 
-  description String          @db.Text
-  quantity    Int             @default(1)
+  description String            @db.Text
+  quantity    Int               @default(1)
   status      SupplierRmaStatus @default(OPEN)
   reference   String?
-  reason      String?         @db.Text
-  notes       String?         @db.Text
-  sentAt      DateTime?       @db.Timestamptz
-  resolvedAt  DateTime?       @db.Timestamptz
+  reason      String?           @db.Text
+  notes       String?           @db.Text
+  sentAt      DateTime?         @db.Timestamptz
+  resolvedAt  DateTime?         @db.Timestamptz
 
   createdById String
-  createdBy   User   @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdBy   User     @relation(fields: [createdById], references: [id], onDelete: Restrict)
   createdAt   DateTime @default(now()) @db.Timestamptz
   updatedAt   DateTime @updatedAt @db.Timestamptz
 
   @@index([supplierId])
   @@index([partId])
+  @@index([jobId])
   @@index([status])
   @@index([createdById])
   @@index([createdAt])
@@ -1449,19 +1463,19 @@ model SupplierRma {
 // ─────────────────────────────────────────────
 
 model JobReferral {
-  id   String @id @default(cuid())
+  id    String @id @default(cuid())
   jobId String
   job   Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   toShopName    String
   toShopContact String?
-  reason        String? @db.Text
+  reason        String?        @db.Text
   status        ReferralStatus @default(SENT)
   notes         String?        @db.Text
   resolvedAt    DateTime?      @db.Timestamptz
 
   createdById String
-  createdBy   User   @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdBy   User     @relation(fields: [createdById], references: [id], onDelete: Restrict)
   createdAt   DateTime @default(now()) @db.Timestamptz
   updatedAt   DateTime @updatedAt @db.Timestamptz
 
@@ -1469,4 +1483,91 @@ model JobReferral {
   @@index([status])
   @@index([createdById])
   @@map("job_referrals")
+}
+
+model WorkshopTask {
+  entityType String  @default("GENERAL")
+  entityId   String?
+
+  id             String    @id @default(cuid())
+  title          String
+  notes          String?   @db.Text
+  priority       String    @default("NORMAL")
+  jobId          String?
+  job            Job?      @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  assigneeId     String?
+  assignee       User?     @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdById    String
+  createdBy      User      @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  scheduledAt    DateTime  @default(now()) @db.Timestamptz
+  dueAt          DateTime? @db.Timestamptz
+  completedAt    DateTime? @db.Timestamptz
+  nextTitle      String?
+  nextDelayHours Int       @default(0)
+  predecessorId  String?   @unique
+  triggerKey     String?   @unique
+  createdAt      DateTime  @default(now()) @db.Timestamptz
+
+  @@index([jobId])
+  @@index([completedAt, scheduledAt])
+  @@index([entityType, entityId])
+  @@map("workshop_tasks")
+}
+
+model TaskRule {
+  id              String         @id @default(cuid())
+  title           String
+  notes           String?        @db.Text
+  priority        String         @default("NORMAL")
+  workflowStateId String?
+  workflowState   WorkflowState? @relation(fields: [workflowStateId], references: [id], onDelete: Restrict)
+  triggerStatus   JobStatus?
+  delayHours      Int            @default(0)
+  assigneeId      String?
+  nextTitle       String?
+  nextDelayHours  Int            @default(0)
+  isActive        Boolean        @default(true)
+  createdById     String
+  createdBy       User           @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt       DateTime       @default(now()) @db.Timestamptz
+
+  @@map("task_rules")
+}
+
+model PurchaseOrder {
+  id         String    @id @default(cuid())
+  title      String
+  supplierId String?
+  supplier   Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  notes      String?   @db.Text
+  reference  String?
+  createdAt  DateTime  @default(now()) @db.Timestamptz
+  updatedAt  DateTime  @updatedAt @db.Timestamptz
+
+  @@index([supplierId])
+  @@map("purchase_orders")
+}
+
+model WorkflowState {
+  taskRules  TaskRule[]
+  id         String           @id @default(cuid())
+  entityType String
+  name       String
+  isActive   Boolean          @default(true)
+  records    RecordWorkflow[]
+
+  @@unique([entityType, name])
+  @@map("workflow_states")
+}
+
+model RecordWorkflow {
+  id         String        @id @default(cuid())
+  entityType String
+  entityId   String
+  stateId    String
+  state      WorkflowState @relation(fields: [stateId], references: [id], onDelete: Restrict)
+  updatedAt  DateTime      @updatedAt @db.Timestamptz
+
+  @@unique([entityType, entityId])
+  @@map("record_workflows")
 }
