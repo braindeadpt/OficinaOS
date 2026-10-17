@@ -7,6 +7,7 @@ function buildApp(canEditSettings: boolean) {
   const app = Fastify();
   const findMany = vi.fn(async () => []);
   app.decorate("prisma", {
+    job: { findUnique: vi.fn(async () => ({ id: "j1" })) },
     taskRule: { findMany },
     workshopTask: { findMany },
   } as never);
@@ -64,7 +65,9 @@ describe("task routes", () => {
     const res = await app.inject({ method: "GET", url: "/api/tasks?jobId=j1" });
     expect(res.statusCode).toBe(200);
     expect(findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { jobId: "j1", completedAt: null } })
+      expect.objectContaining({
+        where: expect.objectContaining({ jobId: "j1", completedAt: null }),
+      })
     );
     await app.close();
   });

@@ -2421,13 +2421,14 @@
     "next": "Next task after completion",
     "next_delay": "Delay for the next task (hours)",
     "notes": "Notes",
-    "rule_hint": "Applies within 30 seconds, including matching repairs already in this state. Each rule runs once per repair.",
+    "rule_hint": "One task per rule and record. Existing records are reconciled within 30 seconds; new tracking-status assignments trigger tasks immediately.",
     "show_completed": "Show completed",
     "complete": "Complete task",
     "more": "Load more",
     "rules": "Automatic rules",
     "disable": "Disable",
-    "failed": "Could not save or load tasks."
+    "failed": "Could not save or load tasks.",
+    "task_title": "Task"
   },
   "photos": {
     "phase": "Photo phase",
@@ -2436,5 +2437,39 @@
     "FINAL": "Final",
     "RETURN_INTAKE": "Return intake",
     "RETURN_RESOLUTION": "Return resolution"
-  }
+  },
+  "workflow": {
+    "tasks_status": "Tasks and tracking status",
+    "status_hint": "Tracking statuses complement the operational status. Stock, payments and warranty transitions continue to use the original workflow.",
+    "status": "Tracking status",
+    "no_status": "No tracking status",
+    "manage_states": "Add or edit statuses (administrator)",
+    "state_name": "Status name",
+    "activate": "Activate",
+    "deactivate": "Deactivate",
+    "manage_tasks": "Manage tasks",
+    "retry": "Try again",
+    "no_tasks": "No pending tasks.",
+    "orders": "Purchase orders",
+    "order_title": "Order description",
+    "no_supplier": "No supplier selected",
+    "reference": "Supplier reference",
+    "no_orders": "No orders.",
+    "all_orders": "All orders",
+    "types": {
+      "GENERAL": "General",
+      "JOB": "Repair",
+      "RMA": "Supplier RMA",
+      "REQUEST": "Intake request",
+      "RETURN": "Return",
+      "ORDER": "Purchase order",
+      "TRADE_IN": "Trade-in",
+      "SUPPLIER": "Supplier",
+      "CUSTOMER": "Customer"
+    }
+  },
+  "ai_provider_label": "AI provider",
+  "ai_provider_hint": "Changing provider requires its own API key. You can also configure an OpenAI-compatible endpoint.",
+  "ai_custom_provider": "Other compatible provider",
+  "ai_gemini_hint": "Gemini has a limited free tier for eligible models and accounts. Requires your own API key; quotas and terms apply. Review Google’s data-use terms before sending customer data."
 }

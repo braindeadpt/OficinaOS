@@ -2,7 +2,17 @@
 
 ## Implementado nesta branch
 
-- Tarefas gerais ou associadas à referência de uma reparação.
+- Tarefas no painel do proprietário, técnico e balcão, e integradas nas fichas de reparações.
+- Tarefas associadas a reparações, RMAs, pedidos de entrada, devoluções, encomendas, retomas, fornecedores ou clientes; continuam a existir tarefas gerais.
+- Em listas, expandir **Tarefas e estado de acompanhamento** no registo pretendido. Em reparações, clientes e devoluções, a secção começa expandida.
+- Nova área **Encomendas**: descrição, fornecedor, referência e notas; criação e edição, tarefas e estado de acompanhamento. No fornecedor existe uma ligação para as respetivas encomendas. Esta área ainda não efetua receções de stock nem contabilização de faturas.
+- Estados de acompanhamento por módulo: o administrador pode criar, renomear, desativar e reativar estados; cada ficha permite selecionar um estado. Desativar preserva as associações existentes.
+- Os estados de acompanhamento complementam os estados operacionais originais. Não substituem as transições que movimentam stock, pagamentos, garantias ou resolução de RMAs. Os nomes dos estados operacionais originais continuam fixos nesta versão.
+- Regras automáticas para estados de acompanhamento de qualquer módulo, além das regras existentes por estado operacional de reparação. A atribuição de um estado e as tarefas geradas são gravadas na mesma transação. O arranque e a verificação periódica também reconciliam os registos já nesse estado.
+- Uma regra cria uma tarefa por registo, mesmo se voltar ao mesmo estado. Repetir a atribuição ou reiniciar a aplicação não duplica tarefas. A tarefa seguinte conserva a associação ao módulo e ao registo.
+- O painel respeita as permissões de cada módulo e o âmbito individual das devoluções. Além dos editores do módulo, o responsável atribuído pode concluir as próprias tarefas, desde que mantenha acesso ao registo.
+- IA: predefinições OpenAI, Google Gemini e Mistral AI, com modelo editável e opção de outro serviço compatível. É necessário configurar uma chave própria. Ao mudar o servidor do fornecedor sem nova chave, a chave anterior é removida e a IA fica desativada.
+- O Gemini usa a API compatível com OpenAI, com preservação das assinaturas das chamadas de ferramentas. O modelo inicial é `gemini-3.5-flash-lite`, editável nas definições. O nível gratuito está sujeito a modelos, contas, quotas e condições da Google; esta aplicação não garante disponibilidade ou gratuidade. Ligações reais aos fornecedores precisam de validação com a chave da loja.
 - Responsável (técnico ou proprietário ativo), prioridade, notas, início agendado e prazo.
 - Ao concluir uma tarefa, criar a tarefa seguinte indicada, imediatamente ou após um número de horas.
 - A conclusão é transacional: repetir o pedido ou clicar duas vezes não cria duas tarefas seguintes.
@@ -33,12 +43,23 @@ As tarefas e as suas notas são internas. Não são devolvidas nos endpoints pú
 ## Restante âmbito solicitado — ainda por implementar
 
 1. Documentos carregados uma vez e associados a várias reparações, tarefas, peças, faturas e RMAs. Visibilidade por associação, interna por defeito; faturas de fornecedor partilhadas permanecem internas. Remover uma associação não elimina as restantes.
-2. Histórico por fornecedor: encomendas, receções, peças, custos, faturas, notas de crédito, pagamentos, garantias e RMAs.
+2. Completar o histórico por fornecedor com receções, peças, custos, faturas, notas de crédito, pagamentos e garantias. As encomendas básicas já estão ligadas ao fornecedor.
 3. Documentos Diagnosticamente PC/Mobile com fase Antes/Depois e partilha controlada no acompanhamento do cliente. Upload manual primeiro; envio automático requer integração nos dois programas e autenticação própria, sem publicar dados privados.
 4. Fotografias: legendas, alteração da fase após upload, agrupamento por fase e visibilidade para o cliente, verificada no servidor.
 5. Agenda interna e marcações públicas, sincronização Google Calendar, gestão de conflitos, cancelamentos e proteção dos eventos privados. Credenciais OAuth e calendário de destino ainda por configurar.
-6. Estados personalizados com correspondência às fases internas para preservar regras, relatórios e histórico.
+6. Substituição dos estados operacionais nativos por um fluxo inteiramente configurável; a implementação atual disponibiliza estados de acompanhamento adicionais e mantém o fluxo operacional original.
 7. Melhorias dos importadores: mapeamento de colunas, pré-visualização, referências de origem, datas/estados/valores, idempotência, XLS antigo e movimentos de stock. Os ficheiros de exemplo de origem ainda não foram fornecidos.
 8. Etiqueta Brother DK-22205: equipamento, cliente, contacto e entrada, além da referência/QR. A correspondência do rolo de 62 mm também depende do controlador instalado no PC; precisa de teste físico.
 
 Esta lista distingue requisitos de funcionalidades já existentes. As integrações e os restantes módulos não devem ser anunciados como concluídos com esta branch.
+
+
+## Atualizar a instância de testes
+
+A migração `20261106000000_universal_workflow` acrescenta tabelas e colunas, preservando a ligação das tarefas antigas às reparações. Não altera a migração já aplicada anteriormente.
+
+Na pasta de testes, efetuar backup antes de atualizar. Depois de obter esta branch, reconstruir e recriar apenas a aplicação com o projeto e ficheiro Compose da instância de testes. O comando de arranque da imagem Node aplica `prisma migrate deploy`.
+
+Para configurar um estado e uma regra: abrir um registo, expandir a secção de tarefas, criar o estado como administrador e, na página **Tarefas**, criar uma regra escolhendo esse módulo/estado na lista de gatilhos. As regras e notas continuam internas, sem exposição no portal público do cliente.
+
+Documentação dos fornecedores: [Gemini/OpenAI](https://ai.google.dev/gemini-api/docs/openai), [quotas e preços Gemini](https://ai.google.dev/gemini-api/docs/pricing), [Mistral/OpenAI](https://docs.mistral.ai/resources/migration-guides).

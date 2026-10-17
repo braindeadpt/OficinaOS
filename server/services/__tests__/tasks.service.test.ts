@@ -1,6 +1,11 @@
 import type { PrismaClient } from "@generated/client";
 import { describe, expect, it, vi } from "vitest";
-import { applyTaskRules, completeTask, createTask } from "../tasks.service.js";
+import {
+  applyTaskRules,
+  applyWorkflowTaskRules,
+  completeTask,
+  createTask,
+} from "../tasks.service.js";
 
 describe("task automation", () => {
   it("creates one successor even when the completion request is retried", async () => {
@@ -10,6 +15,8 @@ describe("task automation", () => {
       nextTitle: "Await receipt",
       nextDelayHours: 24,
       jobId: "j1",
+      entityType: "JOB",
+      entityId: "j1",
       assigneeId: "u1",
       priority: "HIGH",
       createdById: "u1",
@@ -38,6 +45,8 @@ describe("task automation", () => {
         jobId: "j1",
         assigneeId: "u1",
         predecessorId: "t1",
+        entityType: "JOB",
+        entityId: "j1",
       }),
     });
     expect(create.mock.calls[0][0].data.scheduledAt.getTime()).toBeGreaterThan(
@@ -78,6 +87,7 @@ describe("task automation", () => {
         prisma,
         {
           title: "Order part",
+          entityType: "GENERAL",
           assigneeId: "u1",
           priority: "NORMAL",
           nextDelayHours: 0,
@@ -114,5 +124,45 @@ describe("task automation", () => {
       "rule1:job1",
     ]);
     expect(upsert.mock.calls[0][0].update).toEqual({});
+  });
+});
+
+describe("custom status task rules", () => {
+  it("uses a stable key and preserves order context when reconciling a custom state", async () => {
+    const upsert = vi.fn();
+    const prisma = {
+      taskRule: {
+        findMany: vi.fn(async () => [
+          {
+            id: "rule1",
+            title: "Await part",
+            priority: "NORMAL",
+            delayHours: 24,
+            nextDelayHours: 0,
+            createdById: "u1",
+          },
+        ]),
+      },
+      workshopTask: { upsert },
+    };
+    const record = { entityType: "ORDER", entityId: "o1", stateId: "state1" };
+    await applyWorkflowTaskRules(prisma as never, record);
+    await applyWorkflowTaskRules(prisma as never, record);
+    expect(upsert).toHaveBeenCalledTimes(2);
+    expect(upsert.mock.calls.map(([input]) => input.where.triggerKey)).toEqual([
+      "rule1:ORDER:o1",
+      "rule1:ORDER:o1",
+    ]);
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: {},
+        create: expect.objectContaining({
+          entityType: "ORDER",
+          entityId: "o1",
+          jobId: null,
+          title: "Await part",
+        }),
+      })
+    );
   });
 });

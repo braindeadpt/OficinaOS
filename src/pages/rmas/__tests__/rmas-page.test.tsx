@@ -8,6 +8,7 @@ import SupplierRmasPage from "..";
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), error: vi.fn() }));
 
+vi.mock("@/hooks/use-can", () => ({ useCan: () => false }));
 vi.mock("@/lib/api", () => ({ default: { get: mocks.get } }));
 vi.mock("sonner", () => ({ toast: { error: mocks.error } }));
 vi.mock("react-i18next", () => ({

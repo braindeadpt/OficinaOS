@@ -2421,13 +2421,14 @@
     "next": "Tâche suivante après clôture",
     "next_delay": "Délai de la tâche suivante (heures)",
     "notes": "Notes",
-    "rule_hint": "Appliquée sous 30 secondes, y compris aux réparations déjà dans cet état. Une exécution par règle et par réparation.",
+    "rule_hint": "Une tâche par règle et fiche. Les fiches existantes sont vérifiées sous 30 secondes ; attribuer un statut de suivi génère la tâche immédiatement.",
     "show_completed": "Afficher les tâches terminées",
     "complete": "Terminer la tâche",
     "more": "Charger plus",
     "rules": "Règles automatiques",
     "disable": "Désactiver",
-    "failed": "Impossible de charger ou enregistrer les tâches."
+    "failed": "Impossible de charger ou enregistrer les tâches.",
+    "task_title": "Tâche"
   },
   "photos": {
     "phase": "Étape de la photo",
@@ -2436,5 +2437,39 @@
     "FINAL": "Finalisation",
     "RETURN_INTAKE": "Réception du retour",
     "RETURN_RESOLUTION": "Résolution du retour"
-  }
+  },
+  "workflow": {
+    "tasks_status": "Tâches et statut de suivi",
+    "status_hint": "Les statuts de suivi complètent le statut opérationnel. Le stock, les paiements et les garanties conservent le flux existant.",
+    "status": "Statut de suivi",
+    "no_status": "Aucun statut de suivi",
+    "manage_states": "Ajouter ou modifier les statuts (administrateur)",
+    "state_name": "Nom du statut",
+    "activate": "Activer",
+    "deactivate": "Désactiver",
+    "manage_tasks": "Gérer les tâches",
+    "retry": "Réessayer",
+    "no_tasks": "Aucune tâche en attente.",
+    "orders": "Commandes fournisseurs",
+    "order_title": "Description de la commande",
+    "no_supplier": "Aucun fournisseur sélectionné",
+    "reference": "Référence fournisseur",
+    "no_orders": "Aucune commande.",
+    "all_orders": "Toutes les commandes",
+    "types": {
+      "GENERAL": "Général",
+      "JOB": "Réparation",
+      "RMA": "RMA fournisseur",
+      "REQUEST": "Demande de réception",
+      "RETURN": "Retour",
+      "ORDER": "Commande",
+      "TRADE_IN": "Reprise",
+      "SUPPLIER": "Fournisseur",
+      "CUSTOMER": "Client"
+    }
+  },
+  "ai_provider_label": "Fournisseur IA",
+  "ai_provider_hint": "Un changement de fournisseur nécessite sa propre clé API. Vous pouvez aussi configurer un service compatible avec OpenAI.",
+  "ai_custom_provider": "Autre fournisseur compatible",
+  "ai_gemini_hint": "Gemini propose un accès gratuit limité pour les modèles et comptes éligibles. Votre propre clé API est nécessaire ; des quotas et conditions s’appliquent. Consultez les conditions d’utilisation des données de Google avant d’envoyer des données clients."
 }

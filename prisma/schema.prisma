@@ -1384,6 +1384,8 @@ model Verification {
 // ─────────────────────────────────────────────
 
 model Supplier {
+  purchaseOrders PurchaseOrder[]
+
   id       String  @id @default(cuid())
   name     String
   email    String?
@@ -1465,6 +1467,9 @@ model JobReferral {
 }
 
 model WorkshopTask {
+  entityType String  @default("GENERAL")
+  entityId   String?
+
   id             String    @id @default(cuid())
   title          String
   notes          String?   @db.Text
@@ -1486,23 +1491,64 @@ model WorkshopTask {
 
   @@index([jobId])
   @@index([completedAt, scheduledAt])
+  @@index([entityType, entityId])
   @@map("workshop_tasks")
 }
 
 model TaskRule {
-  id             String    @id @default(cuid())
-  title          String
-  notes          String?   @db.Text
-  priority       String    @default("NORMAL")
-  triggerStatus  JobStatus
-  delayHours     Int       @default(0)
-  assigneeId     String?
-  nextTitle      String?
-  nextDelayHours Int       @default(0)
-  isActive       Boolean   @default(true)
-  createdById    String
-  createdBy      User      @relation(fields: [createdById], references: [id], onDelete: Restrict)
-  createdAt      DateTime  @default(now()) @db.Timestamptz
+  id              String         @id @default(cuid())
+  title           String
+  notes           String?        @db.Text
+  priority        String         @default("NORMAL")
+  workflowStateId String?
+  workflowState   WorkflowState? @relation(fields: [workflowStateId], references: [id], onDelete: Restrict)
+  triggerStatus   JobStatus?
+  delayHours      Int            @default(0)
+  assigneeId      String?
+  nextTitle       String?
+  nextDelayHours  Int            @default(0)
+  isActive        Boolean        @default(true)
+  createdById     String
+  createdBy       User           @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt       DateTime       @default(now()) @db.Timestamptz
 
   @@map("task_rules")
+}
+
+model PurchaseOrder {
+  id         String    @id @default(cuid())
+  title      String
+  supplierId String?
+  supplier   Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  notes      String?   @db.Text
+  reference  String?
+  createdAt  DateTime  @default(now()) @db.Timestamptz
+  updatedAt  DateTime  @updatedAt @db.Timestamptz
+
+  @@index([supplierId])
+  @@map("purchase_orders")
+}
+
+model WorkflowState {
+  taskRules  TaskRule[]
+  id         String           @id @default(cuid())
+  entityType String
+  name       String
+  isActive   Boolean          @default(true)
+  records    RecordWorkflow[]
+
+  @@unique([entityType, name])
+  @@map("workflow_states")
+}
+
+model RecordWorkflow {
+  id         String        @id @default(cuid())
+  entityType String
+  entityId   String
+  stateId    String
+  state      WorkflowState @relation(fields: [stateId], references: [id], onDelete: Restrict)
+  updatedAt  DateTime      @updatedAt @db.Timestamptz
+
+  @@unique([entityType, entityId])
+  @@map("record_workflows")
 }

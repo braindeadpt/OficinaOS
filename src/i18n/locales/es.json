@@ -2421,13 +2421,14 @@
     "next": "Siguiente tarea al completar",
     "next_delay": "Retraso de la siguiente tarea (horas)",
     "notes": "Notas",
-    "rule_hint": "Se aplica en 30 segundos, incluidas reparaciones ya en este estado. Cada regla se ejecuta una vez por reparación.",
+    "rule_hint": "Una tarea por regla y registro. Los registros existentes se comprueban en 30 segundos; asignar un estado de seguimiento genera la tarea inmediatamente.",
     "show_completed": "Mostrar completadas",
     "complete": "Completar tarea",
     "more": "Cargar más",
     "rules": "Reglas automáticas",
     "disable": "Desactivar",
-    "failed": "No se pudieron guardar o cargar las tareas."
+    "failed": "No se pudieron guardar o cargar las tareas.",
+    "task_title": "Task"
   },
   "photos": {
     "phase": "Fase de fotografía",
@@ -2436,5 +2437,39 @@
     "FINAL": "Finalización",
     "RETURN_INTAKE": "Entrada de devolución",
     "RETURN_RESOLUTION": "Resolución de devolución"
-  }
+  },
+  "workflow": {
+    "tasks_status": "Tasks and tracking status",
+    "status_hint": "Tracking statuses complement the operational status. Stock, payments and warranty transitions continue to use the original workflow.",
+    "status": "Tracking status",
+    "no_status": "No tracking status",
+    "manage_states": "Add or edit statuses (administrator)",
+    "state_name": "Status name",
+    "activate": "Activate",
+    "deactivate": "Deactivate",
+    "manage_tasks": "Manage tasks",
+    "retry": "Try again",
+    "no_tasks": "No pending tasks.",
+    "orders": "Purchase orders",
+    "order_title": "Order description",
+    "no_supplier": "No supplier selected",
+    "reference": "Supplier reference",
+    "no_orders": "No orders.",
+    "all_orders": "All orders",
+    "types": {
+      "GENERAL": "General",
+      "JOB": "Repair",
+      "RMA": "Supplier RMA",
+      "REQUEST": "Intake request",
+      "RETURN": "Return",
+      "ORDER": "Purchase order",
+      "TRADE_IN": "Trade-in",
+      "SUPPLIER": "Supplier",
+      "CUSTOMER": "Customer"
+    }
+  },
+  "ai_provider_label": "Proveedor de IA",
+  "ai_provider_hint": "Al cambiar de proveedor, introduzca su propia clave API. También puede configurar un servicio compatible con OpenAI.",
+  "ai_custom_provider": "Otro proveedor compatible",
+  "ai_gemini_hint": "Gemini ofrece un nivel gratuito limitado para modelos y cuentas elegibles. Requiere su propia clave API; se aplican cuotas y condiciones. Consulte las condiciones de uso de datos de Google antes de enviar datos de clientes."
 }

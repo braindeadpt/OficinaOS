@@ -60,6 +60,12 @@ export const NAV_ITEMS: NavItem[] = [
     perm: { parts: ["viewCatalog"] },
   },
   {
+    icon: "shopping_cart",
+    labelKey: "workflow.orders",
+    to: "/purchase-orders",
+    perm: { parts: ["viewCatalog"] },
+  },
+  {
     icon: "assignment_return",
     labelKey: "rmas.nav_label",
     to: "/rmas",

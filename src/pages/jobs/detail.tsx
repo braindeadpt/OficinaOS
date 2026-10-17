@@ -22,6 +22,7 @@ import StatusHistoryTimeline from "@/components/modules/jobs/status-history-time
 import StatusPopover from "@/components/modules/jobs/status-popover";
 import TechnicianSelect from "@/components/modules/jobs/technician-select";
 import CreateWizardModal from "@/components/modules/returns/create-wizard-modal";
+import { RecordWorkflow } from "@/components/modules/tasks/record-workflow";
 import { Icon } from "@/components/ui/icon";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
 import { copyTextToClipboard } from "@/lib/clipboard";
@@ -497,6 +498,7 @@ export default function JobDetailPage() {
         </div>
       </div>
 
+      <RecordWorkflow entityId={job.id} entityType="JOB" expanded />
       {/* ── Quotes ── */}
       <div className="mt-8 rounded-2xl bg-surface-container p-6">
         <JobQuotesSection
@@ -525,12 +527,6 @@ export default function JobDetailPage() {
 
       {/* ── Referrals — encaminhar para outra loja ── */}
       <div className="mt-8 rounded-2xl bg-surface-container p-6">
-        <Link
-          className="text-primary underline"
-          to={`/tasks?jobId=${job.id}&jobCode=${encodeURIComponent(job.jobCode)}`}
-        >
-          {t("tasks.title")}
-        </Link>
         <JobReferralsSection jobId={job.id} />
         <Can perm={{ parts: ["viewCatalog"] }}>
           <Link

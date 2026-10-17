@@ -12,6 +12,7 @@ import QuickStatsChips from "@/components/modules/dashboard/quick-stats-chips";
 import ReadyForPickup from "@/components/modules/dashboard/ready-for-pickup";
 import TodayOverview from "@/components/modules/dashboard/today-overview";
 import WaitingCustomers from "@/components/modules/dashboard/waiting-customers";
+import { TaskPanel } from "@/components/modules/tasks/task-panel";
 import { Icon } from "@/components/ui/icon";
 import { formatTimeAgo } from "@/lib/format-time-ago";
 import { useDashboardStore } from "@/stores/dashboard";
@@ -181,6 +182,7 @@ export default function FrontDeskPage() {
 
   return (
     <>
+      <TaskPanel />
       <div className="mb-8 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <h2 className="font-extrabold font-headline text-2xl text-on-surface tracking-tight md:text-3xl">

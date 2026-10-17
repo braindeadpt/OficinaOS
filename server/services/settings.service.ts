@@ -1,3 +1,5 @@
+const TRAILING_SLASH = /\/$/;
+
 import type { PrismaClient } from "@generated/client";
 import type {
   UpdateAiSettingsInput,
@@ -19,6 +21,14 @@ import {
 } from "../repositories/settings.repository.js";
 import { isModuleEnabled } from "../utils/modules.js";
 import { generateSmsWebhookToken } from "./sms.service.js";
+
+function endpointOrigin(endpoint: string) {
+  try {
+    return new URL(endpoint).origin;
+  } catch {
+    return endpoint;
+  }
+}
 
 function publicAiSettings<
   T extends { apiKeyEncrypted: string } | null | undefined,
@@ -44,6 +54,13 @@ export async function upsertAiSettings(
   input: UpdateAiSettingsInput
 ) {
   const data: Record<string, unknown> = {};
+  const previous =
+    input.endpointUrl === undefined ? null : await findAiSettingsUnique(prisma);
+  const providerChanged = Boolean(
+    previous?.endpointUrl &&
+      input.endpointUrl !== undefined &&
+      endpointOrigin(previous.endpointUrl) !== endpointOrigin(input.endpointUrl)
+  );
   if (input.endpointUrl !== undefined) {
     data.endpointUrl = input.endpointUrl;
   }
@@ -64,6 +81,10 @@ export async function upsertAiSettings(
     data.enabled = input.enabled ?? true;
   }
 
+  if (providerChanged && !input.apiKey) {
+    data.apiKeyEncrypted = "";
+    data.enabled = false;
+  }
   const row = await upsertAiSettingsRepo(prisma, {
     create: {
       apiKeyEncrypted: (data.apiKeyEncrypted as string) ?? "",
@@ -211,6 +232,13 @@ export async function testAiConnection(prisma: PrismaClient) {
       headers.Authorization = `Bearer ${apiKey}`;
     }
 
+    if (
+      !endpoint.pathname
+        .replace(TRAILING_SLASH, "")
+        .endsWith("/chat/completions")
+    ) {
+      endpoint.pathname = `${endpoint.pathname.replace(TRAILING_SLASH, "")}/chat/completions`;
+    }
     const response = await fetch(endpoint, {
       body: JSON.stringify({
         max_tokens: 1,
