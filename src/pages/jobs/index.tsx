@@ -10,6 +10,7 @@ import type {
 import { jobToRow, STATUS_GROUPS } from "@/components/modules/jobs/jobs-shared";
 import JobsTable from "@/components/modules/jobs/jobs-table";
 import JobMobileCard from "@/components/modules/jobs/mobile-card";
+import { WorkflowStatesManager } from "@/components/modules/tasks/workflow-states-manager";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { TableSkeleton } from "@/components/ui/skeleton";
@@ -157,6 +158,7 @@ export default function JobsPage() {
 
   return (
     <>
+      <WorkflowStatesManager entityType="JOB" />
       <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <h2 className="font-extrabold font-headline text-2xl text-on-surface tracking-tight md:text-3xl">

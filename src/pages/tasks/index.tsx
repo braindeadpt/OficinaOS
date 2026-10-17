@@ -6,9 +6,14 @@ import {
 } from "@shared/constants/workflow";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { Can } from "@/components/modules/can";
+import {
+  type TaskRecord,
+  TaskTable,
+} from "@/components/modules/tasks/task-table";
+import { WorkflowStatesManager } from "@/components/modules/tasks/workflow-states-manager";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -18,27 +23,19 @@ import { useCan } from "@/hooks/use-can";
 import { useTechnicians } from "@/hooks/use-technicians";
 import api from "@/lib/api";
 
-interface Task {
-  assignee: { name: string; username: string } | null;
-  canComplete: boolean;
-  completedAt: string | null;
-  dueAt: string | null;
-  entityId: string | null;
-  entityType: WorkflowType;
+interface Rule {
+  assigneeId: string | null;
+  delayHours: number;
   id: string;
-  job: { id: string; jobCode: string } | null;
+  isActive: boolean;
+  nextDelayHours: number;
   nextTitle: string | null;
   notes: string | null;
   priority: string;
-  scheduledAt: string;
-  title: string;
-}
-interface Rule {
-  id: string;
-  isActive: boolean;
   title: string;
   triggerStatus: string | null;
   workflowState?: { name: string; entityType: WorkflowType } | null;
+  workflowStateId: string | null;
 }
 
 function ruleTrigger(value: string) {
@@ -47,16 +44,25 @@ function ruleTrigger(value: string) {
     : { triggerStatus: value };
 }
 
+function taskContext(params: URLSearchParams) {
+  const kind = params.get("entityType") as WorkflowType;
+  const entityType = WORKFLOW_TYPES.includes(kind) ? kind : undefined;
+  return {
+    entityType,
+    entityId: params.get("entityId") || undefined,
+    jobId: params.get("jobId") || undefined,
+    initialSection:
+      entityType && entityType !== "GENERAL"
+        ? entityType
+        : ("JOB" as WorkflowType),
+  };
+}
+
 export default function TasksPage() {
   const { t } = useTranslation();
   const [params] = useSearchParams();
-  const jobId = params.get("jobId") || undefined;
-  const contextType = params.get("entityType") as WorkflowType | null;
-  const entityType = WORKFLOW_TYPES.includes(contextType as WorkflowType)
-    ? (contextType ?? undefined)
-    : undefined;
-  const entityId = params.get("entityId") || undefined;
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const { jobId, entityType, entityId, initialSection } = taskContext(params);
+  const [tasks, setTasks] = useState<TaskRecord[]>([]);
   const [rules, setRules] = useState<Rule[]>([]);
   const [workflowStates, setWorkflowStates] = useState<
     { id: string; name: string; entityType: WorkflowType }[]
@@ -64,6 +70,8 @@ export default function TasksPage() {
   const [completed, setCompleted] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [ruleSection, setRuleSection] = useState<WorkflowType>(initialSection);
+  const [editingRule, setEditingRule] = useState("");
   const [mode, setMode] = useState<"task" | "rule">("task");
   const canRules = useCan({ settings: ["edit"] });
   const { technicians } = useTechnicians();
@@ -77,7 +85,7 @@ export default function TasksPage() {
     dueAt: "",
     nextTitle: "",
     nextDelayHours: "0",
-    triggerStatus: "WAITING_FOR_PARTS",
+    triggerStatus: initialSection === "JOB" ? "WAITING_FOR_PARTS" : "",
     delayHours: "0",
   });
   const set = (patch: Partial<typeof form>) =>
@@ -120,11 +128,18 @@ export default function TasksPage() {
     };
     try {
       if (mode === "rule") {
-        await api.post("/tasks/rules", {
+        const data = {
+          entityType: ruleSection,
           ...common,
           ...ruleTrigger(form.triggerStatus),
           delayHours: Number(form.delayHours),
-        });
+        };
+        if (editingRule) {
+          await api.patch(`/tasks/rules/${editingRule}`, data);
+        } else {
+          await api.post("/tasks/rules", data);
+        }
+        setEditingRule("");
       } else {
         await api.post("/tasks", {
           ...common,
@@ -175,6 +190,7 @@ export default function TasksPage() {
         {t("tasks.title")}
         {entityType && ` · ${t(`workflow.types.${entityType}`)}`}
       </h1>
+      <WorkflowStatesManager onChanged={load} />
       <Can perm={WORKFLOW_PERMISSIONS[entityType ?? "GENERAL"].edit}>
         <form
           className="space-y-4 rounded-xl bg-surface-container-low p-5"
@@ -183,7 +199,10 @@ export default function TasksPage() {
           {canRules && (
             <Field label={t("tasks.mode")}>
               <Select
-                onChange={(e) => setMode(e.target.value as "task" | "rule")}
+                onChange={(e) => {
+                  setMode(e.target.value as "task" | "rule");
+                  setEditingRule("");
+                }}
                 value={mode}
               >
                 <option value="task">{t("tasks.new")}</option>
@@ -209,21 +228,50 @@ export default function TasksPage() {
               </Field>
             )}
             {mode === "rule" && (
+              <Field label={t("tasks.section")}>
+                <Select
+                  onChange={(event) => {
+                    const section = event.target.value as WorkflowType;
+                    setRuleSection(section);
+                    set({
+                      triggerStatus:
+                        section === "JOB" ? "WAITING_FOR_PARTS" : "",
+                    });
+                  }}
+                  value={ruleSection}
+                >
+                  {WORKFLOW_TYPES.filter((type) => type !== "GENERAL").map(
+                    (type) => (
+                      <option key={type} value={type}>
+                        {t(`workflow.types.${type}`)}
+                      </option>
+                    )
+                  )}
+                </Select>
+              </Field>
+            )}
+            {mode === "rule" && (
               <Field label={t("tasks.trigger")}>
                 <Select
                   onChange={(e) => set({ triggerStatus: e.target.value })}
+                  required
                   value={form.triggerStatus}
                 >
-                  {workflowStates.map((state) => (
-                    <option key={state.id} value={`WORKFLOW:${state.id}`}>
-                      {t(`workflow.types.${state.entityType}`)} · {state.name}
-                    </option>
-                  ))}
-                  {Object.values(JobStatus).map((status) => (
-                    <option key={status} value={status}>
-                      {t(`status.${status}`)}
-                    </option>
-                  ))}
+                  <option value="">{t("tasks.select_state")}</option>
+                  {workflowStates
+                    .filter((state) => state.entityType === ruleSection)
+                    .map((state) => (
+                      <option key={state.id} value={`WORKFLOW:${state.id}`}>
+                        {t(`workflow.types.${state.entityType}`)} · {state.name}
+                      </option>
+                    ))}
+                  {(ruleSection === "JOB" ? Object.values(JobStatus) : []).map(
+                    (status) => (
+                      <option key={status} value={status}>
+                        {t(`status.${status}`)}
+                      </option>
+                    )
+                  )}
                 </Select>
               </Field>
             )}
@@ -304,10 +352,27 @@ export default function TasksPage() {
               value={form.notes}
             />
           </Field>
+          {mode === "rule" &&
+            ruleSection !== "JOB" &&
+            !workflowStates.some(
+              (state) => state.entityType === ruleSection
+            ) && <p role="status">{t("tasks.no_states")}</p>}
           {mode === "rule" && <p className="text-sm">{t("tasks.rule_hint")}</p>}
+          {editingRule && <p>{t("tasks.edit_rule")}</p>}
           <Button loading={busy} type="submit">
             {t("save")}
           </Button>
+          {editingRule && (
+            <Button
+              disabled={busy}
+              onClick={() => {
+                setEditingRule("");
+                set({ title: "", notes: "", nextTitle: "", assigneeId: "" });
+              }}
+            >
+              {t("cancel")}
+            </Button>
+          )}
         </form>
       </Can>
       <label className="flex gap-2">
@@ -318,50 +383,12 @@ export default function TasksPage() {
         />
         {t("tasks.show_completed")}
       </label>
-      {tasks.map((task) => (
-        <article
-          className="space-y-2 rounded-xl bg-surface-container-low p-4"
-          key={task.id}
-        >
-          <h2 className="font-bold">
-            {task.title} · {t(`tasks.${task.priority}`)}
-          </h2>
-          <p>{t(`workflow.types.${task.entityType ?? "GENERAL"}`)}</p>
-          {task.job && (
-            <Link
-              className="text-primary underline"
-              to={`/jobs/${task.job.id}`}
-            >
-              {task.job.jobCode}
-            </Link>
-          )}
-          <p>
-            {task.assignee?.name ||
-              task.assignee?.username ||
-              t("tasks.unassigned")}
-          </p>
-          <p>
-            {t("tasks.scheduled")}:{" "}
-            {new Date(task.scheduledAt).toLocaleString()}
-          </p>
-          {task.dueAt && (
-            <p>
-              {t("tasks.due")}: {new Date(task.dueAt).toLocaleString()}
-            </p>
-          )}
-          {task.notes && <p className="whitespace-pre-wrap">{task.notes}</p>}
-          {task.nextTitle && (
-            <p>
-              {t("tasks.next")}: {task.nextTitle}
-            </p>
-          )}
-          {!task.completedAt && task.canComplete && (
-            <Button disabled={busy} onClick={() => complete(task.id)}>
-              {t("tasks.complete")}
-            </Button>
-          )}
-        </article>
-      ))}
+      <TaskTable
+        busy={busy}
+        onChanged={load}
+        onComplete={complete}
+        tasks={tasks}
+      />
       {nextCursor && (
         <Button
           onClick={async () => {
@@ -401,6 +428,28 @@ export default function TasksPage() {
                     ? `${t(`workflow.types.${rule.workflowState.entityType}`)} · ${rule.workflowState.name}`
                     : t(`status.${rule.triggerStatus}`)}
                 </span>
+                <Button
+                  onClick={() => {
+                    setMode("rule");
+                    setEditingRule(rule.id);
+                    setRuleSection(rule.workflowState?.entityType ?? "JOB");
+                    set({
+                      title: rule.title,
+                      notes: rule.notes ?? "",
+                      priority: rule.priority,
+                      assigneeId: rule.assigneeId ?? "",
+                      nextTitle: rule.nextTitle ?? "",
+                      nextDelayHours: String(rule.nextDelayHours),
+                      delayHours: String(rule.delayHours),
+                      triggerStatus: rule.workflowStateId
+                        ? `WORKFLOW:${rule.workflowStateId}`
+                        : (rule.triggerStatus ?? ""),
+                    });
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                >
+                  {t("edit")}
+                </Button>
                 <Button onClick={() => disableRule(rule.id)}>
                   {t("tasks.disable")}
                 </Button>

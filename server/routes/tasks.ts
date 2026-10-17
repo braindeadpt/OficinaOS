@@ -8,6 +8,7 @@ import {
   createTaskRuleSchema,
   createTaskSchema,
   taskListSchema,
+  updateTaskSchema,
 } from "@shared/schemas/task.schema";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { requirePermission } from "../middlewares/rbac.js";
@@ -15,6 +16,8 @@ import {
   completeTask,
   createRule,
   createTask,
+  updateRule,
+  updateTask,
 } from "../services/tasks.service.js";
 import { authorizeWorkflow } from "../services/workflow.service.js";
 import { getRole, getUserId } from "../utils/request.js";
@@ -110,6 +113,8 @@ export const tasksRoutes: FastifyPluginAsync = (app) => {
     return {
       data: data.map((task) => ({
         ...task,
+        canEdit:
+          !task.completedAt && scope.editableTypes.includes(task.entityType),
         canComplete:
           scope.editableTypes.includes(task.entityType) ||
           task.assigneeId === getUserId(req),
@@ -139,6 +144,36 @@ export const tasksRoutes: FastifyPluginAsync = (app) => {
       data: await createTask(app.prisma, parsed.data, getUserId(req)),
     });
   });
+  app.patch("/:id", async (req) => {
+    const { id } = req.params as { id: string };
+    const parsed = updateTaskSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new AppError("VALIDATION_ERROR");
+    }
+    const task = await app.prisma.workshopTask.findUnique({ where: { id } });
+    if (!task) {
+      throw new AppError("NOT_FOUND");
+    }
+    await authorizeWorkflow(
+      req,
+      task.entityType as WorkflowType,
+      "edit",
+      task.entityId ?? undefined
+    );
+    return { data: await updateTask(app.prisma, id, parsed.data) };
+  });
+  app.patch(
+    "/rules/:id",
+    { preHandler: requirePermission({ settings: ["edit"] }) },
+    async (req) => {
+      const { id } = req.params as { id: string };
+      const parsed = createTaskRuleSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new AppError("VALIDATION_ERROR");
+      }
+      return { data: await updateRule(app.prisma, id, parsed.data) };
+    }
+  );
   app.post("/:id/complete", {}, async (req) => {
     const { id } = req.params as { id: string };
     const task = await app.prisma.workshopTask.findUnique({ where: { id } });

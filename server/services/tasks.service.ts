@@ -3,9 +3,13 @@ import { AppError } from "@shared/errors/app-error.js";
 import type {
   CreateTaskInput,
   CreateTaskRuleInput,
+  UpdateTaskInput,
 } from "@shared/schemas/task.schema";
 
-async function validateAssignee(prisma: PrismaClient, id?: string) {
+async function validateAssignee(
+  prisma: Pick<PrismaClient, "user">,
+  id?: string | null
+) {
   if (!id) {
     return;
   }
@@ -54,18 +58,21 @@ export function completeTask(prisma: PrismaClient, id: string) {
       where: { id, completedAt: null },
       data: { completedAt: new Date() },
     });
-    if (result.count && task.nextTitle) {
+    const saved = result.count
+      ? await tx.workshopTask.findUnique({ where: { id } })
+      : null;
+    if (saved?.nextTitle) {
       await tx.workshopTask.create({
         data: {
-          title: task.nextTitle,
-          jobId: task.jobId,
-          entityType: task.entityType,
-          entityId: task.entityId,
-          assigneeId: task.assigneeId,
-          priority: task.priority,
-          createdById: task.createdById,
-          predecessorId: task.id,
-          scheduledAt: new Date(Date.now() + task.nextDelayHours * 3_600_000),
+          title: saved.nextTitle,
+          jobId: saved.jobId,
+          entityType: saved.entityType,
+          entityId: saved.entityId,
+          assigneeId: saved.assigneeId,
+          priority: saved.priority,
+          createdById: saved.createdById,
+          predecessorId: saved.id,
+          scheduledAt: new Date(Date.now() + saved.nextDelayHours * 3_600_000),
         },
       });
     }
@@ -78,16 +85,81 @@ export async function createRule(
   input: CreateTaskRuleInput,
   userId: string
 ) {
+  const data = await ruleData(prisma, input);
+  return prisma.taskRule.create({ data: { ...data, createdById: userId } });
+}
+
+async function ruleData(prisma: PrismaClient, input: CreateTaskRuleInput) {
+  const { entityType, ...data } = input;
   await validateAssignee(prisma, input.assigneeId);
   if (input.workflowStateId) {
     const state = await prisma.workflowState.findFirst({
       where: { id: input.workflowStateId, isActive: true },
     });
-    if (!state) {
+    if (!state || (entityType && state.entityType !== entityType)) {
       throw new AppError("VALIDATION_ERROR");
     }
+  } else if (entityType && entityType !== "JOB") {
+    throw new AppError("VALIDATION_ERROR");
   }
-  return prisma.taskRule.create({ data: { ...input, createdById: userId } });
+  return {
+    ...data,
+    triggerStatus: data.triggerStatus ?? null,
+    workflowStateId: data.workflowStateId ?? null,
+  };
+}
+
+export async function updateRule(
+  prisma: PrismaClient,
+  id: string,
+  input: CreateTaskRuleInput
+) {
+  const data = await ruleData(prisma, input);
+  return prisma.taskRule.update({
+    where: { id },
+    data: {
+      ...data,
+      notes: input.notes ?? null,
+      assigneeId: input.assigneeId ?? null,
+      nextTitle: input.nextTitle ?? null,
+    },
+  });
+}
+
+export function updateTask(
+  prisma: PrismaClient,
+  id: string,
+  input: UpdateTaskInput
+) {
+  return prisma.$transaction(async (tx) => {
+    const task = await tx.workshopTask.findUnique({ where: { id } });
+    if (!task) {
+      throw new AppError("NOT_FOUND");
+    }
+    if (task.completedAt) {
+      throw new AppError("VALIDATION_ERROR");
+    }
+    await validateAssignee(tx, input.assigneeId);
+    const scheduledAt = input.scheduledAt
+      ? new Date(input.scheduledAt)
+      : task.scheduledAt;
+    let dueAt = task.dueAt;
+    if (input.dueAt !== undefined) {
+      dueAt = input.dueAt ? new Date(input.dueAt) : null;
+    }
+    if (dueAt && dueAt < scheduledAt) {
+      throw new AppError("VALIDATION_ERROR");
+    }
+    const { dueAt: _due, scheduledAt: _scheduled, ...data } = input;
+    const result = await tx.workshopTask.updateMany({
+      where: { id, completedAt: null },
+      data: { ...data, scheduledAt, dueAt: dueAt || null },
+    });
+    if (!result.count) {
+      throw new AppError("VALIDATION_ERROR");
+    }
+    return tx.workshopTask.findUnique({ where: { id } });
+  });
 }
 
 /** Reconcile persisted rules after restart; the unique key prevents duplicates. */

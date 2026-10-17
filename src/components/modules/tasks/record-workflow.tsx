@@ -2,15 +2,14 @@ import {
   WORKFLOW_PERMISSIONS,
   type WorkflowType,
 } from "@shared/constants/workflow";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { useCan } from "@/hooks/use-can";
 import api from "@/lib/api";
 import { TaskPanel } from "./task-panel";
+import { WorkflowStatesManager } from "./workflow-states-manager";
 
 interface State {
   id: string;
@@ -66,11 +65,8 @@ function WorkflowStateControl({
 }) {
   const { t } = useTranslation();
   const edit = useCan(WORKFLOW_PERMISSIONS[entityType].edit);
-  const admin = useCan({ settings: ["edit"] });
   const [states, setStates] = useState<State[]>([]);
   const [stateId, setStateId] = useState("");
-  const [name, setName] = useState("");
-  const [editing, setEditing] = useState("");
   const [busy, setBusy] = useState(false);
   const load = useCallback(async () => {
     try {
@@ -85,25 +81,9 @@ function WorkflowStateControl({
   }, [entityType, entityId, t]);
   useEffect(() => {
     load();
+    window.addEventListener("workflow-states-changed", load);
+    return () => window.removeEventListener("workflow-states-changed", load);
   }, [load]);
-  const save = async (event: FormEvent) => {
-    event.preventDefault();
-    setBusy(true);
-    try {
-      if (editing) {
-        await api.patch(`/workflow/states/${editing}`, { name });
-      } else {
-        await api.post("/workflow/states", { entityType, name });
-      }
-      setName("");
-      setEditing("");
-      await load();
-    } catch {
-      toast.error(t("tasks.failed"));
-    } finally {
-      setBusy(false);
-    }
-  };
   return (
     <div className="mt-3 space-y-3">
       <p className="text-sm">{t("workflow.status_hint")}</p>
@@ -137,68 +117,7 @@ function WorkflowStateControl({
             </option>
           ))}
       </Select>
-      {admin && (
-        <details>
-          <summary className="cursor-pointer">
-            {t("workflow.manage_states")}
-          </summary>
-          <form className="my-3 flex flex-wrap gap-2" onSubmit={save}>
-            <Input
-              aria-label={t("workflow.state_name")}
-              maxLength={100}
-              onChange={(e) => setName(e.target.value)}
-              required
-              value={name}
-            />
-            <Button loading={busy} type="submit">
-              {t("save")}
-            </Button>
-            {editing && (
-              <Button
-                onClick={() => {
-                  setEditing("");
-                  setName("");
-                }}
-              >
-                {t("cancel")}
-              </Button>
-            )}
-          </form>
-          {states.map((state) => (
-            <div className="my-2 flex items-center gap-3" key={state.id}>
-              <span>{state.name}</span>
-              <Button
-                onClick={() => {
-                  setEditing(state.id);
-                  setName(state.name);
-                }}
-              >
-                {t("edit")}
-              </Button>
-              <Button
-                disabled={busy}
-                onClick={async () => {
-                  setBusy(true);
-                  try {
-                    await api.patch(`/workflow/states/${state.id}`, {
-                      isActive: !state.isActive,
-                    });
-                    await load();
-                  } catch {
-                    toast.error(t("tasks.failed"));
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              >
-                {t(
-                  state.isActive ? "workflow.deactivate" : "workflow.activate"
-                )}
-              </Button>
-            </div>
-          ))}
-        </details>
-      )}
+      <WorkflowStatesManager entityType={entityType} />
     </div>
   );
 }

@@ -2428,7 +2428,19 @@
     "rules": "Regras automáticas",
     "disable": "Desativar",
     "failed": "Não foi possível guardar ou carregar as tarefas.",
-    "task_title": "Tarefa"
+    "task_title": "Tarefa",
+    "edit_task": "Editar tarefa",
+    "section": "Secção",
+    "state": "Estado",
+    "actions": "Ações",
+    "completed": "Concluída",
+    "pending": "Pendente",
+    "add_state": "Adicionar estado",
+    "no_states": "Ainda não existem estados nesta secção. Adicione um em Gerir estados.",
+    "active": "Ativo",
+    "inactive": "Inativo",
+    "select_state": "Escolher um estado",
+    "edit_rule": "Editar regra automática"
   },
   "photos": {
     "phase": "Fase da fotografia",

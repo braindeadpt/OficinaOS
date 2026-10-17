@@ -1,10 +1,23 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TaskPanel } from "../task-panel";
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  get: vi.fn(),
+  post: vi.fn(),
+  patch: vi.fn(),
+}));
+vi.mock("@/hooks/use-technicians", () => ({
+  useTechnicians: () => ({ technicians: [] }),
+}));
 vi.mock("@/lib/api", () => ({ default: mocks }));
 vi.mock("@/hooks/use-can", () => ({ useCan: () => true }));
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: translate }) }));
@@ -70,6 +83,38 @@ describe("embedded repair tasks", () => {
         entityType: "JOB",
         entityId: "j1",
       })
+    );
+  });
+
+  it("edits a task from its table row", async () => {
+    mocks.patch.mockResolvedValue({});
+    render(
+      <MemoryRouter>
+        <TaskPanel entityId="j1" entityType="JOB" />
+      </MemoryRouter>
+    );
+    await screen.findByText("Order screen");
+    expect(
+      screen.getByRole("table", { name: "tasks.title" })
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "edit" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "tasks.edit_task",
+    });
+    fireEvent.change(
+      within(dialog).getByRole("textbox", { name: "tasks.name" }),
+      { target: { value: "Await delivery" } }
+    );
+    fireEvent.click(within(dialog).getByRole("button", { name: "save" }));
+    await waitFor(() =>
+      expect(mocks.patch).toHaveBeenCalledWith(
+        "/tasks/t1",
+        expect.objectContaining({
+          title: "Await delivery",
+          dueAt: null,
+          assigneeId: null,
+        })
+      )
     );
   });
 });

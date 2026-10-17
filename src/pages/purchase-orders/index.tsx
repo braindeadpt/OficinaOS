@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { RecordWorkflow } from "@/components/modules/tasks/record-workflow";
+import { WorkflowStatesManager } from "@/components/modules/tasks/workflow-states-manager";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -73,6 +74,7 @@ export default function PurchaseOrdersPage() {
   };
   return (
     <div className="space-y-5">
+      <WorkflowStatesManager entityType="ORDER" />
       <h1 className="font-bold text-2xl">{t("workflow.orders")}</h1>
       {edit && (
         <form

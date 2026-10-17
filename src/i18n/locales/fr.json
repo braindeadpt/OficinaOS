@@ -2428,7 +2428,19 @@
     "rules": "Règles automatiques",
     "disable": "Désactiver",
     "failed": "Impossible de charger ou enregistrer les tâches.",
-    "task_title": "Tâche"
+    "task_title": "Tâche",
+    "edit_task": "Modifier la tâche",
+    "section": "Section",
+    "state": "Statut",
+    "actions": "Actions",
+    "completed": "Terminée",
+    "pending": "En attente",
+    "add_state": "Ajouter un statut",
+    "no_states": "Aucun statut dans cette section. Ajoutez-en un dans Gérer les statuts.",
+    "active": "Actif",
+    "inactive": "Inactif",
+    "select_state": "Choisir un statut",
+    "edit_rule": "Modifier la règle automatique"
   },
   "photos": {
     "phase": "Étape de la photo",

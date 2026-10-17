@@ -261,3 +261,24 @@ it("writes the tracking status and automatic task in one transaction", async () 
   );
   await app.close();
 });
+
+it("does not let an assignee without module editing permission edit task details", async () => {
+  const { app } = buildApp({ manageCatalog: false });
+  const result = await app.inject({
+    method: "PATCH",
+    url: "/tasks/t1",
+    payload: { title: "Changed" },
+  });
+  expect(result.statusCode).toBe(403);
+  await app.close();
+});
+it("rejects attempts to move an existing task through its edit endpoint", async () => {
+  const { app } = buildApp();
+  const result = await app.inject({
+    method: "PATCH",
+    url: "/tasks/t1",
+    payload: { entityType: "JOB", entityId: "j1" },
+  });
+  expect(result.statusCode).toBe(400);
+  await app.close();
+});

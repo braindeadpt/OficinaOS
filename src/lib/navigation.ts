@@ -24,6 +24,12 @@ export const NAV_ITEMS: NavItem[] = [
   },
   { icon: "build", labelKey: "jobs", to: "/jobs", perm: { jobs: ["view"] } },
   {
+    icon: "shopping_cart",
+    labelKey: "workflow.orders",
+    to: "/purchase-orders",
+    perm: { parts: ["viewCatalog"] },
+  },
+  {
     icon: "task_alt",
     labelKey: "tasks.title",
     to: "/tasks",
@@ -57,12 +63,6 @@ export const NAV_ITEMS: NavItem[] = [
     icon: "local_shipping",
     labelKey: "suppliers.nav_label",
     to: "/suppliers",
-    perm: { parts: ["viewCatalog"] },
-  },
-  {
-    icon: "shopping_cart",
-    labelKey: "workflow.orders",
-    to: "/purchase-orders",
     perm: { parts: ["viewCatalog"] },
   },
   {

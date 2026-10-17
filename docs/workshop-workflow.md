@@ -30,7 +30,11 @@ Em **Tarefas**, criar uma regra para **Aguardar peças** com título **Encomenda
 
 A tarefa seguinte fica agendada para o momento da conclusão mais o atraso. Não é uma confirmação de encomenda ou de chegada real: essas ações são confirmadas pela equipa. A regra não altera o estado da reparação.
 
-Esta primeira versão permite definir uma tarefa seguinte por tarefa criada. Não contém ainda um editor de cadeias arbitrárias, edição de tarefas existentes ou sincronização com calendários externos.
+É possível editar tarefas pendentes na tabela: título, responsável, prioridade, notas, datas e configuração da tarefa seguinte. A associação ao registo permanece fixa. Tarefas concluídas não podem ser alteradas; a gravação verifica também se ocorreu uma conclusão concorrente.
+
+As regras automáticas podem ser editadas. O formulário obriga a escolher a secção e apresenta apenas estados dessa secção; os estados operacionais de reparação aparecem apenas em Reparações. Alterar uma regra aplica-se às futuras gerações e não reescreve tarefas já criadas. Cada regra continua a gerar uma tarefa por registo.
+
+Esta versão permite definir uma tarefa seguinte por tarefa criada. Não contém ainda um editor de cadeias arbitrárias ou sincronização com calendários externos.
 
 ## Instalação e validação
 
@@ -63,3 +67,10 @@ Na pasta de testes, efetuar backup antes de atualizar. Depois de obter esta bran
 Para configurar um estado e uma regra: abrir um registo, expandir a secção de tarefas, criar o estado como administrador e, na página **Tarefas**, criar uma regra escolhendo esse módulo/estado na lista de gatilhos. As regras e notas continuam internas, sem exposição no portal público do cliente.
 
 Documentação dos fornecedores: [Gemini/OpenAI](https://ai.google.dev/gemini-api/docs/openai), [quotas e preços Gemini](https://ai.google.dev/gemini-api/docs/pricing), [Mistral/OpenAI](https://docs.mistral.ai/resources/migration-guides).
+
+
+## Tabelas e gestão dos estados
+
+As tarefas aparecem em tabela no painel, nas fichas e na página de Tarefas, com secção/referência, responsável, prioridade, datas, estado e ações. **Encomendas** ocupa a terceira posição no menu, depois de Painel e Reparações, para utilizadores com acesso ao catálogo.
+
+A gestão de estados está disponível no topo das secções de Reparações, RMAs, Pedidos, Devoluções, Encomendas, Retomas, Fornecedores e Clientes, mesmo quando ainda não existem registos. A página Tarefas permite gerir os estados de todas essas secções. Os estados operacionais nativos mantêm-se; os estados configuráveis são de acompanhamento.

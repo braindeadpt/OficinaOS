@@ -2428,7 +2428,19 @@
     "rules": "Automatic rules",
     "disable": "Disable",
     "failed": "Could not save or load tasks.",
-    "task_title": "Task"
+    "task_title": "Task",
+    "edit_task": "Edit task",
+    "section": "Section",
+    "state": "Status",
+    "actions": "Actions",
+    "completed": "Completed",
+    "pending": "Pending",
+    "add_state": "Add status",
+    "no_states": "No statuses in this section yet. Add one using Manage statuses.",
+    "active": "Active",
+    "inactive": "Inactive",
+    "select_state": "Choose a status",
+    "edit_rule": "Edit automatic rule"
   },
   "photos": {
     "phase": "Photo phase",

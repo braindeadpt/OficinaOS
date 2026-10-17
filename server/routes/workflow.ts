@@ -34,12 +34,24 @@ export const workflowRoutes: FastifyPluginAsync = (app) => {
   app.get(
     "/states",
     { preHandler: requirePermission({ settings: ["edit"] }) },
-    async () => ({
-      data: await app.prisma.workflowState.findMany({
-        where: { isActive: true },
-        orderBy: [{ entityType: "asc" }, { name: "asc" }],
-      }),
-    })
+    async (req) => {
+      const query = parseInput(
+        z.object({
+          entityType: z.enum(WORKFLOW_TYPES).optional(),
+          includeInactive: z.enum(["true", "false"]).optional(),
+        }),
+        req.query
+      );
+      return {
+        data: await app.prisma.workflowState.findMany({
+          where: {
+            entityType: query.entityType,
+            ...(query.includeInactive === "true" ? {} : { isActive: true }),
+          },
+          orderBy: [{ entityType: "asc" }, { name: "asc" }],
+        }),
+      };
+    }
   );
   app.post(
     "/states",
