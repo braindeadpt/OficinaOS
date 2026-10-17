@@ -42,8 +42,12 @@ export function TaskPanel({
   }, [entityType, entityId]);
   useEffect(() => {
     load();
+    window.addEventListener("business-record-changed", load);
     const timer = setInterval(load, 30_000);
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("business-record-changed", load);
+    };
   }, [load]);
   const save = async (event: FormEvent) => {
     event.preventDefault();

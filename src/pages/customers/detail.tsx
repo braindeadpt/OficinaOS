@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router";
 import { RecordWorkflow } from "@/components/modules/tasks/record-workflow";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { BusinessHistory } from "@/pages/business/history";
 import { useCustomersStore } from "@/stores/customers";
 
 export default function CustomerDetailPage() {
@@ -92,6 +93,7 @@ export default function CustomerDetailPage() {
         </Link>
       </div>
 
+      <BusinessHistory entityId={currentCustomer.id} entityType="CUSTOMER" />
       <RecordWorkflow
         entityId={currentCustomer.id}
         entityType="CUSTOMER"

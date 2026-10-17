@@ -27,6 +27,7 @@ import { Icon } from "@/components/ui/icon";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import { printJobReceipt } from "@/lib/print";
+import { BusinessHistory } from "@/pages/business/history";
 import { useJobsStore } from "@/stores/jobs";
 import { useSettingsStore } from "@/stores/settings";
 import { useUiStore } from "@/stores/ui";
@@ -498,6 +499,7 @@ export default function JobDetailPage() {
         </div>
       </div>
 
+      <BusinessHistory entityId={job.id} entityType="JOB" />
       <RecordWorkflow entityId={job.id} entityType="JOB" expanded />
       {/* ── Quotes ── */}
       <div className="mt-8 rounded-2xl bg-surface-container p-6">

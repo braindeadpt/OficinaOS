@@ -2,6 +2,9 @@ import type { PermissionCheck } from "@shared/permissions";
 
 export const WORKFLOW_TYPES = [
   "GENERAL",
+  "TICKET",
+  "MESSAGE",
+  "AGREEMENT",
   "JOB",
   "RMA",
   "REQUEST",
@@ -16,6 +19,9 @@ export const WORKFLOW_PERMISSIONS: Record<
   WorkflowType,
   { view: PermissionCheck; edit: PermissionCheck }
 > = {
+  TICKET: { view: { jobs: ["view"] }, edit: { jobs: ["edit"] } },
+  MESSAGE: { view: { settings: ["edit"] }, edit: { settings: ["edit"] } },
+  AGREEMENT: { view: { settings: ["edit"] }, edit: { settings: ["edit"] } },
   GENERAL: { view: { jobs: ["view"] }, edit: { jobs: ["edit"] } },
   JOB: { view: { jobs: ["view"] }, edit: { jobs: ["edit"] } },
   REQUEST: { view: { jobs: ["view"] }, edit: { jobs: ["edit"] } },

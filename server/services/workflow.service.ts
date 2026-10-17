@@ -24,6 +24,12 @@ export async function findWorkflowRecord(
   const where = { id };
   const record = await (() => {
     switch (type) {
+      case "TICKET":
+        return prisma.supportTicket.findUnique({ where });
+      case "MESSAGE":
+        return prisma.businessMessage.findUnique({ where });
+      case "AGREEMENT":
+        return prisma.commercialAgreement.findUnique({ where });
       case "JOB":
         return prisma.job.findUnique({ where });
       case "RMA":

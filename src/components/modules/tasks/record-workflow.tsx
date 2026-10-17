@@ -39,11 +39,13 @@ export function RecordWorkflow({
       </summary>
       {open && (
         <>
-          <WorkflowStateControl
-            entityId={entityId}
-            entityType={entityType}
-            onChanged={() => setRevision((value) => value + 1)}
-          />
+          {entityType !== "JOB" && (
+            <WorkflowStateControl
+              entityId={entityId}
+              entityType={entityType}
+              onChanged={() => setRevision((value) => value + 1)}
+            />
+          )}
           <TaskPanel
             entityId={entityId}
             entityType={entityType}
@@ -54,7 +56,7 @@ export function RecordWorkflow({
     </details>
   );
 }
-function WorkflowStateControl({
+export function WorkflowStateControl({
   entityType,
   entityId,
   onChanged,

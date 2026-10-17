@@ -1,5 +1,7 @@
 # Fluxo de tarefas e RMAs
 
+A extensão de tickets, mensagens, identidades partilhadas e gestão comercial está descrita em [business-support.md](business-support.md).
+
 ## Implementado nesta branch
 
 - Tarefas no painel do proprietário, técnico e balcão, e integradas nas fichas de reparações.
@@ -73,4 +75,4 @@ Documentação dos fornecedores: [Gemini/OpenAI](https://ai.google.dev/gemini-ap
 
 As tarefas aparecem em tabela no painel, nas fichas e na página de Tarefas, com secção/referência, responsável, prioridade, datas, estado e ações. **Encomendas** ocupa a terceira posição no menu, depois de Painel e Reparações, para utilizadores com acesso ao catálogo.
 
-A gestão de estados está disponível no topo das secções de Reparações, RMAs, Pedidos, Devoluções, Encomendas, Retomas, Fornecedores e Clientes, mesmo quando ainda não existem registos. A página Tarefas permite gerir os estados de todas essas secções. Os estados operacionais nativos mantêm-se; os estados configuráveis são de acompanhamento.
+A gestão de estados passa para junto do seletor de estado na ficha da reparação e para a secção de tarefas/estado de cada registo nos outros módulos. Os blocos no topo das listas foram removidos. A página Tarefas permite gerir os estados de todas essas secções. Os estados operacionais nativos mantêm-se; os estados configuráveis são de acompanhamento.

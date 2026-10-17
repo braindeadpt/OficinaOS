@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { useCan } from "@/hooks/use-can";
+import { businessRecordPath } from "@/lib/business-links";
 import { TaskEditor } from "./task-editor";
 export interface TaskRecord {
   assignee: { name: string; username: string } | null;
@@ -133,6 +134,16 @@ function TaskTableRow({
       </td>
       <td className="px-4 py-3">
         {t(`workflow.types.${task.entityType ?? "GENERAL"}`)}
+        {!task.job &&
+          task.entityId &&
+          businessRecordPath(task.entityType, task.entityId) && (
+            <Link
+              className="block text-primary underline"
+              to={businessRecordPath(task.entityType, task.entityId) ?? ""}
+            >
+              {t("business.open_record")}
+            </Link>
+          )}
         {task.job && (
           <Link
             className="block text-primary underline"

@@ -117,7 +117,11 @@ describe("multi-module workflow permissions", () => {
     await app.close();
   });
   it("filters dashboard tasks by module permissions and return self scope", async () => {
-    const { app, prisma } = buildApp({ catalog: false, shopReturns: false });
+    const { app, prisma } = buildApp({
+      catalog: false,
+      shopReturns: false,
+      settings: false,
+    });
     const result = await app.inject({ method: "GET", url: "/tasks" });
     expect(result.statusCode).toBe(200);
     const where = prisma.workshopTask.findMany.mock.calls[0]?.[0];
@@ -125,7 +129,15 @@ describe("multi-module workflow permissions", () => {
       expect.objectContaining({
         where: expect.objectContaining({
           entityType: {
-            in: ["GENERAL", "JOB", "REQUEST", "RETURN", "TRADE_IN", "CUSTOMER"],
+            in: [
+              "GENERAL",
+              "TICKET",
+              "JOB",
+              "REQUEST",
+              "RETURN",
+              "TRADE_IN",
+              "CUSTOMER",
+            ],
           },
           OR: [
             { entityType: { not: "RETURN" } },

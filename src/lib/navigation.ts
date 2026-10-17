@@ -30,6 +30,24 @@ export const NAV_ITEMS: NavItem[] = [
     perm: { parts: ["viewCatalog"] },
   },
   {
+    icon: "confirmation_number",
+    labelKey: "business.tickets",
+    to: "/tickets",
+    perm: { jobs: ["view"] },
+  },
+  {
+    icon: "forum",
+    labelKey: "business.messages",
+    to: "/messages",
+    perm: { settings: ["edit"] },
+  },
+  {
+    icon: "handshake",
+    labelKey: "business.agreements",
+    to: "/agreements",
+    perm: { settings: ["edit"] },
+  },
+  {
     icon: "task_alt",
     labelKey: "tasks.title",
     to: "/tasks",
