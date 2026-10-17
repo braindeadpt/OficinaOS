@@ -14,6 +14,10 @@ const repairCategoryValues = Object.values(RepairCategory) as [
 ];
 const jobStatusValues = Object.values(JobStatus) as [string, ...string[]];
 
+export const photoStageQuerySchema = z.object({
+  stage: z.enum(["INTAKE", "REPAIR", "FINAL"]).optional(),
+});
+
 export const intakeRepairItemSchema = z.object({
   repairId: z.string().max(64).optional(),
   repairName: z.string().min(1).max(120),

@@ -51,16 +51,18 @@ export async function updateSupplier(
 
 export function listRmas(
   prisma: PrismaClient,
-  opts: { supplierId?: string; status?: string }
+  opts: { supplierId?: string; status?: string; jobId?: string }
 ) {
   return prisma.supplierRma.findMany({
     where: {
       ...(opts.supplierId ? { supplierId: opts.supplierId } : {}),
+      ...(opts.jobId ? { jobId: opts.jobId } : {}),
       ...(opts.status ? { status: opts.status as never } : {}),
     },
     orderBy: { createdAt: "desc" },
     include: {
       supplier: { select: { id: true, name: true } },
+      job: { select: { id: true, jobCode: true } },
       part: { select: { id: true, name: true } },
       createdBy: { select: { id: true, name: true, username: true } },
     },
@@ -79,6 +81,13 @@ export async function createRma(
   if (!supplier) {
     throw new AppError("NOT_FOUND");
   }
+  const { jobCode, ...rmaInput } = input;
+  const job = jobCode
+    ? await prisma.job.findUnique({ where: { jobCode } })
+    : null;
+  if (jobCode && !job) {
+    throw new AppError("JOB_NOT_FOUND");
+  }
   if (input.partId) {
     const part = await prisma.partsCatalog.findUnique({
       where: { id: input.partId },
@@ -88,7 +97,7 @@ export async function createRma(
     }
   }
   return prisma.supplierRma.create({
-    data: { ...input, createdById: userId },
+    data: { ...rmaInput, jobId: job?.id, createdById: userId },
     include: {
       supplier: { select: { id: true, name: true } },
       part: { select: { id: true, name: true } },

@@ -117,6 +117,46 @@ describe("suppliers routes", () => {
 });
 
 describe("supplier RMAs", () => {
+  it("links an RMA to the repair selected by its reference", async () => {
+    const create = vi.fn(async (args) => ({ id: "r1", ...args.data }));
+    const prisma = {
+      supplier: { findUnique: vi.fn(async () => ({ id: "s1" })) },
+      job: { findUnique: vi.fn(async () => ({ id: "j1", jobCode: "REP-1" })) },
+      supplierRma: { create },
+    };
+    const app = buildApp(prisma, [
+      { plugin: supplierRmasRoutes, prefix: "/api/supplier-rmas" },
+    ]);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/supplier-rmas",
+      payload: { supplierId: "s1", jobCode: "REP-1", description: "Screen" },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(create.mock.calls[0][0].data.jobId).toBe("j1");
+    expect(create.mock.calls[0][0].data).not.toHaveProperty("jobCode");
+    await app.close();
+  });
+
+  it("rejects an unknown repair reference instead of silently leaving it unlinked", async () => {
+    const create = vi.fn();
+    const app = buildApp(
+      {
+        supplier: { findUnique: vi.fn(async () => ({ id: "s1" })) },
+        job: { findUnique: vi.fn(async () => null) },
+        supplierRma: { create },
+      },
+      [{ plugin: supplierRmasRoutes, prefix: "/api/supplier-rmas" }]
+    );
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/supplier-rmas",
+      payload: { supplierId: "s1", jobCode: "missing", description: "Screen" },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(create).not.toHaveBeenCalled();
+    await app.close();
+  });
   it("creates an RMA for an existing supplier", async () => {
     const prisma = {
       supplier: { findUnique: vi.fn(async () => ({ id: "s1" })) },

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Icon } from "@/components/ui/icon";
+import { Select } from "@/components/ui/select";
 import api from "@/lib/api";
 
 interface JobPhotosSectionProps {
@@ -21,6 +22,7 @@ export default function JobPhotosSection({
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
+  const [stage, setStage] = useState("INTAKE");
   const photos = job.photos ?? [];
   const isTerminal = INACTIVE_STATUSES.includes(
     job.status as (typeof INACTIVE_STATUSES)[number]
@@ -37,7 +39,9 @@ export default function JobPhotosSection({
           const form = new FormData();
           form.append("file", file);
           try {
-            await api.post(`/jobs/${job.id}/photos`, form);
+            await api.post(`/jobs/${job.id}/photos`, form, {
+              params: { stage },
+            });
             uploaded++;
           } catch {
             /* individual failure counted */
@@ -50,7 +54,7 @@ export default function JobPhotosSection({
         onChanged?.();
       }
     },
-    [job.id, onChanged, t]
+    [job.id, onChanged, stage, t]
   );
 
   const photoUrl = (path: string) => `${api.defaults.baseURL}/uploads/${path}`;
@@ -80,12 +84,30 @@ export default function JobPhotosSection({
     [confirmDelete, job.id, onChanged, t]
   );
 
+  const stagePicker = !isTerminal && (
+    <label className="mb-3 block text-sm" htmlFor="job-photo-stage">
+      {t("photos.phase")}
+      <Select
+        id="job-photo-stage"
+        onChange={(e) => setStage(e.target.value)}
+        value={stage}
+      >
+        {["INTAKE", "REPAIR", "FINAL"].map((value) => (
+          <option key={value} value={value}>
+            {t(`photos.${value}`)}
+          </option>
+        ))}
+      </Select>
+    </label>
+  );
+
   if (photos.length === 0) {
     return (
       <>
         <h2 className="mb-4 font-bold font-headline text-base text-on-surface">
           {t("intake.device_photos")}
         </h2>
+        {stagePicker}
         <div className="flex flex-col items-center rounded-xl bg-surface-container-low/50 py-8">
           <Icon
             className="mb-2 text-3xl text-on-surface-variant/60"
@@ -160,6 +182,7 @@ export default function JobPhotosSection({
           </button>
         </div>
       </div>
+      {stagePicker}
       <div className="flex flex-wrap gap-3">
         {photos.map((photo) => (
           <div
@@ -180,6 +203,11 @@ export default function JobPhotosSection({
                 width={96}
               />
             </button>
+            {photo.stage && (
+              <span className="pointer-events-none absolute right-0 bottom-0 left-0 bg-surface-container px-1 text-center text-xs">
+                {t(`photos.${photo.stage}`)}
+              </span>
+            )}
             <button
               aria-label={
                 confirmDelete === photo.id

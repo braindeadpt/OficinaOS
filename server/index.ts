@@ -46,12 +46,14 @@ import { setupRoutes } from "./routes/setup.js";
 import { signatureSessionRoutes } from "./routes/signature-sessions.js";
 import { storefrontRoutes } from "./routes/storefront.js";
 import { supplierRmasRoutes, suppliersRoutes } from "./routes/suppliers.js";
+import { tasksRoutes } from "./routes/tasks.js";
 import { tradeInsRoutes } from "./routes/trade-ins.js";
 import { usersRoutes } from "./routes/users.js";
 import { startLowStockScheduler } from "./services/low-stock.service.js";
 import { cleanupReadNotifications } from "./services/notification-inapp.service.js";
 import { startOutboxWorker } from "./services/notification-outbox.service.js";
 import { startRemarketingScheduler } from "./services/remarketing.service.js";
+import { applyTaskRules } from "./services/tasks.service.js";
 import { initValidationI18n } from "./utils/resolve-validation-messages.js";
 
 const env = loadEnv();
@@ -195,6 +197,29 @@ app.register(invoicingRoutes, { prefix: "/api/invoicing" });
 app.register(feedbackRoutes, { prefix: "/api/feedback" });
 app.register(suppliersRoutes, { prefix: "/api/suppliers" });
 app.register(supplierRmasRoutes, { prefix: "/api/supplier-rmas" });
+app.register(tasksRoutes, { prefix: "/api/tasks" });
+
+let tasksRunning = false;
+const reconcileTasks = async () => {
+  if (tasksRunning) {
+    return;
+  }
+  tasksRunning = true;
+  try {
+    await applyTaskRules(app.prisma);
+  } catch (err) {
+    app.log.error({ err }, "Task automation failed; will retry");
+  } finally {
+    tasksRunning = false;
+  }
+};
+const taskTimer = setInterval(reconcileTasks, 30_000);
+taskTimer.unref();
+app.addHook("onReady", reconcileTasks);
+app.addHook("onClose", () => {
+  clearInterval(taskTimer);
+  return Promise.resolve();
+});
 app.register(referralsRoutes, { prefix: "/api" });
 app.register(dataIoRoutes, { prefix: "/api" });
 

@@ -2355,7 +2355,8 @@
     "status_received": "Reçu",
     "status_resolved": "Résolu",
     "status_cancelled": "Annulé",
-    "empty": "Aucun RMA trouvé."
+    "empty": "Aucun RMA trouvé.",
+    "job_code": "Numéro de réparation (facultatif)"
   },
   "referrals": {
     "title": "Transferts vers d'autres ateliers",
@@ -2400,5 +2401,40 @@
     "copied": "Copié",
     "copy_failed": "Impossible de copier",
     "jobs": "Réparations"
+  },
+  "tasks": {
+    "title": "Tâches",
+    "mode": "Type",
+    "new": "Nouvelle tâche",
+    "rule": "Règle automatique",
+    "name": "Titre",
+    "trigger": "Quand la réparation passe à",
+    "assignee": "Responsable",
+    "unassigned": "Non attribuée",
+    "priority": "Priorité",
+    "LOW": "Basse",
+    "NORMAL": "Normale",
+    "HIGH": "Haute",
+    "scheduled": "Planifiée pour",
+    "due": "Échéance",
+    "delay": "Délai (heures)",
+    "next": "Tâche suivante après clôture",
+    "next_delay": "Délai de la tâche suivante (heures)",
+    "notes": "Notes",
+    "rule_hint": "Appliquée sous 30 secondes, y compris aux réparations déjà dans cet état. Une exécution par règle et par réparation.",
+    "show_completed": "Afficher les tâches terminées",
+    "complete": "Terminer la tâche",
+    "more": "Charger plus",
+    "rules": "Règles automatiques",
+    "disable": "Désactiver",
+    "failed": "Impossible de charger ou enregistrer les tâches."
+  },
+  "photos": {
+    "phase": "Étape de la photo",
+    "INTAKE": "Réception",
+    "REPAIR": "Réparation",
+    "FINAL": "Finalisation",
+    "RETURN_INTAKE": "Réception du retour",
+    "RETURN_RESOLUTION": "Résolution du retour"
   }
 }

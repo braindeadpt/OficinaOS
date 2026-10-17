@@ -525,7 +525,21 @@ export default function JobDetailPage() {
 
       {/* ── Referrals — encaminhar para outra loja ── */}
       <div className="mt-8 rounded-2xl bg-surface-container p-6">
+        <Link
+          className="text-primary underline"
+          to={`/tasks?jobId=${job.id}&jobCode=${encodeURIComponent(job.jobCode)}`}
+        >
+          {t("tasks.title")}
+        </Link>
         <JobReferralsSection jobId={job.id} />
+        <Can perm={{ parts: ["viewCatalog"] }}>
+          <Link
+            className="text-primary underline"
+            to={`/rmas?jobId=${job.id}&jobCode=${encodeURIComponent(job.jobCode)}`}
+          >
+            {t("rmas.title")}
+          </Link>
+        </Can>
       </div>
 
       {/* ── Notes ── */}

@@ -24,6 +24,12 @@ export const NAV_ITEMS: NavItem[] = [
   },
   { icon: "build", labelKey: "jobs", to: "/jobs", perm: { jobs: ["view"] } },
   {
+    icon: "task_alt",
+    labelKey: "tasks.title",
+    to: "/tasks",
+    perm: { jobs: ["view"] },
+  },
+  {
     icon: "inbox",
     labelKey: "requests_nav",
     to: "/requests",

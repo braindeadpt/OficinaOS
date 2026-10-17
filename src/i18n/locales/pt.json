@@ -2355,7 +2355,8 @@
     "status_received": "Recebido",
     "status_resolved": "Resolvido",
     "status_cancelled": "Cancelado",
-    "empty": "Nenhum RMA encontrado."
+    "empty": "Nenhum RMA encontrado.",
+    "job_code": "Número da reparação (opcional)"
   },
   "referrals": {
     "title": "Encaminhado para outras lojas",
@@ -2400,5 +2401,40 @@
     "copied": "Copiado",
     "copy_failed": "Não foi possível copiar",
     "jobs": "Reparações"
+  },
+  "tasks": {
+    "title": "Tarefas",
+    "mode": "Tipo",
+    "new": "Nova tarefa",
+    "rule": "Regra automática",
+    "name": "Título",
+    "trigger": "Quando a reparação entra em",
+    "assignee": "Responsável",
+    "unassigned": "Sem responsável",
+    "priority": "Prioridade",
+    "LOW": "Baixa",
+    "NORMAL": "Normal",
+    "HIGH": "Alta",
+    "scheduled": "Agendada para",
+    "due": "Prazo",
+    "delay": "Atraso (horas)",
+    "next": "Tarefa seguinte após concluir",
+    "next_delay": "Atraso da tarefa seguinte (horas)",
+    "notes": "Notas",
+    "rule_hint": "Aplicada em até 30 segundos, incluindo reparações já neste estado. Cada regra é executada uma vez por reparação.",
+    "show_completed": "Mostrar concluídas",
+    "complete": "Concluir tarefa",
+    "more": "Carregar mais",
+    "rules": "Regras automáticas",
+    "disable": "Desativar",
+    "failed": "Não foi possível guardar ou carregar as tarefas."
+  },
+  "photos": {
+    "phase": "Fase da fotografia",
+    "INTAKE": "Entrada",
+    "REPAIR": "Reparação",
+    "FINAL": "Finalização",
+    "RETURN_INTAKE": "Entrada da devolução",
+    "RETURN_RESOLUTION": "Resolução da devolução"
   }
 }

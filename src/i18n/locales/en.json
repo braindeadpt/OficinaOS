@@ -2355,7 +2355,8 @@
     "status_received": "Received",
     "status_resolved": "Resolved",
     "status_cancelled": "Cancelled",
-    "empty": "No RMAs found."
+    "empty": "No RMAs found.",
+    "job_code": "Repair reference (optional)"
   },
   "referrals": {
     "title": "Referrals to other shops",
@@ -2400,5 +2401,40 @@
     "copied": "Copied",
     "copy_failed": "Could not copy",
     "jobs": "Repair jobs"
+  },
+  "tasks": {
+    "title": "Tasks",
+    "mode": "Type",
+    "new": "New task",
+    "rule": "Automatic rule",
+    "name": "Title",
+    "trigger": "When the repair enters",
+    "assignee": "Assignee",
+    "unassigned": "Unassigned",
+    "priority": "Priority",
+    "LOW": "Low",
+    "NORMAL": "Normal",
+    "HIGH": "High",
+    "scheduled": "Scheduled for",
+    "due": "Deadline",
+    "delay": "Delay (hours)",
+    "next": "Next task after completion",
+    "next_delay": "Delay for the next task (hours)",
+    "notes": "Notes",
+    "rule_hint": "Applies within 30 seconds, including matching repairs already in this state. Each rule runs once per repair.",
+    "show_completed": "Show completed",
+    "complete": "Complete task",
+    "more": "Load more",
+    "rules": "Automatic rules",
+    "disable": "Disable",
+    "failed": "Could not save or load tasks."
+  },
+  "photos": {
+    "phase": "Photo phase",
+    "INTAKE": "Intake",
+    "REPAIR": "Repair",
+    "FINAL": "Final",
+    "RETURN_INTAKE": "Return intake",
+    "RETURN_RESOLUTION": "Return resolution"
   }
 }
