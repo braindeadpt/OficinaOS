@@ -32,6 +32,7 @@ function LanguageSwitcher() {
 }
 
 interface PublicShop {
+  logoUrl: string | null;
   name: string | null;
 }
 
@@ -55,6 +56,8 @@ export default function SignPage() {
   const { token } = useParams<{ token: string }>();
   const [state, setState] = useState<PageState>("loading");
   const [shopName, setShopName] = useState<string | null>(null);
+  const [shopLogoUrl, setShopLogoUrl] = useState<string | null>(null);
+  const [logoFailed, setLogoFailed] = useState(false);
   const [document, setDocument] = useState<PublicDocument | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -70,7 +73,9 @@ export default function SignPage() {
         return;
       }
       if (shopRes.status === "fulfilled") {
-        setShopName((shopRes.value.data as PublicShop).name ?? null);
+        const shop = shopRes.value.data as PublicShop;
+        setShopName(shop.name ?? null);
+        setShopLogoUrl(shop.logoUrl ?? null);
       }
       if (sessionRes.status === "rejected") {
         setState("expired");
@@ -119,9 +124,10 @@ export default function SignPage() {
             <img
               alt=""
               aria-hidden="true"
-              className="h-8 w-8"
+              className="h-8 w-auto max-w-[96px] object-contain"
               height={32}
-              src="/logo-mark.svg"
+              onError={() => setLogoFailed(true)}
+              src={shopLogoUrl && !logoFailed ? shopLogoUrl : "/logo-mark.svg"}
               width={32}
             />
             <span className="font-bold font-headline text-2xl text-primary-container tracking-tight">

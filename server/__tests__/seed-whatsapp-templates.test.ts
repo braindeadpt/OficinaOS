@@ -179,6 +179,8 @@ const run = async (
   const child = spawn(command, args, {
     cwd: process.cwd(),
     env: { ...process.env, DATABASE_URL: seedDbUrl as string },
+    // bunx is a .cmd shim on Windows — needs a shell to resolve.
+    shell: process.platform === "win32",
     stdio: ["ignore", "pipe", "pipe"],
   });
   let output = "";

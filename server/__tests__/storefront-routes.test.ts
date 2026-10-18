@@ -251,7 +251,10 @@ describe("storefront routes — PUT", () => {
       cloudEntitlements: ["storefront", "storefront-plus"],
     });
     const app = buildApp(prisma);
-    const logo = "data:image/png;base64,aGVsbG8=";
+    // Real 32×32 PNG — the PUT now validates magic bytes + dimensions.
+    const logoPng =
+      "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAKUlEQVR4nO3NsQ0AAAzCMP5/mj5RNkuZ4zSZtr0DAAAAAAAAAACA/gEHMsP8LofXz44AAAAASUVORK5CYII=";
+    const logo = `data:image/png;base64,${logoPng}`;
     const res = await app.inject({
       method: "PUT",
       url: "/api/storefront",
@@ -272,8 +275,24 @@ describe("storefront routes — PUT", () => {
     expect(body.template).toBe("compacta");
     expect(body.logo).toEqual({
       mime: "image/png",
-      dataBase64: "aGVsbG8=",
+      dataBase64: logoPng,
     });
+  });
+
+  it("rejects a logo that is not a valid image", async () => {
+    const { prisma } = fakePrisma({
+      cloudEntitlements: ["storefront", "storefront-plus"],
+    });
+    const app = buildApp(prisma);
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/storefront",
+      payload: { published: true, logo: "data:image/png;base64,aGVsbG8=" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("VALIDATION_ERROR");
+    expect(res.json().details.errors.logo).toHaveLength(1);
+    expect(prisma.shopSettings.update).not.toHaveBeenCalled();
   });
 
   it("omits theme fields from the push without storefront-plus", async () => {

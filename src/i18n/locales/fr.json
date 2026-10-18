@@ -1308,6 +1308,7 @@
   "realtime": "En temps réel",
   "realtime_status": "Statut en direct du jour",
   "receipt_footer": "Message de pied de reçu",
+  "receipt_footer_placeholder": "p. ex. Merci de nous avoir choisis !",
   "recently_added": "Récemment ajouté",
   "regional_settings_label": "Paramètres régionaux",
   "repair_category": {
@@ -1903,6 +1904,8 @@
     "invalid_url": "Doit être une URL http(s) valide",
     "pairing_code_required": "Entrez le code d'appairage.",
     "invalid_slug": "Utilisez uniquement des lettres minuscules, des chiffres et des traits d'union (min. 2 caractères)",
+    "logo_unreadable": "Le fichier du logo est corrompu ou n'est pas une image valide",
+    "logo_bad_size": "L'image du logo doit être comprise entre 24×24 et 4096×4096 px",
     "invalid_template_name": "Utilisez uniquement des lettres minuscules, des chiffres et des traits de soulignement",
     "invalid_instance": "Utilisez uniquement des lettres, chiffres et tirets",
     "disclaimer_required": "Vous devez accepter l'avertissement pour activer WhatsApp local",
@@ -2213,6 +2216,7 @@
     "logo_remove": "Retirer",
     "logo_hint": "PNG, JPEG ou WebP jusqu'à 200 Ko — affichés en haut de la page de votre boutique",
     "logo_invalid": "Le logo doit être une image PNG, JPEG ou WebP pesant jusqu'à 200 Ko",
+    "logo_too_small": "L'image du logo doit être d'au moins 24×24 px",
     "plus_upsell": "Des couleurs, un logo et des mises en page personnalisés sont disponibles avec le module Storefront+ — demandez à votre fournisseur de l'activer."
   },
   "customer_edit_tax_id": "Numéro fiscal (NIF)",

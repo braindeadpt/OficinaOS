@@ -152,10 +152,10 @@ export async function revenueAndMarginComparison(
   currentMonth: DateRange,
   prevMonth: DateRange
 ): Promise<{
-  avgProfitMarginChange: number;
+  avgProfitMarginChange: number | null;
   avgProfitMarginPrev: number;
   avgProfitMarginThis: number;
-  revenueChangePct: number;
+  revenueChangePct: number | null;
   revenuePrevMonth: number;
   revenueThisMonth: number;
 }> {
@@ -178,18 +178,19 @@ export async function revenueAndMarginComparison(
       ? 0
       : Math.round(((prev.revenue - prev.cost) / prev.revenue) * 10_000) / 100;
 
-  let revenueChangePct: number;
-  if (revenuePrevMonth === 0) {
-    revenueChangePct = revenueThisMonth > 0 ? 100 : 0;
-  } else {
+  // No baseline last month → no honest comparison, surface as null
+  // rather than a fabricated +0%/+100% delta.
+  let revenueChangePct: number | null = null;
+  if (revenuePrevMonth !== 0) {
     revenueChangePct = Math.round(
       ((revenueThisMonth - revenuePrevMonth) / revenuePrevMonth) * 100
     );
   }
 
-  const avgProfitMarginChange = Math.round(
-    avgProfitMarginThis - avgProfitMarginPrev
-  );
+  const avgProfitMarginChange =
+    prev.revenue === 0
+      ? null
+      : Math.round(avgProfitMarginThis - avgProfitMarginPrev);
 
   return {
     avgProfitMarginChange,

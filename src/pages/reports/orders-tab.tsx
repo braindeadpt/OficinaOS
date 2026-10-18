@@ -162,10 +162,11 @@ export default function OrdersTab() {
         />
         {showMargin && (
           <MetricCard
-            detail="%"
+            detail=""
             icon="trending_up"
             label={t("reports.orders_margin")}
-            value={`${summary.avgMargin}%`}
+            unit="%"
+            value={String(summary.avgMargin)}
           />
         )}
       </div>

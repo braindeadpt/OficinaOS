@@ -391,7 +391,7 @@ export default function SettingsShopTab({
                 setShopForm((f) => ({ ...f, receiptFooter: e.target.value }));
                 onDirtyChange(true);
               }}
-              placeholder="Thanks for choosing OficinaOS!"
+              placeholder={t("receipt_footer_placeholder")}
               type="text"
               value={shopForm.receiptFooter}
             />

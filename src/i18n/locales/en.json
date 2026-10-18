@@ -1308,6 +1308,7 @@
   "realtime": "Real-time",
   "realtime_status": "What's happening right now",
   "receipt_footer": "Receipt Footer Message",
+  "receipt_footer_placeholder": "e.g. Thank you for choosing us!",
   "recently_added": "Recently Added",
   "regional_settings_label": "Regional Settings",
   "repair_category": {
@@ -1903,6 +1904,8 @@
     "invalid_url": "Must be a valid http(s) URL",
     "pairing_code_required": "Enter the pairing code.",
     "invalid_slug": "Use only lowercase letters, numbers and hyphens (min. 2 characters)",
+    "logo_unreadable": "The logo file is corrupted or is not a valid image",
+    "logo_bad_size": "The logo image must be between 24×24 and 4096×4096 px",
     "invalid_template_name": "Use only lowercase letters, numbers and underscores",
     "invalid_instance": "Use only letters, numbers and hyphens",
     "disclaimer_required": "You must accept the disclaimer to enable local WhatsApp",
@@ -2213,6 +2216,7 @@
     "logo_remove": "Remove",
     "logo_hint": "PNG, JPEG or WebP up to 200 KB — shown at the top of your store page",
     "logo_invalid": "Logo must be a PNG, JPEG or WebP image up to 200 KB",
+    "logo_too_small": "The logo image must be at least 24×24 px",
     "plus_upsell": "Custom colours, logo and layouts are available with the Storefront+ module — ask your provider to enable it."
   },
   "customer_edit_tax_id": "Tax number (NIF)",
