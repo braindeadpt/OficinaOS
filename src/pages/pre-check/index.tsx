@@ -1,6 +1,7 @@
 import { LANGUAGES } from "@shared/constants";
 import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ShopBrand } from "@/components/modules/shop-brand";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -111,17 +112,7 @@ export default function PreCheckPage({ embed = false }: { embed?: boolean }) {
         <nav className="sticky top-0 z-50 w-full bg-background">
           <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4">
             <div className="flex items-center gap-2.5">
-              <img
-                alt=""
-                aria-hidden="true"
-                className="h-8 w-8"
-                height={32}
-                src="/logo-mark.svg"
-                width={32}
-              />
-              <span className="font-bold font-headline text-2xl text-primary-container tracking-tight">
-                OficinaOS
-              </span>
+              <ShopBrand />
             </div>
             <LanguageSwitcher />
           </div>

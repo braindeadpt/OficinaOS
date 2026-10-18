@@ -50,10 +50,11 @@ export default function InsightsTab() {
           </span>
         </MetricCard>
         <MetricCard
-          detail="%"
+          detail=""
           icon="repeat"
           label={t("reports.repeatRate")}
-          value={`${summary.repeatRate}%`}
+          unit="%"
+          value={String(summary.repeatRate)}
         />
         <MetricCard
           detail=""

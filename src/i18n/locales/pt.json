@@ -1308,6 +1308,7 @@
   "realtime": "Em tempo real",
   "realtime_status": "O que está a acontecer agora",
   "receipt_footer": "Mensagem de rodapé de recibo",
+  "receipt_footer_placeholder": "p. ex. Obrigado por nos escolher!",
   "recently_added": "Adicionado recentemente",
   "regional_settings_label": "Definições regionais",
   "repair_category": {
@@ -1903,6 +1904,8 @@
     "invalid_url": "Tem de ser um URL http(s) válido",
     "pairing_code_required": "Introduza o código de emparelhamento.",
     "invalid_slug": "Utilize apenas letras minúsculas, números e hífens (mín. 2 caracteres)",
+    "logo_unreadable": "O ficheiro do logótipo está corrompido ou não é uma imagem válida",
+    "logo_bad_size": "A imagem do logótipo deve ter entre 24×24 e 4096×4096 px",
     "invalid_template_name": "Utilize apenas letras minúsculas, números e sublinhados",
     "invalid_instance": "Use apenas letras, números e hífenes",
     "disclaimer_required": "Tem de aceitar o aviso para ativar o WhatsApp local",
@@ -2213,6 +2216,7 @@
     "logo_remove": "Remover",
     "logo_hint": "PNG, JPEG ou WebP até 200 KB — apresentados no topo da página da sua loja",
     "logo_invalid": "O logótipo deve ser uma imagem PNG, JPEG ou WebP até 200 KB",
+    "logo_too_small": "A imagem do logótipo deve ter pelo menos 24×24 px",
     "plus_upsell": "Cores, logótipo e layouts personalizados estão disponíveis com o módulo Storefront+ – peça ao seu fornecedor para o ativar."
   },
   "customer_edit_tax_id": "Número fiscal (NIF)",

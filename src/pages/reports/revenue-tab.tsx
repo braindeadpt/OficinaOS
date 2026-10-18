@@ -89,10 +89,11 @@ export default function RevenueTab() {
         />
         {showMargin && (
           <MetricCard
-            detail="%"
+            detail=""
             icon="trending_up"
             label={t("reports.avgProfitMargin")}
-            value={`${summary.avgProfitMargin}%`}
+            unit="%"
+            value={String(summary.avgProfitMargin)}
           />
         )}
         <MetricCard

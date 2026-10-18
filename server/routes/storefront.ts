@@ -8,9 +8,14 @@ import {
   pushStorefront,
   storefrontUrl,
 } from "../services/storefront.service.js";
-import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
+import { logoDataUrlError } from "../utils/file-validation.js";
+import {
+  resolveValidationMessage,
+  resolveZodErrors,
+} from "../utils/resolve-validation-messages.js";
 
 const MODULE = "storefront";
+
 // Paid design tier — accent color, logo and layout. Enforced here for a
 // fast UI error; the cloud re-checks the entitlement on every push.
 const PLUS_MODULE = "storefront-plus";
@@ -38,6 +43,17 @@ function hasThemeInput(input: ThemeInput): boolean {
     input.template !== undefined ||
     input.logo !== undefined
   );
+}
+
+/** Throws VALIDATION_ERROR with a localized `logo` field error when invalid. */
+function assertLogoValid(logo: string | undefined, locale: string): void {
+  const key = logo ? logoDataUrlError(logo) : null;
+  if (!key) {
+    return;
+  }
+  throw new AppError("VALIDATION_ERROR", {
+    errors: { logo: [resolveValidationMessage(`validations.${key}`, locale)] },
+  });
 }
 
 interface SettingsView {
@@ -125,6 +141,7 @@ export const storefrontRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const { description, email, published, slug } = parsed.data;
+      assertLogoValid(parsed.data.logo, req.locale);
       // Paid theme fields require storefront-plus — rejected before save.
       if (hasThemeInput(parsed.data) && !modules.includes(PLUS_MODULE)) {
         throw new AppError("CLOUD_MODULE_REQUIRED");

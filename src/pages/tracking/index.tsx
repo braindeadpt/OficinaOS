@@ -8,6 +8,11 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams } from "react-router";
+import {
+  type PublicShop,
+  ShopBrand,
+  usePublicShop,
+} from "@/components/modules/shop-brand";
 import { Field } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icon";
 import { Textarea } from "@/components/ui/textarea";
@@ -107,64 +112,6 @@ interface TrackingData {
   statusTransitions: StatusTransition[];
   warranty: WarrantyInfo | null;
   warrantyDays: number;
-}
-
-interface PublicShop {
-  address: string | null;
-  logoUrl: string | null;
-  name: string | null;
-  phone: string | null;
-  warrantyDays: number;
-}
-
-// One request per page load: the lookup form, status view and header all
-// read the same public shop identity.
-let publicShopPromise: Promise<PublicShop | null> | null = null;
-
-function usePublicShop(): PublicShop | null {
-  const [shop, setShop] = useState<PublicShop | null>(null);
-  useEffect(() => {
-    let alive = true;
-    publicShopPromise ??= api
-      .get("/public/shop")
-      .then((res) => res.data as PublicShop)
-      .catch(() => {
-        publicShopPromise = null;
-        return null;
-      });
-    publicShopPromise.then((value) => {
-      if (alive) {
-        setShop(value);
-      }
-    });
-    return () => {
-      alive = false;
-    };
-  }, []);
-  return shop;
-}
-
-/** The shop's own logo and name; OficinaOS only until settings load. */
-function ShopBrand() {
-  const shop = usePublicShop();
-  const [logoFailed, setLogoFailed] = useState(false);
-  const logo = shop?.logoUrl && !logoFailed ? shop.logoUrl : "/logo-mark.svg";
-  return (
-    <>
-      <img
-        alt=""
-        aria-hidden="true"
-        className="h-8 w-auto max-w-[96px] object-contain"
-        height={32}
-        onError={() => setLogoFailed(true)}
-        src={logo}
-        width={32}
-      />
-      <span className="truncate font-bold font-headline text-2xl text-primary-container tracking-tight">
-        {shop ? (shop.name ?? "OficinaOS") : "\u00a0"}
-      </span>
-    </>
-  );
 }
 
 function LookupForm({

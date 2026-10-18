@@ -44,12 +44,13 @@ describe("RestockHint", () => {
 
     render(<RestockHint partId="part-1" />);
 
+    // The hint container renders during loading — wait for the content,
+    // not just the testid, or the text assertion races the fetch.
     await waitFor(() => {
-      expect(screen.getByTestId("restock-hint")).toBeInTheDocument();
+      expect(screen.getByText(SUGGESTION_RE)).toHaveTextContent(
+        '"avg":"1","days":30,"qty":"14"'
+      );
     });
-    expect(screen.getByText(SUGGESTION_RE)).toHaveTextContent(
-      '"avg":"1","days":30,"qty":"14"'
-    );
     expect(screen.getByText(DAYS_LEFT_RE)).toBeInTheDocument();
   });
 
