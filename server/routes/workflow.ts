@@ -75,8 +75,15 @@ export const workflowRoutes: FastifyPluginAsync = (app) => {
         }),
         req.body
       );
+      const updated = await app.prisma.workflowState.updateMany({
+        where: { id },
+        data,
+      });
+      if (!updated.count) {
+        throw new AppError("NOT_FOUND");
+      }
       return {
-        data: await app.prisma.workflowState.update({ where: { id }, data }),
+        data: await app.prisma.workflowState.findUnique({ where: { id } }),
       };
     }
   );

@@ -228,6 +228,7 @@ model User {
   tasksAssigned         WorkshopTask[]      @relation("TaskAssignee")
   tasksCreated          WorkshopTask[]      @relation("TaskCreator")
   taskRules             TaskRule[]
+  taskRulesAssigned     TaskRule[]          @relation("TaskRuleAssignee")
 
   @@map("users")
 }
@@ -1538,13 +1539,18 @@ model TaskRule {
   triggerStatus   JobStatus?
   delayHours      Int            @default(0)
   assigneeId      String?
+  assignee        User?          @relation("TaskRuleAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   nextTitle       String?
   nextDelayHours  Int            @default(0)
   isActive        Boolean        @default(true)
   createdById     String
   createdBy       User           @relation(fields: [createdById], references: [id], onDelete: Restrict)
   createdAt       DateTime       @default(now()) @db.Timestamptz
+  // Reconcile cursor — "<epochMs>:<sourceId>" into the transition stream
+  // (audit_logs for status rules, record_workflows for state rules).
+  scanCursor      String?
 
+  @@index([assigneeId])
   @@map("task_rules")
 }
 

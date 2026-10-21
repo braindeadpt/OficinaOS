@@ -9,13 +9,20 @@ import { getRole } from "../utils/request.js";
 
 export const purchaseOrdersRoutes: FastifyPluginAsync = (app) => {
   app.addHook("preHandler", requirePermission({ parts: ["viewCatalog"] }));
-  const serialize = async (
-    req: FastifyRequest,
-    order: Awaited<ReturnType<typeof app.prisma.purchaseOrder.findMany>>[number]
+  // One permission check per request — serializing a page of orders
+  // must not re-ask better-auth for every row.
+  const canViewCost = async (req: FastifyRequest) =>
+    (
+      await app.auth.api.userHasPermission({
+        body: { role: getRole(req), permissions: { parts: ["viewCost"] } },
+      })
+    ).success;
+  const serialize = (
+    order: Awaited<
+      ReturnType<typeof app.prisma.purchaseOrder.findMany>
+    >[number],
+    allowed: boolean
   ) => {
-    const allowed = await app.auth.api.userHasPermission({
-      body: { role: getRole(req), permissions: { parts: ["viewCost"] } },
-    });
     const {
       costGross,
       quoteGross,
@@ -24,7 +31,7 @@ export const purchaseOrdersRoutes: FastifyPluginAsync = (app) => {
       recoverInputVat,
       ...publicFields
     } = order;
-    if (!allowed.success) {
+    if (!allowed) {
       return publicFields;
     }
     const financials = {
@@ -65,6 +72,7 @@ export const purchaseOrdersRoutes: FastifyPluginAsync = (app) => {
       ...(customer ? [{ customerId: customer }] : []),
       ...(vendor ? [{ supplierId: vendor }] : []),
     ];
+    const viewCost = await canViewCost(req);
     const data = await app.prisma.purchaseOrder.findMany({
       where: {
         jobId,
@@ -82,7 +90,7 @@ export const purchaseOrdersRoutes: FastifyPluginAsync = (app) => {
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     });
     return {
-      data: await Promise.all(data.map((order) => serialize(req, order))),
+      data: data.map((order) => serialize(order, viewCost)),
       nextCursor: data.length === 100 ? data.at(-1)?.id : null,
     };
   });
@@ -115,9 +123,9 @@ export const purchaseOrdersRoutes: FastifyPluginAsync = (app) => {
       const data = parseInput(orderFields, req.body);
       await validateReferences(data);
       return reply.status(201).send({
-        data: await serialize(
-          req,
-          await app.prisma.purchaseOrder.create({ data })
+        data: serialize(
+          await app.prisma.purchaseOrder.create({ data }),
+          await canViewCost(req)
         ),
       });
     }
@@ -150,9 +158,9 @@ export const purchaseOrdersRoutes: FastifyPluginAsync = (app) => {
       });
       await validateReferences(data);
       return {
-        data: await serialize(
-          req,
-          await app.prisma.purchaseOrder.update({ where: { id }, data })
+        data: serialize(
+          await app.prisma.purchaseOrder.update({ where: { id }, data }),
+          await canViewCost(req)
         ),
       };
     }
