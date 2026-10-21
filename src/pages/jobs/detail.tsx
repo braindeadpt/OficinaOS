@@ -22,10 +22,12 @@ import StatusHistoryTimeline from "@/components/modules/jobs/status-history-time
 import StatusPopover from "@/components/modules/jobs/status-popover";
 import TechnicianSelect from "@/components/modules/jobs/technician-select";
 import CreateWizardModal from "@/components/modules/returns/create-wizard-modal";
+import { RecordWorkflow } from "@/components/modules/tasks/record-workflow";
 import { Icon } from "@/components/ui/icon";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import { printJobReceipt } from "@/lib/print";
+import { BusinessHistory } from "@/pages/business/history";
 import { useJobsStore } from "@/stores/jobs";
 import { useSettingsStore } from "@/stores/settings";
 import { useUiStore } from "@/stores/ui";
@@ -497,6 +499,8 @@ export default function JobDetailPage() {
         </div>
       </div>
 
+      <BusinessHistory entityId={job.id} entityType="JOB" />
+      <RecordWorkflow entityId={job.id} entityType="JOB" expanded />
       {/* ── Quotes ── */}
       <div className="mt-8 rounded-2xl bg-surface-container p-6">
         <JobQuotesSection
@@ -526,6 +530,14 @@ export default function JobDetailPage() {
       {/* ── Referrals — encaminhar para outra loja ── */}
       <div className="mt-8 rounded-2xl bg-surface-container p-6">
         <JobReferralsSection jobId={job.id} />
+        <Can perm={{ parts: ["viewCatalog"] }}>
+          <Link
+            className="text-primary underline"
+            to={`/rmas?jobId=${job.id}&jobCode=${encodeURIComponent(job.jobCode)}`}
+          >
+            {t("rmas.title")}
+          </Link>
+        </Can>
       </div>
 
       {/* ── Notes ── */}

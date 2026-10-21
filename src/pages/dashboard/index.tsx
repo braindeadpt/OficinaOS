@@ -7,6 +7,7 @@ import FinancialTrend from "@/components/modules/dashboard/financial-trend";
 import JobPipeline from "@/components/modules/dashboard/job-pipeline";
 import OverdueJobs from "@/components/modules/dashboard/overdue-jobs";
 import ReadyForPickup from "@/components/modules/dashboard/ready-for-pickup";
+import { TaskPanel } from "@/components/modules/tasks/task-panel";
 import { Icon } from "@/components/ui/icon";
 import MetricCard from "@/components/ui/metric-card";
 import { useCan } from "@/hooks/use-can";
@@ -548,6 +549,7 @@ export default function DashboardPage() {
   return (
     <>
       <DashboardHeader canCreateJob={canCreateJob} userName={userName} />
+      <TaskPanel />
 
       {isLoading && <DashboardSkeleton />}
 

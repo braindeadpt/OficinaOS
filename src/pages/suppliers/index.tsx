@@ -2,6 +2,7 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 import { toast } from "sonner";
+import { RecordWorkflow } from "@/components/modules/tasks/record-workflow";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icon";
@@ -281,6 +282,13 @@ export default function SuppliersPage() {
                 key={s.id}
               >
                 <div className="min-w-0 flex-1">
+                  <RecordWorkflow entityId={s.id} entityType="SUPPLIER" />
+                  <Link
+                    className="text-primary underline"
+                    to={`/purchase-orders?supplierId=${s.id}`}
+                  >
+                    {t("workflow.orders")}
+                  </Link>
                   <p className="truncate font-bold text-on-surface text-sm">
                     <Link
                       className="hover:text-primary hover:underline"

@@ -1,8 +1,14 @@
+const CHAT_COMPLETIONS_SUFFIX = /\/chat\/completions\/?$/;
+
 import type { AiSettings, Prisma, PrismaClient } from "@generated/client";
 import { AppError } from "@shared/errors/app-error.js";
 import OpenAI from "openai";
 import { decryptSecret, isEncrypted } from "../lib/crypto.js";
 import { assembleSystemPrompt, getToolDefinitions } from "./context.js";
+import {
+  type AccumulatedToolCall,
+  accumulateToolDelta,
+} from "./tool-call-stream.js";
 import { executeGetSchema, executeQueryDatabase } from "./tools.js";
 
 interface StreamParams {
@@ -23,11 +29,6 @@ interface ResolvedAgent {
 interface StreamResult {
   conversationId: string;
   stream: ReadableStream<Uint8Array>;
-}
-
-interface ToolCallAccumulator {
-  function: { name: string; arguments: string };
-  id: string;
 }
 
 function resolveApiKey(settings: AiSettings): string {
@@ -62,70 +63,14 @@ function emitContent(
   return content;
 }
 
-function accumulateToolCallDelta(
-  tc: OpenAI.ChatCompletionChunk.Choice.Delta.ToolCall,
-  currentToolCall: { id: string; name: string; arguments: string } | null,
-  toolCalls: ToolCallAccumulator[],
-  controller: ReadableStreamDefaultController<Uint8Array>,
-  encoder: TextEncoder
-): { id: string; name: string; arguments: string } | null {
-  if (tc.id) {
-    if (currentToolCall) {
-      toolCalls.push({
-        id: currentToolCall.id,
-        function: {
-          name: currentToolCall.name,
-          arguments: currentToolCall.arguments,
-        },
-      });
-    }
-    controller.enqueue(
-      encoder.encode(
-        sseEvent({
-          type: "tool_call",
-          tool: tc.function?.name,
-          status: "running",
-        })
-      )
-    );
-    return {
-      id: tc.id,
-      name: tc.function?.name ?? "",
-      arguments: tc.function?.arguments ?? "",
-    };
-  }
-  if (tc.function?.arguments && currentToolCall) {
-    currentToolCall.arguments += tc.function.arguments;
-  }
-  return currentToolCall;
-}
-
-function finalizeToolCalls(
-  currentToolCall: { id: string; name: string; arguments: string } | null,
-  toolCalls: ToolCallAccumulator[]
-): ToolCallAccumulator[] {
-  if (currentToolCall) {
-    toolCalls.push({
-      id: currentToolCall.id,
-      function: {
-        name: currentToolCall.name,
-        arguments: currentToolCall.arguments,
-      },
-    });
-  }
-  return toolCalls;
-}
-
 async function processStreamResponse(
   response: AsyncIterable<OpenAI.ChatCompletionChunk>,
   controller: ReadableStreamDefaultController<Uint8Array>,
   encoder: TextEncoder,
   agentName: string
-): Promise<{ assistantContent: string; toolCalls: ToolCallAccumulator[] }> {
+): Promise<{ assistantContent: string; toolCalls: AccumulatedToolCall[] }> {
   let assistantContent = "";
-  let currentToolCall: { id: string; name: string; arguments: string } | null =
-    null;
-  const toolCalls: ToolCallAccumulator[] = [];
+  const toolCalls = new Map<number, AccumulatedToolCall>();
 
   for await (const chunk of response) {
     const delta = chunk.choices[0]?.delta;
@@ -144,26 +89,30 @@ async function processStreamResponse(
 
     if (delta.tool_calls) {
       for (const tc of delta.tool_calls) {
-        currentToolCall = accumulateToolCallDelta(
-          tc,
-          currentToolCall,
-          toolCalls,
-          controller,
-          encoder
-        );
+        if (accumulateToolDelta(toolCalls, tc)) {
+          controller.enqueue(
+            encoder.encode(
+              sseEvent({
+                type: "tool_call",
+                tool: tc.function?.name,
+                status: "running",
+              })
+            )
+          );
+        }
       }
     }
   }
 
   return {
     assistantContent,
-    toolCalls: finalizeToolCalls(currentToolCall, toolCalls),
+    toolCalls: [...toolCalls.values()],
   };
 }
 
 async function executeToolCalls(
   prisma: PrismaClient,
-  toolCalls: ToolCallAccumulator[],
+  toolCalls: AccumulatedToolCall[],
   controller: ReadableStreamDefaultController<Uint8Array>,
   encoder: TextEncoder
 ): Promise<{ followUpMessages: OpenAI.ChatCompletionMessageParam[] }> {
@@ -269,7 +218,7 @@ export async function streamChat(params: StreamParams): Promise<StreamResult> {
 
   const client = new OpenAI({
     apiKey,
-    baseURL: settings.endpointUrl,
+    baseURL: settings.endpointUrl.replace(CHAT_COMPLETIONS_SUFFIX, ""),
     timeout: 60_000,
   });
 
@@ -399,7 +348,7 @@ async function handleToolCallsFollowUp(
   prisma: PrismaClient,
   settings: AiSettings,
   openaiMessages: OpenAI.ChatCompletionMessageParam[],
-  toolCalls: ToolCallAccumulator[],
+  toolCalls: AccumulatedToolCall[],
   agentName: string,
   assistantContent: string,
   controller: ReadableStreamDefaultController<Uint8Array>,
@@ -409,13 +358,9 @@ async function handleToolCallsFollowUp(
   const assistantMessage: OpenAI.ChatCompletionMessageParam = {
     role: "assistant",
     content: assistantContent || null,
-    tool_calls: toolCalls.map((tc) => ({
-      id: tc.id,
+    tool_calls: toolCalls.map((call) => ({
+      ...call,
       type: "function" as const,
-      function: {
-        name: tc.function.name,
-        arguments: tc.function.arguments,
-      },
     })),
   };
 

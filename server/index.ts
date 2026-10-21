@@ -20,6 +20,7 @@ import securityPlugin from "./plugins/security.js";
 import { websocketPlugin, wsBroadcast } from "./plugins/websocket.js";
 import { aiRoutes } from "./routes/ai.js";
 import { authRoutes } from "./routes/auth.js";
+import { businessRoutes } from "./routes/business.js";
 import { customersRoutes } from "./routes/customers.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
 import { dataIoRoutes } from "./routes/data-io.js";
@@ -35,6 +36,7 @@ import { partRequestsRoutes } from "./routes/part-requests.js";
 import { partsRoutes } from "./routes/parts.js";
 import { paymentRoutes } from "./routes/payments.js";
 import { publicRoutes } from "./routes/public.js";
+import { purchaseOrdersRoutes } from "./routes/purchase-orders.js";
 import { receiptRoutes } from "./routes/receipts.js";
 import { referralsRoutes } from "./routes/referrals.js";
 import { repairCatalogRoutes } from "./routes/repairs.js";
@@ -46,12 +48,15 @@ import { setupRoutes } from "./routes/setup.js";
 import { signatureSessionRoutes } from "./routes/signature-sessions.js";
 import { storefrontRoutes } from "./routes/storefront.js";
 import { supplierRmasRoutes, suppliersRoutes } from "./routes/suppliers.js";
+import { tasksRoutes } from "./routes/tasks.js";
 import { tradeInsRoutes } from "./routes/trade-ins.js";
 import { usersRoutes } from "./routes/users.js";
+import { workflowRoutes } from "./routes/workflow.js";
 import { startLowStockScheduler } from "./services/low-stock.service.js";
 import { cleanupReadNotifications } from "./services/notification-inapp.service.js";
 import { startOutboxWorker } from "./services/notification-outbox.service.js";
 import { startRemarketingScheduler } from "./services/remarketing.service.js";
+import { applyTaskRules } from "./services/tasks.service.js";
 import { initValidationI18n } from "./utils/resolve-validation-messages.js";
 
 const env = loadEnv();
@@ -195,6 +200,32 @@ app.register(invoicingRoutes, { prefix: "/api/invoicing" });
 app.register(feedbackRoutes, { prefix: "/api/feedback" });
 app.register(suppliersRoutes, { prefix: "/api/suppliers" });
 app.register(supplierRmasRoutes, { prefix: "/api/supplier-rmas" });
+app.register(workflowRoutes, { prefix: "/api/workflow" });
+app.register(businessRoutes, { prefix: "/api/business" });
+app.register(purchaseOrdersRoutes, { prefix: "/api/purchase-orders" });
+app.register(tasksRoutes, { prefix: "/api/tasks" });
+
+let tasksRunning = false;
+const reconcileTasks = async () => {
+  if (tasksRunning) {
+    return;
+  }
+  tasksRunning = true;
+  try {
+    await applyTaskRules(app.prisma);
+  } catch (err) {
+    app.log.error({ err }, "Task automation failed; will retry");
+  } finally {
+    tasksRunning = false;
+  }
+};
+const taskTimer = setInterval(reconcileTasks, 30_000);
+taskTimer.unref();
+app.addHook("onReady", reconcileTasks);
+app.addHook("onClose", () => {
+  clearInterval(taskTimer);
+  return Promise.resolve();
+});
 app.register(referralsRoutes, { prefix: "/api" });
 app.register(dataIoRoutes, { prefix: "/api" });
 

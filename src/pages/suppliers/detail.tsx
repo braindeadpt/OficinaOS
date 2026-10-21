@@ -3,6 +3,10 @@ import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router";
 import { toast } from "sonner";
 import api from "@/lib/api";
+import {
+  BusinessHistory,
+  SupplierCustomerLink,
+} from "@/pages/business/history";
 
 interface SupplierPart {
   category: string;
@@ -91,6 +95,8 @@ export default function SupplierDetailPage() {
 
   return (
     <>
+      <SupplierCustomerLink supplierId={supplier.id} />
+      <BusinessHistory entityId={supplier.id} entityType="SUPPLIER" />
       <div className="mb-6">
         <Link
           className="font-medium text-on-surface-variant text-sm hover:text-primary"

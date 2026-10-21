@@ -36,7 +36,10 @@ export async function upload(
   jobId: string,
   file: { mimetype: string; toBuffer: () => Promise<Buffer> },
   userId: string,
-  options?: { skipMutabilityCheck?: boolean }
+  options?: {
+    skipMutabilityCheck?: boolean;
+    stage?: "INTAKE" | "REPAIR" | "FINAL";
+  }
 ) {
   const job = await findJobById(prisma, jobId);
   if (!job) {
@@ -80,6 +83,7 @@ export async function upload(
     photo = await createPhotoRepo(prisma, {
       job: { connect: { id: jobId } },
       path: relativePath,
+      ...(options?.stage ? { stage: options.stage } : {}),
     });
   } catch (err) {
     await fs.unlink(filePath).catch(() => undefined);

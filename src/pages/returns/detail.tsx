@@ -5,6 +5,7 @@ import ClaimHeader from "@/components/modules/returns/claim-header";
 import ClaimPhotosSection from "@/components/modules/returns/claim-photos-section";
 import ResolutionSection from "@/components/modules/returns/resolution-section";
 import TriageSection from "@/components/modules/returns/triage-section";
+import { RecordWorkflow } from "@/components/modules/tasks/record-workflow";
 import { fetchReturnClaim } from "@/lib/api-return-claims";
 import type { ReturnClaimDetail } from "@/types/return-claim";
 
@@ -76,6 +77,7 @@ export default function ReturnDetailPage() {
 
   return (
     <>
+      <RecordWorkflow entityId={claim.id} entityType="RETURN" expanded />
       <ClaimHeader claim={claim} />
 
       <section className="rounded-2xl bg-surface-container-low p-5">

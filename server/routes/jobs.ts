@@ -7,6 +7,7 @@ import {
   addWaitingPartSchema,
   createJobSchema,
   jobListQuerySchema,
+  photoStageQuerySchema,
   transitionStatusSchema,
   updateJobSchema,
 } from "@shared/schemas/job.schema";
@@ -834,7 +835,17 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
         throw new AppError("NO_FILE_UPLOADED");
       }
       const userId = getUserId(req);
-      const result = await uploadPhoto(app.prisma, id, data, userId);
+      const parsed = photoStageQuerySchema.safeParse(req.query);
+      if (!parsed.success) {
+        throw new AppError("VALIDATION_ERROR");
+      }
+      const result = await uploadPhoto(
+        app.prisma,
+        id,
+        data,
+        userId,
+        parsed.data
+      );
       if (!result) {
         throw new AppError("JOB_NOT_FOUND");
       }

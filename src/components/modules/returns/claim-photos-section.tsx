@@ -13,7 +13,10 @@ interface Props {
   onChanged: () => void;
 }
 
-const STAGES: PhotoStage[] = ["RETURN_INTAKE", "RETURN_RESOLUTION"];
+const STAGES = [
+  "RETURN_INTAKE",
+  "RETURN_RESOLUTION",
+] as const satisfies readonly PhotoStage[];
 
 export default function ClaimPhotosSection({ claim, onChanged }: Props) {
   const { t } = useTranslation();
@@ -22,7 +25,7 @@ export default function ClaimPhotosSection({ claim, onChanged }: Props) {
   const resolutionRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
-  const photosByStage: Record<PhotoStage, typeof claim.photos> = {
+  const photosByStage: Record<(typeof STAGES)[number], typeof claim.photos> = {
     RETURN_INTAKE: claim.photos.filter((p) => p.stage === "RETURN_INTAKE"),
     RETURN_RESOLUTION: claim.photos.filter(
       (p) => p.stage === "RETURN_RESOLUTION"

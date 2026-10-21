@@ -1,4 +1,5 @@
 import { AI_MODELS } from "@shared/constants";
+import { AI_PROVIDERS, aiProviderId } from "@shared/constants/ai-providers";
 import type { FormEvent } from "react";
 import {
   useCallback,
@@ -660,6 +661,46 @@ export default function SettingsAiTab({
           />
         </div>
         <div className="rounded-2xl bg-surface-container-low p-5">
+          <Field hint={t("ai_provider_hint")} label={t("ai_provider_label")}>
+            <Select
+              onChange={(event) => {
+                const provider = AI_PROVIDERS.find(
+                  (item) => item.id === event.target.value
+                );
+                if (!provider) {
+                  return;
+                }
+                setAiForm((old) => ({
+                  ...old,
+                  endpointUrl: provider.endpointUrl,
+                  model: provider.model,
+                  apiKey: "",
+                  enabled: false,
+                }));
+                onDirtyChange(true);
+              }}
+              value={aiProviderId(aiForm.endpointUrl)}
+            >
+              {AI_PROVIDERS.map((provider) => (
+                <option key={provider.id} value={provider.id}>
+                  {provider.name || t("ai_custom_provider")}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          {aiProviderId(aiForm.endpointUrl) === "gemini" && (
+            <p className="my-3 text-sm">
+              {t("ai_gemini_hint")}{" "}
+              <a
+                className="text-primary underline"
+                href="https://aistudio.google.com/apikey"
+                rel="noreferrer"
+                target="_blank"
+              >
+                Google AI Studio
+              </a>
+            </p>
+          )}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <Field
               hint={t("ai_endpoint_hint")}
@@ -713,23 +754,27 @@ export default function SettingsAiTab({
 
         <div className="rounded-2xl bg-surface-container-low p-5">
           <Field label={t("analytical_model")}>
-            <div className="relative">
-              <Select
-                className="pe-12"
-                onChange={(e) => {
-                  setAiForm((f) => ({ ...f, model: e.target.value }));
-                  onDirtyChange(true);
-                }}
-                value={aiForm.model}
-              >
-                {AI_MODELS.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {t(m.labelKey)}
-                  </option>
-                ))}
-              </Select>
-            </div>
+            <Input
+              list="ai-model-options"
+              onChange={(event) => {
+                setAiForm((old) => ({ ...old, model: event.target.value }));
+                onDirtyChange(true);
+              }}
+              required
+              value={aiForm.model}
+            />
           </Field>
+          <datalist id="ai-model-options">
+            {AI_MODELS.map((model) => (
+              <option key={model.id} value={model.id}>
+                {t(model.labelKey)}
+              </option>
+            ))}
+            <option value="gemini-3.5-flash-lite" />
+            <option value="gemini-3.8-flash" />
+            <option value="mistral-small-latest" />
+            <option value="mistral-large-latest" />
+          </datalist>
           <button
             aria-expanded={showAdvanced}
             className="mt-4 flex items-center gap-2 text-on-surface-variant text-sm transition-colors hover:text-primary"
