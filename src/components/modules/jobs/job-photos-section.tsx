@@ -3,6 +3,7 @@ import type { Job } from "@shared/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { Field } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icon";
 import { Select } from "@/components/ui/select";
 import api from "@/lib/api";
@@ -85,8 +86,7 @@ export default function JobPhotosSection({
   );
 
   const stagePicker = !isTerminal && (
-    <label className="mb-3 block text-sm" htmlFor="job-photo-stage">
-      {t("photos.phase")}
+    <Field className="mb-3" label={t("photos.phase")}>
       <Select
         id="job-photo-stage"
         onChange={(e) => setStage(e.target.value)}
@@ -98,7 +98,7 @@ export default function JobPhotosSection({
           </option>
         ))}
       </Select>
-    </label>
+    </Field>
   );
 
   if (photos.length === 0) {

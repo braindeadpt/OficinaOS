@@ -15,6 +15,7 @@ import {
 } from "@/components/modules/tasks/task-table";
 import { WorkflowStatesManager } from "@/components/modules/tasks/workflow-states-manager";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -375,14 +376,12 @@ export default function TasksPage() {
           )}
         </form>
       </Can>
-      <label className="flex gap-2">
-        <input
+      <Field horizontal label={t("tasks.show_completed")}>
+        <Checkbox
           checked={completed}
           onChange={(e) => setCompleted(e.target.checked)}
-          type="checkbox"
         />
-        {t("tasks.show_completed")}
-      </label>
+      </Field>
       <TaskTable
         busy={busy}
         onChanged={load}
