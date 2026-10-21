@@ -228,10 +228,23 @@ function saveCursor(
 }
 
 async function reconcileStatusRule(prisma: PrismaClient, rule: RuleData) {
+  // Jobs are born INTAKE with a JOB_CREATED row, not a STATUS_CHANGED
+  // one — an INTAKE rule would never fire without it. Deliberately no
+  // synthetic STATUS_CHANGED is written at creation (reports/dashboard
+  // count them). Imports keep the gte rule.createdAt gate, so jobs with
+  // a backdated createdAt never fire.
+  const transitionFilter: Prisma.AuditLogWhereInput =
+    rule.triggerStatus === "INTAKE"
+      ? {
+          OR: [
+            { action: "STATUS_CHANGED", toValue: rule.triggerStatus },
+            { action: "JOB_CREATED" },
+          ],
+        }
+      : { action: "STATUS_CHANGED", toValue: rule.triggerStatus ?? undefined };
   const logs = await prisma.auditLog.findMany({
     where: {
-      action: "STATUS_CHANGED",
-      toValue: rule.triggerStatus ?? undefined,
+      ...transitionFilter,
       ...streamCursor(rule, "createdAt"),
     },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],

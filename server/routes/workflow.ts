@@ -105,6 +105,15 @@ export const workflowRoutes: FastifyPluginAsync = (app) => {
     }
     return {
       data: await app.prisma.$transaction(async (tx) => {
+        const current = await tx.recordWorkflow.findUnique({
+          where: { entityType_entityId: context },
+        });
+        // Re-writing the SAME state must not touch the row — @updatedAt
+        // would bump and the task-rule stream would read a fresh
+        // transition that never happened.
+        if (current?.stateId === stateId) {
+          return current;
+        }
         const record = await tx.recordWorkflow.upsert({
           where: { entityType_entityId: context },
           create: { ...context, stateId },
