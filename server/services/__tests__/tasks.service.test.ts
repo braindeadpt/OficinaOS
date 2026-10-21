@@ -100,6 +100,14 @@ describe("task automation", () => {
 
   it("reconciles a rule with a stable key so restarts do not duplicate tasks", async () => {
     const upsert = vi.fn();
+    const ruleCreatedAt = new Date("2026-11-09T10:00:00Z");
+    const findLogs = vi.fn((_args: { where: Record<string, unknown> }) => [
+      {
+        id: "log1",
+        jobId: "job1",
+        createdAt: new Date("2026-11-09T11:00:00Z"),
+      },
+    ]);
     const prisma = {
       taskRule: {
         findMany: vi.fn(() => [
@@ -108,13 +116,15 @@ describe("task automation", () => {
             title: "Order part",
             triggerStatus: "WAITING_FOR_PARTS",
             delayHours: 0,
-            createdAt: new Date(),
+            createdAt: ruleCreatedAt,
             createdById: "u1",
             nextDelayHours: 0,
+            scanCursor: null,
           },
         ]),
+        update: vi.fn(),
       },
-      job: { findMany: vi.fn(() => [{ id: "job1" }]) },
+      auditLog: { findMany: findLogs },
       workshopTask: { upsert },
     } as unknown as PrismaClient;
     await applyTaskRules(prisma);
@@ -124,6 +134,98 @@ describe("task automation", () => {
       "rule1:job1",
     ]);
     expect(upsert.mock.calls[0][0].update).toEqual({});
+    // Forward-only: the stream never reaches transitions older than the rule.
+    expect(findLogs.mock.calls[0][0].where).toMatchObject({
+      action: "STATUS_CHANGED",
+      toValue: "WAITING_FOR_PARTS",
+      createdAt: { gte: ruleCreatedAt },
+    });
+  });
+
+  it("fires an INTAKE rule on JOB_CREATED rows — jobs are born without STATUS_CHANGED", async () => {
+    const upsert = vi.fn();
+    const ruleCreatedAt = new Date("2026-11-09T10:00:00Z");
+    const findLogs = vi.fn((_args: { where: Record<string, unknown> }) => [
+      {
+        id: "log1",
+        jobId: "job1",
+        createdAt: new Date("2026-11-09T11:00:00Z"),
+      },
+    ]);
+    const prisma = {
+      taskRule: {
+        findMany: vi.fn(() => [
+          {
+            id: "rule1",
+            title: "Intake checklist",
+            triggerStatus: "INTAKE",
+            delayHours: 0,
+            createdAt: ruleCreatedAt,
+            createdById: "u1",
+            nextDelayHours: 0,
+            scanCursor: null,
+          },
+        ]),
+        update: vi.fn(),
+      },
+      auditLog: { findMany: findLogs },
+      workshopTask: { upsert },
+    } as unknown as PrismaClient;
+    await applyTaskRules(prisma);
+    expect(upsert).toHaveBeenCalledTimes(1);
+    expect(upsert.mock.calls[0][0].where.triggerKey).toBe("rule1:job1");
+    // INTAKE rules read BOTH transition kinds — and keep the same
+    // forward-only gate, so jobs imported/created before the rule
+    // (JOB_CREATED rows stamped earlier) never fire.
+    expect(findLogs.mock.calls[0][0].where).toMatchObject({
+      OR: [
+        { action: "STATUS_CHANGED", toValue: "INTAKE" },
+        { action: "JOB_CREATED" },
+      ],
+      createdAt: { gte: ruleCreatedAt },
+    });
+  });
+
+  it("keeps deduping a JOB_CREATED + STATUS_CHANGED pair on the same job", async () => {
+    const upsert = vi.fn();
+    const findLogs = vi.fn((_args: { where: Record<string, unknown> }) => [
+      {
+        id: "log1",
+        jobId: "job1",
+        createdAt: new Date("2026-11-09T11:00:00Z"),
+      },
+      {
+        id: "log2",
+        jobId: "job1",
+        createdAt: new Date("2026-11-09T12:00:00Z"),
+      },
+    ]);
+    const prisma = {
+      taskRule: {
+        findMany: vi.fn(() => [
+          {
+            id: "rule1",
+            title: "Intake checklist",
+            triggerStatus: "INTAKE",
+            delayHours: 0,
+            createdAt: new Date("2026-11-09T10:00:00Z"),
+            createdById: "u1",
+            nextDelayHours: 0,
+            scanCursor: null,
+          },
+        ]),
+        update: vi.fn(),
+      },
+      auditLog: { findMany: findLogs },
+      workshopTask: { upsert },
+    } as unknown as PrismaClient;
+    await applyTaskRules(prisma);
+    // Both stream rows upsert under the same unique triggerKey — the
+    // DB collapses them to one task.
+    expect(upsert.mock.calls.map(([arg]) => arg.where.triggerKey)).toEqual([
+      "rule1:job1",
+      "rule1:job1",
+    ]);
   });
 });
 

@@ -31,8 +31,16 @@ export function orderMargin(input: {
     revenueNet: money(revenueNet),
     profitAfterVat: money(profit),
     vatBalance: money(quoteGross - revenueNet - (costGross - costNet)),
+    // Half away from zero — bigint division truncates, which shaved up
+    // to 0.005pp off every margin (and inflated negative ones).
     marginPercent:
-      revenueNet === 0n ? null : Number((profit * 10000n) / revenueNet) / 100,
+      revenueNet === 0n
+        ? null
+        : Number(
+            profit >= 0n
+              ? (profit * 10000n + revenueNet / 2n) / revenueNet
+              : -((-profit * 10000n + revenueNet / 2n) / revenueNet)
+          ) / 100,
   };
 }
 export function commissionGross(

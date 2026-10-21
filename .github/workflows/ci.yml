@@ -50,6 +50,11 @@ jobs:
       - name: Apply migrations
         run: bun run db:migrate-deploy
 
+      - name: Unique migration timestamps
+        run: |
+          git fetch --depth=1 origin "${GITHUB_BASE_REF:-main}"
+          bun scripts/check-migration-timestamps.ts FETCH_HEAD
+
       - name: Lint
         run: bun run check
 

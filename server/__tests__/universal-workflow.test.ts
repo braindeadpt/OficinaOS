@@ -34,7 +34,11 @@ function buildApp({
       findFirst: vi.fn(async () => null),
       update: vi.fn(),
     },
-    recordWorkflow: { upsert: vi.fn(), deleteMany: vi.fn() },
+    recordWorkflow: {
+      findUnique: vi.fn(async () => null),
+      upsert: vi.fn(),
+      deleteMany: vi.fn(),
+    },
     purchaseOrder: {
       create: vi.fn(async ({ data }) => ({ id: "o1", ...data })),
     },

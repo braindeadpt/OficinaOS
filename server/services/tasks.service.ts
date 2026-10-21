@@ -5,6 +5,7 @@ import type {
   CreateTaskRuleInput,
   UpdateTaskInput,
 } from "@shared/schemas/task.schema";
+import { logger } from "../utils/logger.js";
 
 async function validateAssignee(
   prisma: Pick<PrismaClient, "user">,
@@ -162,64 +163,120 @@ export function updateTask(
   });
 }
 
-/** Reconcile persisted rules after restart; the unique key prevents duplicates. */
+/**
+ * Reconcile persisted rules incrementally; the unique key prevents duplicates.
+ *
+ * Each sweep advances ONE page of the rule's transition stream, persisted in
+ * `scanCursor` — the process never rescans the whole table every interval.
+ * A rule only fires for transitions that happen AFTER it exists: status rules
+ * read `audit_logs` rows stamped at/after `rule.createdAt`, state rules read
+ * `record_workflows` rows whose `updatedAt` (the state-entry write) postdates
+ * the rule. Historical rows are never backfilled.
+ */
 export async function applyTaskRules(prisma: PrismaClient) {
   const rules = await prisma.taskRule.findMany({ where: { isActive: true } });
   for (const rule of rules) {
-    if (rule.workflowStateId) {
-      await reconcileWorkflowRule(prisma, rule);
-      continue;
+    // Isolate failures — one broken rule must not starve the rest.
+    try {
+      if (rule.workflowStateId) {
+        await reconcileWorkflowRule(prisma, rule);
+      } else if (rule.triggerStatus) {
+        await reconcileStatusRule(prisma, rule);
+      }
+    } catch (err) {
+      logger.error({ err, ruleId: rule.id }, "[tasks] rule reconcile failed");
     }
-    if (!rule.triggerStatus) {
-      continue;
-    }
-    let cursor: string | undefined;
-    for (;;) {
-      const jobs = await prisma.job.findMany({
-        where: {
+  }
+}
+
+const SCAN_PAGE = 100;
+
+/** Keyset filter "(ts, id) > scanCursor" over the rule's transition stream. */
+function streamCursor(rule: RuleData, field: "createdAt" | "updatedAt") {
+  const since = { [field]: { gte: rule.createdAt } };
+  if (!rule.scanCursor) {
+    return since;
+  }
+  const [ts, id] = rule.scanCursor.split(":");
+  const at = new Date(Number(ts));
+  if (!(id && Number.isFinite(at.getTime()))) {
+    return since;
+  }
+  return {
+    AND: [
+      since,
+      {
+        OR: [
+          { [field]: { gt: at } },
+          { AND: [{ [field]: at }, { id: { gt: id } }] },
+        ],
+      },
+    ],
+  };
+}
+
+function saveCursor(
+  prisma: PrismaClient | Prisma.TransactionClient,
+  rule: RuleData,
+  ts: Date,
+  id: string
+) {
+  return prisma.taskRule.update({
+    where: { id: rule.id },
+    data: { scanCursor: `${ts.getTime()}:${id}` },
+  });
+}
+
+async function reconcileStatusRule(prisma: PrismaClient, rule: RuleData) {
+  // Jobs are born INTAKE with a JOB_CREATED row, not a STATUS_CHANGED
+  // one — an INTAKE rule would never fire without it. Deliberately no
+  // synthetic STATUS_CHANGED is written at creation (reports/dashboard
+  // count them). Imports keep the gte rule.createdAt gate, so jobs with
+  // a backdated createdAt never fire.
+  const transitionFilter: Prisma.AuditLogWhereInput =
+    rule.triggerStatus === "INTAKE"
+      ? {
           OR: [
-            { status: rule.triggerStatus },
-            {
-              auditLogs: {
-                some: {
-                  action: "STATUS_CHANGED",
-                  toValue: rule.triggerStatus,
-                  createdAt: { gte: rule.createdAt },
-                },
-              },
-            },
+            { action: "STATUS_CHANGED", toValue: rule.triggerStatus },
+            { action: "JOB_CREATED" },
           ],
-          ...(cursor ? { id: { gt: cursor } } : {}),
-        },
-        orderBy: { id: "asc" },
-        take: 100,
-        select: { id: true },
-      });
-      for (const job of jobs) {
-        await prisma.workshopTask.upsert({
-          where: { triggerKey: `${rule.id}:${job.id}` },
-          update: {},
-          create: {
-            triggerKey: `${rule.id}:${job.id}`,
-            title: rule.title,
-            notes: rule.notes,
-            jobId: job.id,
-            entityType: "JOB",
-            entityId: job.id,
-            assigneeId: rule.assigneeId,
-            priority: rule.priority,
-            nextTitle: rule.nextTitle,
-            nextDelayHours: rule.nextDelayHours,
-            createdById: rule.createdById,
-            scheduledAt: new Date(Date.now() + rule.delayHours * 3_600_000),
-          },
-        });
-      }
-      if (jobs.length < 100) {
-        break;
-      }
-      cursor = jobs.at(-1)?.id;
+        }
+      : { action: "STATUS_CHANGED", toValue: rule.triggerStatus ?? undefined };
+  const logs = await prisma.auditLog.findMany({
+    where: {
+      ...transitionFilter,
+      ...streamCursor(rule, "createdAt"),
+    },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    take: SCAN_PAGE,
+    select: { id: true, jobId: true, createdAt: true },
+  });
+  for (const log of logs) {
+    if (!log.jobId) {
+      continue;
     }
+    await prisma.workshopTask.upsert({
+      where: { triggerKey: `${rule.id}:${log.jobId}` },
+      update: {},
+      create: {
+        triggerKey: `${rule.id}:${log.jobId}`,
+        title: rule.title,
+        notes: rule.notes,
+        jobId: log.jobId,
+        entityType: "JOB",
+        entityId: log.jobId,
+        assigneeId: rule.assigneeId,
+        priority: rule.priority,
+        nextTitle: rule.nextTitle,
+        nextDelayHours: rule.nextDelayHours,
+        createdById: rule.createdById,
+        scheduledAt: new Date(Date.now() + rule.delayHours * 3_600_000),
+      },
+    });
+  }
+  const last = logs.at(-1);
+  if (last) {
+    await saveCursor(prisma, rule, last.createdAt, last.id);
   }
 }
 
@@ -256,24 +313,23 @@ function createWorkflowTask(
   });
 }
 async function reconcileWorkflowRule(prisma: PrismaClient, rule: RuleData) {
-  let cursor: string | undefined;
-  for (;;) {
-    const records = await prisma.recordWorkflow.findMany({
-      where: {
-        stateId: rule.workflowStateId ?? undefined,
-        state: { isActive: true },
-      },
-      orderBy: { id: "asc" },
-      take: 100,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-    });
-    for (const record of records) {
-      await createWorkflowTask(prisma, rule, record);
-    }
-    if (records.length < 100) {
-      break;
-    }
-    cursor = records.at(-1)?.id;
+  // A record's updatedAt IS its state-entry timestamp — entities that sat
+  // in this state before the rule existed are history, not triggers.
+  const records = await prisma.recordWorkflow.findMany({
+    where: {
+      stateId: rule.workflowStateId ?? undefined,
+      state: { isActive: true },
+      ...streamCursor(rule, "updatedAt"),
+    },
+    orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
+    take: SCAN_PAGE,
+  });
+  for (const record of records) {
+    await createWorkflowTask(prisma, rule, record);
+  }
+  const last = records.at(-1);
+  if (last) {
+    await saveCursor(prisma, rule, last.updatedAt, last.id);
   }
 }
 export async function applyWorkflowTaskRules(

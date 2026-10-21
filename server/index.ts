@@ -219,7 +219,9 @@ const reconcileTasks = async () => {
     tasksRunning = false;
   }
 };
-const taskTimer = setInterval(reconcileTasks, 30_000);
+// Rules reconcile incrementally (per-rule scanCursor), so the sweep only
+// advances new transitions — a 5-minute cadence is enough.
+const taskTimer = setInterval(reconcileTasks, 300_000);
 taskTimer.unref();
 app.addHook("onReady", reconcileTasks);
 app.addHook("onClose", () => {
