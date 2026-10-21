@@ -101,7 +101,7 @@ describe("task automation", () => {
   it("reconciles a rule with a stable key so restarts do not duplicate tasks", async () => {
     const upsert = vi.fn();
     const ruleCreatedAt = new Date("2026-11-09T10:00:00Z");
-    const findLogs = vi.fn(() => [
+    const findLogs = vi.fn((_args: { where: Record<string, unknown> }) => [
       {
         id: "log1",
         jobId: "job1",
