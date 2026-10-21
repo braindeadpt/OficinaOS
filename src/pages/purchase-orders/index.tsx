@@ -5,6 +5,7 @@ import { Link, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { RecordWorkflow } from "@/components/modules/tasks/record-workflow";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -271,8 +272,8 @@ export default function PurchaseOrdersPage() {
                 />
               </Field>
             ))}
-            <label className="flex items-center gap-2">
-              <input
+            <Field horizontal label={t("business.fields.recoverInputVat")}>
+              <Checkbox
                 checked={form.recoverInputVat}
                 onChange={(e) =>
                   setForm((old) => ({
@@ -280,10 +281,8 @@ export default function PurchaseOrdersPage() {
                     recoverInputVat: e.target.checked,
                   }))
                 }
-                type="checkbox"
               />
-              {t("business.fields.recoverInputVat")}
-            </label>
+            </Field>
           </div>
           {[
             form.costGross,

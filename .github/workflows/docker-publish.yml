@@ -14,7 +14,8 @@ permissions:
   packages: write
 
 env:
-  IMAGE: ghcr.io/${{ github.repository }}
+  # GHCR refs must be lowercase; github.repository is "braindeadpt/OficinaOS".
+  IMAGE: ghcr.io/braindeadpt/oficinaos
 
 jobs:
   # Build nativo por arquitetura (sem QEMU: o bun sob emulação é lento e instável).
