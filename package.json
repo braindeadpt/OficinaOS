@@ -107,7 +107,7 @@
     "prepare": "husky"
   },
   "type": "module",
-  "version": "1.0.14",
+  "version": "1.0.15",
   "private": true,
   "engines": {
     "bun": "1.4.4"
