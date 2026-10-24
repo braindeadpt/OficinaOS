@@ -63,6 +63,19 @@ $gz = New-Object IO.Compression.GzipStream($in, [IO.Compression.CompressionMode]
 $out = [IO.File]::Create($tmp)
 try { $gz.CopyTo($out) } finally { $gz.Dispose(); $in.Dispose(); $out.Dispose() }
 
+# pg_dump >= 17 escreve `SET transaction_timeout = 0;` em todos os dumps —
+# o GUC nao existe em Postgres <= 16 e rebentava o restore (ON_ERROR_STOP).
+# Streaming: CreateText escreve UTF-8 sem BOM e nao carrega o dump em memoria.
+$tmpFiltered = "$tmp.filtered"
+$reader = [IO.File]::OpenText($tmp)
+$writer = [IO.File]::CreateText($tmpFiltered)
+try {
+    while (($line = $reader.ReadLine()) -ne $null) {
+        if ($line -notmatch '^SET transaction_timeout\b') { $writer.WriteLine($line) }
+    }
+} finally { $reader.Dispose(); $writer.Dispose() }
+Move-Item $tmpFiltered $tmp -Force
+
 # Dump de seguranca dos dados atuais ANTES de os destruir — fica na
 # lista do RESTORE como oficinaos-pre-restore-*.sql.gz. Se o dump
 # escolhido aplicar mal, os dados antigos nao se perderam.
