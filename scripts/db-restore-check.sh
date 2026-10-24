@@ -49,7 +49,9 @@ psql --host="$PGHOST" --port="$PGPORT" --username="$PGUSER" \
   --command="DROP DATABASE IF EXISTS \"$CHECK_DB\";" \
   --command="CREATE DATABASE \"$CHECK_DB\";"
 
-gunzip -c "$LOCAL_PATH" | psql \
+# pg_dump >= 17 escreve `SET transaction_timeout = 0;` em todos os dumps —
+# o GUC nao existe em Postgres <= 16 e rebentava o restore (ON_ERROR_STOP).
+gunzip -c "$LOCAL_PATH" | sed '/^SET transaction_timeout\b/d' | psql \
   --host="$PGHOST" --port="$PGPORT" --username="$PGUSER" \
   --dbname="$CHECK_DB" --set=ON_ERROR_STOP=1 --quiet
 

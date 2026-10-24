@@ -46,7 +46,9 @@ GRANT ALL ON SCHEMA public TO CURRENT_USER;
 SQL
 
 echo "[restore] applying backup"
-gunzip -c "$SOURCE" | psql \
+# pg_dump >= 17 escreve `SET transaction_timeout = 0;` em todos os dumps —
+# o GUC nao existe em Postgres <= 16 e rebentava o restore (ON_ERROR_STOP).
+gunzip -c "$SOURCE" | sed '/^SET transaction_timeout\b/d' | psql \
   --host="$PGHOST" --port="$PGPORT" --username="$PGUSER" \
   --dbname="$PGDATABASE" --set=ON_ERROR_STOP=1 --quiet
 
