@@ -137,3 +137,40 @@ jobs:
           Write-Host "MARKER-G-END EXIT=$LASTEXITCODE"
           # Corre contra postgres inexistente — falha esperada com P1000,
           # mas tem de imprimir o erro e sair, NÃO pendurar.
+
+      # Os probes A–F passam; nas 3 releases falhadas a única construção
+      # diferente era a pipeline (| Out-Null / 2>&1 | Out-String) — se um
+      # neto/worker do bun segura o handle do pipe, o consumidor espera EOF
+      # eternamente. H replica a construção que falhou; I é o candidato a fix.
+
+      - name: Probe H — migrate deploy --help CAPTURADO (2>&1 | Out-String)
+        timeout-minutes: 3
+        working-directory: ${{ runner.temp }}\oficinaos-portable\app
+        env:
+          CHECKPOINT_DISABLE: "1"
+        run: |
+          Write-Host "MARKER-H-START"
+          $prismaHelp = & bun node_modules\prisma\build\index.js migrate deploy --help 2>&1 | Out-String
+          Write-Host "MARKER-H-END EXIT=$LASTEXITCODE"
+          Write-Host "HELP LEN: $($prismaHelp.Length)"
+
+      - name: Probe I — migrate deploy --help saída DIRETA (candidato a fix)
+        timeout-minutes: 3
+        working-directory: ${{ runner.temp }}\oficinaos-portable\app
+        env:
+          CHECKPOINT_DISABLE: "1"
+        run: |
+          Write-Host "MARKER-I-START"
+          bun node_modules\prisma\build\index.js migrate deploy --help
+          Write-Host "MARKER-I-END EXIT=$LASTEXITCODE"
+          if ($LASTEXITCODE -ne 0) { throw "migrate deploy direto falhou" }
+
+      - name: Probe J — Out-Null pipeline (construção da v1.0.15)
+        timeout-minutes: 3
+        working-directory: ${{ runner.temp }}\oficinaos-portable\app
+        env:
+          CHECKPOINT_DISABLE: "1"
+        run: |
+          Write-Host "MARKER-J-START"
+          bun node_modules\prisma\build\index.js migrate deploy --help | Out-Null
+          Write-Host "MARKER-J-END EXIT=$LASTEXITCODE"
