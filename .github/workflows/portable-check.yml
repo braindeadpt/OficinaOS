@@ -247,8 +247,10 @@ jobs:
           Write-Host "K9 pg expanded"
           Copy-Item scripts\portable\* "$b\"
           Write-Host "K10 scripts copied"
-          tar -a -cf oficinaos-portable.zip -C "$env:RUNNER_TEMP" oficinaos-portable-k
-          Write-Host "K11 zip done EXIT=$LASTEXITCODE"
+          # Espelha o fix no release.yml — Compress-Archive em vez de tar.
+          Compress-Archive -Path "$env:RUNNER_TEMP\oficinaos-portable-k" `
+            -DestinationPath oficinaos-portable.zip -CompressionLevel Optimal
+          Write-Host "K11 zip done"
 
       # K11 crashou: tar (bsdtar) segfault 0xC0000005 a comprimir o bundle.
       # Candidatos a substituto — Compress-Archive (pwsh/.NET puro) e 7z

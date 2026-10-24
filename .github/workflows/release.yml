@@ -141,7 +141,11 @@ jobs:
           Copy-Item bun-tmp\bun-windows-x64\bun.exe "$b\bun\"
           Expand-Archive pg.zip "$b"
           Copy-Item scripts\portable\* "$b\"
-          tar -a -cf oficinaos-portable.zip -C "$env:RUNNER_TEMP" oficinaos-portable
+          # `tar -a -cf` (bsdtar) fazia segfault 0xC0000005 a comprimir o
+          # bundle — 3 releases seguidas morreram aqui aos ~80s de silêncio.
+          # Compress-Archive é .NET puro — mais lento (~45s) mas não crasha.
+          Compress-Archive -Path "$env:RUNNER_TEMP\oficinaos-portable" `
+            -DestinationPath oficinaos-portable.zip -CompressionLevel Optimal
 
       - name: Smoke test the portable bundle (extract → start → health → stop)
         # 3 releases seguidas saíram com o portátil partido (título vazio,
@@ -156,7 +160,7 @@ jobs:
           # o smoke replica esse caminho.
           $smoke = "$env:SystemDrive\oficinaos-smoke"
           New-Item -ItemType Directory -Force $smoke | Out-Null
-          tar -xf oficinaos-portable.zip -C $smoke
+          Expand-Archive oficinaos-portable.zip $smoke
           $root = "$smoke\oficinaos-portable"
           Remove-Item "$root\data" -Recurse -Force -ErrorAction SilentlyContinue
           # O `choice` do autostart assume N em CI (INICIAR.bat `if defined
@@ -186,7 +190,8 @@ jobs:
         # O zip de update é exactamente a app\ do bundle — instalação fresca e
         # instalação actualizada ficam sempre com o mesmo conteúdo.
         run: |
-          tar -a -cf oficinaos-app-update.zip -C "$env:RUNNER_TEMP\oficinaos-portable" app
+          Compress-Archive -Path "$env:RUNNER_TEMP\oficinaos-portable\app" `
+            -DestinationPath oficinaos-app-update.zip -CompressionLevel Optimal
           # Formato sha256sum ("hash  ficheiro") — `sha256sum -c` funciona direto.
           $h = (Get-FileHash oficinaos-app-update.zip -Algorithm SHA256).Hash.ToLower()
           "$h  oficinaos-app-update.zip" |
