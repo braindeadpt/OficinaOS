@@ -175,3 +175,76 @@ jobs:
           Write-Host "MARKER-J-START"
           bun node_modules\prisma\build\index.js migrate deploy --help | Out-Null
           Write-Host "MARKER-J-END EXIT=$LASTEXITCODE"
+
+      # A–J passam — o hang do release tem de estar nos comandos que seguem o
+      # prisma check dentro do mesmo step (Expand-Archive do pg.zip ~300MB ou
+      # o tar do zip final, ambos silenciosos). Probe K = réplica EXATA do
+      # assemble do release.yml com Write-Host entre blocos.
+
+      - name: Download Bun + PostgreSQL (como no release)
+        timeout-minutes: 10
+        run: |
+          $bunVersion = (Get-Content package.json -Raw | ConvertFrom-Json).engines.bun
+          Invoke-WebRequest "https://github.com/oven-sh/bun/releases/download/bun-v$bunVersion/bun-windows-x64.zip" -OutFile bun-win.zip
+          Expand-Archive bun-win.zip bun-tmp
+          Invoke-WebRequest "https://get.enterprisedb.com/postgresql/postgresql-17.6-1-windows-x64-binaries.zip" -OutFile pg.zip
+          Write-Host "DOWNLOADS OK"
+
+      - name: Probe K — réplica exata do Assemble bundle (com markers)
+        timeout-minutes: 15
+        run: |
+          $b = "$env:RUNNER_TEMP\oficinaos-portable-k"
+          New-Item -ItemType Directory -Force "$b\app", "$b\bun", "$b\data" | Out-Null
+          git archive HEAD -o "$env:RUNNER_TEMP\app-k.tar"
+          tar -xf "$env:RUNNER_TEMP\app-k.tar" -C "$b\app"
+          Write-Host "K1 archive ok"
+          Push-Location "$b\app"
+          bun install --production --ignore-scripts
+          Pop-Location
+          Write-Host "K2 install ok"
+          robocopy dist "$b\app\dist" /E /NFL /NDL /NJH /NJS /NP | Out-Null
+          if ($LASTEXITCODE -ge 8) { throw "robocopy dist falhou: $LASTEXITCODE" }
+          robocopy generated "$b\app\generated" /E /NFL /NDL /NJH /NJS /NP | Out-Null
+          if ($LASTEXITCODE -ge 8) { throw "robocopy generated falhou: $LASTEXITCODE" }
+          $global:LASTEXITCODE = 0
+          Write-Host "K3 robocopy ok"
+          $dead = @(
+            '@capacitor', '@electric-sql', '@prisma/query-plan-executor',
+            '@testing-library', '@types', '@babel', '@rolldown', '@vitest',
+            '@vitejs', '@biomejs', '@fontsource-variable',
+            'typescript', 'jsdom', 'lucide-react', 'jspdf', 'jspdf-autotable',
+            'html2canvas', 'react', 'react-dom', 'react-router', 'react-i18next',
+            'react-markdown', 'remark-gfm', 'rehype-highlight', 'highlight.js',
+            'zustand', 'sonner', 'chart.js', 'vitest', 'vite', 'tailwindcss',
+            'ultracite', 'husky', 'concurrently', 'lightningcss-win32-x64-msvc',
+            'i18next-browser-languagedetector'
+          )
+          foreach ($d in $dead) {
+            Remove-Item (Join-Path "$b\app\node_modules" $d) -Recurse -Force -ErrorAction SilentlyContinue
+          }
+          Get-ChildItem "$b\app\node_modules\@prisma\client\runtime" -Filter 'query_compiler_*' -File |
+            Where-Object { $_.Name -notlike 'query_compiler_fast_bg.postgresql.*' } |
+            Remove-Item -Force
+          Write-Host "K4 prune ok"
+          Push-Location "$b\app"
+          bun build server/index.ts --target bun --outdir "$env:RUNNER_TEMP\server-check"
+          if ($LASTEXITCODE -ne 0) { throw "bun build falhou no bundle podado" }
+          Write-Host "K5 bun build ok"
+          $env:CHECKPOINT_DISABLE = "1"
+          $prismaHelp = & bun node_modules\prisma\build\index.js migrate deploy --help 2>&1 | Out-String
+          Remove-Item Env:\CHECKPOINT_DISABLE
+          if ($LASTEXITCODE -ne 0) {
+            throw "prisma migrate deploy falhou no bundle podado:`n$prismaHelp"
+          }
+          Write-Host "K6 prisma ok"
+          Pop-Location
+          Remove-Item "$b\app\node_modules\.cache" -Recurse -Force -ErrorAction SilentlyContinue
+          Write-Host "K7 cache removed"
+          Copy-Item bun-tmp\bun-windows-x64\bun.exe "$b\bun\"
+          Write-Host "K8 bun.exe copied"
+          Expand-Archive pg.zip "$b"
+          Write-Host "K9 pg expanded"
+          Copy-Item scripts\portable\* "$b\"
+          Write-Host "K10 scripts copied"
+          tar -a -cf oficinaos-portable.zip -C "$env:RUNNER_TEMP" oficinaos-portable-k
+          Write-Host "K11 zip done EXIT=$LASTEXITCODE"
