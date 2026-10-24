@@ -191,6 +191,7 @@ jobs:
           Write-Host "DOWNLOADS OK"
 
       - name: Probe K — réplica exata do Assemble bundle (com markers)
+        continue-on-error: true
         timeout-minutes: 15
         run: |
           $b = "$env:RUNNER_TEMP\oficinaos-portable-k"
@@ -248,3 +249,37 @@ jobs:
           Write-Host "K10 scripts copied"
           tar -a -cf oficinaos-portable.zip -C "$env:RUNNER_TEMP" oficinaos-portable-k
           Write-Host "K11 zip done EXIT=$LASTEXITCODE"
+
+      # K11 crashou: tar (bsdtar) segfault 0xC0000005 a comprimir o bundle.
+      # Candidatos a substituto — Compress-Archive (pwsh/.NET puro) e 7z
+      # (presente na imagem windows-latest). O bundle K persiste em
+      # RUNNER_TEMP\oficinaos-portable-k entre steps do mesmo job.
+
+      - name: Probe L — Compress-Archive do bundle
+        timeout-minutes: 10
+        run: |
+          Write-Host "MARKER-L-START"
+          $sw = [Diagnostics.Stopwatch]::StartNew()
+          Compress-Archive -Path "$env:RUNNER_TEMP\oficinaos-portable-k" `
+            -DestinationPath "$env:RUNNER_TEMP\portable-ca.zip" `
+            -CompressionLevel Optimal
+          Write-Host "MARKER-L-END em $($sw.Elapsed.TotalSeconds)s"
+          (Get-Item "$env:RUNNER_TEMP\portable-ca.zip").Length
+
+      - name: Probe M — 7z do bundle
+        timeout-minutes: 10
+        run: |
+          Write-Host "MARKER-M-START"
+          & "C:\Program Files\7-Zip\7z.exe" a -tzip "$env:RUNNER_TEMP\portable-7z.zip" "$env:RUNNER_TEMP\oficinaos-portable-k" | Select-Object -Last 5
+          Write-Host "MARKER-M-END EXIT=$LASTEXITCODE"
+          (Get-Item "$env:RUNNER_TEMP\portable-7z.zip").Length
+
+      - name: Probe N — validar que o zip extrai limpo
+        timeout-minutes: 5
+        run: |
+          Write-Host "MARKER-N-START"
+          Expand-Archive "$env:RUNNER_TEMP\portable-ca.zip" "$env:SystemDrive\portable-extract-test"
+          Test-Path "$env:SystemDrive\portable-extract-test\oficinaos-portable-k\app\package.json"
+          Test-Path "$env:SystemDrive\portable-extract-test\oficinaos-portable-k\bun\bun.exe"
+          Test-Path "$env:SystemDrive\portable-extract-test\oficinaos-portable-k\pgsql\bin\pg_ctl.exe"
+          Write-Host "MARKER-N-END"
