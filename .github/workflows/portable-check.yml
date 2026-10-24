@@ -10,7 +10,6 @@ on:
   workflow_dispatch:
 
 env:
-  BUNDLE_DIR: ${{ runner.temp }}\oficinaos-portable
   DATABASE_URL: postgresql://localhost:5432/build
 
 jobs:
