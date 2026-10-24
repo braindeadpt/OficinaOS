@@ -65,8 +65,11 @@ jobs:
           bun run build
 
       - name: Download Bun runtime for Windows
+        # Fixado na engines.bun do package.json — a v1.0.15 apanhou um bun
+        # de releases/latest mais novo que o testado no setup-bun do job.
         run: |
-          Invoke-WebRequest "https://github.com/oven-sh/bun/releases/latest/download/bun-windows-x64.zip" -OutFile bun-win.zip
+          $bunVersion = (Get-Content package.json -Raw | ConvertFrom-Json).engines.bun
+          Invoke-WebRequest "https://github.com/oven-sh/bun/releases/download/bun-v$bunVersion/bun-windows-x64.zip" -OutFile bun-win.zip
           Expand-Archive bun-win.zip bun-tmp
 
       - name: Download portable PostgreSQL binaries
@@ -120,9 +123,15 @@ jobs:
           Push-Location "$b\app"
           bun build server/index.ts --target bun --outdir "$env:RUNNER_TEMP\server-check"
           if ($LASTEXITCODE -ne 0) { throw "bun build falhou no bundle podado" }
-          # Prova: o prisma CLI ainda arranca (start:prod corre migrate deploy).
-          bunx prisma migrate deploy --help | Out-Null
-          if ($LASTEXITCODE -ne 0) { throw "prisma migrate deploy falhou no bundle podado" }
+          # Prova: o prisma CLI ainda arranca — pelo MESMO caminho que o
+          # `bun run db:migrate-deploy` usa nas lojas (.bin\prisma.exe), mas
+          # sem `bunx`: em 1.4.x o bunx pendurou 73s no runner sem qualquer
+          # saída antes do passo falhar. A saída fica guardada — numa falha
+          # futura o log mostra o erro real.
+          $prismaHelp = & ".\node_modules\.bin\prisma.exe" migrate deploy --help 2>&1 | Out-String
+          if ($LASTEXITCODE -ne 0) {
+            throw "prisma migrate deploy falhou no bundle podado:`n$prismaHelp"
+          }
           Pop-Location
           # Cache de engines que o prisma CLI baixa ao correr — não vai no zip.
           Remove-Item "$b\app\node_modules\.cache" -Recurse -Force -ErrorAction SilentlyContinue
