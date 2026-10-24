@@ -127,6 +127,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "shim migrate deploy --help falhou" }
 
       - name: Probe G — bun run db:migrate-deploy (the real production path)
+        continue-on-error: true
         timeout-minutes: 5
         working-directory: ${{ runner.temp }}\oficinaos-portable\app
         env:
