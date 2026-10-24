@@ -123,12 +123,15 @@ jobs:
           Push-Location "$b\app"
           bun build server/index.ts --target bun --outdir "$env:RUNNER_TEMP\server-check"
           if ($LASTEXITCODE -ne 0) { throw "bun build falhou no bundle podado" }
-          # Prova: o prisma CLI ainda arranca — pelo MESMO caminho que o
-          # `bun run db:migrate-deploy` usa nas lojas (.bin\prisma.exe), mas
-          # sem `bunx`: em 1.4.x o bunx pendurou 73s no runner sem qualquer
-          # saída antes do passo falhar. A saída fica guardada — numa falha
-          # futura o log mostra o erro real.
-          $prismaHelp = & ".\node_modules\.bin\prisma.exe" migrate deploy --help 2>&1 | Out-String
+          # Prova: o prisma CLI ainda arranca — entry point direto com bun.
+          # Nem `bunx` nem o trampolim .bin\*.exe: em 1.4.x ambos penduram no
+          # runner 73–90s sem saída (um processo-filho segura o pipe do step
+          # e o passo morre sem mensagem). CHECKPOINT_DISABLE corta a única
+          # chamada de rede que o CLI faz no arranque (update-check). A saída
+          # fica capturada — numa falha futura o log mostra o erro real.
+          $env:CHECKPOINT_DISABLE = "1"
+          $prismaHelp = & bun node_modules\prisma\build\index.js migrate deploy --help 2>&1 | Out-String
+          Remove-Item Env:\CHECKPOINT_DISABLE
           if ($LASTEXITCODE -ne 0) {
             throw "prisma migrate deploy falhou no bundle podado:`n$prismaHelp"
           }
