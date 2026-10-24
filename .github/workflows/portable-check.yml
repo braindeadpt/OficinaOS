@@ -1,0 +1,287 @@
+name: Portable check
+
+# Workflow de diagnóstico — corre o mesmo assemble do release.yml mas com
+# cada comando nativo em step separado e saída direta (nada capturado em
+# variáveis). Existe porque o step "Assemble bundle" morreu 3 releases
+# seguidas com 75–90s de silêncio e zero output — sem isto é impossível
+# saber qual comando pendura no runner.
+on:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  DATABASE_URL: postgresql://localhost:5432/build
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Runtime versions
+        run: |
+          bun --version
+          node --version
+          $PSVersionTable.PSVersion
+
+      - name: Install deps + build app
+        run: |
+          bun install
+          bun run build
+
+      - name: Assemble dirs + prune (same list as release.yml)
+        run: |
+          $b = "$env:RUNNER_TEMP\oficinaos-portable"
+          New-Item -ItemType Directory -Force "$b\app" | Out-Null
+          git archive HEAD -o "$env:RUNNER_TEMP\app.tar"
+          tar -xf "$env:RUNNER_TEMP\app.tar" -C "$b\app"
+          Push-Location "$b\app"
+          bun install --production --ignore-scripts
+          Pop-Location
+          robocopy dist "$b\app\dist" /E /NFL /NDL /NJH /NJS /NP | Out-Null
+          if ($LASTEXITCODE -ge 8) { throw "robocopy dist falhou: $LASTEXITCODE" }
+          robocopy generated "$b\app\generated" /E /NFL /NDL /NJH /NJS /NP | Out-Null
+          if ($LASTEXITCODE -ge 8) { throw "robocopy generated falhou: $LASTEXITCODE" }
+          $global:LASTEXITCODE = 0
+          $dead = @(
+            '@capacitor', '@electric-sql', '@prisma/query-plan-executor',
+            '@testing-library', '@types', '@babel', '@rolldown', '@vitest',
+            '@vitejs', '@biomejs', '@fontsource-variable',
+            'typescript', 'jsdom', 'lucide-react', 'jspdf', 'jspdf-autotable',
+            'html2canvas', 'react', 'react-dom', 'react-router', 'react-i18next',
+            'react-markdown', 'remark-gfm', 'rehype-highlight', 'highlight.js',
+            'zustand', 'sonner', 'chart.js', 'vitest', 'vite', 'tailwindcss',
+            'ultracite', 'husky', 'concurrently', 'lightningcss-win32-x64-msvc',
+            'i18next-browser-languagedetector'
+          )
+          foreach ($d in $dead) {
+            Remove-Item (Join-Path "$b\app\node_modules" $d) -Recurse -Force -ErrorAction SilentlyContinue
+          }
+          Get-ChildItem "$b\app\node_modules\@prisma\client\runtime" -Filter 'query_compiler_*' -File |
+            Where-Object { $_.Name -notlike 'query_compiler_fast_bg.postgresql.*' } |
+            Remove-Item -Force
+          Get-Item "$b\app\node_modules\prisma\build\index.js" | Select-Object FullName, Length
+          Get-Item "$b\app\node_modules\.bin\prisma*" | Select-Object Name
+
+      - name: Probe A — bun build in pruned bundle
+        timeout-minutes: 5
+        working-directory: ${{ runner.temp }}\oficinaos-portable\app
+        run: |
+          Write-Host "MARKER-A-START"
+          bun build server/index.ts --target bun --outdir "$env:RUNNER_TEMP\server-check"
+          Write-Host "MARKER-A-END EXIT=$LASTEXITCODE"
+          if ($LASTEXITCODE -ne 0) { throw "bun build falhou" }
+
+      - name: Probe B — bun version inside bundle dir
+        timeout-minutes: 2
+        working-directory: ${{ runner.temp }}\oficinaos-portable\app
+        run: |
+          Write-Host "MARKER-B-START"
+          bun --version
+          Write-Host "MARKER-B-END EXIT=$LASTEXITCODE"
+
+      - name: Probe C — prisma --version (direct bun)
+        timeout-minutes: 5
+        working-directory: ${{ runner.temp }}\oficinaos-portable\app
+        run: |
+          Write-Host "MARKER-C-START"
+          bun node_modules\prisma\build\index.js --version
+          Write-Host "MARKER-C-END EXIT=$LASTEXITCODE"
+          if ($LASTEXITCODE -ne 0) { throw "prisma --version falhou" }
+
+      - name: Probe D — prisma migrate deploy --help (direct bun, DATABASE_URL set)
+        timeout-minutes: 5
+        working-directory: ${{ runner.temp }}\oficinaos-portable\app
+        env:
+          CHECKPOINT_DISABLE: "1"
+        run: |
+          Write-Host "MARKER-D-START"
+          bun node_modules\prisma\build\index.js migrate deploy --help
+          Write-Host "MARKER-D-END EXIT=$LASTEXITCODE"
+          if ($LASTEXITCODE -ne 0) { throw "migrate deploy --help falhou" }
+
+      - name: Probe E — prisma migrate deploy --help (direct bun, no DATABASE_URL)
+        timeout-minutes: 5
+        working-directory: ${{ runner.temp }}\oficinaos-portable\app
+        env:
+          DATABASE_URL: ""
+          CHECKPOINT_DISABLE: "1"
+        run: |
+          Write-Host "MARKER-E-START"
+          bun node_modules\prisma\build\index.js migrate deploy --help
+          Write-Host "MARKER-E-END EXIT=$LASTEXITCODE"
+          if ($LASTEXITCODE -ne 0) { throw "migrate deploy --help (sem DATABASE_URL) falhou" }
+
+      - name: Probe F — prisma migrate deploy --help via .bin shim
+        timeout-minutes: 5
+        working-directory: ${{ runner.temp }}\oficinaos-portable\app
+        env:
+          CHECKPOINT_DISABLE: "1"
+        run: |
+          Write-Host "MARKER-F-START"
+          & ".\node_modules\.bin\prisma.exe" migrate deploy --help
+          Write-Host "MARKER-F-END EXIT=$LASTEXITCODE"
+          if ($LASTEXITCODE -ne 0) { throw "shim migrate deploy --help falhou" }
+
+      - name: Probe G — bun run db:migrate-deploy (the real production path)
+        continue-on-error: true
+        timeout-minutes: 5
+        working-directory: ${{ runner.temp }}\oficinaos-portable\app
+        env:
+          CHECKPOINT_DISABLE: "1"
+        run: |
+          Write-Host "MARKER-G-START"
+          bun run db:migrate-deploy
+          Write-Host "MARKER-G-END EXIT=$LASTEXITCODE"
+          # Corre contra postgres inexistente — falha esperada com P1000,
+          # mas tem de imprimir o erro e sair, NÃO pendurar.
+
+      # Os probes A–F passam; nas 3 releases falhadas a única construção
+      # diferente era a pipeline (| Out-Null / 2>&1 | Out-String) — se um
+      # neto/worker do bun segura o handle do pipe, o consumidor espera EOF
+      # eternamente. H replica a construção que falhou; I é o candidato a fix.
+
+      - name: Probe H — migrate deploy --help CAPTURADO (2>&1 | Out-String)
+        timeout-minutes: 3
+        working-directory: ${{ runner.temp }}\oficinaos-portable\app
+        env:
+          CHECKPOINT_DISABLE: "1"
+        run: |
+          Write-Host "MARKER-H-START"
+          $prismaHelp = & bun node_modules\prisma\build\index.js migrate deploy --help 2>&1 | Out-String
+          Write-Host "MARKER-H-END EXIT=$LASTEXITCODE"
+          Write-Host "HELP LEN: $($prismaHelp.Length)"
+
+      - name: Probe I — migrate deploy --help saída DIRETA (candidato a fix)
+        timeout-minutes: 3
+        working-directory: ${{ runner.temp }}\oficinaos-portable\app
+        env:
+          CHECKPOINT_DISABLE: "1"
+        run: |
+          Write-Host "MARKER-I-START"
+          bun node_modules\prisma\build\index.js migrate deploy --help
+          Write-Host "MARKER-I-END EXIT=$LASTEXITCODE"
+          if ($LASTEXITCODE -ne 0) { throw "migrate deploy direto falhou" }
+
+      - name: Probe J — Out-Null pipeline (construção da v1.0.15)
+        timeout-minutes: 3
+        working-directory: ${{ runner.temp }}\oficinaos-portable\app
+        env:
+          CHECKPOINT_DISABLE: "1"
+        run: |
+          Write-Host "MARKER-J-START"
+          bun node_modules\prisma\build\index.js migrate deploy --help | Out-Null
+          Write-Host "MARKER-J-END EXIT=$LASTEXITCODE"
+
+      # A–J passam — o hang do release tem de estar nos comandos que seguem o
+      # prisma check dentro do mesmo step (Expand-Archive do pg.zip ~300MB ou
+      # o tar do zip final, ambos silenciosos). Probe K = réplica EXATA do
+      # assemble do release.yml com Write-Host entre blocos.
+
+      - name: Download Bun + PostgreSQL (como no release)
+        timeout-minutes: 10
+        run: |
+          $bunVersion = (Get-Content package.json -Raw | ConvertFrom-Json).engines.bun
+          Invoke-WebRequest "https://github.com/oven-sh/bun/releases/download/bun-v$bunVersion/bun-windows-x64.zip" -OutFile bun-win.zip
+          Expand-Archive bun-win.zip bun-tmp
+          Invoke-WebRequest "https://get.enterprisedb.com/postgresql/postgresql-17.6-1-windows-x64-binaries.zip" -OutFile pg.zip
+          Write-Host "DOWNLOADS OK"
+
+      - name: Probe K — réplica exata do Assemble bundle (com markers)
+        continue-on-error: true
+        timeout-minutes: 15
+        run: |
+          $b = "$env:RUNNER_TEMP\oficinaos-portable-k"
+          New-Item -ItemType Directory -Force "$b\app", "$b\bun", "$b\data" | Out-Null
+          git archive HEAD -o "$env:RUNNER_TEMP\app-k.tar"
+          tar -xf "$env:RUNNER_TEMP\app-k.tar" -C "$b\app"
+          Write-Host "K1 archive ok"
+          Push-Location "$b\app"
+          bun install --production --ignore-scripts
+          Pop-Location
+          Write-Host "K2 install ok"
+          robocopy dist "$b\app\dist" /E /NFL /NDL /NJH /NJS /NP | Out-Null
+          if ($LASTEXITCODE -ge 8) { throw "robocopy dist falhou: $LASTEXITCODE" }
+          robocopy generated "$b\app\generated" /E /NFL /NDL /NJH /NJS /NP | Out-Null
+          if ($LASTEXITCODE -ge 8) { throw "robocopy generated falhou: $LASTEXITCODE" }
+          $global:LASTEXITCODE = 0
+          Write-Host "K3 robocopy ok"
+          $dead = @(
+            '@capacitor', '@electric-sql', '@prisma/query-plan-executor',
+            '@testing-library', '@types', '@babel', '@rolldown', '@vitest',
+            '@vitejs', '@biomejs', '@fontsource-variable',
+            'typescript', 'jsdom', 'lucide-react', 'jspdf', 'jspdf-autotable',
+            'html2canvas', 'react', 'react-dom', 'react-router', 'react-i18next',
+            'react-markdown', 'remark-gfm', 'rehype-highlight', 'highlight.js',
+            'zustand', 'sonner', 'chart.js', 'vitest', 'vite', 'tailwindcss',
+            'ultracite', 'husky', 'concurrently', 'lightningcss-win32-x64-msvc',
+            'i18next-browser-languagedetector'
+          )
+          foreach ($d in $dead) {
+            Remove-Item (Join-Path "$b\app\node_modules" $d) -Recurse -Force -ErrorAction SilentlyContinue
+          }
+          Get-ChildItem "$b\app\node_modules\@prisma\client\runtime" -Filter 'query_compiler_*' -File |
+            Where-Object { $_.Name -notlike 'query_compiler_fast_bg.postgresql.*' } |
+            Remove-Item -Force
+          Write-Host "K4 prune ok"
+          Push-Location "$b\app"
+          bun build server/index.ts --target bun --outdir "$env:RUNNER_TEMP\server-check"
+          if ($LASTEXITCODE -ne 0) { throw "bun build falhou no bundle podado" }
+          Write-Host "K5 bun build ok"
+          $env:CHECKPOINT_DISABLE = "1"
+          $prismaHelp = & bun node_modules\prisma\build\index.js migrate deploy --help 2>&1 | Out-String
+          Remove-Item Env:\CHECKPOINT_DISABLE
+          if ($LASTEXITCODE -ne 0) {
+            throw "prisma migrate deploy falhou no bundle podado:`n$prismaHelp"
+          }
+          Write-Host "K6 prisma ok"
+          Pop-Location
+          Remove-Item "$b\app\node_modules\.cache" -Recurse -Force -ErrorAction SilentlyContinue
+          Write-Host "K7 cache removed"
+          Copy-Item bun-tmp\bun-windows-x64\bun.exe "$b\bun\"
+          Write-Host "K8 bun.exe copied"
+          Expand-Archive pg.zip "$b"
+          Write-Host "K9 pg expanded"
+          Copy-Item scripts\portable\* "$b\"
+          Write-Host "K10 scripts copied"
+          # Espelha o fix no release.yml — Compress-Archive em vez de tar.
+          Compress-Archive -Path "$env:RUNNER_TEMP\oficinaos-portable-k" `
+            -DestinationPath oficinaos-portable.zip -CompressionLevel Optimal
+          Write-Host "K11 zip done"
+
+      # K11 crashou: tar (bsdtar) segfault 0xC0000005 a comprimir o bundle.
+      # Candidatos a substituto — Compress-Archive (pwsh/.NET puro) e 7z
+      # (presente na imagem windows-latest). O bundle K persiste em
+      # RUNNER_TEMP\oficinaos-portable-k entre steps do mesmo job.
+
+      - name: Probe L — Compress-Archive do bundle
+        timeout-minutes: 10
+        run: |
+          Write-Host "MARKER-L-START"
+          $sw = [Diagnostics.Stopwatch]::StartNew()
+          Compress-Archive -Path "$env:RUNNER_TEMP\oficinaos-portable-k" `
+            -DestinationPath "$env:RUNNER_TEMP\portable-ca.zip" `
+            -CompressionLevel Optimal
+          Write-Host "MARKER-L-END em $($sw.Elapsed.TotalSeconds)s"
+          (Get-Item "$env:RUNNER_TEMP\portable-ca.zip").Length
+
+      - name: Probe M — 7z do bundle
+        timeout-minutes: 10
+        run: |
+          Write-Host "MARKER-M-START"
+          & "C:\Program Files\7-Zip\7z.exe" a -tzip "$env:RUNNER_TEMP\portable-7z.zip" "$env:RUNNER_TEMP\oficinaos-portable-k" | Select-Object -Last 5
+          Write-Host "MARKER-M-END EXIT=$LASTEXITCODE"
+          (Get-Item "$env:RUNNER_TEMP\portable-7z.zip").Length
+
+      - name: Probe N — validar que o zip extrai limpo
+        timeout-minutes: 5
+        run: |
+          Write-Host "MARKER-N-START"
+          Expand-Archive "$env:RUNNER_TEMP\portable-ca.zip" "$env:SystemDrive\portable-extract-test"
+          Test-Path "$env:SystemDrive\portable-extract-test\oficinaos-portable-k\app\package.json"
+          Test-Path "$env:SystemDrive\portable-extract-test\oficinaos-portable-k\bun\bun.exe"
+          Test-Path "$env:SystemDrive\portable-extract-test\oficinaos-portable-k\pgsql\bin\pg_ctl.exe"
+          Write-Host "MARKER-N-END"
