@@ -37,7 +37,8 @@ const DEMO_FORBIDDEN_ENV =
 // LOOKS like a secret is forbidden in demo — except the few the app
 // genuinely needs to boot (session/crypto keys stay local, never leave
 // the container).
-const DEMO_FORBIDDEN_SUFFIX = /(_TOKEN|_SECRET|_PASSWORD|_API_KEY|_APIKEY)$/;
+const DEMO_FORBIDDEN_SUFFIX =
+  /(_TOKEN|_SECRET|_PASSWORD|_PASS|_KEY|_API_KEY|_APIKEY|_CREDENTIALS|_DSN)$/;
 const DEMO_ALLOWED_SECRETS = new Set([
   "BETTER_AUTH_SECRET",
   "COOKIE_SECRET",
@@ -135,6 +136,12 @@ const schema = z
     // Public demo at demo.oficinaos.app: fictional shop, hourly reset,
     // everything that could reach the outside world switched off.
     DEMO_MODE: boolish,
+    // Trust CF-Connecting-IP for rate-limit keys. Optional because the
+    // header is client-controlled the moment someone reaches the origin
+    // without going through Cloudflare — only turn on if the edge proxy
+    // does not already strip/replace it AND requests can also arrive
+    // from a public socket IP (Docker-internal peers are trusted anyway).
+    DEMO_TRUST_CF_CONNECTING_IP: boolish,
 
     // ── Timezone ──────────────────────────────────────────────
     TZ: z.string().optional(),

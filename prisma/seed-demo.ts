@@ -940,6 +940,11 @@ export async function buildDemoDump(now: Date): Promise<DemoDump> {
   );
 }
 
+interface DemoDelegate {
+  createMany: (arg: { data: Row[] }) => Promise<unknown>;
+  findMany: (arg?: { select?: Record<string, boolean> }) => Promise<Row[]>;
+}
+
 type DemoPrisma = {
   $executeRawUnsafe: (sql: string, ...params: unknown[]) => Promise<unknown>;
   $queryRawUnsafe: <T = unknown>(
@@ -950,7 +955,7 @@ type DemoPrisma = {
     fn: (tx: DemoPrisma) => Promise<unknown>,
     opts?: { timeout?: number; maxWait?: number }
   ) => Promise<unknown>;
-} & Record<string, { createMany: (arg: { data: Row[] }) => Promise<unknown> }>;
+} & Record<string, DemoDelegate>;
 
 /**
  * Wipes every public table except _prisma_migrations and replays the dump
@@ -967,6 +972,10 @@ export async function applyDemoDump(
   await prisma.$transaction(
     async (tx) => {
       await tx.$executeRawUnsafe(`SET LOCAL lock_timeout = '10s'`);
+      // The hourly TRUNCATE would log every visitor out — preserve live
+      // sessions and re-insert them after the replay (the demo user's id
+      // is deterministic, so the FK still resolves).
+      const sessions = await tx.session.findMany();
       const tables = await tx.$queryRawUnsafe<{ tablename: string }[]>(
         `SELECT tablename FROM pg_tables
          WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'`
@@ -980,6 +989,19 @@ export async function applyDemoDump(
       for (const [delegate, rows] of dump) {
         if (rows.length > 0) {
           await tx[delegate].createMany({ data: rows });
+        }
+      }
+      if (sessions.length > 0) {
+        const userIds = new Set(
+          (await tx.user.findMany({ select: { id: true } })).map(
+            (u) => u.id as string
+          )
+        );
+        const restorable = sessions.filter((s) =>
+          userIds.has(s.userId as string)
+        );
+        if (restorable.length > 0) {
+          await tx.session.createMany({ data: restorable });
         }
       }
     },

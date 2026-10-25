@@ -24,8 +24,14 @@
 # First boot seeds the demo dataset automatically when the user table is
 # empty (DEMO_MODE + 0 users).
 #
-# Proxy note: rate limits key on CF-Connecting-IP when present (the
-# cloudflared connector forwards it), falling back to the socket IP.
+# Proxy note: rate limits key on CF-Connecting-IP only when the peer is
+# trusted — a private/edge IP (the cloudflared connector or the edge
+# proxy itself) or DEMO_TRUST_CF_CONNECTING_IP=true. A request reaching
+# the origin on a public socket keeps its real IP as the key, so forging
+# the header mints nothing. THE ORIGIN MUST ONLY BE REACHABLE VIA
+# cloudflared (or the edge proxy must strip/replace the header) — if the
+# app port is ever exposed to the internet, set
+# DEMO_TRUST_CF_CONNECTING_IP=false or keep the default off.
 # TRUST_PROXY stays off — plain X-Forwarded-For would be spoofable.
 
 name: oficinaos-demo
@@ -49,6 +55,13 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    # The postgres entrypoint chowns its datadir and su-execs to the
+    # postgres user — without these caps the container exits on boot.
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETUID
+      - SETGID
     mem_limit: 512m
     pids_limit: 128
     networks:
@@ -72,10 +85,18 @@ services:
       UPLOAD_DIR: /app/uploads
       # Root fs is read-only — the snapshot lives on the tmpfs.
       DEMO_DUMP_PATH: /tmp/demo-snapshot.json
+      # read_only hardening: stop Bun/Prisma from writing caches under
+      # $HOME (and stop Prisma's checkpoint ping entirely).
+      BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0"
+      CHECKPOINT_DISABLE: "1"
+      # Optional — see the proxy note above. Default (off) only trusts
+      # CF-Connecting-IP from private/edge peers.
+      # DEMO_TRUST_CF_CONNECTING_IP: "true"
     volumes:
       - demo-uploads:/app/uploads
     tmpfs:
       - /tmp
+      - /root/.cache
     read_only: true
     security_opt:
       - no-new-privileges:true

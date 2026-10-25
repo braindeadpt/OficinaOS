@@ -28,6 +28,7 @@ android/
 docs/
 specs/
 scripts/
+!scripts/demo-reset.ts
 
 *.test.ts
 *.test.tsx

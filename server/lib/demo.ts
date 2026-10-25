@@ -145,37 +145,62 @@ export function demoRequestPath(
   return decoded.replace(/\/{2,}/g, "/").toLowerCase();
 }
 
+// The database name must be exactly "demo" or carry it as a delimited
+// segment (oficinaos_demo, demo_it_123): a substring match would let
+// "demolition" or "notademo" through, which is precisely the accident
+// this guard exists to prevent.
+const DEMO_DB_NAME = /(^|_)demo(_|$)/i;
+
 /**
  * Second safety net for the destructive demo paths (seed, hourly reset):
- * the target database's name must literally contain "demo", so a
- * mispointed DATABASE_URL can never wipe a real shop.
+ * the target database's name must be "demo" (or contain it as a
+ * _-delimited segment), so a mispointed DATABASE_URL can never wipe a
+ * real shop.
  */
 export function assertDemoDatabase(databaseUrl: string): void {
   let dbName = "";
   try {
-    dbName = new URL(databaseUrl).pathname.split("/").pop() ?? "";
+    const raw = new URL(databaseUrl).pathname.split("/").pop() ?? "";
+    // DB names may be percent-encoded in the URL — compare the real name.
+    dbName = decodeURIComponent(raw);
   } catch {
     // unparsable — falls through to the throw below
   }
-  if (!dbName.toLowerCase().includes("demo")) {
+  if (!DEMO_DB_NAME.test(dbName)) {
     throw new Error(
-      `Refusing demo wipe on database "${dbName || "unknown"}" — name must contain "demo".`
+      `Refusing demo wipe on database "${dbName || "unknown"}" — name must be or contain "_demo_".`
     );
   }
 }
+
+// RFC1918/CGNAT/link-local/loopback — a peer in one of these ranges is
+// inside our own deployment (the cloudflared connector or the edge
+// proxy), so its CF-Connecting-IP header is infrastructure-set, not
+// client-controlled. Anyone else hitting the origin directly keeps the
+// socket IP as their key — a forged header then buys them nothing.
+const PRIVATE_IP =
+  /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|127\.|169\.254\.|::1$|fd|fe80)/i;
 
 /**
  * DEMO_MODE rate-limit key: behind cloudflared/Caddy every request arrives
  * from the proxy IP, so the whole visitor pool would share one budget
  * (and ban:5 would let a single script block everyone). CF-Connecting-IP
- * is what cloudflared forwards to the origin; direct hits fall back to
- * the socket IP. Only used in demo mode — real installs keep request.ip
- * and the explicit TRUST_PROXY opt-in.
+ * is what cloudflared forwards to the origin — but it is just an HTTP
+ * header, so we only honor it when the peer is trusted: either it came
+ * from a private/internal IP (i.e. our own proxy infrastructure), or the
+ * operator explicitly set DEMO_TRUST_CF_CONNECTING_IP=true. A direct hit
+ * on a public socket falls back to request.ip, where rotating the header
+ * cannot mint extra budgets. Only used in demo mode — real installs keep
+ * request.ip and the explicit TRUST_PROXY opt-in.
  */
 export function demoRateLimitKey(request: {
   headers: Record<string, unknown>;
   ip: string;
 }): string {
   const cfIp = request.headers["cf-connecting-ip"];
-  return typeof cfIp === "string" && cfIp.length > 0 ? cfIp : request.ip;
+  const trusted =
+    loadEnv().DEMO_TRUST_CF_CONNECTING_IP || PRIVATE_IP.test(request.ip);
+  return trusted && typeof cfIp === "string" && cfIp.length > 0
+    ? cfIp
+    : request.ip;
 }

@@ -131,7 +131,25 @@ describe.skipIf(!serverReachable)("demo seed/reset (integration)", () => {
       expect(() => assertDemoDatabase(process.env.DATABASE_URL)).toThrow(
         DEMO_NAME_RE
       );
+      // Substring "demo" is not enough — only an exact or _-delimited
+      // match passes, so "demolition" can never wipe a real shop.
+      expect(() =>
+        assertDemoDatabase(
+          (testDbUrl as string).replace(DB_NAME, "oficinaosdemodb")
+        )
+      ).toThrow(DEMO_NAME_RE);
       expect(() => assertDemoDatabase(testDbUrl as string)).not.toThrow();
+      expect(() =>
+        assertDemoDatabase(
+          (testDbUrl as string).replace(DB_NAME, "oficinaos_demo")
+        )
+      ).not.toThrow();
+      // Percent-encoded names are compared decoded.
+      expect(() =>
+        assertDemoDatabase(
+          (testDbUrl as string).replace(DB_NAME, "oficinaos_%64emo")
+        )
+      ).not.toThrow();
     } finally {
       process.env.DATABASE_URL = saved;
       resetEnvForTests();
@@ -171,6 +189,30 @@ describe.skipIf(!serverReachable)("demo seed/reset (integration)", () => {
       });
       expect(await db.user.count()).toBe(2);
 
+      // A live visitor session — the hourly TRUNCATE used to log everyone
+      // out; the reset must re-insert sessions that survive the replay.
+      const demoUser = await db.user.findFirstOrThrow({
+        where: { username: "demo" },
+      });
+      const liveSession = await db.session.create({
+        data: {
+          token: `it-session-${Math.random().toString(36).slice(2)}`,
+          userId: demoUser.id,
+          expiresAt: new Date(Date.now() + 3_600_000),
+        },
+      });
+      // And one tied to the rogue user — it must NOT come back.
+      const rogue = await db.user.findFirstOrThrow({
+        where: { username: "rogue" },
+      });
+      await db.session.create({
+        data: {
+          token: `it-rogue-${Math.random().toString(36).slice(2)}`,
+          userId: rogue.id,
+          expiresAt: new Date(Date.now() + 3_600_000),
+        },
+      });
+
       const { applyDemoDump } = await import("../../prisma/seed-demo.js");
       await applyDemoDump(db as never, dump);
 
@@ -196,6 +238,11 @@ describe.skipIf(!serverReachable)("demo seed/reset (integration)", () => {
       expect(only.isActive).toBe(true);
       // No leftover "ALTERADO" names.
       expect(await db.customer.count({ where: { name: "ALTERADO" } })).toBe(0);
+
+      // The demo visitor's session survived the wipe; the rogue user's
+      // did not (its owner was reset away).
+      const sessions = await db.session.findMany();
+      expect(sessions.map((s) => s.id)).toEqual([liveSession.id]);
     } finally {
       process.env.DATABASE_URL = saved;
       resetEnvForTests();

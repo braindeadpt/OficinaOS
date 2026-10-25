@@ -208,12 +208,12 @@ Todas as variáveis de ambiente estão documentadas no [`.env.example`](./.env.e
 **O que muda com `DEMO_MODE=true`:**
 
 - `POST /api/demo/login` cria uma sessão de dono de oficina sem password; `/setup` fica desativado e um banco vazio é semeado automaticamente no arranque
-- O servidor **recusa arrancar** se algum segredo real estiver definido — por prefixo (`OPENAI_`, `EMAIL_`, `WHATSAPP_`, `SMTP_`, `META_`, `EVOLUTION_`, `OFICINAOS_CLOUD_`, `CLOUD_`, `GITHUB_`, `INVOICEXPRESS_`, `IX_`, `TRADE_`, `MARKET_`, `S3_`, `R2_`, `AWS_`, `BACKUP_`, `SEED_ADMIN_`, `SETUP_TOKEN`) **ou por sufixo** (`*_TOKEN`, `*_SECRET`, `*_PASSWORD`, `*_API_KEY`, `*_APIKEY`). Únicas exceções: `BETTER_AUTH_SECRET`, `COOKIE_SECRET` e `AI_ENCRYPTION_KEY`, que nunca saem do contentor
+- O servidor **recusa arrancar** se algum segredo real estiver definido — por prefixo (`OPENAI_`, `EMAIL_`, `WHATSAPP_`, `SMTP_`, `META_`, `EVOLUTION_`, `OFICINAOS_CLOUD_`, `CLOUD_`, `GITHUB_`, `INVOICEXPRESS_`, `IX_`, `TRADE_`, `MARKET_`, `S3_`, `R2_`, `AWS_`, `BACKUP_`, `SEED_ADMIN_`, `SETUP_TOKEN`) **ou por sufixo** (`*_TOKEN`, `*_SECRET`, `*_PASSWORD`, `*_PASS`, `*_KEY`, `*_API_KEY`, `*_APIKEY`, `*_CREDENTIALS`, `*_DSN`). Únicas exceções: `BETTER_AUTH_SECRET`, `COOKIE_SECRET` e `AI_ENCRYPTION_KEY`, que nunca saem do contentor
 - Tudo o que sai para fora fica desligado **no servidor** (não só na UI): email, WhatsApp/SMS, webhooks, assistente IA, pairing/sync com Cloud e Trade, InvoiceXpress, feedback→GitHub, self-update, impressora ESC/POS, exports
 - Bloqueados com 403: gestão de utilizadores/papéis, alteração de password/email, chaves e integrações, sign-in por credenciais (só `/api/demo/login` cria sessões — falhas nunca bloqueiam a conta demo), importações acima de 50 linhas
 - O guard corre sobre o caminho **descodificado** (variantes URL-encoded como `/api/%75sers/...` são rejeitadas antes do router)
 - Uploads: máximo 1 MB por ficheiro, só imagens (validação MIME + magic bytes), quota total de 200 MB
-- Rate limits mais apertados (login demo 20/15min por IP; escritas ≤60/min) — atrás do cloudflared a chave é `CF-Connecting-IP`, para que todos os visitantes não partilhem o IP do túnel
+- Rate limits mais apertados (login demo 20/15min por IP; escritas ≤60/min) — atrás do cloudflared a chave é `CF-Connecting-IP`, para que todos os visitantes não partilhem o IP do túnel. O header só é honrado quando o peer é privado/edge (o conector cloudflared ou o proxy) ou com `DEMO_TRUST_CF_CONNECTING_IP=true` — **a origem tem de estar acessível apenas via cloudflared** (ou o proxy da edge tem de sobrepor/remover o header), senão quem chegar direto à origem forja o header e ganha orçamento ilimitado
 - Os schedulers externos (Cloud poller, remarketing, outbox) nem arrancam
 - Uma faixa fixa no topo avisa «Demo — os dados são fictícios e apagados de hora a hora» com o CTA «Instalar na minha oficina»
 

@@ -108,6 +108,10 @@ export const usersRoutes: FastifyPluginAsync = async (app) => {
         body: { type: "object", additionalProperties: true },
       },
       preHandler: [requirePermission({ user: ["create"] })],
+      // User creation is the only 10/min endpoint in this family — the
+      // central map's prefix match would cap GETs too, so the budget
+      // lives on the route itself.
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
     },
     async (request, reply) => {
       // Defense in depth — the global demo guard already rejects this,
