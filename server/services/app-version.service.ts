@@ -1,4 +1,5 @@
 import pkg from "../../package.json";
+import { assertNotDemoMode, isDemoMode } from "../lib/demo.js";
 import { logger } from "../utils/logger.js";
 import { isNewerVersion } from "../utils/version.js";
 
@@ -33,6 +34,17 @@ export interface AppVersionInfo {
 export async function getAppVersionInfo(
   fetchImpl: typeof fetch = fetch
 ): Promise<AppVersionInfo> {
+  // The demo's update banner polls this route — answer locally instead of
+  // phoning GitHub (fetchLatestRelease would refuse anyway).
+  if (isDemoMode()) {
+    return {
+      current: pkg.version,
+      latest: null,
+      updateAvailable: false,
+      releaseUrl: null,
+      checkedAt: null,
+    };
+  }
   if (!cache || Date.now() - cache.checkedAt > cache.ttl) {
     cache = await fetchLatestRelease(fetchImpl);
   }
@@ -54,6 +66,8 @@ export function resetAppVersionCache(): void {
 async function fetchLatestRelease(
   fetchImpl: typeof fetch
 ): Promise<LatestCache> {
+  // Version check phones GitHub — off in demo.
+  assertNotDemoMode();
   try {
     const res = await fetchImpl(RELEASES_API, {
       headers: {

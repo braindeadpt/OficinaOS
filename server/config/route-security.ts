@@ -1,4 +1,5 @@
 import type { FastifyRequest } from "fastify";
+import { demoRateLimitKey } from "../lib/demo.js";
 
 export interface RateLimitConfig {
   keyGenerator?: (req: FastifyRequest) => string;
@@ -33,8 +34,15 @@ const signInKeyGenerator = (req: FastifyRequest): string => {
 // budget in the app and always keys on the caller's IP.
 const lookupKeyGenerator = (req: FastifyRequest): string => req.ip;
 
-// Authenticated API traffic is keyed per user (see plugins/security.ts), so
-// staff sharing one shop IP do not share a budget.
+// Demo login uses the shared demo key (see lib/demo.ts): CF-Connecting-IP
+// when the peer is trusted (private/edge IP or the explicit env flag),
+// else the socket IP — a spoofable header must never mint extra budget.
+const demoLoginKeyGenerator = (req: FastifyRequest): string =>
+  demoRateLimitKey(req);
+
+// The global keyGenerator is per IP (see plugins/security.ts): staff on
+// one shop LAN share a budget, which is intended — per-user keys would
+// need request.user, which is not populated yet when rate limits run.
 export const DEFAULT_SECURITY: RouteSecurityOverride = {
   rateLimit: { max: 300, timeWindow: "1 minute" },
   allowSensitiveKeys: false,
@@ -115,6 +123,18 @@ function routeMatchesPattern(url: string, pattern: string): boolean {
 
 export const routeSecurity: [string, RouteSecurityOverride][] = [
   ["/health", { rateLimit: false, csrf: false }],
+  // Public demo entry — anonymous, IP-keyed, tight budget.
+  [
+    "/api/demo/login",
+    {
+      rateLimit: {
+        keyGenerator: demoLoginKeyGenerator,
+        max: 20,
+        timeWindow: "15 minutes",
+      },
+    },
+  ],
+  ["/api/demo/status", { csrf: false }],
   [
     "/api/csrf-token",
     { rateLimit: { max: 60, timeWindow: "1 minute" }, csrf: false },
@@ -194,13 +214,12 @@ export const routeSecurity: [string, RouteSecurityOverride][] = [
       allowSensitiveKeys: true,
     },
   ],
-  [
-    "/api/users",
-    {
-      rateLimit: { max: 10, timeWindow: "1 minute" },
-      allowSensitiveKeys: true,
-    },
-  ],
+  // No rateLimit here: the map matches by prefix and for every method, so
+  // a write budget on "/api/users" would silently cap GETs too (list,
+  // stats, sessions). The 10/min create-user limit lives on the POST /
+  // route config in routes/users.ts; reset-password and :id/status keep
+  // their own entries above.
+  ["/api/users", { allowSensitiveKeys: true }],
   // More specific patterns must precede their parent, since the first match wins.
   [
     "/api/jobs/lookup",

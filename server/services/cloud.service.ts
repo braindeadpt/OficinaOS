@@ -3,6 +3,7 @@ import { Role } from "@shared/constants/roles.js";
 import type { FastifyBaseLogger } from "fastify";
 import { AppError } from "../../shared/errors/app-error.js";
 import { decryptSecret, encryptSecret } from "../lib/crypto.js";
+import { assertNotDemoMode } from "../lib/demo.js";
 import { create as createIntakeRequest } from "../repositories/intake-request.repository.js";
 import { findManyUsers } from "../repositories/notification.repository.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
@@ -34,6 +35,7 @@ export async function cloudFetch(
     timeoutMs?: number;
   } = {}
 ): Promise<{ ok: boolean; status: number; body: unknown }> {
+  assertNotDemoMode();
   const controller = new AbortController();
   const timer = setTimeout(
     () => controller.abort(),

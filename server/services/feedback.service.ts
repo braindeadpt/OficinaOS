@@ -2,6 +2,7 @@ import { AppError } from "@shared/errors/app-error.js";
 import type { ReportProblemInput } from "@shared/schemas/feedback.schema";
 import pkg from "../../package.json";
 import { loadEnv } from "../config/env.js";
+import { assertNotDemoMode } from "../lib/demo.js";
 
 const GITHUB_API = "https://api.github.com";
 const USER_REPORT_LABEL = "user-report";
@@ -89,6 +90,7 @@ export async function submitFeedbackReport(
   input: ReportProblemInput,
   reporter: FeedbackReporter
 ): Promise<FeedbackResult> {
+  assertNotDemoMode();
   const env = loadEnv();
   if (!env.GITHUB_FEEDBACK_TOKEN) {
     throw new AppError("FEEDBACK_NOT_CONFIGURED");

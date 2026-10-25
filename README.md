@@ -199,6 +199,29 @@ Todas as variáveis de ambiente estão documentadas no [`.env.example`](./.env.e
 | `AI_ENCRYPTION_KEY` | Chave AES-256 para guardar a OpenAI key |
 | `OPENAI_API_KEY` | Opcional — assistente IA |
 | `WHATSAPP_*`, `EMAIL_*` | Opcional — notificações ao cliente |
+| `DEMO_MODE` | `true` ativa a demo pública (ver secção seguinte) — **nunca numa instalação real** |
+
+## Demo pública (`demo.oficinaos.app`)
+
+`DEMO_MODE=true` transforma a instalação numa demo pública: o visitante carrega em «Experimentar a demo», entra numa oficina fictícia já preenchida (clientes, reparações, stock, vendas — tudo inventado) e usa tudo sem instalar nada.
+
+**O que muda com `DEMO_MODE=true`:**
+
+- `POST /api/demo/login` cria uma sessão de dono de oficina sem password; `/setup` fica desativado e um banco vazio é semeado automaticamente no arranque
+- O servidor **recusa arrancar** se algum segredo real estiver definido — por prefixo (`OPENAI_`, `EMAIL_`, `WHATSAPP_`, `SMTP_`, `META_`, `EVOLUTION_`, `OFICINAOS_CLOUD_`, `CLOUD_`, `GITHUB_`, `INVOICEXPRESS_`, `IX_`, `TRADE_`, `MARKET_`, `S3_`, `R2_`, `AWS_`, `BACKUP_`, `SEED_ADMIN_`, `SETUP_TOKEN`) **ou por sufixo** (`*_TOKEN`, `*_SECRET`, `*_PASSWORD`, `*_PASS`, `*_KEY`, `*_API_KEY`, `*_APIKEY`, `*_CREDENTIALS`, `*_DSN`). Únicas exceções: `BETTER_AUTH_SECRET`, `COOKIE_SECRET` e `AI_ENCRYPTION_KEY`, que nunca saem do contentor
+- Tudo o que sai para fora fica desligado **no servidor** (não só na UI): email, WhatsApp/SMS, webhooks, assistente IA, pairing/sync com Cloud e Trade, InvoiceXpress, feedback→GitHub, self-update, impressora ESC/POS, exports
+- Bloqueados com 403: gestão de utilizadores/papéis, alteração de password/email, chaves e integrações, sign-in por credenciais (só `/api/demo/login` cria sessões — falhas nunca bloqueiam a conta demo), importações acima de 50 linhas
+- O guard corre sobre o caminho **descodificado** (variantes URL-encoded como `/api/%75sers/...` são rejeitadas antes do router)
+- Uploads: máximo 1 MB por ficheiro, só imagens (validação MIME + magic bytes), quota total de 200 MB
+- Rate limits mais apertados (login demo 20/15min por IP; escritas ≤60/min) — atrás do cloudflared a chave é `CF-Connecting-IP`, para que todos os visitantes não partilhem o IP do túnel. O header só é honrado quando o peer é privado/edge (o conector cloudflared ou o proxy) ou com `DEMO_TRUST_CF_CONNECTING_IP=true` — **a origem tem de estar acessível apenas via cloudflared** (ou o proxy da edge tem de sobrepor/remover o header), senão quem chegar direto à origem forja o header e ganha orçamento ilimitado
+- Os schedulers externos (Cloud poller, remarketing, outbox) nem arrancam
+- Uma faixa fixa no topo avisa «Demo — os dados são fictícios e apagados de hora a hora» com o CTA «Instalar na minha oficina»
+
+**Seed:** `bun run db:seed:demo` gera o dataset determinístico (PRNG com seed fixa — mesma forma em cada execução, datas relativas a "agora") e grava o snapshot em `demo-snapshot.json` (ou `DEMO_DUMP_PATH`). Como segunda guarda, `seedDemo`/`demo:reset` recusam correr sobre uma BD cujo nome não contenha `demo`.
+
+**Reset horário:** o timer da infra corre `docker exec demo-web bun run demo:reset` — regenera o dump (datas sempre frescas), faz TRUNCATE+replay **numa única transação** (`lock_timeout=10s`, timeout 60s) e limpa o conteúdo dos uploads. A app continua a responder durante o reset — os leitores veem o estado antes ou depois, nunca uma base a meio; o comando é idempotente e corre inteiramente dentro do contentor.
+
+**Deploy de exemplo:** [`compose.demo.yaml`](./compose.demo.yaml) — app + Postgres com imagem de tag fixa, `read_only` + `tmpfs /tmp`, `cap_drop ALL`, `no-new-privileges`, limites de memória/CPU/PIDs, rede `internal` selada e **nenhuma porta publicada** (só a rede `edge`), com [`.env.demo.example`](./.env.demo.example). O reverse proxy na edge aponta `demo.oficinaos.app` para `demo-web:4000`.
 
 ## Desenvolvimento local (sem Docker)
 

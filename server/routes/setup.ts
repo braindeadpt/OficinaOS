@@ -24,6 +24,10 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
+      // The demo is seeded — it never shows the first-run screen.
+      if (loadEnv().DEMO_MODE) {
+        return reply.send({ needsSetup: false, allowed: false });
+      }
       const needsSetup = await isSetupNeeded(app.prisma);
       if (!needsSetup) {
         return reply.send({ needsSetup: false, allowed: false });

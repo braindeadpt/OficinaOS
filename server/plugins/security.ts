@@ -19,8 +19,10 @@ import {
   MUTATION_METHODS,
   matchRoute,
   mergeRouteConfig,
+  type RouteSecurityOverride,
   routeSecurity,
 } from "../config/route-security.js";
+import { demoRateLimitKey, isDemoMode } from "../lib/demo.js";
 import {
   buildRateLimitError,
   CappedBackoffStore,
@@ -33,6 +35,27 @@ const SENSITIVE_KEYS = new Set(["password", "role", "mustChangePassword"]);
 
 function generateNonce(): string {
   return globalThis.crypto.randomUUID().replace(/-/g, "");
+}
+
+// DEMO_MODE write ceiling — see the onRoute call site below.
+const DEMO_MUTATION_MAX_PER_MINUTE = 60;
+function clampDemoMutationRateLimit(config: unknown, method: string): void {
+  if (!(isDemoMode() && isMutation(method))) {
+    return;
+  }
+  const cfg = config as RouteSecurityOverride | undefined;
+  const rl = cfg?.rateLimit;
+  if (rl && typeof rl === "object") {
+    // Clone before capping — routeSecurity entries are shared objects;
+    // mutating them in place would leak the demo ceiling into the map.
+    cfg.rateLimit = {
+      ...rl,
+      max: Math.min(
+        rl.max ?? DEMO_MUTATION_MAX_PER_MINUTE,
+        DEMO_MUTATION_MAX_PER_MINUTE
+      ),
+    };
+  }
 }
 
 // Segment-aware: /embed and /embed/* are iframable widget pages; a sibling
@@ -223,63 +246,11 @@ const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     maxAge: 86_400,
   });
 
-  // ── Layer 3: Rate Limiting (global — all API routes rate-limited) ───────
-  // hook: 'preHandler' so the request body is parsed by the time per-route
-  // keyGenerators run (sign-in rate-limits key on body.email/body.username).
-  // Static assets and the SPA shell are exempt (a page load fetches dozens
-  // of chunks); backoff windows are capped at 15 min and every rejection is
-  // a 429 with Retry-After — see server/lib/rate-limit.ts.
-  await app.register(rateLimit, {
-    global: true,
-    hook: "preHandler",
-    max:
-      DEFAULT_SECURITY.rateLimit &&
-      typeof DEFAULT_SECURITY.rateLimit === "object"
-        ? (DEFAULT_SECURITY.rateLimit as { max: number }).max
-        : 100,
-    timeWindow:
-      DEFAULT_SECURITY.rateLimit &&
-      typeof DEFAULT_SECURITY.rateLimit === "object"
-        ? (DEFAULT_SECURITY.rateLimit as { timeWindow: string }).timeWindow
-        : "1 minute",
-    // NOTE: keyed on IP, not user — this preHandler was registered before
-    // the auth plugin sets request.user, so request.user is always null
-    // here. IP keying is intended (single shop behind NAT shares the
-    // budget) and sensitive endpoints carry their own per-identifier
-    // limits + lockout.
-    keyGenerator: (request) => request.ip,
-    exponentialBackoff: true,
-    ban: 5,
-    store: CappedBackoffStore,
-    allowList: (request) => isRateLimitExempt(request),
-    errorResponseBuilder: buildRateLimitError,
-  });
-
-  // ── Layer 4: CSRF Protection ───────────────────────────────────────────
-  // Cookie secret is required when cookies are signed.
-  await app.register(cookie, {
-    secret: env.COOKIE_SECRET ?? env.BETTER_AUTH_SECRET,
-  });
-
-  await app.register(csrf, {
-    cookieOpts: {
-      // HTTPS deployments (incl. the Android Capacitor WebView, which is
-      // cross-site against the public origin) need SameSite=None; Secure.
-      // Plain-HTTP LAN deployments use Lax so the cookie is actually stored.
-      sameSite: IS_HTTPS ? "none" : "lax",
-      httpOnly: true,
-      path: "/",
-      secure: IS_HTTPS,
-      signed: IS_PROD,
-    },
-  });
-
-  app.get("/api/csrf-token", async (_req, reply) => {
-    const token = await reply.generateCsrf();
-    return { token };
-  });
-
   // ── Layer 5: Auto-apply route security from config map ──────────────────
+  // IMPORTANT: registered BEFORE @fastify/rate-limit. The plugin reads
+  // routeOptions.config.rateLimit in its own onRoute hook, and onRoute
+  // hooks run in registration order — so this map merge must already have
+  // happened or every override (e.g. /api/demo/login 20/15min) is ignored.
   app.addHook("onRoute", (routeOptions) => {
     const url = routeOptions.path;
     const method = routeOptions.method;
@@ -309,6 +280,71 @@ const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       routeOptions.config as Record<string, unknown> | undefined,
       override
     );
+
+    // DEMO_MODE: writes get a tighter ceiling (60/min) — the public demo
+    // shares one data set, so a single visitor scripting POSTs must not
+    // churn it for everyone else. Stricter per-route limits still win.
+    clampDemoMutationRateLimit(routeOptions.config, methodStr);
+  });
+
+  // ── Layer 3: Rate Limiting (global — all API routes rate-limited) ───────
+  // hook: 'preHandler' so the request body is parsed by the time per-route
+  // keyGenerators run (sign-in rate-limits key on body.email/body.username).
+  // Static assets and the SPA shell are exempt (a page load fetches dozens
+  // of chunks); backoff windows are capped at 15 min and every rejection is
+  // a 429 with Retry-After — see server/lib/rate-limit.ts.
+  await app.register(rateLimit, {
+    global: true,
+    hook: "preHandler",
+    max:
+      DEFAULT_SECURITY.rateLimit &&
+      typeof DEFAULT_SECURITY.rateLimit === "object"
+        ? (DEFAULT_SECURITY.rateLimit as { max: number }).max
+        : 100,
+    timeWindow:
+      DEFAULT_SECURITY.rateLimit &&
+      typeof DEFAULT_SECURITY.rateLimit === "object"
+        ? (DEFAULT_SECURITY.rateLimit as { timeWindow: string }).timeWindow
+        : "1 minute",
+    // NOTE: keyed on IP, not user — this preHandler was registered before
+    // the auth plugin sets request.user, so request.user is always null
+    // here. IP keying is intended (single shop behind NAT shares the
+    // budget) and sensitive endpoints carry their own per-identifier
+    // limits + lockout. DEMO_MODE keys on CF-Connecting-IP instead: the
+    // demo sits behind cloudflared, where every request arrives from the
+    // tunnel IP — plain request.ip would give all visitors ONE shared
+    // budget (and ban:5 would let a single script block everyone).
+    keyGenerator: (request) =>
+      isDemoMode() ? demoRateLimitKey(request) : request.ip,
+    exponentialBackoff: true,
+    ban: 5,
+    store: CappedBackoffStore,
+    allowList: (request) => isRateLimitExempt(request),
+    errorResponseBuilder: buildRateLimitError,
+  });
+
+  // ── Layer 4: CSRF Protection ───────────────────────────────────────────
+  // Cookie secret is required when cookies are signed.
+  await app.register(cookie, {
+    secret: env.COOKIE_SECRET ?? env.BETTER_AUTH_SECRET,
+  });
+
+  await app.register(csrf, {
+    cookieOpts: {
+      // HTTPS deployments (incl. the Android Capacitor WebView, which is
+      // cross-site against the public origin) need SameSite=None; Secure.
+      // Plain-HTTP LAN deployments use Lax so the cookie is actually stored.
+      sameSite: IS_HTTPS ? "none" : "lax",
+      httpOnly: true,
+      path: "/",
+      secure: IS_HTTPS,
+      signed: IS_PROD,
+    },
+  });
+
+  app.get("/api/csrf-token", async (_req, reply) => {
+    const token = await reply.generateCsrf();
+    return { token };
   });
 
   // ── Layer 6: Request Sanitization ───────────────────────────────────────

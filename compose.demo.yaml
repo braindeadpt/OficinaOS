@@ -1,0 +1,121 @@
+# compose.demo.yaml — public demo (demo.oficinaos.app).
+#
+# A fictional, pre-filled repair shop any visitor can try without
+# installing anything. DEMO_MODE=true hard-disables every outbound
+# integration (email, WhatsApp/SMS, AI, Cloud/Trade pairing, exports) and
+# refuses to boot if real credentials are set — there are no secrets in
+# this stack.
+#
+# Deliberately absent vs. a real install:
+#   - no db-backup sidecar (the data is fictional; the reset IS the backup)
+#   - no published ports: only the external `edge` network (traefik/nginx)
+#     can reach the app — nothing else on the host
+#   - `internal` is a sealed network: db is unreachable from outside the
+#     compose project
+#   - the app runs read-only with a tmpfs /tmp, dropped caps and
+#     no-new-privileges — a public instance gets the tightest sandbox we
+#     can give it
+#
+# Reset: the infra timer runs `docker exec demo-web bun run demo:reset`
+# hourly — TRUNCATE + replay inside ONE transaction + clear uploads. The
+# app keeps serving; readers see the pre- or post-reset state, never a
+# half-empty database.
+#
+# First boot seeds the demo dataset automatically when the user table is
+# empty (DEMO_MODE + 0 users).
+#
+# Proxy note: rate limits key on CF-Connecting-IP only when the peer is
+# trusted — a private/edge IP (the cloudflared connector or the edge
+# proxy itself) or DEMO_TRUST_CF_CONNECTING_IP=true. A request reaching
+# the origin on a public socket keeps its real IP as the key, so forging
+# the header mints nothing. THE ORIGIN MUST ONLY BE REACHABLE VIA
+# cloudflared (or the edge proxy must strip/replace the header) — if the
+# app port is ever exposed to the internet, set
+# DEMO_TRUST_CF_CONNECTING_IP=false or keep the default off.
+# TRUST_PROXY stays off — plain X-Forwarded-For would be spoofable.
+
+name: oficinaos-demo
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: demo
+      POSTGRES_DB: demo
+    volumes:
+      - demo-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demo -d demo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # The postgres entrypoint chowns its datadir and su-execs to the
+    # postgres user — without these caps the container exits on boot.
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETUID
+      - SETGID
+    mem_limit: 512m
+    pids_limit: 128
+    networks:
+      - internal
+
+  app:
+    # Pinned tag — bump to the first release that ships DEMO_MODE.
+    # Never :latest: an accidental pull must not swap the running build.
+    image: ghcr.io/braindeadpt/oficinaos:1.0.19
+    restart: unless-stopped
+    container_name: demo-web
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env.demo
+    environment:
+      DATABASE_URL: postgresql://demo:demo@db:5432/demo
+      DEMO_MODE: "true"
+      NODE_ENV: production
+      APP_URL: https://demo.oficinaos.app
+      UPLOAD_DIR: /app/uploads
+      # Root fs is read-only — the snapshot lives on the tmpfs.
+      DEMO_DUMP_PATH: /tmp/demo-snapshot.json
+      # read_only hardening: stop Bun/Prisma from writing caches under
+      # $HOME (and stop Prisma's checkpoint ping entirely).
+      BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0"
+      CHECKPOINT_DISABLE: "1"
+      # Optional — see the proxy note above. Default (off) only trusts
+      # CF-Connecting-IP from private/edge peers.
+      # DEMO_TRUST_CF_CONNECTING_IP: "true"
+    volumes:
+      - demo-uploads:/app/uploads
+    tmpfs:
+      - /tmp
+      - /root/.cache
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 768m
+    cpus: 1.0
+    pids_limit: 256
+    # No `ports:` — the app is only reachable through the edge network.
+    networks:
+      - internal
+      - edge
+
+networks:
+  internal:
+    internal: true
+  edge:
+    external: true
+
+volumes:
+  demo-pgdata:
+  demo-uploads:

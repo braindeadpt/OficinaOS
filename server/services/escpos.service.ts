@@ -2,6 +2,7 @@ import { Socket } from "node:net";
 import type { ShopSettings } from "@generated/client";
 import { AppError } from "@shared/errors/app-error.js";
 import iconv from "iconv-lite";
+import { assertNotDemoMode } from "../lib/demo.js";
 import {
   fmtMoneyPlain,
   phone4Of,
@@ -380,6 +381,9 @@ export async function sendEscPos(
   > | null,
   data: Buffer
 ): Promise<void> {
+  // Demo: a raw TCP socket to a visitor-supplied host is SSRF-shaped —
+  // receipt printing uses the browser path instead.
+  assertNotDemoMode();
   if (settings?.printerMode !== "escpos" || !settings.printerHost) {
     throw new AppError("PRINTER_NOT_CONFIGURED");
   }

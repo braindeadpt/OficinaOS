@@ -4,6 +4,7 @@ import type { AiSettings, Prisma, PrismaClient } from "@generated/client";
 import { AppError } from "@shared/errors/app-error.js";
 import OpenAI from "openai";
 import { decryptSecret, isEncrypted } from "../lib/crypto.js";
+import { assertNotDemoMode } from "../lib/demo.js";
 import { assembleSystemPrompt, getToolDefinitions } from "./context.js";
 import {
   type AccumulatedToolCall,
@@ -152,6 +153,7 @@ async function executeToolCalls(
 }
 
 export async function streamChat(params: StreamParams): Promise<StreamResult> {
+  assertNotDemoMode();
   const { prisma, settings, userId, message, conversationId, agentName } =
     params;
 

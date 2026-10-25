@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import api, { type ApiError } from "@/lib/api";
+import { useDemoMode } from "@/lib/demo";
 import { useAuthStore } from "@/stores/auth";
 
 /**
@@ -77,6 +78,7 @@ export default function SetupPage() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token") ?? undefined;
   const login = useAuthStore((s) => s.login);
+  const isDemo = useDemoMode();
 
   const [status, setStatus] = useState<SetupStatus | null>(null);
   const [form, setForm] = useState({
@@ -179,7 +181,8 @@ export default function SetupPage() {
     }
   }
 
-  if (status && !status.needsSetup) {
+  // DEMO_MODE: /setup is disabled — the seeded shop already exists.
+  if (isDemo || (status && !status.needsSetup)) {
     return <Navigate replace to="/login" />;
   }
 

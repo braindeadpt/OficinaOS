@@ -5,6 +5,7 @@ import type { FastifyPluginAsync } from "fastify";
 import fp from "fastify-plugin";
 import type { Auth } from "../lib/auth.js";
 import { createAuth, getSessionFromRequest } from "../lib/auth.js";
+import { DEMO_USERNAME, isDemoMode } from "../lib/demo.js";
 import {
   incrementFailedAttempt,
   isAccountLocked,
@@ -61,7 +62,7 @@ function sanitizeSignInResponse(
   }
 }
 
-async function handleFailedSignIn(
+export async function handleFailedSignIn(
   prisma: PrismaClient,
   request: { method: string; body: unknown }
 ): Promise<void> {
@@ -81,9 +82,11 @@ async function handleFailedSignIn(
     const normalized = identifier.toLowerCase().trim();
     const user = await prisma.user.findFirst({
       where: { OR: [{ username: normalized }, { email: normalized }] },
-      select: { id: true },
+      select: { id: true, username: true },
     });
-    if (user) {
+    // The shared demo account is exempt — failures against it are never
+    // counted, so nobody can lock the demo out for every other visitor.
+    if (user && !(isDemoMode() && user.username === DEMO_USERNAME)) {
       await incrementFailedAttempt(prisma, user.id);
     }
   } catch (error) {
@@ -116,7 +119,7 @@ async function forwardResponse(
   reply.send(sanitized ?? null);
 }
 
-async function checkSignInLockout(
+export async function checkSignInLockout(
   prisma: PrismaClient,
   request: { method: string; body: unknown }
 ): Promise<void> {
@@ -136,8 +139,13 @@ async function checkSignInLockout(
   const normalized = identifier.toLowerCase().trim();
   const user = await prisma.user.findFirst({
     where: { OR: [{ username: normalized }, { email: normalized }] },
-    select: { failedLoginAttempts: true, lockedUntil: true },
+    select: { username: true, failedLoginAttempts: true, lockedUntil: true },
   });
+  // Same demo exemption as the failure counter — the seeded demo account
+  // must stay reachable even if a stale lock somehow made it into the row.
+  if (isDemoMode() && user?.username === DEMO_USERNAME) {
+    return;
+  }
   if (user && isAccountLocked(user)) {
     throw new AppError("ACCOUNT_LOCKED");
   }
@@ -209,6 +217,10 @@ const authPlugin: FastifyPluginAsync = async (app) => {
       pathname === "/health" ||
       pathname === "/api/csrf-token" ||
       pathname.startsWith("/api/auth") ||
+      // Public demo entry — creates the session itself. Exact matches:
+      // a prefix would also exempt any future /api/demo/* route we add.
+      pathname === "/api/demo/login" ||
+      pathname === "/api/demo/status" ||
       // First-run setup runs before any user exists; the route guards
       // itself (0 users + loopback or one-time token).
       pathname === "/api/setup" ||
@@ -235,9 +247,13 @@ const authPlugin: FastifyPluginAsync = async (app) => {
 
     const lockoutUser = await app.prisma.user.findUnique({
       where: { id: session.id },
-      select: { failedLoginAttempts: true, lockedUntil: true },
+      select: { username: true, failedLoginAttempts: true, lockedUntil: true },
     });
-    if (lockoutUser && isAccountLocked(lockoutUser)) {
+    if (
+      lockoutUser &&
+      !(isDemoMode() && lockoutUser.username === DEMO_USERNAME) &&
+      isAccountLocked(lockoutUser)
+    ) {
       throw new AppError("ACCOUNT_LOCKED");
     }
 

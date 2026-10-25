@@ -2,6 +2,7 @@ import type { Transporter } from "nodemailer";
 import nodemailer from "nodemailer";
 import { loadEnv } from "../config/env.js";
 import { logger } from "../utils/logger.js";
+import { assertNotDemoMode } from "./demo.js";
 
 let _transporter: Transporter | null = null;
 
@@ -44,6 +45,7 @@ export async function sendEmail({
   text?: string;
   html?: string;
 }): Promise<void> {
+  assertNotDemoMode();
   if (!isConfigured()) {
     logger.warn(
       "[email] SMTP not configured — skipping email send. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS to enable."

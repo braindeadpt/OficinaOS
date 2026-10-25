@@ -376,6 +376,13 @@
   "customers_export": "Exportar CSV",
   "dashboard": "Painel",
   "dashboard_greeting": "Bem-vindo de volta, {{name}}",
+  "demo_banner_cta": "Instalar na minha oficina",
+  "demo_banner_text": "Demo — os dados são fictícios e apagados de hora a hora. Não introduza dados reais.",
+  "demo_login_button": "Experimentar a demo",
+  "demo_login_cta": "Experimentar a demo",
+  "demo_login_desc": "Entre numa oficina fictícia — sem password. Tudo é reposto de hora a hora.",
+  "demo_login_title": "Demo do OficinaOS",
+  "demo_unavailable": "Indisponível na demo",
   "dashboard_page": {
     "since_8am": "+{{count}} desde as 8h",
     "hours_late": "{{hours}}h atrasado",
@@ -615,8 +622,10 @@
     "signature_already_submitted": "Esta assinatura já foi submetida",
     "quote_amount_required": "Indique o valor do orçamento — esta reparação ainda não tem custo estimado",
     "duplicate_customer_phone": "Já existe um cliente com este número de telefone",
+    "demo_disabled": "Indisponível na demo",
     "setup_already_done": "A oficina já foi configurada. Inicie sessão.",
-    "setup_not_local": "Por segurança, a primeira configuração só pode ser feita no computador onde o OficinaOS está instalado."
+    "setup_not_local": "Por segurança, a primeira configuração só pode ser feita no computador onde o OficinaOS está instalado.",
+    "demo_quota_exceeded": "Armazenamento de uploads cheio na demo — repõe de hora a hora"
   },
   "failed_to_create_part": "Falha ao criar peça",
   "failed_to_delete_part": "Falha ao eliminar peça",

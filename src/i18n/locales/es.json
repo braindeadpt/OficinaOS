@@ -376,6 +376,13 @@
   "customers_export": "Exportar CSV",
   "dashboard": "Panel",
   "dashboard_greeting": "Bienvenido/a de nuevo, {{name}} ",
+  "demo_banner_cta": "instalarlo en mi tienda",
+  "demo_banner_text": "Demostración: los datos son ficticios y se borran cada hora. ",
+  "demo_login_button": "Pruebe la demostración",
+  "demo_login_cta": "Pruebe la demostración",
+  "demo_login_desc": "Ingrese a un taller de reparación ficticio, no se necesita contraseña. ",
+  "demo_login_title": "Demostración de OficinaOS",
+  "demo_unavailable": "No disponible en demostración",
   "dashboard_page": {
     "since_8am": "+{{count}} desde LAS 8:00",
     "hours_late": "{{hours}}h tarde",
@@ -615,8 +622,10 @@
     "signature_already_submitted": "Esta firma ya fue enviada",
     "quote_amount_required": "Indique el importe del presupuesto: esta reparación aún no tiene coste estimado",
     "duplicate_customer_phone": "Ya existe un cliente con este número de teléfono",
+    "demo_disabled": "No disponible en demostración",
     "setup_already_done": "El taller ya está configurado. Inicie sesión.",
-    "setup_not_local": "Por seguridad, la primera configuración solo puede hacerse en el ordenador donde está instalado OficinaOS."
+    "setup_not_local": "Por seguridad, la primera configuración solo puede hacerse en el ordenador donde está instalado OficinaOS.",
+    "demo_quota_exceeded": "El almacenamiento de carga está lleno en la demostración: se reinicia cada hora"
   },
   "failed_to_create_part": "No se pudo crear la pieza",
   "failed_to_delete_part": "No se pudo eliminar la parte",

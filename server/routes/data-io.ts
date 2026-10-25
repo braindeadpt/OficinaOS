@@ -6,6 +6,7 @@ import {
   importRepairsSchema,
 } from "@shared/schemas/data-io.schema";
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
+import { DEMO_IMPORT_MAX_ROWS, isDemoMode } from "../lib/demo.js";
 import { requirePermission } from "../middlewares/rbac.js";
 import { createAuditLog } from "../services/audit.service.js";
 import {
@@ -42,7 +43,13 @@ function parseImportBody(
       errors: resolveZodErrors(parsed.error.flatten().fieldErrors, req.locale),
     });
   }
-  return parsed.data.rows;
+  const rows = parsed.data.rows;
+  // Demo: small imports are allowed, bulk imports are not — the shared
+  // dataset would be churned by whoever pastes in a spreadsheet.
+  if (isDemoMode() && rows.length > DEMO_IMPORT_MAX_ROWS) {
+    throw new AppError("DEMO_DISABLED");
+  }
+  return rows;
 }
 
 // Import/export em massa — CSV/XLSX (o XLSX é convertido no cliente para

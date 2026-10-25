@@ -29,6 +29,29 @@ const boolish = z
   .optional()
   .transform((v) => v === "true");
 
+// Secrets that must never reach the public demo — real credentials on a
+// shared, hourly-reset instance would leak the moment anyone hit Settings.
+const DEMO_FORBIDDEN_ENV =
+  /^(OPENAI_|EMAIL_|WHATSAPP_|SMTP_|META_|EVOLUTION_|OFICINAOS_CLOUD_|CLOUD_|GITHUB_|INVOICEXPRESS_|IX_|TRADE_|MARKET_|S3_|R2_|AWS_|BACKUP_|SEED_ADMIN_|SETUP_TOKEN)/;
+// Catch-all for credentials we didn't enumerate by prefix: anything that
+// LOOKS like a secret is forbidden in demo — except the few the app
+// genuinely needs to boot (session/crypto keys stay local, never leave
+// the container).
+const DEMO_FORBIDDEN_SUFFIX =
+  /(_TOKEN|_SECRET|_PASSWORD|_PASS|_KEY|_API_KEY|_APIKEY|_CREDENTIALS|_DSN)$/;
+const DEMO_ALLOWED_SECRETS = new Set([
+  "BETTER_AUTH_SECRET",
+  "COOKIE_SECRET",
+  "AI_ENCRYPTION_KEY",
+]);
+
+function isDemoForbiddenEnv(key: string): boolean {
+  if (DEMO_ALLOWED_SECRETS.has(key)) {
+    return false;
+  }
+  return DEMO_FORBIDDEN_ENV.test(key) || DEMO_FORBIDDEN_SUFFIX.test(key);
+}
+
 /** Treat empty/whitespace-only strings as unset so defaults apply. */
 /** Coerce to int, but let empty strings fall through to the default. */
 const portNumber = z.preprocess(
@@ -109,10 +132,36 @@ const schema = z
       .regex(GITHUB_REPO_REGEX, "must be owner/repo")
       .default("braindeadpt/OficinaOS"),
 
+    // ── Demo mode ─────────────────────────────────────────────
+    // Public demo at demo.oficinaos.app: fictional shop, hourly reset,
+    // everything that could reach the outside world switched off.
+    DEMO_MODE: boolish,
+    // Trust CF-Connecting-IP for rate-limit keys. Optional because the
+    // header is client-controlled the moment someone reaches the origin
+    // without going through Cloudflare — only turn on if the edge proxy
+    // does not already strip/replace it AND requests can also arrive
+    // from a public socket IP (Docker-internal peers are trusted anyway).
+    DEMO_TRUST_CF_CONNECTING_IP: boolish,
+
     // ── Timezone ──────────────────────────────────────────────
     TZ: z.string().optional(),
   })
   .superRefine((val, ctx) => {
+    // The demo must never hold real credentials: it is public, seeded with
+    // fictional data and reset hourly. Real secrets defined alongside
+    // DEMO_MODE mean a misconfigured deploy — refuse to start.
+    if (val.DEMO_MODE) {
+      const forbidden = Object.keys(process.env).filter(isDemoForbiddenEnv);
+      for (const key of forbidden) {
+        ctx.addIssue({
+          code: "custom",
+          path: [key],
+          message:
+            "must not be set when DEMO_MODE=true (demo never uses real credentials)",
+        });
+      }
+    }
+
     if (val.NODE_ENV !== "production") {
       return;
     }
