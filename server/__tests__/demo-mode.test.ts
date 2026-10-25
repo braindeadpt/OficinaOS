@@ -1,41 +1,84 @@
+import multipart from "@fastify/multipart";
 import { isAppError } from "@shared/errors/app-error.js";
-import Fastify from "fastify";
+import Fastify, { type FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetEnvForTests } from "../config/env.js";
 
-// Demo-mode tests exercise env parsing, the route blocklist plugin and the
-// /api/demo endpoints. The env module caches loadEnv() — resetEnvForTests()
-// between cases so DEMO_MODE flips cleanly.
+// Demo-mode tests exercise env parsing, the route blocklist plugin, the
+// /api/demo endpoints and the outbound choke points. The env module caches
+// loadEnv() — resetEnvForTests() between cases so DEMO_MODE flips cleanly.
+//
+// Bun auto-loads .env into process.env — any real credential lying around
+// (SETUP_TOKEN, secrets) would trip the demo "no real secrets" refusal, so
+// clearDemoEnv() strips every forbidden-pattern key, not just a fixed list.
 
-const DEMO_ENV_KEYS = [
-  "DEMO_MODE",
-  "OPENAI_API_KEY",
-  "EMAIL_FROM",
-  "WHATSAPP_TOKEN",
-  "SMTP_HOST",
-  "META_APP_SECRET",
-  "EVOLUTION_API_KEY",
-  "OFICINAOS_CLOUD_TOKEN",
-] as const;
+const DEMO_SECRET_PREFIX =
+  /^(OPENAI_|EMAIL_|WHATSAPP_|SMTP_|META_|EVOLUTION_|OFICINAOS_CLOUD_|CLOUD_|GITHUB_|INVOICEXPRESS_|IX_|TRADE_|MARKET_|S3_|R2_|AWS_|BACKUP_|SEED_ADMIN_|SETUP_TOKEN)/;
+const DEMO_SECRET_SUFFIX = /(_TOKEN|_SECRET|_PASSWORD|_API_KEY|_APIKEY)$/;
+const DEMO_SECRET_ALLOW = new Set([
+  "BETTER_AUTH_SECRET",
+  "COOKIE_SECRET",
+  "AI_ENCRYPTION_KEY",
+]);
+const EXTRA_KEYS = ["DEMO_MODE"];
 
 function clearDemoEnv() {
-  for (const key of DEMO_ENV_KEYS) {
-    Reflect.deleteProperty(process.env, key);
+  for (const key of Object.keys(process.env)) {
+    const forbidden =
+      !DEMO_SECRET_ALLOW.has(key) &&
+      (DEMO_SECRET_PREFIX.test(key) || DEMO_SECRET_SUFFIX.test(key));
+    if (forbidden || EXTRA_KEYS.includes(key)) {
+      Reflect.deleteProperty(process.env, key);
+    }
   }
   resetEnvForTests();
+}
+
+function setErrorHandler(app: FastifyInstance) {
+  app.setErrorHandler((error, _req, reply) => {
+    if (isAppError(error)) {
+      reply.status(error.status).send({ code: error.code });
+      return;
+    }
+    const status = (error as { statusCode?: number }).statusCode ?? 500;
+    reply.status(status).send({ code: "INTERNAL_ERROR" });
+  });
+}
+
+function stubPrisma() {
+  return new Proxy(
+    {},
+    {
+      get: (_t, _delegate) =>
+        new Proxy(
+          {},
+          {
+            get: (_d, method) => {
+              if (method === "findUnique" || method === "findFirst") {
+                return async () => null;
+              }
+              if (method === "count") {
+                return async () => 0;
+              }
+              if (
+                typeof method === "string" &&
+                method.startsWith("$queryRaw")
+              ) {
+                return async () => [];
+              }
+              return async () => ({});
+            },
+          }
+        ),
+    }
+  );
 }
 
 function buildAppWithDemoGuard() {
   // Lightweight harness mirroring index.ts: demo plugin + error handler.
   return import("../plugins/demo.js").then(({ default: demoPlugin }) => {
     const app = Fastify({ logger: false });
-    app.setErrorHandler((error, _req, reply) => {
-      if (isAppError(error)) {
-        reply.status(error.status).send({ code: error.code });
-        return;
-      }
-      reply.status(500).send({ code: "INTERNAL_ERROR" });
-    });
+    setErrorHandler(app);
     app.register(demoPlugin);
     // Probe routes that stand in for the real handlers.
     app.get("/api/settings/cloud", async () => ({ ok: true }));
@@ -77,12 +120,39 @@ describe("DEMO_MODE env validation", () => {
     "META_APP_SECRET",
     "EVOLUTION_API_KEY",
     "OFICINAOS_CLOUD_TOKEN",
+    "CLOUD_API_KEY",
+    "GITHUB_FEEDBACK_TOKEN",
+    "INVOICEXPRESS_API_KEY",
+    "IX_API_KEY",
+    "TRADE_API_TOKEN",
+    "MARKET_SECRET",
+    "S3_ACCESS_KEY",
+    "R2_TOKEN",
+    "AWS_SECRET_ACCESS_KEY",
+    "BACKUP_PASSPHRASE",
+    "SEED_ADMIN_PASSWORD",
+    "SETUP_TOKEN",
+    // Suffix catch-all — a credential shape we never enumerated by prefix.
+    "ACME_SERVICE_API_KEY",
+    "SOME_RANDOM_PASSWORD",
   ])("refuses to start with %s defined", async (key) => {
     process.env.DEMO_MODE = "true";
     process.env[key] = "x-real-credential";
     resetEnvForTests();
     const { loadEnv } = await import("../config/env.js");
     expect(() => loadEnv()).toThrow();
+  });
+
+  it.each([
+    "BETTER_AUTH_SECRET",
+    "COOKIE_SECRET",
+    "AI_ENCRYPTION_KEY",
+  ])("still boots with the local-only secret %s", async (key) => {
+    process.env.DEMO_MODE = "true";
+    process.env[key] = "local-demo-secret-thirty-two-chars-ok";
+    resetEnvForTests();
+    const { loadEnv } = await import("../config/env.js");
+    expect(() => loadEnv()).not.toThrow();
   });
 
   it("starts cleanly with DEMO_MODE=true and no secrets", async () => {
@@ -140,15 +210,22 @@ describe("demo route guard", () => {
     }
   });
 
-  it("keeps demo login + sign-in/sign-out open", async () => {
+  it("blocks credential sign-ins — only /api/demo/login creates sessions", async () => {
     process.env.DEMO_MODE = "true";
     resetEnvForTests();
     const app = await buildAppWithDemoGuard();
+    // Credential sign-ins are closed in demo: scripted failures would
+    // otherwise lock the shared demo account out for every visitor.
     for (const url of [
-      "/api/demo/login",
       "/api/auth/sign-in/username",
-      "/api/auth/sign-out",
+      "/api/auth/sign-in/email",
     ]) {
+      const res = await app.inject({ method: "POST", url });
+      expect(res.statusCode).toBe(403);
+      expect(res.json()).toMatchObject({ code: "DEMO_DISABLED" });
+    }
+    // Demo login and sign-out stay open.
+    for (const url of ["/api/demo/login", "/api/auth/sign-out"]) {
       const res = await app.inject({ method: "POST", url });
       expect(res.statusCode).toBe(200);
     }
@@ -162,6 +239,310 @@ describe("demo route guard", () => {
   });
 });
 
+describe("URL-encoding bypass (real routes)", () => {
+  beforeEach(clearDemoEnv);
+  afterEach(clearDemoEnv);
+
+  async function buildRealRouteApp() {
+    const { default: demoPlugin } = await import("../plugins/demo.js");
+    const { usersRoutes } = await import("../routes/users.js");
+    const { settingsRoutes } = await import("../routes/settings.js");
+    const { authRoutes } = await import("../routes/auth.js");
+    const app = Fastify({ logger: false });
+    setErrorHandler(app);
+    app.decorate("prisma", stubPrisma() as never);
+    app.decorate("auth", {
+      handler: async () => new Response("{}", { status: 200 }),
+      api: { getSession: async () => null },
+    } as never);
+    await app.register(demoPlugin);
+    // The same wildcard the auth plugin exposes for better-auth.
+    app.all("/api/auth/*", async () => ({ ok: true }));
+    app.register(authRoutes);
+    app.register(usersRoutes, { prefix: "/api/users" });
+    app.register(settingsRoutes, { prefix: "/api/settings" });
+    return app;
+  }
+
+  it.each([
+    ["POST", "/api/%75sers/x/reset-password"],
+    ["POST", "/api/%75sers"],
+    ["PATCH", "/api/%75sers/x/status"],
+    ["POST", "/api/au%74h/change-password"],
+    ["POST", "/api/settings/clou%64/pair"],
+    ["POST", "/api/settings/whatsap%70"],
+    ["GET", "/api/settings/clou%64"],
+    ["POST", "/api/%61i/chat"],
+    ["GET", "/api/expor%74/jobs.csv"],
+    ["POST", "/api/setu%70"],
+  ])("rejects encoded %s %s with DEMO_DISABLED", async (method, url) => {
+    process.env.DEMO_MODE = "true";
+    resetEnvForTests();
+    const app = await buildRealRouteApp();
+    const res = await app.inject({ method: method as "POST", url });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toMatchObject({ code: "DEMO_DISABLED" });
+  });
+
+  it("returns 400 for malformed percent-encoding instead of skipping the guard", async () => {
+    process.env.DEMO_MODE = "true";
+    resetEnvForTests();
+    const app = await buildRealRouteApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/auth/%E4%XX",
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe("route classification — every /api route is decided", () => {
+  // Route families that are legitimately open in demo (business reads +
+  // normal shop writes the demo is FOR). Anything outside this list must
+  // be caught by the blocklist — a new route that lands unclassified
+  // fails this test instead of silently shipping open.
+  const ALLOWED_FAMILIES = [
+    "/api/demo/",
+    "/api/csrf-token",
+    "/api/setup",
+    "/api/public/",
+    "/api/uploads/",
+    "/api/jobs",
+    "/api/customers",
+    "/api/parts",
+    "/api/brands",
+    "/api/repairs",
+    "/api/sales",
+    "/api/payments",
+    "/api/receipts",
+    "/api/dashboard",
+    "/api/reports",
+    "/api/notifications",
+    "/api/tasks",
+    "/api/suppliers",
+    "/api/supplier-rmas",
+    "/api/purchase-orders",
+    "/api/workflow",
+    "/api/business",
+    "/api/trade-ins",
+    "/api/return-claims",
+    "/api/sign-sessions",
+    "/api/intake-requests",
+    "/api/invoicing",
+    "/api/users",
+    "/api/settings",
+    "/api/import",
+    "/api/referrals",
+    "/api/auth/",
+  ] as const;
+
+  it("classifies every registered /api route", async () => {
+    process.env.DEMO_MODE = "true";
+    resetEnvForTests();
+    const { isDemoBlockedPath } = await import("../lib/demo.js");
+    const app = Fastify({ logger: false });
+    const collected: { method: string; path: string }[] = [];
+    app.addHook("onRoute", (r) => {
+      const methods = Array.isArray(r.method) ? r.method : [r.method];
+      for (const m of methods) {
+        collected.push({ method: m, path: r.path });
+      }
+    });
+    app.decorate("prisma", stubPrisma() as never);
+    app.decorate("auth", {
+      handler: async () => new Response("{}"),
+      api: { getSession: async () => null },
+    } as never);
+    app.decorate("wsBroadcast", () => undefined);
+    app.decorate("resetEmbedOriginsCache", () => undefined);
+
+    // Same route registrations as server/index.ts.
+    app.all("/api/auth/*", async () => ({}));
+    app.register((await import("../routes/auth.js")).authRoutes);
+    app.register((await import("../routes/demo.js")).demoRoutes);
+    app.register((await import("../routes/setup.js")).setupRoutes);
+    app.register((await import("../routes/health.js")).healthRoutes);
+    app.register((await import("../routes/public.js")).publicRoutes, {
+      prefix: "/api/public",
+    });
+    app.register(
+      (await import("../routes/intake-requests.js")).intakeRequestsRoutes,
+      { prefix: "/api/intake-requests" }
+    );
+    app.register((await import("../routes/jobs.js")).jobRoutes, {
+      prefix: "/api/jobs",
+    });
+    app.register((await import("../routes/payments.js")).paymentRoutes, {
+      prefix: "/api/payments",
+    });
+    app.register((await import("../routes/receipts.js")).receiptRoutes, {
+      prefix: "/api/receipts",
+    });
+    app.register((await import("../routes/parts.js")).partsRoutes, {
+      prefix: "/api/parts",
+    });
+    app.register((await import("../routes/repairs.js")).repairCatalogRoutes, {
+      prefix: "/api/repairs",
+    });
+    app.register((await import("../routes/customers.js")).customersRoutes, {
+      prefix: "/api/customers",
+    });
+    app.register((await import("../routes/devices.js")).devicesRoutes, {
+      prefix: "/api/brands",
+    });
+    app.register((await import("../routes/users.js")).usersRoutes, {
+      prefix: "/api/users",
+    });
+    app.register(
+      (await import("../routes/notifications.js")).notificationsRoutes,
+      { prefix: "/api/notifications" }
+    );
+    app.register((await import("../routes/settings.js")).settingsRoutes, {
+      prefix: "/api/settings",
+    });
+    app.register(
+      (await import("../routes/signature-sessions.js")).signatureSessionRoutes,
+      { prefix: "/api/sign-sessions" }
+    );
+    app.register((await import("../routes/dashboard.js")).dashboardRoutes, {
+      prefix: "/api/dashboard",
+    });
+    app.register((await import("../routes/ai.js")).aiRoutes, {
+      prefix: "/api/ai",
+    });
+    app.register((await import("../routes/reports.js")).reportsRoutes, {
+      prefix: "/api/reports",
+    });
+    app.register((await import("../routes/sales.js")).saleRoutes, {
+      prefix: "/api/sales",
+    });
+    app.register(
+      (await import("../routes/return-claims.js")).returnClaimsRoutes,
+      { prefix: "/api/return-claims" }
+    );
+    app.register((await import("../routes/trade-ins.js")).tradeInsRoutes, {
+      prefix: "/api/trade-ins",
+    });
+    app.register(
+      (await import("../routes/part-requests.js")).partRequestsRoutes,
+      { prefix: "/api/part-requests" }
+    );
+    app.register(
+      (await import("../routes/market-prices.js")).marketPricesRoutes,
+      { prefix: "/api/market-prices" }
+    );
+    app.register((await import("../routes/storefront.js")).storefrontRoutes, {
+      prefix: "/api/storefront",
+    });
+    app.register((await import("../routes/invoicing.js")).invoicingRoutes, {
+      prefix: "/api/invoicing",
+    });
+    app.register((await import("../routes/feedback.js")).feedbackRoutes, {
+      prefix: "/api/feedback",
+    });
+    app.register((await import("../routes/suppliers.js")).suppliersRoutes, {
+      prefix: "/api/suppliers",
+    });
+    app.register((await import("../routes/suppliers.js")).supplierRmasRoutes, {
+      prefix: "/api/supplier-rmas",
+    });
+    app.register((await import("../routes/workflow.js")).workflowRoutes, {
+      prefix: "/api/workflow",
+    });
+    app.register((await import("../routes/business.js")).businessRoutes, {
+      prefix: "/api/business",
+    });
+    app.register(
+      (await import("../routes/purchase-orders.js")).purchaseOrdersRoutes,
+      { prefix: "/api/purchase-orders" }
+    );
+    app.register((await import("../routes/tasks.js")).tasksRoutes, {
+      prefix: "/api/tasks",
+    });
+    app.register((await import("../routes/referrals.js")).referralsRoutes, {
+      prefix: "/api",
+    });
+    app.register((await import("../routes/data-io.js")).dataIoRoutes, {
+      prefix: "/api",
+    });
+    await app.ready();
+
+    const unclassified: string[] = [];
+    for (const { method, path } of collected) {
+      if (!path.startsWith("/api")) {
+        continue;
+      }
+      if (isDemoBlockedPath(method, path)) {
+        continue; // blocked (all methods or this mutation)
+      }
+      const allowed = ALLOWED_FAMILIES.some(
+        (f) => path === f || path.startsWith(f)
+      );
+      if (!allowed) {
+        unclassified.push(`${method} ${path}`);
+      }
+    }
+    expect(unclassified).toEqual([]);
+  });
+});
+
+describe("demo account lockout exemption", () => {
+  beforeEach(clearDemoEnv);
+  afterEach(clearDemoEnv);
+
+  it("never counts failures or locks the demo user", async () => {
+    process.env.DEMO_MODE = "true";
+    resetEnvForTests();
+    const { handleFailedSignIn, checkSignInLockout } = await import(
+      "../plugins/auth.js"
+    );
+    const increment = vi.fn();
+    const prisma = {
+      user: {
+        findFirst: async () => ({
+          id: "demo-user-owner",
+          username: "demo",
+          failedLoginAttempts: 10,
+          lockedUntil: new Date(Date.now() + 30 * 60 * 1000),
+        }),
+      },
+    };
+    // 6 failed sign-ins: no counting, no lockout check against "demo".
+    for (let i = 0; i < 6; i++) {
+      await handleFailedSignIn(prisma as never, {
+        method: "POST",
+        body: { username: "demo", password: "wrong" },
+      });
+      await checkSignInLockout(prisma as never, {
+        method: "POST",
+        body: { username: "demo", password: "wrong" },
+      });
+    }
+    expect(increment).not.toHaveBeenCalled();
+  });
+
+  it("still locks non-demo users in demo mode", async () => {
+    process.env.DEMO_MODE = "true";
+    resetEnvForTests();
+    const { checkSignInLockout } = await import("../plugins/auth.js");
+    const prisma = {
+      user: {
+        findFirst: async () => ({
+          username: "intruder",
+          failedLoginAttempts: 10,
+          lockedUntil: new Date(Date.now() + 30 * 60 * 1000),
+        }),
+      },
+    };
+    await expect(
+      checkSignInLockout(prisma as never, {
+        method: "POST",
+        body: { username: "intruder", password: "x" },
+      })
+    ).rejects.toMatchObject({ code: "ACCOUNT_LOCKED" });
+  });
+});
+
 describe("POST /api/demo/login", () => {
   const authHandler = vi.fn();
   const userFindUnique = vi.fn();
@@ -169,13 +550,7 @@ describe("POST /api/demo/login", () => {
   function buildLoginApp() {
     return import("../routes/demo.js").then(({ demoRoutes }) => {
       const app = Fastify({ logger: false });
-      app.setErrorHandler((error, _req, reply) => {
-        if (isAppError(error)) {
-          reply.status(error.status).send({ code: error.code });
-          return;
-        }
-        reply.status(500).send({ code: "INTERNAL_ERROR" });
-      });
+      setErrorHandler(app);
       app.decorate("prisma", {
         user: { findUnique: userFindUnique },
       } as never);
@@ -229,6 +604,263 @@ describe("POST /api/demo/login", () => {
   });
 });
 
+describe("rate limit headers (real securityPlugin)", () => {
+  beforeEach(clearDemoEnv);
+  afterEach(clearDemoEnv);
+
+  async function buildSecureApp() {
+    const { default: securityPlugin } = await import("../plugins/security.js");
+    const app = Fastify({ logger: false });
+    await app.register(securityPlugin);
+    app.post("/api/demo/login", async () => ({ ok: true }));
+    app.get("/api/probe-get", async () => ({ ok: true }));
+    app.post("/api/probe-post", async () => ({ ok: true }));
+    app.post("/api/auth/change-password", async () => ({ ok: true }));
+    return app;
+  }
+
+  // POSTs need the CSRF cookie+token pair (same dance the SPA does), or the
+  // CSRF layer 403s before the rate-limit preHandler sets its headers.
+  async function csrfPair(app: Awaited<ReturnType<typeof buildSecureApp>>) {
+    const res = await app.inject({ method: "GET", url: "/api/csrf-token" });
+    const cookie = res.cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+    return { cookie, "x-csrf-token": res.json().token as string };
+  }
+
+  it("applies route-map limits — not the global default", async () => {
+    const app = await buildSecureApp();
+    const csrf = await csrfPair(app);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/demo/login",
+      headers: csrf,
+      payload: {},
+    });
+    expect(res.headers["x-ratelimit-limit"]).toBe("20");
+    const resGet = await app.inject({ method: "GET", url: "/api/probe-get" });
+    expect(resGet.headers["x-ratelimit-limit"]).toBe("300");
+    const resPwd = await app.inject({
+      method: "POST",
+      url: "/api/auth/change-password",
+      headers: csrf,
+      payload: {},
+    });
+    expect(resPwd.headers["x-ratelimit-limit"]).toBe("5");
+  });
+
+  it("clamps demo mutations to 60/min and keys demo login on CF-Connecting-IP", async () => {
+    process.env.DEMO_MODE = "true";
+    resetEnvForTests();
+    const app = await buildSecureApp();
+    const csrf = await csrfPair(app);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/probe-post",
+      headers: csrf,
+      payload: {},
+    });
+    expect(res.headers["x-ratelimit-limit"]).toBe("60");
+    // Same inject IP, different CF-Connecting-IP → independent budgets prove
+    // the demo login keys on the Cloudflare header, not the tunnel IP.
+    const resA = await app.inject({
+      method: "POST",
+      url: "/api/demo/login",
+      headers: { ...csrf, "cf-connecting-ip": "203.0.113.7" },
+      payload: {},
+    });
+    expect(resA.headers["x-ratelimit-limit"]).toBe("20");
+    expect(resA.headers["x-ratelimit-remaining"]).toBe("19");
+    const resB = await app.inject({
+      method: "POST",
+      url: "/api/demo/login",
+      headers: { ...csrf, "cf-connecting-ip": "198.51.100.9" },
+      payload: {},
+    });
+    expect(resB.headers["x-ratelimit-remaining"]).toBe("19");
+  });
+});
+
+describe("outbound choke points — no fetch is ever reached", () => {
+  beforeEach(clearDemoEnv);
+  afterEach(clearDemoEnv);
+
+  const failFetch = () => {
+    throw new Error("fetch must never be called in DEMO_MODE");
+  };
+
+  it.each<[string, () => Promise<unknown>]>([
+    [
+      "sendEmail",
+      async () =>
+        (await import("../lib/email.js")).sendEmail({
+          subject: "x",
+          to: "a@b.example",
+        }),
+    ],
+    [
+      "sendWhatsAppText",
+      async () =>
+        (await import("../services/whatsapp-channel.js")).sendWhatsAppText(
+          {} as never,
+          { apiUrl: "https://x", mode: "cloud", shopToken: "t" },
+          "910000001",
+          "hi",
+          undefined,
+          null
+        ),
+    ],
+    [
+      "sendWhatsAppTemplateVia",
+      async () =>
+        (
+          await import("../services/whatsapp-channel.js")
+        ).sendWhatsAppTemplateVia(
+          {} as never,
+          { apiUrl: "https://x", mode: "cloud", shopToken: "t" },
+          "910000001",
+          "tpl",
+          "pt",
+          [],
+          undefined,
+          null
+        ),
+    ],
+    [
+      "sendSms",
+      async () =>
+        (await import("../services/sms.service.js")).sendSms(
+          { url: "http://x", user: "u", password: "p" },
+          "910000001",
+          "hi"
+        ),
+    ],
+    [
+      "registerSmsWebhook",
+      async () =>
+        (await import("../services/sms.service.js")).registerSmsWebhook(
+          { url: "http://x", user: "u", password: "p" },
+          "http://cb"
+        ),
+    ],
+    [
+      "checkSmsGateway",
+      async () =>
+        (await import("../services/sms.service.js")).checkSmsGateway({
+          url: "http://x",
+          user: "u",
+          password: "p",
+        }),
+    ],
+    [
+      "cloudFetch",
+      async () =>
+        (await import("../services/cloud.service.js")).cloudFetch(
+          "https://cloud.example",
+          "/x"
+        ),
+    ],
+    [
+      "sendEvolutionText (evoFetch)",
+      async () =>
+        (await import("../services/evolution.service.js")).sendEvolutionText(
+          { apiKey: "k", baseUrl: "http://x", instance: "i" },
+          "910000001",
+          "hi"
+        ),
+    ],
+    [
+      "sendEscPos",
+      async () =>
+        (await import("../services/escpos.service.js")).sendEscPos(
+          { printerHost: "10.0.0.1", printerMode: "escpos", printerPort: 9100 },
+          Buffer.from("x")
+        ),
+    ],
+    [
+      "submitFeedbackReport",
+      async () =>
+        (await import("../services/feedback.service.js")).submitFeedbackReport(
+          { description: "x" } as never,
+          {} as never
+        ),
+    ],
+    [
+      "streamChat",
+      async () => (await import("../ai/stream.js")).streamChat({} as never),
+    ],
+    [
+      "startUpdate",
+      async () => (await import("../services/update.service.js")).startUpdate(),
+    ],
+    [
+      "testAiConnection",
+      async () =>
+        (await import("../services/settings.service.js")).testAiConnection(
+          {} as never
+        ),
+    ],
+  ])("%s throws DEMO_DISABLED without calling fetch", async (_name, fn) => {
+    process.env.DEMO_MODE = "true";
+    resetEnvForTests();
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(failFetch as never);
+    try {
+      await expect(fn()).rejects.toMatchObject({ code: "DEMO_DISABLED" });
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+});
+
+describe("demo upload + setup guards", () => {
+  beforeEach(clearDemoEnv);
+  afterEach(clearDemoEnv);
+
+  it("rejects uploads above 1 MB in DEMO_MODE", async () => {
+    process.env.DEMO_MODE = "true";
+    resetEnvForTests();
+    const app = Fastify({ logger: false });
+    setErrorHandler(app);
+    const env = (await import("../config/env.js")).loadEnv();
+    await app.register(multipart, {
+      limits: { fileSize: env.DEMO_MODE ? 1024 * 1024 : 5 * 1024 * 1024 },
+    });
+    app.post("/upload", async (req) => {
+      const file = await req.file();
+      return { size: (await file?.toBuffer())?.length ?? 0 };
+    });
+    const boundary = "----demoBoundary";
+    const bigBody = Buffer.concat([
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="f"; filename="x.png"\r\nContent-Type: image/png\r\n\r\n`
+      ),
+      Buffer.alloc(1024 * 1024 + 10, 1),
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+    const res = await app.inject({
+      method: "POST",
+      url: "/upload",
+      headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+      payload: bigBody,
+    });
+    expect(res.statusCode).toBe(413);
+  });
+
+  it("GET /api/setup/status reports needsSetup:false in demo", async () => {
+    process.env.DEMO_MODE = "true";
+    resetEnvForTests();
+    const { setupRoutes } = await import("../routes/setup.js");
+    const app = Fastify({ logger: false });
+    setErrorHandler(app);
+    app.decorate("prisma", stubPrisma() as never);
+    app.register(setupRoutes);
+    const res = await app.inject({ method: "GET", url: "/api/setup/status" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ needsSetup: false });
+  });
+});
+
 describe("data-io import cap in demo", () => {
   beforeEach(clearDemoEnv);
   afterEach(clearDemoEnv);
@@ -239,8 +871,6 @@ describe("data-io import cap in demo", () => {
     const { isDemoMode, DEMO_IMPORT_MAX_ROWS } = await import("../lib/demo.js");
     expect(isDemoMode()).toBe(true);
     expect(DEMO_IMPORT_MAX_ROWS).toBe(50);
-    // Route-level enforcement lives in parseImportBody; the flag + cap are
-    // the contract, the 403 comes from DEMO_DISABLED.
     const { isDemoBlockedPath } = await import("../lib/demo.js");
     expect(isDemoBlockedPath("POST", "/api/import/parts")).toBe(false);
   });

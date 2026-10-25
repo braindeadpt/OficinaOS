@@ -624,7 +624,8 @@
     "duplicate_customer_phone": "Já existe um cliente com este número de telefone",
     "demo_disabled": "Indisponível na demo",
     "setup_already_done": "A oficina já foi configurada. Inicie sessão.",
-    "setup_not_local": "Por segurança, a primeira configuração só pode ser feita no computador onde o OficinaOS está instalado."
+    "setup_not_local": "Por segurança, a primeira configuração só pode ser feita no computador onde o OficinaOS está instalado.",
+    "demo_quota_exceeded": "Armazenamento de uploads cheio na demo — repõe de hora a hora"
   },
   "failed_to_create_part": "Falha ao criar peça",
   "failed_to_delete_part": "Falha ao eliminar peça",

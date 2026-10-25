@@ -324,6 +324,10 @@ export const ERRORS = {
     status: 403,
     message: "errors.demo_disabled",
   },
+  DEMO_QUOTA_EXCEEDED: {
+    status: 429,
+    message: "errors.demo_quota_exceeded",
+  },
 } as const;
 
 export type ErrorCode = keyof typeof ERRORS;

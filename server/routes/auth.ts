@@ -2,6 +2,7 @@ import { AppError } from "@shared/errors/app-error.js";
 import { changePasswordSchema } from "@shared/schemas/auth.schema";
 import { fromNodeHeaders } from "better-auth/node";
 import type { FastifyPluginAsync } from "fastify";
+import { assertNotDemoMode } from "../lib/demo.js";
 import { changePassword as changePasswordService } from "../services/auth.service.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
@@ -25,6 +26,9 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
+      // The shared demo account must keep its seeded password — the demo
+      // guard blocks this route too, but a bypass can't cost us the login.
+      assertNotDemoMode();
       const headers = fromNodeHeaders(request.headers);
       const session = await app.auth.api.getSession({ headers });
 

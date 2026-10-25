@@ -4,6 +4,7 @@ import path from "node:path";
 import type { PrismaClient } from "@generated/client";
 import { AuditAction } from "@generated/client";
 import { loadEnv } from "../config/env.js";
+import { isDemoMode } from "../lib/demo.js";
 import {
   countPhotos,
   createPhoto as createPhotoRepo,
@@ -20,6 +21,25 @@ const PHOTO_SUBDIR = "job-photos";
 const MAX_PHOTOS = 5;
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 const ALLOWED_MIMES = ["image/jpeg", "image/png", "image/webp"];
+// DEMO_MODE: total uploads quota — a shared public instance can't let
+// visitors fill the disk photo by photo.
+const DEMO_UPLOAD_QUOTA_BYTES = 200 * 1024 * 1024;
+
+async function dirSizeBytes(dir: string): Promise<number> {
+  let total = 0;
+  const entries = await fs
+    .readdir(dir, { withFileTypes: true })
+    .catch(() => []);
+  for (const entry of entries) {
+    const p = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      total += await dirSizeBytes(p);
+    } else {
+      total += (await fs.stat(p).catch(() => null))?.size ?? 0;
+    }
+  }
+  return total;
+}
 
 function extFromMime(mime: string): string {
   if (mime === "image/png") {
@@ -59,6 +79,13 @@ export async function upload(
 
   if (!ALLOWED_MIMES.includes(file.mimetype)) {
     return { error: "INVALID_FILE_TYPE" as const };
+  }
+
+  if (
+    isDemoMode() &&
+    (await dirSizeBytes(UPLOAD_BASE)) > DEMO_UPLOAD_QUOTA_BYTES
+  ) {
+    return { error: "DEMO_QUOTA_EXCEEDED" as const };
   }
 
   const buffer = await file.toBuffer();

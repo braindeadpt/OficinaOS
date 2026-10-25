@@ -150,6 +150,20 @@ await app.register(websocket);
 await app.register(localePlugin);
 
 await app.register(prismaPlugin);
+
+// DEMO_MODE first boot: an empty database would leave the demo dead —
+// /setup is disabled and nobody could sign in. Seed the fictional
+// dataset once (seedDemo refuses non-"demo" database names itself).
+if (env.DEMO_MODE) {
+  const userCount = await app.prisma.user.count();
+  if (userCount === 0) {
+    app.log.info("DEMO_MODE: empty database — seeding fictional dataset");
+    const { seedDemo } = await import("../prisma/seed-demo.js");
+    await seedDemo(app.prisma as never);
+    app.log.info("DEMO_MODE: demo dataset seeded");
+  }
+}
+
 await app.register(authRoutes);
 await app.register(demoRoutes);
 await app.register(setupRoutes);

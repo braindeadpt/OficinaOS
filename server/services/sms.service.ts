@@ -114,6 +114,7 @@ export async function sendSms(
 
 /** Liveness probe do gateway — GET /health existe no modo Local Server. */
 export async function checkSmsGateway(config: SmsConfig): Promise<SendResult> {
+  assertNotDemoMode();
   try {
     const response = await fetch(`${config.url}/health`, {
       headers: { Authorization: authHeader(config) },

@@ -33,6 +33,14 @@ const signInKeyGenerator = (req: FastifyRequest): string => {
 // budget in the app and always keys on the caller's IP.
 const lookupKeyGenerator = (req: FastifyRequest): string => req.ip;
 
+// Demo login keys on CF-Connecting-IP when present — the public demo sits
+// behind cloudflared, where request.ip is the tunnel connector for every
+// visitor and a shared IP budget would let one script exhaust everyone.
+const demoLoginKeyGenerator = (req: FastifyRequest): string => {
+  const cf = req.headers["cf-connecting-ip"];
+  return typeof cf === "string" && cf.length > 0 ? cf : req.ip;
+};
+
 // Authenticated API traffic is keyed per user (see plugins/security.ts), so
 // staff sharing one shop IP do not share a budget.
 export const DEFAULT_SECURITY: RouteSecurityOverride = {
@@ -120,7 +128,7 @@ export const routeSecurity: [string, RouteSecurityOverride][] = [
     "/api/demo/login",
     {
       rateLimit: {
-        keyGenerator: lookupKeyGenerator,
+        keyGenerator: demoLoginKeyGenerator,
         max: 20,
         timeWindow: "15 minutes",
       },

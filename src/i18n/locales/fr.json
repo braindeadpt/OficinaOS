@@ -624,7 +624,8 @@
     "duplicate_customer_phone": "Un client avec ce numéro de téléphone existe déjà",
     "demo_disabled": "Indisponible en démo",
     "setup_already_done": "L'atelier est déjà configuré. Connectez-vous.",
-    "setup_not_local": "Par sécurité, la première configuration ne peut se faire que sur l'ordinateur où OficinaOS est installé."
+    "setup_not_local": "Par sécurité, la première configuration ne peut se faire que sur l'ordinateur où OficinaOS est installé.",
+    "demo_quota_exceeded": "Le stockage de téléchargement est plein dans la démo : il se réinitialise toutes les heures"
   },
   "failed_to_create_part": "Échec de la création de la pièce",
   "failed_to_delete_part": "Échec de la suppression de la pièce",

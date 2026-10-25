@@ -9,6 +9,7 @@ import {
 } from "@shared/schemas/settings.schema";
 import type { FastifyPluginAsync } from "fastify";
 import { decryptSecret } from "../lib/crypto.js";
+import { assertNotDemoMode } from "../lib/demo.js";
 import { requirePermission } from "../middlewares/rbac.js";
 import {
   findShopSettingsUnique,
@@ -153,6 +154,7 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (req, reply) => {
+      assertNotDemoMode();
       const parsed = pairCloudSchema.safeParse(req.body);
       if (!parsed.success) {
         throw new AppError("VALIDATION_ERROR", {
@@ -189,6 +191,7 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (_req, reply) => {
+      assertNotDemoMode();
       await unpairCloud(app.prisma);
       return reply.send({ ok: true });
     }
@@ -207,6 +210,7 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (req, reply) => {
+      assertNotDemoMode();
       const body = (req.body ?? {}) as { host?: string; port?: number };
       const settings = await findShopSettingsUnique(app.prisma);
       const host = body.host ?? settings?.printerHost;
@@ -268,6 +272,7 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (req, reply) => {
+      assertNotDemoMode();
       const parsed = updateAiSettingsSchema.safeParse(req.body);
       if (!parsed.success) {
         throw new AppError("VALIDATION_ERROR", {
@@ -289,6 +294,7 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       schema: { tags: ["settings"], summary: "Test AI connection" },
     },
     async (_req, reply) => {
+      assertNotDemoMode();
       const result = await testAiConnection(app.prisma);
       return reply.send(result);
     }
@@ -351,6 +357,7 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (req, reply) => {
+      assertNotDemoMode();
       const parsed = updateWhatsAppSettingsSchema.safeParse(req.body);
       if (!parsed.success) {
         throw new AppError("VALIDATION_ERROR", {
@@ -425,6 +432,7 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (_req, reply) => {
+      assertNotDemoMode();
       const s = await getOrCreateShopSettings(app.prisma);
       if (!isModuleEnabled(s, "whatsapp-bot")) {
         throw new AppError("CLOUD_MODULE_REQUIRED");
@@ -453,6 +461,7 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (_req, reply) => {
+      assertNotDemoMode();
       const config = await evolutionConfigOrNull();
       if (!config) {
         return reply.send({ ok: true });
@@ -487,6 +496,7 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (req, reply) => {
+      assertNotDemoMode();
       const parsed = updateSmsSettingsSchema.safeParse(req.body);
       if (!parsed.success) {
         throw new AppError("VALIDATION_ERROR", {
@@ -532,6 +542,7 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (req, reply) => {
+      assertNotDemoMode();
       const body = (req.body ?? {}) as { phone?: string };
       const row = await getOrCreateShopSettings(app.prisma);
       if (!isModuleEnabled(row, "sms")) {
@@ -572,6 +583,7 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (req, reply) => {
+      assertNotDemoMode();
       const ok = await tryRegisterSmsWebhook(
         app.prisma,
         req.headers.host ?? ""
@@ -608,6 +620,7 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (req, reply) => {
+      assertNotDemoMode();
       const parsed = updateInvoicingSettingsSchema.safeParse(req.body);
       if (!parsed.success) {
         throw new AppError("VALIDATION_ERROR", {

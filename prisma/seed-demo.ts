@@ -17,6 +17,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { hashPassword } from "better-auth/crypto";
 import { PrismaClient } from "../generated/client";
 import {
+  assertDemoDatabase,
   DEMO_PASSWORD,
   DEMO_USERNAME,
   isDemoMode,
@@ -93,8 +94,6 @@ const CUSTOMER_NAMES = [
   "Yara Monteiro",
   "Zélia Figueiredo",
 ] as const;
-
-const MOBILE_PREFIXES = ["91", "92", "93", "96"] as const;
 
 const DEVICES: [brand: string, model: string][] = [
   ["Apple", "iPhone 11"],
@@ -285,21 +284,21 @@ const PARTS: PartDef[] = [
 const SUPPLIERS = [
   {
     name: "TechParts Lisboa, Lda.",
-    email: "encomendas@techparts.exemplo.pt",
+    email: "encomendas@techparts.example",
     phone: "218 000 000",
     taxId: fictionalNif(5, 104_210),
     address: "Parque Industrial do Alto, Lote 14, Lisboa",
   },
   {
     name: "IberFone Distribuição",
-    email: "geral@iberfone.exemplo.pt",
+    email: "geral@iberfone.example",
     phone: "220 000 000",
     taxId: fictionalNif(5, 308_775),
     address: "Zona Industrial do Porto, Arm. 7, Maia",
   },
   {
     name: "MobileFix Supplies, Unipessoal Lda",
-    email: "vendas@mobilefix.exemplo.pt",
+    email: "vendas@mobilefix.example",
     phone: "239 000 000",
     taxId: fictionalNif(5, 512_340),
     address: "Rua do Comércio 88, Coimbra",
@@ -360,6 +359,8 @@ const DUMP_ORDER = [
 
 type Push = (delegate: string, row: Row) => void;
 const stamp = (d: Date) => ({ createdAt: d, updatedAt: d });
+// Job children, payments and sales have no updatedAt column.
+const createdStamp = (d: Date) => ({ createdAt: d });
 const id = (p: string, n: number) => `${p}-${String(n).padStart(3, "0")}`;
 
 // jobCode format matches generateJobCode (REP-YYYY-NNNNNN-XXX) but the
@@ -381,7 +382,7 @@ function buildUser(push: Push, createdSeed: Date, passwordHash: string) {
     name: "Rui Andrade",
     username: DEMO_USERNAME,
     displayUsername: DEMO_USERNAME,
-    email: "demo@oficinaos.local",
+    email: "demo@oficinaos.example",
     emailVerified: true,
     role: "OWNER",
     isActive: true,
@@ -442,7 +443,9 @@ function buildBrandsDevices(push: Push, createdSeed: Date): string[] {
 
 function buildCustomers(push: Push, now: Date) {
   CUSTOMER_NAMES.forEach((name, i) => {
-    const mobile = `${pick(MOBILE_PREFIXES)}${String(1_000_000 + int(0, 8_999_999)).slice(-7)}`;
+    // Obviously fictional but format-valid: 91/93 000 0NNN. No real
+    // subscriber ever sits in the 000 0xxx range.
+    const mobile = `${i % 2 === 0 ? "91" : "93"} 000 0${String(i + 1).padStart(3, "0")}`;
     const [firstRaw, lastRaw] = name.split(" ");
     const first = firstRaw.toLowerCase().replace(/[^a-z]/g, "");
     const last = (lastRaw ?? "").toLowerCase().replace(/[^a-z]/g, "");
@@ -451,8 +454,8 @@ function buildCustomers(push: Push, now: Date) {
     push("customer", {
       id: id("demo-cust", i + 1),
       name,
-      phone: `${mobile.slice(0, 2)} ${mobile.slice(2, 5)} ${mobile.slice(5)}`,
-      email: hasEmail ? `${first}.${last}@exemplo.pt` : null,
+      phone: mobile,
+      email: hasEmail ? `${first}.${last}@exemplo.example` : null,
       taxId: fictionalNif(pick([1, 2, 3]), 100_000 + i * 97),
       whatsappConsent: consented,
       whatsappConsentAt: consented ? daysAgo(now, int(20, 80), 11) : null,
@@ -540,6 +543,10 @@ function buildTemplates(push: Push, createdSeed: Date) {
       "quote_sent",
       "Orçamento enviado{{if jobCode}} — {{jobCode}}{{endif}}{{if quoteAmount}} ({{quoteAmount}} {{currency}}){{endif}}",
     ],
+    [
+      "pre_check_submitted",
+      "Novo pedido de pré-diagnóstico{{if requestCode}} — {{requestCode}}{{endif}}{{if customerName}} de {{customerName}}{{endif}}{{if deviceLabel}} ({{deviceLabel}}){{endif}}",
+    ],
   ];
   TEMPLATES.forEach(([name, body], i) => {
     push("notificationTemplate", {
@@ -614,7 +621,7 @@ function pushJobChildren(push: Push, ctx: JobCtx) {
       category: r.category,
       price: r.price,
       createdById: DEMO_USER_ID,
-      ...stamp(created),
+      ...createdStamp(created),
     });
   }
   if (usedPart) {
@@ -629,7 +636,7 @@ function pushJobChildren(push: Push, ctx: JobCtx) {
       quantity: usedPart.qty,
       totalCost: p.price * usedPart.qty,
       createdById: DEMO_USER_ID,
-      ...stamp(created),
+      ...createdStamp(created),
     });
   }
   if (status === "WAITING_FOR_PARTS") {
@@ -638,7 +645,7 @@ function pushJobChildren(push: Push, ctx: JobCtx) {
       jobId: jid,
       partName: pick(PARTS).name,
       supplier: pick(SUPPLIERS).name,
-      ...stamp(created),
+      ...createdStamp(created),
     });
   }
   if (status !== "INTAKE" && chance(0.45)) {
@@ -659,7 +666,6 @@ function pushJobChildren(push: Push, ctx: JobCtx) {
         qStatus === "SENT"
           ? null
           : daysAgo(now, Math.max(0, int(ageMin, ageMax) - 1), 17),
-      ...stamp(sent),
     });
   }
   if (chance(0.3)) {
@@ -669,7 +675,7 @@ function pushJobChildren(push: Push, ctx: JobCtx) {
       content: pick(NOTES),
       isCustomerVisible: false,
       createdById: DEMO_USER_ID,
-      ...stamp(created),
+      ...createdStamp(created),
     });
   }
   if (status === "DELIVERED") {
@@ -816,7 +822,7 @@ function buildJobs(
       buildJob(push, jobSeq, year, now, deviceIds, partIds, counters, plan);
     }
   }
-  push("jobCounter", { id: `demo-jc-${year}`, year, lastSeq: jobSeq });
+  push("jobCounter", { year, lastSeq: jobSeq });
   return jobSeq;
 }
 
@@ -846,7 +852,7 @@ function buildSales(push: Push, now: Date, partIds: string[]): number {
         : null,
       total,
       createdById: DEMO_USER_ID,
-      ...stamp(at),
+      ...createdStamp(at),
     });
     for (const it of items) {
       push("saleItem", {
@@ -865,10 +871,10 @@ function buildSales(push: Push, now: Date, partIds: string[]): number {
       saleId: sid,
       method: pick(["MB_WAY", "CARD", "CASH"]),
       amount: total,
-      ...stamp(at),
+      ...createdStamp(at),
     });
   }
-  push("saleCounter", { id: `demo-sc-${year}`, year, lastSeq: saleSeq });
+  push("saleCounter", { year, lastSeq: saleSeq });
   return saleSeq;
 }
 
@@ -883,9 +889,9 @@ function buildIntakeRequests(push: Push, now: Date): number {
       id: id("demo-intake", intakeSeq),
       code: `PC-${year}-${String(intakeSeq).padStart(4, "0")}`,
       customerName: name,
-      customerPhone: `93${String(1_000_000 + int(0, 8_999_999)).slice(-7)}`,
+      customerPhone: `93 000 0${String(100 + i).padStart(3, "0")}`,
       customerEmail: chance(0.5)
-        ? `${name.split(" ")[0].toLowerCase()}@exemplo.pt`
+        ? `${name.split(" ")[0].toLowerCase()}@exemplo.example`
         : null,
       deviceLabel: pick(DEVICES).join(" "),
       problem: pick(PROBLEMS),
@@ -895,7 +901,6 @@ function buildIntakeRequests(push: Push, now: Date): number {
     });
   }
   push("intakeRequestCounter", {
-    id: `demo-ic-${year}`,
     year,
     lastSeq: intakeSeq,
   });
@@ -937,33 +942,49 @@ export async function buildDemoDump(now: Date): Promise<DemoDump> {
 
 type DemoPrisma = {
   $executeRawUnsafe: (sql: string, ...params: unknown[]) => Promise<unknown>;
-  $queryRawUnsafe: (sql: string, ...params: unknown[]) => Promise<unknown>;
+  $queryRawUnsafe: <T = unknown>(
+    sql: string,
+    ...params: unknown[]
+  ) => Promise<T>;
+  $transaction: (
+    fn: (tx: DemoPrisma) => Promise<unknown>,
+    opts?: { timeout?: number; maxWait?: number }
+  ) => Promise<unknown>;
 } & Record<string, { createMany: (arg: { data: Row[] }) => Promise<unknown> }>;
 
 /**
- * Wipes every public table except _prisma_migrations, replays the dump in
- * FK order and writes it to disk. Used both by `bun run db:seed:demo`
- * (first boot) and by the hourly `bun run demo:reset` — idempotent.
+ * Wipes every public table except _prisma_migrations and replays the dump
+ * in FK order — inside ONE transaction so the app never serves a
+ * half-empty database. lock_timeout keeps a stuck lock from freezing
+ * reads; the 60s timeout aborts rather than hold the truncate forever.
+ * Used by `bun run db:seed:demo`, the hourly `demo:reset` and the
+ * first-boot seed — idempotent.
  */
 export async function applyDemoDump(
   prisma: DemoPrisma,
   dump: DemoDump
 ): Promise<void> {
-  const tables = await prisma.$queryRawUnsafe<{ tablename: string }[]>(
-    `SELECT tablename FROM pg_tables
-     WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'`
+  await prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRawUnsafe(`SET LOCAL lock_timeout = '10s'`);
+      const tables = await tx.$queryRawUnsafe<{ tablename: string }[]>(
+        `SELECT tablename FROM pg_tables
+         WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'`
+      );
+      if (tables.length > 0) {
+        const list = tables.map((t) => `"${t.tablename}"`).join(", ");
+        await tx.$executeRawUnsafe(
+          `TRUNCATE TABLE ${list} RESTART IDENTITY CASCADE`
+        );
+      }
+      for (const [delegate, rows] of dump) {
+        if (rows.length > 0) {
+          await tx[delegate].createMany({ data: rows });
+        }
+      }
+    },
+    { timeout: 60_000, maxWait: 15_000 }
   );
-  if (tables.length > 0) {
-    const list = tables.map((t) => `"${t.tablename}"`).join(", ");
-    await prisma.$executeRawUnsafe(
-      `TRUNCATE TABLE ${list} RESTART IDENTITY CASCADE`
-    );
-  }
-  for (const [delegate, rows] of dump) {
-    if (rows.length > 0) {
-      await prisma[delegate].createMany({ data: rows });
-    }
-  }
 }
 
 export async function writeDemoDump(dump: DemoDump): Promise<string> {
@@ -972,6 +993,10 @@ export async function writeDemoDump(dump: DemoDump): Promise<string> {
 }
 
 export async function seedDemo(prisma: DemoPrisma): Promise<DemoDump> {
+  // Second guard beyond DEMO_MODE: the seed wipes the database, so the
+  // connection must point at a database whose name says "demo" — a
+  // misconfigured DATABASE_URL can never truncate a real shop.
+  assertDemoDatabase(process.env.DATABASE_URL ?? "");
   const dump = await buildDemoDump(new Date());
   await applyDemoDump(prisma, dump);
   await writeDemoDump(dump);

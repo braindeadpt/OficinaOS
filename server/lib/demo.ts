@@ -74,13 +74,10 @@ const BLOCKED_MUTATIONS = [
 
 // Better-auth exposes its whole surface under /api/auth/* — including the
 // admin plugin (user mgmt, ban, impersonate), password/email changes and
-// password-reset email sends. In demo the only allowed mutations are
-// sign-in and sign-out; everything else is rejected before it can act.
-const ALLOWED_AUTH_MUTATIONS = new Set([
-  "/api/auth/sign-in/username",
-  "/api/auth/sign-in/email",
-  "/api/auth/sign-out",
-]);
+// password-reset email sends. In demo the only allowed auth mutation is
+// sign-out: credential sign-ins go through /api/demo/login so scripted
+// failures can't lock the shared demo account out for everyone.
+const ALLOWED_AUTH_MUTATIONS = new Set(["/api/auth/sign-out"]);
 
 const isMutationMethod = (method: string) =>
   method === "POST" ||
@@ -122,3 +119,63 @@ export function isDemoBlockedPath(method: string, pathname: string): boolean {
 
 /** Largest import the demo accepts — bulk imports stay blocked above this. */
 export const DEMO_IMPORT_MAX_ROWS = 50;
+
+/**
+ * Path the demo guard evaluates. For concrete routes the matched
+ * routeOptions.url pattern is already normalized by the router (%XX is
+ * decoded before matching, so /api/%75sers/... lands on /api/users/:id).
+ * For wildcard handlers (the better-auth /api/auth/* catch-all) and
+ * unmatched paths we decode the raw URL ourselves — otherwise an encoded
+ * path would sail past the prefix blocklist while still hitting a handler.
+ */
+export function demoRequestPath(
+  routePattern: string | undefined,
+  rawUrl: string
+): string {
+  if (routePattern && routePattern !== "/" && !routePattern.includes("*")) {
+    return routePattern;
+  }
+  const raw = rawUrl.split("?", 1)[0];
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch {
+    throw new AppError("VALIDATION_ERROR");
+  }
+  return decoded.replace(/\/{2,}/g, "/").toLowerCase();
+}
+
+/**
+ * Second safety net for the destructive demo paths (seed, hourly reset):
+ * the target database's name must literally contain "demo", so a
+ * mispointed DATABASE_URL can never wipe a real shop.
+ */
+export function assertDemoDatabase(databaseUrl: string): void {
+  let dbName = "";
+  try {
+    dbName = new URL(databaseUrl).pathname.split("/").pop() ?? "";
+  } catch {
+    // unparsable — falls through to the throw below
+  }
+  if (!dbName.toLowerCase().includes("demo")) {
+    throw new Error(
+      `Refusing demo wipe on database "${dbName || "unknown"}" — name must contain "demo".`
+    );
+  }
+}
+
+/**
+ * DEMO_MODE rate-limit key: behind cloudflared/Caddy every request arrives
+ * from the proxy IP, so the whole visitor pool would share one budget
+ * (and ban:5 would let a single script block everyone). CF-Connecting-IP
+ * is what cloudflared forwards to the origin; direct hits fall back to
+ * the socket IP. Only used in demo mode — real installs keep request.ip
+ * and the explicit TRUST_PROXY opt-in.
+ */
+export function demoRateLimitKey(request: {
+  headers: Record<string, unknown>;
+  ip: string;
+}): string {
+  const cfIp = request.headers["cf-connecting-ip"];
+  return typeof cfIp === "string" && cfIp.length > 0 ? cfIp : request.ip;
+}

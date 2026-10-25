@@ -624,7 +624,8 @@
     "duplicate_customer_phone": "A customer with this phone number already exists",
     "demo_disabled": "Unavailable in demo",
     "setup_already_done": "This shop is already set up. Please sign in.",
-    "setup_not_local": "For security, first-time setup can only be done on the computer where OficinaOS is installed."
+    "setup_not_local": "For security, first-time setup can only be done on the computer where OficinaOS is installed.",
+    "demo_quota_exceeded": "Upload storage is full in demo — it resets every hour"
   },
   "failed_to_create_part": "Failed to create part",
   "failed_to_delete_part": "Failed to delete part",
