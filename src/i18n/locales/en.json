@@ -376,6 +376,13 @@
   "customers_export": "Export CSV",
   "dashboard": "Dashboard",
   "dashboard_greeting": "Welcome back, {{name}}",
+  "demo_banner_cta": "Install it in my shop",
+  "demo_banner_text": "Demo — the data is fictional and wiped every hour. Do not enter real data.",
+  "demo_login_button": "Try the demo",
+  "demo_login_cta": "Try the demo",
+  "demo_login_desc": "Step into a fictional repair shop — no password needed. Everything resets hourly.",
+  "demo_login_title": "OficinaOS Demo",
+  "demo_unavailable": "Unavailable in demo",
   "dashboard_page": {
     "since_8am": "+{{count}} since 8AM",
     "hours_late": "{{hours}}h Late",
@@ -615,6 +622,7 @@
     "signature_already_submitted": "This signature was already submitted",
     "quote_amount_required": "Enter the quote amount — this repair has no estimated cost yet",
     "duplicate_customer_phone": "A customer with this phone number already exists",
+    "demo_disabled": "Unavailable in demo",
     "setup_already_done": "This shop is already set up. Please sign in.",
     "setup_not_local": "For security, first-time setup can only be done on the computer where OficinaOS is installed."
   },

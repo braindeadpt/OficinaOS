@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { PrismaClient } from "@generated/client";
 import type { FastifyBaseLogger } from "fastify";
 import { decryptSecret, isEncrypted } from "../lib/crypto.js";
+import { assertNotDemoMode } from "../lib/demo.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import {
   type BotReplyCtx,
@@ -77,6 +78,7 @@ export async function sendSms(
   text: string,
   countryCode?: string
 ): Promise<SendResult> {
+  assertNotDemoMode();
   const url = `${config.url}/message`;
   const payload = {
     phoneNumbers: [formatPhone(to, countryCode)],
@@ -138,6 +140,7 @@ export async function registerSmsWebhook(
   config: SmsConfig,
   callbackUrl: string
 ): Promise<SendResult> {
+  assertNotDemoMode();
   try {
     const listRes = await fetch(`${config.url}/webhooks`, {
       headers: { Authorization: authHeader(config) },

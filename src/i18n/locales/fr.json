@@ -376,6 +376,13 @@
   "customers_export": "Exporter CSV",
   "dashboard": "Tableau de bord",
   "dashboard_greeting": "Bon retour, {{name}}",
+  "demo_banner_cta": "Installez-le dans ma boutique",
+  "demo_banner_text": "Démo : les données sont fictives et effacées toutes les heures. ",
+  "demo_login_button": "Essayez la démo",
+  "demo_login_cta": "Essayez la démo",
+  "demo_login_desc": "Entrez dans un atelier de réparation fictif – aucun mot de passe n'est requis. ",
+  "demo_login_title": "Démo OficinaOS",
+  "demo_unavailable": "Indisponible en démo",
   "dashboard_page": {
     "since_8am": "+{{count}} depuis 8h",
     "hours_late": "{{hours}}h En retard",
@@ -615,6 +622,7 @@
     "signature_already_submitted": "Cette signature a déjà été soumise",
     "quote_amount_required": "Indiquez le montant du devis : cette réparation n'a pas encore de coût estimé",
     "duplicate_customer_phone": "Un client avec ce numéro de téléphone existe déjà",
+    "demo_disabled": "Indisponible en démo",
     "setup_already_done": "L'atelier est déjà configuré. Connectez-vous.",
     "setup_not_local": "Par sécurité, la première configuration ne peut se faire que sur l'ordinateur où OficinaOS est installé."
   },

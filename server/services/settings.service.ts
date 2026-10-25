@@ -10,6 +10,7 @@ import type {
   UpdateWhatsAppSettingsInput,
 } from "@shared/schemas/settings.schema";
 import { decryptSecret, encryptSecret, isEncrypted } from "../lib/crypto.js";
+import { assertNotDemoMode } from "../lib/demo.js";
 import { findNotificationTemplateUnique } from "../repositories/notification.repository.js";
 import {
   findAiSettingsUnique,
@@ -218,6 +219,7 @@ export async function updateNotificationTemplate(
 }
 
 export async function testAiConnection(prisma: PrismaClient) {
+  assertNotDemoMode();
   const settings = await findAiSettingsUnique(prisma);
   if (!settings) {
     return { message: "AI settings not configured", success: false };

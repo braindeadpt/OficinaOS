@@ -1,4 +1,5 @@
 import pkg from "../../package.json";
+import { assertNotDemoMode } from "../lib/demo.js";
 import { logger } from "../utils/logger.js";
 import { isNewerVersion } from "../utils/version.js";
 
@@ -54,6 +55,8 @@ export function resetAppVersionCache(): void {
 async function fetchLatestRelease(
   fetchImpl: typeof fetch
 ): Promise<LatestCache> {
+  // Version check phones GitHub — off in demo.
+  assertNotDemoMode();
   try {
     const res = await fetchImpl(RELEASES_API, {
       headers: {

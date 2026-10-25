@@ -320,6 +320,10 @@ export const ERRORS = {
     status: 403,
     message: "errors.password_change_required",
   },
+  DEMO_DISABLED: {
+    status: 403,
+    message: "errors.demo_disabled",
+  },
 } as const;
 
 export type ErrorCode = keyof typeof ERRORS;

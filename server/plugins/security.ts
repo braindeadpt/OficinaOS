@@ -19,8 +19,10 @@ import {
   MUTATION_METHODS,
   matchRoute,
   mergeRouteConfig,
+  type RouteSecurityOverride,
   routeSecurity,
 } from "../config/route-security.js";
+import { isDemoMode } from "../lib/demo.js";
 import {
   buildRateLimitError,
   CappedBackoffStore,
@@ -33,6 +35,22 @@ const SENSITIVE_KEYS = new Set(["password", "role", "mustChangePassword"]);
 
 function generateNonce(): string {
   return globalThis.crypto.randomUUID().replace(/-/g, "");
+}
+
+// DEMO_MODE write ceiling — see the onRoute call site below.
+const DEMO_MUTATION_MAX_PER_MINUTE = 60;
+function clampDemoMutationRateLimit(config: unknown, method: string): void {
+  if (!(isDemoMode() && isMutation(method))) {
+    return;
+  }
+  const cfg = config as RouteSecurityOverride | undefined;
+  const rl = cfg?.rateLimit;
+  if (rl && typeof rl === "object") {
+    rl.max = Math.min(
+      rl.max ?? DEMO_MUTATION_MAX_PER_MINUTE,
+      DEMO_MUTATION_MAX_PER_MINUTE
+    );
+  }
 }
 
 // Segment-aware: /embed and /embed/* are iframable widget pages; a sibling
@@ -309,6 +327,11 @@ const securityPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       routeOptions.config as Record<string, unknown> | undefined,
       override
     );
+
+    // DEMO_MODE: writes get a tighter ceiling (60/min) — the public demo
+    // shares one data set, so a single visitor scripting POSTs must not
+    // churn it for everyone else. Stricter per-route limits still win.
+    clampDemoMutationRateLimit(routeOptions.config, methodStr);
   });
 
   // ── Layer 6: Request Sanitization ───────────────────────────────────────

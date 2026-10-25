@@ -13,6 +13,7 @@
  * Auth: header `apikey` (global AUTHENTICATION_API_KEY ou hash da
  * instância). syncFullHistory=false — nunca guardamos histórico.
  */
+import { assertNotDemoMode } from "../lib/demo.js";
 
 export interface EvolutionConfig {
   apiKey: string;
@@ -37,6 +38,7 @@ async function evoFetch(
   path: string,
   init?: { body?: unknown; method?: string }
 ): Promise<{ body: unknown; ok: boolean; status: number } | null> {
+  assertNotDemoMode();
   try {
     const res = await fetch(
       `${baseUrl.replace(TRAILING_SLASH_RE, "")}${path}`,

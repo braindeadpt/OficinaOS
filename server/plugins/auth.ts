@@ -209,6 +209,8 @@ const authPlugin: FastifyPluginAsync = async (app) => {
       pathname === "/health" ||
       pathname === "/api/csrf-token" ||
       pathname.startsWith("/api/auth") ||
+      // Public demo entry — creates the session itself.
+      pathname.startsWith("/api/demo") ||
       // First-run setup runs before any user exists; the route guards
       // itself (0 users + loopback or one-time token).
       pathname === "/api/setup" ||

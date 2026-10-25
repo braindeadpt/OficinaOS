@@ -1,0 +1,69 @@
+# compose.demo.yaml — public demo (demo.oficinaos.app).
+#
+# A fictional, pre-filled repair shop any visitor can try without
+# installing anything. DEMO_MODE=true hard-disables every outbound
+# integration (email, WhatsApp/SMS, AI, Cloud/Trade pairing, exports) and
+# refuses to boot if real credentials are set — there are no secrets in
+# this stack.
+#
+# Deliberately absent vs. a real install:
+#   - no db-backup sidecar (the data is fictional; the reset IS the backup)
+#   - no published ports: only the external `edge` network (traefik/nginx)
+#     can reach the app — nothing else on the host
+#   - the app volume is a named volume so `demo:reset` can wipe uploads
+#
+# Reset: the infra timer runs `docker exec demo-web bun run demo:reset`
+# hourly (truncate + replay the seed dump + clear uploads). The app keeps
+# serving — the whole reset is one transaction window.
+#
+# First boot seeds the demo dump (idempotent, gated by DEMO_MODE).
+
+name: oficinaos-demo
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: demo
+      POSTGRES_DB: demo
+    volumes:
+      - demo-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demo -d demo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - internal
+
+  app:
+    image: ghcr.io/braindeadpt/oficinaos:latest
+    restart: unless-stopped
+    container_name: demo-web
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env.demo
+    environment:
+      DATABASE_URL: postgresql://demo:demo@db:5432/demo
+      DEMO_MODE: "true"
+      NODE_ENV: production
+      APP_URL: https://demo.oficinaos.app
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      - demo-uploads:/app/uploads
+    # No `ports:` — the app is only reachable through the edge network.
+    networks:
+      - internal
+      - edge
+
+networks:
+  internal:
+  edge:
+    external: true
+
+volumes:
+  demo-pgdata:
+  demo-uploads:

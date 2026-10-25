@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate } from "react-router";
 import LanguageToggle from "@/components/modules/language-toggle";
 import api from "@/lib/api";
+import { useDemoMode } from "@/lib/demo";
 import { useAuthStore } from "@/stores/auth";
 
 const KNOWN_ERROR_KEYS = [
@@ -345,10 +346,17 @@ export default function LoginPage() {
   const login = useAuthStore((s) => s.login);
   const error = useAuthStore((s) => s.error);
   const clearError = useAuthStore((s) => s.clearError);
+  const isDemo = useDemoMode();
+  const checkSession = useAuthStore((s) => s.checkSession);
+  const [demoLoading, setDemoLoading] = useState(false);
 
   // Fresh install (no users yet): the first screen is «Criar a sua oficina»,
-  // not a login nobody has credentials for.
+  // not a login nobody has credentials for. Never applies in demo mode —
+  // the seeded shop already exists.
   useEffect(() => {
+    if (isDemo) {
+      return;
+    }
     let cancelled = false;
     api
       .get<{ needsSetup: boolean }>("/setup/status")
@@ -363,7 +371,21 @@ export default function LoginPage() {
     return () => {
       cancelled = true;
     };
-  }, [navigate]);
+  }, [navigate, isDemo]);
+
+  async function handleDemoLogin() {
+    setDemoLoading(true);
+    try {
+      await api.post("/demo/login");
+      await checkSession(true);
+      navigate("/", { replace: true });
+    } catch {
+      // Surface the generic login error — the demo route already logged it.
+      useAuthStore.setState({ error: "auth_login_failed" });
+    } finally {
+      setDemoLoading(false);
+    }
+  }
 
   async function handleSignIn(e: React.FormEvent) {
     e.preventDefault();
@@ -382,6 +404,88 @@ export default function LoginPage() {
     setShowForgotPassword(false);
     clearError();
   }
+
+  const loginBody = (() => {
+    if (isDemo) {
+      /* DEMO_MODE: no credentials, no forgot-password — a single
+         button creates a session for the seeded demo owner. */
+      return (
+        <div>
+          <div className="mb-8">
+            <h2 className="mb-1 font-bold font-headline text-2xl text-on-surface">
+              {t("demo_login_title")}
+            </h2>
+            <p className="text-on-surface-variant text-sm">
+              {t("demo_login_desc")}
+            </p>
+          </div>
+          <button
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-primary font-label font-semibold text-on-primary transition-opacity hover:opacity-90 disabled:opacity-50"
+            disabled={demoLoading}
+            onClick={handleDemoLogin}
+            type="button"
+          >
+            <span className="material-symbols-outlined text-[20px]">
+              play_circle
+            </span>
+            {demoLoading ? t("loading") : t("demo_login_cta")}
+          </button>
+        </div>
+      );
+    }
+    if (showForgotPassword) {
+      return (
+        <>
+          <div className="mb-8">
+            <h2 className="mb-1 font-bold font-headline text-2xl text-on-surface">
+              {t("auth_forgot_password")}
+            </h2>
+            <p className="text-on-surface-variant text-sm">
+              {t("auth_forgot_password_desc")}
+            </p>
+          </div>
+
+          <ForgotPasswordForm onBack={handleBackToSignIn} />
+        </>
+      );
+    }
+    return (
+      <>
+        <div className="mb-8">
+          <h2 className="mb-1 font-bold font-headline text-2xl text-on-surface">
+            {t("auth_sign_in")}
+          </h2>
+          <p className="text-on-surface-variant text-sm">
+            {t("auth_identify")}
+          </p>
+        </div>
+
+        {notice === "setup_login_after_failed" && (
+          <p
+            className="mb-5 rounded-lg bg-primary-container px-4 py-3 text-on-primary-container text-sm"
+            role="status"
+          >
+            {t("setup_login_after_failed")}
+          </p>
+        )}
+
+        <SignInForm
+          error={error}
+          loading={loading}
+          onForgotPassword={() => {
+            setShowForgotPassword(true);
+          }}
+          onSubmit={handleSignIn}
+          password={password}
+          rememberMe={rememberMe}
+          setPassword={setPassword}
+          setRememberMe={setRememberMe}
+          setUsername={setUsername}
+          username={username}
+        />
+      </>
+    );
+  })();
 
   return (
     <main className="flex min-h-dvh w-full flex-col bg-background font-body text-on-surface antialiased">
@@ -418,57 +522,7 @@ export default function LoginPage() {
       </header>
 
       <section className="flex flex-1 items-center justify-center overflow-y-auto p-4 sm:p-6">
-        <div className="w-full max-w-sm">
-          {showForgotPassword ? (
-            <>
-              <div className="mb-8">
-                <h2 className="mb-1 font-bold font-headline text-2xl text-on-surface">
-                  {t("auth_forgot_password")}
-                </h2>
-                <p className="text-on-surface-variant text-sm">
-                  {t("auth_forgot_password_desc")}
-                </p>
-              </div>
-
-              <ForgotPasswordForm onBack={handleBackToSignIn} />
-            </>
-          ) : (
-            <>
-              <div className="mb-8">
-                <h2 className="mb-1 font-bold font-headline text-2xl text-on-surface">
-                  {t("auth_sign_in")}
-                </h2>
-                <p className="text-on-surface-variant text-sm">
-                  {t("auth_identify")}
-                </p>
-              </div>
-
-              {notice === "setup_login_after_failed" && (
-                <p
-                  className="mb-5 rounded-lg bg-primary-container px-4 py-3 text-on-primary-container text-sm"
-                  role="status"
-                >
-                  {t("setup_login_after_failed")}
-                </p>
-              )}
-
-              <SignInForm
-                error={error}
-                loading={loading}
-                onForgotPassword={() => {
-                  setShowForgotPassword(true);
-                }}
-                onSubmit={handleSignIn}
-                password={password}
-                rememberMe={rememberMe}
-                setPassword={setPassword}
-                setRememberMe={setRememberMe}
-                setUsername={setUsername}
-                username={username}
-              />
-            </>
-          )}
-        </div>
+        <div className="w-full max-w-sm">{loginBody}</div>
       </section>
 
       <footer className="flex shrink-0 items-center justify-between border-outline-variant/30 border-t px-4 py-3 pb-[env(safe-area-inset-bottom,16px)] sm:px-6 lg:px-8">

@@ -115,6 +115,18 @@ function routeMatchesPattern(url: string, pattern: string): boolean {
 
 export const routeSecurity: [string, RouteSecurityOverride][] = [
   ["/health", { rateLimit: false, csrf: false }],
+  // Public demo entry — anonymous, IP-keyed, tight budget.
+  [
+    "/api/demo/login",
+    {
+      rateLimit: {
+        keyGenerator: lookupKeyGenerator,
+        max: 20,
+        timeWindow: "15 minutes",
+      },
+    },
+  ],
+  ["/api/demo/status", { csrf: false }],
   [
     "/api/csrf-token",
     { rateLimit: { max: 60, timeWindow: "1 minute" }, csrf: false },

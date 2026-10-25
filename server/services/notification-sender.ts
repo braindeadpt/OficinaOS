@@ -3,6 +3,7 @@ import {
   NATIONAL_NUMBER_LENGTHS,
 } from "@shared/constants/countries.js";
 import { decryptSecret, isEncrypted } from "../lib/crypto.js";
+import { assertNotDemoMode } from "../lib/demo.js";
 
 export interface WhatsAppConfig {
   apiToken: string;
@@ -21,6 +22,7 @@ export async function sendWhatsApp(
   message: string,
   countryCode?: string
 ): Promise<SendResult> {
+  assertNotDemoMode();
   const url = `https://graph.facebook.com/v21.0/${config.phoneNumberId}/messages`;
   const payload = {
     messaging_product: "whatsapp",
@@ -70,6 +72,7 @@ export async function sendWhatsAppTemplate(
   params: string[],
   countryCode?: string
 ): Promise<SendResult> {
+  assertNotDemoMode();
   const url = `https://graph.facebook.com/v21.0/${config.phoneNumberId}/messages`;
   const payload = {
     messaging_product: "whatsapp",

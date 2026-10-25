@@ -14,6 +14,7 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { AppError } from "@shared/errors/app-error.js";
+import { assertNotDemoMode } from "../lib/demo.js";
 import { logger } from "../utils/logger.js";
 import { getAppVersionInfo } from "./app-version.service.js";
 
@@ -337,6 +338,9 @@ async function applyUpdate(
 export async function startUpdate(
   fetchImpl: typeof fetch = fetch
 ): Promise<UpdateState> {
+  // Self-update spawns a PowerShell that swaps the install — never on a
+  // shared public demo.
+  assertNotDemoMode();
   const state = await getUpdateState();
   if (!(state.updateAvailable && state.latest)) {
     throw new AppError("VALIDATION_ERROR", { reason: "no update available" });

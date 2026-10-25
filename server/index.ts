@@ -14,6 +14,7 @@ import { startMdnsResponder } from "./lib/mdns.js";
 import { isFileRequestPath } from "./lib/spa-fallback.js";
 import { cacheControlFor } from "./lib/static-cache.js";
 import authPlugin from "./plugins/auth.js";
+import demoPlugin from "./plugins/demo.js";
 import { localePlugin } from "./plugins/locale.js";
 import prismaPlugin from "./plugins/prisma.js";
 import securityPlugin from "./plugins/security.js";
@@ -24,6 +25,7 @@ import { businessRoutes } from "./routes/business.js";
 import { customersRoutes } from "./routes/customers.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
 import { dataIoRoutes } from "./routes/data-io.js";
+import { demoRoutes } from "./routes/demo.js";
 import { devicesRoutes } from "./routes/devices.js";
 import { feedbackRoutes } from "./routes/feedback.js";
 import { healthRoutes } from "./routes/health.js";
@@ -86,6 +88,7 @@ app.addHook("onSend", (request, reply, _payload, done) => {
 });
 
 await app.register(securityPlugin);
+await app.register(demoPlugin);
 
 if (!IS_PROD) {
   await app.register(swagger, {
@@ -136,12 +139,19 @@ if (!IS_PROD) {
   });
 }
 
-await app.register(multipart, { limits: { fileSize: 5 * 1024 * 1024 } });
+// Demo uploads are capped at 1 MB per file (images only — enforced by the
+// per-route MIME allowlists) so the shared instance cannot fill the disk.
+await app.register(multipart, {
+  limits: {
+    fileSize: env.DEMO_MODE ? 1024 * 1024 : 5 * 1024 * 1024,
+  },
+});
 await app.register(websocket);
 await app.register(localePlugin);
 
 await app.register(prismaPlugin);
 await app.register(authRoutes);
+await app.register(demoRoutes);
 await app.register(setupRoutes);
 await app.register(authPlugin);
 await app.register(websocketPlugin);
@@ -151,11 +161,16 @@ await app.register(websocketPlugin);
 );
 
 setAppInstance(app);
+// Local-only jobs still run in DEMO_MODE (they only write to the DB and
+// make the demo feel alive); everything that can send data out — the
+// Cloud poller, WhatsApp remarketing and the notification outbox worker —
+// is never started.
+const noop = () => undefined;
 const stopOverdue = startOverdueScheduler(app);
-const stopCloudPoller = startCloudPoller(app);
+const stopCloudPoller = env.DEMO_MODE ? noop : startCloudPoller(app);
 const stopLowStock = startLowStockScheduler(app);
-const stopRemarketing = startRemarketingScheduler(app);
-const stopOutboxWorker = startOutboxWorker(app.prisma);
+const stopRemarketing = env.DEMO_MODE ? noop : startRemarketingScheduler(app);
+const stopOutboxWorker = env.DEMO_MODE ? noop : startOutboxWorker(app.prisma);
 const CLEANUP_INTERVAL_MS = 15 * 60 * 1000;
 const cleanupHandle = setInterval(() => {
   cleanupReadNotifications(app.prisma).catch((err) => {

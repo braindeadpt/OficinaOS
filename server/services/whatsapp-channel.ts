@@ -1,4 +1,5 @@
 import { decryptSecret, isEncrypted } from "../lib/crypto.js";
+import { assertNotDemoMode } from "../lib/demo.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import { isModuleEnabled } from "../utils/modules.js";
@@ -171,6 +172,7 @@ export async function sendWhatsAppText(
   countryCode: string | undefined,
   settings: SettingsLike | null
 ): Promise<SendResult> {
+  assertNotDemoMode();
   if (channel.mode === "local") {
     return sendWhatsApp(channel.config, to, message, countryCode);
   }
@@ -263,6 +265,7 @@ export async function sendWhatsAppTemplateVia(
   countryCode: string | undefined,
   settings: SettingsLike | null
 ): Promise<SendResult> {
+  assertNotDemoMode();
   if (channel.mode === "local") {
     return sendWhatsAppTemplate(
       channel.config,

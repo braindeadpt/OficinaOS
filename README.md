@@ -199,6 +199,28 @@ Todas as variáveis de ambiente estão documentadas no [`.env.example`](./.env.e
 | `AI_ENCRYPTION_KEY` | Chave AES-256 para guardar a OpenAI key |
 | `OPENAI_API_KEY` | Opcional — assistente IA |
 | `WHATSAPP_*`, `EMAIL_*` | Opcional — notificações ao cliente |
+| `DEMO_MODE` | `true` ativa a demo pública (ver secção seguinte) — **nunca numa instalação real** |
+
+## Demo pública (`demo.oficinaos.app`)
+
+`DEMO_MODE=true` transforma a instalação numa demo pública: o visitante carrega em «Experimentar a demo», entra numa oficina fictícia já preenchida (clientes, reparações, stock, vendas — tudo inventado) e usa tudo sem instalar nada.
+
+**O que muda com `DEMO_MODE=true`:**
+
+- `POST /api/demo/login` cria uma sessão de dono de oficina sem password; `/setup` fica desativado
+- O servidor **recusa arrancar** se algum segredo real estiver definido (`OPENAI_*`, `EMAIL_*`, `WHATSAPP_*`, `SMTP_*`, `META_*`, `EVOLUTION_*`, `OFICINAOS_CLOUD_*`) — a demo nunca tem credenciais verdadeiras
+- Tudo o que sai para fora fica desligado **no servidor** (não só na UI): email, WhatsApp/SMS, webhooks, assistente IA, pairing/sync com Cloud e Trade, InvoiceXpress, feedback→GitHub, self-update, impressora ESC/POS, exports
+- Bloqueados com 403: gestão de utilizadores/papéis, alteração de password/email, chaves e integrações, importações acima de 50 linhas
+- Uploads: máximo 1 MB por ficheiro, só imagens (validação MIME + magic bytes)
+- Rate limits mais apertados (login demo 20/15min por IP; escritas ≤60/min)
+- Os schedulers externos (Cloud poller, remarketing, outbox) nem arrancam
+- Uma faixa fixa no topo avisa «Demo — os dados são fictícios e apagados de hora a hora» com o CTA «Instalar na minha oficina»
+
+**Seed:** `bun run db:seed:demo` gera o dataset determinístico (PRNG com seed fixa — mesma forma em cada execução, datas relativas a "agora") e grava o snapshot em `demo-snapshot.json`.
+
+**Reset horário:** o timer da infra corre `docker exec demo-web bun run demo:reset` — regenera o dump (datas sempre frescas), faz TRUNCATE+replay numa transação curta e limpa os uploads. A app continua a responder durante o reset; o comando é idempotente e corre inteiramente dentro do contentor.
+
+**Deploy de exemplo:** [`compose.demo.yaml`](./compose.demo.yaml) (app + Postgres, sem `db-backup`, sem portas publicadas — só a rede `edge`) com [`.env.demo.example`](./.env.demo.example). O reverse proxy na edge aponta `demo.oficinaos.app` para `demo-web:4000`.
 
 ## Desenvolvimento local (sem Docker)
 

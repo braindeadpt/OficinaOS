@@ -29,6 +29,11 @@ const boolish = z
   .optional()
   .transform((v) => v === "true");
 
+// Secrets that must never reach the public demo — real credentials on a
+// shared, hourly-reset instance would leak the moment anyone hit Settings.
+const DEMO_FORBIDDEN_ENV =
+  /^(OPENAI_|EMAIL_|WHATSAPP_|SMTP_|META_|EVOLUTION_|OFICINAOS_CLOUD_)/;
+
 /** Treat empty/whitespace-only strings as unset so defaults apply. */
 /** Coerce to int, but let empty strings fall through to the default. */
 const portNumber = z.preprocess(
@@ -109,10 +114,32 @@ const schema = z
       .regex(GITHUB_REPO_REGEX, "must be owner/repo")
       .default("braindeadpt/OficinaOS"),
 
+    // ── Demo mode ─────────────────────────────────────────────
+    // Public demo at demo.oficinaos.app: fictional shop, hourly reset,
+    // everything that could reach the outside world switched off.
+    DEMO_MODE: boolish,
+
     // ── Timezone ──────────────────────────────────────────────
     TZ: z.string().optional(),
   })
   .superRefine((val, ctx) => {
+    // The demo must never hold real credentials: it is public, seeded with
+    // fictional data and reset hourly. Real secrets defined alongside
+    // DEMO_MODE mean a misconfigured deploy — refuse to start.
+    if (val.DEMO_MODE) {
+      const forbidden = Object.keys(process.env).filter((k) =>
+        DEMO_FORBIDDEN_ENV.test(k)
+      );
+      for (const key of forbidden) {
+        ctx.addIssue({
+          code: "custom",
+          path: [key],
+          message:
+            "must not be set when DEMO_MODE=true (demo never uses real credentials)",
+        });
+      }
+    }
+
     if (val.NODE_ENV !== "production") {
       return;
     }

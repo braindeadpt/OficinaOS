@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { Link, Route, Routes } from "react-router";
 import CommandPalette from "@/components/modules/command-palette";
 import DashboardLayout from "@/components/modules/dashboard-layout";
+import DemoBanner from "@/components/modules/demo-banner";
 import ProtectedRoute, {
   RequirePermission,
 } from "@/components/modules/protected-route";
@@ -110,6 +111,8 @@ export default function App() {
 
   return (
     <ChunkErrorBoundary>
+      {/* Public demo: fixed banner + in-flow spacer on every page. */}
+      <DemoBanner />
       {/* Outside Suspense and outside any layout: the palette has to survive
           route changes and lazy chunk loading, and open from every screen. */}
       {isAuthenticated && <CommandPalette />}
