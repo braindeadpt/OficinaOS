@@ -40,6 +40,19 @@ $keepDir = Join-Path $env:TEMP ('oficinaos-keep-' + [guid]::NewGuid().ToString('
 # Ficheiros mutaveis dentro de app\ que nao vem no zip de update.
 $preserve = @('.env', '.pgpass', 'PRIMEIRO-LOGIN.txt', 'uploads')
 
+# Log por passo: o status.json so guarda o ULTIMO estado — sem historico,
+# uma falha a meio do swap nao deixava rasto nenhum. O pai do StatusPath e
+# o staging (apagado a cada update), por isso o log fica no avo (workDir)
+# e persiste entre updates. Nunca e fatal: o update nao pode morrer por
+# causa do log.
+$logPath = Join-Path (Split-Path (Split-Path $StatusPath -Parent) -Parent) 'update-apply.log'
+function Write-Log([string]$msg) {
+  try {
+    $ts = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+    [IO.File]::AppendAllText($logPath, "$ts $msg`r`n")
+  } catch { }
+}
+
 function Set-Status([string]$state, [string]$detail) {
   $body = @{
     state     = $state
@@ -47,6 +60,7 @@ function Set-Status([string]$state, [string]$detail) {
     updatedAt = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
   } | ConvertTo-Json -Compress
   [IO.File]::WriteAllText($StatusPath, $body)
+  Write-Log "$state — $detail"
 }
 
 function Stop-AppProcesses {
@@ -166,8 +180,13 @@ function Resolve-FailedMigrations {
 function Restore-Previous([string]$reason) {
   Set-Status 'rolling_back' $reason
   Stop-OficinaOS
-  if (Test-Path $appDir) { Remove-Item $appDir -Recurse -Force }
-  Rename-Item $prevDir $appDir
+  # Sem app.prev nao ha nada para repor — apagar app\ destruía a instalacao
+  # e o status ficava a mentir ("rolled_back" sem nada reposto).
+  if (-not (Test-Path $prevDir)) {
+    throw "rollback impossivel: $prevDir nao existe — app\ mantida como esta"
+  }
+  if (Test-Path $appDir) { Remove-Item $appDir -Recurse -Force -ErrorAction Stop }
+  Rename-Item $prevDir $appDir -ErrorAction Stop
   Restore-Preserved
   Resolve-FailedMigrations
   Start-OficinaOS
@@ -200,10 +219,16 @@ try {
   # 4. Trocar app\ (mantem app.prev para rollback)
   Set-Status 'applying' 'A instalar a nova versao'
   if (Test-Path $prevDir) { Remove-Item $prevDir -Recurse -Force }
+  # O swap so existe se o rename tiver saido bem — sem a flag, um rename
+  # falhado (ficheiro bloqueado, antivirus, Explorer aberto em app\) fazia o
+  # catch APAGAR a app\ original intacta, e com app.prev inexistente nada
+  # era reposto: instalacao destruida com status "versao anterior reposta".
+  $swapped = $false
   try {
     # O rename fica DENTRO do try: se falhar (pasta em uso / cwd em app\),
     # o catch repoe o estado e arranca o servico em vez de o deixar parado.
-    Rename-Item $appDir $prevDir
+    Rename-Item $appDir $prevDir -ErrorAction Stop
+    $swapped = $true
     # O zip contem a pasta app\ — extrai para o root e recria app\.
     # Expand-Archive do PS 5.1 falha em zips criados com `tar -a -cf`
     # ("Cannot find path ...\app\.bun-version") e demorava ~450-640s.
@@ -219,14 +244,22 @@ try {
     Restore-Preserved
   } catch {
     $msg = $_.Exception.Message
-    try {
-      if (Test-Path $appDir) { Remove-Item $appDir -Recurse -Force }
-      if (Test-Path $prevDir) { Rename-Item $prevDir $appDir }
-      Restore-Preserved
-    } catch { }
+    Write-Log "swap falhou: $msg (swapped=$swapped)"
+    # So ha algo para repor se o swap chegou a acontecer — app\ intacta
+    # (rename falhou) nao se toca, app\ parcial (extracao falhou) e limpa
+    # e o app.prev volta ao lugar.
+    if ($swapped) {
+      try {
+        if (Test-Path $appDir) { Remove-Item $appDir -Recurse -Force }
+        if (Test-Path $prevDir) { Rename-Item $prevDir $appDir }
+        Restore-Preserved
+        Write-Log 'app.prev reposto apos falha na extracao'
+      } catch { Write-Log "reposicao falhou: $($_.Exception.Message)" }
+    }
     # O rearranque tenta SEMPRE — mesmo que a reposicao falhe a meio.
     try { Start-OficinaOS } catch { }
-    throw "extracao falhou: $msg — versao anterior reposta"
+    $outcome = if ($swapped) { 'versao anterior reposta' } else { 'versao anterior intacta' }
+    throw "extracao falhou: $msg — $outcome"
   }
 
   # 5. Arrancar + health check (migracoes correm no arranque)
