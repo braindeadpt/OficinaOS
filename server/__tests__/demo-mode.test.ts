@@ -3,6 +3,11 @@ import { isAppError } from "@shared/errors/app-error.js";
 import Fastify, { type FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetEnvForTests } from "../config/env.js";
+// Static import: resolving the better-auth graph inside a test body put
+// ~3s of module loading inside the 15s test budget — enough to flake
+// under parallel load on Windows. At file level the cost is paid once,
+// outside any per-test timeout.
+import { checkSignInLockout, handleFailedSignIn } from "../plugins/auth.js";
 
 // Demo-mode tests exercise env parsing, the route blocklist plugin, the
 // /api/demo endpoints and the outbound choke points. The env module caches
@@ -638,9 +643,6 @@ describe("demo account lockout exemption", () => {
   it("never counts failures or locks the demo user", async () => {
     process.env.DEMO_MODE = "true";
     resetEnvForTests();
-    const { handleFailedSignIn, checkSignInLockout } = await import(
-      "../plugins/auth.js"
-    );
     const increment = vi.fn();
     const prisma = {
       user: {
@@ -669,7 +671,6 @@ describe("demo account lockout exemption", () => {
   it("still locks non-demo users in demo mode", async () => {
     process.env.DEMO_MODE = "true";
     resetEnvForTests();
-    const { checkSignInLockout } = await import("../plugins/auth.js");
     const prisma = {
       user: {
         findFirst: async () => ({
