@@ -1,10 +1,13 @@
 import { useTranslation } from "react-i18next";
 import { MetricCard } from "@/components/ui/metric-card";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 import { downloadCsv } from "@/lib/export-csv";
+import { formatNumber } from "@/lib/format";
 import { useReportsStore } from "@/stores/reports";
 
 export default function OperationsTab() {
   const { t } = useTranslation();
+  const fmt = useFormatCurrency();
   const state = useReportsStore((s) => s.operations);
 
   if (state.loading) {
@@ -68,7 +71,7 @@ export default function OperationsTab() {
           detail={
             summary.jobsCompletedChangePercent === undefined
               ? ""
-              : `${summary.jobsCompletedChangePercent > 0 ? "+" : ""}${summary.jobsCompletedChangePercent}%`
+              : `${summary.jobsCompletedChangePercent > 0 ? "+" : ""}${formatNumber(summary.jobsCompletedChangePercent, 1)}%`
           }
           icon="check_circle"
           label={t("reports.jobsCompleted")}
@@ -78,7 +81,7 @@ export default function OperationsTab() {
           detail={t("reports.hours")}
           icon="schedule"
           label={t("reports.avgTurnaround")}
-          value={String(summary.avgTurnaroundHours)}
+          value={formatNumber(summary.avgTurnaroundHours, 1)}
         />
         <MetricCard
           detail=""
@@ -91,7 +94,7 @@ export default function OperationsTab() {
             detail="%"
             icon="autorenew"
             label={t("reports.warrantyReturnRate")}
-            value={`${summary.warrantyReturnRate}%`}
+            value={formatNumber(summary.warrantyReturnRate, 1)}
           />
         )}
       </div>
@@ -130,10 +133,10 @@ export default function OperationsTab() {
                       {r.count}
                     </td>
                     <td className="px-4 py-3 text-end tabular-nums">
-                      {r.avgPrice.toLocaleString()}
+                      {fmt(r.avgPrice)}
                     </td>
                     <td className="px-4 py-3 text-end tabular-nums">
-                      {r.revenue.toLocaleString()}
+                      {fmt(r.revenue)}
                     </td>
                   </tr>
                 ))}
@@ -170,7 +173,7 @@ export default function OperationsTab() {
                       {s.count}
                     </td>
                     <td className="px-4 py-3 text-end tabular-nums">
-                      {s.avgDays}
+                      {formatNumber(s.avgDays, 1)}
                     </td>
                   </tr>
                 ))}

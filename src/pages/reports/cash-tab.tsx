@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import CashCloseCard from "@/components/reports/cash-close-card";
 import CashClosedCard from "@/components/reports/cash-closed-card";
 import { MetricCard } from "@/components/ui/metric-card";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 import { useReportsStore } from "@/stores/reports";
 
 function methodKey(method: string): string {
@@ -11,6 +12,7 @@ function methodKey(method: string): string {
 
 export default function CashTab() {
   const { t } = useTranslation();
+  const fmt = useFormatCurrency();
   const state = useReportsStore((s) => s.cash);
   const sessionState = useReportsStore((s) => s.cashSession);
   const fetchCashSession = useReportsStore((s) => s.fetchCashSession);
@@ -62,19 +64,19 @@ export default function CashTab() {
           detail=""
           icon="payments"
           label={t("reports.cashTotalCollected")}
-          value={summary.totalCollected.toLocaleString()}
+          value={fmt(summary.totalCollected)}
         />
         <MetricCard
           detail=""
           icon="local_atm"
           label={t("reports.cashCashTotal")}
-          value={summary.cashTotal.toLocaleString()}
+          value={fmt(summary.cashTotal)}
         />
         <MetricCard
           detail=""
           icon="credit_card"
           label={t("reports.cashTransferTotal")}
-          value={summary.transferTotal.toLocaleString()}
+          value={fmt(summary.transferTotal)}
         />
         <MetricCard
           detail=""
@@ -120,7 +122,7 @@ export default function CashTab() {
                         {m.count}
                       </td>
                       <td className="px-4 py-3 text-end font-bold tabular-nums">
-                        {m.amount.toLocaleString()}
+                        {fmt(m.amount)}
                       </td>
                     </tr>
                   ))}
@@ -165,7 +167,7 @@ export default function CashTab() {
                         {u.count}
                       </td>
                       <td className="px-4 py-3 text-end font-bold tabular-nums">
-                        {u.total.toLocaleString()}
+                        {fmt(u.total)}
                       </td>
                     </tr>
                   ))}
@@ -179,7 +181,7 @@ export default function CashTab() {
       {largestPayment && (
         <p className="text-on-surface-variant text-sm">
           {t("reports.cashLargestPayment", {
-            amount: largestPayment.amount.toLocaleString(),
+            amount: fmt(largestPayment.amount),
             location:
               largestPayment.location === "POS"
                 ? t("reports.cashLocationPos")

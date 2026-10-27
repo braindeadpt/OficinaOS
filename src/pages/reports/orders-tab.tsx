@@ -1,6 +1,8 @@
 import { useTranslation } from "react-i18next";
 import { MetricCard } from "@/components/ui/metric-card";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 import { downloadCsv } from "@/lib/export-csv";
+import { formatNumber } from "@/lib/format";
 import { useReportsStore } from "@/stores/reports";
 
 const STATUSES = [
@@ -16,6 +18,7 @@ const STATUSES = [
 
 export default function OrdersTab() {
   const { t } = useTranslation();
+  const fmt = useFormatCurrency();
   const state = useReportsStore((s) => s.orders);
   const status = useReportsStore((s) => s.ordersStatus);
   const setStatus = useReportsStore((s) => s.setOrdersStatus);
@@ -152,13 +155,13 @@ export default function OrdersTab() {
           detail=""
           icon="payments"
           label={t("reports.orders_total_value")}
-          value={summary.totalValue.toLocaleString()}
+          value={fmt(summary.totalValue)}
         />
         <MetricCard
           detail=""
           icon="calculate"
           label={t("reports.orders_avg")}
-          value={summary.avgOrderValue.toLocaleString()}
+          value={fmt(summary.avgOrderValue)}
         />
         {showMargin && (
           <MetricCard
@@ -166,7 +169,7 @@ export default function OrdersTab() {
             icon="trending_up"
             label={t("reports.orders_margin")}
             unit="%"
-            value={String(summary.avgMargin)}
+            value={formatNumber(summary.avgMargin ?? 0, 1)}
           />
         )}
       </div>
@@ -209,11 +212,13 @@ export default function OrdersTab() {
                     {t(`status.${row.status}`)}
                   </td>
                   <td className="px-4 py-3 text-end tabular-nums">
-                    {row.totalValue.toLocaleString()}
+                    {fmt(row.totalValue)}
                   </td>
                   {showMargin && (
                     <td className="px-4 py-3 text-end tabular-nums">
-                      {row.margin === undefined ? "—" : `${row.margin}%`}
+                      {row.margin === undefined
+                        ? "—"
+                        : `${formatNumber(row.margin, 1)}%`}
                     </td>
                   )}
                   <td className="px-4 py-3 text-on-surface-variant">
