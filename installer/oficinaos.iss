@@ -106,6 +106,7 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ResultCode: Integer;
+  TrayExe: String;
 begin
   if CurStep = ssPostInstall then begin
     WizardForm.StatusLabel.Caption :=
@@ -125,6 +126,13 @@ begin
         'Volte a correr o instalador ou contacte o suporte.',
         mbError, MB_OK, IDOK);
     end;
+    // O tray foi morto no PrepareToInstall (numa instalação nova ainda nem
+    // correu) — relança-o como o utilizador original, não como admin/SYSTEM,
+    // para o ícone voltar já e não só no próximo login. Falha não é fatal:
+    // a entrada [Registry] Run arranca-o na próxima sessão na mesma.
+    TrayExe := ExpandConstant('{app}\tools\OficinaOSTray.exe');
+    if FileExists(TrayExe) then
+      ExecAsOriginalUser(TrayExe, '', '', SW_SHOW, ewNoWait, ResultCode);
   end;
 end;
 

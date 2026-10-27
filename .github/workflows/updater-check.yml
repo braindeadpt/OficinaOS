@@ -1,0 +1,38 @@
+name: Updater check
+
+# Smoke Windows do updater + instalador. O portable-check monta o bundle mas
+# nunca corre o update-apply.ps1 nem compila o .iss — este workflow cobre os
+# dois em cada PR que lhes toca, antes de chegarem a uma release.
+on:
+  pull_request:
+    paths:
+      - scripts/update-apply.ps1
+      - scripts/update-launch.ps1
+      - scripts/update-apply.test.ps1
+      - installer/oficinaos.iss
+      - .github/workflows/updater-check.yml
+  workflow_dispatch:
+
+jobs:
+  updater:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: update-apply.ps1 — ficheiro bloqueado + rollback (PS 5.1, como em producao)
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\update-apply.test.ps1
+
+      - name: Install Inno Setup 6
+        run: choco install innosetup --no-progress -y
+
+      - name: Compile oficinaos.iss (stage minimo — so valida sintaxe/constantes)
+        # O .iss so era compilado na release — um erro de Pascal ou de
+        # constante chegava la dentro. Fontes stub para o [Files] nao falhar.
+        run: |
+          $s = "installer\stage-ci"
+          New-Item -ItemType Directory -Force "$s\app", "$s\bun", "$s\pgsql", "$s\tools", "dist" | Out-Null
+          Set-Content "$s\app\stub", "$s\bun\stub", "$s\pgsql\stub", "$s\tools\stub" x
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" `
+            "/DMyAppVersion=0.0.0-ci" "/DSourceDir=stage-ci" /Q installer\oficinaos.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC falhou: $LASTEXITCODE" }
