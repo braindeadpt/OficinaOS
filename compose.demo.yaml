@@ -70,7 +70,7 @@ services:
   app:
     # Pinned tag — bump to the first release that ships DEMO_MODE.
     # Never :latest: an accidental pull must not swap the running build.
-    image: ghcr.io/braindeadpt/oficinaos:1.0.19
+    image: ghcr.io/braindeadpt/oficinaos:1.0.20
     restart: unless-stopped
     container_name: demo-web
     depends_on:
