@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import DeliverJobDialog from "@/components/modules/jobs/deliver-job-dialog";
 import FunctionalChecklist from "@/components/modules/jobs/intake-modal/functional-checklist";
 import type { IntakeChecklist } from "@/components/modules/jobs/intake-modal/types";
-import { WorkflowStateControl } from "@/components/modules/tasks/record-workflow";
+import { WorkflowStatesManager } from "@/components/modules/tasks/workflow-states-manager";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
@@ -484,12 +484,12 @@ export default function StatusPopover({
         title={t("business.manage_states")}
       >
         {manageStates && (
-          <WorkflowStateControl
-            entityId={job.id}
+          <WorkflowStatesManager
             entityType="JOB"
             onChanged={() => {
               window.dispatchEvent(new Event("business-record-changed"));
               onChanged?.();
+              return Promise.resolve();
             }}
           />
         )}

@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { RecordWorkflow } from "@/components/modules/tasks/record-workflow";
 import { Button } from "@/components/ui/button";
 import { Field, type FieldControlProps } from "@/components/ui/field";
+import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -272,126 +273,143 @@ export default function BusinessPage({ module }: { module: Module }) {
           </form>
         </details>
       )}
-      {!entries.length && <p>{t("business.empty")}</p>}
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr>
-              {["title", "customerId", "supplierId", "details"].map((name) => (
-                <th className="p-3" key={name}>
-                  {t(`business.fields.${name}`)}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {entries.map((entry) => (
-              <tr
-                className="border-outline-variant border-b align-top"
-                key={entry.id}
-              >
-                <td className="p-3">
-                  <strong>
-                    {entry.number
-                      ? `TK-${String(entry.number).padStart(6, "0")} · `
-                      : ""}
-                    {entry.title ?? entry.subject}
-                  </strong>
-                  {edit && (
-                    <Button
-                      onClick={() => {
-                        const next = empty(module);
-                        for (const key of Object.keys(next)) {
-                          const value = entry[key];
-                          next[key] = value == null ? "" : String(value);
-                          if (key.endsWith("At")) {
-                            next[key] = next[key].slice(0, 10);
-                          }
-                        }
-                        setForm(next);
-                        setEditing(entry.id);
-                        window.scrollTo({ top: 0, behavior: "smooth" });
-                      }}
-                      size="sm"
-                      variant="ghost"
-                    >
-                      {t("edit")}
-                    </Button>
-                  )}
-                </td>
-                <td className="p-3">{entry.customer?.name ?? "—"}</td>
-                <td className="p-3">{entry.supplier?.name ?? "—"}</td>
-                <td className="min-w-64 p-3">
-                  {module === "tickets" && (
-                    <>
-                      <p>
-                        {String(entry.area)} ·{" "}
-                        {t(`business.values.${entry.priority}`)}
-                      </p>
-                      <p className="whitespace-pre-wrap">
-                        {String(entry.description)}
-                      </p>
-                    </>
-                  )}
-                  {module === "messages" && (
-                    <>
-                      <p>
-                        {String(entry.channel)} ·{" "}
-                        {t(`business.values.${entry.deliveryStatus}`)} ·{" "}
-                        {t(`business.values.${entry.direction}`)}
-                      </p>
-                      <p>{String(entry.correspondent ?? "")}</p>
-                      <p className="whitespace-pre-wrap">
-                        {String(entry.body)}
-                      </p>
-                      <MessageLinks
-                        links={entry.links ?? []}
-                        messageId={entry.id}
-                        onChanged={() => load()}
-                      />
-                    </>
-                  )}
-                  {module === "agreements" && (
-                    <>
-                      <p>
-                        {t(`business.values.${entry.kind}`)} ·{" "}
-                        {t(`business.values.${entry.status}`)}
-                      </p>
-                      <p>
-                        {t("business.fields.amountGross")}:{" "}
-                        {String(entry.amountGross)} € ·{" "}
-                        {t(`business.values.${entry.interval}`)}
-                      </p>
-                      <p>
-                        {t("business.fields.paidGross")}:{" "}
-                        {String(entry.paidGross)} €
-                      </p>
-                      {Boolean(entry.renewsAt) && (
-                        <p>
-                          {t("business.fields.renewsAt")}:{" "}
-                          {new Date(
-                            String(entry.renewsAt)
-                          ).toLocaleDateString()}
-                        </p>
-                      )}
-                      <p className="whitespace-pre-wrap">
-                        {String(entry.notes ?? "")}
-                      </p>
-                    </>
-                  )}
-                  {module === "tickets" && (
-                    <BusinessHistory entityId={entry.id} entityType="TICKET" />
-                  )}
-                  <RecordWorkflow
-                    entityId={entry.id}
-                    entityType={types[module]}
-                  />
-                </td>
+      {entries.length === 0 ? (
+        <div className="mt-4 rounded-xl border border-outline-variant/40 border-dashed bg-surface-container-lowest px-4 py-10 text-center">
+          <Icon
+            className="mx-auto text-on-surface-variant"
+            name="inbox"
+            size="lg"
+          />
+          <p className="mt-2 font-medium text-on-surface-variant text-sm">
+            {t("business.empty")}
+          </p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr>
+                {["title", "customerId", "supplierId", "details"].map(
+                  (name) => (
+                    <th className="p-3" key={name}>
+                      {t(`business.fields.${name}`)}
+                    </th>
+                  )
+                )}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {entries.map((entry) => (
+                <tr
+                  className="border-outline-variant border-b align-top"
+                  key={entry.id}
+                >
+                  <td className="p-3">
+                    <strong>
+                      {entry.number
+                        ? `TK-${String(entry.number).padStart(6, "0")} · `
+                        : ""}
+                      {entry.title ?? entry.subject}
+                    </strong>
+                    {edit && (
+                      <Button
+                        onClick={() => {
+                          const next = empty(module);
+                          for (const key of Object.keys(next)) {
+                            const value = entry[key];
+                            next[key] = value == null ? "" : String(value);
+                            if (key.endsWith("At")) {
+                              next[key] = next[key].slice(0, 10);
+                            }
+                          }
+                          setForm(next);
+                          setEditing(entry.id);
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        }}
+                        size="sm"
+                        variant="ghost"
+                      >
+                        {t("edit")}
+                      </Button>
+                    )}
+                  </td>
+                  <td className="p-3">{entry.customer?.name ?? "—"}</td>
+                  <td className="p-3">{entry.supplier?.name ?? "—"}</td>
+                  <td className="min-w-64 p-3">
+                    {module === "tickets" && (
+                      <>
+                        <p>
+                          {String(entry.area)} ·{" "}
+                          {t(`business.values.${entry.priority}`)}
+                        </p>
+                        <p className="whitespace-pre-wrap">
+                          {String(entry.description)}
+                        </p>
+                      </>
+                    )}
+                    {module === "messages" && (
+                      <>
+                        <p>
+                          {String(entry.channel)} ·{" "}
+                          {t(`business.values.${entry.deliveryStatus}`)} ·{" "}
+                          {t(`business.values.${entry.direction}`)}
+                        </p>
+                        <p>{String(entry.correspondent ?? "")}</p>
+                        <p className="whitespace-pre-wrap">
+                          {String(entry.body)}
+                        </p>
+                        <MessageLinks
+                          links={entry.links ?? []}
+                          messageId={entry.id}
+                          onChanged={() => load()}
+                        />
+                      </>
+                    )}
+                    {module === "agreements" && (
+                      <>
+                        <p>
+                          {t(`business.values.${entry.kind}`)} ·{" "}
+                          {t(`business.values.${entry.status}`)}
+                        </p>
+                        <p>
+                          {t("business.fields.amountGross")}:{" "}
+                          {String(entry.amountGross)} € ·{" "}
+                          {t(`business.values.${entry.interval}`)}
+                        </p>
+                        <p>
+                          {t("business.fields.paidGross")}:{" "}
+                          {String(entry.paidGross)} €
+                        </p>
+                        {Boolean(entry.renewsAt) && (
+                          <p>
+                            {t("business.fields.renewsAt")}:{" "}
+                            {new Date(
+                              String(entry.renewsAt)
+                            ).toLocaleDateString()}
+                          </p>
+                        )}
+                        <p className="whitespace-pre-wrap">
+                          {String(entry.notes ?? "")}
+                        </p>
+                      </>
+                    )}
+                    {module === "tickets" && (
+                      <BusinessHistory
+                        entityId={entry.id}
+                        entityType="TICKET"
+                      />
+                    )}
+                    <RecordWorkflow
+                      entityId={entry.id}
+                      entityType={types[module]}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       {cursor && (
         <Button onClick={() => load(cursor)}>{t("tasks.more")}</Button>
       )}

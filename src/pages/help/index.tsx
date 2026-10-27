@@ -35,6 +35,21 @@ const APPLE_DEVICE_RE = /iPad|iPhone|iPod/;
 const ANDROID_RE = /android/i;
 const IPV4_RE = /^\d{1,3}(\.\d{1,3}){3}$/;
 
+function isLoopbackUrl(value: string) {
+  try {
+    const { hostname } = new URL(value);
+    return (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "[::1]" ||
+      hostname === "::1" ||
+      hostname.endsWith(".localhost")
+    );
+  } catch {
+    return false;
+  }
+}
+
 function detectPlatform(): Platform {
   const ua = navigator.userAgent;
   if (APPLE_DEVICE_RE.test(ua)) {
@@ -146,13 +161,18 @@ export default function HelpPage() {
     };
   }, [qrTarget]);
 
+  // Show and copy the same address the QR encodes, so the text, the QR and
+  // what a phone can actually open never disagree.
+  const shareUrl = qrTarget;
+  const shareIsLoopback = isLoopbackUrl(shareUrl);
+
   const copyAddress = async () => {
     try {
-      await navigator.clipboard.writeText(origin);
+      await navigator.clipboard.writeText(shareUrl);
     } catch {
       // clipboard API needs HTTPS — fall back to a temporary textarea on LAN
       const el = document.createElement("textarea");
-      el.value = origin;
+      el.value = shareUrl;
       document.body.appendChild(el);
       el.select();
       document.execCommand("copy");
@@ -227,7 +247,7 @@ export default function HelpPage() {
           </div>
           <div className="flex items-center gap-2">
             <code className="min-w-0 flex-1 truncate rounded-xl bg-surface-container px-4 py-3 font-mono text-on-surface text-sm">
-              {origin}
+              {shareUrl}
             </code>
             <button
               className="shrink-0 rounded-xl bg-primary px-4 py-3 font-bold text-on-primary text-sm transition-all active:scale-[0.97]"
@@ -237,6 +257,11 @@ export default function HelpPage() {
               {copied ? t("help_address_copied") : t("help_address_copy")}
             </button>
           </div>
+          {shareIsLoopback && (
+            <p className="mt-3 rounded-xl bg-surface-container px-4 py-3 text-on-surface-variant text-xs">
+              {t("help_address_loopback_warning")}
+            </p>
+          )}
           {qrDataUrl && (
             <div className="mt-4 flex items-center gap-4">
               <img
@@ -251,7 +276,7 @@ export default function HelpPage() {
                   {t("help_qr_scan")}
                 </p>
                 <code className="mt-1 block truncate font-mono text-on-surface text-xs">
-                  {qrTarget}
+                  {shareUrl}
                 </code>
               </div>
             </div>

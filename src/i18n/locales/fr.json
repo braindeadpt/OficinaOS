@@ -686,6 +686,7 @@
   "help_address_remote": "Vous utilisez l'accès à distance.",
   "help_address_copy": "Copier",
   "help_address_copied": "Copié!",
+  "help_address_loopback_warning": "Cette adresse ne s'ouvre que sur cet ordinateur. Pour accéder à OficinaOS depuis un autre appareil, définissez l'adresse réseau de l'atelier (APP_URL) puis rouvrez cette page.",
   "help_shop_title": "Dans la boutique",
   "help_shop_intro": "OficinaOS fonctionne sur l'ordinateur de la boutique. Pour l'utiliser sur cet appareil :",
   "help_shop_step1": "Connectez cet appareil au Wi-Fi de la boutique.",
@@ -2524,7 +2525,7 @@
   "ai_custom_provider": "Autre fournisseur compatible",
   "ai_gemini_hint": "Gemini propose un accès gratuit limité pour les modèles et comptes éligibles. Votre propre clé API est nécessaire ; des quotas et conditions s’appliquent. Consultez les conditions d’utilisation des données de Google avant d’envoyer des données clients.",
   "business": {
-    "manage_states": "Manage statuses",
+    "manage_states": "Modifier la liste des statuts",
     "tickets": "Support tickets",
     "messages": "Messages",
     "agreements": "Commissions, licences and retainers",

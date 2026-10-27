@@ -396,7 +396,7 @@ export default function JobDetailPage() {
           />
 
           <button
-            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl px-2 text-on-surface-variant text-sm transition-colors hover:bg-surface-container-high hover:text-on-surface"
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest px-4 font-medium text-on-surface-variant text-sm transition-colors hover:bg-surface-container hover:text-on-surface"
             onClick={handleCopyTrackLink}
             type="button"
           >
@@ -410,7 +410,7 @@ export default function JobDetailPage() {
             published={portalPublished}
           />
           <button
-            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl px-2 text-on-surface-variant text-sm transition-colors hover:bg-surface-container-high hover:text-on-surface"
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest px-4 font-medium text-on-surface-variant text-sm transition-colors hover:bg-surface-container hover:text-on-surface"
             onClick={() =>
               window.open(`/api/receipts/${job.id}/label`, "_blank")
             }
@@ -422,7 +422,7 @@ export default function JobDetailPage() {
           <Can perm={{ returns: ["create"] }}>
             {job.status === "DELIVERED" && (
               <button
-                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl px-2 text-on-surface-variant text-sm transition-colors hover:bg-surface-container-high hover:text-on-surface"
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest px-4 font-medium text-on-surface-variant text-sm transition-colors hover:bg-surface-container hover:text-on-surface"
                 onClick={() => setShowReturnWizard(true)}
                 type="button"
               >

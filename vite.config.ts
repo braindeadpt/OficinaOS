@@ -32,7 +32,9 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
-    sourcemap: "hidden",
+    // Production maps were never uploaded anywhere; hidden mode only made the
+    // Tailwind plugin warn about broken sources. Keep the build quiet.
+    sourcemap: false,
     rollupOptions: {
       output: {
         manualChunks(id) {
