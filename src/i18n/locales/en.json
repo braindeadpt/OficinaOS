@@ -1010,7 +1010,7 @@
   "no_records": "No records found",
   "no_repairs_found": "No repairs found",
   "no_repairs_found_desc": "No repairs match the selected category. Try clearing the filter or add a new repair service.",
-  "no_templates": "No notification templates. Create one to start sending updates.",
+  "no_templates_channel": "No templates configured for this channel yet.",
   "no_users_found": "No users found",
   "not_found": {
     "title": "Page not found",
@@ -1943,6 +1943,7 @@
   "whatsapp_phone_id_help": "Your registered phone number ID from WhatsApp Business API",
   "whatsapp_phone_number_id": "Phone Number ID",
   "whatsapp_settings": "WhatsApp Settings",
+  "in_app_templates": "In-app alerts",
   "whatsapp_templates": "WhatsApp Templates",
   "whatsapp_tracking_url": "Public tracking URL",
   "whatsapp_tracking_url_help": "Public address where customers open the tracking page from WhatsApp messages, e.g. https://repairs.myshop.com or http://192.168.1.33:4000. Optional — the link is only included when set",

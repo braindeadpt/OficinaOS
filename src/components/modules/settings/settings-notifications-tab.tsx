@@ -33,7 +33,7 @@ export default function SettingsNotificationsTab({
               markdown
             </span>
             <p className="mt-3 text-on-surface-variant text-sm">
-              {t("no_templates")}
+              {t("no_templates_channel")}
             </p>
           </div>
         ) : (
@@ -85,11 +85,19 @@ export default function SettingsNotificationsTab({
   const smsTemplates = notificationTemplates.filter(
     (tpl) => tpl.channel === "SMS"
   );
+  const inAppTemplates = notificationTemplates.filter(
+    (tpl) => tpl.channel === "IN_APP"
+  );
 
   return (
     <div className="space-y-8">
       {renderTemplateGroup(t("whatsapp_templates"), "chat", whatsappTemplates)}
       {renderTemplateGroup(t("sms_templates"), "sms", smsTemplates)}
+      {renderTemplateGroup(
+        t("in_app_templates"),
+        "notifications",
+        inAppTemplates
+      )}
     </div>
   );
 }

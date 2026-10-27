@@ -1010,7 +1010,7 @@
   "no_records": "Nenhum registo encontrado",
   "no_repairs_found": "Nenhuma reparação encontrado",
   "no_repairs_found_desc": "Nenhuma reparação corresponde à categoria selecionada. Tente limpar o filtro ou adicionar um novo serviço de reparação.",
-  "no_templates": "Sem modelo de notificação. Crie um para começar a enviar atualizações.",
+  "no_templates_channel": "Ainda não há modelo configurado para este canal.",
   "no_users_found": "Nenhum utilizador encontrado",
   "not_found": {
     "title": "Página não encontrada",
@@ -1943,6 +1943,7 @@
   "whatsapp_phone_id_help": "O seu ID de número de telefone registado na API do WhatsApp Business",
   "whatsapp_phone_number_id": "ID do número de telefone",
   "whatsapp_settings": "Definições do WhatsApp",
+  "in_app_templates": "Alertas na aplicação",
   "whatsapp_templates": "Modelos do WhatsApp",
   "whatsapp_tracking_url": "URL público de acompanhamento",
   "whatsapp_tracking_url_help": "Endereço público onde os clientes abrem a página de acompanhamento a partir das mensagens WhatsApp, ex.: https://reparacoes.minhaloja.pt ou http://192.168.1.33:4000. Opcional — o link só é incluído quando definido",

@@ -19,6 +19,16 @@ export const USER_SELECT: UserSelect = {
   createdAt: true,
 };
 
+// Safe projection for technicians/front desk: enough to render an assignee
+// picker, without emails, account flags or audit dates.
+export const USER_SELECT_MINIMAL: UserSelect = {
+  id: true,
+  username: true,
+  name: true,
+  role: true,
+  isActive: true,
+};
+
 export const USER_SELECT_NO_IMAGE: UserSelect = {
   id: true,
   username: true,

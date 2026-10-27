@@ -547,12 +547,60 @@ function buildTemplates(push: Push, createdSeed: Date) {
       "pre_check_submitted",
       "Novo pedido de pré-diagnóstico{{if requestCode}} — {{requestCode}}{{endif}}{{if customerName}} de {{customerName}}{{endif}}{{if deviceLabel}} ({{deviceLabel}}){{endif}}",
     ],
+    [
+      "part_low_stock",
+      "Stock baixo: {{partName}} — {{partQuantity}} unidades (nível de encomenda {{partReorderLevel}})",
+    ],
   ];
   TEMPLATES.forEach(([name, body], i) => {
     push("notificationTemplate", {
       id: id("demo-tpl", i + 1),
       name,
       channel: "IN_APP",
+      body,
+      isDefault: true,
+      ...stamp(createdSeed),
+    });
+  });
+
+  // Customer-facing templates. Without these the demo settings screen had
+  // only IN_APP rows and both the WhatsApp and SMS groups looked empty.
+  const CHANNEL_TEMPLATES: [
+    name: string,
+    channel: "WHATSAPP" | "SMS",
+    body: string,
+  ][] = [
+    [
+      "job_ready",
+      "WHATSAPP",
+      "Olá {{customerName}}, a sua reparação {{jobCode}} está pronta para levantar.{{if shopName}} — {{shopName}}{{endif}}",
+    ],
+    [
+      "job_delivered",
+      "WHATSAPP",
+      "Olá {{customerName}}, obrigado pela preferência. A reparação {{jobCode}} foi entregue.{{if reviewUrl}}\nDeixe a sua avaliação: {{reviewUrl}}{{endif}}",
+    ],
+    [
+      "quote_sent",
+      "WHATSAPP",
+      "Olá {{customerName}}, o orçamento da reparação {{jobCode}} está pronto: {{quoteAmount}} {{currency}}.{{if trackingUrl}}\nConsulte aqui: {{trackingUrl}}{{endif}}",
+    ],
+    [
+      "job_ready",
+      "SMS",
+      "{{shopName}}: reparação {{jobCode}} pronta para levantar.",
+    ],
+    [
+      "job_overdue",
+      "SMS",
+      "{{shopName}}: a reparação {{jobCode}} está atrasada. Entraremos em contacto.",
+    ],
+  ];
+  CHANNEL_TEMPLATES.forEach(([name, channel, body], i) => {
+    push("notificationTemplate", {
+      id: `demo-tpl-${channel.toLowerCase()}-${i + 1}`,
+      name,
+      channel,
       body,
       isDefault: true,
       ...stamp(createdSeed),

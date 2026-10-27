@@ -1010,7 +1010,7 @@
   "no_records": "Aucun enregistrement trouvé",
   "no_repairs_found": "Aucune réparation trouvée",
   "no_repairs_found_desc": "Aucune réparation ne correspond à la catégorie sélectionnée. ",
-  "no_templates": "Aucun modèle de notification. Créez-en un pour commencer à envoyer des mises à jour.",
+  "no_templates_channel": "Aucun modèle n'est encore configuré pour cette chaîne.",
   "no_users_found": "Aucun utilisateur trouvé",
   "not_found": {
     "title": "Page introuvable",
@@ -1943,6 +1943,7 @@
   "whatsapp_phone_id_help": "Votre identifiant de numéro de téléphone enregistré depuis l'API WhatsApp Business",
   "whatsapp_phone_number_id": "Numéro de téléphone",
   "whatsapp_settings": "Paramètres WhatsApp",
+  "in_app_templates": "Alertes dans l'application",
   "whatsapp_templates": "Modèles WhatsApp",
   "whatsapp_tracking_url": "URL publique de suivi",
   "whatsapp_tracking_url_help": "Adresse publique où les clients ouvrent la page de suivi depuis les messages WhatsApp, p. ex. https://reparations.maboutique.fr ou http://192.168.1.33:4000. Facultatif — le lien n'est inclus que s'il est défini",

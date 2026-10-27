@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createUser,
   getActivity,
+  list,
   resetPassword,
   toggleStatus,
   updateUserProfileService,
@@ -27,6 +28,26 @@ const createData = {
   role: "OWNER",
   username: "newowner",
 };
+
+describe("list user projection", () => {
+  it("omits email and account flags for non-owner callers", async () => {
+    const prisma = mockPrisma();
+    prisma.user.findMany.mockResolvedValue([]);
+
+    await list(prisma, { cursor: "u1", limit: 20 }, true);
+
+    const select = prisma.user.findMany.mock.calls[0][0].select;
+    expect(select).toMatchObject({
+      id: true,
+      username: true,
+      name: true,
+      role: true,
+      isActive: true,
+    });
+    expect(select).not.toHaveProperty("email");
+    expect(select).not.toHaveProperty("mustChangePassword");
+  });
+});
 
 describe("createUser role guard", () => {
   let prisma: ReturnType<typeof mockPrisma>;

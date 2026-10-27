@@ -19,6 +19,7 @@ import {
   findSessions,
   jobCount,
   USER_SELECT,
+  USER_SELECT_MINIMAL,
   USER_SELECT_NO_IMAGE,
   updateCredentialPassword as updateCredentialPasswordRepo,
   updateMustChangePassword as updateMustChangePasswordRepo,
@@ -72,7 +73,11 @@ function buildUpdateData(
   ) as Record<string, string>;
 }
 
-export async function list(prisma: DbClient, query: UserListQueryInput) {
+export async function list(
+  prisma: DbClient,
+  query: UserListQueryInput,
+  minimal = false
+) {
   const { cursor, limit, search } = query;
 
   const where: Prisma.UserWhereInput = {};
@@ -88,7 +93,13 @@ export async function list(prisma: DbClient, query: UserListQueryInput) {
   }
 
   const [users, totalCount] = await Promise.all([
-    userFindMany(prisma, where, USER_SELECT, { id: "desc" }, limit + 1),
+    userFindMany(
+      prisma,
+      where,
+      minimal ? USER_SELECT_MINIMAL : USER_SELECT,
+      { id: "desc" },
+      limit + 1
+    ),
     cursor ? Promise.resolve(null) : userCount(prisma, where),
   ]);
 
