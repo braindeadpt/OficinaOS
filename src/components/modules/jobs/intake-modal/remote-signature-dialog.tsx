@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { Dialog } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
 import api from "@/lib/api";
+import { pickSignBaseUrl } from "./remote-signature-url";
 
 const POLL_MS = 2000;
 
@@ -71,9 +72,11 @@ export default function RemoteSignatureDialog({
       frozenDocRef.current = canonicalize(doc);
 
       const urls = (infoRes.data as AccessInfo).urls ?? [];
-      // mDNS hostname survives DHCP; plain IPs are the fallback for phones
-      // (notably iOS) that resolve .local unreliably on some networks.
-      const base = urls.find((u) => u.includes(".local")) ?? urls[0];
+      const base = pickSignBaseUrl(urls);
+      if (!base) {
+        setLoadError(true);
+        return;
+      }
       const signUrl = `${base}/sign/${token}`;
       const qr = await QRCode.toDataURL(signUrl, { margin: 1, width: 192 });
       setQrDataUrl(qr);
