@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { opaqueIdSchema } from "./id.schema";
+import { phoneSchema } from "./phone.schema";
 
 // Field caps — keep in sync with the maxLength on the customer forms.
 export const CUSTOMER_NAME_MAX = 120;
-export const CUSTOMER_PHONE_MAX = 32;
 export const CUSTOMER_EMAIL_MAX = 254;
 export const CUSTOMER_TAX_ID_MAX = 20;
 const SEARCH_MAX = 100;
@@ -20,11 +20,7 @@ export const createCustomerSchema = z.object({
     .trim()
     .min(1, { error: "validations.enter_name" })
     .max(CUSTOMER_NAME_MAX),
-  phone: z
-    .string()
-    .trim()
-    .min(1, { error: "validations.enter_phone" })
-    .max(CUSTOMER_PHONE_MAX),
+  phone: phoneSchema,
   // NIF / VAT id — optional; enables proper invoices (FR) instead of FS.
   taxId: z
     .string()
@@ -47,12 +43,7 @@ export const updateCustomerSchema = z.object({
     .min(1, { error: "validations.enter_name" })
     .max(CUSTOMER_NAME_MAX)
     .optional(),
-  phone: z
-    .string()
-    .trim()
-    .min(1, { error: "validations.enter_phone" })
-    .max(CUSTOMER_PHONE_MAX)
-    .optional(),
+  phone: phoneSchema.optional(),
   email: z
     .string()
     .max(CUSTOMER_EMAIL_MAX)

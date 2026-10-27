@@ -1,3 +1,4 @@
+import { isValidPhone } from "@shared/utils/phone";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -98,6 +99,8 @@ export default function AddCustomerModal({
     }
     if (!form.phone.trim()) {
       newErrors.phone = t("add_customer_modal.error_phone_required");
+    } else if (!isValidPhone(form.phone)) {
+      newErrors.phone = t("validations.invalid_phone");
     }
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);

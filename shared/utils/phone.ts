@@ -1,3 +1,26 @@
+/** Longest phone string accepted by the forms and API (E.164 + separators). */
+export const PHONE_MAX_LENGTH = 32;
+
+/** Separators people actually type; anything else is not a phone number. */
+const PHONE_ALLOWED_RE = /^\+?[\d\s().-]+$/;
+const PHONE_MIN_DIGITS = 7;
+const PHONE_MAX_DIGITS = 15;
+
+/**
+ * Loose but real validation: optional leading "+", digits and the usual
+ * separators only, with 7–15 digits (ITU E.164). This accepts "+351 912 345
+ * 678", "912345678", "(21) 3456-7890" and rejects free text like "abc" or
+ * a too-short "123", while leaving country-specific rules to the shop.
+ */
+export function isValidPhone(raw: string): boolean {
+  const trimmed = raw.trim();
+  if (!PHONE_ALLOWED_RE.test(trimmed)) {
+    return false;
+  }
+  const digits = trimmed.replace(/\D/g, "");
+  return digits.length >= PHONE_MIN_DIGITS && digits.length <= PHONE_MAX_DIGITS;
+}
+
 /**
  * Canonical form of a phone number for duplicate detection: separators
  * (spaces, dashes, dots, parentheses) are dropped and an international

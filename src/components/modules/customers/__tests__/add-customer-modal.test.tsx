@@ -108,6 +108,23 @@ describe("AddCustomerModal", () => {
     ).toBeInTheDocument();
   });
 
+  it("rejects a phone made of text without calling the API", () => {
+    render(<AddCustomerModal {...defaultProps} />);
+
+    fireEvent.change(screen.getByLabelText("add_customer_modal.name"), {
+      target: { value: "John" },
+    });
+    fireEvent.change(screen.getByLabelText("add_customer_modal.phone"), {
+      target: { value: "abc" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "add_customer_modal.submit" })
+    );
+
+    expect(screen.getByText("validations.invalid_phone")).toBeInTheDocument();
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
   it("clears field error when user starts typing", () => {
     render(<AddCustomerModal {...defaultProps} />);
 

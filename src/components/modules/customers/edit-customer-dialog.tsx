@@ -1,4 +1,5 @@
 import type { Customer } from "@shared/types";
+import { isValidPhone } from "@shared/utils/phone";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Field } from "@/components/ui/field";
@@ -87,7 +88,7 @@ export default function EditCustomerDialog({
   }, [open]);
 
   const handleSubmit = useCallback(async () => {
-    if (!(form.name.trim() && form.phone.trim())) {
+    if (!(form.name.trim() && form.phone.trim() && isValidPhone(form.phone))) {
       return;
     }
 
@@ -115,7 +116,12 @@ export default function EditCustomerDialog({
     return null;
   }
 
-  const canSubmit = form.name.trim().length > 0 && form.phone.trim().length > 0;
+  const phoneError =
+    form.phone.trim().length > 0 && !isValidPhone(form.phone)
+      ? t("validations.invalid_phone")
+      : null;
+  const canSubmit =
+    form.name.trim().length > 0 && form.phone.trim().length > 0 && !phoneError;
 
   return (
     <div
@@ -164,7 +170,7 @@ export default function EditCustomerDialog({
               />
             </Field>
 
-            <Field label={t("customer_edit_phone")}>
+            <Field error={phoneError} label={t("customer_edit_phone")}>
               <Input
                 maxLength={32}
                 onChange={(e) =>
