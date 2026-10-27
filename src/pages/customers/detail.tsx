@@ -93,12 +93,6 @@ export default function CustomerDetailPage() {
         </Link>
       </div>
 
-      <BusinessHistory entityId={currentCustomer.id} entityType="CUSTOMER" />
-      <RecordWorkflow
-        entityId={currentCustomer.id}
-        entityType="CUSTOMER"
-        expanded
-      />
       <div className="rounded-xl bg-surface-container-low p-6">
         <div className="mb-4 flex items-center justify-between">
           <h1 className="font-extrabold font-headline text-2xl text-on-surface">
@@ -222,6 +216,9 @@ export default function CustomerDetailPage() {
           </div>
         )}
       </div>
+
+      <BusinessHistory entityId={currentCustomer.id} entityType="CUSTOMER" />
+      <RecordWorkflow entityId={currentCustomer.id} entityType="CUSTOMER" />
     </div>
   );
 }

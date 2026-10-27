@@ -1,6 +1,7 @@
-import type { JobStatusType } from "@shared/constants";
+import { JobStatus, type JobStatusType } from "@shared/constants";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useSearchParams } from "react-router";
 import BatchActionBar from "@/components/modules/jobs/batch-action-bar";
 import UnifiedJobsFilter from "@/components/modules/jobs/filters";
 import type {
@@ -34,8 +35,13 @@ export default function JobsPage() {
     fetchMetrics,
     loadMoreJobs,
   } = useJobsStore();
+  const [searchParams] = useSearchParams();
+  const requestedStatus = searchParams.get("status");
   const [statusFilter, setStatusFilter] = useState<JobStatusType | "ALL">(
-    "ALL"
+    requestedStatus &&
+      (Object.values(JobStatus) as string[]).includes(requestedStatus)
+      ? (requestedStatus as JobStatusType)
+      : "ALL"
   );
   const [groupFilter, setGroupFilter] = useState<StatusGroupKey | "ALL">("ALL");
   const [searchQuery, setSearchQuery] = useState("");
