@@ -2127,7 +2127,7 @@
   "print_host_help": "IP o nombre de host de la impresora de red, p. ",
   "print_port": "Puerto de impresora",
   "print_high_contrast": "Impresión de alto contraste",
-  "print_high_contrast_help": "Imprime cada línea en negrita; utilícela cuando los recibos salgan débiles.",
+  "print_high_contrast_help": "Imprime cada línea en negrita; utilícela cuando los recibos salgan débiles, en cualquier modo de impresión.",
   "print_test": "Enviar ticket de prueba",
   "print_test_success": "Ticket de prueba enviado — revisa la impresora",
   "print_test_failed": "No se pudo conectar con la impresora: verifique la IP, el puerto y la red",
