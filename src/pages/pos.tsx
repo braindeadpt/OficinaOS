@@ -108,6 +108,7 @@ export default function PosPage() {
   const [invoicingReady, setInvoicingReady] = useState(false);
   const customFormRef = useRef<HTMLDivElement>(null);
   const checkoutRef = useRef<HTMLDivElement>(null);
+  const cartRef = useRef<HTMLDivElement>(null);
   useModalEffects(
     showCustomForm,
     () => setShowCustomForm(false),
@@ -210,7 +211,7 @@ export default function PosPage() {
   }, [checkout, payments, changeDue, invoicingReady, t]);
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+    <div className="mx-auto max-w-6xl px-4 py-6 pb-28 sm:px-6 lg:pb-6">
       <h1 className="font-extrabold font-headline text-2xl text-on-surface tracking-tight">
         {t("pos.title")}
       </h1>
@@ -303,7 +304,7 @@ export default function PosPage() {
         </div>
 
         {/* Cart */}
-        <div className="rounded-2xl bg-surface-container p-5">
+        <div className="rounded-2xl bg-surface-container p-5" ref={cartRef}>
           <div className="flex items-center justify-between">
             <h2 className="font-bold font-headline text-base text-on-surface">
               {t("pos.cart")}
@@ -406,6 +407,34 @@ export default function PosPage() {
           </Can>
         </div>
       </div>
+
+      {/* Mobile checkout shortcut: the cart sits after a long catalogue, so
+          keep the running total and the next action permanently in reach. */}
+      {cart.length > 0 && (
+        <div className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 border-outline-variant border-t bg-surface-container-low/95 px-3 py-2 backdrop-blur-sm lg:hidden">
+          <button
+            className="flex min-h-12 w-full items-center justify-between gap-3 rounded-xl bg-primary px-4 text-on-primary"
+            onClick={() =>
+              cartRef.current?.scrollIntoView({
+                behavior: "smooth",
+                block: "center",
+              })
+            }
+            type="button"
+          >
+            <span className="font-semibold text-sm">
+              {t("pos.mobile_cart_summary", {
+                count: cart.reduce((n, line) => n + line.quantity, 0),
+                total: fmt(cartTotal),
+              })}
+            </span>
+            <span className="flex shrink-0 items-center gap-1 font-bold text-sm">
+              {t("pos.mobile_view_cart")}
+              <Icon className="text-[18px]" name="arrow_forward" />
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* Custom item dialog */}
       {showCustomForm && (

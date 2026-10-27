@@ -110,8 +110,8 @@ export default function RevenueTab() {
       </div>
 
       {breakdown.length > 0 ? (
-        <div className="overflow-x-auto rounded-xl bg-surface-container-low">
-          <table className="w-full text-left text-sm">
+        <div className="oos-scrollbar overflow-x-auto rounded-xl bg-surface-container-low">
+          <table className="w-full min-w-[640px] text-left text-sm">
             <thead>
               <tr className="border-outline-variant border-b text-on-surface-variant text-xs uppercase tracking-wide">
                 <th className="px-4 py-3">{t("reports.jobCode")}</th>

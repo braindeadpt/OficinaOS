@@ -225,14 +225,14 @@ export default function SettingsPage() {
       <div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
         <div
           aria-label={t("settings_page")}
-          className="grid grid-cols-5 gap-1 lg:sticky lg:top-24 lg:flex lg:w-52 lg:shrink-0 lg:flex-col lg:self-start"
+          className="grid grid-cols-3 gap-1 sm:grid-cols-6 lg:sticky lg:top-24 lg:flex lg:w-52 lg:shrink-0 lg:flex-col lg:self-start"
           role="tablist"
         >
           {tabs.map(({ key, label }) => (
             <button
               aria-controls={panelId(key)}
               aria-selected={activeTab === key}
-              className={`flex min-h-16 flex-col items-center gap-0.5 rounded-xl px-1 py-2.5 text-center transition-all lg:min-h-12 lg:flex-row lg:gap-2.5 lg:px-4 lg:py-3 lg:text-start ${
+              className={`flex min-h-16 min-w-0 flex-col items-center gap-0.5 rounded-xl px-1 py-2.5 text-center transition-all lg:min-h-12 lg:flex-row lg:gap-2.5 lg:px-4 lg:py-3 lg:text-start ${
                 activeTab === key
                   ? "bg-primary-fixed font-bold text-primary"
                   : "text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface"
@@ -249,7 +249,9 @@ export default function SettingsPage() {
               type="button"
             >
               <Icon className="text-[20px]" name={TAB_ICONS[key]} />
-              <span className="text-xs leading-tight lg:hidden">{label}</span>
+              <span className="line-clamp-2 text-balance text-xs leading-tight lg:hidden">
+                {label}
+              </span>
               <span className="hidden lg:inline">{label}</span>
             </button>
           ))}
