@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { opaqueIdSchema } from "./id.schema";
 
 // Field caps — keep in sync with the maxLength on the customer forms.
 export const CUSTOMER_NAME_MAX = 120;
@@ -82,7 +83,7 @@ export const customerSearchQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(10),
 });
 
-export const customerIdParamSchema = z.string().cuid();
+export const customerIdParamSchema = opaqueIdSchema;
 
 export type CustomerListQueryInput = z.infer<typeof customerListQuerySchema>;
 export type CustomerSearchQueryInput = z.infer<

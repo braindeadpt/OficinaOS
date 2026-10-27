@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { opaqueIdSchema } from "./id.schema";
 
 export const listInAppQuerySchema = z.object({
   filter: z.enum(["all", "unread", "read"]).default("all"),
@@ -6,7 +7,7 @@ export const listInAppQuerySchema = z.object({
 });
 
 export const markReadParamSchema = z.object({
-  id: z.string().cuid(),
+  id: opaqueIdSchema,
 });
 
 export const markReadAllSchema = z.object({});

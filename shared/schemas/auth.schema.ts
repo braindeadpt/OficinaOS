@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { opaqueIdSchema } from "./id.schema";
 
 export const passwordPolicy = z
   .string()
@@ -79,7 +80,7 @@ export const activityListQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(4),
 });
 
-export const userIdParamSchema = z.string().cuid();
+export const userIdParamSchema = opaqueIdSchema;
 
 export const userListQuerySchema = z.object({
   cursor: z.string().optional(),
