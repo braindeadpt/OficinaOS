@@ -2126,6 +2126,8 @@
   "print_host": "Endereço IP da impressora",
   "print_host_help": "IP ou nome de host da impressora de rede — p. 192.168.1.50.",
   "print_port": "Porta de impressora",
+  "print_high_contrast": "Impressão de alto contraste",
+  "print_high_contrast_help": "Imprime todas as linhas a negrito — utilize quando os talões saem fracos.",
   "print_test": "Enviar ticket de teste",
   "print_test_success": "Ticket de teste enviado – verifique a impressora",
   "print_test_failed": "Não foi possível aceder à impressora — verifique o IP, a porta e a rede",

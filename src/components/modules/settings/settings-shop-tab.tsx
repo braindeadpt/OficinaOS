@@ -156,6 +156,7 @@ const SHOP_FORM_DEFAULT = {
   printerMode: "browser" as "browser" | "escpos",
   printerHost: "",
   printerPort: 9100,
+  printerHighContrast: false,
   monthlyRevenueGoal: "",
   reviewUrl: "",
 };
@@ -182,6 +183,7 @@ function formFromSettings(shopSettings: ShopSettings) {
       : "browser") as "browser" | "escpos",
     printerHost: shopSettings.printerHost ?? "",
     printerPort: shopSettings.printerPort ?? 9100,
+    printerHighContrast: shopSettings.printerHighContrast ?? false,
     monthlyRevenueGoal:
       shopSettings.monthlyRevenueGoal === null ||
       shopSettings.monthlyRevenueGoal === undefined
@@ -518,6 +520,28 @@ export default function SettingsShopTab({
             </>
           )}
         </div>
+        {shopForm.printerMode === "escpos" && (
+          <div className="mt-5 flex items-center gap-3">
+            <span
+              className="flex-1 font-medium text-on-surface-variant text-sm"
+              id="print-high-contrast-label"
+            >
+              {t("print_high_contrast")}
+              <span className="mt-0.5 block font-normal text-xs">
+                {t("print_high_contrast_help")}
+              </span>
+            </span>
+            <Switch
+              ariaLabelledBy="print-high-contrast-label"
+              checked={shopForm.printerHighContrast}
+              id="print-high-contrast"
+              onChange={(checked) => {
+                setShopForm((f) => ({ ...f, printerHighContrast: checked }));
+                onDirtyChange(true);
+              }}
+            />
+          </div>
+        )}
         {shopForm.printerMode === "escpos" && (
           <button
             className="mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-surface-container-high px-5 font-bold font-headline text-on-surface text-sm transition-colors hover:bg-surface-container"

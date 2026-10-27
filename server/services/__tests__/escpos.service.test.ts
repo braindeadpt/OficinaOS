@@ -120,6 +120,27 @@ describe("buildJobReceiptEscPos", () => {
     expect(lines.length).toBeGreaterThan(0);
     expect(lines[0].trim().length).toBe(32);
   });
+
+  // Guedes e Pinto (#106): body text printed faint while bold headers were
+  // readable — the printer's only contrast lever is ESC E (emphasized).
+  it("wraps every text line in bold when printerHighContrast is set", () => {
+    const boldOn = Buffer.from([ESC, 0x45, 0x01]);
+    const boldOff = Buffer.from([ESC, 0x45, 0x00]);
+    const sepLine = iconv.encode(`${"-".repeat(42)}\n`, "cp850");
+    const wrappedSep = Buffer.concat([boldOn, sepLine, boldOff]);
+
+    const buf = buildJobReceiptEscPos(
+      { ...SETTINGS, printerHighContrast: true },
+      JOB,
+      "https://app.test"
+    );
+    expect(buf.includes(wrappedSep)).toBe(true);
+
+    // Off by default: the same body line ships without the bold wrapper.
+    const plain = buildJobReceiptEscPos(SETTINGS, JOB, "https://app.test");
+    expect(plain.includes(wrappedSep)).toBe(false);
+    expect(plain.includes(sepLine)).toBe(true);
+  });
 });
 
 describe("buildSaleReceiptEscPos", () => {

@@ -55,13 +55,23 @@ const LINE_BREAK_RE = /\r?\n/;
 class Ticket {
   readonly segments: Buffer[] = [];
   private readonly width: number;
+  // "Alto contraste" mode: every text line ships wrapped in ESC E (bold).
+  // Bolding per line — not once globally — keeps the header BOLD_OFFs from
+  // switching it back off mid-ticket.
+  private readonly boldAll: boolean;
 
-  constructor(width: number) {
+  constructor(width: number, boldAll = false) {
     this.width = width;
+    this.boldAll = boldAll;
   }
 
   text(raw = ""): void {
-    this.segments.push(enc(`${raw}\n`));
+    const line = enc(`${raw}\n`);
+    if (this.boldAll) {
+      this.segments.push(BOLD_ON, line, BOLD_OFF);
+      return;
+    }
+    this.segments.push(line);
   }
 
   center(raw: string): void {
@@ -230,7 +240,10 @@ export function buildJobReceiptEscPos(
     showSignature: settings?.receiptShowSignature ?? true,
     showWarranty: settings?.receiptShowWarranty ?? true,
   };
-  const t = new Ticket(thermalWidth(settings?.receiptPaper));
+  const t = new Ticket(
+    thermalWidth(settings?.receiptPaper),
+    settings?.printerHighContrast
+  );
   t.segments.push(INIT, CP850);
 
   shopHeader(t, settings);
@@ -289,7 +302,10 @@ export function buildSaleReceiptEscPos(
 ): Buffer {
   const s = receiptStrings(options?.locale);
   const currency = settings?.currency ?? "EUR";
-  const t = new Ticket(thermalWidth(settings?.receiptPaper));
+  const t = new Ticket(
+    thermalWidth(settings?.receiptPaper),
+    settings?.printerHighContrast
+  );
   t.segments.push(INIT, CP850);
 
   shopHeader(t, settings);
@@ -324,7 +340,10 @@ export function buildSaleReceiptEscPos(
 }
 
 export function buildTestTicketEscPos(settings: ShopSettings | null): Buffer {
-  const t = new Ticket(thermalWidth(settings?.receiptPaper));
+  const t = new Ticket(
+    thermalWidth(settings?.receiptPaper),
+    settings?.printerHighContrast
+  );
   t.segments.push(INIT, CP850);
   shopHeader(t, settings);
   t.sep();

@@ -122,6 +122,7 @@ interface SettingsState {
     printerMode?: "browser" | "escpos";
     printerHost?: string | null;
     printerPort?: number;
+    printerHighContrast?: boolean;
     monthlyRevenueGoal?: number | null;
     reviewUrl?: string;
     embedAllowedOrigins?: string | null;
