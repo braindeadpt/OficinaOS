@@ -115,6 +115,7 @@ export default function ReturnsTab() {
             detail={changeDetail(summary.warrantyReturnRateChangePercent)}
             icon="autorenew"
             label={t("reports.warrantyReturnRate")}
+            unit="%"
             value={formatNumber(summary.warrantyReturnRate, 1)}
           />
         )}

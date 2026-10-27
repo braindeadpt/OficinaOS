@@ -29,6 +29,15 @@ describe("opaque ID validation", () => {
       opaqueIdSchema.safeParse("x".repeat(OPAQUE_ID_MAX + 1)).success
     ).toBe(false);
   });
+
+  it("rejects path and control characters", () => {
+    for (const bad of ["../etc", "a/b", "a\\b", "a b", "id%00", "a.b"]) {
+      expect(opaqueIdSchema.safeParse(bad).success).toBe(false);
+    }
+    expect(
+      opaqueIdSchema.safeParse("123e4567-e89b-12d3-a456-426614174000").success
+    ).toBe(true);
+  });
 });
 
 describe("route params and payloads accept non-cuid IDs", () => {

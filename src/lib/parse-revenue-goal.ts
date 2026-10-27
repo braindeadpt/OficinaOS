@@ -3,6 +3,9 @@ const SPACES_RE = /\s/g;
 const COMMAS_RE = /,/g;
 const DOTS_RE = /\./g;
 const DECIMAL_RE = /^\d+(\.\d+)?$/;
+// "2.500" / "12.500" — one dot followed by exactly three digits is a pt-PT
+// thousands separator, never cents (a revenue goal has 2 decimals at most).
+const THOUSANDS_RE = /^\d{1,3}\.\d{3}$/;
 
 /**
  * Parses the admin's revenue goal input.
@@ -27,7 +30,10 @@ export function parseRevenueGoalInput(raw: string): number | null | undefined {
       return;
     }
     normalized = compact.replace(DOTS_RE, "").replace(",", ".");
-  } else if ((compact.match(DOTS_RE) ?? []).length > 1) {
+  } else if (
+    (compact.match(DOTS_RE) ?? []).length > 1 ||
+    THOUSANDS_RE.test(compact)
+  ) {
     // Multiple dots with no comma can only be thousands separators.
     normalized = compact.replace(DOTS_RE, "");
   }

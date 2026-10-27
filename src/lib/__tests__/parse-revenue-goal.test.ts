@@ -13,6 +13,10 @@ describe("parseRevenueGoalInput", () => {
     expect(parseRevenueGoalInput("4 500,50")).toBe(4500.5);
     expect(parseRevenueGoalInput("2.500,50")).toBe(2500.5);
     expect(parseRevenueGoalInput("4500.50")).toBe(4500.5);
+    expect(parseRevenueGoalInput("2.500")).toBe(2500);
+    expect(parseRevenueGoalInput("12.500")).toBe(12_500);
+    expect(parseRevenueGoalInput("1.250.000")).toBe(1_250_000);
+    expect(parseRevenueGoalInput("2.5")).toBe(2.5);
   });
 
   it("rejects free text, negatives and out-of-range values", () => {
