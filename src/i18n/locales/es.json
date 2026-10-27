@@ -1010,7 +1010,7 @@
   "no_records": "No se encontraron registros",
   "no_repairs_found": "No se encontraron reparaciones",
   "no_repairs_found_desc": "Ninguna reparación coincide con la categoría seleccionada. ",
-  "no_templates": "Sin plantillas de notificación. ",
+  "no_templates_channel": "Aún no hay plantillas configuradas para este canal.",
   "no_users_found": "No se encontraron usuarios",
   "not_found": {
     "title": "Página no encontrada",
@@ -1943,6 +1943,7 @@
   "whatsapp_phone_id_help": "Su número de teléfono registrado ID de WhatsApp Business API",
   "whatsapp_phone_number_id": "Identificación del número de teléfono",
   "whatsapp_settings": "Configuración de WhatsApp",
+  "in_app_templates": "Alertas en la aplicación",
   "whatsapp_templates": "Plantillas de WhatsApp",
   "whatsapp_tracking_url": "URL pública de seguimiento",
   "whatsapp_tracking_url_help": "Dirección pública donde los clientes abren la página de seguimiento desde los mensajes de WhatsApp, p. ej. https://reparaciones.mitienda.es o http://192.168.1.33:4000. Opcional — el enlace solo se incluye si está definida",

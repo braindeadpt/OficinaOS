@@ -1,4 +1,4 @@
-import type { RoleType } from "@shared/constants/roles";
+import { Role, type RoleType } from "@shared/constants/roles";
 import { AppError } from "@shared/errors/app-error.js";
 import {
   activityListQuerySchema,
@@ -73,7 +73,13 @@ export const usersRoutes: FastifyPluginAsync = async (app) => {
           ),
         });
       }
-      const result = await listUsers(app.prisma, parsed.data);
+      // Owners manage accounts and need the full row. Everyone else only
+      // needs a picker (assignee/technician), so return the minimal DTO.
+      const result = await listUsers(
+        app.prisma,
+        parsed.data,
+        getRole(request) !== Role.OWNER
+      );
       return reply.send(result);
     }
   );
