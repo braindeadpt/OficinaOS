@@ -690,6 +690,7 @@
   "help_address_remote": "Está a usar acesso remoto.",
   "help_address_copy": "Copiar",
   "help_address_copied": "Copiado!",
+  "help_address_loopback_warning": "Este endereço só abre neste computador. Para aceder ao OficinaOS a partir de outro dispositivo, defina o endereço de rede da loja (APP_URL) e volte a abrir esta página.",
   "help_shop_title": "Dentro da loja",
   "help_shop_intro": "O OficinaOS corre no computador da loja. Para o utilizar neste dispositivo:",
   "help_shop_step1": "Ligue este dispositivo ao Wi-Fi da loja.",

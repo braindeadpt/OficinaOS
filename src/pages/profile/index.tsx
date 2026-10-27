@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { useProfileMultiUser } from "@/hooks/use-profile-multi-user";
 import api from "@/lib/api";
+import { getInitials } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth";
 import { useUsersStore } from "@/stores/users";
 
@@ -51,8 +52,8 @@ export default function ProfilePage() {
 
   const displayName = displayUser.name || t("default_user_display");
   const initials = useMemo(
-    () => displayUser.name?.charAt(0)?.toUpperCase() ?? "?",
-    [displayUser.name]
+    () => getInitials(displayUser.name || displayUser.username || ""),
+    [displayUser.name, displayUser.username]
   );
 
   const tabParam = searchParams.get("tab") as ProfileTab | null;

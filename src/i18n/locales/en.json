@@ -690,6 +690,7 @@
   "help_address_remote": "You are using remote access.",
   "help_address_copy": "Copy",
   "help_address_copied": "Copied!",
+  "help_address_loopback_warning": "This address only opens on this computer. To reach OficinaOS from another device, set the shop's network address (APP_URL) and reopen this page.",
   "help_shop_title": "Inside the shop",
   "help_shop_intro": "OficinaOS runs on the shop computer. To use it on this device:",
   "help_shop_step1": "Connect this device to the shop's Wi-Fi.",

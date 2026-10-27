@@ -43,6 +43,10 @@ describe("HelpPage", () => {
     // jsdom defaults to http://localhost:3000
     expect(screen.getByText("http://localhost:3000")).toBeInTheDocument();
     expect(screen.getByText("help_address_lan")).toBeInTheDocument();
+    // A loopback address is useless on a phone, so say so next to the address.
+    expect(
+      screen.getByText("help_address_loopback_warning")
+    ).toBeInTheDocument();
   });
 
   it("links back into the app", () => {

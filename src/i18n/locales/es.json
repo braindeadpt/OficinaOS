@@ -690,6 +690,7 @@
   "help_address_remote": "Estás usando el acceso remoto.",
   "help_address_copy": "Copiar",
   "help_address_copied": "¡Copiado!",
+  "help_address_loopback_warning": "Esta dirección solo se abre en este ordenador. Para acceder a OficinaOS desde otro dispositivo, configura la dirección de red del taller (APP_URL) y vuelve a abrir esta página.",
   "help_shop_title": "Dentro de la tienda",
   "help_shop_intro": "OficinaOS se ejecuta en el ordenador de la tienda. Para usarlo en este dispositivo:",
   "help_shop_step1": "Conecta este dispositivo al Wi-Fi de la tienda.",
@@ -2537,7 +2538,7 @@
   "ai_custom_provider": "Otro proveedor compatible",
   "ai_gemini_hint": "Gemini ofrece un nivel gratuito limitado para modelos y cuentas elegibles. Requiere su propia clave API; se aplican cuotas y condiciones. Consulte las condiciones de uso de datos de Google antes de enviar datos de clientes.",
   "business": {
-    "manage_states": "Manage statuses",
+    "manage_states": "Gestionar estados",
     "tickets": "Support tickets",
     "messages": "Messages",
     "agreements": "Commissions, licences and retainers",
