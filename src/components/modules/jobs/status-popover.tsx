@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import DeliverJobDialog from "@/components/modules/jobs/deliver-job-dialog";
 import FunctionalChecklist from "@/components/modules/jobs/intake-modal/functional-checklist";
 import type { IntakeChecklist } from "@/components/modules/jobs/intake-modal/types";
+import { WorkflowStateControl } from "@/components/modules/tasks/record-workflow";
 import { WorkflowStatesManager } from "@/components/modules/tasks/workflow-states-manager";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -484,14 +485,26 @@ export default function StatusPopover({
         title={t("business.manage_states")}
       >
         {manageStates && (
-          <WorkflowStatesManager
-            entityType="JOB"
-            onChanged={() => {
-              window.dispatchEvent(new Event("business-record-changed"));
-              onChanged?.();
-              return Promise.resolve();
-            }}
-          />
+          <>
+            {/* Set this job's state (anyone with edit permission)… */}
+            <WorkflowStateControl
+              entityId={job.id}
+              entityType="JOB"
+              onChanged={() => {
+                window.dispatchEvent(new Event("business-record-changed"));
+                onChanged?.();
+              }}
+            />
+            {/* …and, for admins only, edit the list of states itself. */}
+            <WorkflowStatesManager
+              entityType="JOB"
+              onChanged={() => {
+                window.dispatchEvent(new Event("business-record-changed"));
+                onChanged?.();
+                return Promise.resolve();
+              }}
+            />
+          </>
         )}
       </Dialog>
       <DeliverJobDialog

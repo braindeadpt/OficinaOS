@@ -2525,7 +2525,7 @@
   "ai_custom_provider": "Otro proveedor compatible",
   "ai_gemini_hint": "Gemini ofrece un nivel gratuito limitado para modelos y cuentas elegibles. Requiere su propia clave API; se aplican cuotas y condiciones. Consulte las condiciones de uso de datos de Google antes de enviar datos de clientes.",
   "business": {
-    "manage_states": "Editar lista de estados",
+    "manage_states": "Gestionar estados",
     "tickets": "Support tickets",
     "messages": "Messages",
     "agreements": "Commissions, licences and retainers",

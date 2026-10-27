@@ -2525,7 +2525,7 @@
   "ai_custom_provider": "Other compatible provider",
   "ai_gemini_hint": "Gemini has a limited free tier for eligible models and accounts. Requires your own API key; quotas and terms apply. Review Google’s data-use terms before sending customer data.",
   "business": {
-    "manage_states": "Edit status list",
+    "manage_states": "Manage statuses",
     "tickets": "Support tickets",
     "messages": "Messages",
     "agreements": "Commissions, licences and retainers",
