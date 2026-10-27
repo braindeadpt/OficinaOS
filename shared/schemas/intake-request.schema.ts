@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { opaqueIdSchema } from "./id.schema";
 
 // Public pre-check form. `company` is a honeypot — real browsers hide it,
 // so a filled value means a bot; the route fakes success without storing.
@@ -36,7 +37,7 @@ export const preCheckSubmitSchema = z.object({
 });
 
 export const convertIntakeRequestSchema = z.object({
-  jobId: z.string().cuid({ error: "validations.invalid_id" }),
+  jobId: opaqueIdSchema,
 });
 
 export type ConvertIntakeRequestInput = z.infer<

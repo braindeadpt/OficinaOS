@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { opaqueIdSchema } from "./id.schema";
 
 export const createConversationSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -10,13 +11,13 @@ export const updateConversationSchema = z.object({
 });
 
 export const bulkDeleteConversationsSchema = z.object({
-  ids: z.array(z.string().cuid()).min(1).max(50),
+  ids: z.array(opaqueIdSchema).min(1).max(50),
 });
 
 export const chatMessageSchema = z.object({
   message: z.string().min(1).max(10_000),
   language: z.string().min(2).max(5).optional(),
-  conversationId: z.string().cuid().nullable().optional(),
+  conversationId: opaqueIdSchema.nullable().optional(),
   agentName: z.string().min(1).max(100).optional(),
 });
 

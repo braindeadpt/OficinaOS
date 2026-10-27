@@ -7,6 +7,7 @@ import {
 import { DEVICE_CATEGORIES } from "@shared/constants/device-categories";
 import { serialField } from "@shared/utils/imei";
 import { z } from "zod";
+import { opaqueIdSchema } from "./id.schema";
 
 const repairCategoryValues = Object.values(RepairCategory) as [
   string,
@@ -32,7 +33,7 @@ export const createJobSchema = z.object({
     .email({ error: "validations.email" })
     .optional()
     .or(z.literal("")),
-  customerId: z.string().cuid().optional(),
+  customerId: opaqueIdSchema.optional(),
   customerName: z.string().min(1, { error: "validations.enter_name" }).max(120),
   customerPhone: z
     .string()
@@ -90,7 +91,7 @@ export const createJobSchema = z.object({
     .optional(),
   hasLoanerDevice: z.boolean().optional(),
   loanerNote: z.string().max(200).optional(),
-  technicianId: z.string().cuid({ error: "validations.invalid_id" }).optional(),
+  technicianId: opaqueIdSchema.optional(),
   isUrgent: z.boolean().optional(),
   isWarrantyReturn: z.boolean().optional(),
   warrantyForJobId: z.string().max(64).optional(),
@@ -107,7 +108,7 @@ export const updateJobSchema = z.object({
   depositAmount: z.number().min(0).max(99_999_999.99).nullable().optional(),
   hasLoanerDevice: z.boolean().optional(),
   loanerNote: z.string().max(200).nullable().optional(),
-  technicianId: z.string().cuid().nullable().optional(),
+  technicianId: opaqueIdSchema.nullable().optional(),
   isUrgent: z.boolean().optional(),
   color: z.string().max(40).optional(),
   imei: serialField,
