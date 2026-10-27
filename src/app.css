@@ -32,6 +32,28 @@
 
 /* Lucide icons sized like the icon font: 1em square, 24px unless a text-*
    utility says otherwise (layered so utilities win). */
+@layer utilities {
+  /* Thin, always-visible scrollbars for long navigation panels. */
+  .oos-scrollbar {
+    scrollbar-color: var(--oos-color-border-strong) transparent;
+    scrollbar-width: thin;
+  }
+
+  .oos-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .oos-scrollbar::-webkit-scrollbar-thumb {
+    background-color: var(--oos-color-border-strong);
+    border-radius: 9999px;
+  }
+
+  .oos-scrollbar::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
+}
+
 @layer components {
   .oos-icon {
     display: inline-block;

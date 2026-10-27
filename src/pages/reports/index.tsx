@@ -157,10 +157,10 @@ export default function ReportsPage() {
             )}
           </p>
         </div>
-        <div className="flex gap-1 rounded-xl bg-surface-container-low p-1">
+        <div className="oos-scrollbar flex gap-1 overflow-x-auto rounded-xl bg-surface-container-low p-1">
           {RANGE_OPTIONS.map(({ key, label }) => (
             <button
-              className={`min-h-11 rounded-lg px-4 font-medium text-sm transition-colors ${
+              className={`min-h-11 shrink-0 rounded-lg px-4 font-medium text-sm transition-colors ${
                 range === key
                   ? "bg-surface-container-lowest text-primary shadow-sm"
                   : "text-on-surface-variant hover:text-primary"
@@ -176,10 +176,10 @@ export default function ReportsPage() {
       </div>
 
       {visibleTabs.length > 1 && (
-        <div className="flex gap-1 rounded-xl bg-surface-container-low p-1">
+        <div className="oos-scrollbar -mx-1 flex gap-1 overflow-x-auto rounded-xl bg-surface-container-low p-1">
           {visibleTabs.map((tab) => (
             <button
-              className={`min-h-11 rounded-lg px-4 font-medium text-sm transition-colors ${
+              className={`min-h-11 shrink-0 rounded-lg px-4 font-medium text-sm transition-colors ${
                 activeTab === tab
                   ? "bg-surface-container-lowest text-primary shadow-sm"
                   : "text-on-surface-variant hover:text-primary"
