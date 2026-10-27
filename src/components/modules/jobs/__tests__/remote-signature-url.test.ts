@@ -33,4 +33,26 @@ describe("pickSignBaseUrl", () => {
     );
     expect(pickSignBaseUrl([])).toBeNull();
   });
+
+  it("prefers a public HTTPS APP_URL over container IPs (Docker/demo)", () => {
+    expect(
+      pickSignBaseUrl([
+        "https://demo.oficinaos.app",
+        "http://3f2a1b:4000",
+        "http://172.18.0.3:4000",
+      ])
+    ).toBe("https://demo.oficinaos.app");
+  });
+
+  it("never picks loopback, link-local or CGNAT addresses", () => {
+    expect(
+      pickSignBaseUrl([
+        "http://127.0.0.1:4000",
+        "http://169.254.10.2:4000",
+        "http://100.101.102.103:4000",
+        "http://192.168.1.50:4000",
+      ])
+    ).toBe("http://192.168.1.50:4000");
+    expect(pickSignBaseUrl(["http://localhost:4000"])).toBeNull();
+  });
 });

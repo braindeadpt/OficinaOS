@@ -3,6 +3,7 @@ import QRCode from "qrcode";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
+import { pickLanBaseUrl } from "@/components/modules/jobs/intake-modal/remote-signature-url";
 
 function LanguageSwitcher() {
   const { i18n, t } = useTranslation();
@@ -117,8 +118,9 @@ export default function HelpPage() {
   const isRemote = window.location.protocol === "https:" && !isLocalAddress;
   const platform = detectPlatform();
 
-  // QR encodes the best URL the SERVER knows — the mDNS name when set, else
-  // APP_URL — never "localhost" (useless when /help is opened on the server).
+  // QR encodes the URL a phone can actually open — same pick as the remote
+  // signature QR (public HTTPS, then LAN IPv4, then .local); never
+  // "localhost" (useless when /help is opened on the server).
   const [qrTarget, setQrTarget] = useState(origin);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
 
@@ -127,7 +129,7 @@ export default function HelpPage() {
     fetch("/api/public/access-info")
       .then((r) => (r.ok ? r.json() : null))
       .then((body: { urls?: string[] } | null) => {
-        const best = body?.urls?.[0];
+        const best = pickLanBaseUrl(body?.urls ?? []);
         if (!cancelled && best) {
           setQrTarget(best);
         }
