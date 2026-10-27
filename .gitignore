@@ -46,3 +46,6 @@ compose.override.y*ml
 demo-snapshot.json
 .env.demo
 !.env.demo.example
+
+# Local QA evidence from audits (screenshots, traces) — not shipped
+/audit/
