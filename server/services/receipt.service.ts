@@ -272,6 +272,7 @@ type ReceiptPaper = "58mm" | "80mm" | "a4";
 type LabelSize = "40x20" | "57x32" | "62x29";
 
 interface PrintPrefs {
+  highContrast: boolean;
   labelSize: LabelSize;
   paper: ReceiptPaper;
   showImei: boolean;
@@ -283,6 +284,7 @@ interface PrintPrefs {
 
 interface PrintSettingsRow {
   labelSize?: string | null;
+  printerHighContrast?: boolean | null;
   receiptPaper?: string | null;
   receiptShowImei?: boolean | null;
   receiptShowProblem?: boolean | null;
@@ -295,6 +297,7 @@ function prefsFrom(settings: PrintSettingsRow | null | undefined): PrintPrefs {
   const paper = settings?.receiptPaper;
   const labelSize = settings?.labelSize;
   return {
+    highContrast: settings?.printerHighContrast ?? false,
     labelSize:
       labelSize === "57x32" || labelSize === "62x29" ? labelSize : "40x20",
     paper: paper === "58mm" || paper === "a4" ? paper : "80mm",
@@ -685,6 +688,7 @@ function renderThermalReceiptDocument(ctx: ReceiptRenderContext): string {
   .total td{font-weight:bold;border-top:1px solid #000}
   .qr{text-align:center;margin:8px 0}
   .qr img{width:120px}
+  ${prefs.highContrast ? "body *{color:#000 !important;font-weight:700 !important}" : ""}
   @media print{body{margin:0}}
 </style>
 </head>
@@ -938,6 +942,7 @@ ${settings?.receiptFooter ? `<div class="foot"><div class="txt"><p>${escMultilin
   .total td{font-weight:bold;border-top:1px solid #000}
   .qr{text-align:center;margin:8px 0}
   .qr img{width:120px}
+  ${prefs.highContrast ? "body *{color:#000 !important;font-weight:700 !important}" : ""}
   @media print{body{margin:0}}
 </style>
 </head>
@@ -1076,6 +1081,7 @@ export async function renderTradeInReceiptHtml(
   options?: { locale?: string }
 ): Promise<string> {
   const settings = await findShopSettingsUnique(prisma);
+  const prefs = prefsFrom(settings);
   const currency = settings?.currency ?? "EUR";
   const s = TRADE_IN_STRINGS[options?.locale ?? ""] ?? TRADE_IN_STRINGS.pt;
   const shopHeader = shopHeaderHtml(settings);
@@ -1099,6 +1105,7 @@ export async function renderTradeInReceiptHtml(
   table{width:100%;border-collapse:collapse;margin:4px 0}
   .sep{border-top:1px dashed #000;margin:8px 0}
   .total td{font-weight:bold;border-top:1px solid #000}
+  ${prefs.highContrast ? "body *{color:#000 !important;font-weight:700 !important}" : ""}
   @media print{body{margin:0;max-width:none}}
 </style>
 </head>

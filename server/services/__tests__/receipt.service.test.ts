@@ -67,6 +67,22 @@ describe("renderReceiptHtml paper presets", () => {
   });
 });
 
+describe("renderReceiptHtml high contrast", () => {
+  it("bolds every line and blacks out grays when printerHighContrast is on", async () => {
+    const prisma = mockPrisma({ ...FULL_SETTINGS, printerHighContrast: true });
+    const html = await renderReceiptHtml(prisma, BASE_JOB, "", {});
+    expect(html).toContain(
+      "body *{color:#000 !important;font-weight:700 !important}"
+    );
+  });
+
+  it("omits the override when printerHighContrast is off", async () => {
+    const prisma = mockPrisma(FULL_SETTINGS);
+    const html = await renderReceiptHtml(prisma, BASE_JOB, "", {});
+    expect(html).not.toContain("font-weight:700 !important");
+  });
+});
+
 describe("renderReceiptHtml section toggles", () => {
   const withToggle = async (patch: Record<string, unknown>) => {
     const prisma = mockPrisma({ ...FULL_SETTINGS, ...patch });

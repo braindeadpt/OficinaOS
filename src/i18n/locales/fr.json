@@ -2127,7 +2127,7 @@
   "print_host_help": "IP ou nom d'hôte de l'imprimante réseau - par ex. ",
   "print_port": "Port imprimante",
   "print_high_contrast": "Impression à contraste élevé",
-  "print_high_contrast_help": "Imprime chaque ligne en gras – à utiliser lorsque les reçus sont pâles.",
+  "print_high_contrast_help": "Imprime chaque ligne en gras – à utiliser lorsque les reçus sont pâles, quel que soit le mode d'impression.",
   "print_test": "Envoyer un ticket de test",
   "print_test_success": "Ticket de test envoyé — vérifiez l'imprimante",
   "print_test_failed": "Impossible d'atteindre l'imprimante : vérifiez l'adresse IP, le port et le réseau",
