@@ -150,6 +150,7 @@ const shopCreate = (input: UpdateShopSettingsInput) => ({
   printerMode: input.printerMode ?? "browser",
   printerHost: input.printerHost ?? null,
   printerPort: input.printerPort ?? 9100,
+  printerHighContrast: input.printerHighContrast ?? false,
   monthlyRevenueGoal: input.monthlyRevenueGoal ?? null,
   reviewUrl: input.reviewUrl?.trim() || null,
   embedAllowedOrigins: normalizeOriginList(input.embedAllowedOrigins),
@@ -172,6 +173,7 @@ const shopUpdate = (input: UpdateShopSettingsInput) => ({
   printerMode: input.printerMode,
   printerHost: input.printerHost,
   printerPort: input.printerPort,
+  printerHighContrast: input.printerHighContrast,
   monthlyRevenueGoal:
     input.monthlyRevenueGoal === undefined
       ? undefined

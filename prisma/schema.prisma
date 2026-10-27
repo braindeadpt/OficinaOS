@@ -1149,6 +1149,9 @@ model ShopSettings {
   printerMode                 String    @default("browser")
   printerHost                 String?
   printerPort                 Int       @default(9100)
+  // ESC/POS "alto contraste": every text line wrapped in ESC E (bold) — fixes
+  // faint body text on printers with low density or worn heads/paper.
+  printerHighContrast         Boolean   @default(false)
   // Meta mensal de faturação — progresso mostrado no dashboard do gerente.
   // Null = sem meta definida (não mostrar nada).
   monthlyRevenueGoal          Decimal?  @db.Decimal(10, 2)

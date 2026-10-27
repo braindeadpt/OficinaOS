@@ -61,6 +61,7 @@ export const updateShopSettingsSchema = z
     printerMode: z.enum(["browser", "escpos"]).optional(),
     printerHost: z.string().trim().max(253).nullable().optional(),
     printerPort: z.number().int().min(1).max(65_535).optional(),
+    printerHighContrast: z.boolean().optional(),
     countryCode: z.string().max(8).optional(),
     timezone: z.string().min(1).optional(),
     // Meta mensal de faturação (€). 0/null limpa a meta.
@@ -104,6 +105,7 @@ export const updateShopSettingsSchema = z
       data.printerMode !== undefined ||
       data.printerHost !== undefined ||
       data.printerPort !== undefined ||
+      data.printerHighContrast !== undefined ||
       data.countryCode !== undefined ||
       data.timezone !== undefined ||
       data.monthlyRevenueGoal !== undefined ||

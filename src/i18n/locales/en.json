@@ -2126,6 +2126,8 @@
   "print_host": "Printer IP address",
   "print_host_help": "IP or hostname of the network printer — e.g. 192.168.1.50.",
   "print_port": "Printer port",
+  "print_high_contrast": "High contrast printing",
+  "print_high_contrast_help": "Prints every line in bold — use when receipts come out faint.",
   "print_test": "Send test ticket",
   "print_test_success": "Test ticket sent — check the printer",
   "print_test_failed": "Could not reach the printer — check IP, port and network",
