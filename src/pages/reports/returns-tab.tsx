@@ -4,8 +4,10 @@ import { Histogram } from "@/components/ui/histogram";
 import { MetricCard } from "@/components/ui/metric-card";
 import { StackedBar } from "@/components/ui/stacked-bar";
 import { useCan } from "@/hooks/use-can";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 import { FAULT_TONES } from "@/lib/category-display";
 import { downloadCsv } from "@/lib/export-csv";
+import { formatNumber } from "@/lib/format";
 import { useReportsStore } from "@/stores/reports";
 
 const TTR_BUCKET_LABELS: Record<TtrBucket, string> = {
@@ -20,11 +22,12 @@ function changeDetail(pct: number | undefined): string {
   if (pct === undefined) {
     return "";
   }
-  return `${pct > 0 ? "+" : ""}${pct}%`;
+  return `${pct > 0 ? "+" : ""}${formatNumber(pct, 1)}%`;
 }
 
 export default function ReturnsTab() {
   const { t } = useTranslation();
+  const fmt = useFormatCurrency();
   const state = useReportsStore((s) => s.returns);
   const canViewShop = useCan({ returns: ["viewShop"] });
 
@@ -112,7 +115,7 @@ export default function ReturnsTab() {
             detail={changeDetail(summary.warrantyReturnRateChangePercent)}
             icon="autorenew"
             label={t("reports.warrantyReturnRate")}
-            value={`${summary.warrantyReturnRate}%`}
+            value={formatNumber(summary.warrantyReturnRate, 1)}
           />
         )}
         {summary.netWarrantyCost !== undefined && (
@@ -120,7 +123,7 @@ export default function ReturnsTab() {
             detail={changeDetail(summary.netWarrantyCostChangePercent)}
             icon="payments"
             label={t("reports.netWarrantyCost")}
-            value={summary.netWarrantyCost.toLocaleString()}
+            value={fmt(summary.netWarrantyCost)}
           >
             <p className="text-on-surface-variant text-xs">
               {t("reports.warrantyCostFootnote")}
@@ -132,7 +135,7 @@ export default function ReturnsTab() {
           icon="schedule"
           label={t("reports.avgTimeToReturn")}
           unit={t("reports.days")}
-          value={String(summary.avgTimeToReturnDays)}
+          value={formatNumber(summary.avgTimeToReturnDays, 1)}
         />
       </div>
 
@@ -223,7 +226,7 @@ export default function ReturnsTab() {
                       {tech.claimsCount}
                     </td>
                     <td className="px-4 py-3 text-end tabular-nums">
-                      {tech.returnRate}%
+                      {formatNumber(tech.returnRate, 1)}%
                     </td>
                     <td className="px-4 py-3 text-on-surface-variant">
                       {tech.dominantFault}

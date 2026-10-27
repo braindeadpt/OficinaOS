@@ -1,10 +1,13 @@
 import { useTranslation } from "react-i18next";
 import { MetricCard } from "@/components/ui/metric-card";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 import { downloadCsv } from "@/lib/export-csv";
+import { formatNumber } from "@/lib/format";
 import { useReportsStore } from "@/stores/reports";
 
 export default function RevenueTab() {
   const { t } = useTranslation();
+  const fmt = useFormatCurrency();
   const state = useReportsStore((s) => s.revenue);
 
   if (state.loading) {
@@ -75,17 +78,17 @@ export default function RevenueTab() {
           detail={
             summary.revenueChangePercent === undefined
               ? ""
-              : `${summary.revenueChangePercent > 0 ? "+" : ""}${summary.revenueChangePercent}%`
+              : `${summary.revenueChangePercent > 0 ? "+" : ""}${formatNumber(summary.revenueChangePercent, 1)}%`
           }
           icon="payments"
           label={t("reports.totalRevenue")}
-          value={summary.totalRevenue.toLocaleString()}
+          value={fmt(summary.totalRevenue)}
         />
         <MetricCard
           detail=""
           icon="account_balance_wallet"
           label={t("reports.totalDeposits")}
-          value={summary.totalDeposits.toLocaleString()}
+          value={fmt(summary.totalDeposits)}
         />
         {showMargin && (
           <MetricCard
@@ -93,7 +96,7 @@ export default function RevenueTab() {
             icon="trending_up"
             label={t("reports.avgProfitMargin")}
             unit="%"
-            value={String(summary.avgProfitMargin)}
+            value={formatNumber(summary.avgProfitMargin ?? 0, 1)}
           />
         )}
         <MetricCard
@@ -102,7 +105,7 @@ export default function RevenueTab() {
           })}
           icon="pending"
           label={t("reports.outstandingBalance")}
-          value={summary.outstandingBalance.toLocaleString()}
+          value={fmt(summary.outstandingBalance)}
         />
       </div>
 
@@ -141,20 +144,22 @@ export default function RevenueTab() {
                     {row.deviceName}
                   </td>
                   <td className="px-4 py-3 text-end tabular-nums">
-                    {row.estimatedCost.toLocaleString()}
+                    {fmt(row.estimatedCost)}
                   </td>
                   <td className="px-4 py-3 text-end tabular-nums">
-                    {row.depositAmount.toLocaleString()}
+                    {fmt(row.depositAmount)}
                   </td>
                   <td className="px-4 py-3 text-end tabular-nums">
-                    {row.partsCost.toLocaleString()}
+                    {fmt(row.partsCost)}
                   </td>
                   <td className="px-4 py-3 text-end tabular-nums">
-                    {row.repairsTotal.toLocaleString()}
+                    {fmt(row.repairsTotal)}
                   </td>
                   {showMargin && (
                     <td className="px-4 py-3 text-end tabular-nums">
-                      {row.margin === undefined ? "\u2014" : `${row.margin}%`}
+                      {row.margin === undefined
+                        ? "\u2014"
+                        : `${formatNumber(row.margin, 1)}%`}
                     </td>
                   )}
                 </tr>
