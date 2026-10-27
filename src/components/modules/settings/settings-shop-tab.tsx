@@ -15,6 +15,7 @@ import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import api from "@/lib/api";
+import { parseRevenueGoalInput } from "@/lib/parse-revenue-goal";
 import { getPhonePlaceholder } from "@/lib/phone-formats";
 import { useSettingsStore } from "@/stores/settings";
 
@@ -216,6 +217,7 @@ export default function SettingsShopTab({
 
   const [shopForm, setShopForm] = useState(SHOP_FORM_DEFAULT);
   const [shopFormInitial, setShopFormInitial] = useState(shopForm);
+  const [goalError, setGoalError] = useState<string | null>(null);
 
   useImperativeHandle(ref, () => ({
     requestSubmit: () => formRef.current?.requestSubmit(),
@@ -227,6 +229,7 @@ export default function SettingsShopTab({
       const form = formFromSettings(shopSettings);
       setShopForm(form);
       setShopFormInitial(form);
+      setGoalError(null);
     }
   }, [shopSettings]);
 
@@ -244,14 +247,18 @@ export default function SettingsShopTab({
       onToast(t("settings_error_shop_name_required"), "error");
       return;
     }
+    const parsedGoal = parseRevenueGoalInput(shopForm.monthlyRevenueGoal);
+    if (parsedGoal === undefined) {
+      // Never turn a typo into a silent `null` — keep the field and explain.
+      setGoalError(t("shop_revenue_goal_invalid"));
+      return;
+    }
+    setGoalError(null);
     onSavingChange(true);
     try {
-      const goal = shopForm.monthlyRevenueGoal.trim();
-      const parsedGoal = Number(goal.replace(",", "."));
       await saveShopSettings({
         ...shopForm,
-        monthlyRevenueGoal:
-          goal === "" || !Number.isFinite(parsedGoal) ? null : parsedGoal,
+        monthlyRevenueGoal: parsedGoal,
         printerHost: shopForm.printerHost.trim() || null,
       });
       setShopFormInitial({ ...shopForm });
@@ -397,6 +404,7 @@ export default function SettingsShopTab({
             />
           </Field>
           <Field
+            error={goalError}
             hint={t("shop_revenue_goal_help")}
             label={t("shop_revenue_goal")}
           >
@@ -408,6 +416,7 @@ export default function SettingsShopTab({
                   ...f,
                   monthlyRevenueGoal: e.target.value,
                 }));
+                setGoalError(null);
                 onDirtyChange(true);
               }}
               placeholder="2500"

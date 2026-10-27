@@ -1,3 +1,4 @@
+import { isValidPhone } from "@shared/utils/phone";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { CreatedCustomerData } from "@/components/modules/jobs/quick-add-customer";
@@ -107,6 +108,8 @@ export function useIntakeModal({
     }
     if (!form.customerPhone.trim()) {
       newErrors.customerPhone = t("intake.error_required");
+    } else if (!isValidPhone(form.customerPhone)) {
+      newErrors.customerPhone = t("validations.invalid_phone");
     }
     if (!form.model.trim()) {
       newErrors.model = t("intake.error_required");
@@ -152,6 +155,14 @@ export function useIntakeModal({
       setTouched((prev) => ({ ...prev, [field]: true }));
       if (REQUIRED_FIELDS.includes(field) && !form[field]?.toString().trim()) {
         setErrors((prev) => ({ ...prev, [field]: t("intake.error_required") }));
+      } else if (
+        field === "customerPhone" &&
+        !isValidPhone(form.customerPhone)
+      ) {
+        setErrors((prev) => ({
+          ...prev,
+          customerPhone: t("validations.invalid_phone"),
+        }));
       }
     },
     [form, t]

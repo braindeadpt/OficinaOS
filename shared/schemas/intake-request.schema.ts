@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { opaqueIdSchema } from "./id.schema";
+import { phoneSchema } from "./phone.schema";
 
 // Public pre-check form. `company` is a honeypot — real browsers hide it,
 // so a filled value means a bot; the route fakes success without storing.
@@ -15,11 +16,7 @@ export const preCheckSubmitSchema = z.object({
     .trim()
     .min(2, { error: "validations.enter_name" })
     .max(100),
-  customerPhone: z
-    .string()
-    .trim()
-    .min(6, { error: "validations.enter_phone" })
-    .max(30),
+  customerPhone: phoneSchema,
   deviceLabel: z.string().trim().min(2).max(100),
   problem: z.string().trim().min(10).max(2000),
   whatsappOptIn: z.boolean().optional(),

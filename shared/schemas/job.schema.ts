@@ -8,6 +8,7 @@ import { DEVICE_CATEGORIES } from "@shared/constants/device-categories";
 import { serialField } from "@shared/utils/imei";
 import { z } from "zod";
 import { opaqueIdSchema } from "./id.schema";
+import { phoneSchema } from "./phone.schema";
 
 const repairCategoryValues = Object.values(RepairCategory) as [
   string,
@@ -35,10 +36,7 @@ export const createJobSchema = z.object({
     .or(z.literal("")),
   customerId: opaqueIdSchema.optional(),
   customerName: z.string().min(1, { error: "validations.enter_name" }).max(120),
-  customerPhone: z
-    .string()
-    .min(1, { error: "validations.enter_phone" })
-    .max(32),
+  customerPhone: phoneSchema,
   deviceBrand: z.string().min(1, { error: "validations.enter_brand" }).max(60),
   deviceBrandId: z.string().max(64).optional(),
   deviceModel: z.string().min(1, { error: "validations.enter_model" }).max(120),

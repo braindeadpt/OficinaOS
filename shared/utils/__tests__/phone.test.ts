@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizePhone, phoneSearchDigits } from "../phone";
+import { isValidPhone, normalizePhone, phoneSearchDigits } from "../phone";
 
 describe("normalizePhone", () => {
   it("drops spaces, dashes, dots and parentheses", () => {
@@ -17,6 +17,24 @@ describe("normalizePhone", () => {
     expect(normalizePhone("912345678")).not.toBe(
       normalizePhone("+351912345678")
     );
+  });
+});
+
+describe("isValidPhone", () => {
+  it("accepts national and international formats", () => {
+    expect(isValidPhone("912345678")).toBe(true);
+    expect(isValidPhone("+351 912 345 678")).toBe(true);
+    expect(isValidPhone("00351 912 345 678")).toBe(true);
+    expect(isValidPhone("(21) 3456-7890")).toBe(true);
+    expect(isValidPhone("+44 7911 123456")).toBe(true);
+  });
+
+  it("rejects free text, short numbers and letters", () => {
+    expect(isValidPhone("abc")).toBe(false);
+    expect(isValidPhone("123")).toBe(false);
+    expect(isValidPhone("91234abc678")).toBe(false);
+    expect(isValidPhone("+351 912 345 678 999 000")).toBe(false);
+    expect(isValidPhone("")).toBe(false);
   });
 });
 
