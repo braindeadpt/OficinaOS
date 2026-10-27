@@ -1,0 +1,36 @@
+import { describe, expect, it } from "vitest";
+import { pickSignBaseUrl } from "../intake-modal/remote-signature-url";
+
+describe("pickSignBaseUrl", () => {
+  // The signature QR must open on the customer's phone over the shop LAN.
+  // Android resolves neither .local mDNS names nor bare machine hostnames —
+  // preferring them produced a QR pointing at a page that never loaded.
+  it("prefers a numeric LAN IPv4 over .local and machine hostnames", () => {
+    expect(
+      pickSignBaseUrl([
+        "http://oficinaos.local:4000",
+        "http://LOJA-PC:4000",
+        "http://192.168.1.50:4000",
+      ])
+    ).toBe("http://192.168.1.50:4000");
+  });
+
+  it("keeps .local as the fallback when no IPv4 exists (iOS resolves it)", () => {
+    expect(
+      pickSignBaseUrl(["http://LOJA-PC:4000", "http://oficinaos.local:4000"])
+    ).toBe("http://oficinaos.local:4000");
+  });
+
+  it("ignores malformed entries while scanning for an IPv4", () => {
+    expect(pickSignBaseUrl(["not a url", "http://10.0.0.9:4000"])).toBe(
+      "http://10.0.0.9:4000"
+    );
+  });
+
+  it("falls back to the first URL and null on an empty list", () => {
+    expect(pickSignBaseUrl(["http://LOJA-PC:4000"])).toBe(
+      "http://LOJA-PC:4000"
+    );
+    expect(pickSignBaseUrl([])).toBeNull();
+  });
+});
