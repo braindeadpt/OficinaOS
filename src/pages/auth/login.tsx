@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate } from "react-router";
 import LanguageToggle from "@/components/modules/language-toggle";
@@ -246,9 +246,11 @@ function NoEmailRecoveryPanel({ onBack }: { onBack: () => void }) {
 
 function ForgotPasswordForm({
   onBack,
+  emailAvailable,
   onEmailAvailable,
 }: {
   onBack: () => void;
+  emailAvailable: boolean | null;
   onEmailAvailable: (available: boolean) => void;
 }) {
   const { t } = useTranslation();
@@ -256,31 +258,6 @@ function ForgotPasswordForm({
   const [sent, setSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [emailAvailable, setEmailAvailable] = useState<boolean | null>(null);
-
-  // Ask once whether this shop can actually send mail — without SMTP the
-  // email form would be a lie (token created, nothing ever delivered).
-  useEffect(() => {
-    let cancelled = false;
-    api
-      .get<{ email: boolean }>("/auth/recovery-options")
-      .then((res) => {
-        if (!cancelled) {
-          setEmailAvailable(res.data.email);
-          onEmailAvailable(res.data.email);
-        }
-      })
-      .catch(() => {
-        // Older server without the probe — keep the previous email flow;
-        // a 503 on submit still swaps to the no-email panel below.
-        if (!cancelled) {
-          setEmailAvailable(true);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [onEmailAvailable]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -294,7 +271,6 @@ function ForgotPasswordForm({
       const status = (err as { response?: { status?: number } }).response
         ?.status;
       if (status === 503) {
-        setEmailAvailable(false);
         onEmailAvailable(false);
       } else {
         setSubmitError("auth_reset_failed");
@@ -426,6 +402,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [recoveryEmail, setRecoveryEmail] = useState<boolean | null>(null);
+  const recoveryProbeStarted = useRef(false);
   const navigate = useNavigate();
 
   const location = useLocation();
@@ -493,6 +470,26 @@ export default function LoginPage() {
     clearError();
   }
 
+  function handleForgotPassword() {
+    setShowForgotPassword(true);
+    // Probe once per page load: the answer is a constant capability flag,
+    // so repeat opens reuse the cached value instead of spending the
+    // endpoint's rate-limit budget.
+    if (!recoveryProbeStarted.current) {
+      recoveryProbeStarted.current = true;
+      api
+        .get<{ email: boolean }>("/auth/recovery-options")
+        .then((res) => {
+          setRecoveryEmail(res.data.email);
+        })
+        .catch(() => {
+          // Older server without the probe — keep the previous email flow;
+          // a 503 on submit still swaps to the no-email panel.
+          setRecoveryEmail(true);
+        });
+    }
+  }
+
   const loginBody = (() => {
     if (isDemo) {
       /* DEMO_MODE: no credentials, no forgot-password — a single
@@ -536,6 +533,7 @@ export default function LoginPage() {
           </div>
 
           <ForgotPasswordForm
+            emailAvailable={recoveryEmail}
             onBack={handleBackToSignIn}
             onEmailAvailable={setRecoveryEmail}
           />
@@ -565,9 +563,7 @@ export default function LoginPage() {
         <SignInForm
           error={error}
           loading={loading}
-          onForgotPassword={() => {
-            setShowForgotPassword(true);
-          }}
+          onForgotPassword={handleForgotPassword}
           onSubmit={handleSignIn}
           password={password}
           rememberMe={rememberMe}

@@ -238,13 +238,45 @@ describe("/api/auth/recovery-options", () => {
     expect(res.json()).toEqual({ email: false });
   });
 
-  it("tem rate-limit próprio no mapa (igual ao do login)", () => {
+  it("tem rate-limit próprio no mapa — 30/5min, IP-keyed, sem dados", () => {
     const cfg = matchRoute("/api/auth/recovery-options", routeSecurity);
     expect(
       cfg?.rateLimit && typeof cfg.rateLimit === "object"
         ? cfg.rateLimit.max
         : null
-    ).toBe(5);
+    ).toBe(30);
+  });
+
+  it("6 carregamentos seguidos do login não dão 429", async () => {
+    // Regressão: com max 5 a 6.ª visita ao login levava 429. O probe é uma
+    // flag constante sem dados — o orçamento tem de aguentar reloads reais.
+    const { default: rateLimit } = await import("@fastify/rate-limit");
+    const app = Fastify();
+    // Replica o wiring de server/plugins/security.ts: o mapa de segurança
+    // corre antes do plugin e copia o rateLimit para a config da rota.
+    app.addHook("onRoute", (routeOptions) => {
+      const cfg = matchRoute(routeOptions.url, routeSecurity);
+      if (cfg?.rateLimit && typeof cfg.rateLimit === "object") {
+        routeOptions.config = {
+          ...(routeOptions.config ?? {}),
+          rateLimit: cfg.rateLimit,
+        };
+      }
+    });
+    await app.register(rateLimit, {
+      global: true,
+      max: 300,
+      timeWindow: "1 minute",
+    });
+    await app.register(authPlugin);
+    mocks.emailConfigured.mockReturnValue(true);
+    for (let i = 0; i < 6; i++) {
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/auth/recovery-options",
+      });
+      expect(res.statusCode).toBe(200);
+    }
   });
 });
 

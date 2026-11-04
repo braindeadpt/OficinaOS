@@ -174,14 +174,15 @@ export const routeSecurity: [string, RouteSecurityOverride][] = [
       },
     },
   ],
-  // Password-recovery probe — anonymous GET, same budget/keyspace as
-  // sign-in (IP-keyed: a GET carries no identifier).
+  // Password-recovery probe — anonymous GET returning a constant capability
+  // flag ({email}). No user data, so the budget is looser than sign-in: the
+  // SPA fetches it once per login page, but a reload must not 429.
   [
     "/api/auth/recovery-options",
     {
       csrf: false,
       rateLimit: {
-        max: 5,
+        max: 30,
         timeWindow: "5 minute",
         keyGenerator: signInKeyGenerator,
       },
