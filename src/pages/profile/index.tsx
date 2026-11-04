@@ -548,8 +548,9 @@ export default function ProfilePage() {
         <ResetPasswordModal
           onClose={() => setShowResetModal(false)}
           onSubmit={async (password) => {
+            // Apenas o reset — o modal fica aberto a mostrar a password
+            // temporária (estado done) até fechar via onClose.
             await useUsersStore.getState().resetUserPassword(userId, password);
-            setShowResetModal(false);
           }}
           username={displayUser.username}
         />

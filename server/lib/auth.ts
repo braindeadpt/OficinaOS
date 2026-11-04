@@ -16,7 +16,7 @@ import { buildPasswordResetLink, localeFromRequest } from "./reset-link.js";
  */
 export function createAuth(prisma: PrismaClient) {
   const env = loadEnv();
-  const { appUrl, apiUrl, trustedOrigins } = resolveUrls(env);
+  const { appUrl, apiUrl, trustedOrigins, pageOrigins } = resolveUrls(env);
   // HTTPS on the public origin => Secure cookies; plain-HTTP LAN stays Lax.
   const isHttps = (env.APP_URL ?? apiUrl).startsWith("https://");
 
@@ -46,7 +46,7 @@ export function createAuth(prisma: PrismaClient) {
       revokeSessionsOnPasswordReset: true,
       sendResetPassword: async ({ user, url }, request) => {
         try {
-          const link = buildPasswordResetLink(url, appUrl, trustedOrigins);
+          const link = buildPasswordResetLink(url, appUrl, pageOrigins);
           await sendPasswordResetEmail(
             user.email,
             link,

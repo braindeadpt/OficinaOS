@@ -37,11 +37,13 @@ Sem rota HTTP: o acesso físico ao servidor é a prova de autorização.
 
 O script (`server/scripts/recover-access.ts`):
 
-- sem argumentos lista as contas OWNER ativas;
+- sem argumentos lista as contas OWNER (inativas vêm marcadas);
 - `--user <username>` gera uma password temporária aleatória de 18
   caracteres sem glifos ambíguos (0/O, 1/l/I), grava o hash, ativa
-  `mustChangePassword`, termina as sessões e audita `PASSWORD_RESET` com
-  `toValue` «Recuperação local (servidor)»;
+  `mustChangePassword`, termina as sessões, limpa o bloqueio por
+  tentativas falhadas (`failedLoginAttempts`/`lockedUntil` — senão a
+  temporária era recusada durante o resto do lockout) e audita
+  `PASSWORD_RESET` com `toValue` «Recuperação local (servidor)»;
 - imprime a password **uma única vez** no stdout — nunca em ficheiros ou
   logs;
 - contas inativas são recusadas; `--reactivate` reativa (auditado em

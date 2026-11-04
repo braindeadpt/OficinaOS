@@ -203,9 +203,9 @@ export default function SettingsPage() {
     if (!resetTarget) {
       return;
     }
+    // Apenas o reset — o modal fica aberto a mostrar a password temporária
+    // (estado done) até o admin a copiar e fechar via onClose.
     await useUsersStore.getState().resetUserPassword(resetTarget.id, password);
-    setShowResetModal(false);
-    setResetTarget(null);
   }
 
   return (

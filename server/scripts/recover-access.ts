@@ -7,7 +7,8 @@
  * recover-access`. There is deliberately no HTTP route — physical access
  * to the server is the authorization proof.
  *
- *   bun run recover-access                     → list active OWNER accounts
+ *   bun run recover-access                     → list OWNER accounts
+ *                                                (inactive marked)
  *   bun run recover-access -- --user <name>    → reset that account
  *   bun run recover-access -- --user <name> --reactivate
  *                                              → also re-enable an
@@ -27,6 +28,7 @@ import { create as auditCreate } from "../repositories/audit.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import {
   deleteUserSessions,
+  resetFailedAttempts,
   updateCredentialPassword,
   updateMustChangePassword,
   findFirst as userFindFirst,
@@ -49,12 +51,14 @@ export function generateTemporaryPassword(
   return out;
 }
 
-/** Accounts recoverable locally — the admin tier (OWNER). */
+/** Accounts recoverable locally — the admin tier (OWNER). Inactive
+ *  accounts are listed too (marked) so the tray/operator can reach the
+ *  --reactivate path instead of staring at an empty list. */
 export function listRecoverableUsers(prisma: DbClient) {
   return userFindMany(
     prisma,
-    { role: Role.OWNER, isActive: true },
-    { username: true, name: true, role: true },
+    { role: Role.OWNER },
+    { username: true, name: true, role: true, isActive: true },
     { username: "asc" },
     50
   );
@@ -92,6 +96,9 @@ export async function recoverAccess(
     }
     await updateCredentialPassword(tx, user.id, hashed);
     await updateMustChangePassword(tx, user.id, true);
+    // A conta recuperada tem de entrar já — um lockout em curso recusaria
+    // a temporária válida nos minutos restantes do bloqueio.
+    await resetFailedAttempts(tx, user.id);
     await deleteUserSessions(tx, user.id);
   });
 
@@ -109,7 +116,7 @@ export async function recoverAccess(
 function printUsage(): void {
   console.log(
     "Uso: bun run recover-access -- [--user <username>] [--reactivate]\n" +
-      "Sem --user lista as contas OWNER ativas."
+      "Sem --user lista as contas OWNER (inativas marcadas)."
   );
 }
 
@@ -138,11 +145,16 @@ export async function main(argv: string[]): Promise<void> {
         console.log("Nenhuma conta OWNER ativa encontrada.");
         return;
       }
-      console.log("Contas OWNER ativas:");
+      console.log("Contas OWNER:");
       for (const u of users) {
-        console.log(`  ${u.username}${u.name ? ` (${u.name})` : ""}`);
+        console.log(
+          `  ${u.username}${u.name ? ` (${u.name})` : ""}${u.isActive ? "" : " — inativa"}`
+        );
       }
-      console.log("\nPara repor: bun run recover-access -- --user <username>");
+      console.log(
+        "\nPara repor: bun run recover-access -- --user <username>" +
+          "  (+ --reactivate se estiver inativa)"
+      );
       return;
     }
 

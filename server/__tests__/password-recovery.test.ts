@@ -51,6 +51,7 @@ vi.mock("../repositories/user.repository.js", () => ({
   findFirst: mocks.userFindFirst,
   findMany: mocks.userFindMany,
   findUniqueById: mocks.userFindUniqueById,
+  resetFailedAttempts: mocks.resetFailedAttempts,
   updateCredentialPassword: mocks.updateCredentialPassword,
   updateMustChangePassword: mocks.updateMustChangePassword,
   updateStatus: mocks.updateStatus,
@@ -123,6 +124,18 @@ describe("buildPasswordResetLink", () => {
     const link = buildPasswordResetLink("not-a-url", appUrl, trusted);
     expect(link).toBe(`${appUrl}/reset-password?token=`);
   });
+
+  it("callback igual ao apiUrl cai para appUrl — não é origem de página", () => {
+    // apiUrl está em trustedOrigins mas NÃO em pageOrigins: é origem de
+    // endpoint e um token enviado para lá vaza para os logs de outra app.
+    const pages = [appUrl, "http://oficinaos.local:4000"];
+    const link = buildPasswordResetLink(
+      baUrl("https://api.outra-app.example/reset-password"),
+      appUrl,
+      pages
+    );
+    expect(link).toBe(`${appUrl}/reset-password?token=TOKEN123`);
+  });
 });
 
 // ── resolveUrls: origem mDNS ───────────────────────────────────────────
@@ -138,6 +151,22 @@ describe("resolveUrls — mDNS", () => {
     const { trustedOrigins } = resolveUrls(env);
     expect(trustedOrigins).toContain("http://oficinaos.local:4000");
     expect(trustedOrigins).toContain("https://app.oficinaos.app");
+  });
+
+  it("pageOrigins exclui apiUrl e inclui appUrl + EXTRA + mDNS", () => {
+    const env = {
+      NODE_ENV: "production",
+      PORT: 4000,
+      APP_URL: "http://192.168.1.33:4000",
+      API_URL: "https://api.outra-app.example",
+      EXTRA_TRUSTED_ORIGINS: ["https://app.oficinaos.app"],
+      MDNS_HOSTNAME: "oficinaos",
+    } as Env;
+    const { pageOrigins } = resolveUrls(env);
+    expect(pageOrigins).not.toContain("https://api.outra-app.example");
+    expect(pageOrigins).toContain("http://192.168.1.33:4000");
+    expect(pageOrigins).toContain("https://app.oficinaos.app");
+    expect(pageOrigins).toContain("http://oficinaos.local:4000");
   });
 });
 
@@ -276,15 +305,30 @@ describe("recover-access (script)", () => {
     expect(pw).not.toMatch(AMBIGUOUS_RE);
   });
 
-  it("lista contas OWNER ativas", async () => {
+  it("lista contas OWNER — ativas e inativas marcadas", async () => {
+    // Inativas também entram na lista: senão o tray/operador não
+    // consegue chegar ao caminho --reactivate (a conta nem é visível).
     await listRecoverableUsers(fakePrisma as never);
     expect(mocks.userFindMany).toHaveBeenCalledWith(
       fakePrisma,
-      { role: "OWNER", isActive: true },
-      expect.anything(),
+      { role: "OWNER" },
+      expect.objectContaining({ isActive: true }),
       expect.anything(),
       50
     );
+  });
+
+  it("repor OWNER limpa o lockout — a temporária entra já", async () => {
+    // Com failedLoginAttempts/lockedUntil ativos, a temporária seria
+    // recusada durante os minutos restantes do bloqueio.
+    mocks.userFindFirst.mockResolvedValue({
+      id: "u1",
+      username: "dono",
+      role: "OWNER",
+      isActive: true,
+    });
+    await recoverAccess(fakePrisma as never, "dono");
+    expect(mocks.resetFailedAttempts).toHaveBeenCalledWith(fakeTx, "u1");
   });
 
   it("repor OWNER: hash + mustChangePassword + sessões apagadas + audit", async () => {

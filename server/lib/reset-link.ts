@@ -5,14 +5,16 @@ const SUPPORTED_LOCALES = new Set(["en", "es", "fr", "pt"]);
  * was generated with. The client already says where the user browsed from
  * (redirectTo → callbackURL), so we rebuild the link as
  * `<origin>/reset-password?token=<token>`. The origin is only honored when
- * it is in trustedOrigins (config + EXTRA_TRUSTED_ORIGINS + mDNS name);
- * anything else — including a forged Host/Origin header, which we never
- * read — falls back to appUrl.
+ * it is in pageOrigins — origins where the SPA is actually browsed
+ * (appUrl + EXTRA_TRUSTED_ORIGINS + mDNS name, never apiUrl: a token
+ * mailed to an endpoint origin leaks into that application's logs and
+ * 404s anyway). Anything else — including a forged Host/Origin header,
+ * which we never read — falls back to appUrl.
  */
 export function buildPasswordResetLink(
   resetUrl: string,
   appUrl: string,
-  trustedOrigins: string[]
+  pageOrigins: string[]
 ): string {
   let token = "";
   let callbackOrigin: string | null = null;
@@ -24,7 +26,7 @@ export function buildPasswordResetLink(
     const callback = parsed.searchParams.get("callbackURL");
     if (callback) {
       const origin = new URL(callback).origin;
-      if (trustedOrigins.includes(origin)) {
+      if (pageOrigins.includes(origin)) {
         callbackOrigin = origin;
       }
     }
