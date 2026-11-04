@@ -218,6 +218,12 @@ export function loadEnv(): Env {
  *   - appUrl:       the single public web origin (CORS, QR codes)
  *   - apiUrl:       where /api/auth/* is served (Better Auth baseURL)
  *   - trustedOrigins: appUrl + apiUrl + EXTRA_TRUSTED_ORIGINS
+ *   - pageOrigins:    appUrl + EXTRA_TRUSTED_ORIGINS + mDNS — origins
+ *                     where the SPA itself is browsed. apiUrl is
+ *                     deliberately absent: it is an endpoint origin, and
+ *                     when it differs from appUrl it may belong to
+ *                     another application — a user-facing secret (like a
+ *                     password-reset token) must never be mailed there.
  *
  * In dev, falls back to localhost:5173 / localhost:4000 so you don't need
  * to set anything.
@@ -226,14 +232,27 @@ export function resolveUrls(env: Env = loadEnv()) {
   const isProd = env.NODE_ENV === "production";
   const appUrl = env.APP_URL ?? (isProd ? "" : "http://localhost:5173");
   const apiUrl = env.API_URL ?? appUrl;
+  // The mDNS name is a first-class origin: LAN devices reach the app at
+  // http://<hostname>.local:<port> and must be able to finish auth
+  // flows (password reset links, CORS) from it.
+  const mdnsOrigin = env.MDNS_HOSTNAME
+    ? `http://${env.MDNS_HOSTNAME}.local:${env.PORT}`
+    : null;
   const trustedOrigins = Array.from(
     new Set(
-      [appUrl, apiUrl, ...env.EXTRA_TRUSTED_ORIGINS].filter(
+      [appUrl, apiUrl, ...env.EXTRA_TRUSTED_ORIGINS, mdnsOrigin].filter(
         (o): o is string => typeof o === "string" && o.length > 0
       )
     )
   );
-  return { appUrl, apiUrl, trustedOrigins };
+  const pageOrigins = Array.from(
+    new Set(
+      [appUrl, ...env.EXTRA_TRUSTED_ORIGINS, mdnsOrigin].filter(
+        (o): o is string => typeof o === "string" && o.length > 0
+      )
+    )
+  );
+  return { appUrl, apiUrl, trustedOrigins, pageOrigins };
 }
 
 export function resetEnvForTests(): void {

@@ -23,6 +23,8 @@ export default function ResetPasswordModal({
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [done, setDone] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -33,11 +35,86 @@ export default function ResetPasswordModal({
     setSubmitting(true);
     try {
       await onSubmit(password);
+      setDone(true);
     } catch {
       setError(t("profile_password_update_failed"));
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function copyPassword() {
+    try {
+      await navigator.clipboard.writeText(password);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  if (done) {
+    // Show the temporary password ONCE — the admin hands it to the user,
+    // who must rotate it at first login (mustChangePassword is set).
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <button
+          aria-hidden="true"
+          className="absolute inset-0 bg-overlay backdrop-blur-[20px]"
+          onClick={onClose}
+          tabIndex={-1}
+          type="button"
+        />
+        <div
+          aria-labelledby="reset-password-done-title"
+          aria-modal="true"
+          className="relative z-10 mx-4 w-full max-w-[440px] overflow-hidden rounded-2xl bg-surface-container-lowest shadow-2xl"
+          ref={dialogRef}
+          role="dialog"
+        >
+          <div className="bg-surface-container-low px-6 py-5">
+            <h2
+              className="font-bold font-headline text-on-surface text-xl tracking-tight"
+              id="reset-password-done-title"
+            >
+              {t("reset_password_done_title")}
+            </h2>
+            <p className="mt-0.5 text-on-surface-variant text-sm">
+              {t("reset_password_done_desc", { name: username })}
+            </p>
+          </div>
+          <div className="flex flex-col gap-5 px-6 py-6">
+            <div>
+              <Label className="mb-2 block" htmlFor="reset-password-temp">
+                {t("reset_password_temporary")}
+              </Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  className="font-mono"
+                  id="reset-password-temp"
+                  readOnly
+                  value={password}
+                />
+                <Button
+                  onClick={copyPassword}
+                  type="button"
+                  variant="secondary"
+                >
+                  {copied ? t("copied") : t("copy")}
+                </Button>
+              </div>
+            </div>
+            <p className="rounded-xl bg-tertiary-container p-3 text-on-tertiary-container text-xs">
+              {t("reset_password_must_change_hint")}
+            </p>
+          </div>
+          <div className="flex items-center justify-end gap-3 px-6 py-4">
+            <Button onClick={onClose} type="button">
+              {t("close")}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

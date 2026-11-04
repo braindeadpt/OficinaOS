@@ -46,6 +46,8 @@ internal static class Program
         menu.Items.Add("Fazer backup agora", null, (s, e) => RunBackup());
         menu.Items.Add("Abrir pasta de backups", null, (s, e) => OpenBackups());
         menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("Recuperar acesso…", null, (s, e) => RecoverAccess());
+        menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Sair", null, (s, e) => { _tray.Visible = false; Application.Exit(); });
 
         _tray = new NotifyIcon
@@ -115,6 +117,46 @@ internal static class Program
         var psi = new ProcessStartInfo("powershell.exe",
             "-NoProfile -ExecutionPolicy Bypass -File \"" + ps1 + "\"")
         { UseShellExecute = true, Verb = "runas" }; // ProgramData exige elevação
+        try { Process.Start(psi); }
+        catch { /* UAC recusado */ }
+    }
+
+    private static void RecoverAccess()
+    {
+        // Igual às rotas de gestão: recuperação desativada em modo demo.
+        var envPath = Path.Combine(InstallRoot, @"app\.env");
+        try
+        {
+            if (File.Exists(envPath))
+            {
+                foreach (var line in File.ReadAllLines(envPath))
+                {
+                    var t = line.Trim();
+                    if (t.Equals("DEMO_MODE=true", StringComparison.OrdinalIgnoreCase))
+                    {
+                        MessageBox.Show(
+                            "Recuperação de acesso desativada em modo demo.",
+                            "OficinaOS");
+                        return;
+                    }
+                }
+            }
+        }
+        catch { /* sem .env legível — o script re-verifica */ }
+
+        // A elevação UAC é a prova de acesso físico ao servidor; o script
+        // elevado corre o recover-access e mostra a password uma vez.
+        var ps1 = Path.Combine(InstallRoot, @"tools\recover-access.ps1");
+        if (!File.Exists(ps1))
+        {
+            MessageBox.Show(
+                "recover-access.ps1 não encontrado — reinstale o OficinaOS.",
+                "OficinaOS");
+            return;
+        }
+        var psi = new ProcessStartInfo("powershell.exe",
+            "-NoProfile -ExecutionPolicy Bypass -File \"" + ps1 + "\"")
+        { UseShellExecute = true, Verb = "runas" };
         try { Process.Start(psi); }
         catch { /* UAC recusado */ }
     }

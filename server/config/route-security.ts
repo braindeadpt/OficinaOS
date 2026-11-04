@@ -174,6 +174,20 @@ export const routeSecurity: [string, RouteSecurityOverride][] = [
       },
     },
   ],
+  // Password-recovery probe — anonymous GET returning a constant capability
+  // flag ({email}). No user data, so the budget is looser than sign-in: the
+  // SPA fetches it once per login page, but a reload must not 429.
+  [
+    "/api/auth/recovery-options",
+    {
+      csrf: false,
+      rateLimit: {
+        max: 30,
+        timeWindow: "5 minute",
+        keyGenerator: signInKeyGenerator,
+      },
+    },
+  ],
   ["/api/auth/*", { csrf: false, allowSensitiveKeys: true }],
   // First-run setup — unauthenticated by nature (no user exists yet), so it
   // is keyed on IP with a small budget. allowSensitiveKeys: the body carries

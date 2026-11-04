@@ -13,7 +13,7 @@ em cima do bundle portátil (Bun + PostgreSQL + app já compilados).
 | Estado (BD, uploads, backups, logs) | `C:\ProgramData\OficinaOS` — mutável |
 | Serviço `OficinaOS-DB` | Postgres via `pg_ctl register`, arranque automático |
 | Serviço `OficinaOS` | app via WinSW (`tools\OficinaOS.exe` + `.xml`), depende do DB |
-| `OficinaOSTray` | ícone na bandeja (HKLM Run): Abrir / Estado / Backup / Parar / Reiniciar |
+| `OficinaOSTray` | ícone na bandeja (HKLM Run): Abrir / Estado / Backup / Recuperar acesso / Parar / Reiniciar |
 | Firewall | regra inbound TCP 4000 — sem ela os tablets da loja não ligam |
 | Tarefa `OficinaOS Backup` | `backup.ps1` diário às 03:30 como SYSTEM |
 
@@ -27,6 +27,17 @@ O Postgres exige password (`scram-sha-256`) — gerada na instalação e guardad
 no `.env`; clusters antigos em `trust` migram sozinhos no re-setup. `data\`,
 `backups\` e `app\.env` têm ACL restrita (só Administrators, SYSTEM e NETWORK
 SERVICE) — dados de clientes não são legíveis por outros utilizadores do PC.
+
+## Recuperação de acesso (desde v1.0.22)
+
+Dono/admin trancado fora? Tray → **«Recuperar acesso…»** (pede elevação UAC —
+a prova de acesso físico ao servidor) → escolher a conta → a password
+temporária aparece uma vez com «Copiar» e tem de ser mudada no primeiro
+login. Nada fica escrito em ficheiro nem log. Funciona por
+`tools\recover-access.ps1` → `bun run recover-access` em `app\`. Em
+Docker/Linux: `docker compose exec app bun run recover-access -- --user
+<username>`. Desativado em modo demo. Detalhes em
+`docs/recuperar-acesso.md`.
 
 ## Desinstalar
 

@@ -21,6 +21,7 @@ oficinaos-portable/
 ├── ATUALIZAR.bat       atualiza preservando data\ e app\.env
 ├── BACKUP.bat          backup manual (corre sozinho a cada arranque)
 ├── RESTAURAR.bat       repõe a BD a partir de um backup (interativo)
+├── RECUPERAR-ACESSO.bat repõe a password de uma conta OWNER (pede admin)
 ├── run-app.bat         wrapper com respawn (usado pelo INICIAR)
 ├── BACKUP.ps1 / RESTORE.ps1 / gerar-env.ps1 / harden-pg.ps1   lógica real
 └── STOP                flag criada pelo PARAR (impede respawn)
