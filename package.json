@@ -110,7 +110,7 @@
     "prepare": "husky"
   },
   "type": "module",
-  "version": "1.0.21",
+  "version": "1.0.22",
   "private": true,
   "overrides": {
     "@fastify/busboy": "^3.2.4",
