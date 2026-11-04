@@ -6,7 +6,7 @@ import { assertNotDemoMode } from "./demo.js";
 
 let _transporter: Transporter | null = null;
 
-function isConfigured(): boolean {
+export function isEmailConfigured(): boolean {
   const env = loadEnv();
   return Boolean(
     env.SMTP_HOST && env.SMTP_PORT && env.SMTP_USER && env.SMTP_PASS
@@ -46,7 +46,7 @@ export async function sendEmail({
   html?: string;
 }): Promise<void> {
   assertNotDemoMode();
-  if (!isConfigured()) {
+  if (!isEmailConfigured()) {
     logger.warn(
       "[email] SMTP not configured — skipping email send. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS to enable."
     );
@@ -59,10 +59,58 @@ export async function sendEmail({
   await getTransporter().sendMail({ from, to, subject, text, html });
 }
 
-export async function sendPasswordResetEmail(
-  to: string,
-  resetUrl: string
-): Promise<void> {
+const RESET_EMAIL_COPY: Record<
+  string,
+  {
+    subject: string;
+    title: string;
+    intro: string;
+    button: string;
+    expiry: string;
+    ignore: string;
+  }
+> = {
+  pt: {
+    subject: "Repor a password do OficinaOS",
+    title: "Repor a password",
+    intro: "Clique no botão abaixo para definir uma nova password:",
+    button: "Repor password",
+    expiry: "Este link é válido durante 1 hora.",
+    ignore: "Se não pediu isto, ignore este email.",
+  },
+  en: {
+    subject: "Reset your OficinaOS password",
+    title: "Reset your password",
+    intro: "Click the button below to set a new password:",
+    button: "Reset Password",
+    expiry: "This link is valid for 1 hour.",
+    ignore: "If you didn't request this, you can ignore this email.",
+  },
+  es: {
+    subject: "Restablecer la contraseña de OficinaOS",
+    title: "Restablecer la contraseña",
+    intro: "Haga clic en el botón para definir una nueva contraseña:",
+    button: "Restablecer contraseña",
+    expiry: "Este enlace es válido durante 1 hora.",
+    ignore: "Si no lo ha solicitado, ignore este correo.",
+  },
+  fr: {
+    subject: "Réinitialiser votre mot de passe OficinaOS",
+    title: "Réinitialiser le mot de passe",
+    intro:
+      "Cliquez sur le bouton ci-dessous pour définir un nouveau mot de passe :",
+    button: "Réinitialiser",
+    expiry: "Ce lien est valable pendant 1 heure.",
+    ignore:
+      "Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.",
+  },
+};
+
+export function buildPasswordResetEmail(
+  resetUrl: string,
+  locale = "pt"
+): { subject: string; text: string; html: string } {
+  const copy = RESET_EMAIL_COPY[locale] ?? RESET_EMAIL_COPY.pt;
   const safeUrl = resetUrl
     .replace(/&/g, "&amp;")
     .replace(/"/g, "&quot;")
@@ -70,18 +118,26 @@ export async function sendPasswordResetEmail(
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 
-  await sendEmail({
-    to,
-    subject: "Reset your OficinaOS password",
-    text: `Click the link below to reset your password:\n\n${resetUrl}\n\nIf you didn't request this, you can ignore this email.`,
+  return {
+    subject: copy.subject,
+    text: `${copy.intro}\n\n${resetUrl}\n\n${copy.expiry}\n${copy.ignore}`,
     html: `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
         <p style="margin:0 0 16px;font-size:20px;font-weight:800;letter-spacing:-0.3px;color:#111827">Oficina<span style="color:#1d4ed8">OS</span></p>
-        <h2 style="color:#1a1a1a">Reset your password</h2>
-        <p>Click the button below to set a new password:</p>
-        <a href="${safeUrl}" style="display:inline-block;padding:12px 24px;background:#1d4ed8;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">Reset Password</a>
-        <p style="margin-top:16px;color:#666;font-size:14px">If you didn't request this, you can ignore this email.</p>
+        <h2 style="color:#1a1a1a">${copy.title}</h2>
+        <p>${copy.intro}</p>
+        <a href="${safeUrl}" style="display:inline-block;padding:12px 24px;background:#1d4ed8;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">${copy.button}</a>
+        <p style="margin-top:16px;color:#666;font-size:14px">${copy.expiry} ${copy.ignore}</p>
       </div>
     `,
-  });
+  };
+}
+
+export async function sendPasswordResetEmail(
+  to: string,
+  resetUrl: string,
+  locale = "pt"
+): Promise<void> {
+  const { subject, text, html } = buildPasswordResetEmail(resetUrl, locale);
+  await sendEmail({ to, subject, text, html });
 }

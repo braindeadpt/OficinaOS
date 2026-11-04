@@ -174,6 +174,19 @@ export const routeSecurity: [string, RouteSecurityOverride][] = [
       },
     },
   ],
+  // Password-recovery probe — anonymous GET, same budget/keyspace as
+  // sign-in (IP-keyed: a GET carries no identifier).
+  [
+    "/api/auth/recovery-options",
+    {
+      csrf: false,
+      rateLimit: {
+        max: 5,
+        timeWindow: "5 minute",
+        keyGenerator: signInKeyGenerator,
+      },
+    },
+  ],
   ["/api/auth/*", { csrf: false, allowSensitiveKeys: true }],
   // First-run setup — unauthenticated by nature (no user exists yet), so it
   // is keyed on IP with a small budget. allowSensitiveKeys: the body carries

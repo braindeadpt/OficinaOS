@@ -320,6 +320,10 @@ export const ERRORS = {
     status: 403,
     message: "errors.password_change_required",
   },
+  EMAIL_NOT_CONFIGURED: {
+    status: 503,
+    message: "errors.email_not_configured",
+  },
   DEMO_DISABLED: {
     status: 403,
     message: "errors.demo_disabled",

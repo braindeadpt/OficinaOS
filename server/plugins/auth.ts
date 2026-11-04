@@ -6,6 +6,7 @@ import fp from "fastify-plugin";
 import type { Auth } from "../lib/auth.js";
 import { createAuth, getSessionFromRequest } from "../lib/auth.js";
 import { DEMO_USERNAME, isDemoMode } from "../lib/demo.js";
+import { isEmailConfigured } from "../lib/email.js";
 import {
   incrementFailedAttempt,
   isAccountLocked,
@@ -98,6 +99,12 @@ function isSignInPost(method: string, pathname: string): boolean {
   return method === "POST" && pathname.includes("sign-in");
 }
 
+// Better Auth serves the reset request under both names across versions.
+const RESET_REQUEST_PATHS = new Set([
+  "/api/auth/request-password-reset",
+  "/api/auth/forget-password",
+]);
+
 async function forwardResponse(
   response: Response,
   reply: {
@@ -159,9 +166,34 @@ const authPlugin: FastifyPluginAsync = async (app) => {
   app.decorate("auth", auth);
   app.decorateRequest("user", null);
 
+  // Anonymous capability probe for the login screen: the only truthful
+  // answer is whether email delivery can work at all. It never reveals
+  // user data — same flag for every caller.
+  app.get(
+    "/api/auth/recovery-options",
+    {
+      schema: {
+        tags: ["auth"],
+        summary: "Password recovery options",
+      },
+    },
+    async () => ({ email: isEmailConfigured() })
+  );
+
   app.all("/api/auth/*", async (request, reply) => {
     try {
       const url = new URL(request.url, `http://${request.headers.host}`);
+      // Without SMTP the request can only ever fail silently — Better Auth
+      // still creates the token but sendEmail logs-and-drops. Answer
+      // honestly with 503 (installation state, not user state) so the UI
+      // can show the no-email recovery panel.
+      if (
+        request.method === "POST" &&
+        RESET_REQUEST_PATHS.has(url.pathname) &&
+        !isEmailConfigured()
+      ) {
+        throw new AppError("EMAIL_NOT_CONFIGURED");
+      }
       const headers = fromNodeHeaders(request.headers);
       const body = extractBody(request.method, request.body);
 

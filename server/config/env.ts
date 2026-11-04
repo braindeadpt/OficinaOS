@@ -228,9 +228,17 @@ export function resolveUrls(env: Env = loadEnv()) {
   const apiUrl = env.API_URL ?? appUrl;
   const trustedOrigins = Array.from(
     new Set(
-      [appUrl, apiUrl, ...env.EXTRA_TRUSTED_ORIGINS].filter(
-        (o): o is string => typeof o === "string" && o.length > 0
-      )
+      [
+        appUrl,
+        apiUrl,
+        ...env.EXTRA_TRUSTED_ORIGINS,
+        // The mDNS name is a first-class origin: LAN devices reach the app at
+        // http://<hostname>.local:<port> and must be able to finish auth
+        // flows (password reset links, CORS) from it.
+        ...(env.MDNS_HOSTNAME
+          ? [`http://${env.MDNS_HOSTNAME}.local:${env.PORT}`]
+          : []),
+      ].filter((o): o is string => typeof o === "string" && o.length > 0)
     )
   );
   return { appUrl, apiUrl, trustedOrigins };

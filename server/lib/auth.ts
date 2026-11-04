@@ -8,6 +8,7 @@ import { admin, username } from "better-auth/plugins";
 import { loadEnv, resolveUrls } from "../config/env.js";
 import { logger } from "../utils/logger.js";
 import { sendPasswordResetEmail } from "./email.js";
+import { buildPasswordResetLink, localeFromRequest } from "./reset-link.js";
 
 /**
  * Creates a Better Auth instance configured for OficinaOS.
@@ -15,7 +16,7 @@ import { sendPasswordResetEmail } from "./email.js";
  */
 export function createAuth(prisma: PrismaClient) {
   const env = loadEnv();
-  const { apiUrl, trustedOrigins } = resolveUrls(env);
+  const { appUrl, apiUrl, trustedOrigins } = resolveUrls(env);
   // HTTPS on the public origin => Secure cookies; plain-HTTP LAN stays Lax.
   const isHttps = (env.APP_URL ?? apiUrl).startsWith("https://");
 
@@ -40,9 +41,17 @@ export function createAuth(prisma: PrismaClient) {
     emailAndPassword: {
       enabled: true,
       disableSignUp: true,
-      sendResetPassword: async ({ user, url }) => {
+      // A password reset ends every other session — same semantics as the
+      // admin-initiated reset in user.service.
+      revokeSessionsOnPasswordReset: true,
+      sendResetPassword: async ({ user, url }, request) => {
         try {
-          await sendPasswordResetEmail(user.email, url);
+          const link = buildPasswordResetLink(url, appUrl, trustedOrigins);
+          await sendPasswordResetEmail(
+            user.email,
+            link,
+            localeFromRequest(request)
+          );
         } catch (error) {
           logger.error(
             { err: error },

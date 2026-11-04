@@ -93,6 +93,7 @@
     "db:seed:demo": "bun run prisma/seed-demo.ts",
     "db:seed:prod": "bun run prisma/seed.ts",
     "demo:reset": "bun run scripts/demo-reset.ts",
+    "recover-access": "bun run server/scripts/recover-access.ts",
     "scan-i18n": "bun run scripts/scan-i18n.ts",
     "sync-locales": "bun run scripts/sync-locales.ts",
     "setup-worktree": "bun run scripts/setup-worktree.ts",

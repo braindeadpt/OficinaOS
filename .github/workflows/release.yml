@@ -256,7 +256,7 @@ jobs:
           robocopy installer\stage-tmp\pgsql "$s\pgsql" /E /NFL /NDL /NJH /NJS /NP | Out-Null
           if ($LASTEXITCODE -ge 8) { throw "robocopy pgsql falhou: $LASTEXITCODE" }
           Copy-Item installer\setup-service.ps1, installer\backup.ps1, `
-            installer\OficinaOS.xml "$s\tools\"
+            installer\recover-access.ps1, installer\OficinaOS.xml "$s\tools\"
           # robocopy sai 1 em sucesso ("files copied") — resetar senão o step falha
           $global:LASTEXITCODE = 0
 

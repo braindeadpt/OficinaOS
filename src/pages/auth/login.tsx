@@ -199,12 +199,88 @@ function SignInForm({
   );
 }
 
-function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
+function NoEmailRecoveryPanel({ onBack }: { onBack: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-4 py-4">
+      <div className="flex items-center justify-center">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-tertiary-container">
+          <span
+            aria-hidden="true"
+            className="material-symbols-outlined text-2xl text-on-tertiary-container"
+          >
+            mail_off
+          </span>
+        </div>
+      </div>
+      <p className="text-center font-medium text-on-surface">
+        {t("auth_no_email_title")}
+      </p>
+      <div className="space-y-3 rounded-xl bg-surface-container-high px-4 py-4 text-on-surface-variant text-sm">
+        <p>
+          <span className="font-semibold text-on-surface">
+            {t("auth_no_email_employee_label")}
+          </span>{" "}
+          {t("auth_no_email_employee")}
+        </p>
+        <p>
+          <span className="font-semibold text-on-surface">
+            {t("auth_no_email_owner_label")}
+          </span>{" "}
+          {t("auth_no_email_owner")}
+        </p>
+      </div>
+      <button
+        className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-surface-container-highest py-3 font-bold font-headline text-on-surface text-sm uppercase tracking-wider transition-colors hover:bg-surface-container-high"
+        onClick={onBack}
+        type="button"
+      >
+        <span aria-hidden="true" className="material-symbols-outlined text-lg">
+          arrow_back
+        </span>
+        {t("auth_back_to_sign_in")}
+      </button>
+    </div>
+  );
+}
+
+function ForgotPasswordForm({
+  onBack,
+  onEmailAvailable,
+}: {
+  onBack: () => void;
+  onEmailAvailable: (available: boolean) => void;
+}) {
   const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [emailAvailable, setEmailAvailable] = useState<boolean | null>(null);
+
+  // Ask once whether this shop can actually send mail — without SMTP the
+  // email form would be a lie (token created, nothing ever delivered).
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get<{ email: boolean }>("/auth/recovery-options")
+      .then((res) => {
+        if (!cancelled) {
+          setEmailAvailable(res.data.email);
+          onEmailAvailable(res.data.email);
+        }
+      })
+      .catch(() => {
+        // Older server without the probe — keep the previous email flow;
+        // a 503 on submit still swaps to the no-email panel below.
+        if (!cancelled) {
+          setEmailAvailable(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [onEmailAvailable]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -214,11 +290,22 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
       const redirectTo = `${window.location.origin}/reset-password`;
       await api.post("/auth/request-password-reset", { email, redirectTo });
       setSent(true);
-    } catch {
-      setSubmitError("auth_reset_failed");
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } }).response
+        ?.status;
+      if (status === 503) {
+        setEmailAvailable(false);
+        onEmailAvailable(false);
+      } else {
+        setSubmitError("auth_reset_failed");
+      }
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (emailAvailable === false) {
+    return <NoEmailRecoveryPanel onBack={onBack} />;
   }
 
   if (sent) {
@@ -338,6 +425,7 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [recoveryEmail, setRecoveryEmail] = useState<boolean | null>(null);
   const navigate = useNavigate();
 
   const location = useLocation();
@@ -441,11 +529,16 @@ export default function LoginPage() {
               {t("auth_forgot_password")}
             </h2>
             <p className="text-on-surface-variant text-sm">
-              {t("auth_forgot_password_desc")}
+              {recoveryEmail === false
+                ? t("auth_forgot_password_no_email_desc")
+                : t("auth_forgot_password_desc")}
             </p>
           </div>
 
-          <ForgotPasswordForm onBack={handleBackToSignIn} />
+          <ForgotPasswordForm
+            onBack={handleBackToSignIn}
+            onEmailAvailable={setRecoveryEmail}
+          />
         </>
       );
     }
