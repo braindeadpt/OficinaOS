@@ -1,4 +1,5 @@
 import { createSocket, type Socket } from "node:dgram";
+import { existsSync } from "node:fs";
 import os from "node:os";
 import type { FastifyBaseLogger } from "fastify";
 
@@ -43,8 +44,30 @@ function isLanAddress(info: os.NetworkInterfaceInfo): boolean {
   );
 }
 
+let cachedContainer: boolean | null = null;
+
+/**
+ * True inside a container (Docker/K8s). A container's own interface IPs —
+ * eth0's 172.x etc — are unreachable from the shop LAN, so they must never
+ * be offered as "LAN" addresses: the QR picker prefers any private IPv4 and
+ * would happily emit a dead 172.18.x URL. In a container the reachable URL
+ * has to come from APP_URL / a reverse proxy, not from interfaces.
+ */
+export function inContainerRuntime(): boolean {
+  if (cachedContainer === null) {
+    cachedContainer =
+      existsSync("/.dockerenv") ||
+      existsSync("/run/.containerenv") ||
+      Boolean(process.env.KUBERNETES_SERVICE_HOST);
+  }
+  return cachedContainer;
+}
+
 /** Real-network IPv4s — virtual adapters (WSL/Docker/VPN) excluded. */
 export function lanIpv4Addresses(): string[] {
+  if (inContainerRuntime()) {
+    return [];
+  }
   const real: string[] = [];
   const virtual: string[] = [];
   for (const [name, infos] of Object.entries(os.networkInterfaces())) {
