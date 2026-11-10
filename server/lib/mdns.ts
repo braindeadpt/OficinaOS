@@ -1,5 +1,5 @@
 import { createSocket, type Socket } from "node:dgram";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
 import type { FastifyBaseLogger } from "fastify";
 
@@ -35,6 +35,7 @@ export interface MdnsHandle {
 // denylist the Windows env generator uses for APP_URL.
 const VIRTUAL_IFACE_RE =
   /loopback|vethernet|wsl|docker|hyper-v|virtualbox|vmware|vpn|tailscale|hamachi/i;
+const HOSTS_SEP_RE = /\s+/;
 
 function isLanAddress(info: os.NetworkInterfaceInfo): boolean {
   return (
@@ -44,28 +45,64 @@ function isLanAddress(info: os.NetworkInterfaceInfo): boolean {
   );
 }
 
-let cachedContainer: boolean | null = null;
+/** True inside a container (Docker/Podman/K8s), whatever its net mode. */
+export function inContainerRuntime(): boolean {
+  return (
+    existsSync("/.dockerenv") ||
+    existsSync("/run/.containerenv") ||
+    Boolean(process.env.KUBERNETES_SERVICE_HOST)
+  );
+}
 
 /**
- * True inside a container (Docker/K8s). A container's own interface IPs —
- * eth0's 172.x etc — are unreachable from the shop LAN, so they must never
- * be offered as "LAN" addresses: the QR picker prefers any private IPv4 and
- * would happily emit a dead 172.18.x URL. In a container the reachable URL
- * has to come from APP_URL / a reverse proxy, not from interfaces.
+ * True when the container runs in an isolated network namespace (default
+ * bridge, pod net). There its interface IPs are unreachable from the shop
+ * LAN, so they must never be offered as "LAN" addresses: the QR picker
+ * prefers any private IPv4 and would happily emit a dead 172.18.x URL.
+ *
+ * Under host networking (`--network host`) the interfaces ARE the host's
+ * real LAN adapters and stay reachable — keep them (this is also the only
+ * container mode where mDNS multicast actually works).
+ *
+ * The tell: inside an isolated netns, Docker/Podman/K8s map the container
+ * hostname to its own container IP in /etc/hosts; under host networking
+ * the hostname maps to loopback (127.0.1.1) instead. So hostname → an IP
+ * that exists on an interface means isolated; anything else means the
+ * adapters belong to the real network.
+ * Edge: macvlan hosts look isolated by this rule — set APP_URL there.
  */
-export function inContainerRuntime(): boolean {
-  if (cachedContainer === null) {
-    cachedContainer =
-      existsSync("/.dockerenv") ||
-      existsSync("/run/.containerenv") ||
-      Boolean(process.env.KUBERNETES_SERVICE_HOST);
+export function hasIsolatedNetNs(): boolean {
+  if (!inContainerRuntime()) {
+    return false;
   }
-  return cachedContainer;
+  const hostname = os.hostname();
+  try {
+    const ifaceIps = new Set<string>();
+    for (const infos of Object.values(os.networkInterfaces())) {
+      for (const info of infos ?? []) {
+        // Non-internal only: a hostname mapped to loopback is the host-net
+        // signature, not an isolated namespace.
+        if (info.family === "IPv4" && !info.internal) {
+          ifaceIps.add(info.address);
+        }
+      }
+    }
+    for (const raw of readFileSync("/etc/hosts", "utf8").split("\n")) {
+      const line = raw.split("#", 1)[0].trim();
+      const [ip, ...names] = line.split(HOSTS_SEP_RE);
+      if (names.includes(hostname)) {
+        return ifaceIps.has(ip);
+      }
+    }
+  } catch {
+    // Unreadable /etc/hosts — can't prove isolation, keep the interfaces.
+  }
+  return false;
 }
 
 /** Real-network IPv4s — virtual adapters (WSL/Docker/VPN) excluded. */
 export function lanIpv4Addresses(): string[] {
-  if (inContainerRuntime()) {
+  if (hasIsolatedNetNs()) {
     return [];
   }
   const real: string[] = [];

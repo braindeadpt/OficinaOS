@@ -2,7 +2,7 @@ import { createSocket } from "node:dgram";
 import { afterAll, describe, expect, it } from "vitest";
 import {
   buildResponse,
-  inContainerRuntime,
+  hasIsolatedNetNs,
   lanIpv4Addresses,
   primaryLanIpv4,
   readName,
@@ -90,10 +90,10 @@ describe("mDNS responder (multicast roundtrip)", () => {
 describe("lanIpv4Addresses", () => {
   it("puts real adapters before virtual ones", () => {
     const ips = lanIpv4Addresses();
-    if (inContainerRuntime()) {
-      // Container interface IPs are unreachable from the shop LAN — never
-      // offered: the QR picker would emit a dead 172.x URL. APP_URL is the
-      // only honest base in containers.
+    if (hasIsolatedNetNs()) {
+      // Isolated-netns container interface IPs are unreachable from the
+      // shop LAN — never offered: the QR picker would emit a dead 172.x
+      // URL. APP_URL is the only honest base there.
       expect(ips).toEqual([]);
       expect(primaryLanIpv4()).toBeNull();
       return;
