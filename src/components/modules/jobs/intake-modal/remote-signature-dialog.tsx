@@ -46,6 +46,8 @@ export default function RemoteSignatureDialog({
 }: RemoteSignatureDialogProps) {
   const { t } = useTranslation();
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [expired, setExpired] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const sessionRef = useRef<string | null>(null);
@@ -59,6 +61,8 @@ export default function RemoteSignatureDialog({
 
   const startSession = useCallback(async () => {
     setQrDataUrl(null);
+    setRemoteUrl(null);
+    setCopied(false);
     setExpired(false);
     setLoadError(false);
     const doc = documentRef.current;
@@ -67,17 +71,23 @@ export default function RemoteSignatureDialog({
         api.post("/sign-sessions", { document: doc }),
         api.get("/public/access-info"),
       ]);
-      const { token } = sessionRes.data as { token: string };
+      const { token, cloudSignUrl } = sessionRes.data as {
+        cloudSignUrl?: string | null;
+        token: string;
+      };
       sessionRef.current = token;
       frozenDocRef.current = canonicalize(doc);
 
+      // Pro signature-remote gives a public cloud link that works anywhere;
+      // without it the QR needs a LAN-reachable base for the phone.
       const urls = (infoRes.data as AccessInfo).urls ?? [];
       const base = pickSignBaseUrl(urls);
-      if (!base) {
+      const signUrl = cloudSignUrl ?? (base ? `${base}/sign/${token}` : null);
+      if (!signUrl) {
         setLoadError(true);
         return;
       }
-      const signUrl = `${base}/sign/${token}`;
+      setRemoteUrl(cloudSignUrl ?? null);
       const qr = await QRCode.toDataURL(signUrl, { margin: 1, width: 192 });
       setQrDataUrl(qr);
     } catch {
@@ -177,13 +187,44 @@ export default function RemoteSignatureDialog({
             </button>
           </div>
         ) : (
-          <p className="mt-4 flex items-center gap-2 text-on-surface-variant text-sm">
-            <Icon
-              className="animate-pulse text-base"
-              name="progress_activity"
-            />
-            {t("intake.sign_remote_waiting")}
-          </p>
+          <>
+            <p className="mt-4 flex items-center gap-2 text-on-surface-variant text-sm">
+              <Icon
+                className="animate-pulse text-base"
+                name="progress_activity"
+              />
+              {t("intake.sign_remote_waiting")}
+            </p>
+            {remoteUrl && (
+              <div className="mt-3 w-full">
+                <p className="mb-1 text-center text-on-surface-variant text-xs">
+                  {t("intake.sign_remote_send_link")}
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    className="min-w-0 flex-1 rounded-lg bg-surface-container-lowest px-3 py-2 font-mono text-on-surface text-xs ring-1 ring-outline-variant"
+                    onFocus={(e) => e.currentTarget.select()}
+                    readOnly
+                    value={remoteUrl}
+                  />
+                  <button
+                    className="shrink-0 rounded-lg bg-surface-container-high px-3 py-2 font-label text-on-surface text-xs"
+                    onClick={async () => {
+                      await navigator.clipboard
+                        .writeText(remoteUrl)
+                        .catch(() => undefined);
+                      setCopied(true);
+                    }}
+                    type="button"
+                  >
+                    {copied
+                      ? t("intake.sign_remote_copied")
+                      : t("intake.sign_remote_copy")}
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </>
     );

@@ -45,7 +45,8 @@ export function documentMatches(
 
 export async function createSignatureSession(
   prisma: PrismaClient,
-  document?: IntakeDocument
+  document?: IntakeDocument,
+  opts?: { ttlMs?: number }
 ) {
   // Lazy cleanup — dead sessions hold a signature image and are worthless.
   await prisma.signatureSession.deleteMany({
@@ -55,7 +56,9 @@ export async function createSignatureSession(
     data: {
       token: randomBytes(32).toString("hex"),
       snapshot: (document ?? undefined) as Prisma.InputJsonValue | undefined,
-      expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+      // Links relayed through the cloud live longer — the local session must
+      // still be open when the customer's signature comes back via the poller.
+      expiresAt: new Date(Date.now() + (opts?.ttlMs ?? SESSION_TTL_MS)),
     },
   });
   return { token: session.token, expiresAt: session.expiresAt };

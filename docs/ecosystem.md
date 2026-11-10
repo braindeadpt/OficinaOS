@@ -38,6 +38,7 @@ Em cada ciclo, `server/services/cloud.service.ts` faz:
 
 - `POST /shops/sync` → empurra config da loja (ex.: `whatsappPhoneNumberId`), recebe **entitlements** (módulos ativos)
 - `GET /portal/replies` + `POST /portal/replies/ack` → respostas de orçamento vindas do portal público
+- `GET /signature/replies` + `POST /signature/replies/ack` → assinaturas capturadas na página remota (o ack apaga o PNG na cloud)
 - `GET /whatsapp/inbound` + `POST /whatsapp/inbound/ack` → mensagens WhatsApp recebidas
 - Push de snapshots de portal que mudaram desde o último sync
 - `POST /shops/metrics` → snapshot diário agregado (receita, reparações, vendas) se `multi-shop` ativo — só números, nunca dados de clientes
@@ -52,6 +53,26 @@ balcão — mesmo audit trail).
 **Agent-readable**: a página declara `rel="alternate"` para `GET /api/portal/:token`
 (JSON limpo, noindex) e o site serve `/llms.txt` — LLMs/agentes conseguem ler o
 estado da reparação a partir do link. MCP server é roadmap em `docs/pro-modules.md`.
+
+### Módulo `signature-remote`
+
+Assinatura remota da ficha de entrada — o cliente assina fora da LAN, sem tunnel.
+
+```
+App cria sessão local (mesmo token 64-hex, TTL alargado 24h) →
+POST /signature/sessions publica o documento REDIGIDO
+(publicDocumentView — sem códigos de desbloqueio) → página pública
+cloud.oficinaos.app/sign/:token → cliente assina (PNG ≤500KB, submissão
+atómica single-use, rate-limit por IP) → poller da app →
+pullSignatureReplies → submitSignatureSession (o mesmo serviço do QR LAN —
+mesma prova, hash e audit trail) → POST /signature/replies/ack apaga o PNG
+na cloud.
+```
+
+A cloud é só transporte: guarda a assinatura até ao ack, nunca é a dona da
+prova — essa fica na app local (`signatureDataUrl` + `documentHash`).
+Invalidar a sessão local faz `DELETE /signature/sessions/:token`; o QR LAN
+de 15 min continua a existir para quem não tem o módulo.
 
 ### Módulo `whatsapp-bot`
 
@@ -141,6 +162,7 @@ linguagem simples gerado na Cloud.
 | ID do módulo | Nome | Onde no código | Estado |
 |---|---|---|---|
 | `portal` | Portal do cliente | app: `server/services/portal.service.ts`; cloud: `src/routes/portal.ts`, `public/portal.html` | Live, E2E testado |
+| `signature-remote` | Assinatura remota | app: `server/services/signature-relay.service.ts`; cloud: `src/routes/signature.ts`, `public/sign.html`, `SignatureRelaySession` | Implementado |
 | `whatsapp-bot` | Bot de WhatsApp | app: `whatsapp-bot.service.ts` + `whatsapp-channel.ts`; cloud: webhook + `WhatsAppInbound` + relay `POST /whatsapp/send` | Live, E2E provado (SIM → APPROVED real) |
 | `diag-intake` | Receção de diagnósticos | app: `intake-request.service.ts` (fila em Pedidos); cloud: `src/routes/intake.ts` | Implementado |
 | `ai-reports` | Relatórios IA | cloud: `src/routes/reports.ts`, `src/ai-report.ts` | Implementado |
