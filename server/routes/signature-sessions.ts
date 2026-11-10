@@ -5,6 +5,7 @@ import { requirePermission } from "../middlewares/rbac.js";
 import {
   deleteSignatureRelay,
   publishSignatureRelay,
+  pullSignatureReplies,
   REMOTE_SESSION_TTL_MS,
   remoteSignatureCreds,
 } from "../services/signature-relay.service.js";
@@ -32,14 +33,14 @@ export const signatureSessionRoutes: FastifyPluginAsync = async (app) => {
       if (!parsed.success) {
         throw new AppError("VALIDATION_ERROR");
       }
-      // Pro signature-remote: the session also lives on the cloud so the
-      // customer signs from anywhere — its longer TTL lets a late signature
-      // still land on this local row via the poller.
+      // The link is only meant to live while the dialog is open — v1 caps
+      // every session at 30 minutes (the dialog invalidates it on close, so
+      // this is just the backstop).
       const relay = await remoteSignatureCreds(app.prisma);
       const session = await createSignatureSession(
         app.prisma,
         parsed.data.document,
-        relay ? { ttlMs: REMOTE_SESSION_TTL_MS } : undefined
+        { ttlMs: REMOTE_SESSION_TTL_MS }
       );
       let cloudSignUrl: string | null = null;
       if (relay && parsed.data.document) {
@@ -52,6 +53,12 @@ export const signatureSessionRoutes: FastifyPluginAsync = async (app) => {
           },
           req.log
         );
+        if (cloudSignUrl) {
+          await app.prisma.signatureSession.update({
+            where: { token: session.token },
+            data: { relayed: true },
+          });
+        }
       }
       return { ...session, cloudSignUrl };
     },
@@ -68,9 +75,34 @@ export const signatureSessionRoutes: FastifyPluginAsync = async (app) => {
         required: ["token"],
       },
     },
-    handler: (req) => {
+    handler: async (req) => {
       const { token } = req.params as { token: string };
-      return getSignatureSession(app.prisma, token);
+      let session = await getSignatureSession(app.prisma, token);
+      // A relayed session still waiting for its signature pulls fresh
+      // replies on this poll — the customer at the counter shouldn't wait
+      // up to ~2 minutes for the entitlements sync to notice.
+      if (
+        session.relayed &&
+        !session.signed &&
+        session.expiresAt.getTime() > Date.now()
+      ) {
+        const relay = await remoteSignatureCreds(app.prisma);
+        if (relay) {
+          try {
+            await pullSignatureReplies(
+              app.prisma,
+              relay.apiUrl,
+              relay.token,
+              req.log
+            );
+            session = await getSignatureSession(app.prisma, token);
+          } catch (err) {
+            // Cloud trouble never breaks the local poll.
+            req.log.warn({ err }, "signature relay pull failed");
+          }
+        }
+      }
+      return session;
     },
   });
 

@@ -86,6 +86,7 @@ export async function getSignatureSession(prisma: PrismaClient, token: string) {
     signed: session.signatureDataUrl !== null,
     signatureDataUrl: session.signatureDataUrl,
     expiresAt: session.expiresAt,
+    relayed: session.relayed,
   };
 }
 

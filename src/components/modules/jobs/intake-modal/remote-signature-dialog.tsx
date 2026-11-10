@@ -4,10 +4,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Dialog } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
+import { Input } from "@/components/ui/input";
 import api from "@/lib/api";
 import { pickSignBaseUrl } from "./remote-signature-url";
 
-const POLL_MS = 2000;
+// ~3s while a session is pending — each poll also triggers the cloud reply
+// pull server-side, so a customer at the counter never waits for the ~2min
+// entitlements sync.
+const POLL_MS = 3000;
 
 interface RemoteSignatureDialogProps {
   /** Frozen ficha + terms the customer signs — edits invalidate the link. */
@@ -51,6 +55,10 @@ export default function RemoteSignatureDialog({
   const [expired, setExpired] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const sessionRef = useRef<string | null>(null);
+  // The token whose signature already landed — its row must survive until
+  // consumeSignatureSession moves it onto the job, so close/retry never
+  // invalidates it.
+  const signedTokenRef = useRef<string | null>(null);
   // The document the live session was created over — any drift invalidates.
   // Kept in a ref so form edits don't restart the session — they kill it.
   const frozenDocRef = useRef<string | null>(null);
@@ -59,7 +67,21 @@ export default function RemoteSignatureDialog({
   const onSignatureRef = useRef(onSignature);
   onSignatureRef.current = onSignature;
 
+  // The remote link is only meant to live while this dialog is open: on
+  // close (or when a fresh QR supersedes it) a pending session is
+  // invalidated — locally and its cloud copy — so a link sent and forgotten
+  // can't be signed into nothing.
+  const invalidatePending = useCallback(() => {
+    const token = sessionRef.current;
+    sessionRef.current = null;
+    frozenDocRef.current = null;
+    if (token && token !== signedTokenRef.current) {
+      api.post(`/sign-sessions/${token}/invalidate`).catch(() => undefined);
+    }
+  }, []);
+
   const startSession = useCallback(async () => {
+    invalidatePending();
     setQrDataUrl(null);
     setRemoteUrl(null);
     setCopied(false);
@@ -93,21 +115,17 @@ export default function RemoteSignatureDialog({
     } catch {
       setLoadError(true);
     }
-  }, []);
+  }, [invalidatePending]);
 
-  // (Re)create a session whenever the dialog opens; drop the token on close.
+  // (Re)create a session whenever the dialog opens; closing it kills any
+  // pending link (locally and its cloud copy).
   useEffect(() => {
     if (!open) {
-      sessionRef.current = null;
-      frozenDocRef.current = null;
       return;
     }
     startSession();
-    return () => {
-      sessionRef.current = null;
-      frozenDocRef.current = null;
-    };
-  }, [open, startSession]);
+    return invalidatePending;
+  }, [open, startSession, invalidatePending]);
 
   // A ficha edit while the link is live invalidates it — the customer would
   // otherwise sign a document that no longer matches the submitted job.
@@ -121,6 +139,7 @@ export default function RemoteSignatureDialog({
     const token = sessionRef.current;
     sessionRef.current = null;
     frozenDocRef.current = null;
+    // Even a delivered signature dies here — it signed the OLD document.
     api.post(`/sign-sessions/${token}/invalidate`).catch(() => undefined);
     setQrDataUrl(null);
     setExpired(true);
@@ -140,6 +159,7 @@ export default function RemoteSignatureDialog({
         const data = res.data as SessionStatus;
         if (data.signed && data.signatureDataUrl) {
           clearInterval(poll);
+          signedTokenRef.current = token;
           onSignatureRef.current(data.signatureDataUrl, token);
           return;
         }
@@ -201,12 +221,14 @@ export default function RemoteSignatureDialog({
                   {t("intake.sign_remote_send_link")}
                 </p>
                 <div className="flex items-center gap-2">
-                  <input
-                    className="min-w-0 flex-1 rounded-lg bg-surface-container-lowest px-3 py-2 font-mono text-on-surface text-xs ring-1 ring-outline-variant"
-                    onFocus={(e) => e.currentTarget.select()}
-                    readOnly
-                    value={remoteUrl}
-                  />
+                  <div className="min-w-0 flex-1">
+                    <Input
+                      className="font-mono text-xs"
+                      onFocus={(e) => e.currentTarget.select()}
+                      readOnly
+                      value={remoteUrl}
+                    />
+                  </div>
                   <button
                     className="shrink-0 rounded-lg bg-surface-container-high px-3 py-2 font-label text-on-surface text-xs"
                     onClick={async () => {

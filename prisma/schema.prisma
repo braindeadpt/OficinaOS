@@ -1384,6 +1384,10 @@ model SignatureSession {
   signerUserAgent  String?   @db.Text
   createdAt        DateTime  @default(now()) @db.Timestamptz
   expiresAt        DateTime  @db.Timestamptz
+  // True when the session was also published to the cloud relay — a pending
+  // relayed session pulls fresh replies on each staff poll instead of
+  // waiting for the ~2-minute entitlements sync.
+  relayed          Boolean   @default(false)
 
   @@map("signature_sessions")
 }

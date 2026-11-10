@@ -1,5 +1,6 @@
+import { createHash } from "node:crypto";
 import type { PrismaClient } from "@generated/client";
-import { isAppError } from "@shared/errors/app-error.js";
+import { AppError, isAppError } from "@shared/errors/app-error.js";
 import {
   type IntakeDocument,
   publicDocumentView,
@@ -10,12 +11,21 @@ import { getOrCreateShopSettings } from "../repositories/settings.repository.js"
 import { cloudFetch, HINT_TTL_MS } from "./cloud.service.js";
 import { submitSignatureSession } from "./signature-session.service.js";
 
-// Remote sign links travel by WhatsApp/SMS — the customer may open one hours
-// later, so relayed sessions outlive the 15-minute LAN QR. The cloud clamps
-// anything above its own 7-day cap.
-export const REMOTE_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+// v1: the link is valid only while the intake dialog stays open — it exists
+// for the customer standing at the counter. 30 minutes covers the interaction
+// while keeping a forgotten link from staying signable into nothing. (Async
+// "sign later" links are a separate, future design.)
+export const REMOTE_SESSION_TTL_MS = 30 * 60 * 1000;
 const MODULE = "signature-remote";
 const TRAILING_SLASHES = /\/+$/;
+
+/**
+ * The cloud only ever sees the sha256 of the session token — the raw
+ * credential stays on the shop side and inside the customer's own link.
+ */
+function tokenHash(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
 
 interface RelayCreds {
   apiUrl: string;
@@ -66,7 +76,7 @@ export async function publishSignatureRelay(
     body: {
       document: JSON.parse(JSON.stringify(publicDocumentView(input.document))),
       expiresAt: input.expiresAt.toISOString(),
-      token: input.token,
+      tokenHash: tokenHash(input.token),
     },
     method: "POST",
     token: creds.token,
@@ -89,7 +99,7 @@ export async function deleteSignatureRelay(
 ): Promise<void> {
   const res = await cloudFetch(
     creds.apiUrl,
-    `/signature/sessions/${sessionToken}`,
+    `/signature/sessions/${tokenHash(sessionToken)}`,
     {
       method: "DELETE",
       token: creds.token,
@@ -105,13 +115,16 @@ interface SignatureReply {
   signedAt?: string;
   signerIp?: string | null;
   signerUserAgent?: string | null;
-  token?: string;
+  tokenHash?: string;
 }
 
 /**
  * Pull completed signatures from the cloud relay into the matching local
- * sessions — the dialog's normal poll then picks them up unchanged. Each
- * delivered token is acked so the cloud drops its copy and stops resending.
+ * sessions — the dialog's normal poll then picks them up unchanged. The
+ * cloud stores only sha256(token), so replies are matched by hashing each
+ * local session's token. Every processed reply is acked so the cloud drops
+ * its row and stops resending — including replies whose local session is
+ * already gone, which can never land anywhere.
  */
 export async function pullSignatureReplies(
   prisma: PrismaClient,
@@ -127,22 +140,28 @@ export async function pullSignatureReplies(
   const replies = ((res.body as { replies?: SignatureReply[] }).replies ??
     []) as SignatureReply[];
 
+  const localTokens = await prisma.signatureSession.findMany({
+    select: { token: true },
+  });
+  const tokenByHash = new Map(
+    localTokens.map((s) => [tokenHash(s.token), s.token])
+  );
+
   const acked: string[] = [];
   for (const reply of replies) {
-    if (!(reply.token && reply.signatureDataUrl)) {
+    if (!(reply.tokenHash && reply.signatureDataUrl)) {
       continue;
     }
+    const localToken = tokenByHash.get(reply.tokenHash);
     try {
-      await submitSignatureSession(
-        prisma,
-        reply.token,
-        reply.signatureDataUrl,
-        {
-          ip: reply.signerIp ?? undefined,
-          userAgent: reply.signerUserAgent ?? undefined,
-        }
-      );
-      acked.push(reply.token);
+      if (!localToken) {
+        throw new AppError("NOT_FOUND");
+      }
+      await submitSignatureSession(prisma, localToken, reply.signatureDataUrl, {
+        ip: reply.signerIp ?? undefined,
+        userAgent: reply.signerUserAgent ?? undefined,
+      });
+      acked.push(reply.tokenHash);
     } catch (err) {
       // AppError = the local session is gone, expired or already signed —
       // the cloud can't deliver it anywhere else, so ack and move on.
@@ -152,7 +171,7 @@ export async function pullSignatureReplies(
           { code: err.code },
           "signature reply dropped — local session unusable"
         );
-        acked.push(reply.token);
+        acked.push(reply.tokenHash);
       } else {
         log.warn({ err }, "signature reply import failed");
       }
@@ -161,7 +180,7 @@ export async function pullSignatureReplies(
 
   if (acked.length) {
     const ack = await cloudFetch(apiUrl, "/signature/replies/ack", {
-      body: { tokens: acked },
+      body: { tokenHashes: acked },
       method: "POST",
       token,
     });

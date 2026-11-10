@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { PrismaClient } from "@generated/client";
 import {
   buildIntakeDocument,
@@ -73,6 +74,7 @@ function fakePrisma(
         async ({ where }: { where: { token: string } }) =>
           sessions.find((s) => s.token === where.token) ?? null
       ),
+      findMany: vi.fn(async () => sessions.map((s) => ({ token: s.token }))),
       updateMany: vi.fn(
         ({
           where,
@@ -172,8 +174,16 @@ describe("publishSignatureRelay", () => {
       log
     );
     expect(url).toBe(`${API}/sign/${TOKEN}`);
-    const body = sent as { document?: Record<string, unknown>; token?: string };
-    expect(body.token).toBe(TOKEN);
+    const body = sent as {
+      document?: Record<string, unknown>;
+      token?: string;
+      tokenHash?: string;
+    };
+    // The cloud stores only the hash — the raw credential never leaves.
+    expect(body.tokenHash).toBe(
+      createHash("sha256").update(TOKEN).digest("hex")
+    );
+    expect(body.token).toBeUndefined();
     expect(body.document?.customerName).toBe("Maria Silva");
     // The redacted view never carries the phone — the LAN doc has it.
     expect(body.document?.customerPhone).toBeUndefined();
@@ -222,7 +232,7 @@ describe("pullSignatureReplies", () => {
         return okJson({
           replies: [
             {
-              token: TOKEN,
+              tokenHash: createHash("sha256").update(TOKEN).digest("hex"),
               signatureDataUrl: PNG,
               signedAt: new Date().toISOString(),
               signerIp: "203.0.113.9",
@@ -247,7 +257,14 @@ describe("pullSignatureReplies", () => {
     vi.stubGlobal("fetch", (url: string) => {
       calls.push(url);
       if (url.endsWith("/signature/replies")) {
-        return okJson({ replies: [{ token: TOKEN, signatureDataUrl: PNG }] });
+        return okJson({
+          replies: [
+            {
+              tokenHash: createHash("sha256").update(TOKEN).digest("hex"),
+              signatureDataUrl: PNG,
+            },
+          ],
+        });
       }
       return okJson({ ok: true });
     });
