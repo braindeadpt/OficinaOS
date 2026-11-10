@@ -852,6 +852,7 @@
     "sign_remote_expired": "Este código ha caducado.",
     "sign_remote_retry": "Generar un nuevo código",
     "sign_remote_error": "No se pudo iniciar la sesión de firma — inténtelo de nuevo.",
+    "sign_remote_needs_app_url": "Esta instalación no tiene una dirección que un teléfono pueda abrir. Define APP_URL en .env con la dirección de red de la tienda y reinicia.",
     "sign_remote_qr_alt": "Código QR que abre la página de firma",
     "whatsapp_consent": "El cliente autoriza las notificaciones de WhatsApp",
     "whatsapp_consent_hint": "Actualizaciones de estado de reparación enviadas automáticamente. ",

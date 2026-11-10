@@ -264,7 +264,7 @@ export default function HelpPage() {
               {t("help_address_loopback_warning")}
             </p>
           )}
-          {qrDataUrl && (
+          {qrDataUrl && !shareIsLoopback && (
             <div className="mt-4 flex items-center gap-4">
               <img
                 alt={t("help_qr_alt")}

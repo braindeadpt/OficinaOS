@@ -18,6 +18,7 @@ interface RemoteSignatureDialogProps {
 }
 
 interface AccessInfo {
+  needsAppUrl?: boolean;
   urls: string[];
 }
 
@@ -48,6 +49,7 @@ export default function RemoteSignatureDialog({
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [expired, setExpired] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const [needsAppUrl, setNeedsAppUrl] = useState(false);
   const sessionRef = useRef<string | null>(null);
   // The document the live session was created over — any drift invalidates.
   // Kept in a ref so form edits don't restart the session — they kill it.
@@ -61,6 +63,7 @@ export default function RemoteSignatureDialog({
     setQrDataUrl(null);
     setExpired(false);
     setLoadError(false);
+    setNeedsAppUrl(false);
     const doc = documentRef.current;
     try {
       const [sessionRes, infoRes] = await Promise.all([
@@ -71,9 +74,10 @@ export default function RemoteSignatureDialog({
       sessionRef.current = token;
       frozenDocRef.current = canonicalize(doc);
 
-      const urls = (infoRes.data as AccessInfo).urls ?? [];
-      const base = pickSignBaseUrl(urls);
+      const info = infoRes.data as AccessInfo;
+      const base = pickSignBaseUrl(info.urls ?? []);
       if (!base) {
+        setNeedsAppUrl(Boolean(info.needsAppUrl));
         setLoadError(true);
         return;
       }
@@ -148,9 +152,15 @@ export default function RemoteSignatureDialog({
 
   let content: React.ReactNode;
   if (loadError) {
+    // needsAppUrl: container install without APP_URL — the fix is config,
+    // not a retry, so it gets its own message instead of the generic error.
     content = (
       <p className="py-8 text-center text-error text-sm" role="alert">
-        {t("intake.sign_remote_error")}
+        {t(
+          needsAppUrl
+            ? "intake.sign_remote_needs_app_url"
+            : "intake.sign_remote_error"
+        )}
       </p>
     );
   } else if (qrDataUrl) {

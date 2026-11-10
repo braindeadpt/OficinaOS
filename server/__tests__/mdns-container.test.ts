@@ -2,8 +2,10 @@ import { existsSync, readFileSync } from "node:fs";
 import type os from "node:os";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  accessUrls,
   hasIsolatedNetNs,
   inContainerRuntime,
+  isDialableUrl,
   lanIpv4Addresses,
   primaryLanIpv4,
 } from "../lib/mdns.js";
@@ -152,5 +154,105 @@ describe("hasIsolatedNetNs / lanIpv4Addresses", () => {
     });
     expect(hasIsolatedNetNs()).toBe(false);
     expect(lanIpv4Addresses()).toEqual(["192.168.1.20"]);
+  });
+});
+
+describe("isDialableUrl", () => {
+  it("rejects loopback and wildcard hosts — phones can never open them", () => {
+    for (const url of [
+      "http://localhost:4000",
+      "http://x.localhost:4000",
+      "http://127.0.0.1:4000",
+      "http://[::1]:4000",
+      "http://0.0.0.0:4000",
+      "http://[::]:4000",
+      "not a url",
+    ]) {
+      expect(isDialableUrl(url)).toBe(false);
+    }
+    for (const url of [
+      "https://loja.example.com",
+      "http://192.168.1.20:4000",
+      "http://pc-da-loja:4000",
+    ]) {
+      expect(isDialableUrl(url)).toBe(true);
+    }
+  });
+});
+
+describe("accessUrls", () => {
+  const HOST_IFACES = { ...LO, eth0: [iface("192.168.1.20")] };
+
+  it("emits every reachable form on a bare host", () => {
+    env({
+      container: false,
+      hostname: "pc-da-loja",
+      interfaces: HOST_IFACES,
+    });
+    const out = accessUrls({
+      appUrl: "http://localhost:4000", // dev default — never dialable
+      mdnsHostname: "oficinaos",
+      port: 4000,
+    });
+    expect(out.needsAppUrl).toBe(false);
+    expect(out.urls).toEqual([
+      "http://oficinaos.local:4000",
+      "http://pc-da-loja:4000",
+      "http://192.168.1.20:4000",
+    ]);
+  });
+
+  it("keeps only a usable APP_URL in a bridge-netns container", () => {
+    env({
+      container: true,
+      hosts: "127.0.0.1 localhost\n172.18.0.5 3f2a1b9c8d\n",
+      interfaces: { ...LO, eth0: [iface("172.18.0.5")] },
+    });
+    // The container hostname (3f2a1b9c8d), the .local name and the bridge IP
+    // are all unreachable — emitting them just feeds a dead QR.
+    const out = accessUrls({
+      appUrl: "https://loja.example.com",
+      mdnsHostname: "oficinaos",
+      port: 4000,
+    });
+    expect(out).toEqual({
+      urls: ["https://loja.example.com"],
+      needsAppUrl: false,
+    });
+  });
+
+  it("asks for APP_URL when an isolated container has no usable URL", () => {
+    env({
+      container: true,
+      hosts: "127.0.0.1 localhost\n172.18.0.5 3f2a1b9c8d\n",
+      interfaces: { ...LO, eth0: [iface("172.18.0.5")] },
+    });
+    for (const appUrl of [
+      undefined,
+      "http://localhost:4000",
+      "http://0.0.0.0:4000",
+    ]) {
+      expect(
+        accessUrls({ appUrl, mdnsHostname: "oficinaos", port: 4000 })
+      ).toEqual({
+        urls: [],
+        needsAppUrl: true,
+      });
+    }
+  });
+
+  it("keeps the real hostname under host networking", () => {
+    env({
+      container: true,
+      hostname: "pc-da-loja",
+      hosts: "127.0.0.1 localhost\n127.0.1.1 pc-da-loja\n",
+      interfaces: HOST_IFACES,
+    });
+    const out = accessUrls({ port: 4000 });
+    expect(out.needsAppUrl).toBe(false);
+    expect(out.urls).toEqual([
+      "http://pc-da-loja:4000",
+      "http://192.168.1.20:4000",
+    ]);
   });
 });

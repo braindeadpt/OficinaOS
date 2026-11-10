@@ -12,6 +12,9 @@
  *    (100.64/10) are never picked — a phone on the shop Wi-Fi can't use them.
  * 3. .local (iOS resolves it via Bonjour).
  * 4. Whatever came first that isn't loopback.
+ *
+ * Wildcard hosts (0.0.0.0 / ::) are bind addresses, not dialable ones — they
+ * count as unreachable everywhere below, same as loopback.
  */
 const IPV4_HOST_RE = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 
@@ -44,13 +47,16 @@ function isPrivateLanIpv4(host: string): boolean {
   );
 }
 
-function isLoopback(host: string): boolean {
+function isUndialable(host: string): boolean {
   return (
     host === "localhost" ||
     host.endsWith(".localhost") ||
     host.startsWith("127.") ||
     host === "[::1]" ||
-    host === "::1"
+    host === "::1" ||
+    host === "0.0.0.0" ||
+    host === "::" ||
+    host === "[::]"
   );
 }
 
@@ -61,7 +67,7 @@ function isPublicHttps(url: string): boolean {
     h.protocol === "https:" &&
     ipv4Octets(h.host) === null &&
     !h.host.endsWith(".local") &&
-    !isLoopback(h.host) &&
+    !isUndialable(h.host) &&
     h.host.includes(".")
   );
 }
@@ -76,7 +82,7 @@ export function pickSignBaseUrl(urls: string[]): string | null {
     urls.find((url) => hostOf(url)?.host.endsWith(".local")) ??
     urls.find((url) => {
       const h = hostOf(url);
-      return h !== null && !isLoopback(h.host);
+      return h !== null && !isUndialable(h.host);
     }) ??
     null
   );

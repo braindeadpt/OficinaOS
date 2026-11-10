@@ -123,6 +123,60 @@ export function primaryLanIpv4(): string | null {
   return lanIpv4Addresses()[0] ?? null;
 }
 
+/**
+ * True when a phone on the shop network could open this URL — loopback and
+ * wildcard hosts only name this machine (a bind address, never a dialable
+ * one), so advertising them produces a QR that opens nothing.
+ */
+export function isDialableUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return !(
+      host === "localhost" ||
+      host.endsWith(".localhost") ||
+      host.startsWith("127.") ||
+      host === "::1" ||
+      host === "[::1]" ||
+      host === "0.0.0.0" ||
+      host === "::" ||
+      host === "[::]"
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The URLs /public/access-info offers for reaching this server from another
+ * device. In an isolated container netns both name-based URLs are dead —
+ * the hostname is a container ID and mDNS multicast can't cross the bridge
+ * — so only a configured APP_URL can produce a usable entry. `needsAppUrl`
+ * tells the UI to ask for APP_URL instead of rendering a QR that resolves
+ * to nothing.
+ */
+export function accessUrls(opts: {
+  appUrl?: string;
+  mdnsHostname?: string;
+  port: number;
+}): { urls: string[]; needsAppUrl: boolean } {
+  const isolated = hasIsolatedNetNs();
+  const urls: string[] = [];
+  if (!isolated && opts.mdnsHostname) {
+    urls.push(`http://${opts.mdnsHostname}.local:${opts.port}`);
+  }
+  if (opts.appUrl && isDialableUrl(opts.appUrl)) {
+    urls.push(opts.appUrl);
+  }
+  if (!isolated) {
+    urls.push(`http://${os.hostname().split(".")[0]}:${opts.port}`);
+  }
+  for (const ip of lanIpv4Addresses()) {
+    urls.push(`http://${ip}:${opts.port}`);
+  }
+  const deduped = Array.from(new Set(urls));
+  return { urls: deduped, needsAppUrl: isolated && deduped.length === 0 };
+}
+
 /** Decode a DNS name at `offset`; returns the name and the next offset. */
 export function readName(
   packet: Buffer,
