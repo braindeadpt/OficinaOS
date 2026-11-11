@@ -1,11 +1,10 @@
 import { timingSafeEqual } from "node:crypto";
-import os from "node:os";
 import { AppError } from "@shared/errors/app-error.js";
 import { preCheckSubmitSchema } from "@shared/schemas/intake-request.schema";
 import { quoteRespondSchema } from "@shared/schemas/quote.schema";
 import type { FastifyPluginAsync } from "fastify";
 import { loadEnv } from "../config/env.js";
-import { lanIpv4Addresses } from "../lib/mdns.js";
+import { accessUrls } from "../lib/mdns.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import { submitPreCheckRequest } from "../services/intake-request.service.js";
 import { respondToQuote } from "../services/job-quote.service.js";
@@ -157,22 +156,11 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
   app.get("/access-info", {
     handler: () => {
       const env = loadEnv();
-      const port = env.PORT;
-      const hostname = os.hostname().split(".")[0];
-      const urls: string[] = [];
-      if (env.MDNS_HOSTNAME) {
-        urls.push(`http://${env.MDNS_HOSTNAME}.local:${port}`);
-      }
-      if (env.APP_URL) {
-        urls.push(env.APP_URL);
-      }
-      urls.push(`http://${hostname}:${port}`);
-      for (const ip of lanIpv4Addresses()) {
-        urls.push(`http://${ip}:${port}`);
-      }
-      return {
-        urls: Array.from(new Set(urls)),
-      };
+      return accessUrls({
+        appUrl: env.APP_URL,
+        mdnsHostname: env.MDNS_HOSTNAME,
+        port: env.PORT,
+      });
     },
     schema: {
       summary: "LAN URLs for connecting devices (QR card on /help)",

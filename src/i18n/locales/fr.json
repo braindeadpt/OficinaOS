@@ -852,6 +852,7 @@
     "sign_remote_expired": "Ce code a expiré.",
     "sign_remote_retry": "Générer un nouveau code",
     "sign_remote_error": "Impossible de démarrer la session de signature — réessayez.",
+    "sign_remote_needs_app_url": "Cette installation n'a aucune adresse qu'un téléphone puisse ouvrir. Définissez APP_URL dans .env sur l'adresse réseau du magasin et redémarrez.",
     "sign_remote_qr_alt": "Code QR ouvrant la page de signature",
     "whatsapp_consent": "Le client autorise les notifications WhatsApp",
     "whatsapp_consent_hint": "Mises à jour de l'état de réparation envoyées automatiquement. ",

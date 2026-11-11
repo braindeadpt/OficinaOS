@@ -1,4 +1,5 @@
 import { createSocket, type Socket } from "node:dgram";
+import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
 import type { FastifyBaseLogger } from "fastify";
 
@@ -34,6 +35,7 @@ export interface MdnsHandle {
 // denylist the Windows env generator uses for APP_URL.
 const VIRTUAL_IFACE_RE =
   /loopback|vethernet|wsl|docker|hyper-v|virtualbox|vmware|vpn|tailscale|hamachi/i;
+const HOSTS_SEP_RE = /\s+/;
 
 function isLanAddress(info: os.NetworkInterfaceInfo): boolean {
   return (
@@ -43,11 +45,85 @@ function isLanAddress(info: os.NetworkInterfaceInfo): boolean {
   );
 }
 
-/** Real-network IPv4s — virtual adapters (WSL/Docker/VPN) excluded. */
-export function lanIpv4Addresses(): string[] {
+/** True inside a container (Docker/Podman/K8s), whatever its net mode. */
+export function inContainerRuntime(): boolean {
+  return (
+    existsSync("/.dockerenv") ||
+    existsSync("/run/.containerenv") ||
+    Boolean(process.env.KUBERNETES_SERVICE_HOST)
+  );
+}
+
+/**
+ * True when the container runs in an isolated network namespace (default
+ * bridge, pod net). There its interface IPs are unreachable from the shop
+ * LAN, so they must never be offered as "LAN" addresses: the QR picker
+ * prefers any private IPv4 and would happily emit a dead 172.18.x URL.
+ *
+ * Under host networking (`--network host`) the interfaces ARE the host's
+ * real LAN adapters and stay reachable — keep them (this is also the only
+ * container mode where mDNS multicast actually works).
+ *
+ * The tell: inside an isolated netns, Docker/Podman/K8s map the container
+ * hostname to its own container IP in /etc/hosts; under host networking
+ * the hostname maps to loopback (127.0.1.1) instead. So hostname → an IP
+ * that exists on an interface means isolated; anything else means the
+ * adapters belong to the real network.
+ * Edge: macvlan hosts look isolated by this rule — set APP_URL there.
+ */
+/** Núcleo puro da heurística /etc/hosts — testável sem tocar no SO. */
+export function isolatedNetNsFromHosts(opts: {
+  hostname: string;
+  ifaceIps: ReadonlySet<string>;
+  hostsContent: string;
+}): boolean {
+  for (const raw of opts.hostsContent.split("\n")) {
+    const line = raw.split("#", 1)[0].trim();
+    const [ip, ...names] = line.split(HOSTS_SEP_RE);
+    if (names.includes(opts.hostname)) {
+      return opts.ifaceIps.has(ip);
+    }
+  }
+  return false;
+}
+
+export function hasIsolatedNetNs(): boolean {
+  if (!inContainerRuntime()) {
+    return false;
+  }
+  try {
+    const ifaceIps = new Set<string>();
+    for (const infos of Object.values(os.networkInterfaces())) {
+      for (const info of infos ?? []) {
+        // Non-internal only: a hostname mapped to loopback is the host-net
+        // signature, not an isolated namespace.
+        if (info.family === "IPv4" && !info.internal) {
+          ifaceIps.add(info.address);
+        }
+      }
+    }
+    return isolatedNetNsFromHosts({
+      hostname: os.hostname(),
+      ifaceIps,
+      hostsContent: readFileSync("/etc/hosts", "utf8"),
+    });
+  } catch {
+    // Unreadable /etc/hosts — can't prove isolation, keep the interfaces.
+    return false;
+  }
+}
+
+/** Núcleo puro do filtro — testável com um mapa de interfaces fictício. */
+export function pickLanIpv4s(
+  interfaces: Record<string, os.NetworkInterfaceInfo[] | undefined>,
+  isolated: boolean
+): string[] {
+  if (isolated) {
+    return [];
+  }
   const real: string[] = [];
   const virtual: string[] = [];
-  for (const [name, infos] of Object.entries(os.networkInterfaces())) {
+  for (const [name, infos] of Object.entries(interfaces)) {
     for (const info of infos ?? []) {
       if (!isLanAddress(info)) {
         continue;
@@ -58,9 +134,68 @@ export function lanIpv4Addresses(): string[] {
   return [...real, ...virtual];
 }
 
+/** Real-network IPv4s — virtual adapters (WSL/Docker/VPN) excluded. */
+export function lanIpv4Addresses(): string[] {
+  return pickLanIpv4s(os.networkInterfaces(), hasIsolatedNetNs());
+}
+
 /** First non-virtual, non-loopback, non-link-local IPv4 on the machine. */
 export function primaryLanIpv4(): string | null {
   return lanIpv4Addresses()[0] ?? null;
+}
+
+/**
+ * True when a phone on the shop network could open this URL — loopback and
+ * wildcard hosts only name this machine (a bind address, never a dialable
+ * one), so advertising them produces a QR that opens nothing.
+ */
+export function isDialableUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return !(
+      host === "localhost" ||
+      host.endsWith(".localhost") ||
+      host.startsWith("127.") ||
+      host === "::1" ||
+      host === "[::1]" ||
+      host === "0.0.0.0" ||
+      host === "::" ||
+      host === "[::]"
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The URLs /public/access-info offers for reaching this server from another
+ * device. In an isolated container netns both name-based URLs are dead —
+ * the hostname is a container ID and mDNS multicast can't cross the bridge
+ * — so only a configured APP_URL can produce a usable entry. `needsAppUrl`
+ * tells the UI to ask for APP_URL instead of rendering a QR that resolves
+ * to nothing.
+ */
+export function accessUrls(opts: {
+  appUrl?: string;
+  mdnsHostname?: string;
+  port: number;
+}): { urls: string[]; needsAppUrl: boolean } {
+  const isolated = hasIsolatedNetNs();
+  const urls: string[] = [];
+  if (!isolated && opts.mdnsHostname) {
+    urls.push(`http://${opts.mdnsHostname}.local:${opts.port}`);
+  }
+  if (opts.appUrl && isDialableUrl(opts.appUrl)) {
+    urls.push(opts.appUrl);
+  }
+  if (!isolated) {
+    urls.push(`http://${os.hostname().split(".")[0]}:${opts.port}`);
+  }
+  for (const ip of lanIpv4Addresses()) {
+    urls.push(`http://${ip}:${opts.port}`);
+  }
+  const deduped = Array.from(new Set(urls));
+  return { urls: deduped, needsAppUrl: isolated && deduped.length === 0 };
 }
 
 /** Decode a DNS name at `offset`; returns the name and the next offset. */
