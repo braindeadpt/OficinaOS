@@ -309,3 +309,18 @@ jobs:
         # sem checkout neste job — -R resolve o repo senao gh falha com
         # "not a git repository"
         run: gh release edit "${{ github.ref_name }}" --draft=false -R "${{ github.repository }}"
+
+      - name: Announce on Discord #updates
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DISCORD_UPDATES_WEBHOOK: ${{ secrets.DISCORD_UPDATES_WEBHOOK }}
+        # O anuncio nao pode falhar o release — continua mesmo se o webhook
+        # ou a API do Discord estiver em baixo.
+        continue-on-error: true
+        run: |
+          notes=$(gh release view "${{ github.ref_name }}" -R "${{ github.repository }}" \
+            --json body -q .body | head -c 1600)
+          content=$(printf '## %s — novo release\n\n%s\n\nDownload: https://github.com/%s/releases/tag/%s' \
+            "${{ github.ref_name }}" "$notes" "${{ github.repository }}" "${{ github.ref_name }}")
+          jq -n --arg c "$content" '{content: $c}' | \
+            curl -fsS -X POST -H 'Content-Type: application/json' -d @- "$DISCORD_UPDATES_WEBHOOK"
