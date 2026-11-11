@@ -4,10 +4,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Dialog } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
+import { Input } from "@/components/ui/input";
 import api from "@/lib/api";
 import { pickSignBaseUrl } from "./remote-signature-url";
 
-const POLL_MS = 2000;
+// ~3s while a session is pending — each poll also triggers the cloud reply
+// pull server-side, so a customer at the counter never waits for the ~2min
+// entitlements sync.
+const POLL_MS = 3000;
 
 interface RemoteSignatureDialogProps {
   /** Frozen ficha + terms the customer signs — edits invalidate the link. */
@@ -46,9 +50,15 @@ export default function RemoteSignatureDialog({
 }: RemoteSignatureDialogProps) {
   const { t } = useTranslation();
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [expired, setExpired] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const sessionRef = useRef<string | null>(null);
+  // The token whose signature already landed — its row must survive until
+  // consumeSignatureSession moves it onto the job, so close/retry never
+  // invalidates it.
+  const signedTokenRef = useRef<string | null>(null);
   // The document the live session was created over — any drift invalidates.
   // Kept in a ref so form edits don't restart the session — they kill it.
   const frozenDocRef = useRef<string | null>(null);
@@ -57,8 +67,24 @@ export default function RemoteSignatureDialog({
   const onSignatureRef = useRef(onSignature);
   onSignatureRef.current = onSignature;
 
+  // The remote link is only meant to live while this dialog is open: on
+  // close (or when a fresh QR supersedes it) a pending session is
+  // invalidated — locally and its cloud copy — so a link sent and forgotten
+  // can't be signed into nothing.
+  const invalidatePending = useCallback(() => {
+    const token = sessionRef.current;
+    sessionRef.current = null;
+    frozenDocRef.current = null;
+    if (token && token !== signedTokenRef.current) {
+      api.post(`/sign-sessions/${token}/invalidate`).catch(() => undefined);
+    }
+  }, []);
+
   const startSession = useCallback(async () => {
+    invalidatePending();
     setQrDataUrl(null);
+    setRemoteUrl(null);
+    setCopied(false);
     setExpired(false);
     setLoadError(false);
     const doc = documentRef.current;
@@ -67,37 +93,39 @@ export default function RemoteSignatureDialog({
         api.post("/sign-sessions", { document: doc }),
         api.get("/public/access-info"),
       ]);
-      const { token } = sessionRes.data as { token: string };
+      const { token, cloudSignUrl } = sessionRes.data as {
+        cloudSignUrl?: string | null;
+        token: string;
+      };
       sessionRef.current = token;
       frozenDocRef.current = canonicalize(doc);
 
+      // Pro signature-remote gives a public cloud link that works anywhere;
+      // without it the QR needs a LAN-reachable base for the phone.
       const urls = (infoRes.data as AccessInfo).urls ?? [];
       const base = pickSignBaseUrl(urls);
-      if (!base) {
+      const signUrl = cloudSignUrl ?? (base ? `${base}/sign/${token}` : null);
+      if (!signUrl) {
         setLoadError(true);
         return;
       }
-      const signUrl = `${base}/sign/${token}`;
+      setRemoteUrl(cloudSignUrl ?? null);
       const qr = await QRCode.toDataURL(signUrl, { margin: 1, width: 192 });
       setQrDataUrl(qr);
     } catch {
       setLoadError(true);
     }
-  }, []);
+  }, [invalidatePending]);
 
-  // (Re)create a session whenever the dialog opens; drop the token on close.
+  // (Re)create a session whenever the dialog opens; closing it kills any
+  // pending link (locally and its cloud copy).
   useEffect(() => {
     if (!open) {
-      sessionRef.current = null;
-      frozenDocRef.current = null;
       return;
     }
     startSession();
-    return () => {
-      sessionRef.current = null;
-      frozenDocRef.current = null;
-    };
-  }, [open, startSession]);
+    return invalidatePending;
+  }, [open, startSession, invalidatePending]);
 
   // A ficha edit while the link is live invalidates it — the customer would
   // otherwise sign a document that no longer matches the submitted job.
@@ -111,6 +139,7 @@ export default function RemoteSignatureDialog({
     const token = sessionRef.current;
     sessionRef.current = null;
     frozenDocRef.current = null;
+    // Even a delivered signature dies here — it signed the OLD document.
     api.post(`/sign-sessions/${token}/invalidate`).catch(() => undefined);
     setQrDataUrl(null);
     setExpired(true);
@@ -130,6 +159,7 @@ export default function RemoteSignatureDialog({
         const data = res.data as SessionStatus;
         if (data.signed && data.signatureDataUrl) {
           clearInterval(poll);
+          signedTokenRef.current = token;
           onSignatureRef.current(data.signatureDataUrl, token);
           return;
         }
@@ -177,13 +207,51 @@ export default function RemoteSignatureDialog({
             </button>
           </div>
         ) : (
-          <p className="mt-4 flex items-center gap-2 text-on-surface-variant text-sm">
-            <Icon
-              className="animate-pulse text-base"
-              name="progress_activity"
-            />
-            {t("intake.sign_remote_waiting")}
-          </p>
+          <>
+            <p className="mt-4 flex items-center gap-2 text-on-surface-variant text-sm">
+              <Icon
+                className="animate-pulse text-base"
+                name="progress_activity"
+              />
+              {t("intake.sign_remote_waiting")}
+            </p>
+            {remoteUrl && (
+              <div className="mt-3 w-full">
+                <p className="mb-1 text-center text-on-surface-variant text-xs">
+                  {t("intake.sign_remote_send_link")}
+                </p>
+                <div className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <Input
+                      className="font-mono text-xs"
+                      onFocus={(e) => e.currentTarget.select()}
+                      readOnly
+                      value={remoteUrl}
+                    />
+                  </div>
+                  <button
+                    className="shrink-0 rounded-lg bg-surface-container-high px-3 py-2 font-label text-on-surface text-xs"
+                    onClick={async () => {
+                      // Só confirma se a cópia correu mesmo — um writeText
+                      // rejeitado (sem foco/permissão) não pode mostrar
+                      // «Copiado» com o link por copiar.
+                      try {
+                        await navigator.clipboard.writeText(remoteUrl);
+                        setCopied(true);
+                      } catch {
+                        /* clipboard indisponível — o input continua selecionável */
+                      }
+                    }}
+                    type="button"
+                  >
+                    {copied
+                      ? t("intake.sign_remote_copied")
+                      : t("intake.sign_remote_copy")}
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </>
     );

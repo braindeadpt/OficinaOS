@@ -79,7 +79,12 @@ describe("createSignatureSession", () => {
     const result = await createSignatureSession(prisma, DOC);
 
     expect(result.token).toMatch(TOKEN_HEX_RE);
-    expect(result.expiresAt.getTime()).toBeGreaterThan(Date.now());
+    // LAN default is 15 minutes — the remote 30-minute TTL is applied by
+    // the route only after the cloud accepts the relay, never to LAN-only
+    // links (unpaired or publish-failed shops keep the short window).
+    const span = result.expiresAt.getTime() - Date.now();
+    expect(span).toBeGreaterThan(14 * 60 * 1000);
+    expect(span).toBeLessThanOrEqual(15 * 60 * 1000);
     expect(prisma.signatureSession.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ snapshot: DOC }),
