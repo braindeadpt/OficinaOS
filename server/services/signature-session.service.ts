@@ -45,8 +45,7 @@ export function documentMatches(
 
 export async function createSignatureSession(
   prisma: PrismaClient,
-  document?: IntakeDocument,
-  opts?: { ttlMs?: number }
+  document?: IntakeDocument
 ) {
   // Lazy cleanup — dead sessions hold a signature image and are worthless.
   await prisma.signatureSession.deleteMany({
@@ -56,9 +55,9 @@ export async function createSignatureSession(
     data: {
       token: randomBytes(32).toString("hex"),
       snapshot: (document ?? undefined) as Prisma.InputJsonValue | undefined,
-      // Links relayed through the cloud live longer — the local session must
-      // still be open when the customer's signature comes back via the poller.
-      expiresAt: new Date(Date.now() + (opts?.ttlMs ?? SESSION_TTL_MS)),
+      // LAN links live 15 min; a cloud-relayed session is extended to the
+      // remote TTL by the route once the cloud accepts it.
+      expiresAt: new Date(Date.now() + SESSION_TTL_MS),
     },
   });
   return { token: session.token, expiresAt: session.expiresAt };
@@ -118,7 +117,7 @@ export async function submitSignatureSession(
   prisma: PrismaClient,
   token: string,
   signatureDataUrl: unknown,
-  meta: { ip?: string; userAgent?: string } = {}
+  meta: { ip?: string; userAgent?: string; signedAt?: Date } = {}
 ) {
   assertUsableToken(token);
   if (
@@ -152,7 +151,9 @@ export async function submitSignatureSession(
     data: {
       signatureDataUrl,
       documentHash,
-      signedAt: new Date(),
+      // Cloud replies carry the moment the customer actually signed — the
+      // poller can lag for hours; LAN submits keep the receive-time default.
+      signedAt: meta.signedAt ?? new Date(),
       signerIp: meta.ip ?? null,
       signerUserAgent: meta.userAgent ?? null,
     },

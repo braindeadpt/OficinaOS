@@ -232,10 +232,15 @@ export default function RemoteSignatureDialog({
                   <button
                     className="shrink-0 rounded-lg bg-surface-container-high px-3 py-2 font-label text-on-surface text-xs"
                     onClick={async () => {
-                      await navigator.clipboard
-                        .writeText(remoteUrl)
-                        .catch(() => undefined);
-                      setCopied(true);
+                      // Só confirma se a cópia correu mesmo — um writeText
+                      // rejeitado (sem foco/permissão) não pode mostrar
+                      // «Copiado» com o link por copiar.
+                      try {
+                        await navigator.clipboard.writeText(remoteUrl);
+                        setCopied(true);
+                      } catch {
+                        /* clipboard indisponível — o input continua selecionável */
+                      }
                     }}
                     type="button"
                   >

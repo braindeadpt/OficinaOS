@@ -59,7 +59,8 @@ estado da reparação a partir do link. MCP server é roadmap em `docs/pro-modul
 Assinatura remota da ficha de entrada — o cliente assina fora da LAN, sem tunnel.
 
 ```
-App cria sessão local (mesmo token 64-hex, TTL alargado 24h) →
+App cria sessão local (mesmo token 64-hex — LAN 15min; relayed na cloud
+alarga para 30min, link vivo só com o diálogo aberto) →
 POST /signature/sessions publica o documento REDIGIDO
 (publicDocumentView — sem códigos de desbloqueio) → página pública
 cloud.oficinaos.app/sign/:token → cliente assina (PNG ≤500KB, submissão

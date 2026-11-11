@@ -4,6 +4,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { requirePermission } from "../middlewares/rbac.js";
 import {
   deleteSignatureRelay,
+  pairingSignatureCreds,
   publishSignatureRelay,
   pullSignatureReplies,
   REMOTE_SESSION_TTL_MS,
@@ -33,22 +34,24 @@ export const signatureSessionRoutes: FastifyPluginAsync = async (app) => {
       if (!parsed.success) {
         throw new AppError("VALIDATION_ERROR");
       }
-      // The link is only meant to live while the dialog is open — v1 caps
-      // every session at 30 minutes (the dialog invalidates it on close, so
-      // this is just the backstop).
+      // LAN-only sessions keep the default 15-minute expiry. The 30-minute
+      // remote TTL only applies when the cloud actually accepted the relay —
+      // otherwise an unpaired/offline shop would silently get longer links.
       const relay = await remoteSignatureCreds(app.prisma);
       const session = await createSignatureSession(
         app.prisma,
-        parsed.data.document,
-        { ttlMs: REMOTE_SESSION_TTL_MS }
+        parsed.data.document
       );
       let cloudSignUrl: string | null = null;
       if (relay && parsed.data.document) {
+        // Cloud link and local session must expire together — the reply
+        // lands back on this same session through the poller.
+        const remoteExpiresAt = new Date(Date.now() + REMOTE_SESSION_TTL_MS);
         cloudSignUrl = await publishSignatureRelay(
           relay,
           {
             document: parsed.data.document,
-            expiresAt: session.expiresAt,
+            expiresAt: remoteExpiresAt,
             token: session.token,
           },
           req.log
@@ -56,8 +59,9 @@ export const signatureSessionRoutes: FastifyPluginAsync = async (app) => {
         if (cloudSignUrl) {
           await app.prisma.signatureSession.update({
             where: { token: session.token },
-            data: { relayed: true },
+            data: { relayed: true, expiresAt: remoteExpiresAt },
           });
+          session.expiresAt = remoteExpiresAt;
         }
       }
       return { ...session, cloudSignUrl };
@@ -120,7 +124,9 @@ export const signatureSessionRoutes: FastifyPluginAsync = async (app) => {
     handler: async (req) => {
       const { token } = req.params as { token: string };
       const result = await invalidateSignatureSession(app.prisma, token);
-      const relay = await remoteSignatureCreds(app.prisma);
+      // Pairing creds, not module-gated: a lost entitlement must not orphan
+      // the cloud copy — it would keep serving the document until expiry.
+      const relay = await pairingSignatureCreds(app.prisma);
       if (relay) {
         // Best effort — the local session is already gone; the cloud copy
         // also dies on its own expiresAt if this call doesn't reach it.

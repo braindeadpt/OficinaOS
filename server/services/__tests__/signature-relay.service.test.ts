@@ -8,6 +8,7 @@ import type { FastifyBaseLogger } from "fastify";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { encryptSecret } from "../../lib/crypto.js";
 import {
+  pairingSignatureCreds,
   publishSignatureRelay,
   pullSignatureReplies,
   REMOTE_SESSION_TTL_MS,
@@ -155,6 +156,27 @@ describe("remoteSignatureCreds", () => {
   });
 });
 
+describe("pairingSignatureCreds", () => {
+  it("is null when the shop is not paired", async () => {
+    const { prisma } = fakePrisma();
+    expect(await pairingSignatureCreds(prisma)).toBeNull();
+  });
+
+  it("returns credentials WITHOUT the module — cleanup must outlive entitlement", async () => {
+    // A revoked/lapsed module can never block invalidate → the cloud copy
+    // would keep serving the customer document until its own expiry.
+    const { prisma } = fakePrisma({
+      cloudApiUrl: API,
+      cloudEntitlements: ["portal"],
+      cloudShopTokenEncrypted: encryptSecret("tok"),
+      cloudSyncedAt: new Date(),
+    });
+    const creds = await pairingSignatureCreds(prisma);
+    expect(creds?.apiUrl).toBe(API);
+    expect(creds?.token).toBe("tok");
+  });
+});
+
 describe("publishSignatureRelay", () => {
   const doc = buildIntakeDocument(SOURCE, "termos", "pt");
 
@@ -249,6 +271,54 @@ describe("pullSignatureReplies", () => {
     expect(s.signerIp).toBe("203.0.113.9");
     expect(s.signerUserAgent).toBe("Mozilla/5.0");
     expect(posts.some((u) => u.endsWith("/signature/replies/ack"))).toBe(true);
+  });
+
+  it("stores the customer's signedAt, not the pull time", async () => {
+    // Customer signed 12 minutes ago while the shop was offline — the job
+    // must show HER moment, not when the poller happened to run.
+    const signedAt = new Date(Date.now() - 12 * 60 * 1000);
+    const { prisma, sessions } = fakePrisma(entitled(), [session(TOKEN)]);
+    vi.stubGlobal("fetch", (url: string) =>
+      url.endsWith("/signature/replies")
+        ? okJson({
+            replies: [
+              {
+                tokenHash: createHash("sha256").update(TOKEN).digest("hex"),
+                signatureDataUrl: PNG,
+                signedAt: signedAt.toISOString(),
+              },
+            ],
+          })
+        : okJson({ ok: true })
+    );
+    await pullSignatureReplies(prisma, API, "tok", log);
+    expect(sessions[0].signedAt?.getTime()).toBe(signedAt.getTime());
+  });
+
+  it("falls back to pull time when signedAt is bogus or future", async () => {
+    const before = Date.now();
+    for (const bad of [
+      "not-a-date",
+      new Date(Date.now() + 3_600_000).toISOString(),
+    ]) {
+      const { prisma, sessions } = fakePrisma(entitled(), [session(TOKEN)]);
+      vi.stubGlobal("fetch", (url: string) =>
+        url.endsWith("/signature/replies")
+          ? okJson({
+              replies: [
+                {
+                  tokenHash: createHash("sha256").update(TOKEN).digest("hex"),
+                  signatureDataUrl: PNG,
+                  signedAt: bad,
+                },
+              ],
+            })
+          : okJson({ ok: true })
+      );
+      await pullSignatureReplies(prisma, API, "tok", log);
+      expect(sessions[0].signedAt?.getTime()).toBeGreaterThanOrEqual(before);
+      vi.unstubAllGlobals();
+    }
   });
 
   it("acks replies whose local session is already gone", async () => {

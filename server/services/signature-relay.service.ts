@@ -62,6 +62,25 @@ export async function remoteSignatureCreds(
 }
 
 /**
+ * Pairing-level credentials — apiUrl + shop token, WITHOUT the module
+ * entitlement check. Only for cleanup paths (invalidate/delete): a revoked
+ * module must never orphan a published session — the cloud row keeps
+ * serving the document until its own expiry otherwise.
+ */
+export async function pairingSignatureCreds(
+  prisma: PrismaClient
+): Promise<RelayCreds | null> {
+  const settings = await getOrCreateShopSettings(prisma);
+  if (!(settings.cloudApiUrl && settings.cloudShopTokenEncrypted)) {
+    return null;
+  }
+  return {
+    apiUrl: settings.cloudApiUrl,
+    token: decryptSecret(settings.cloudShopTokenEncrypted),
+  };
+}
+
+/**
  * Publish a session's frozen document to the cloud relay so the same token
  * resolves at cloud.oficinaos.app/sign/:token for customers off the LAN.
  * Returns the public URL, or null when the cloud declines/is unreachable —
@@ -108,6 +127,22 @@ export async function deleteSignatureRelay(
   if (!res?.ok) {
     log.warn({ status: res?.status }, "signature relay delete failed");
   }
+}
+
+// The cloud stamps signedAt when the customer submits — the poller can lag
+// for hours, so the stored signature must keep the customer's own moment.
+// Only finite, non-future values are trusted (small skew tolerated); a
+// bogus stamp falls back to receive time inside submitSignatureSession.
+const CLOCK_SKEW_MS = 60_000;
+function validatedReplyTime(signedAt: string | undefined): Date | undefined {
+  if (!signedAt) {
+    return;
+  }
+  const t = Date.parse(signedAt);
+  if (!Number.isFinite(t) || t > Date.now() + CLOCK_SKEW_MS) {
+    return;
+  }
+  return new Date(t);
 }
 
 interface SignatureReply {
@@ -160,6 +195,7 @@ export async function pullSignatureReplies(
       await submitSignatureSession(prisma, localToken, reply.signatureDataUrl, {
         ip: reply.signerIp ?? undefined,
         userAgent: reply.signerUserAgent ?? undefined,
+        signedAt: validatedReplyTime(reply.signedAt),
       });
       acked.push(reply.tokenHash);
     } catch (err) {
