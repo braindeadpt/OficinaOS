@@ -319,7 +319,10 @@ jobs:
         continue-on-error: true
         run: |
           notes=$(gh release view "${{ github.ref_name }}" -R "${{ github.repository }}" \
-            --json body -q .body | head -c 1600)
+            --json body -q .body)
+          # Corte por caracteres, nao bytes: `head -c` podia partir um
+          # multibyte UTF-8 a meio e o Discord mostrava U+FFFD.
+          notes=${notes:0:1600}
           content=$(printf '## %s — novo release\n\n%s\n\nDownload: https://github.com/%s/releases/tag/%s' \
             "${{ github.ref_name }}" "$notes" "${{ github.repository }}" "${{ github.ref_name }}")
           jq -n --arg c "$content" '{content: $c}' | \
