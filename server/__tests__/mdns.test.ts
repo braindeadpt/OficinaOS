@@ -1,9 +1,12 @@
 import { createSocket } from "node:dgram";
+import type os from "node:os";
 import { afterAll, describe, expect, it } from "vitest";
 import {
   buildResponse,
   hasIsolatedNetNs,
+  isolatedNetNsFromHosts,
   lanIpv4Addresses,
+  pickLanIpv4s,
   primaryLanIpv4,
   readName,
   startMdnsResponder,
@@ -100,5 +103,57 @@ describe("lanIpv4Addresses", () => {
     }
     expect(ips.length).toBeGreaterThan(0);
     expect(primaryLanIpv4()).toBe(ips[0]);
+  });
+});
+
+// Os dois modos de rede de um contentor testam-se em separado: bridge
+// (netns isolado) tem de esconder os IPs das interfaces — são 172.x
+// inatingíveis — enquanto --network host partilha o namespace do host e
+// os adaptadores físicos continuam alcançáveis (e é o único modo onde o
+// multicast mDNS funciona).
+describe("container network modes", () => {
+  const eth0 = (address: string) =>
+    ({
+      address,
+      netmask: "255.255.255.0",
+      family: "IPv4",
+      mac: "02:42:ac:12:00:05",
+      internal: false,
+      cidr: `${address}/24`,
+    }) as os.NetworkInterfaceInfo;
+
+  it("bridge: hostname mapeado para o próprio IP do contentor → nenhum LAN ip", () => {
+    const isolated = isolatedNetNsFromHosts({
+      hostname: "c3f2a1b9",
+      ifaceIps: new Set(["172.18.0.5"]),
+      hostsContent: "127.0.0.1 localhost\n172.18.0.5 c3f2a1b9\n",
+    });
+    expect(isolated).toBe(true);
+    expect(pickLanIpv4s({ eth0: [eth0("172.18.0.5")] }, isolated)).toEqual([]);
+  });
+
+  it("host network: hostname em loopback → adaptadores físicos mantidos", () => {
+    const isolated = isolatedNetNsFromHosts({
+      hostname: "oficina-pc",
+      ifaceIps: new Set(["192.168.1.20"]),
+      hostsContent: "127.0.0.1 localhost\n127.0.1.1 oficina-pc\n",
+    });
+    expect(isolated).toBe(false);
+    expect(
+      pickLanIpv4s(
+        { eth0: [eth0("192.168.1.20")], docker0: [eth0("172.17.0.1")] },
+        isolated
+      )
+    ).toEqual(["192.168.1.20", "172.17.0.1"]);
+  });
+
+  it("hostname sem entrada em /etc/hosts → não prova isolamento", () => {
+    expect(
+      isolatedNetNsFromHosts({
+        hostname: "ausente",
+        ifaceIps: new Set(["192.168.1.20"]),
+        hostsContent: "127.0.0.1 localhost\n",
+      })
+    ).toBe(false);
   });
 });

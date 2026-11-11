@@ -71,11 +71,26 @@ export function inContainerRuntime(): boolean {
  * adapters belong to the real network.
  * Edge: macvlan hosts look isolated by this rule — set APP_URL there.
  */
+/** Núcleo puro da heurística /etc/hosts — testável sem tocar no SO. */
+export function isolatedNetNsFromHosts(opts: {
+  hostname: string;
+  ifaceIps: ReadonlySet<string>;
+  hostsContent: string;
+}): boolean {
+  for (const raw of opts.hostsContent.split("\n")) {
+    const line = raw.split("#", 1)[0].trim();
+    const [ip, ...names] = line.split(HOSTS_SEP_RE);
+    if (names.includes(opts.hostname)) {
+      return opts.ifaceIps.has(ip);
+    }
+  }
+  return false;
+}
+
 export function hasIsolatedNetNs(): boolean {
   if (!inContainerRuntime()) {
     return false;
   }
-  const hostname = os.hostname();
   try {
     const ifaceIps = new Set<string>();
     for (const infos of Object.values(os.networkInterfaces())) {
@@ -87,27 +102,28 @@ export function hasIsolatedNetNs(): boolean {
         }
       }
     }
-    for (const raw of readFileSync("/etc/hosts", "utf8").split("\n")) {
-      const line = raw.split("#", 1)[0].trim();
-      const [ip, ...names] = line.split(HOSTS_SEP_RE);
-      if (names.includes(hostname)) {
-        return ifaceIps.has(ip);
-      }
-    }
+    return isolatedNetNsFromHosts({
+      hostname: os.hostname(),
+      ifaceIps,
+      hostsContent: readFileSync("/etc/hosts", "utf8"),
+    });
   } catch {
     // Unreadable /etc/hosts — can't prove isolation, keep the interfaces.
+    return false;
   }
-  return false;
 }
 
-/** Real-network IPv4s — virtual adapters (WSL/Docker/VPN) excluded. */
-export function lanIpv4Addresses(): string[] {
-  if (hasIsolatedNetNs()) {
+/** Núcleo puro do filtro — testável com um mapa de interfaces fictício. */
+export function pickLanIpv4s(
+  interfaces: Record<string, os.NetworkInterfaceInfo[] | undefined>,
+  isolated: boolean
+): string[] {
+  if (isolated) {
     return [];
   }
   const real: string[] = [];
   const virtual: string[] = [];
-  for (const [name, infos] of Object.entries(os.networkInterfaces())) {
+  for (const [name, infos] of Object.entries(interfaces)) {
     for (const info of infos ?? []) {
       if (!isLanAddress(info)) {
         continue;
@@ -116,6 +132,11 @@ export function lanIpv4Addresses(): string[] {
     }
   }
   return [...real, ...virtual];
+}
+
+/** Real-network IPv4s — virtual adapters (WSL/Docker/VPN) excluded. */
+export function lanIpv4Addresses(): string[] {
+  return pickLanIpv4s(os.networkInterfaces(), hasIsolatedNetNs());
 }
 
 /** First non-virtual, non-loopback, non-link-local IPv4 on the machine. */
