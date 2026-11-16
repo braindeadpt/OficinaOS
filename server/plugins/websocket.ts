@@ -69,6 +69,10 @@ export const websocketPlugin: FastifyPluginAsync = async (app) => {
                 OR: [
                   { lockedUntil: null },
                   { lockedUntil: { lt: new Date() } },
+                  // The shared demo account is exempt from lockout at
+                  // upgrade too — disconnecting it here would be the only
+                  // place the exemption silently didn't hold.
+                  ...(isDemoMode() ? [{ username: DEMO_USERNAME }] : []),
                 ],
               },
             },
