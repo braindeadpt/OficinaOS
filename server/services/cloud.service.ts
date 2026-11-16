@@ -12,7 +12,7 @@ import type { NotifyContext } from "./job.service.js";
 import { notify } from "./notification-dispatch.js";
 
 const FETCH_TIMEOUT_MS = 10_000;
-const HINT_TTL_MS = 24 * 3600 * 1000;
+export const HINT_TTL_MS = 24 * 3600 * 1000;
 
 interface CloudErrorBody {
   error?: { code?: string; message?: string };
@@ -228,6 +228,17 @@ export async function syncCloudEntitlements(
         )
       )
       .catch((err) => log.warn({ err }, "storefront sync failed"));
+  }
+
+  // Assinatura remota: recolhe assinaturas capturadas na página pública
+  // /sign/:token da cloud e entrega-as às sessões locais correspondentes —
+  // o poll do diálogo apanha-as sem saber que vieram de fora da LAN.
+  if (modules.includes("signature-remote")) {
+    import("./signature-relay.service.js")
+      .then(({ pullSignatureReplies }) =>
+        pullSignatureReplies(prisma, settings.cloudApiUrl ?? "", token, log)
+      )
+      .catch((err) => log.warn({ err }, "signature relay pull failed"));
   }
 
   // Multi-loja: empurra o snapshot diário agregado (hoje + ontem) para o
