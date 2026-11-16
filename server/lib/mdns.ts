@@ -69,7 +69,13 @@ export function inContainerRuntime(): boolean {
  * the hostname maps to loopback (127.0.1.1) instead. So hostname → an IP
  * that exists on an interface means isolated; anything else means the
  * adapters belong to the real network.
- * Edge: macvlan hosts look isolated by this rule — set APP_URL there.
+ *
+ * Ambiguity the file can't resolve: a host-network box whose /etc/hosts
+ * maps the hostname to its LAN IP (instead of 127.0.1.1) produces the
+ * same shape as a bridge self-mapping. There is no in-container signal
+ * that proves host networking — the netns IS the host's — so that case
+ * needs the explicit `HOST_NETWORK=true` override (also the escape hatch
+ * for macvlan, which looks isolated but is LAN-reachable).
  */
 /** Núcleo puro da heurística /etc/hosts — testável sem tocar no SO. */
 export function isolatedNetNsFromHosts(opts: {
@@ -89,6 +95,11 @@ export function isolatedNetNsFromHosts(opts: {
 
 export function hasIsolatedNetNs(): boolean {
   if (!inContainerRuntime()) {
+    return false;
+  }
+  if (process.env.HOST_NETWORK === "true") {
+    // Declared host networking (`--network host` / `network_mode: host`):
+    // the interfaces are the host's real adapters, reachable as usual.
     return false;
   }
   try {

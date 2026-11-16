@@ -103,6 +103,11 @@ const schema = z
       .string()
       .regex(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/i, "must be a DNS label")
       .optional(),
+    // Set "true" when the container runs with host networking
+    // (--network host / network_mode: host): LAN discovery keeps the
+    // host's real adapters. The /etc/hosts heuristic can't always tell
+    // host mode from an isolated bridge.
+    HOST_NETWORK: boolish,
 
     // ── Email (optional) ──────────────────────────────────────
     SMTP_HOST: z.string().optional(),

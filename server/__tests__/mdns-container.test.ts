@@ -132,6 +132,37 @@ describe("hasIsolatedNetNs / lanIpv4Addresses", () => {
     expect(primaryLanIpv4()).toBe("192.168.1.20");
   });
 
+  it("keeps the host adapters when HOST_NETWORK=true overrides a LAN-IP mapping", () => {
+    // Host-net boxes often map their hostname to the real LAN IP instead
+    // of 127.0.1.1 — a shape identical to a bridge self-mapping, so the
+    // explicit override is the source of truth.
+    vi.stubEnv("HOST_NETWORK", "true");
+    env({
+      container: true,
+      hostname: "shop-pc",
+      hosts: "127.0.0.1 localhost\n192.168.1.20 shop-pc\n",
+      interfaces: { ...LO, eth0: [iface("192.168.1.20")] },
+    });
+    expect(hasIsolatedNetNs()).toBe(false);
+    expect(lanIpv4Addresses()).toEqual(["192.168.1.20"]);
+    expect(primaryLanIpv4()).toBe("192.168.1.20");
+  });
+
+  it("reads a LAN-IP hostname mapping as isolated without the override", () => {
+    // Ambiguous shape — identical to a Docker bridge self-mapping, so the
+    // heuristic can't tell them apart. Suppressing is the safer default:
+    // emitting the IP would hand out a dead QR, while suppressing flags
+    // needsAppUrl; HOST_NETWORK=true is the escape for real host nets.
+    env({
+      container: true,
+      hostname: "shop-pc",
+      hosts: "127.0.0.1 localhost\n192.168.1.20 shop-pc\n",
+      interfaces: { ...LO, eth0: [iface("192.168.1.20")] },
+    });
+    expect(hasIsolatedNetNs()).toBe(true);
+    expect(lanIpv4Addresses()).toEqual([]);
+  });
+
   it("treats a K8s pod netns as isolated", () => {
     vi.stubEnv("KUBERNETES_SERVICE_HOST", "10.96.0.1");
     env({
