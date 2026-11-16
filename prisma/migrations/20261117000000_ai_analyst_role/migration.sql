@@ -97,26 +97,31 @@ FROM public.parts_catalog;
 -- Fora: supplierId (FK para tabela fora do sandbox).
 
 -- ── Role + grants (idempotente, nunca fatal) ─────────────────────
+-- O role deriva da BD (analyst_ro_<db>): roles são globais ao cluster,
+-- e um role com LOGIN partilhado por duas BDs ligar-se-ia a ambas —
+-- CONNECT vem de PUBLIC por defeito. Derivado, o role de A não lê B.
 
 DO $analyst$
+DECLARE
+  role_name text := 'analyst_ro_' || left(regexp_replace(lower(current_database()), '[^a-z0-9_]', '_', 'g'), 52);
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'analyst_ro') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = role_name) THEN
     BEGIN
-      CREATE ROLE analyst_ro NOLOGIN;
-      RAISE NOTICE 'analyst_ro: role criado — corre server/scripts/provision-analyst.ts para lhe dar LOGIN/password e gerar ANALYST_DATABASE_URL';
+      EXECUTE format('CREATE ROLE %I NOLOGIN', role_name);
+      RAISE NOTICE '%: role criado — o provisioning no arranque dá-lhe LOGIN/password', role_name;
     EXCEPTION WHEN OTHERS THEN
-      RAISE NOTICE 'analyst_ro: sem privilégio para criar o role (%) — schema e views ficam criados; a ferramenta SQL fica desligada até provisioning', SQLERRM;
+      RAISE NOTICE '%: sem privilégio para criar o role (%) — schema e views ficam criados; a ferramenta SQL fica desligada até provisioning', role_name, SQLERRM;
     END;
   END IF;
 
-  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'analyst_ro') THEN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = role_name) THEN
     BEGIN
-      EXECUTE 'GRANT USAGE ON SCHEMA analyst TO analyst_ro';
-      EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA analyst TO analyst_ro';
+      EXECUTE format('GRANT USAGE ON SCHEMA analyst TO %I', role_name);
+      EXECUTE format('GRANT SELECT ON ALL TABLES IN SCHEMA analyst TO %I', role_name);
       -- Cobre views criadas por migrações futuras com o mesmo owner.
-      EXECUTE 'ALTER DEFAULT PRIVILEGES IN SCHEMA analyst GRANT SELECT ON TABLES TO analyst_ro';
+      EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA analyst GRANT SELECT ON TABLES TO %I', role_name);
     EXCEPTION WHEN OTHERS THEN
-      RAISE NOTICE 'analyst_ro: grants falharam (%) — provisiona manualmente', SQLERRM;
+      RAISE NOTICE '%: grants falharam (%) — provisiona manualmente', role_name, SQLERRM;
     END;
   END IF;
 END

@@ -128,7 +128,7 @@ async function executeToolCalls(
       const analystDb = await getAnalystClient();
       result = analystDb
         ? (await executeQueryDatabase(analystDb, args.sql)).data
-        : "SQL queries are unavailable: ANALYST_DATABASE_URL is not configured. Ask the shop owner to run server/scripts/provision-analyst.ts.";
+        : "SQL queries are unavailable: the analyst database role is not provisioned. It is created automatically at startup when DATABASE_URL has CREATEROLE — otherwise a DBA must grant it (see server/scripts/provision-analyst.ts).";
     } else if (tc.function.name === "getSchema") {
       result = (await executeGetSchema(prisma, args.tableName)).data;
     } else {

@@ -43,6 +43,11 @@ psql \
 DROP SCHEMA public CASCADE;
 CREATE SCHEMA public;
 GRANT ALL ON SCHEMA public TO CURRENT_USER;
+-- O dump também traz `CREATE SCHEMA analyst` + views (o backup sai com
+-- --no-privileges, logo não há GRANTs para falhar num cluster sem o role).
+-- Sem o drop, o restore morria em "schema analyst already exists".
+-- O role/grants voltam a nascer no provisioning do arranque.
+DROP SCHEMA IF EXISTS analyst CASCADE;
 SQL
 
 echo "[restore] applying backup"
