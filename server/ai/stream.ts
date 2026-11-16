@@ -5,6 +5,7 @@ import { AppError } from "@shared/errors/app-error.js";
 import OpenAI from "openai";
 import { decryptSecret, isEncrypted } from "../lib/crypto.js";
 import { assertNotDemoMode } from "../lib/demo.js";
+import { getAnalystClient } from "./analyst-client.js";
 import { assembleSystemPrompt, getToolDefinitions } from "./context.js";
 import {
   type AccumulatedToolCall,
@@ -124,7 +125,10 @@ async function executeToolCalls(
     let result: string;
 
     if (tc.function.name === "queryDatabase") {
-      result = (await executeQueryDatabase(prisma, args.sql)).data;
+      const analystDb = await getAnalystClient();
+      result = analystDb
+        ? (await executeQueryDatabase(analystDb, args.sql)).data
+        : "SQL queries are unavailable: ANALYST_DATABASE_URL is not configured. Ask the shop owner to run server/scripts/provision-analyst.ts.";
     } else if (tc.function.name === "getSchema") {
       result = (await executeGetSchema(prisma, args.tableName)).data;
     } else {

@@ -10,7 +10,7 @@ interface ToolResult {
   success: boolean;
 }
 
-const ALLOWED_TABLES = new Set([
+export const ALLOWED_TABLES = new Set([
   "jobs",
   "customers",
   "devices",
@@ -32,7 +32,7 @@ const BLOCKED_TABLES = new Set([
   "shop_settings",
 ]);
 
-const BLOCKED_COLUMNS: Record<string, Set<string>> = {
+export const BLOCKED_COLUMNS: Record<string, Set<string>> = {
   jobs: new Set(["accesscode", "deviceunlockcode", "intakesignaturedataurl"]),
   users: new Set(["password"]),
 };
@@ -309,7 +309,7 @@ export async function executeGetSchema(
       const columns = await prisma.$queryRaw(
         Prisma.sql`SELECT column_name, data_type, is_nullable, column_default
          FROM information_schema.columns
-         WHERE table_name = ${table} AND table_schema = 'public'
+         WHERE table_name = ${table} AND table_schema = 'analyst'
          ORDER BY ordinal_position`
       );
       results[table] = columns;
@@ -387,16 +387,27 @@ export async function executeQueryDatabase(
     // and braces: the static checks above already admit SELECT alone, but a
     // read-only transaction also neuters side-effecting functions
     // (nextval, setval, …) even if analysis ever misses them.
+    // search_path=analyst is the real boundary: this client connects as
+    // analyst_ro, which only sees the allowlisted views in the `analyst`
+    // schema — a derived table, TABLE-expression or schema-qualified
+    // reference that slips past the regexes dies on the database, not on
+    // the model's output.
     const result = await prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe(
         `SET LOCAL statement_timeout = ${STATEMENT_TIMEOUT_MS}`
       );
       await tx.$executeRawUnsafe("SET TRANSACTION READ ONLY");
+      await tx.$executeRawUnsafe("SET LOCAL search_path = analyst");
       return await tx.$queryRawUnsafe(finalSql);
     });
     return {
       success: true,
-      data: JSON.stringify(redactProtectedColumns(result)),
+      data: JSON.stringify(
+        redactProtectedColumns(result),
+        // pg serializes COUNT(*) and other int8 as BigInt — without this
+        // replacer the most basic analyst query fails on stringify.
+        (_key, value) => (typeof value === "bigint" ? Number(value) : value)
+      ),
     };
   } catch (err) {
     return {

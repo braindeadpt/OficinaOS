@@ -86,6 +86,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate-deploy": "prisma migrate deploy",
+    "provision:analyst": "bun run server/scripts/provision-analyst.ts",
     "db:push": "prisma db push",
     "db:reset": "prisma migrate reset --force && bun run db:seed",
     "db:studio": "prisma studio",

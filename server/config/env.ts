@@ -32,7 +32,7 @@ const boolish = z
 // Secrets that must never reach the public demo — real credentials on a
 // shared, hourly-reset instance would leak the moment anyone hit Settings.
 const DEMO_FORBIDDEN_ENV =
-  /^(OPENAI_|EMAIL_|WHATSAPP_|SMTP_|META_|EVOLUTION_|OFICINAOS_CLOUD_|CLOUD_|GITHUB_|INVOICEXPRESS_|IX_|TRADE_|MARKET_|S3_|R2_|AWS_|BACKUP_|SEED_ADMIN_|SETUP_TOKEN)/;
+  /^(OPENAI_|EMAIL_|WHATSAPP_|SMTP_|META_|EVOLUTION_|OFICINAOS_CLOUD_|CLOUD_|GITHUB_|INVOICEXPRESS_|IX_|TRADE_|MARKET_|S3_|R2_|AWS_|BACKUP_|SEED_ADMIN_|SETUP_TOKEN|ANALYST_)/;
 // Catch-all for credentials we didn't enumerate by prefix: anything that
 // LOOKS like a secret is forbidden in demo — except the few the app
 // genuinely needs to boot (session/crypto keys stay local, never leave
@@ -81,6 +81,11 @@ const schema = z
 
     // ── Database ──────────────────────────────────────────────
     DATABASE_URL: z.string().url(),
+    // Optional: dedicated least-privilege connection for the AI SQL tool.
+    // Must authenticate as analyst_ro (see provision-analyst.ts). Unset →
+    // the tool stays disabled (fail-closed), the rest of the assistant
+    // keeps working.
+    ANALYST_DATABASE_URL: z.string().url().optional(),
 
     // ── Secrets ───────────────────────────────────────────────
     BETTER_AUTH_SECRET: secretString(),
