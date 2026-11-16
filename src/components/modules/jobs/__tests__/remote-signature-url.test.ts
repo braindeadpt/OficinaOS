@@ -55,4 +55,11 @@ describe("pickSignBaseUrl", () => {
     ).toBe("http://192.168.1.50:4000");
     expect(pickSignBaseUrl(["http://localhost:4000"])).toBeNull();
   });
+
+  it("never picks wildcard bind addresses (0.0.0.0 is not dialable)", () => {
+    expect(
+      pickSignBaseUrl(["http://0.0.0.0:4000", "http://10.0.0.9:4000"])
+    ).toBe("http://10.0.0.9:4000");
+    expect(pickSignBaseUrl(["http://0.0.0.0:4000"])).toBeNull();
+  });
 });

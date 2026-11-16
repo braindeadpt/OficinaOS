@@ -22,6 +22,7 @@ interface RemoteSignatureDialogProps {
 }
 
 interface AccessInfo {
+  needsAppUrl?: boolean;
   urls: string[];
 }
 
@@ -54,6 +55,7 @@ export default function RemoteSignatureDialog({
   const [copied, setCopied] = useState(false);
   const [expired, setExpired] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const [needsAppUrl, setNeedsAppUrl] = useState(false);
   const sessionRef = useRef<string | null>(null);
   // The token whose signature already landed — its row must survive until
   // consumeSignatureSession moves it onto the job, so close/retry never
@@ -87,6 +89,7 @@ export default function RemoteSignatureDialog({
     setCopied(false);
     setExpired(false);
     setLoadError(false);
+    setNeedsAppUrl(false);
     const doc = documentRef.current;
     try {
       const [sessionRes, infoRes] = await Promise.all([
@@ -102,10 +105,11 @@ export default function RemoteSignatureDialog({
 
       // Pro signature-remote gives a public cloud link that works anywhere;
       // without it the QR needs a LAN-reachable base for the phone.
-      const urls = (infoRes.data as AccessInfo).urls ?? [];
-      const base = pickSignBaseUrl(urls);
+      const info = infoRes.data as AccessInfo;
+      const base = pickSignBaseUrl(info.urls ?? []);
       const signUrl = cloudSignUrl ?? (base ? `${base}/sign/${token}` : null);
       if (!signUrl) {
+        setNeedsAppUrl(Boolean(info.needsAppUrl));
         setLoadError(true);
         return;
       }
@@ -178,9 +182,15 @@ export default function RemoteSignatureDialog({
 
   let content: React.ReactNode;
   if (loadError) {
+    // needsAppUrl: container install without APP_URL — the fix is config,
+    // not a retry, so it gets its own message instead of the generic error.
     content = (
       <p className="py-8 text-center text-error text-sm" role="alert">
-        {t("intake.sign_remote_error")}
+        {t(
+          needsAppUrl
+            ? "intake.sign_remote_needs_app_url"
+            : "intake.sign_remote_error"
+        )}
       </p>
     );
   } else if (qrDataUrl) {
