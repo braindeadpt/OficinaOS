@@ -39,6 +39,37 @@ describe("isRateLimitExempt", () => {
       false
     );
   });
+
+  it("counts %-encoded API paths — they are not asset requests", () => {
+    // /%61pi/jobs decodes to /api/jobs: an encoded path must not look like
+    // a static asset to the limiter while the router resolves it to a
+    // handler. Unmatched paths have no route pattern, so raw.url is used.
+    expect(
+      isRateLimitExempt({
+        method: "GET",
+        url: "/%61pi/jobs",
+        raw: { url: "/%61pi/jobs" },
+      })
+    ).toBe(false);
+    // The matched route pattern is already normalized — trust it over the
+    // raw URL it was reached by.
+    expect(
+      isRateLimitExempt({
+        method: "GET",
+        url: "/%61pi/jobs/42",
+        raw: { url: "/%61pi/jobs/42" },
+        routeOptions: { url: "/api/jobs/:id" },
+      })
+    ).toBe(false);
+    // Encoded slashes collapse: /%2Fapi/x → //api/x → /api/x.
+    expect(
+      isRateLimitExempt({
+        method: "GET",
+        url: "/%2Fapi/jobs",
+        raw: { url: "/%2Fapi/jobs" },
+      })
+    ).toBe(false);
+  });
 });
 
 describe("CappedBackoffStore", () => {

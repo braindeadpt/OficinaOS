@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { INTAKE_DOCUMENT_VERSION } from "../intake-document.js";
 
+// Signature canvases are PNG-only data URLs with a pure base64 body.
+// Anything else (a `data:image/svg`, an `x"onerror=` tail) would land
+// unescaped in an <img src> on printed receipts, so every signature
+// field validates against this exact shape.
+export const SIGNATURE_DATA_URL_RE = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/;
+
 // Frozen document carried by a signature session — validated on create so a
 // malformed snapshot can't produce a job that never verifies.
 export const intakeDocumentSchema = z.object({

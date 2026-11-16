@@ -17,6 +17,7 @@ function mockPrisma() {
       findMany: vi.fn(),
     },
     auditLog: { create: vi.fn(), findMany: vi.fn() },
+    session: { deleteMany: vi.fn() },
     $transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(mock)),
   };
   return mock as unknown as any;
@@ -108,6 +109,27 @@ describe("toggleStatus target-role guard", () => {
 
     const result = await toggleStatus(prisma, "u-tech", false, "FRONT_DESK");
     expect(result).toMatchObject({ isActive: false });
+  });
+
+  it("deleting live sessions is part of deactivation, not activation", async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      id: "u-tech",
+      role: "TECHNICIAN",
+    });
+    prisma.user.update.mockResolvedValue({ id: "u-tech", isActive: false });
+    prisma.session.deleteMany.mockResolvedValue({ count: 2 });
+
+    await toggleStatus(prisma, "u-tech", false, "OWNER");
+    // HTTP gate + WS sweep key off live session rows — revoke them inside
+    // the same transaction as the flag flip.
+    expect(prisma.session.deleteMany).toHaveBeenCalledWith({
+      where: { userId: "u-tech" },
+    });
+
+    prisma.session.deleteMany.mockClear();
+    prisma.user.update.mockResolvedValue({ id: "u-tech", isActive: true });
+    await toggleStatus(prisma, "u-tech", true, "OWNER");
+    expect(prisma.session.deleteMany).not.toHaveBeenCalled();
   });
 });
 

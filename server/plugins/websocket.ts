@@ -1,6 +1,8 @@
 import type { FastifyPluginAsync } from "fastify";
 import { loadEnv, resolveUrls } from "../config/env.js";
 import { getSessionFromRequest } from "../lib/auth.js";
+import { DEMO_USERNAME, isDemoMode } from "../lib/demo.js";
+import { isAccountLocked } from "../services/account-lockout.service.js";
 
 interface WsClient {
   alive: boolean;
@@ -55,7 +57,21 @@ export const websocketPlugin: FastifyPluginAsync = async (app) => {
       const ids = [...connections].map((c) => c.sessionId);
       const rows = ids.length
         ? await app.prisma.session.findMany({
-            where: { id: { in: ids }, expiresAt: { gt: new Date() } },
+            where: {
+              id: { in: ids },
+              expiresAt: { gt: new Date() },
+              // Same account checks as the HTTP preHandler: a deactivated,
+              // locked or must-change-password account stops receiving
+              // broadcasts even while its session row still exists.
+              user: {
+                isActive: true,
+                mustChangePassword: false,
+                OR: [
+                  { lockedUntil: null },
+                  { lockedUntil: { lt: new Date() } },
+                ],
+              },
+            },
             select: { id: true },
           })
         : [];
@@ -100,6 +116,35 @@ export const websocketPlugin: FastifyPluginAsync = async (app) => {
     if (!session) {
       app.log.warn("WS connection rejected — invalid session");
       socket.close(4001, "Unauthorized");
+      return;
+    }
+    // The upgrade check mirrors the HTTP preHandler, not just "has a
+    // session": disabled / locked / must-change-password accounts must
+    // not sit on the broadcast channel either.
+    if (!session.isActive) {
+      app.log.warn({ userId: session.id }, "WS rejected — account disabled");
+      socket.close(4001, "Account disabled");
+      return;
+    }
+    const lockoutUser = await app.prisma.user.findUnique({
+      where: { id: session.id },
+      select: { username: true, failedLoginAttempts: true, lockedUntil: true },
+    });
+    if (
+      lockoutUser &&
+      !(isDemoMode() && lockoutUser.username === DEMO_USERNAME) &&
+      isAccountLocked(lockoutUser)
+    ) {
+      app.log.warn({ userId: session.id }, "WS rejected — account locked");
+      socket.close(4001, "Account locked");
+      return;
+    }
+    if (session.mustChangePassword) {
+      app.log.warn(
+        { userId: session.id },
+        "WS rejected — password change required"
+      );
+      socket.close(4001, "Password change required");
       return;
     }
 

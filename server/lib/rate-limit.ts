@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { AppError } from "@shared/errors/app-error.js";
 import type { FastifyRequest } from "fastify";
+import { normalizedRequestPath } from "./demo.js";
 
 // @fastify/rate-limit ships its store as CommonJS without a typed export.
 const require = createRequire(import.meta.url);
@@ -109,9 +110,18 @@ export class CappedBackoffStore implements RateLimitStore {
  * counting them made a normal reload burn the whole 100 req/min budget.
  */
 export function isRateLimitExempt(
-  request: Pick<FastifyRequest, "method" | "url">
+  request: Pick<FastifyRequest, "method" | "url"> & {
+    routeOptions?: { url?: string };
+    raw?: { url?: string };
+  }
 ): boolean {
-  const pathname = request.url.split("?", 1)[0] ?? request.url;
+  // The /api prefix check runs on the normalized path — a %XX-encoded
+  // path (/%61pi/...) must not look like a plain asset to the limiter
+  // while the router still resolves it to an API handler.
+  const pathname = normalizedRequestPath(
+    request.routeOptions?.url,
+    request.raw?.url ?? request.url
+  );
   if (pathname === "/health") {
     return true;
   }

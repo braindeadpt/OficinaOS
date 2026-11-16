@@ -194,6 +194,21 @@ export async function toggleStatus(
   if (target.role === Role.OWNER && callerRole !== Role.OWNER) {
     throw new AppError("FORBIDDEN");
   }
+  // Deactivation revokes sessions in the same transaction — the HTTP gate
+  // and the WS sweep both key off live session rows, so deleting them is
+  // the point where "disabled" actually takes effect for connected clients.
+  if (!isActive) {
+    return await prisma.$transaction(async (tx) => {
+      const user = await userUpdateStatus(
+        tx,
+        id,
+        isActive,
+        USER_SELECT_NO_IMAGE
+      );
+      await deleteUserSessions(tx, id);
+      return user;
+    });
+  }
   return await userUpdateStatus(prisma, id, isActive, USER_SELECT_NO_IMAGE);
 }
 
