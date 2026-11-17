@@ -292,6 +292,16 @@ describe("executeQueryDatabase — resource bounds", () => {
     await executeQueryDatabase(mock.prisma, "SELECT id FROM jobs");
     expect(mock.setStatements[0]).toContain("SET LOCAL statement_timeout");
   });
+
+  it("runs inside the analyst schema sandbox", async () => {
+    // The dedicated connection's session_user is analyst_ro; pinning
+    // search_path=analyst makes every bare table name resolve to the
+    // allowlisted views — the Postgres-level boundary behind the regexes.
+    const mock = makePrisma();
+    await executeQueryDatabase(mock.prisma, "SELECT id FROM jobs");
+    expect(mock.setStatements).toContain("SET LOCAL search_path = analyst");
+    expect(mock.setStatements).toContain("SET TRANSACTION READ ONLY");
+  });
 });
 
 describe("executeGetSchema", () => {

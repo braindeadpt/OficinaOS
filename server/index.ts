@@ -13,6 +13,7 @@ import { startOverdueScheduler } from "./jobs/overdue-scheduler.js";
 import { startMdnsResponder } from "./lib/mdns.js";
 import { isFileRequestPath } from "./lib/spa-fallback.js";
 import { cacheControlFor } from "./lib/static-cache.js";
+import { registerUploadsStatic } from "./lib/uploads-static.js";
 import authPlugin from "./plugins/auth.js";
 import demoPlugin from "./plugins/demo.js";
 import { localePlugin } from "./plugins/locale.js";
@@ -234,14 +235,7 @@ if (IS_PROD) {
   });
 }
 
-// Uploads: served only through an authenticated pre-handler. The global
-// authPlugin preHandler already rejects unauthenticated requests for anything
-// not in its allow-list, so /api/uploads/** is session-gated.
-await app.register(staticPlugin, {
-  root: path.resolve(env.UPLOAD_DIR),
-  prefix: "/api/uploads/",
-  decorateReply: false,
-});
+await registerUploadsStatic(app, env.UPLOAD_DIR);
 
 process.on("uncaughtException", (err) => {
   app.log.fatal({ err }, "Uncaught exception");
