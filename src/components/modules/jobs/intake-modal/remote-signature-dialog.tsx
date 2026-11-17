@@ -183,15 +183,26 @@ export default function RemoteSignatureDialog({
   let content: React.ReactNode;
   if (loadError) {
     // needsAppUrl: container install without APP_URL — the fix is config,
-    // not a retry, so it gets its own message instead of the generic error.
+    // not a retry, so it gets its own message and no retry button.
     content = (
-      <p className="py-8 text-center text-error text-sm" role="alert">
-        {t(
-          needsAppUrl
-            ? "intake.sign_remote_needs_app_url"
-            : "intake.sign_remote_error"
+      <div className="mt-4 flex flex-col items-center gap-2">
+        <p className="text-center text-error text-sm" role="alert">
+          {t(
+            needsAppUrl
+              ? "intake.sign_remote_needs_app_url"
+              : "intake.sign_remote_error"
+          )}
+        </p>
+        {!needsAppUrl && (
+          <button
+            className="font-label text-primary text-sm underline"
+            onClick={startSession}
+            type="button"
+          >
+            {t("intake.sign_remote_retry")}
+          </button>
         )}
-      </p>
+      </div>
     );
   } else if (qrDataUrl) {
     content = (
