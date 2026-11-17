@@ -121,14 +121,14 @@ export function isDemoBlockedPath(method: string, pathname: string): boolean {
 export const DEMO_IMPORT_MAX_ROWS = 50;
 
 /**
- * Path the demo guard evaluates. For concrete routes the matched
- * routeOptions.url pattern is already normalized by the router (%XX is
- * decoded before matching, so /api/%75sers/... lands on /api/users/:id).
- * For wildcard handlers (the better-auth /api/auth/* catch-all) and
- * unmatched paths we decode the raw URL ourselves — otherwise an encoded
- * path would sail past the prefix blocklist while still hitting a handler.
+ * The path any prefix-based guard must check: a matched routeOptions.url
+ * pattern is already normalized by the router (%XX is decoded before
+ * matching, so /api/%75sers/... lands on /api/users/:id). For wildcard
+ * handlers (the better-auth /api/auth/* catch-all) and unmatched paths we
+ * decode the raw URL ourselves — otherwise an encoded path would sail
+ * past a prefix check while still hitting a handler.
  */
-export function demoRequestPath(
+export function normalizedRequestPath(
   routePattern: string | undefined,
   rawUrl: string
 ): string {

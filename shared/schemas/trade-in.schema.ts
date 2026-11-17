@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { SIGNATURE_DATA_URL_RE } from "./signature.schema";
+
 const SELLER_ID_TYPES = ["CC", "PASSPORT", "NIF", "OTHER"] as const;
 const CONDITIONS = ["EXCELLENT", "GOOD", "FAIR", "POOR"] as const;
 const PAYMENT_METHODS = ["CASH", "TRANSFER", "STORE_CREDIT"] as const;
@@ -25,7 +27,7 @@ export const createTradeInSchema = z
     paymentMethod: z.enum(PAYMENT_METHODS),
     signatureDataUrl: z
       .string()
-      .startsWith("data:image/")
+      .regex(SIGNATURE_DATA_URL_RE, "validations.invalid_signature")
       .max(300_000)
       .optional(),
   })
@@ -46,7 +48,7 @@ export const updateTradeInSchema = z
     paymentMethod: z.enum(PAYMENT_METHODS).optional(),
     signatureDataUrl: z
       .string()
-      .startsWith("data:image/")
+      .regex(SIGNATURE_DATA_URL_RE, "validations.invalid_signature")
       .max(300_000)
       .nullable()
       .optional(),

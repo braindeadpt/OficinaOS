@@ -1,7 +1,11 @@
 import { AppError } from "@shared/errors/app-error.js";
 import type { FastifyPluginAsync } from "fastify";
 import fp from "fastify-plugin";
-import { demoRequestPath, isDemoBlockedPath, isDemoMode } from "../lib/demo.js";
+import {
+  isDemoBlockedPath,
+  isDemoMode,
+  normalizedRequestPath,
+} from "../lib/demo.js";
 
 /**
  * DEMO_MODE guard: rejects every route on the blocklist with 403
@@ -20,7 +24,7 @@ const demoPlugin: FastifyPluginAsync = async (app) => {
   }
   // biome-ignore lint/suspicious/useAwait: Fastify hook signature is async
   app.addHook("onRequest", async (request) => {
-    const pathname = demoRequestPath(
+    const pathname = normalizedRequestPath(
       request.routeOptions?.url,
       request.raw.url ?? request.url
     );

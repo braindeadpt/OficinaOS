@@ -5,7 +5,11 @@ import type { FastifyPluginAsync } from "fastify";
 import fp from "fastify-plugin";
 import type { Auth } from "../lib/auth.js";
 import { createAuth, getSessionFromRequest } from "../lib/auth.js";
-import { DEMO_USERNAME, isDemoMode } from "../lib/demo.js";
+import {
+  DEMO_USERNAME,
+  isDemoMode,
+  normalizedRequestPath,
+} from "../lib/demo.js";
 import { isEmailConfigured } from "../lib/email.js";
 import {
   incrementFailedAttempt,
@@ -242,8 +246,13 @@ const authPlugin: FastifyPluginAsync = async (app) => {
   });
 
   app.addHook("preHandler", async (request, _reply) => {
-    const url = request.url;
-    const pathname = url.split("?")[0];
+    // Path check on the normalized form: a %XX-encoded path
+    // (/%61pi/...) must not slip past the session gate while the
+    // router still resolves it to an /api handler.
+    const pathname = normalizedRequestPath(
+      request.routeOptions?.url,
+      request.raw.url ?? request.url
+    );
 
     if (
       pathname === "/health" ||

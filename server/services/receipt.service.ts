@@ -488,7 +488,7 @@ function signatureSectionHtml(
   if (!dataUrl?.startsWith("data:image/")) {
     return "";
   }
-  return `<p style="text-align:left;font-size:10px;color:#555">${esc(termsSigned)}</p><div style="text-align:center"><img src="${dataUrl}" style="max-width:200px;max-height:60px" alt="signature" /></div>${sealHtml}<div class="sep"></div>`;
+  return `<p style="text-align:left;font-size:10px;color:#555">${esc(termsSigned)}</p><div style="text-align:center"><img src="${esc(dataUrl)}" style="max-width:200px;max-height:60px" alt="signature" /></div>${sealHtml}<div class="sep"></div>`;
 }
 
 export async function renderReceiptHtml(
@@ -774,7 +774,7 @@ ${
       : "";
 
   const signatureBox = job.intakeSignatureDataUrl?.startsWith("data:image/")
-    ? `<img src="${job.intakeSignatureDataUrl}" alt="signature" />`
+    ? `<img src="${esc(job.intakeSignatureDataUrl)}" alt="signature" />`
     : `<div class="line">${s.signatureLabel}</div>`;
   const signatureHtml = prefs.showSignature
     ? `<div class="sign"><p class="terms">${esc(s.termsSigned)}</p><div class="box">${signatureBox}</div>${signatureSealHtml(job, s)}</div>`
@@ -1087,7 +1087,7 @@ export async function renderTradeInReceiptHtml(
   const shopHeader = shopHeaderHtml(settings);
   const date = new Date(tradeIn.createdAt).toLocaleString(s.dateLocale);
   const signatureImg = tradeIn.signatureDataUrl
-    ? `<div style="text-align:center"><img src="${tradeIn.signatureDataUrl}" style="max-width:200px;max-height:60px" alt="signature" /></div>`
+    ? `<div style="text-align:center"><img src="${esc(tradeIn.signatureDataUrl)}" style="max-width:200px;max-height:60px" alt="signature" /></div>`
     : `<p style="text-align:center">${s.signatureLabel}: ____________________</p>`;
   const footerHtml = settings?.receiptFooter
     ? `<div class="sep"></div><p style="text-align:left">${escMultiline(settings.receiptFooter)}</p>`

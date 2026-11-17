@@ -8,6 +8,7 @@ import {
   type IntakeDocumentSource,
   publicDocumentView,
 } from "@shared/intake-document.js";
+import { SIGNATURE_DATA_URL_RE } from "@shared/schemas/signature.schema.js";
 
 // The QR is photographed easily and the bearer token is the only secret, so
 // the window stays short — a fresh session is one click away in the modal.
@@ -16,7 +17,6 @@ const TOKEN_RE = /^[a-f0-9]{64}$/;
 // canvas.toDataURL("image/png") output — a stroke on a mostly-blank canvas is
 // tens of KB; 500 KB rejects anything that is not a real signature.
 const MAX_SIGNATURE_BYTES = 500 * 1024;
-const SIGNATURE_DATA_URL_RE = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/;
 
 /** sha256 of the canonical document + the signature image — the job's proof. */
 export function intakeDocumentHash(

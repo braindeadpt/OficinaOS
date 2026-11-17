@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { SIGNATURE_DATA_URL_RE } from "./signature.schema";
+
 export const closeCashSessionSchema = z.object({
   /** Physical cash counted in the drawer. */
   countedCash: z
@@ -22,7 +24,7 @@ export const closeCashSessionSchema = z.object({
   /** Signature image as a PNG data URL, drawn on the close dialog. */
   signatureDataUrl: z
     .string()
-    .startsWith("data:image/png;base64,", "validations.invalid_signature")
+    .regex(SIGNATURE_DATA_URL_RE, "validations.invalid_signature")
     .max(1_000_000, "validations.max_length")
     .optional(),
 });

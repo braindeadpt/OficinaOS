@@ -9,6 +9,7 @@ import { serialField } from "@shared/utils/imei";
 import { z } from "zod";
 import { opaqueIdSchema } from "./id.schema";
 import { phoneSchema } from "./phone.schema";
+import { SIGNATURE_DATA_URL_RE } from "./signature.schema";
 
 const repairCategoryValues = Object.values(RepairCategory) as [
   string,
@@ -58,7 +59,7 @@ export const createJobSchema = z.object({
   // Signature canvas PNG data URL — ~50-150KB typical, cap well above.
   intakeSignatureDataUrl: z
     .string()
-    .startsWith("data:image/")
+    .regex(SIGNATURE_DATA_URL_RE, "validations.invalid_signature")
     .max(600_000)
     .optional(),
   // Remote signing: the session token whose frozen document must match this
