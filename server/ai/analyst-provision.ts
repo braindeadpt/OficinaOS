@@ -3,8 +3,8 @@
  * entre o arranque automático (start:prod) e o script manual
  * (server/scripts/provision-analyst.ts, caso DBA).
  *
- * O role é derivado da base de dados (`analyst_ro_<db>`): roles são
- * globais ao cluster — duas BDs OficinaOS no mesmo Postgres não podem
+ * O role é derivado da base de dados (`analyst_ro_<db>_<hash>`): roles
+ * são globais ao cluster — duas BDs OficinaOS no mesmo Postgres não podem
  * partilhar um role com LOGIN, senão um conseguia ligar-se à BD da
  * outra (CONNECT vem de PUBLIC) e a rotação de uma afetava a outra.
  *
@@ -14,7 +14,7 @@
  * Em Docker isso é o volume `uploads`; no Windows, a pasta de dados da
  * instalação. Gerada uma vez — não é rodada a cada arranque.
  */
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -29,12 +29,23 @@ import { loadEnv } from "../config/env.js";
 const ROLE_PREFIX = "analyst_ro_";
 const NON_IDENT_RE = /[^a-z0-9_]/g;
 const IDENT_MAX = 63;
+const HASH_LEN = 8;
 const QUOTE_RE = /'/g;
 
-/** analyst_ro_<db>, sanitizado a identificador e cortado a 63 chars. */
+/**
+ * analyst_ro_<db>_<hash8>, ≤63 chars. O nome sanitizado pode colidir
+ * (loja-a vs loja_a) e o role é global ao cluster — o sufixo md5 do nome
+ * exato separa essas BDs. Tem de bater certo com a derivação no DO-block
+ * da migração 20261117000000_ai_analyst_role.
+ */
 export function analystRoleName(dbName: string): string {
   const clean = dbName.toLowerCase().replace(NON_IDENT_RE, "_");
-  return `${ROLE_PREFIX}${clean.slice(0, IDENT_MAX - ROLE_PREFIX.length)}`;
+  const suffix = createHash("md5")
+    .update(dbName)
+    .digest("hex")
+    .slice(0, HASH_LEN);
+  const budget = IDENT_MAX - ROLE_PREFIX.length - 1 - HASH_LEN;
+  return `${ROLE_PREFIX}${clean.slice(0, budget)}_${suffix}`;
 }
 
 export function analystSecretPath(uploadDir: string): string {
@@ -93,28 +104,28 @@ export async function ensureAnalystProvisioned(): Promise<ProvisionResult> {
       return { status: "no-privilege" };
     }
 
-    let password = readAnalystPassword(env.UPLOAD_DIR);
+    const onFile = readAnalystPassword(env.UPLOAD_DIR);
     const exists = await admin.query(
       "SELECT 1 FROM pg_roles WHERE rolname = $1",
       [role]
     );
-    if (exists.rowCount === 0 || password === null) {
-      // Role novo, ou ficheiro perdido (restauro/limpeza): password nova —
-      // a do ficheiro antigo já não é conhecida por ninguém.
-      password ??= randomBytes(36).toString("base64url");
-      const escaped = password.replace(QUOTE_RE, "''");
-      if (exists.rowCount === 0) {
-        await admin.query(`CREATE ROLE "${role}" LOGIN PASSWORD '${escaped}'`);
-      } else {
-        await admin.query(
-          `ALTER ROLE "${role}" WITH LOGIN PASSWORD '${escaped}'`
-        );
-      }
-      writeAnalystPassword(env.UPLOAD_DIR, password);
+    // O ficheiro é a fonte da verdade: se sumiu (restauro/limpeza) gera-se
+    // uma nova — a do ficheiro antigo já não é conhecida por ninguém.
+    const password = onFile ?? randomBytes(36).toString("base64url");
+    const escaped = password.replace(QUOTE_RE, "''");
+    if (exists.rowCount === 0) {
+      await admin.query(`CREATE ROLE "${role}" LOGIN PASSWORD '${escaped}'`);
     } else {
-      // A migração pode ter criado o role NOLOGIN — garante LOGIN sem tocar
-      // na password (idempotente, barato a cada arranque).
-      await admin.query(`ALTER ROLE "${role}" WITH LOGIN`);
+      // Role já existe (a migração cria-o NOLOGIN sem password): garante
+      // LOGIN e reconcilia a password com o ficheiro — sem isto, uma BD
+      // refeita com uploads preservados ficava com password NULL e a auth
+      // falhava em todos os arranques seguintes.
+      await admin.query(
+        `ALTER ROLE "${role}" WITH LOGIN PASSWORD '${escaped}'`
+      );
+    }
+    if (onFile === null) {
+      writeAnalystPassword(env.UPLOAD_DIR, password);
     }
 
     await admin.query(`GRANT USAGE ON SCHEMA analyst TO "${role}"`);

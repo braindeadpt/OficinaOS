@@ -82,7 +82,7 @@ const schema = z
     // ── Database ──────────────────────────────────────────────
     DATABASE_URL: z.string().url(),
     // Optional: dedicated least-privilege connection for the AI SQL tool
-    // (DBA case). Must authenticate as analyst_ro_<db> — see
+    // (DBA case). Must authenticate as analyst_ro_<db>_<hash> — see
     // server/ai/analyst-provision.ts. Unset → derived automatically from
     // DATABASE_URL + the provisioned password file when possible, else
     // the tool stays disabled (fail-closed) and the assistant keeps working.

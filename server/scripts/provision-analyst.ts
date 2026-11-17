@@ -8,10 +8,13 @@
  * desligada (fail-closed) e a app sobe na mesma.
  *
  * Caso DBA (BD gerida sem CREATEROLE no user da app): um DBA corre —
- *   CREATE ROLE analyst_ro_<db> LOGIN PASSWORD '…';
- *   GRANT USAGE ON SCHEMA analyst TO analyst_ro_<db>;
- *   GRANT SELECT ON ALL TABLES IN SCHEMA analyst TO analyst_ro_<db>;
+ *   CREATE ROLE analyst_ro_<db>_<hash> LOGIN PASSWORD '…';
+ *   GRANT USAGE ON SCHEMA analyst TO analyst_ro_<db>_<hash>;
+ *   GRANT SELECT ON ALL TABLES IN SCHEMA analyst TO analyst_ro_<db>_<hash>;
  * e define ANALYST_DATABASE_URL no .env — este script passa a no-op.
+ * O nome exato do role (derivação de analyst-provision.ts):
+ *   SELECT 'analyst_ro_' || left(regexp_replace(lower('SUA_BD'), '[^a-z0-9_]', '_', 'g'), 43)
+ *          || '_' || left(md5('SUA_BD'), 8);
  */
 import { ensureAnalystProvisioned } from "../ai/analyst-provision.js";
 

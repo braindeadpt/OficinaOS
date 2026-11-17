@@ -97,13 +97,15 @@ FROM public.parts_catalog;
 -- Fora: supplierId (FK para tabela fora do sandbox).
 
 -- ── Role + grants (idempotente, nunca fatal) ─────────────────────
--- O role deriva da BD (analyst_ro_<db>): roles são globais ao cluster,
--- e um role com LOGIN partilhado por duas BDs ligar-se-ia a ambas —
--- CONNECT vem de PUBLIC por defeito. Derivado, o role de A não lê B.
+-- O role deriva da BD (analyst_ro_<db>_<hash8>): roles são globais ao
+-- cluster, e um role com LOGIN partilhado por duas BDs ligar-se-ia a
+-- ambas — CONNECT vem de PUBLIC por defeito. O sufixo md5 do nome exato
+-- separa BDs cujo nome sanitizado colide (loja-a vs loja_a). Tem de
+-- bater certo com analystRoleName em server/ai/analyst-provision.ts.
 
 DO $analyst$
 DECLARE
-  role_name text := 'analyst_ro_' || left(regexp_replace(lower(current_database()), '[^a-z0-9_]', '_', 'g'), 52);
+  role_name text := 'analyst_ro_' || left(regexp_replace(lower(current_database()), '[^a-z0-9_]', '_', 'g'), 43) || '_' || left(md5(current_database()), 8);
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = role_name) THEN
     BEGIN

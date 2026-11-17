@@ -1,6 +1,6 @@
 /**
  * Integration test — the AI analyst SQL sandbox (schema `analyst` + role
- * `analyst_ro_<db>` on a dedicated connection). Asserts the Postgres
+ * `analyst_ro_<db>_<hash>` on a dedicated connection). Asserts the Postgres
  * layer — not the regexes — is what stops the attacks from the security
  * finding: derived tables, TABLE-expressions, schema-qualified reads,
  * pg_authid and the set_config('role', …) session_user escape.
@@ -9,7 +9,14 @@
  * `prisma migrate deploy`, skipped when no PostgreSQL is reachable.
  */
 import { spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PrismaClient } from "@generated/client";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -399,5 +406,73 @@ maybeDescribe("migration is non-fatal without CREATEROLE", () => {
       [ROLE]
     );
     expect(roles.rowCount).toBe(0);
+  });
+});
+
+maybeDescribe("ensureAnalystProvisioned — role NOLOGIN recriado", () => {
+  it("reconciles the persisted password instead of leaving it NULL", async () => {
+    // Corre em último: o teste anterior deixou o role dropped — recria-se
+    // o cenário real de uma BD refeita com uploads preservados, onde a
+    // migração volta a criar o role NOLOGIN sem password e o ficheiro
+    // antigo ainda existe. Sem a reconciliação, ALTER … WITH LOGIN
+    // deixava a password NULL e a auth falhava em todos os arranques.
+    const { resetEnvForTests } = await import("../../config/env.js");
+    const { ensureAnalystProvisioned, analystSecretPath } = await import(
+      "../analyst-provision.js"
+    );
+    const tmpDir = mkdtempSync(join(tmpdir(), "analyst-prov-"));
+    const uploads = join(tmpDir, "uploads");
+    mkdirSync(join(uploads, ".secrets"), { recursive: true });
+    writeFileSync(analystSecretPath(uploads), ANALYST_PASSWORD, {
+      mode: 0o600,
+    });
+
+    await need(adminClient).query(`CREATE ROLE "${ROLE}" NOLOGIN`);
+
+    const saved = {
+      DATABASE_URL: process.env.DATABASE_URL,
+      UPLOAD_DIR: process.env.UPLOAD_DIR,
+      ANALYST_DATABASE_URL: process.env.ANALYST_DATABASE_URL,
+    };
+    try {
+      process.env.DATABASE_URL = testDbUrl as string;
+      process.env.UPLOAD_DIR = uploads;
+      delete process.env.ANALYST_DATABASE_URL;
+      resetEnvForTests();
+      const result = await ensureAnalystProvisioned();
+      expect(result).toEqual({ status: "ok", role: ROLE });
+      // O ficheiro não foi rodado — a password persistida é a que fica.
+      expect(readFileSync(analystSecretPath(uploads), "utf8").trim()).toBe(
+        ANALYST_PASSWORD
+      );
+    } finally {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) {
+          delete process.env[key];
+        } else {
+          process.env[key] = value;
+        }
+      }
+      resetEnvForTests();
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+
+    // A password do ficheiro autentica e lê as views — antes do fix o
+    // role ficava com password NULL e esta ligação era sempre recusada.
+    const check = new PrismaClient({
+      adapter: new PrismaPg({ connectionString: analystDbUrl }),
+    });
+    try {
+      const who = await check.$queryRawUnsafe<{ u: string }[]>(
+        "SELECT session_user AS u"
+      );
+      expect(who[0]?.u).toBe(ROLE);
+      const ok = await check.$queryRawUnsafe<{ n: number }[]>(
+        "SELECT COUNT(*)::int AS n FROM analyst.jobs"
+      );
+      expect(ok[0]?.n).toBe(0);
+    } finally {
+      await check.$disconnect().catch(() => undefined);
+    }
   });
 });

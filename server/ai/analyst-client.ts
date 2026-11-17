@@ -15,7 +15,7 @@ let refusedWrongRole = false;
 
 /**
  * Dedicated connection for the AI SQL tool. The session_user there IS
- * analyst_ro_<db> — a login role that belongs to nothing else — so
+ * analyst_ro_<db>_<hash> — a login role that belongs to nothing else — so
  * `set_config('role', …)` inside a query can never escalate back to the
  * shop owner the way `SET LOCAL ROLE` on the app connection could.
  *

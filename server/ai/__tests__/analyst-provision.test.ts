@@ -29,6 +29,9 @@ import {
   readAnalystPassword,
 } from "../analyst-provision.js";
 
+const ROLE_REPARILO_RE = /^analyst_ro_reparilo_[0-9a-f]{8}$/;
+const ROLE_MINHA_LOJA_RE = /^analyst_ro_minha_loja_2_[0-9a-f]{8}$/;
+
 const savedEnv = { ...process.env };
 let tmp: string | null = null;
 
@@ -49,8 +52,8 @@ afterEach(async () => {
 
 describe("analystRoleName — per-database role", () => {
   it("sanitizes to a valid identifier and stays under 63 chars", () => {
-    expect(analystRoleName("reparilo")).toBe("analyst_ro_reparilo");
-    expect(analystRoleName("Minha-Loja.2")).toBe("analyst_ro_minha_loja_2");
+    expect(analystRoleName("reparilo")).toMatch(ROLE_REPARILO_RE);
+    expect(analystRoleName("Minha-Loja.2")).toMatch(ROLE_MINHA_LOJA_RE);
     const long = analystRoleName("x".repeat(100));
     expect(long.length).toBeLessThanOrEqual(63);
     expect(long.startsWith("analyst_ro_")).toBe(true);
@@ -58,6 +61,13 @@ describe("analystRoleName — per-database role", () => {
 
   it("derives different roles for different databases", () => {
     expect(analystRoleName("loja_a")).not.toBe(analystRoleName("loja_b"));
+  });
+
+  it("does not collide on sanitized-name clashes (loja-a vs loja_a)", () => {
+    // Roles são globais ao cluster: sem o sufixo hash as duas BDs
+    // partilhavam o mesmo analyst_ro_loja_a e liam-se uma à outra.
+    expect(analystRoleName("loja-a")).not.toBe(analystRoleName("loja_a"));
+    expect(analystRoleName("Loja")).not.toBe(analystRoleName("loja"));
   });
 });
 
@@ -103,7 +113,7 @@ describe("analystDatabaseUrl", () => {
     resetEnvForTests();
 
     const url = new URL(analystDatabaseUrl() as string);
-    expect(url.username).toBe("analyst_ro_minha_loja");
+    expect(url.username).toBe(analystRoleName("minha_loja"));
     expect(url.password).toBe("pw-ficheiro");
     expect(url.hostname).toBe("localhost");
     expect(url.pathname).toBe("/minha_loja");
