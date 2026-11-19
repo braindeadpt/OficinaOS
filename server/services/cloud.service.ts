@@ -182,6 +182,71 @@ export async function generateDiagPairingCode(
   return { code: payload.code, expiresAt: payload.expiresAt };
 }
 
+export interface CloudStation {
+  createdAt: string;
+  id: string;
+  label: string | null;
+  lastSeenAt: string | null;
+  revokedAt: string | null;
+  scope: string;
+}
+
+/**
+ * List the shop's cloud tokens — the "stations" the station cap counts.
+ * Never transports token material: the cloud endpoint only returns
+ * metadata (id/label/scope/dates).
+ */
+export async function listCloudStations(
+  prisma: PrismaClient
+): Promise<CloudStation[]> {
+  const settings = await getOrCreateShopSettings(prisma);
+  if (!(settings.cloudApiUrl && settings.cloudShopTokenEncrypted)) {
+    throw new AppError("CLOUD_NOT_PAIRED");
+  }
+  const token = decryptSecret(settings.cloudShopTokenEncrypted);
+  const res = await cloudFetch(settings.cloudApiUrl, "/shops/tokens", {
+    token,
+  }).catch(() => null);
+  if (!res) {
+    throw new AppError("CLOUD_UNREACHABLE");
+  }
+  const payload = res.body as { tokens?: CloudStation[] };
+  if (!(res.ok && Array.isArray(payload.tokens))) {
+    throw new AppError("CLOUD_REQUEST_FAILED");
+  }
+  return payload.tokens;
+}
+
+/**
+ * Revoke one station (a paired Diag PC) — frees a slot on the station cap.
+ * The cloud refuses to revoke the very token this app calls with, so this
+ * shop can never lock itself out through the UI.
+ */
+export async function revokeCloudStation(
+  prisma: PrismaClient,
+  tokenId: string
+): Promise<void> {
+  const settings = await getOrCreateShopSettings(prisma);
+  if (!(settings.cloudApiUrl && settings.cloudShopTokenEncrypted)) {
+    throw new AppError("CLOUD_NOT_PAIRED");
+  }
+  const token = decryptSecret(settings.cloudShopTokenEncrypted);
+  const res = await cloudFetch(
+    settings.cloudApiUrl,
+    `/shops/tokens/${encodeURIComponent(tokenId)}/revoke`,
+    { method: "POST", token }
+  ).catch(() => null);
+  if (!res) {
+    throw new AppError("CLOUD_UNREACHABLE");
+  }
+  if (res.status === 404) {
+    throw new AppError("CLOUD_STATION_NOT_FOUND");
+  }
+  if (!res.ok) {
+    throw new AppError("CLOUD_REQUEST_FAILED");
+  }
+}
+
 export async function syncCloudEntitlements(
   prisma: PrismaClient,
   log: FastifyBaseLogger,

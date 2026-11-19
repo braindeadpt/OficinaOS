@@ -5,8 +5,10 @@ import { decryptSecret, isEncrypted } from "../lib/crypto.js";
 import {
   generateDiagPairingCode,
   getCloudStatus,
+  listCloudStations,
   pairWithCloud,
   pullCloudIntake,
+  revokeCloudStation,
   syncCloudEntitlements,
   unpairCloud,
 } from "../services/cloud.service.js";
@@ -167,6 +169,71 @@ describe("generateDiagPairingCode", () => {
     await expect(
       generateDiagPairingCode(prisma as never)
     ).rejects.toMatchObject({ code: "CLOUD_PAIRING_FAILED" });
+  });
+});
+
+describe("cloud stations (list + revoke)", () => {
+  it("lists stations via /shops/tokens with the decrypted bearer token", async () => {
+    const { encryptSecret } = await import("../lib/crypto.js");
+    const { prisma } = fakePrisma({
+      cloudApiUrl: "https://cloud.example.com",
+      cloudShopTokenEncrypted: encryptSecret("tok-abc"),
+    });
+    let auth: string | undefined;
+    let url: string | undefined;
+    vi.stubGlobal("fetch", (u: string, init?: RequestInit) => {
+      url = u;
+      auth = (init?.headers as Record<string, string>)?.authorization;
+      return okJson({
+        tokens: [
+          {
+            id: "t1",
+            label: "bancada",
+            scope: "diag",
+            createdAt: "x",
+            lastSeenAt: null,
+            revokedAt: null,
+          },
+        ],
+      });
+    });
+
+    const res = await listCloudStations(prisma as never);
+    expect(url).toBe("https://cloud.example.com/shops/tokens");
+    expect(auth).toBe("Bearer tok-abc");
+    expect(res).toHaveLength(1);
+    expect(res[0].id).toBe("t1");
+  });
+
+  it("posts to the per-token revoke endpoint and maps 404", async () => {
+    const { encryptSecret } = await import("../lib/crypto.js");
+    const { prisma } = fakePrisma({
+      cloudApiUrl: "https://cloud.example.com",
+      cloudShopTokenEncrypted: encryptSecret("tok-abc"),
+    });
+    let url: string | undefined;
+    vi.stubGlobal("fetch", (u: string) => {
+      url = u;
+      return okJson({ revoked: true });
+    });
+
+    await revokeCloudStation(prisma as never, "tok 1");
+    expect(url).toBe("https://cloud.example.com/shops/tokens/tok%201/revoke");
+
+    vi.stubGlobal("fetch", () => okJson({ error: {} }, 404));
+    await expect(
+      revokeCloudStation(prisma as never, "gone")
+    ).rejects.toMatchObject({ code: "CLOUD_STATION_NOT_FOUND" });
+  });
+
+  it("fails fast when not paired", async () => {
+    const { prisma } = fakePrisma();
+    await expect(listCloudStations(prisma as never)).rejects.toMatchObject({
+      code: "CLOUD_NOT_PAIRED",
+    });
+    await expect(
+      revokeCloudStation(prisma as never, "x")
+    ).rejects.toMatchObject({ code: "CLOUD_NOT_PAIRED" });
   });
 });
 

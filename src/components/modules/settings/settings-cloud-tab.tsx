@@ -19,6 +19,15 @@ interface CloudStatus {
   syncedAt: string | null;
 }
 
+interface CloudStation {
+  createdAt: string;
+  id: string;
+  label: string | null;
+  lastSeenAt: string | null;
+  revokedAt: string | null;
+  scope: string;
+}
+
 export default function SettingsCloudTab({
   onToast,
 }: {
@@ -34,12 +43,33 @@ export default function SettingsCloudTab({
     code: string;
     expiresAt: string;
   } | null>(null);
+  const [stations, setStations] = useState<CloudStation[] | null>(null);
+
+  const stationStatus = (s: CloudStation): string => {
+    if (s.revokedAt) {
+      return t("cloud_station_revoked_at", {
+        date: new Date(s.revokedAt).toLocaleDateString(),
+      });
+    }
+    if (s.lastSeenAt) {
+      return t("cloud_station_last_seen", {
+        date: new Date(s.lastSeenAt).toLocaleDateString(),
+      });
+    }
+    return t("cloud_station_never_used");
+  };
 
   const refresh = useCallback(async () => {
     try {
       const res = await api.get<CloudStatus>("/settings/cloud");
       setStatus(res.data);
       setApiUrl((prev) => prev || res.data.apiUrl || "");
+      if (res.data.paired) {
+        const tok = await api.get<{ tokens: CloudStation[] }>(
+          "/settings/cloud/tokens"
+        );
+        setStations(tok.data.tokens);
+      }
     } catch (err) {
       onToast(getErrorMessage(err, t("errors.generic")), "error");
     } finally {
@@ -80,6 +110,24 @@ export default function SettingsCloudTab({
       onToast(t("cloud_diag_code_success"), "success");
     } catch (err) {
       onToast(getErrorMessage(err, t("cloud_diag_code_failed")), "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRevokeStation(tokenId: string) {
+    setBusy(true);
+    try {
+      await api.post(`/settings/cloud/tokens/${tokenId}/revoke`);
+      setStations(
+        (prev) =>
+          prev?.map((s) =>
+            s.id === tokenId ? { ...s, revokedAt: new Date().toISOString() } : s
+          ) ?? null
+      );
+      onToast(t("cloud_station_revoked"), "success");
+    } catch (err) {
+      onToast(getErrorMessage(err, t("cloud_station_revoke_failed")), "error");
     } finally {
       setBusy(false);
     }
@@ -232,6 +280,61 @@ export default function SettingsCloudTab({
             >
               {t("cloud_diag_code_generate")}
             </Button>
+          </div>
+
+          <div className="rounded-2xl bg-surface-container-low p-4">
+            <div className="mb-2 font-semibold text-on-surface text-sm">
+              {t("cloud_stations_title")}
+            </div>
+            <p className="mb-3 text-on-surface-variant text-xs">
+              {t("cloud_stations_hint")}
+            </p>
+            {stations === null ? (
+              <p className="text-on-surface-variant text-sm">
+                {t("cloud_stations_unavailable")}
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {stations.map((s) => (
+                  <li
+                    className="flex items-center justify-between gap-3 rounded-xl bg-surface-container-high px-4 py-3"
+                    key={s.id}
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate font-medium text-on-surface text-sm">
+                        {s.label ||
+                          (s.scope === "diag"
+                            ? t("cloud_station_diag")
+                            : t("cloud_station_app"))}
+                        {s.scope === "full" && (
+                          <span className="ml-2 text-on-surface-variant text-xs">
+                            ({t("cloud_station_self")})
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-on-surface-variant text-xs">
+                        {stationStatus(s)}
+                      </div>
+                    </div>
+                    {s.scope === "diag" && !s.revokedAt && (
+                      <Button
+                        disabled={busy}
+                        onClick={() => handleRevokeStation(s.id)}
+                        size="sm"
+                        variant="destructive"
+                      >
+                        {t("cloud_station_revoke")}
+                      </Button>
+                    )}
+                    {s.revokedAt && (
+                      <Badge variant="secondary">
+                        {t("cloud_station_inactive")}
+                      </Badge>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           <SettingsStorefrontSection onToast={onToast} />

@@ -19,7 +19,9 @@ import { getBackupStatus } from "../services/backup-status.service.js";
 import {
   generateDiagPairingCode,
   getCloudStatus,
+  listCloudStations,
   pairWithCloud,
+  revokeCloudStation,
   syncCloudEntitlements,
   unpairCloud,
 } from "../services/cloud.service.js";
@@ -179,6 +181,39 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (_req, reply) => reply.send(await generateDiagPairingCode(app.prisma))
+  );
+
+  app.get(
+    "/cloud/tokens",
+    {
+      schema: {
+        tags: ["settings"],
+        summary: "List OficinaOS Cloud stations (paired Diag PCs)",
+      },
+    },
+    async (_req, reply) =>
+      reply.send({ tokens: await listCloudStations(app.prisma) })
+  );
+
+  app.post(
+    "/cloud/tokens/:id/revoke",
+    {
+      preHandler: [requirePermission({ settings: ["edit"] })],
+      schema: {
+        tags: ["settings"],
+        summary: "Revoke an OficinaOS Cloud station",
+        params: {
+          type: "object",
+          properties: { id: { type: "string", minLength: 1 } },
+          required: ["id"],
+        },
+      },
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      await revokeCloudStation(app.prisma, id);
+      return reply.send({ revoked: true });
+    }
   );
 
   app.post(

@@ -230,6 +230,14 @@ export const ERRORS = {
     status: 502,
     message: "errors.cloud_token_rejected",
   },
+  CLOUD_REQUEST_FAILED: {
+    status: 502,
+    message: "errors.cloud_request_failed",
+  },
+  CLOUD_STATION_NOT_FOUND: {
+    status: 404,
+    message: "errors.cloud_station_not_found",
+  },
   CLOUD_AI_FAILED: {
     status: 502,
     message: "errors.cloud_ai_failed",
