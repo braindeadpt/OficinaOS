@@ -3,6 +3,7 @@ import type { FastifyBaseLogger } from "fastify";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { decryptSecret, isEncrypted } from "../lib/crypto.js";
 import {
+  generateDiagPairingCode,
   getCloudStatus,
   pairWithCloud,
   pullCloudIntake,
@@ -122,6 +123,50 @@ describe("pairWithCloud", () => {
         log
       )
     ).rejects.toMatchObject({ code: "CLOUD_UNREACHABLE" });
+  });
+});
+
+describe("generateDiagPairingCode", () => {
+  it("fails fast when not paired", async () => {
+    const { prisma } = fakePrisma();
+    await expect(
+      generateDiagPairingCode(prisma as never)
+    ).rejects.toMatchObject({ code: "CLOUD_NOT_PAIRED" });
+  });
+
+  it("posts to /shops/pairing-codes with the decrypted bearer token", async () => {
+    const { encryptSecret } = await import("../lib/crypto.js");
+    const { prisma } = fakePrisma({
+      cloudApiUrl: "https://cloud.example.com",
+      cloudShopTokenEncrypted: encryptSecret("tok-abc"),
+    });
+    let auth: string | undefined;
+    let url: string | undefined;
+    vi.stubGlobal("fetch", (u: string, init?: RequestInit) => {
+      url = u;
+      auth = (init?.headers as Record<string, string>)?.authorization;
+      return okJson({ code: "DIAG-1234", expiresAt: "2026-12-01T00:00:00Z" });
+    });
+
+    const res = await generateDiagPairingCode(prisma as never);
+    expect(res.code).toBe("DIAG-1234");
+    expect(url).toBe("https://cloud.example.com/shops/pairing-codes");
+    expect(auth).toBe("Bearer tok-abc");
+  });
+
+  it("throws CLOUD_PAIRING_FAILED when the cloud rejects the mint", async () => {
+    const { encryptSecret } = await import("../lib/crypto.js");
+    const { prisma } = fakePrisma({
+      cloudApiUrl: "https://cloud.example.com",
+      cloudShopTokenEncrypted: encryptSecret("tok-abc"),
+    });
+    vi.stubGlobal("fetch", () =>
+      okJson({ error: { code: "TOO_MANY_ACTIVE_CODES" } }, 409)
+    );
+
+    await expect(
+      generateDiagPairingCode(prisma as never)
+    ).rejects.toMatchObject({ code: "CLOUD_PAIRING_FAILED" });
   });
 });
 

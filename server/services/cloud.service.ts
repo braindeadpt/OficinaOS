@@ -154,6 +154,34 @@ export async function pairWithCloud(
 }
 
 /** Poll the cloud for the current entitlements and cache them locally. */
+/**
+ * Mint a pairing code for an OficinaDiag PC on this shop. The cloud
+ * endpoint requires a full-scope shop token — diag tokens can't mint
+ * codes — and the returned code itself is diag-scoped: redeeming it can
+ * never produce a full-power token.
+ */
+export async function generateDiagPairingCode(
+  prisma: PrismaClient
+): Promise<{ code: string; expiresAt: string }> {
+  const settings = await getOrCreateShopSettings(prisma);
+  if (!(settings.cloudApiUrl && settings.cloudShopTokenEncrypted)) {
+    throw new AppError("CLOUD_NOT_PAIRED");
+  }
+  const token = decryptSecret(settings.cloudShopTokenEncrypted);
+  const res = await cloudFetch(settings.cloudApiUrl, "/shops/pairing-codes", {
+    method: "POST",
+    token,
+  }).catch(() => null);
+  if (!res) {
+    throw new AppError("CLOUD_UNREACHABLE");
+  }
+  const payload = res.body as { code?: string; expiresAt?: string };
+  if (!(res.ok && payload.code && payload.expiresAt)) {
+    throw new AppError("CLOUD_PAIRING_FAILED");
+  }
+  return { code: payload.code, expiresAt: payload.expiresAt };
+}
+
 export async function syncCloudEntitlements(
   prisma: PrismaClient,
   log: FastifyBaseLogger,

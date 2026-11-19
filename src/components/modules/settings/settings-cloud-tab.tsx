@@ -30,6 +30,10 @@ export default function SettingsCloudTab({
   const [busy, setBusy] = useState(false);
   const [apiUrl, setApiUrl] = useState("");
   const [code, setCode] = useState("");
+  const [diagCode, setDiagCode] = useState<{
+    code: string;
+    expiresAt: string;
+  } | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -61,6 +65,21 @@ export default function SettingsCloudTab({
       onToast(t("cloud_pair_success"), "success");
     } catch (err) {
       onToast(getErrorMessage(err, t("cloud_pair_failed")), "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDiagCode() {
+    setBusy(true);
+    try {
+      const res = await api.post<{ code: string; expiresAt: string }>(
+        "/settings/cloud/diag-code"
+      );
+      setDiagCode(res.data);
+      onToast(t("cloud_diag_code_success"), "success");
+    } catch (err) {
+      onToast(getErrorMessage(err, t("cloud_diag_code_failed")), "error");
     } finally {
       setBusy(false);
     }
@@ -185,6 +204,34 @@ export default function SettingsCloudTab({
                 ? new Date(status.syncedAt).toLocaleString()
                 : t("never")}
             </p>
+          </div>
+
+          <div className="rounded-2xl bg-surface-container-low p-4">
+            <div className="mb-2 font-semibold text-on-surface text-sm">
+              {t("cloud_diag_code_title")}
+            </div>
+            <p className="mb-3 text-on-surface-variant text-xs">
+              {t("cloud_diag_code_hint")}
+            </p>
+            {diagCode && (
+              <div className="mb-3 rounded-xl bg-surface-container-high px-4 py-3">
+                <span className="font-mono font-semibold text-lg text-on-surface tracking-widest">
+                  {diagCode.code}
+                </span>
+                <p className="mt-1 text-on-surface-variant text-xs">
+                  {t("cloud_diag_code_expires")}:{" "}
+                  {new Date(diagCode.expiresAt).toLocaleString()}
+                </p>
+              </div>
+            )}
+            <Button
+              disabled={busy}
+              icon="pin"
+              onClick={handleDiagCode}
+              variant="secondary"
+            >
+              {t("cloud_diag_code_generate")}
+            </Button>
           </div>
 
           <SettingsStorefrontSection onToast={onToast} />

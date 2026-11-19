@@ -17,6 +17,7 @@ import {
 } from "../repositories/settings.repository.js";
 import { getBackupStatus } from "../services/backup-status.service.js";
 import {
+  generateDiagPairingCode,
   getCloudStatus,
   pairWithCloud,
   syncCloudEntitlements,
@@ -166,6 +167,18 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       }
       return reply.send(await pairWithCloud(app.prisma, parsed.data, app.log));
     }
+  );
+
+  app.post(
+    "/cloud/diag-code",
+    {
+      preHandler: [requirePermission({ settings: ["edit"] })],
+      schema: {
+        tags: ["settings"],
+        summary: "Generate a pairing code for an OficinaDiag PC",
+      },
+    },
+    async (_req, reply) => reply.send(await generateDiagPairingCode(app.prisma))
   );
 
   app.post(
