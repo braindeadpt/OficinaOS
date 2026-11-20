@@ -43,8 +43,14 @@ export function createCodeLockout(prisma: DbClient): CodeLockoutStore {
       });
       const lockExpired =
         existing?.lockedUntil && existing.lockedUntil.getTime() <= now;
+      const lockActive =
+        existing?.lockedUntil && existing.lockedUntil.getTime() > now;
+      // The rolling failure window only applies while no lock is active —
+      // resetting under an active lock would erase the lockout early.
       const windowExpired =
-        existing && now - existing.firstFailedAt.getTime() > FAILURE_WINDOW_MS;
+        existing &&
+        !lockActive &&
+        now - existing.firstFailedAt.getTime() > FAILURE_WINDOW_MS;
       const reset = !existing || lockExpired || windowExpired;
 
       // Atomic upsert: concurrent failures never lose increments.
@@ -60,7 +66,9 @@ export function createCodeLockout(prisma: DbClient): CodeLockoutStore {
         row.failures >= LOCKOUT_THRESHOLD &&
         !(row.lockedUntil && row.lockedUntil.getTime() > now)
       ) {
-        await prisma.codeLockout.update({
+        // updateMany over update: a concurrent `clear` may have deleted the
+        // row between the upsert and here — plain update would throw P2025.
+        await prisma.codeLockout.updateMany({
           where: { code },
           data: { lockedUntil: new Date(now + LOCKOUT_DURATION_MS) },
         });

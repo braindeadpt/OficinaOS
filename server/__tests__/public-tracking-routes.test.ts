@@ -81,6 +81,7 @@ function buildApp() {
         lockedUntil: null,
       }),
       update: vi.fn().mockResolvedValue(null),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
   });
   (app.decorate as (name: string, value: unknown) => void)("auth", {

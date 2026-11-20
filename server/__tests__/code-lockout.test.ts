@@ -19,6 +19,15 @@ function fakePrisma() {
         rows.delete(where.code);
         return Promise.resolve({ count: 1 });
       }),
+      updateMany: vi.fn(
+        ({ where, data }: { where: { code: string }; data: Partial<Row> }) => {
+          const existing = rows.get(where.code);
+          if (existing) {
+            rows.set(where.code, { ...existing, ...data });
+          }
+          return Promise.resolve({ count: existing ? 1 : 0 });
+        }
+      ),
       update: vi.fn(
         ({ where, data }: { where: { code: string }; data: Partial<Row> }) => {
           const existing = rows.get(where.code);
