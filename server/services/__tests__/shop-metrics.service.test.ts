@@ -43,6 +43,9 @@ function fakePrisma(overrides: Record<string, unknown> = {}) {
       aggregate: vi.fn(async () => ({ _sum: { total: 123.45 } })),
     },
     customer: { count: vi.fn(async () => 2) },
+    shopSettings: {
+      findUnique: vi.fn(async () => ({ timezone: "Europe/Lisbon" })),
+    },
     ...overrides,
   };
   return base as never;
@@ -56,7 +59,11 @@ beforeEach(() => {
 describe("computeDailyMetrics", () => {
   it("aggregates payments, jobs, sales and customers for the day", async () => {
     const prisma = fakePrisma();
-    const m = await computeDailyMetrics(prisma, new Date(2026, 9, 14, 15, 30));
+    const m = await computeDailyMetrics(
+      prisma,
+      "Europe/Lisbon",
+      new Date(2026, 9, 14, 15, 30)
+    );
 
     expect(m).toEqual({
       date: "2026-10-14",
@@ -72,7 +79,7 @@ describe("computeDailyMetrics", () => {
 
   it("queries use local-day bounds, not UTC", async () => {
     const prisma = fakePrisma();
-    await computeDailyMetrics(prisma, new Date(2026, 0, 5, 23, 59));
+    await computeDailyMetrics(prisma, "UTC", new Date(2026, 0, 5, 23, 59));
 
     const p = prisma as unknown as {
       salePayment: { aggregate: ReturnType<typeof vi.fn> };
@@ -82,8 +89,8 @@ describe("computeDailyMetrics", () => {
       gte: Date;
       lt: Date;
     };
-    expect(range.gte.getHours()).toBe(0);
-    expect(range.gte.getMinutes()).toBe(0);
+    expect(range.gte.getUTCHours()).toBe(0);
+    expect(range.gte.getUTCMinutes()).toBe(0);
     expect(range.lt.getTime() - range.gte.getTime()).toBe(86_400_000);
 
     // activeJobs is a point-in-time count — no date filter, excludes finals.

@@ -68,6 +68,18 @@ let csrfCooldownUntil = 0;
 const CSRF_FAILURE_THRESHOLD = 3;
 const CSRF_COOLDOWN_MS = 30_000;
 
+/**
+ * Drop the cached CSRF token. Called on logout: the token is bound to the
+ * session cookie, so the next sign-in would otherwise send the dead one
+ * and burn a 403 + retry on the first mutation.
+ */
+export function resetCsrfToken(): void {
+  csrfToken = null;
+  csrfPromise = null;
+  csrfFetchFailures = 0;
+  csrfCooldownUntil = 0;
+}
+
 export function fetchCsrfToken(): Promise<string | null> {
   if (csrfToken) {
     return Promise.resolve(csrfToken);

@@ -121,18 +121,32 @@ async function executeToolCalls(
   const followUpMessages: OpenAI.ChatCompletionMessageParam[] = [];
 
   for (const tc of toolCalls) {
-    const args = JSON.parse(tc.function.arguments || "{}");
     let result: string;
+    // A malformed `arguments` blob or a failing tool (e.g. rejected SQL) is
+    // a recoverable model mistake: return it as the tool result so the
+    // follow-up can correct itself instead of killing the whole stream.
+    try {
+      const args = JSON.parse(tc.function.arguments || "{}") as Record<
+        string,
+        unknown
+      >;
 
-    if (tc.function.name === "queryDatabase") {
-      const analystDb = await getAnalystClient();
-      result = analystDb
-        ? (await executeQueryDatabase(analystDb, args.sql)).data
-        : "SQL queries are unavailable: the analyst database role is not provisioned. It is created automatically at startup when DATABASE_URL has CREATEROLE — otherwise a DBA must grant it (see server/scripts/provision-analyst.ts).";
-    } else if (tc.function.name === "getSchema") {
-      result = (await executeGetSchema(prisma, args.tableName)).data;
-    } else {
-      result = `Unknown tool: ${tc.function.name}`;
+      if (tc.function.name === "queryDatabase") {
+        const analystDb = await getAnalystClient();
+        result = analystDb
+          ? (await executeQueryDatabase(analystDb, args.sql as string)).data
+          : "SQL queries are unavailable: the analyst database role is not provisioned. It is created automatically at startup when DATABASE_URL has CREATEROLE — otherwise a DBA must grant it (see server/scripts/provision-analyst.ts).";
+      } else if (tc.function.name === "getSchema") {
+        result = (
+          await executeGetSchema(prisma, args.tableName as string | undefined)
+        ).data;
+      } else {
+        result = `Unknown tool: ${tc.function.name}`;
+      }
+    } catch (err) {
+      result = `Tool ${tc.function.name} failed: ${
+        err instanceof Error ? err.message : String(err)
+      }`;
     }
 
     followUpMessages.push({

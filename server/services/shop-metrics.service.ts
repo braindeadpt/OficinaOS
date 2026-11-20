@@ -1,5 +1,7 @@
 import type { PrismaClient } from "@generated/client";
 import type { FastifyBaseLogger } from "fastify";
+import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
+import { dayRange } from "../utils/time-range.js";
 import { cloudFetch } from "./cloud.service.js";
 
 /**
@@ -21,20 +23,6 @@ interface DayMetrics {
   salesCount: number;
 }
 
-/** Local calendar bounds [start, end) of the given day. */
-function dayBounds(day: Date): { start: Date; end: Date } {
-  const start = new Date(day.getFullYear(), day.getMonth(), day.getDate());
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
-  return { start, end };
-}
-
-function localDateString(day: Date): string {
-  const m = String(day.getMonth() + 1).padStart(2, "0");
-  const d = String(day.getDate()).padStart(2, "0");
-  return `${day.getFullYear()}-${m}-${d}`;
-}
-
 function toCents(amount: unknown): number {
   return Math.round(Number(amount ?? 0) * 100);
 }
@@ -42,9 +30,10 @@ function toCents(amount: unknown): number {
 /** Aggregate one shop-local calendar day into a metrics row. */
 export async function computeDailyMetrics(
   prisma: PrismaClient,
-  day: Date
+  tz: string,
+  at: Date
 ): Promise<DayMetrics> {
-  const { start, end } = dayBounds(day);
+  const { start, end, date } = dayRange(tz, at);
   const inDay = { gte: start, lt: end };
 
   const [
@@ -81,7 +70,7 @@ export async function computeDailyMetrics(
   ]);
 
   return {
-    date: localDateString(day),
+    date,
     revenueCents:
       toCents(salePayments._sum.amount) + toCents(jobPayments._sum.amount),
     jobsOpened,
@@ -103,13 +92,18 @@ export async function syncShopMetrics(
   token: string,
   log: FastifyBaseLogger
 ): Promise<void> {
+  // Same resolution as the dashboard scope: settings.timezone, env TZ, UTC.
+  // Without it the "day" would be the server's, not the shop's.
+  const settings = await getOrCreateShopSettings(prisma);
+  const tz = settings.timezone ?? process.env.TZ ?? "UTC";
+
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
 
   const days = await Promise.all([
-    computeDailyMetrics(prisma, yesterday),
-    computeDailyMetrics(prisma, today),
+    computeDailyMetrics(prisma, tz, yesterday),
+    computeDailyMetrics(prisma, tz, today),
   ]);
 
   const res = await cloudFetch(apiUrl, "/shops/metrics", {

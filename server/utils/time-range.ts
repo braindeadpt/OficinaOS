@@ -69,6 +69,30 @@ export function todayRange(tz: string, now: Date = new Date()): DateRange {
   return { start, end };
 }
 
+/**
+ * Bounds [start, end) of the shop-local calendar day containing `at`, in
+ * timezone `tz`, plus the local ISO date string (`YYYY-MM-DD`) that labels
+ * it. Unlike slicing the instant's own ISO date, this matches the day a
+ * person at the shop would call that moment.
+ */
+export function dayRange(
+  tz: string,
+  at: Date = new Date()
+): DateRange & { date: string } {
+  const { year, month, day } = zonedParts(tz, at);
+  const start = utcFromZonedYmd(tz, year, month, day);
+  const next = new Date(Date.UTC(year, month - 1, day + 1));
+  const end = utcFromZonedYmd(
+    tz,
+    next.getUTCFullYear(),
+    next.getUTCMonth() + 1,
+    next.getUTCDate()
+  );
+  const mm = String(month).padStart(2, "0");
+  const dd = String(day).padStart(2, "0");
+  return { start, end, date: `${year}-${mm}-${dd}` };
+}
+
 export function monthRange(tz: string, now: Date = new Date()): DateRange {
   const { year, month } = zonedParts(tz, now);
   const start = utcFromZonedYmd(tz, year, month, 1);

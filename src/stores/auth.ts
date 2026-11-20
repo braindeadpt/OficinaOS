@@ -1,7 +1,7 @@
 import type { RoleType } from "@shared/constants";
 import { create } from "zustand";
 import i18n from "@/i18n";
-import api, { getErrorMessage } from "@/lib/api";
+import api, { getErrorMessage, resetCsrfToken } from "@/lib/api";
 
 interface AuthUser {
   email: string;
@@ -112,6 +112,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     } catch {
       // Intentionally ignored: clear local state regardless of API result
     }
+    // The cached CSRF token is bound to the session that just died.
+    resetCsrfToken();
     set({
       user: null,
       isAuthenticated: false,
