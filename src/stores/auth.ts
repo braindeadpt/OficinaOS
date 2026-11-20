@@ -3,6 +3,8 @@ import { create } from "zustand";
 import i18n from "@/i18n";
 import api, { getErrorMessage } from "@/lib/api";
 
+const TOTP_CODE_REGEX = /^\d{6}$/;
+
 interface AuthUser {
   email: string;
   id: string;
@@ -118,23 +120,13 @@ export const useAuthStore = create<AuthState>((set) => ({
   verifyTwoFactor: async (code) => {
     set({ isLoading: true, error: null });
     try {
-      try {
-        await api.post("/auth/two-factor/verify-totp", {
-          code,
-          trustDevice: false,
-        });
-      } catch (totpErr: unknown) {
-        // Backup codes from the enrolment step are one-use recovery
-        // codes, verified on their own endpoint — try it before failing.
-        try {
-          await api.post("/auth/two-factor/verify-backup-code", {
-            code,
-            trustDevice: false,
-          });
-        } catch {
-          throw totpErr;
-        }
-      }
+      // TOTP codes are 6 digits; backup codes are "XXXXX-XXXXX". Sending a
+      // wrong TOTP to the backup endpoint too would burn two attempts of
+      // the same challenge, so each format only hits its own endpoint.
+      const endpoint = TOTP_CODE_REGEX.test(code)
+        ? "/auth/two-factor/verify-totp"
+        : "/auth/two-factor/verify-backup-code";
+      await api.post(endpoint, { code, trustDevice: false });
       const res = await api.get("/auth/get-session");
       const user = res.data.user;
       if (!user) {
