@@ -18,6 +18,7 @@ import JobReferralsSection from "@/components/modules/jobs/job-referrals-section
 import JobRepairsSection from "@/components/modules/jobs/job-repairs-section";
 import JobReturnsHistorySection from "@/components/modules/jobs/job-returns-history-section";
 import JobWaitingPartsSection from "@/components/modules/jobs/job-waiting-parts-section";
+import LoanerSignatureDialog from "@/components/modules/jobs/loaner-signature-dialog";
 import StatusHistoryTimeline from "@/components/modules/jobs/status-history-timeline";
 import StatusPopover from "@/components/modules/jobs/status-popover";
 import TechnicianSelect from "@/components/modules/jobs/technician-select";
@@ -54,23 +55,56 @@ function UrgentBadge({ visible }: { visible: boolean }) {
   );
 }
 
-/** Standalone A4 term print — only when intake handed a loaner out. */
-function LoanerAgreementButton({ job }: { job: Job }) {
+/** Standalone A4 term print + digital signature — only when a loaner went out. */
+function LoanerAgreementButton({
+  job,
+  onSigned,
+}: {
+  job: Job;
+  onSigned: () => void;
+}) {
   const { t } = useTranslation();
+  const [signOpen, setSignOpen] = useState(false);
   if (!job.hasLoanerDevice) {
     return null;
   }
+  const signed = Boolean(job.loanerAgreementSignatureDataUrl);
   return (
-    <button
-      className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest px-4 font-medium text-on-surface-variant text-sm transition-colors hover:bg-surface-container hover:text-on-surface"
-      onClick={() =>
-        window.open(`/api/receipts/${job.id}/loaner-agreement`, "_blank")
-      }
-      type="button"
-    >
-      <Icon className="text-[18px]" name="description" />
-      {t("jobs_detail_print_loaner")}
-    </button>
+    <>
+      <button
+        className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest px-4 font-medium text-on-surface-variant text-sm transition-colors hover:bg-surface-container hover:text-on-surface"
+        onClick={() =>
+          window.open(`/api/receipts/${job.id}/loaner-agreement`, "_blank")
+        }
+        type="button"
+      >
+        <Icon className="text-[18px]" name="description" />
+        {t("jobs_detail_print_loaner")}
+      </button>
+      <Can perm={{ jobs: ["edit"] }}>
+        <button
+          className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border px-4 font-medium text-sm transition-colors ${
+            signed
+              ? "border-success/60 bg-success-container/40 text-on-surface hover:bg-success-container/60"
+              : "border-outline-variant/60 bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+          }`}
+          onClick={() => setSignOpen(true)}
+          type="button"
+        >
+          <Icon
+            className="text-[18px]"
+            name={signed ? "check_circle" : "draw"}
+          />
+          {t(signed ? "jobs_detail_loaner_signed" : "jobs_detail_loaner_sign")}
+        </button>
+      </Can>
+      <LoanerSignatureDialog
+        jobId={job.id}
+        onClose={() => setSignOpen(false)}
+        onSigned={onSigned}
+        open={signOpen}
+      />
+    </>
   );
 }
 
@@ -454,7 +488,13 @@ export default function JobDetailPage() {
             <Icon className="text-[18px]" name="label" />
             {t("jobs_detail_print_label")}
           </button>
-          <LoanerAgreementButton job={job} />
+          <LoanerAgreementButton
+            job={job}
+            onSigned={() => {
+              toast.success(t("jobs_detail_loaner_sign_success"));
+              fetchJob();
+            }}
+          />
           <Can perm={{ returns: ["create"] }}>
             {job.status === "DELIVERED" && (
               <button

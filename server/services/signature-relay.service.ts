@@ -5,6 +5,11 @@ import {
   type IntakeDocument,
   publicDocumentView,
 } from "@shared/intake-document.js";
+import {
+  LOANER_AGREEMENT_DOC_KIND,
+  type LoanerAgreementDocument,
+  publicLoanerAgreementView,
+} from "@shared/loaner-agreement-document.js";
 import type { FastifyBaseLogger } from "fastify";
 import { decryptSecret } from "../lib/crypto.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
@@ -88,12 +93,21 @@ export async function pairingSignatureCreds(
  */
 export async function publishSignatureRelay(
   creds: RelayCreds,
-  input: { token: string; document: IntakeDocument; expiresAt: Date },
+  input: {
+    token: string;
+    document: IntakeDocument | LoanerAgreementDocument;
+    expiresAt: Date;
+  },
   log: FastifyBaseLogger
 ): Promise<string | null> {
+  const view =
+    (input.document as LoanerAgreementDocument).doc ===
+    LOANER_AGREEMENT_DOC_KIND
+      ? publicLoanerAgreementView(input.document as LoanerAgreementDocument)
+      : publicDocumentView(input.document as IntakeDocument);
   const res = await cloudFetch(creds.apiUrl, "/signature/sessions", {
     body: {
-      document: JSON.parse(JSON.stringify(publicDocumentView(input.document))),
+      document: JSON.parse(JSON.stringify(view)),
       expiresAt: input.expiresAt.toISOString(),
       tokenHash: tokenHash(input.token),
     },

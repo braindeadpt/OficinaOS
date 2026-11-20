@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
 import type { PrismaClient } from "@generated/client";
 import { canonicalize } from "@shared/intake-document.js";
+import {
+  buildLoanerAgreementDocument,
+  loanerAgreementMatches,
+  loanerAgreementText,
+} from "@shared/loaner-agreement-document.js";
 import type { OrdersReportDTO } from "@shared/types/reports";
 import QRCode from "qrcode";
 import { findShopSettingsUnique } from "../repositories/settings.repository.js";
@@ -830,10 +835,10 @@ ${footHtml}
 }
 
 interface LoanerAgreementStrings {
-  clauses: string[];
   customer: string;
   dateLocale: string;
   deviceInRepair: string;
+  docRef: string;
   email: string;
   expectedReturn: string;
   idDoc: string;
@@ -843,20 +848,11 @@ interface LoanerAgreementStrings {
   phone: string;
   returnedOn: string;
   signatureLabel: string;
-  signatureTerms: string;
   signedDoc: string;
-  title: string;
 }
 
 const LOANER_AGREEMENT_STRINGS: Record<string, LoanerAgreementStrings> = {
   pt: {
-    clauses: [
-      "O equipamento acima identificado é propriedade da loja e é cedido ao cliente a título de empréstimo temporário, sem custo, durante o período de reparação do seu equipamento.",
-      "O cliente obriga-se a devolver o equipamento no acto da entrega do seu equipamento, em idênticas condições de conservação e funcionamento em que o recebeu.",
-      "Em caso de perda, furto, dano ou não devolução, o cliente responsabiliza-se pelo custo de reparação ou substituição do equipamento por outro de características equivalentes.",
-      "O equipamento destina-se ao uso exclusivo do cliente, não podendo ser vendido, cedido, emprestado ou dado em garantia a terceiros.",
-      "A loja não se responsabiliza por dados, conteúdos ou utilizações registadas no equipamento durante o período de empréstimo.",
-    ],
     customer: "Cliente",
     dateLocale: "pt-PT",
     deviceInRepair: "Equipamento em reparação",
@@ -869,18 +865,10 @@ const LOANER_AGREEMENT_STRINGS: Record<string, LoanerAgreementStrings> = {
     phone: "Telefone",
     returnedOn: "Devolvido em",
     signatureLabel: "Assinatura do cliente",
-    signatureTerms: "Li e aceito as condições de empréstimo acima descritas.",
     docRef: "Documento",
-    title: "Termo de Responsabilidade — Equipamento de Empréstimo",
+    signedDoc: "Documento assinado",
   },
   en: {
-    clauses: [
-      "The device identified above is the shop's property and is lent to the customer free of charge, for the duration of their own device's repair.",
-      "The customer undertakes to return the device when collecting their repaired device, in the same condition and working order as received.",
-      "In case of loss, theft, damage or failure to return, the customer is liable for the cost of repair or replacement with a device of equivalent specifications.",
-      "The device is for the customer's exclusive use and may not be sold, lent, transferred or pledged to third parties.",
-      "The shop is not responsible for any data, content or usage stored on the device during the loan period.",
-    ],
     customer: "Customer",
     dateLocale: "en-GB",
     deviceInRepair: "Device in repair",
@@ -893,18 +881,10 @@ const LOANER_AGREEMENT_STRINGS: Record<string, LoanerAgreementStrings> = {
     phone: "Phone",
     returnedOn: "Returned on",
     signatureLabel: "Customer signature",
-    signatureTerms: "I have read and accept the loan terms described above.",
     docRef: "Document",
-    title: "Responsibility Agreement — Loaner Device",
+    signedDoc: "Signed document",
   },
   fr: {
-    clauses: [
-      "L'appareil identifié ci-dessus est la propriété du magasin et est prêté au client gratuitement, pendant la durée de la réparation de son propre appareil.",
-      "Le client s'engage à restituer l'appareil lors de la récupération de son appareil réparé, dans le même état de conservation et de fonctionnement que lors de la réception.",
-      "En cas de perte, vol, dommage ou non-restitution, le client est responsable du coût de réparation ou de remplacement par un appareil de caractéristiques équivalentes.",
-      "L'appareil est réservé à l'usage exclusif du client et ne peut être vendu, prêté, cédé ou donné en garantie à des tiers.",
-      "Le magasin n'est pas responsable des données, contenus ou utilisations enregistrés sur l'appareil pendant la durée du prêt.",
-    ],
     customer: "Client",
     dateLocale: "fr-FR",
     deviceInRepair: "Appareil en réparation",
@@ -917,19 +897,10 @@ const LOANER_AGREEMENT_STRINGS: Record<string, LoanerAgreementStrings> = {
     phone: "Téléphone",
     returnedOn: "Restitué le",
     signatureLabel: "Signature du client",
-    signatureTerms:
-      "J'ai lu et j'accepte les conditions de prêt décrites ci-dessus.",
     docRef: "Document",
-    title: "Terme de Responsabilité — Appareil de Prêt",
+    signedDoc: "Document signé",
   },
   es: {
-    clauses: [
-      "El dispositivo identificado arriba es propiedad de la tienda y se presta al cliente gratuitamente, durante el periodo de reparación de su propio dispositivo.",
-      "El cliente se compromete a devolver el dispositivo al recoger su equipo reparado, en las mismas condiciones de conservación y funcionamiento en que lo recibió.",
-      "En caso de pérdida, robo, daño o no devolución, el cliente responde por el coste de reparación o sustitución por un dispositivo de características equivalentes.",
-      "El dispositivo es para uso exclusivo del cliente y no puede ser vendido, prestado, cedido ni dado en garantía a terceros.",
-      "La tienda no se responsabiliza de los datos, contenidos o usos registrados en el dispositivo durante el periodo de préstamo.",
-    ],
     customer: "Cliente",
     dateLocale: "es-ES",
     deviceInRepair: "Dispositivo en reparación",
@@ -942,24 +913,24 @@ const LOANER_AGREEMENT_STRINGS: Record<string, LoanerAgreementStrings> = {
     phone: "Teléfono",
     returnedOn: "Devuelto el",
     signatureLabel: "Firma del cliente",
-    signatureTerms:
-      "He leído y acepto las condiciones de préstamo descritas arriba.",
     docRef: "Documento",
-    title: "Termo de Responsabilidad — Dispositivo de Préstamo",
+    signedDoc: "Documento firmado",
   },
 };
 
 /**
- * Standalone A4 "termo de responsabilidade" for the loaned device — the
- * customer signs it at intake. The fleet unit (or the free-text note for
- * ad-hoc loans) is identified on the document.
+ * Standalone A4 "termo de responsabilidade" for the loaned device. When the
+ * agreement was signed digitally it renders the signature plus the
+ * "Documento assinado" seal — but only while the job's current data still
+ * rebuilds the exact canonical document that was signed; a unit swap, note
+ * edit or customer change falls back to the paper signature line instead of
+ * showing a signature that no longer covers the content.
  *
- * The intake signature/h seal is NOT reused here: it authenticates the ficha,
- * a different document that never contained these liability clauses. The term
- * always prints a paper signature line plus an integrity seal — a sha256 over
- * exactly what is printed (clauses, unit identity, customer, dates), so a
- * reprint after a fleet edit produces a visibly different reference instead
- * of silently authenticating changed content.
+ * The intake signature/seal is NOT reused here: it authenticates the ficha,
+ * a different document that never contained these liability clauses.
+ * Unsigned prints carry the docRef integrity seal — a sha256 over exactly
+ * what is printed — so a reprint after a fleet edit produces a visibly
+ * different reference.
  */
 export async function renderLoanerAgreementHtml(
   prisma: DbClient,
@@ -983,13 +954,17 @@ export async function renderLoanerAgreementHtml(
     } | null;
     loanerNote?: string | null;
     loanerReturnedAt?: Date | null;
+    loanerAgreementSignatureDataUrl?: string | null;
+    loanerAgreementSnapshot?: unknown;
+    loanerAgreementDocumentHash?: string | null;
+    loanerAgreementSignedAt?: Date | null;
   },
   options?: { locale?: string }
 ): Promise<string> {
   const settings = await findShopSettingsUnique(prisma);
-  const s =
-    LOANER_AGREEMENT_STRINGS[options?.locale ?? ""] ??
-    LOANER_AGREEMENT_STRINGS.pt;
+  const locale = options?.locale ?? "pt";
+  const s = LOANER_AGREEMENT_STRINGS[locale] ?? LOANER_AGREEMENT_STRINGS.pt;
+  const text = loanerAgreementText(locale);
   const date = new Date(job.createdAt).toLocaleString(s.dateLocale);
 
   // Fleet unit rows when linked; otherwise the free-text note is the only
@@ -1013,31 +988,40 @@ export async function renderLoanerAgreementHtml(
     ? `<tr><td>${s.returnedOn}</td><td style="text-align:right">${new Date(job.loanerReturnedAt).toLocaleString(s.dateLocale)}</td></tr>`
     : "";
 
-  // Always a paper signature line — never the intake signature (see the
-  // function doc: that signature seals a different document).
-  const signatureBox = `<div class="line">${s.signatureLabel}</div>`;
+  // The stored signature only applies while the job still produces the
+  // exact document the customer signed — same rule as attach-time, so a
+  // reprint after a unit swap falls back to the paper line rather than
+  // showing a signature under different content.
+  const signatureApplies =
+    typeof job.loanerAgreementSignatureDataUrl === "string" &&
+    job.loanerAgreementSignatureDataUrl.startsWith("data:image/") &&
+    loanerAgreementMatches(job.loanerAgreementSnapshot, job);
+  const signatureBox = signatureApplies
+    ? `<img src="${esc(job.loanerAgreementSignatureDataUrl as string)}" alt="signature" />`
+    : `<div class="line">${s.signatureLabel}</div>`;
+  // docRef covers the canonical printed content plus the physical return
+  // stamp (post-signing state that never belongs inside the signed doc).
   const docRef = createHash("sha256")
     .update(
       canonicalize({
-        v: 1,
-        doc: "loaner-agreement",
-        jobCode: job.jobCode,
-        customer: [job.customer.name, job.customer.phone, job.customer.taxId],
-        loaner: ld ? [ld.label, ld.brand, ld.model, ld.imei] : null,
-        note: job.loanerNote ?? null,
-        clauses: s.clauses,
-        lentOn: new Date(job.createdAt).toISOString(),
+        document: buildLoanerAgreementDocument(job, locale),
         returnedOn: job.loanerReturnedAt
           ? new Date(job.loanerReturnedAt).toISOString()
           : null,
-        locale: options?.locale ?? "pt",
       })
     )
     .digest("hex")
     .slice(0, 12);
-  const seal = `<p style="font-size:8pt;color:#777">${esc(s.docRef)} #${docRef}</p>`;
+  const seal =
+    signatureApplies && job.loanerAgreementDocumentHash
+      ? `<p style="font-size:8pt;color:#777">${esc(s.signedDoc)} #${esc(job.loanerAgreementDocumentHash.slice(0, 12))}${
+          job.loanerAgreementSignedAt
+            ? ` · ${new Date(job.loanerAgreementSignedAt).toLocaleString(s.dateLocale)}`
+            : ""
+        }</p>`
+      : `<p style="font-size:8pt;color:#777">${esc(s.docRef)} #${docRef}</p>`;
 
-  const clauseItems = s.clauses
+  const clauseItems = text.clauses
     .map((c, i) => `<li style="margin-bottom:2mm">${i + 1}. ${esc(c)}</li>`)
     .join("");
 
@@ -1046,10 +1030,10 @@ export async function renderLoanerAgreementHtml(
     : "";
 
   return `<!doctype html>
-<html lang="${options?.locale ?? "pt"}">
+<html lang="${locale}">
 <head>
 <meta charset="utf-8">
-<title>${s.title} ${esc(job.jobCode)}</title>
+<title>${text.title} ${esc(job.jobCode)}</title>
 <style>${A4_CSS}
   .clauses { margin-top: 5mm; font-size: 10pt; }
   .clauses ol { margin: 0; padding-left: 0; list-style: none; }
@@ -1058,7 +1042,7 @@ export async function renderLoanerAgreementHtml(
 <body>
 <div class="doc-head">
   ${a4ShopHeader(settings)}
-  <div class="meta"><div class="doctype">${s.title}</div><div class="code">${esc(job.jobCode)}</div><div>${date}</div></div>
+  <div class="meta"><div class="doctype">${text.title}</div><div class="code">${esc(job.jobCode)}</div><div>${date}</div></div>
 </div>
 <div class="grid">
   <div class="col">
@@ -1085,7 +1069,7 @@ export async function renderLoanerAgreementHtml(
 </div>
 <div class="clauses"><ol>${clauseItems}</ol></div>
 <div class="sign">
-  <p class="terms">${esc(s.signatureTerms)}</p>
+  <p class="terms">${esc(text.acceptance)}</p>
   <div class="box">${signatureBox}</div>
 </div>
 ${seal}

@@ -502,6 +502,20 @@ model Job {
   loanerDevice     LoanerDevice?  @relation(fields: [loanerDeviceId], references: [id], onDelete: SetNull)
   loanerReturnedAt DateTime?      @db.Timestamptz
 
+  // Digital signature of the loaner responsibility agreement — a document
+  // separate from the intake ficha. The snapshot freezes the canonical
+  // LoanerAgreementDocument the customer signed (clauses, unit identity,
+  // customer, dates, locale); the hash is sha256(canonical doc + signature).
+  // Reprinting compares the stored snapshot against the job's current data
+  // and falls back to a paper signature line when they no longer match.
+  loanerAgreementSignatureDataUrl String?   @db.Text
+  loanerAgreementSnapshot         Json?
+  loanerAgreementDocumentHash     String?
+  loanerAgreementSignedAt         DateTime? @db.Timestamptz
+  loanerAgreementSignedVia        String? // remote
+  loanerAgreementSignerIp         String?
+  loanerAgreementSignerUserAgent  String?   @db.Text
+
   estimatedDate DateTime? @db.Timestamptz
   createdAt     DateTime  @default(now()) @db.Timestamptz
   updatedAt     DateTime  @updatedAt @db.Timestamptz

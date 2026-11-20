@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@generated/client";
+import { buildLoanerAgreementDocument } from "@shared/loaner-agreement-document.js";
 import { describe, expect, it, vi } from "vitest";
 import {
   renderLabelHtml,
@@ -220,6 +221,47 @@ describe("renderLoanerAgreementHtml signature integrity", () => {
     });
     expect(ref(a)).toBeTruthy();
     expect(ref(a)).not.toBe(ref(b));
+  });
+
+  it("renders the digital signature + seal when the snapshot still matches", async () => {
+    const html = await renderLoanerAgreementHtml(mockPrisma(FULL_SETTINGS), {
+      ...AGREEMENT_JOB,
+      loanerAgreementSignatureDataUrl: "data:image/png;base64,BBBB",
+      loanerAgreementSnapshot: buildLoanerAgreementDocument(
+        AGREEMENT_JOB,
+        "pt"
+      ),
+      loanerAgreementDocumentHash: "aa11bb22cc33dd44",
+      loanerAgreementSignedAt: new Date("2026-01-15T10:06:00Z"),
+    });
+    expect(html).toContain("data:image/png;base64,BBBB");
+    expect(html).toContain("Documento assinado #aa11bb22cc33");
+    expect(html).not.toMatch(DOC_REF_RE);
+  });
+
+  it("falls back to the paper line when the signed snapshot went stale", async () => {
+    // The fleet unit was swapped after signing — the signature no longer
+    // covers the printed unit, so the agreement must not present it.
+    const html = await renderLoanerAgreementHtml(mockPrisma(FULL_SETTINGS), {
+      ...AGREEMENT_JOB,
+      loanerDevice: {
+        brand: "Nokia",
+        imei: "999888",
+        label: "Loja #9",
+        model: "105",
+      },
+      loanerAgreementSignatureDataUrl: "data:image/png;base64,BBBB",
+      loanerAgreementSnapshot: buildLoanerAgreementDocument(
+        AGREEMENT_JOB,
+        "pt"
+      ),
+      loanerAgreementDocumentHash: "aa11bb22cc33dd44",
+      loanerAgreementSignedAt: new Date("2026-01-15T10:06:00Z"),
+    });
+    expect(html).not.toContain("data:image/png;base64,BBBB");
+    expect(html).not.toContain("Documento assinado");
+    expect(html).toContain("Assinatura do cliente");
+    expect(html).toMatch(DOC_REF_RE);
   });
 });
 

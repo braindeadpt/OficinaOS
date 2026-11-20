@@ -44,6 +44,9 @@ interface PublicDocument {
   device: string;
   estimatedCost: number | null;
   estimatedDelivery: string | null;
+  // "loaner-agreement" marks the loaner term (a document separate from the
+  // intake ficha) — it carries the same mapped fields plus structured ones.
+  kind?: "loaner-agreement";
   problem: string;
   termsText: string;
   urgent: boolean;
@@ -217,7 +220,11 @@ export default function SignPage() {
                     </div>
                     <div className="flex justify-between gap-4">
                       <dt className="text-on-surface-variant">
-                        {t("sign_doc_device")}
+                        {t(
+                          document.kind === "loaner-agreement"
+                            ? "sign_doc_loaner_unit"
+                            : "sign_doc_device"
+                        )}
                       </dt>
                       <dd className="font-medium text-on-surface">
                         {document.device}
@@ -225,7 +232,11 @@ export default function SignPage() {
                     </div>
                     <div className="flex justify-between gap-4">
                       <dt className="shrink-0 text-on-surface-variant">
-                        {t("sign_doc_problem")}
+                        {t(
+                          document.kind === "loaner-agreement"
+                            ? "sign_doc_repair_device"
+                            : "sign_doc_problem"
+                        )}
                       </dt>
                       <dd className="text-right font-medium text-on-surface">
                         {document.problem}

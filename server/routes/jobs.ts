@@ -54,6 +54,10 @@ import {
   add as addWaitingPart,
   remove as removeWaitingPart,
 } from "../services/job-waiting-parts.service.js";
+import {
+  attachLoanerSignature,
+  createLoanerSignatureSession,
+} from "../services/loaner-signature.service.js";
 import { notify } from "../services/notification-dispatch.js";
 import {
   clearPaymentOnDelivery,
@@ -987,6 +991,67 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
       const { id } = req.params as { id: string };
       await unpublishJobPortal(app.prisma, id, req.log);
       return reply.status(204).send();
+    }
+  );
+
+  // Loaner agreement signing — the term is a separate document from the
+  // intake ficha. Creating the session freezes the canonical agreement the
+  // server built from the job; attaching moves the signature, document hash
+  // and snapshot onto the job once the job still produces that same
+  // document (a swapped unit or edited note turns it SIGNATURE_STALE).
+  app.post(
+    "/:id/loaner-signature-session",
+    {
+      schema: {
+        tags: ["jobs"],
+        summary: "Create a signing session for the loaner agreement",
+        params: {
+          type: "object",
+          properties: { id: { type: "string" } },
+          required: ["id"],
+        },
+      },
+      preHandler: [requirePermission({ jobs: ["edit"] })],
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const result = await createLoanerSignatureSession(
+        app.prisma,
+        id,
+        req.locale,
+        req.log
+      );
+      return reply.send(result);
+    }
+  );
+
+  app.post(
+    "/:id/loaner-signature",
+    {
+      schema: {
+        tags: ["jobs"],
+        summary: "Attach a signed loaner agreement session to the job",
+        params: {
+          type: "object",
+          properties: { id: { type: "string" } },
+          required: ["id"],
+        },
+      },
+      preHandler: [requirePermission({ jobs: ["edit"] })],
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const token = (req.body as { token?: string } | undefined)?.token;
+      if (typeof token !== "string") {
+        throw new AppError("VALIDATION_ERROR");
+      }
+      const result = await attachLoanerSignature(
+        app.prisma,
+        id,
+        token,
+        getUserId(req)
+      );
+      return reply.send(result);
     }
   );
 };

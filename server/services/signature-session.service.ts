@@ -8,6 +8,13 @@ import {
   type IntakeDocumentSource,
   publicDocumentView,
 } from "@shared/intake-document.js";
+import {
+  LOANER_AGREEMENT_DOC_KIND,
+  type LoanerAgreementDocument,
+  type LoanerAgreementSource,
+  loanerAgreementMatches,
+  publicLoanerAgreementView,
+} from "@shared/loaner-agreement-document.js";
 import { SIGNATURE_DATA_URL_RE } from "@shared/schemas/signature.schema.js";
 
 // The QR is photographed easily and the bearer token is the only secret, so
@@ -20,7 +27,7 @@ const MAX_SIGNATURE_BYTES = 500 * 1024;
 
 /** sha256 of the canonical document + the signature image — the job's proof. */
 export function intakeDocumentHash(
-  document: IntakeDocument,
+  document: unknown,
   signatureDataUrl: string
 ): string {
   return createHash("sha256")
@@ -45,7 +52,7 @@ export function documentMatches(
 
 export async function createSignatureSession(
   prisma: PrismaClient,
-  document?: IntakeDocument
+  document?: IntakeDocument | LoanerAgreementDocument
 ) {
   // Lazy cleanup — dead sessions hold a signature image and are worthless.
   await prisma.signatureSession.deleteMany({
@@ -105,11 +112,20 @@ export async function getPublicSignatureSession(
   if (!session || session.expiresAt < new Date()) {
     throw new AppError("SIGNATURE_SESSION_EXPIRED");
   }
+  const snapshot = session.snapshot as unknown as
+    | IntakeDocument
+    | LoanerAgreementDocument
+    | null;
+  let document: Record<string, unknown> | null = null;
+  if (snapshot) {
+    document =
+      (snapshot as LoanerAgreementDocument).doc === LOANER_AGREEMENT_DOC_KIND
+        ? publicLoanerAgreementView(snapshot as LoanerAgreementDocument)
+        : publicDocumentView(snapshot as IntakeDocument);
+  }
   return {
     signed: session.signatureDataUrl !== null,
-    document: session.snapshot
-      ? publicDocumentView(session.snapshot as unknown as IntakeDocument)
-      : null,
+    document,
   };
 }
 
@@ -140,9 +156,8 @@ export async function submitSignatureSession(
     throw new AppError("SIGNATURE_ALREADY_SUBMITTED");
   }
 
-  const snapshot = session.snapshot as unknown as IntakeDocument | null;
-  const documentHash = snapshot
-    ? intakeDocumentHash(snapshot, signatureDataUrl)
+  const documentHash = session.snapshot
+    ? intakeDocumentHash(session.snapshot, signatureDataUrl)
     : null;
 
   // Atomic single-use: two racing submits can't both claim the slot.
@@ -186,6 +201,34 @@ export async function consumeSignatureSession(
     throw new AppError("VALIDATION_ERROR");
   }
   if (!documentMatches(session.snapshot, input)) {
+    throw new AppError("SIGNATURE_STALE");
+  }
+  await prisma.signatureSession.delete({ where: { id: session.id } });
+  return session;
+}
+
+/**
+ * Same consume for the loaner agreement: the job's current data must rebuild
+ * the exact snapshot the customer signed — a swapped unit, edited note or
+ * changed customer makes the signature stale instead of silently covering
+ * different content.
+ */
+export async function consumeLoanerSignatureSession(
+  prisma: Pick<PrismaClient, "signatureSession">,
+  token: string,
+  source: LoanerAgreementSource
+) {
+  assertUsableToken(token);
+  const session = await prisma.signatureSession.findUnique({
+    where: { token },
+  });
+  if (!session || session.expiresAt < new Date()) {
+    throw new AppError("SIGNATURE_SESSION_EXPIRED");
+  }
+  if (!(session.signatureDataUrl && session.signedAt)) {
+    throw new AppError("VALIDATION_ERROR");
+  }
+  if (!loanerAgreementMatches(session.snapshot, source)) {
     throw new AppError("SIGNATURE_STALE");
   }
   await prisma.signatureSession.delete({ where: { id: session.id } });
