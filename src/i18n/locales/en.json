@@ -626,7 +626,6 @@
     "invoicing_provider_failed": "The invoicing provider rejected or failed the request — try again or check the account settings",
     "already_invoiced": "A fiscal document was already issued for this record",
     "password_change_required": "You must change your password before continuing",
-    "two_factor_setup_required": "Two-factor authentication setup is required for this account",
     "two_factor_enable_failed": "Could not start two-factor setup — check your password",
     "two_factor_disable_failed": "Could not disable two-factor authentication",
     "two_factor_invalid_code": "Invalid authentication code",
@@ -1740,8 +1739,6 @@
   "twofactor_backup_codes_hint": "Store these codes somewhere safe — each can be used once if you lose access to the app.",
   "twofactor_confirm": "Confirm setup",
   "twofactor_disable_confirm": "Enter your password to disable two-factor authentication.",
-  "twofactor_required_title": "Set up two-factor authentication",
-  "twofactor_required_desc": "Owner accounts must enable two-factor authentication before continuing.",
   "time_ago": {
     "just_now": "just now",
     "minutes_ago": "{{count}}m ago",

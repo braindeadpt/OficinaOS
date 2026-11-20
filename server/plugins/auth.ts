@@ -1,5 +1,4 @@
 import type { PrismaClient } from "@generated/client";
-import { Role } from "@shared/constants/roles";
 import { AppError, isAppError } from "@shared/errors/app-error.js";
 import { fromNodeHeaders } from "better-auth/node";
 import type { FastifyPluginAsync } from "fastify";
@@ -308,18 +307,6 @@ const authPlugin: FastifyPluginAsync = async (app) => {
     // (the /api/auth/* endpoints it needs are exempted above).
     if (session.mustChangePassword) {
       throw new AppError("PASSWORD_CHANGE_REQUIRED");
-    }
-
-    // Owners must enrol in TOTP before touching the app — the session
-    // exists but every non-auth route refuses until twoFactorEnabled.
-    // Demo exempt: the seeded demo user is the only account and must
-    // stay reachable on the shared public demo.
-    if (
-      session.role === Role.OWNER &&
-      !session.twoFactorEnabled &&
-      !(isDemoMode() && session.username === DEMO_USERNAME)
-    ) {
-      throw new AppError("TWO_FACTOR_SETUP_REQUIRED");
     }
 
     request.user = session;

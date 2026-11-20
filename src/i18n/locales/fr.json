@@ -626,7 +626,6 @@
     "invoicing_provider_failed": "Le fournisseur de facturation a rejeté ou échoué la demande : réessayez ou vérifiez les paramètres du compte.",
     "already_invoiced": "Un document fiscal a déjà été émis pour ce dossier",
     "password_change_required": "Vous devez changer votre mot de passe avant de continuer",
-    "two_factor_setup_required": "Une configuration d'authentification à deux facteurs est requise pour ce compte",
     "two_factor_enable_failed": "Impossible de démarrer la configuration à deux facteurs : vérifiez votre mot de passe",
     "two_factor_disable_failed": "Impossible de désactiver l'authentification à deux facteurs",
     "two_factor_invalid_code": "Code d'authentification invalide",
@@ -1740,8 +1739,6 @@
   "twofactor_backup_codes_hint": "Conservez ces codes dans un endroit sûr : chacun peut être utilisé une fois si vous perdez l'accès à l'application.",
   "twofactor_confirm": "Confirmer la configuration",
   "twofactor_disable_confirm": "Entrez votre mot de passe pour désactiver l'authentification à deux facteurs.",
-  "twofactor_required_title": "Configurer l'authentification à deux facteurs",
-  "twofactor_required_desc": "Les comptes propriétaires doivent activer l'authentification à deux facteurs avant de continuer.",
   "time_ago": {
     "just_now": "tout à l' heure",
     "minutes_ago": "il y a {{count}} m",

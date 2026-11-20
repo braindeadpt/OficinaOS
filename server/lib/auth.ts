@@ -117,9 +117,7 @@ export function createAuth(prisma: PrismaClient) {
         ac,
         roles,
       }),
-      // TOTP enrolment is self-service at /profile; Owners are forced
-      // through it by the TWO_FACTOR_SETUP_REQUIRED gate in the auth
-      // plugin's preHandler.
+      // Optional TOTP second factor, managed by each user at /profile.
       twoFactor({ issuer: "OficinaOS" }),
     ],
   });

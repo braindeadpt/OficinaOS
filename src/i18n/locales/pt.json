@@ -626,7 +626,6 @@
     "invoicing_provider_failed": "O fornecedor de faturação rejeitou ou falhou a solicitação. Tente novamente ou verifique as definições da conta",
     "already_invoiced": "Já foi emitida uma fatura para este registo",
     "password_change_required": "Deve alterar a sua palavra-passe antes de continuar",
-    "two_factor_setup_required": "A configuração da autenticação de dois fatores é necessária para esta conta",
     "two_factor_enable_failed": "Não foi possível iniciar a configuração de dois fatores — verifique a sua palavra-passe",
     "two_factor_disable_failed": "Não foi possível desativar a autenticação de dois fatores",
     "two_factor_invalid_code": "Código de autenticação inválido",
@@ -1740,8 +1739,6 @@
   "twofactor_backup_codes_hint": "Armazene estes códigos em algum lugar seguro – cada um pode ser utilizado uma vez se perder o acesso à aplicação.",
   "twofactor_confirm": "Confirmar configuração",
   "twofactor_disable_confirm": "Introduza a sua palavra-passe para desativar a autenticação de dois fatores.",
-  "twofactor_required_title": "Set up two-factor authentication",
-  "twofactor_required_desc": "Owner accounts must enable two-factor authentication before continuing.",
   "time_ago": {
     "just_now": "agora mesmo",
     "minutes_ago": "há {{count}}m",

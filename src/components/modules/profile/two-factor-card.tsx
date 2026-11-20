@@ -10,18 +10,8 @@ import { useAuthStore } from "@/stores/auth";
 
 type Step = "idle" | "password" | "enroll" | "disable";
 
-/**
- * TOTP enrolment and management card. `forced` is the first-login gate for
- * Owner accounts (no skip option, success hands control back to the caller
- * via `onActivated`); otherwise it renders as a normal profile section.
- */
-export function TwoFactorCard({
-  forced = false,
-  onActivated,
-}: {
-  forced?: boolean;
-  onActivated?: () => void;
-}) {
+/** TOTP enrolment and management card for the profile security tab. */
+export function TwoFactorCard() {
   const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const checkSession = useAuthStore((s) => s.checkSession);
@@ -81,7 +71,6 @@ export function TwoFactorCard({
       setStep("idle");
       setPassword("");
       setCode("");
-      onActivated?.();
     } catch (err: unknown) {
       setError(getErrorMessage(err, t("errors.two_factor_invalid_code")));
     } finally {
@@ -120,7 +109,7 @@ export function TwoFactorCard({
             {enabled ? t("twofactor_status_on") : t("twofactor_status_off")}
           </p>
         </div>
-        {!forced && step === "idle" && (
+        {step === "idle" && (
           <Button
             icon={enabled ? "lock" : "verified_user"}
             onClick={() => {
@@ -144,7 +133,7 @@ export function TwoFactorCard({
         </p>
       )}
 
-      {(step === "password" || (forced && step === "idle")) && (
+      {step === "password" && (
         <form className="mt-4 space-y-4" onSubmit={submitPassword}>
           <Field label={t("auth_password")}>
             <Input
