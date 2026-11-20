@@ -9,8 +9,11 @@ const mocks = vi.hoisted(() => ({
   decryptSmsConfig: vi.fn(),
   getSmsSettings: vi.fn(),
   handleInboundSms: vi.fn(),
+  pushSmsCredentialsToCloud: vi.fn(),
   registerSmsWebhook: vi.fn(),
+  resolveSmsChannel: vi.fn(),
   sendSms: vi.fn(),
+  sendSmsMessage: vi.fn(),
   upsertSmsSettings: vi.fn(),
 }));
 
@@ -18,8 +21,11 @@ vi.mock("../services/sms.service.js", () => ({
   checkSmsGateway: mocks.checkSmsGateway,
   decryptSmsConfig: mocks.decryptSmsConfig,
   handleInboundSms: mocks.handleInboundSms,
+  pushSmsCredentialsToCloud: mocks.pushSmsCredentialsToCloud,
   registerSmsWebhook: mocks.registerSmsWebhook,
+  resolveSmsChannel: mocks.resolveSmsChannel,
   sendSms: mocks.sendSms,
+  sendSmsMessage: mocks.sendSmsMessage,
 }));
 
 vi.mock("../services/settings.service.js", () => ({
@@ -131,7 +137,10 @@ beforeEach(() => {
 
 describe("PUT /api/settings/sms", () => {
   it("enables the local gateway (free — no entitlement needed)", async () => {
-    mocks.getSmsSettings.mockResolvedValue({ enabled: true });
+    mocks.getSmsSettings.mockResolvedValue({
+      enabled: true,
+      transport: "android",
+    });
     mocks.decryptSmsConfig.mockReturnValue(null);
     const app = buildApp(fakePrisma());
     const res = await app.inject({
@@ -149,7 +158,10 @@ describe("PUT /api/settings/sms", () => {
   });
 
   it("enables without the sms entitlement — the module only gates managed transports", async () => {
-    mocks.getSmsSettings.mockResolvedValue({ enabled: true });
+    mocks.getSmsSettings.mockResolvedValue({
+      enabled: true,
+      transport: "android",
+    });
     const app = buildApp(fakePrisma({ ...SMS_ROW, cloudEntitlements: [] }));
     const res = await app.inject({
       method: "PUT",
@@ -166,7 +178,10 @@ describe("PUT /api/settings/sms", () => {
   });
 
   it("accepts disabling even without the entitlement", async () => {
-    mocks.getSmsSettings.mockResolvedValue({ enabled: false });
+    mocks.getSmsSettings.mockResolvedValue({
+      enabled: false,
+      transport: "android",
+    });
     const app = buildApp(fakePrisma({ ...SMS_ROW, cloudEntitlements: [] }));
     const res = await app.inject({
       method: "PUT",
@@ -178,7 +193,10 @@ describe("PUT /api/settings/sms", () => {
   });
 
   it("registers the gateway webhook when saving config", async () => {
-    mocks.getSmsSettings.mockResolvedValue({ enabled: true });
+    mocks.getSmsSettings.mockResolvedValue({
+      enabled: true,
+      transport: "android",
+    });
     mocks.decryptSmsConfig.mockReturnValue({
       password: "p",
       url: "http://192.168.1.50:8080",
@@ -204,8 +222,56 @@ describe("PUT /api/settings/sms", () => {
     );
   });
 
+  it("skips the android webhook when the transport is custom", async () => {
+    mocks.getSmsSettings.mockResolvedValue({
+      enabled: true,
+      transport: "custom",
+    });
+    const app = buildApp(fakePrisma());
+    const res = await app.inject({
+      headers: { host: "192.168.1.10:4000" },
+      method: "PUT",
+      payload: {
+        customBodyTemplate: '{"to":"{{to}}","msg":"{{text}}"}',
+        customUrl: "https://api.example.com/send",
+        enabled: true,
+        transport: "custom",
+      },
+      url: "/api/settings/sms",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().webhookRegistered).toBe(false);
+    expect(mocks.registerSmsWebhook).not.toHaveBeenCalled();
+    expect(mocks.pushSmsCredentialsToCloud).not.toHaveBeenCalled();
+  });
+
+  it("pushes BulkSMS credentials to the cloud on cloud-transport saves", async () => {
+    mocks.getSmsSettings.mockResolvedValue({
+      enabled: true,
+      transport: "cloud",
+    });
+    mocks.pushSmsCredentialsToCloud.mockResolvedValue(true);
+    const app = buildApp(fakePrisma());
+    const res = await app.inject({
+      method: "PUT",
+      payload: {
+        bulksmsTokenId: "tok-id",
+        bulksmsTokenSecret: "tok-secret",
+        cloudSender: "OFICINA",
+        enabled: true,
+        transport: "cloud",
+      },
+      url: "/api/settings/sms",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mocks.pushSmsCredentialsToCloud).toHaveBeenCalled();
+  });
+
   it("keeps saved settings when the gateway is unreachable", async () => {
-    mocks.getSmsSettings.mockResolvedValue({ enabled: true });
+    mocks.getSmsSettings.mockResolvedValue({
+      enabled: true,
+      transport: "android",
+    });
     mocks.decryptSmsConfig.mockReturnValue(null);
     const app = buildApp(fakePrisma());
     const res = await app.inject({
@@ -219,13 +285,14 @@ describe("PUT /api/settings/sms", () => {
 });
 
 describe("POST /api/settings/sms/test", () => {
+  const ANDROID_CHANNEL = {
+    config: { password: "p", url: "http://192.168.1.50:8080", user: "sms" },
+    mode: "android",
+  };
+
   it("sends the test without the sms entitlement (local gateway is free)", async () => {
-    mocks.decryptSmsConfig.mockReturnValue({
-      password: "p",
-      url: "http://192.168.1.50:8080",
-      user: "sms",
-    });
-    mocks.sendSms.mockResolvedValue({ success: true });
+    mocks.resolveSmsChannel.mockReturnValue(ANDROID_CHANNEL);
+    mocks.sendSmsMessage.mockResolvedValue({ success: true });
     const app = buildApp(fakePrisma({ ...SMS_ROW, cloudEntitlements: [] }));
     const res = await app.inject({
       method: "POST",
@@ -233,11 +300,11 @@ describe("POST /api/settings/sms/test", () => {
       url: "/api/settings/sms/test",
     });
     expect(res.statusCode).toBe(200);
-    expect(mocks.sendSms).toHaveBeenCalled();
+    expect(mocks.sendSmsMessage).toHaveBeenCalled();
   });
 
   it("fails cleanly when the gateway is not configured", async () => {
-    mocks.decryptSmsConfig.mockReturnValue(null);
+    mocks.resolveSmsChannel.mockReturnValue(null);
     const app = buildApp(fakePrisma());
     const res = await app.inject({
       method: "POST",
@@ -248,13 +315,9 @@ describe("POST /api/settings/sms/test", () => {
     expect(res.json().code).toBe("SMS_NOT_CONFIGURED");
   });
 
-  it("sends via the gateway when configured", async () => {
-    mocks.decryptSmsConfig.mockReturnValue({
-      password: "p",
-      url: "http://192.168.1.50:8080",
-      user: "sms",
-    });
-    mocks.sendSms.mockResolvedValue({ success: true });
+  it("sends via the resolved channel when configured", async () => {
+    mocks.resolveSmsChannel.mockReturnValue(ANDROID_CHANNEL);
+    mocks.sendSmsMessage.mockResolvedValue({ success: true });
     const app = buildApp(fakePrisma());
     const res = await app.inject({
       method: "POST",
@@ -262,8 +325,8 @@ describe("POST /api/settings/sms/test", () => {
       url: "/api/settings/sms/test",
     });
     expect(res.statusCode).toBe(200);
-    expect(mocks.sendSms).toHaveBeenCalledWith(
-      expect.objectContaining({ url: "http://192.168.1.50:8080" }),
+    expect(mocks.sendSmsMessage).toHaveBeenCalledWith(
+      ANDROID_CHANNEL,
       "912345678",
       expect.stringContaining("OficinaOS"),
       "PT"

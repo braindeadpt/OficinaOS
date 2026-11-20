@@ -119,28 +119,41 @@ histórico do cliente é importado. Remarketing exige templates Meta →
 recusado no modo local. A sessão/chaves nunca saem da loja (RGPD limpo);
 risco de ban do número fica documentado no disclaimer do UI.
 
-### Canal SMS (free — gateway Android local)
+### Canal SMS — três transportes (`smsTransport`)
+
+`resolveSmsChannel` (`sms.service.ts`) é o ponto único de resolução:
+`"android"` (default) | `"custom"` | `"cloud"`.
 
 ```
-Outbound: evento → notification-dispatch → outbox →
-  POST http://<telemovel>:8080/message (Basic auth, LAN — sms-gate.app)
-Inbound:  cliente SMS → SMS Gateway for Android → webhook
-  POST /api/public/sms/inbound/:token (route-security: CSRF off + rate limit)
-  → handleInboundSms → mesmos intents do bot (bot-intents.ts partilhado
-  com whatsapp-bot) → resposta automática por SMS
+android:  outbox → POST http://<telemovel>:8080/message (Basic auth, LAN)
+          inbound: sms-gate → POST /api/public/sms/inbound/:token
+          → handleInboundSms → bot-intents partilhados → resposta automática
+custom:   outbox → POST/GET <smsCustomUrl> — template `{{to}}`/`{{text}}`
+          (json ou form-urlencoded, headers encriptados, successText opcional)
+          OUTBOUND ONLY — sem inbound nem delivery reports
+cloud:    outbox → POST /sms/send na Cloud (402 sem entitlement) →
+          BulkSMS v1 /messages; inbound/reports: Cloud fila → poller
+          syncSmsCloud → bot-intents → resposta via Cloud → /sms/inbound/ack
 ```
 
-100% LAN: nada passa pela Cloud nem pela Meta — só sai o SMS pela rede móvel.
-É o canal "de arranque" da loja que ainda não tem WhatsApp Business aprovado.
+**android** (default, free): 100% LAN — só sai o SMS pela rede móvel. É o
+canal "de arranque". O SIM, a fatura e os limites anti-spam são da loja.
+Password do gateway encriptada; token do webhook por `generateSmsWebhookToken`.
+
+**custom** (free, BYO provider): qualquer API HTTP que a loja configure
+(URL + método + template + headers encriptados AES-256-GCM). Sem inbound —
+é o preço da genericidade: nenhum provider consegue chamar a LAN da loja e
+cada formato de webhook é próprio.
+
+**cloud** (Pro, `sms` entitlement): BulkSMS gerido. A loja faz push das
+credenciais (`tokenId`/`tokenSecret`, encriptadas na Cloud) — a Cloud faz
+relay outbound com enforcement 402, recebe webhooks do provider (replies +
+delivery reports) e enfileira para o poller `syncSmsCloud` da app. É o
+único transporte com inbound + reports num provider comercial.
+
 Sem template SMS dedicado, o dispatch usa o corpo WhatsApp com `*bold*`
-removido (SMS não renderiza markdown). Corre localmente e é **free** — o
-módulo Pro `sms` gateia apenas transportes geridos (provider comercial via
-Cloud, por construir); o gateway Android da loja não exige entitlement.
-A responsabilidade é da loja: o SIM é dela, a fatura da operadora e os
-limites anti-spam também.
-Consentimento partilhado (`whatsappConsent` = opt-in de mensagens
-automáticas, qualquer canal). Password do gateway encriptada
-(AES-256-GCM); token do webhook gerado por `generateSmsWebhookToken`.
+removido (SMS não renderiza markdown). Consentimento partilhado
+(`whatsappConsent` = opt-in de mensagens automáticas, qualquer canal).
 
 ### Canais de mensagens — matriz free/Pro (regra canónica)
 
@@ -152,7 +165,7 @@ premium é "nós tratamos".**
 | Canal | Free (infra da loja) | Pro (Cloud envia) |
 |---|---|---|
 | WhatsApp | Evolution/Baileys (`whatsappTransport:"evolution"`) — não-oficial, risco de ban, disclaimer obrigatório | Meta Business API — credenciais em `shops.whatsappAccessToken`, envio via `POST /whatsapp/send` (402 sem entitlement) |
-| SMS | SMS Gateway for Android na LAN — SIM/tarifário e limites da operadora da loja | Provider comercial (BulkSMS/Twilio/…) — `smsTransport:"cloud"`, credenciais na Cloud (`POST /shops/sms-credentials` + `POST /sms/send` — por construir quando surgir o 1.º provider pedido) |
+| SMS | Android na LAN (in+out) **ou** `custom` — API HTTP genérica BYO (só outbound) | `smsTransport:"cloud"` — BulkSMS gerido na Cloud: credenciais encriptadas (`POST /shops/sms-credentials`), relay `POST /sms/send` (402), webhook provider → fila → poller da app |
 
 Regras:
 
@@ -173,7 +186,8 @@ Pipeline única para todos os eventos: código do domínio chama
 `notify()` (`notification-dispatch.ts`) → procura template por canal em
 `NotificationTemplate` (editável em Definições → Notificações) → gates de
 canal ativo + consentimento → `notification-outbox` (fila/retry/cancel) →
-transporte resolvido (meta/cloud/evolution ou sms-android). SMS sem
+transporte resolvido (meta/cloud/evolution ou sms-android/custom/cloud).
+SMS sem
 template próprio usa o corpo WhatsApp com `*bold*` removido.
 
 | Evento | Dispara quando | Cliente recebe | Onde no código |

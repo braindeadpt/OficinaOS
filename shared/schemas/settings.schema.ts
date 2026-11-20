@@ -223,12 +223,16 @@ export const updateInvoicingSettingsSchema = z
     message: "validations.at_least_one_field",
   });
 
-// SMS via gateway local (módulo Pro "sms") — SMS Gateway for Android em
-// modo Local Server: a app envia HTTP Basic direto ao telemóvel na LAN.
-// A password é write-only (encriptada, nunca volta à UI).
+// SMS multi-transporte — "android": sms-gate Local Server na LAN da
+// loja (free; a app envia HTTP Basic direto ao telemóvel). "custom":
+// API HTTP arbitrária descrita pela loja (free, outbound only; headers
+// e template validam-se server-side antes de gravar). "cloud": BulkSMS
+// via OficinaOS Cloud (Pro module "sms"; tokenId+secret fazem push para
+// a cloud e o secret local é apagado). Passwords/secrets são write-only.
 export const updateSmsSettingsSchema = z
   .object({
     enabled: z.boolean().optional(),
+    transport: z.enum(["android", "custom", "cloud"]).optional(),
     gatewayUrl: z
       .union([
         z.literal(""),
@@ -241,6 +245,24 @@ export const updateSmsSettingsSchema = z
       .optional(),
     gatewayUser: z.string().trim().max(64).optional(),
     gatewayPassword: z.string().max(256).optional(),
+    customUrl: z
+      .union([
+        z.literal(""),
+        z
+          .string()
+          .trim()
+          .max(2048)
+          .regex(/^https?:\/\//, { error: "validations.invalid_url" }),
+      ])
+      .optional(),
+    customMethod: z.enum(["GET", "POST"]).optional(),
+    customHeaders: z.string().max(4096).optional(),
+    customBodyTemplate: z.string().max(4096).optional(),
+    customBodyFormat: z.enum(["json", "form"]).optional(),
+    customSuccessText: z.string().max(256).optional(),
+    bulksmsTokenId: z.string().trim().max(128).optional(),
+    bulksmsTokenSecret: z.string().max(256).optional(),
+    cloudSender: z.string().trim().max(11).optional(),
   })
   .refine((data) => Object.values(data).some((v) => v !== undefined), {
     message: "validations.at_least_one_field",

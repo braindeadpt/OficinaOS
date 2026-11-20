@@ -148,6 +148,10 @@ export const ERRORS = {
   SMS_NOT_CONFIGURED: { status: 400, message: "errors.sms_not_configured" },
   SMS_SEND_FAILED: { status: 502, message: "errors.sms_send_failed" },
   SMS_WEBHOOK_FAILED: { status: 502, message: "errors.sms_webhook_failed" },
+  SMS_CUSTOM_TEMPLATE_INVALID: {
+    status: 400,
+    message: "errors.sms_custom_template_invalid",
+  },
   JOB_CODE_OVERFLOW: { status: 500, message: "errors.job_code_overflow" },
   OUTBOX_NOT_QUEUED: { status: 409, message: "errors.outbox_not_queued" },
   CASH_SESSION_ALREADY_CLOSED: {

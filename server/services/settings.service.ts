@@ -1,6 +1,7 @@
 const TRAILING_SLASH = /\/$/;
 
 import type { PrismaClient } from "@generated/client";
+import { AppError } from "@shared/errors/app-error.js";
 import type {
   UpdateAiSettingsInput,
   UpdateInvoicingSettingsInput,
@@ -22,6 +23,7 @@ import {
 } from "../repositories/settings.repository.js";
 import { isModuleEnabled } from "../utils/modules.js";
 import { generateSmsWebhookToken } from "./sms.service.js";
+import { parseCustomTemplate } from "./sms-custom.service.js";
 
 function endpointOrigin(endpoint: string) {
   try {
@@ -444,31 +446,117 @@ export async function getSmsSettings(prisma: PrismaClient) {
   const row = await findShopSettingsUnique(prisma);
   return {
     enabled: row?.smsEnabled ?? false,
+    transport: row?.smsTransport ?? "android",
+    // ── android (free) ──
     gatewayUrl: row?.smsGatewayUrl ?? null,
     gatewayUser: row?.smsGatewayUser ?? null,
     hasPassword: Boolean(row?.smsGatewayPasswordEncrypted),
-    // O gateway Android local é free — moduleEnabled só reflete o
-    // entitlement "sms" (transportes geridos futuros); não bloqueia a UI.
-    moduleEnabled: isModuleEnabled(row, "sms"),
     // Path do webhook inbound — o host depende de como o staff acede à
     // app; a UI compõe o URL completo com window.location.origin.
     inboundPath: row?.smsWebhookToken
       ? `/api/public/sms/inbound/${row.smsWebhookToken}`
       : null,
+    // ── custom (free, outbound only) — headers nunca voltam à UI ──
+    customUrl: row?.smsCustomUrl ?? null,
+    customMethod: row?.smsCustomMethod ?? "POST",
+    customBodyTemplate: row?.smsCustomBodyTemplate ?? null,
+    customBodyFormat: row?.smsCustomBodyFormat ?? "json",
+    customSuccessText: row?.smsCustomSuccessText ?? null,
+    hasCustomHeaders: Boolean(row?.smsCustomHeadersEncrypted),
+    // ── cloud (Pro "sms") — secret nunca volta; tokenId fica como
+    // referência não-secreta da conta registada ──
+    bulksmsTokenId: row?.smsBulksmsTokenId ?? null,
+    hasBulksmsSecret:
+      Boolean(row?.smsBulksmsSecretEncrypted) ||
+      Boolean(row?.smsCredentialsAtCloud),
+    cloudSender: row?.smsCloudSender ?? null,
+    credentialsAtCloud: row?.smsCredentialsAtCloud ?? false,
+    // Os transportes locais são free — moduleEnabled só reflete o
+    // entitlement "sms" (transporte gerido via cloud); não bloqueia a UI.
+    moduleEnabled: isModuleEnabled(row, "sms"),
   };
+}
+
+interface SmsSettingsData {
+  smsBulksmsSecretEncrypted?: string | null;
+  smsBulksmsTokenId?: string | null;
+  smsCloudSender?: string | null;
+  smsCredentialsAtCloud?: boolean;
+  smsCustomBodyFormat?: string;
+  smsCustomBodyTemplate?: string | null;
+  smsCustomHeadersEncrypted?: string;
+  smsCustomMethod?: string;
+  smsCustomSuccessText?: string | null;
+  smsCustomUrl?: string | null;
+  smsEnabled?: boolean;
+  smsGatewayPasswordEncrypted?: string;
+  smsGatewayUrl?: string | null;
+  smsGatewayUser?: string | null;
+  smsTransport?: string;
+  smsWebhookToken?: string;
+}
+
+// ── transporte "custom" (free) ──
+function applyCustomSmsFields(
+  data: SmsSettingsData,
+  input: UpdateSmsSettingsInput
+) {
+  if (input.customUrl !== undefined) {
+    data.smsCustomUrl = input.customUrl.trim() || null;
+  }
+  if (input.customMethod !== undefined) {
+    data.smsCustomMethod = input.customMethod;
+  }
+  if (input.customHeaders !== undefined && input.customHeaders !== "") {
+    // JSON de headers (Authorization e afins) — cifrado em repouso;
+    // a validação de forma corre no resolve, nunca devolvido à UI.
+    data.smsCustomHeadersEncrypted = encryptSecret(input.customHeaders);
+  }
+  if (input.customBodyTemplate !== undefined) {
+    const tpl = input.customBodyTemplate.trim();
+    if (tpl && !parseCustomTemplate(tpl)) {
+      // Objeto JSON válido com {{to}} e {{text}} — rejeita antes de
+      // gravar um template que nunca enviaria.
+      throw new AppError("SMS_CUSTOM_TEMPLATE_INVALID");
+    }
+    data.smsCustomBodyTemplate = tpl || null;
+  }
+  if (input.customBodyFormat !== undefined) {
+    data.smsCustomBodyFormat = input.customBodyFormat;
+  }
+  if (input.customSuccessText !== undefined) {
+    data.smsCustomSuccessText = input.customSuccessText.trim() || null;
+  }
+}
+
+// ── transporte "cloud" (Pro) — qualquer escrita marca as credenciais
+// para re-push (mudança de sender ou rotação de secret) ──
+function applyCloudSmsFields(
+  data: SmsSettingsData,
+  input: UpdateSmsSettingsInput
+) {
+  if (input.bulksmsTokenId !== undefined) {
+    data.smsBulksmsTokenId = input.bulksmsTokenId.trim() || null;
+    data.smsCredentialsAtCloud = false;
+  }
+  if (
+    input.bulksmsTokenSecret !== undefined &&
+    input.bulksmsTokenSecret !== ""
+  ) {
+    data.smsBulksmsSecretEncrypted = encryptSecret(input.bulksmsTokenSecret);
+    data.smsCredentialsAtCloud = false;
+  }
+  if (input.cloudSender !== undefined) {
+    data.smsCloudSender = input.cloudSender.trim() || null;
+    data.smsCredentialsAtCloud = false;
+  }
 }
 
 export async function upsertSmsSettings(
   prisma: PrismaClient,
   input: UpdateSmsSettingsInput
 ) {
-  const data: {
-    smsEnabled?: boolean;
-    smsGatewayUrl?: string | null;
-    smsGatewayUser?: string | null;
-    smsGatewayPasswordEncrypted?: string;
-    smsWebhookToken?: string;
-  } = {};
+  const data: SmsSettingsData = {};
   if (input.enabled !== undefined) {
     data.smsEnabled = input.enabled;
     if (input.enabled) {
@@ -476,6 +564,9 @@ export async function upsertSmsSettings(
       // que o anterior tenha sido exposto — gerado sempre que se ativa.
       data.smsWebhookToken = generateSmsWebhookToken();
     }
+  }
+  if (input.transport !== undefined) {
+    data.smsTransport = input.transport;
   }
   if (input.gatewayUrl !== undefined) {
     data.smsGatewayUrl = input.gatewayUrl.trim() || null;
@@ -486,6 +577,8 @@ export async function upsertSmsSettings(
   if (input.gatewayPassword !== undefined && input.gatewayPassword !== "") {
     data.smsGatewayPasswordEncrypted = encryptSecret(input.gatewayPassword);
   }
+  applyCustomSmsFields(data, input);
+  applyCloudSmsFields(data, input);
 
   return await upsertShopSettingsRepo(prisma, {
     create: {
@@ -497,7 +590,7 @@ export async function upsertSmsSettings(
       smsGatewayUser: data.smsGatewayUser ?? null,
       smsWebhookToken: data.smsWebhookToken ?? null,
     },
-    update: data,
+    update: data as Record<string, unknown>,
     where: { id: "default" },
   });
 }

@@ -14,12 +14,7 @@ type Store = ReturnType<typeof useSettingsStore.getState>;
 interface ChannelSettingsProps {
   onFetchWhatsAppSettings: () => Promise<void>;
   onRegisterSmsWebhook: () => Promise<{ ok: boolean; message?: string }>;
-  onSaveSmsSettings: (data: {
-    enabled?: boolean;
-    gatewayPassword?: string;
-    gatewayUrl?: string;
-    gatewayUser?: string;
-  }) => Promise<{ webhookRegistered: boolean }>;
+  onSaveSmsSettings: Store["saveSmsSettings"];
   onSaveWhatsAppSettings: (data: {
     apiToken?: string;
     businessId?: string;
@@ -41,6 +36,272 @@ interface ChannelSettingsProps {
   whatsAppSettings: Store["whatsAppSettings"];
 }
 
+interface SmsFormState {
+  bulksmsTokenId: string;
+  bulksmsTokenSecret: string;
+  cloudSender: string;
+  customBodyFormat: "form" | "json";
+  customBodyTemplate: string;
+  customHeaders: string;
+  customMethod: "GET" | "POST";
+  customSuccessText: string;
+  customUrl: string;
+  enabled: boolean;
+  gatewayPassword: string;
+  gatewayUrl: string;
+  gatewayUser: string;
+  transport: "android" | "cloud" | "custom";
+}
+
+/** Secção do transporte "android" — sms-gate Local Server na LAN (free). */
+function SmsAndroidFields({
+  form,
+  inboundUrl,
+  setForm,
+  t,
+}: {
+  form: SmsFormState;
+  inboundUrl: string | null;
+  setForm: React.Dispatch<React.SetStateAction<SmsFormState>>;
+  t: (key: string) => string;
+}) {
+  return (
+    <>
+      <div className="rounded-xl bg-surface-container px-3 py-2.5">
+        <p className="font-medium text-on-surface text-xs">
+          {t("sms_setup_title")}
+        </p>
+        <ol className="mt-1.5 list-decimal space-y-1 pl-4 text-on-surface-variant text-xs">
+          <li>{t("sms_setup_1")}</li>
+          <li>{t("sms_setup_2")}</li>
+          <li>{t("sms_setup_3")}</li>
+          <li>{t("sms_setup_4")}</li>
+          <li>{t("sms_setup_5")}</li>
+        </ol>
+        <p className="mt-2 text-on-surface-variant text-xs italic">
+          {t("sms_setup_tip")}
+        </p>
+      </div>
+      <Field hint={t("sms_gateway_url_hint")} label={t("sms_gateway_url")}>
+        <Input
+          onChange={(e) =>
+            setForm((f) => ({ ...f, gatewayUrl: e.target.value }))
+          }
+          placeholder="http://192.168.1.50:8080"
+          type="url"
+          value={form.gatewayUrl}
+        />
+      </Field>
+      <Field label={t("sms_gateway_user")}>
+        <Input
+          autoComplete="off"
+          onChange={(e) =>
+            setForm((f) => ({ ...f, gatewayUser: e.target.value }))
+          }
+          value={form.gatewayUser}
+        />
+      </Field>
+      <Field
+        hint={t("sms_gateway_password_hint")}
+        label={t("sms_gateway_password")}
+      >
+        <Input
+          autoComplete="new-password"
+          onChange={(e) =>
+            setForm((f) => ({ ...f, gatewayPassword: e.target.value }))
+          }
+          type="password"
+          value={form.gatewayPassword}
+        />
+      </Field>
+      {inboundUrl && (
+        <Field hint={t("sms_inbound_url_hint")} label={t("sms_inbound_url")}>
+          <Input readOnly value={inboundUrl} />
+        </Field>
+      )}
+    </>
+  );
+}
+
+/** Secção "custom" — API HTTP arbitrária configurada pela loja (free). */
+function SmsCustomFields({
+  form,
+  hasCustomHeaders,
+  setForm,
+  t,
+}: {
+  form: SmsFormState;
+  hasCustomHeaders: boolean;
+  setForm: React.Dispatch<React.SetStateAction<SmsFormState>>;
+  t: (key: string) => string;
+}) {
+  return (
+    <>
+      <p className="rounded-xl bg-surface-container px-3 py-2.5 text-on-surface-variant text-xs">
+        {t("sms_custom_hint")}
+      </p>
+      <Field hint={t("sms_custom_url_hint")} label={t("sms_custom_url")}>
+        <Input
+          onChange={(e) =>
+            setForm((f) => ({ ...f, customUrl: e.target.value }))
+          }
+          placeholder="https://api.provider.com/sms/send"
+          type="url"
+          value={form.customUrl}
+        />
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label={t("sms_custom_method")}>
+          <Select
+            onChange={(e) =>
+              setForm((f) => ({
+                ...f,
+                customMethod: e.target.value as "GET" | "POST",
+              }))
+            }
+            value={form.customMethod}
+          >
+            <option value="POST">POST</option>
+            <option value="GET">GET</option>
+          </Select>
+        </Field>
+        <Field
+          hint={t("sms_custom_format_hint")}
+          label={t("sms_custom_format")}
+        >
+          <Select
+            disabled={form.customMethod === "GET"}
+            onChange={(e) =>
+              setForm((f) => ({
+                ...f,
+                customBodyFormat: e.target.value as "form" | "json",
+              }))
+            }
+            value={form.customMethod === "GET" ? "form" : form.customBodyFormat}
+          >
+            <option value="json">JSON</option>
+            <option value="form">form-urlencoded</option>
+          </Select>
+        </Field>
+      </div>
+      <Field
+        hint={t("sms_custom_headers_hint")}
+        label={t("sms_custom_headers")}
+      >
+        <textarea
+          autoComplete="off"
+          className="min-h-16 w-full rounded-xl bg-surface-container px-4 py-2.5 font-mono text-on-surface text-xs focus:bg-surface-container-lowest"
+          onChange={(e) =>
+            setForm((f) => ({ ...f, customHeaders: e.target.value }))
+          }
+          placeholder={
+            hasCustomHeaders
+              ? t("sms_custom_headers_saved")
+              : '{"Authorization": "Bearer TOKEN"}'
+          }
+          value={form.customHeaders}
+        />
+      </Field>
+      <Field
+        hint={t("sms_custom_template_hint")}
+        label={t("sms_custom_template")}
+      >
+        <textarea
+          autoComplete="off"
+          className="min-h-16 w-full rounded-xl bg-surface-container px-4 py-2.5 font-mono text-on-surface text-xs focus:bg-surface-container-lowest"
+          onChange={(e) =>
+            setForm((f) => ({ ...f, customBodyTemplate: e.target.value }))
+          }
+          placeholder='{"to": "{{to}}", "message": "{{text}}"}'
+          value={form.customBodyTemplate}
+        />
+      </Field>
+      <Field
+        hint={t("sms_custom_success_hint")}
+        label={t("sms_custom_success")}
+      >
+        <Input
+          autoComplete="off"
+          onChange={(e) =>
+            setForm((f) => ({ ...f, customSuccessText: e.target.value }))
+          }
+          placeholder='"sent"'
+          value={form.customSuccessText}
+        />
+      </Field>
+    </>
+  );
+}
+
+/** Secção "cloud" — BulkSMS relay via OficinaOS Cloud (Pro module sms). */
+function SmsCloudFields({
+  form,
+  moduleEnabled,
+  setForm,
+  settings,
+  t,
+}: {
+  form: SmsFormState;
+  moduleEnabled: boolean;
+  setForm: React.Dispatch<React.SetStateAction<SmsFormState>>;
+  settings: Store["smsSettings"];
+  t: (key: string) => string;
+}) {
+  if (!moduleEnabled) {
+    return (
+      <p className="rounded-xl bg-surface-container px-3 py-2.5 text-on-surface-variant text-xs">
+        {t("sms_cloud_upsell")}
+      </p>
+    );
+  }
+  return (
+    <>
+      <p className="rounded-xl bg-surface-container px-3 py-2.5 text-on-surface-variant text-xs">
+        {t("sms_cloud_hint")}
+      </p>
+      <Field hint={t("sms_bulksms_id_hint")} label={t("sms_bulksms_id")}>
+        <Input
+          autoComplete="off"
+          onChange={(e) =>
+            setForm((f) => ({ ...f, bulksmsTokenId: e.target.value }))
+          }
+          value={form.bulksmsTokenId}
+        />
+      </Field>
+      <Field
+        hint={t("sms_bulksms_secret_hint")}
+        label={t("sms_bulksms_secret")}
+      >
+        <Input
+          autoComplete="new-password"
+          onChange={(e) =>
+            setForm((f) => ({ ...f, bulksmsTokenSecret: e.target.value }))
+          }
+          placeholder={settings?.hasBulksmsSecret ? "••••••••" : ""}
+          type="password"
+          value={form.bulksmsTokenSecret}
+        />
+      </Field>
+      <Field hint={t("sms_cloud_sender_hint")} label={t("sms_cloud_sender")}>
+        <Input
+          autoComplete="off"
+          maxLength={11}
+          onChange={(e) =>
+            setForm((f) => ({ ...f, cloudSender: e.target.value }))
+          }
+          placeholder="OFICINA"
+          value={form.cloudSender}
+        />
+      </Field>
+      {settings?.credentialsAtCloud && (
+        <p className="rounded-xl bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
+          {t("sms_cloud_credentials_active")}
+        </p>
+      )}
+    </>
+  );
+}
+
 function SmsCard({
   smsSettings,
   onSave,
@@ -53,11 +314,21 @@ function SmsCard({
   smsSettings: Store["smsSettings"];
 }) {
   const { t } = useTranslation();
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<SmsFormState>({
+    bulksmsTokenId: "",
+    bulksmsTokenSecret: "",
+    cloudSender: "",
+    customBodyFormat: "json",
+    customBodyTemplate: "",
+    customHeaders: "",
+    customMethod: "POST",
+    customSuccessText: "",
+    customUrl: "",
     enabled: false,
     gatewayPassword: "",
     gatewayUrl: "",
     gatewayUser: "",
+    transport: "android",
   });
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -66,9 +337,17 @@ function SmsCard({
     if (smsSettings && !loaded) {
       setForm((f) => ({
         ...f,
+        bulksmsTokenId: smsSettings.bulksmsTokenId ?? "",
+        cloudSender: smsSettings.cloudSender ?? "",
+        customBodyFormat: smsSettings.customBodyFormat ?? "json",
+        customBodyTemplate: smsSettings.customBodyTemplate ?? "",
+        customMethod: smsSettings.customMethod ?? "POST",
+        customSuccessText: smsSettings.customSuccessText ?? "",
+        customUrl: smsSettings.customUrl ?? "",
         enabled: smsSettings.enabled,
         gatewayUrl: smsSettings.gatewayUrl ?? "",
         gatewayUser: smsSettings.gatewayUser ?? "",
+        transport: smsSettings.transport ?? "android",
       }));
       setLoaded(true);
     }
@@ -79,14 +358,29 @@ function SmsCard({
     try {
       const { webhookRegistered } = await onSave({
         enabled: form.enabled,
+        transport: form.transport,
+        bulksmsTokenId: form.bulksmsTokenId,
+        bulksmsTokenSecret: form.bulksmsTokenSecret || undefined,
+        cloudSender: form.cloudSender,
+        customBodyFormat: form.customBodyFormat,
+        customBodyTemplate: form.customBodyTemplate,
+        customHeaders: form.customHeaders || undefined,
+        customMethod: form.customMethod,
+        customSuccessText: form.customSuccessText,
+        customUrl: form.customUrl,
         gatewayPassword: form.gatewayPassword || undefined,
         gatewayUrl: form.gatewayUrl,
         gatewayUser: form.gatewayUser,
       });
-      if (form.enabled && !webhookRegistered) {
+      if (form.enabled && form.transport === "android" && !webhookRegistered) {
         toast.warning(t("sms_webhook_not_registered"));
       }
-      setForm((f) => ({ ...f, gatewayPassword: "" }));
+      setForm((f) => ({
+        ...f,
+        bulksmsTokenSecret: "",
+        customHeaders: "",
+        gatewayPassword: "",
+      }));
     } catch {
       // Error is stored in Zustand state
     } finally {
@@ -115,8 +409,8 @@ function SmsCard({
   const inboundUrl = smsSettings?.inboundPath
     ? `${window.location.origin}${smsSettings.inboundPath}`
     : null;
-  // O gateway Android local é free — o módulo "sms" gateia apenas os
-  // transportes geridos futuros, por isso nunca bloqueia este card.
+  // Os transportes locais (android/custom) são free — o módulo "sms"
+  // gateia apenas a secção cloud, enforçado no relay (não nesta UI).
   return (
     <div className="mt-6">
       <h3 className="font-extrabold font-headline text-lg text-on-surface tracking-tight">
@@ -138,68 +432,48 @@ function SmsCard({
         </div>
         <p className="mt-2 text-on-surface-variant text-xs">{t("sms_desc")}</p>
 
-        <div className="mt-3 rounded-xl bg-surface-container px-3 py-2.5">
-          <p className="font-medium text-on-surface text-xs">
-            {t("sms_setup_title")}
-          </p>
-          <ol className="mt-1.5 list-decimal space-y-1 pl-4 text-on-surface-variant text-xs">
-            <li>{t("sms_setup_1")}</li>
-            <li>{t("sms_setup_2")}</li>
-            <li>{t("sms_setup_3")}</li>
-            <li>{t("sms_setup_4")}</li>
-            <li>{t("sms_setup_5")}</li>
-          </ol>
-          <p className="mt-2 text-on-surface-variant text-xs italic">
-            {t("sms_setup_tip")}
-          </p>
-        </div>
-
         {form.enabled && (
           <div className="mt-5 space-y-4">
-            <Field
-              hint={t("sms_gateway_url_hint")}
-              label={t("sms_gateway_url")}
-            >
-              <Input
+            <Field label={t("sms_transport")}>
+              <Select
                 onChange={(e) =>
-                  setForm((f) => ({ ...f, gatewayUrl: e.target.value }))
+                  setForm((f) => ({
+                    ...f,
+                    transport: e.target.value as SmsFormState["transport"],
+                  }))
                 }
-                placeholder="http://192.168.1.50:8080"
-                type="url"
-                value={form.gatewayUrl}
-              />
-            </Field>
-            <Field label={t("sms_gateway_user")}>
-              <Input
-                autoComplete="off"
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, gatewayUser: e.target.value }))
-                }
-                value={form.gatewayUser}
-              />
-            </Field>
-            <Field
-              hint={t("sms_gateway_password_hint")}
-              label={t("sms_gateway_password")}
-            >
-              <Input
-                autoComplete="new-password"
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, gatewayPassword: e.target.value }))
-                }
-                placeholder={smsSettings?.hasPassword ? "••••••••" : ""}
-                type="password"
-                value={form.gatewayPassword}
-              />
+                value={form.transport}
+              >
+                <option value="android">{t("sms_transport_android")}</option>
+                <option value="custom">{t("sms_transport_custom")}</option>
+                <option value="cloud">{t("sms_transport_cloud")}</option>
+              </Select>
             </Field>
 
-            {inboundUrl && (
-              <Field
-                hint={t("sms_inbound_url_hint")}
-                label={t("sms_inbound_url")}
-              >
-                <Input readOnly value={inboundUrl} />
-              </Field>
+            {form.transport === "android" && (
+              <SmsAndroidFields
+                form={form}
+                inboundUrl={inboundUrl}
+                setForm={setForm}
+                t={t}
+              />
+            )}
+            {form.transport === "custom" && (
+              <SmsCustomFields
+                form={form}
+                hasCustomHeaders={smsSettings?.hasCustomHeaders ?? false}
+                setForm={setForm}
+                t={t}
+              />
+            )}
+            {form.transport === "cloud" && (
+              <SmsCloudFields
+                form={form}
+                moduleEnabled={smsSettings?.moduleEnabled ?? false}
+                setForm={setForm}
+                settings={smsSettings}
+                t={t}
+              />
             )}
 
             <div className="flex flex-wrap gap-2">
@@ -220,14 +494,16 @@ function SmsCard({
               >
                 {t("sms_send_test")}
               </Button>
-              <Button
-                className="flex min-h-11"
-                onClick={handleRegister}
-                size="sm"
-                variant="secondary"
-              >
-                {t("sms_register_webhook")}
-              </Button>
+              {form.transport === "android" && (
+                <Button
+                  className="flex min-h-11"
+                  onClick={handleRegister}
+                  size="sm"
+                  variant="secondary"
+                >
+                  {t("sms_register_webhook")}
+                </Button>
+              )}
             </div>
           </div>
         )}

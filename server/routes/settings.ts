@@ -50,8 +50,10 @@ import {
 } from "../services/settings.service.js";
 import {
   decryptSmsConfig,
+  pushSmsCredentialsToCloud,
   registerSmsWebhook,
-  sendSms,
+  resolveSmsChannel,
+  sendSmsMessage,
 } from "../services/sms.service.js";
 import { getUpdateState, startUpdate } from "../services/update.service.js";
 import { pushCredentialsToCloud } from "../services/whatsapp-channel.js";
@@ -548,22 +550,30 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
           ),
         });
       }
-      // O gateway Android na LAN é free — o módulo Pro "sms" gateia
-      // apenas transportes geridos (provider via cloud), que terão o
-      // seu próprio caminho de configuração e de entitlement.
+      // Transportes locais (android/custom) são free — o módulo Pro
+      // "sms" gateia apenas o transporte "cloud", enforçado lá fora no
+      // relay (402 server-side), nunca nesta configuração.
       await upsertSmsSettings(app.prisma, parsed.data);
 
-      // Best-effort: regista o webhook inbound no telemóvel usando o
-      // Host do pedido — o endereço a que o browser chegou é também o
-      // que o telemóvel consegue alcançar na LAN. Em localhost não há
-      // como o telemóvel chegar — a UI avisa nesse caso.
-      let webhookRegistered = false;
       const settings = await getSmsSettings(app.prisma);
-      if (settings.enabled) {
+      let webhookRegistered = false;
+      if (settings.enabled && settings.transport === "android") {
+        // Best-effort: regista o webhook inbound no telemóvel usando o
+        // Host do pedido — o endereço a que o browser chegou é também o
+        // que o telemóvel consegue alcançar na LAN. Em localhost não há
+        // como o telemóvel chegar — a UI avisa nesse caso.
         const host = req.headers.host ?? "";
         webhookRegistered = await tryRegisterSmsWebhook(app.prisma, host);
       }
-      return reply.send({ ...settings, webhookRegistered });
+      if (settings.enabled && settings.transport === "cloud") {
+        // Empurra as credenciais BulkSMS para a cloud — best-effort:
+        // se estiver inalcançável fica pendente e o poll retenta.
+        await pushSmsCredentialsToCloud(app.prisma).catch(() => false);
+      }
+      return reply.send({
+        ...(await getSmsSettings(app.prisma)),
+        webhookRegistered,
+      });
     }
   );
 
@@ -581,24 +591,20 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       assertNotDemoMode();
       const body = (req.body ?? {}) as { phone?: string };
       const row = await getOrCreateShopSettings(app.prisma);
-      // Free: o teste sai pelo gateway Android local — só exige o
-      // gateway configurado, não o módulo Pro.
-      const config = decryptSmsConfig({
-        gatewayPasswordEncrypted: row.smsGatewayPasswordEncrypted,
-        gatewayUrl: row.smsGatewayUrl,
-        gatewayUser: row.smsGatewayUser,
-      });
-      if (!config) {
+      // O teste sai pelo transporte ativo — android (LAN, free), custom
+      // (HTTP da loja, free) ou cloud (relay Pro, 402 lá fora).
+      const channel = resolveSmsChannel(row);
+      if (!channel) {
         throw new AppError("SMS_NOT_CONFIGURED");
       }
       const phone = body.phone ?? row.phone;
       if (!phone) {
         throw new AppError("NO_SHOP_PHONE");
       }
-      const result = await sendSms(
-        config,
+      const result = await sendSmsMessage(
+        channel,
         phone,
-        `Teste OficinaOS — o gateway SMS está a funcionar. (${new Date().toLocaleTimeString("pt-PT")})`,
+        `Teste OficinaOS — o canal SMS está a funcionar. (${new Date().toLocaleTimeString("pt-PT")})`,
         row.countryCode ?? "PT"
       );
       if (!result.success) {
