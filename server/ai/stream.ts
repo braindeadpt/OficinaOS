@@ -321,6 +321,7 @@ async function handleStreamCycle(
       prisma,
       settings,
       openaiMessages,
+      tools,
       toolCalls,
       agentName,
       assistantContent,
@@ -363,11 +364,19 @@ async function handleStreamCycle(
   controller.close();
 }
 
+/**
+ * Cap on tool-call rounds per user message. A failed tool now returns its
+ * error as the tool result, so the model may legitimately retry with a
+ * corrected call — a bound keeps a stubborn model from looping forever.
+ */
+const MAX_TOOL_ROUNDS = 4;
+
 async function handleToolCallsFollowUp(
   client: OpenAI,
   prisma: PrismaClient,
   settings: AiSettings,
   openaiMessages: OpenAI.ChatCompletionMessageParam[],
+  tools: ReturnType<typeof getToolDefinitions>,
   toolCalls: AccumulatedToolCall[],
   agentName: string,
   assistantContent: string,
@@ -375,41 +384,45 @@ async function handleToolCallsFollowUp(
   encoder: TextEncoder,
   resolvedAgent: ResolvedAgent
 ): Promise<string> {
-  const assistantMessage: OpenAI.ChatCompletionMessageParam = {
-    role: "assistant",
-    content: assistantContent || null,
-    tool_calls: toolCalls.map((call) => ({
-      ...call,
-      type: "function" as const,
-    })),
-  };
+  const messages: OpenAI.ChatCompletionMessageParam[] = [...openaiMessages];
+  let content = assistantContent;
+  let pending = toolCalls;
 
-  const { followUpMessages } = await executeToolCalls(
-    prisma,
-    toolCalls,
-    controller,
-    encoder
-  );
+  for (let round = 0; round < MAX_TOOL_ROUNDS && pending.length > 0; round++) {
+    messages.push({
+      role: "assistant",
+      content: content || null,
+      tool_calls: pending.map((call) => ({
+        ...call,
+        type: "function" as const,
+      })),
+    });
 
-  const allMessages: OpenAI.ChatCompletionMessageParam[] = [
-    ...openaiMessages,
-    assistantMessage,
-    ...followUpMessages,
-  ];
+    const { followUpMessages } = await executeToolCalls(
+      prisma,
+      pending,
+      controller,
+      encoder
+    );
+    messages.push(...followUpMessages);
 
-  const followUp = await client.chat.completions.create({
-    model: resolvedAgent.model ?? settings.model ?? "gpt-4o",
-    messages: allMessages,
-    temperature: resolvedAgent.temperature ?? settings.temperature ?? 0.7,
-    stream: true,
-  });
+    const followUp = await client.chat.completions.create({
+      model: resolvedAgent.model ?? settings.model ?? "gpt-4o",
+      messages,
+      tools,
+      temperature: resolvedAgent.temperature ?? settings.temperature ?? 0.7,
+      stream: true,
+    });
 
-  const { assistantContent: followUpContent } = await processStreamResponse(
-    followUp,
-    controller,
-    encoder,
-    agentName
-  );
+    const next = await processStreamResponse(
+      followUp,
+      controller,
+      encoder,
+      agentName
+    );
+    content += next.assistantContent;
+    pending = next.toolCalls;
+  }
 
-  return assistantContent + followUpContent;
+  return content;
 }
