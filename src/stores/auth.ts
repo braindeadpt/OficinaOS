@@ -118,10 +118,23 @@ export const useAuthStore = create<AuthState>((set) => ({
   verifyTwoFactor: async (code) => {
     set({ isLoading: true, error: null });
     try {
-      await api.post("/auth/two-factor/verify-totp", {
-        code,
-        trustDevice: false,
-      });
+      try {
+        await api.post("/auth/two-factor/verify-totp", {
+          code,
+          trustDevice: false,
+        });
+      } catch (totpErr: unknown) {
+        // Backup codes from the enrolment step are one-use recovery
+        // codes, verified on their own endpoint — try it before failing.
+        try {
+          await api.post("/auth/two-factor/verify-backup-code", {
+            code,
+            trustDevice: false,
+          });
+        } catch {
+          throw totpErr;
+        }
+      }
       const res = await api.get("/auth/get-session");
       const user = res.data.user;
       if (!user) {
