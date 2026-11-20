@@ -6,6 +6,7 @@ import SignaturePad from "@/components/reports/signature-pad";
 import { Field } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { fetchLoanerDevices, type LoanerDevice } from "@/lib/api-loaners";
 import { buildJobPayload } from "@/lib/build-job-payload";
 import AccessoriesPicker from "./accessories-picker";
@@ -379,8 +380,7 @@ function LoanerField({
             id="loaner-device"
             label={t("intake.loaner_pick")}
           >
-            <select
-              className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface transition-all focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary"
+            <Select
               id="loaner-device"
               onBlur={() => handleBlur("loanerDeviceId")}
               onChange={(e) => pick(e.target.value)}
@@ -392,7 +392,7 @@ function LoanerField({
                   {describeLoaner(d)}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field
             error={fieldError("loanerNote")}
