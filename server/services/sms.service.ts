@@ -158,11 +158,11 @@ export async function checkSmsGateway(config: SmsConfig): Promise<SendResult> {
     if (response.ok) {
       return { success: true };
     }
-    return { success: false, error: `Gateway respondeu ${response.status}` };
+    return { success: false, error: `Gateway returned ${response.status}` };
   } catch (err) {
     return {
       success: false,
-      error: err instanceof Error ? err.message : "Gateway inalcançável",
+      error: err instanceof Error ? err.message : "Gateway unreachable",
     };
   }
 }
