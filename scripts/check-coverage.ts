@@ -36,6 +36,18 @@ function asBudget(value: unknown, source: string): Budget {
   return budget;
 }
 
+function asFlatBudget(value: unknown, source: string): Budget {
+  const budget = {} as Budget;
+  for (const metric of METRICS) {
+    const pct = (value as Record<string, number>)[metric];
+    if (typeof pct !== "number") {
+      throw new Error(`${source}: missing numeric "${metric}"`);
+    }
+    budget[metric] = pct;
+  }
+  return budget;
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const update = args.includes("--update");
@@ -55,10 +67,10 @@ async function main() {
     (summaryRaw as { total: unknown }).total,
     SUMMARY_PATH
   );
-  const floor = await readJson(BUDGET_PATH) as Budget;
+  const floor = asFlatBudget(await readJson(BUDGET_PATH), BUDGET_PATH);
 
   if (basePath) {
-    const base = (await readJson(basePath)) as Budget;
+    const base = asFlatBudget(await readJson(basePath), basePath);
     const lowered = METRICS.filter((m) => floor[m] < base[m]);
     if (lowered.length > 0) {
       console.error(
