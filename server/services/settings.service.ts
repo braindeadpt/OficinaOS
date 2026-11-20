@@ -312,6 +312,7 @@ export async function getWhatsAppSettings(prisma: PrismaClient) {
       remarketingDays: 90,
       remarketingEnabled: false,
       remarketingModule: false,
+      pickupReminderTemplate: null,
       remarketingTemplate: null,
       trackingBaseUrl: null,
       transport: "meta",
@@ -335,6 +336,7 @@ export async function getWhatsAppSettings(prisma: PrismaClient) {
     remarketingDays: row.remarketingDays,
     remarketingEnabled: row.remarketingEnabled,
     remarketingModule: modules.includes("remarketing"),
+    pickupReminderTemplate: row.pickupReminderTemplate,
     remarketingTemplate: row.remarketingTemplate,
     trackingBaseUrl: row.trackingBaseUrl,
     transport: row.whatsappTransport,
@@ -346,6 +348,7 @@ interface WhatsAppUpsertData {
   evolutionApiKeyEncrypted?: string;
   evolutionInstance?: string | null;
   evolutionUrl?: string | null;
+  pickupReminderTemplate?: string | null;
   remarketingCooldownDays?: number;
   remarketingDays?: number;
   remarketingEnabled?: boolean;
@@ -398,6 +401,9 @@ export async function upsertWhatsAppSettings(
   }
   if (input.remarketingCooldownDays !== undefined) {
     data.remarketingCooldownDays = input.remarketingCooldownDays;
+  }
+  if (input.pickupReminderTemplate !== undefined) {
+    data.pickupReminderTemplate = input.pickupReminderTemplate || null;
   }
   if (input.remarketingTemplate !== undefined) {
     data.remarketingTemplate = input.remarketingTemplate || null;

@@ -158,6 +158,21 @@ export const updateWhatsAppSettingsSchema = z
           }),
       ])
       .optional(),
+    // Pickup reminder (job_done_reminder): nome do template Meta aprovado
+    // usado quando o lembrete sai por WhatsApp fora da janela de 24h
+    // (transportes meta/cloud). Vazio = sem envio por template.
+    pickupReminderTemplate: z
+      .union([
+        z.literal(""),
+        z
+          .string()
+          .trim()
+          .max(100)
+          .regex(/^[a-z0-9_]+$/, {
+            error: "validations.invalid_template_name",
+          }),
+      ])
+      .optional(),
     // Transporte WhatsApp: "meta" = Cloud API oficial (default);
     // "evolution" = Evolution API self-hosted na LAN (não-oficial,
     // risco de ban — exige disclaimerAccepted e módulo whatsapp-bot,

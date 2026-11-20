@@ -2,6 +2,10 @@ import { Role } from "@shared/constants/roles";
 import type { FastifyInstance } from "fastify";
 import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import { notify } from "../services/notification-dispatch.js";
+import {
+  resolveWhatsAppChannel,
+  sendWhatsAppTemplateVia,
+} from "../services/whatsapp-channel.js";
 import { isModuleEnabled } from "../utils/modules.js";
 
 const INTERVAL_MS = 15 * 60 * 1000;
@@ -12,6 +16,48 @@ const INTERVAL_MS = 15 * 60 * 1000;
 const READY_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 const RE_REMIND_MS = 3 * 24 * 60 * 60 * 1000;
 const MAX_PER_TICK = 100;
+// Meta template language for the business-initiated reminder (same
+// convention as the remarketing sweep).
+const TEMPLATE_LANG = "pt";
+const WHITESPACE_RE = /\s+/;
+
+/**
+ * WhatsApp leg: Meta transports deliver business-initiated messages only
+ * as APPROVED templates — the reminder lands days after the customer's
+ * last message, always outside the 24h window, so freeform text would be
+ * rejected. Sends the configured template directly (same convention as
+ * the remarketing sweep); a failure is logged and the claim stands.
+ */
+async function sendReminderTemplate(
+  app: FastifyInstance,
+  shop: NonNullable<Awaited<ReturnType<typeof findShopSettingsUnique>>>,
+  channel: NonNullable<ReturnType<typeof resolveWhatsAppChannel>>,
+  template: string,
+  job: ReminderCandidate
+): Promise<void> {
+  if (!job.customerPhone) {
+    return;
+  }
+  const firstName =
+    (job.customerName ?? "").trim().split(WHITESPACE_RE)[0] ||
+    (job.customerName ?? "");
+  const sent = await sendWhatsAppTemplateVia(
+    app.prisma,
+    channel,
+    job.customerPhone,
+    template,
+    TEMPLATE_LANG,
+    [firstName, job.jobCode, shop.shopName ?? ""],
+    shop.countryCode ?? "PT",
+    shop
+  );
+  if (!sent.success) {
+    app.log.warn(
+      { err: sent.error, jobId: job.id },
+      "pickup reminder template send failed"
+    );
+  }
+}
 
 interface ReminderCandidate {
   customerName: string | null;
@@ -33,6 +79,20 @@ async function processPickupReminders(app: FastifyInstance): Promise<void> {
   if (!messagingEnabled) {
     return;
   }
+
+  // WhatsApp Meta transports (meta/cloud) only deliver business-initiated
+  // messages as APPROVED templates — the reminder lands days after the
+  // last customer message, always outside the 24h window, so freeform
+  // text is rejected. When a template is configured the WhatsApp leg is
+  // sent directly here (like the remarketing sweep) and notify() covers
+  // the in-app record + SMS. Evolution (Baileys) has no window and keeps
+  // the freeform outbox path; a missing template falls back to it too
+  // (on Meta it fails and stays FAILED in the outbox — visible signal).
+  const waChannel = shop?.whatsappEnabled ? resolveWhatsAppChannel(shop) : null;
+  const metaTemplate =
+    waChannel && waChannel.mode !== "evolution" && shop?.pickupReminderTemplate
+      ? shop.pickupReminderTemplate
+      : null;
 
   // "Entered DONE" is read from the STATUS_CHANGED audit trail — updatedAt
   // would lie (any edit to a DONE job bumps it and the reminder window
@@ -83,9 +143,12 @@ async function processPickupReminders(app: FastifyInstance): Promise<void> {
               AND status = 'DONE'
               AND ("lastPickupReminderAt" IS NULL
                    OR "lastPickupReminderAt" < ${reRemindBefore})
-          `.then((claimed) => {
+          `.then(async (claimed) => {
           if (claimed === 0) {
             return;
+          }
+          if (metaTemplate && waChannel && shop) {
+            await sendReminderTemplate(app, shop, waChannel, metaTemplate, job);
           }
           return notify(app, {
             context: {
@@ -93,6 +156,9 @@ async function processPickupReminders(app: FastifyInstance): Promise<void> {
               jobCode: job.jobCode,
               recipientPhone: job.customerPhone ?? undefined,
             },
+            // O leg WhatsApp já saiu como template Meta — sem ele o
+            // outbox tentaria texto livre e falharia fora da janela.
+            excludeChannels: metaTemplate ? ["WHATSAPP"] : undefined,
             eventName: "job_done_reminder",
             jobId: job.id,
             recipients: { role: Role.OWNER },
