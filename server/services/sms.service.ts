@@ -374,10 +374,16 @@ export async function pushSmsCredentialsToCloud(
   if (!res?.ok) {
     return false;
   }
+  // A cloud devolve o URL público completo (PUBLIC_BASE_URL dela — a app
+  // não o consegue deduzir localmente) para a loja registar RECEIVED+SENT
+  // na Web App do BulkSMS.
+  const returnedUrl = (res.body as { webhookUrl?: string | null } | null)
+    ?.webhookUrl;
   await prisma.shopSettings.update({
     data: {
       smsBulksmsSecretEncrypted: null,
       smsCloudWebhookSecret: webhookSecret,
+      smsCloudWebhookUrl: returnedUrl ?? null,
       smsCredentialsAtCloud: true,
     },
     where: { id: "default" },
@@ -446,7 +452,10 @@ interface CloudSmsInbound {
   createdAt?: string;
   fromPhone: string;
   id: string;
+  kind?: string; // RECEIVED | REPORT (delivery status — não passa no bot)
   messageType?: string;
+  refId?: string | null;
+  statusType?: string | null;
   text?: string | null;
 }
 
@@ -519,6 +528,12 @@ async function processCloudInbound(
 ): Promise<boolean> {
   try {
     if (!rateOk(msg.fromPhone)) {
+      return true;
+    }
+    // Delivery reports: ack direto — não são texto para o bot. O
+    // statusType/refId ficam na fila para um futuro mapeamento ao
+    // estado da outbox; por agora só não podem bloquear o consumo.
+    if (msg.kind === "REPORT") {
       return true;
     }
     const inbound = {

@@ -2399,6 +2399,7 @@
   "sms_cloud_sender": "Sender ID (optional)",
   "sms_cloud_sender_hint": "Alphanumeric sender registered on your BulkSMS account (max 11 chars, e.g. OFICINA). Leave empty for the account default number.",
   "sms_cloud_credentials_active": "Credentials registered on OficinaOS Cloud — sending, replies and delivery reports are managed by the relay.",
+  "sms_cloud_webhook_hint": "For replies and delivery reports: in your BulkSMS Web App create two webhooks pointing at this URL — one with scope RECEIVED and one with scope SENT:",
   "sms_enabled": "Enable SMS channel",
   "sms_gateway_password": "Gateway password",
   "sms_gateway_password_hint": "Password shown in the SMS Gateway app on the phone (Local Server credentials). Saved encrypted; enter again to change.",

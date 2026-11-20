@@ -2399,6 +2399,7 @@
   "sms_cloud_sender": "Remetente (opcional)",
   "sms_cloud_sender_hint": "Remetente alfanumérico registado na sua conta BulkSMS (máx. 11 caracteres, ex.: OFICINA). Deixe vazio para usar o número por defeito da conta.",
   "sms_cloud_credentials_active": "Credenciais registadas na OficinaOS Cloud — envios, respostas e relatórios de entrega são geridos pelo relé.",
+  "sms_cloud_webhook_hint": "Para respostas e relatórios de entrega: na Web App da BulkSMS crie dois webhooks a apontar para este URL — um com scope RECEIVED e outro com scope SENT:",
   "sms_enabled": "Ativar canal SMS",
   "sms_gateway_password": "Palavra-passe do gateway",
   "sms_gateway_password_hint": "Palavra-passe mostrada na aplicação SMS Gateway no telemóvel (credenciais do servidor local). Guardada de forma encriptada; introduza novamente para alterar.",

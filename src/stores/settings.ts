@@ -29,6 +29,7 @@ interface InvoicingSettings {
 interface SmsSettings {
   bulksmsTokenId: string | null;
   cloudSender: string | null;
+  cloudWebhookUrl: string | null;
   credentialsAtCloud: boolean;
   customBodyFormat: "form" | "json";
   customBodyTemplate: string | null;

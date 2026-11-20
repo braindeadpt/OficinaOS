@@ -471,6 +471,9 @@ export async function getSmsSettings(prisma: PrismaClient) {
       Boolean(row?.smsCredentialsAtCloud),
     cloudSender: row?.smsCloudSender ?? null,
     credentialsAtCloud: row?.smsCredentialsAtCloud ?? false,
+    // URL público do webhook devolvido pela cloud — a loja regista-o na
+    // Web App BulkSMS (scopes RECEIVED + SENT) para replies e reports.
+    cloudWebhookUrl: row?.smsCloudWebhookUrl ?? null,
     // Os transportes locais são free — moduleEnabled só reflete o
     // entitlement "sms" (transporte gerido via cloud); não bloqueia a UI.
     moduleEnabled: isModuleEnabled(row, "sms"),

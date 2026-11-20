@@ -2399,6 +2399,7 @@
   "sms_cloud_sender": "ID del remitente (opcional)",
   "sms_cloud_sender_hint": "Remitente alfanumérico registrado en su cuenta BulkSMS (máximo 11 caracteres, por ejemplo OFICINA). ",
   "sms_cloud_credentials_active": "Credenciales registradas en OficinaOS Cloud: el retransmisor gestiona el envío, las respuestas y los informes de entrega.",
+  "sms_cloud_webhook_hint": "Para respuestas e informes de entrega: en su aplicación web BulkSMS cree dos webhooks que apunten a esta URL, uno con alcance RECIBIDO y otro con alcance ENVIADO:",
   "sms_enabled": "Habilitar canal SMS",
   "sms_gateway_password": "Contraseña de puerta de enlace",
   "sms_gateway_password_hint": "Contraseña que se muestra en la aplicación SMS Gateway del teléfono (credenciales del servidor local). ",

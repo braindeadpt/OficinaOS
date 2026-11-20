@@ -6,6 +6,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { copyTextToClipboard } from "@/lib/clipboard";
 import type { useSettingsStore } from "@/stores/settings";
 import { EvolutionSection } from "./evolution-section";
 
@@ -297,6 +298,25 @@ function SmsCloudFields({
         <p className="rounded-xl bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
           {t("sms_cloud_credentials_active")}
         </p>
+      )}
+      {settings?.cloudWebhookUrl && (
+        <div className="rounded-xl bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
+          <p className="mb-1">{t("sms_cloud_webhook_hint")}</p>
+          <div className="flex items-center gap-2">
+            <code className="min-w-0 flex-1 overflow-x-auto rounded bg-surface px-2 py-1 text-[11px]">
+              {settings.cloudWebhookUrl}
+            </code>
+            <Button
+              onClick={async () => {
+                await copyTextToClipboard(settings.cloudWebhookUrl ?? "");
+              }}
+              type="button"
+              variant="ghost"
+            >
+              {t("copy")}
+            </Button>
+          </div>
+        </div>
       )}
     </>
   );

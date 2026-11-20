@@ -1231,6 +1231,10 @@ model ShopSettings {
   smsCloudSender              String?
   smsCredentialsAtCloud       Boolean   @default(false)
   smsCloudWebhookSecret       String?
+  // URL público do webhook (cloud.devolve no push — a loja regista-o na
+  // Web App BulkSMS com scopes RECEIVED e SENT; o Webhooks API exige a
+  // password da conta, por isso a cloud não o pode auto-registar).
+  smsCloudWebhookUrl          String?
   // Remarketing automático (Pro module "remarketing") — proactive WhatsApp
   // re-engagement for customers idle for remarketingDays, throttled by a
   // cooldown and sent as a Meta-approved template message.
