@@ -2,19 +2,26 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { encryptSecret } from "../../lib/crypto.js";
 
 const mocks = vi.hoisted(() => ({
+  cloudFetch: vi.fn(),
   createManyAndReturnInAppNotifications: vi.fn(),
   findManyUsers: vi.fn(),
   respondToQuote: vi.fn(),
+  transitionOutboxEntry: vi.fn(),
 }));
 
 vi.mock("../../repositories/notification.repository.js", () => ({
   createManyAndReturnInAppNotifications:
     mocks.createManyAndReturnInAppNotifications,
   findManyUsers: mocks.findManyUsers,
+  transitionOutboxEntry: mocks.transitionOutboxEntry,
 }));
 
 vi.mock("../job-quote.service.js", () => ({
   respondToQuote: mocks.respondToQuote,
+}));
+
+vi.mock("../cloud.service.js", () => ({
+  cloudFetch: mocks.cloudFetch,
 }));
 
 import {
@@ -23,6 +30,7 @@ import {
   handleInboundSms,
   registerSmsWebhook,
   sendSms,
+  syncSmsCloud,
 } from "../sms.service.js";
 
 const config = {
@@ -261,5 +269,115 @@ describe("handleInboundSms", () => {
     expect(body.textMessage.text).toContain("Não encontrei reparações");
     // Escalated: staff was looked up
     expect(mocks.findManyUsers).toHaveBeenCalled();
+  });
+});
+
+describe("syncSmsCloud", () => {
+  const CLOUD_ROW = {
+    ...ENABLED_ROW,
+    cloudApiUrl: "https://cloud.test",
+    cloudShopTokenEncrypted: encryptSecret("shop-token"),
+    smsBulksmsTokenId: "bulk-id",
+    smsCloudSender: "OFICINA",
+    smsCredentialsAtCloud: true,
+    smsTransport: "cloud",
+  };
+
+  function cloudFetchSeq(responses: Record<string, unknown>) {
+    mocks.cloudFetch.mockImplementation(
+      async (_api: string, path: string) => responses[path] ?? { ok: false }
+    );
+  }
+
+  it("maps DELIVERED reports to the outbox entry via refId", async () => {
+    cloudFetchSeq({
+      "/sms/inbound": {
+        body: {
+          messages: [
+            {
+              fromPhone: "351912345678",
+              id: "ev-1",
+              kind: "REPORT",
+              refId: "outbox-9",
+              statusType: "DELIVERED",
+            },
+          ],
+        },
+        ok: true,
+      },
+      "/sms/inbound/ack": { ok: true },
+    });
+    const prisma = fakePrisma(CLOUD_ROW);
+
+    await syncSmsCloud(prisma, "https://cloud.test", "tok", log);
+
+    expect(mocks.transitionOutboxEntry).toHaveBeenCalledWith(
+      prisma,
+      "outbox-9",
+      "SENT",
+      { status: "DELIVERED" }
+    );
+    // report consumido — ack enviado
+    expect(mocks.cloudFetch).toHaveBeenCalledWith(
+      "https://cloud.test",
+      "/sms/inbound/ack",
+      expect.objectContaining({ body: { ids: ["ev-1"] } })
+    );
+  });
+
+  it("maps terminal failure reports to FAILED and acks reports without refId", async () => {
+    cloudFetchSeq({
+      "/sms/inbound": {
+        body: {
+          messages: [
+            {
+              fromPhone: "3519",
+              id: "ev-2",
+              kind: "REPORT",
+              refId: "outbox-8",
+              statusType: "UNDELIVERABLE",
+            },
+            {
+              fromPhone: "3519",
+              id: "ev-3",
+              kind: "REPORT",
+              statusType: "SENT",
+            },
+          ],
+        },
+        ok: true,
+      },
+      "/sms/inbound/ack": { ok: true },
+    });
+    const prisma = fakePrisma(CLOUD_ROW);
+
+    await syncSmsCloud(prisma, "https://cloud.test", "tok", log);
+
+    expect(mocks.transitionOutboxEntry).toHaveBeenCalledWith(
+      prisma,
+      "outbox-8",
+      "SENT",
+      expect.objectContaining({ status: "FAILED" })
+    );
+    // estados intermédios (SENT) não transitam — mas ambos os ids são acked
+    expect(mocks.transitionOutboxEntry).toHaveBeenCalledTimes(1);
+    expect(mocks.cloudFetch).toHaveBeenCalledWith(
+      "https://cloud.test",
+      "/sms/inbound/ack",
+      expect.objectContaining({ body: { ids: ["ev-2", "ev-3"] } })
+    );
+  });
+
+  it("does nothing when no channel resolves (module on, SMS unconfigured)", async () => {
+    mocks.cloudFetch.mockResolvedValue({ ok: true });
+    const prisma = fakePrisma({ ...CLOUD_ROW, smsEnabled: false });
+
+    await syncSmsCloud(prisma, "https://cloud.test", "tok", log);
+
+    expect(mocks.cloudFetch).not.toHaveBeenCalledWith(
+      expect.anything(),
+      "/sms/inbound",
+      expect.anything()
+    );
   });
 });

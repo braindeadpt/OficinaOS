@@ -1607,6 +1607,7 @@
   },
   "status_active": "Ativo",
   "status_cancelled": "Cancelado",
+  "status_delivered": "Entregue",
   "status_failed": "Falhou",
   "status_group_active": "Ativo",
   "status_group_closed": "Fechado",

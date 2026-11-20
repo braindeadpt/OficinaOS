@@ -8,11 +8,18 @@ import { useSettingsStore } from "@/stores/settings"; /**
  * raw status rather than rendering an empty pill.
  */
 
-const OUTBOX_STATUSES = ["CANCELLED", "FAILED", "QUEUED", "SENT"] as const;
+const OUTBOX_STATUSES = [
+  "CANCELLED",
+  "DELIVERED",
+  "FAILED",
+  "QUEUED",
+  "SENT",
+] as const;
 type OutboxStatus = (typeof OUTBOX_STATUSES)[number];
 
 const OUTBOX_COLORS: Record<OutboxStatus, string> = {
   CANCELLED: "bg-surface-container-high text-on-surface-variant",
+  DELIVERED: "bg-primary/10 text-primary",
   FAILED: "bg-error/10 text-error",
   QUEUED: "bg-tertiary-fixed text-on-tertiary-fixed-variant",
   SENT: "bg-success/10 text-success",
@@ -20,6 +27,7 @@ const OUTBOX_COLORS: Record<OutboxStatus, string> = {
 
 const OUTBOX_LABELS: Record<OutboxStatus, string> = {
   CANCELLED: "status_cancelled",
+  DELIVERED: "status_delivered",
   FAILED: "status_failed",
   QUEUED: "status_queued",
   SENT: "status_sent",

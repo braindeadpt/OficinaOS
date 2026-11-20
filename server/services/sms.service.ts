@@ -1,8 +1,9 @@
 import { randomBytes } from "node:crypto";
-import type { PrismaClient } from "@generated/client";
+import { OutboxStatus, type PrismaClient } from "@generated/client";
 import type { FastifyBaseLogger } from "fastify";
 import { decryptSecret, isEncrypted } from "../lib/crypto.js";
 import { assertNotDemoMode } from "../lib/demo.js";
+import { transitionOutboxEntry } from "../repositories/notification.repository.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import {
@@ -514,6 +515,45 @@ export async function syncSmsCloud(
   }
 }
 
+// Estados terminais de falha do BulkSMS (status.type num status-report):
+// tudo o que não é terminal (ACCEPTED, ENROUTE, SENT…) deixa a entry em
+// SENT — um report intermédio nunca regride uma entrega já confirmada.
+const REPORT_FAILED_TYPES = new Set([
+  "DELETED",
+  "EXPIRED",
+  "FAILED",
+  "REJECTED",
+  "UNDELIVERABLE",
+]);
+
+/**
+ * Aplica um delivery report à outbox entry que originou o envio.
+ * SENT → DELIVERED | FAILED, só nessa direção: reports fora de ordem ou
+ * duplicados (a rede móvel repete-os) nunca reescrevem um estado final.
+ */
+async function applyDeliveryReport(
+  prisma: DbClient,
+  refId: string | null | undefined,
+  statusType: string | null | undefined,
+  log: FastifyBaseLogger
+): Promise<void> {
+  if (!(refId && statusType)) {
+    return; // report sem ligação possível — nada a fazer, ack segue
+  }
+  if (statusType === "DELIVERED") {
+    await transitionOutboxEntry(prisma, refId, OutboxStatus.SENT, {
+      status: OutboxStatus.DELIVERED,
+    }).catch((err) => log.warn({ err, refId }, "sms report transition failed"));
+    return;
+  }
+  if (REPORT_FAILED_TYPES.has(statusType)) {
+    await transitionOutboxEntry(prisma, refId, OutboxStatus.SENT, {
+      error: `entrega falhou — ${statusType}`,
+      status: OutboxStatus.FAILED,
+    }).catch((err) => log.warn({ err, refId }, "sms report transition failed"));
+  }
+}
+
 /**
  * Uma reply da fila: rate-limit → bot-intents → resposta via relay →
  * escalate staff se necessário. Devolve true quando é seguro dar ack
@@ -530,10 +570,10 @@ async function processCloudInbound(
     if (!rateOk(msg.fromPhone)) {
       return true;
     }
-    // Delivery reports: ack direto — não são texto para o bot. O
-    // statusType/refId ficam na fila para um futuro mapeamento ao
-    // estado da outbox; por agora só não podem bloquear o consumo.
+    // Delivery reports: não são texto para o bot — mapeiam ao estado
+    // da outbox entry que originou o envio (refId = dedupeId).
     if (msg.kind === "REPORT") {
+      await applyDeliveryReport(ctx.prisma, msg.refId, msg.statusType, log);
       return true;
     }
     const inbound = {
