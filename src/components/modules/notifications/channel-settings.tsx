@@ -521,9 +521,7 @@ export default function ChannelSettings({
         ),
         remarketingTemplate:
           whatsAppSettings.remarketingTemplate ?? "oficinaos_remarketing",
-        pickupReminderTemplate:
-          whatsAppSettings.pickupReminderTemplate ??
-          "oficinaos_pickup_reminder",
+        pickupReminderTemplate: whatsAppSettings.pickupReminderTemplate ?? "",
         transport: whatsAppSettings.transport ?? "meta",
         evolutionUrl: whatsAppSettings.evolutionUrl ?? "",
         evolutionInstance: whatsAppSettings.evolutionInstance ?? "",
