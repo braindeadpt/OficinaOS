@@ -97,9 +97,13 @@ export async function syncShopMetrics(
   const settings = await getOrCreateShopSettings(prisma);
   const tz = settings.timezone ?? process.env.TZ ?? "UTC";
 
+  // "Yesterday" in the shop's calendar: derive it from today's zoned date
+  // instead of subtracting a server-local day, so a server in another
+  // timezone never skips or doubles a day around DST transitions.
   const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
+  const { date: todayDate } = dayRange(tz, today);
+  const [y, m, d] = todayDate.split("-").map(Number);
+  const yesterday = new Date(Date.UTC(y ?? 0, (m ?? 1) - 1, (d ?? 1) - 1, 12));
 
   const days = await Promise.all([
     computeDailyMetrics(prisma, tz, yesterday),
