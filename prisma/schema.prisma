@@ -1412,7 +1412,6 @@ model TwoFactor {
   failedVerificationCount Int       @default(0)
   lockedUntil             DateTime? @db.Timestamptz
 
-  @@index([userId])
   @@map("two_factors")
 }
 
@@ -1424,8 +1423,8 @@ model Verification {
   id         String   @id @default(cuid())
   identifier String
   value      String
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt  DateTime @db.Timestamptz
   createdAt  DateTime @default(now()) @db.Timestamptz
   updatedAt  DateTime @default(now()) @db.Timestamptz
