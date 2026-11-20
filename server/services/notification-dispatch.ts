@@ -10,6 +10,7 @@ import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import { logger } from "../utils/logger.js";
 import { isModuleEnabled } from "../utils/modules.js";
+import type { MetaTemplatePayload } from "./notification-outbox.service.js";
 import { queueNotification } from "./notification-outbox.service.js";
 import { renderTemplate } from "./notification-renderer.js";
 
@@ -31,6 +32,7 @@ interface NotifyEvent {
 
 interface ChannelHandlerContext {
   jobId?: string;
+  metaTemplate?: MetaTemplatePayload;
   smsEnabled: boolean;
   templateBody: string;
   templateVars: Record<string, string>;
@@ -136,6 +138,7 @@ const whatsAppHandler: ChannelHandler = {
     await queueNotification(prisma, {
       channel: "WHATSAPP",
       jobId: event.jobId,
+      metaTemplate: context.metaTemplate,
       recipientPhone: phone,
       templateBody: context.templateBody,
       templateName: event.eventName,
@@ -196,6 +199,7 @@ const DEFAULT_IN_APP_BODY =
  */
 async function resolveShopNotificationConfig(prisma: DbClient): Promise<{
   currency: string;
+  pickupReminderTemplate: string | null;
   reviewUrl: string | null;
   shopName: string;
   smsEnabled: boolean;
@@ -206,6 +210,7 @@ async function resolveShopNotificationConfig(prisma: DbClient): Promise<{
     const shop = await findShopSettingsUnique(prisma);
     return {
       currency: shop?.currency ?? "EUR",
+      pickupReminderTemplate: shop?.pickupReminderTemplate ?? null,
       reviewUrl: shop?.reviewUrl ?? null,
       shopName: shop?.shopName ?? "",
       // Módulo Pro "sms": expirado/revogado para os envios mesmo que o
@@ -220,6 +225,7 @@ async function resolveShopNotificationConfig(prisma: DbClient): Promise<{
     logger.warn({ err }, "failed to resolve shop settings for notification");
     return {
       currency: "EUR",
+      pickupReminderTemplate: null,
       reviewUrl: null,
       shopName: "",
       smsEnabled: false,
@@ -231,6 +237,34 @@ async function resolveShopNotificationConfig(prisma: DbClient): Promise<{
 
 const NON_DIGIT_RE = /\D/g;
 const TRAILING_SLASH_RE = /\/+$/;
+const WHITESPACE_RE = /\s+/;
+// Meta template language for business-initiated sends — same convention
+// as the remarketing sweep (the shop approves the template in pt).
+const META_TEMPLATE_LANG = "pt";
+
+/**
+ * Business-initiated customer events that must leave as an approved Meta
+ * template on the official transports (24h window closed). The outbox
+ * stores the resolved payload; the sender picks template vs freeform per
+ * channel. Events not listed keep freeform text — they are normally sent
+ * while the customer is still inside the window.
+ */
+function resolveMetaTemplate(
+  eventName: string,
+  shop: { pickupReminderTemplate: string | null; shopName: string },
+  vars: Record<string, string>
+): MetaTemplatePayload | undefined {
+  if (eventName !== "job_done_reminder" || !shop.pickupReminderTemplate) {
+    return;
+  }
+  const fullName = vars.customerName ?? "";
+  const firstName = fullName.trim().split(WHITESPACE_RE)[0] || fullName;
+  return {
+    language: META_TEMPLATE_LANG,
+    name: shop.pickupReminderTemplate,
+    params: [firstName, vars.jobCode ?? "", shop.shopName],
+  };
+}
 
 /**
  * Deep link into the public tracking page: /tracking/<code>?phone4=<last4>
@@ -312,9 +346,11 @@ export async function notify(
     templateVars.reviewUrl = shop.reviewUrl;
   }
   const inAppBody = resolveInAppBody(templates);
+  const metaTemplate = resolveMetaTemplate(event.eventName, shop, templateVars);
 
   await HANDLERS.IN_APP.handle(app.prisma, app, event, {
     jobId: event.jobId,
+    metaTemplate,
     smsEnabled: shop.smsEnabled,
     templateBody: inAppBody,
     templateVars,
@@ -334,6 +370,7 @@ export async function notify(
     }
     await handler.handle(app.prisma, app, event, {
       jobId: event.jobId,
+      metaTemplate,
       smsEnabled: shop.smsEnabled,
       templateBody: template.body,
       templateVars,
@@ -350,6 +387,7 @@ export async function notify(
   if (!smsTemplate && waTemplate) {
     await HANDLERS.SMS.handle(app.prisma, app, event, {
       jobId: event.jobId,
+      metaTemplate,
       smsEnabled: shop.smsEnabled,
       templateBody: waTemplate.body.replace(WA_BOLD_RE, ""),
       templateVars,

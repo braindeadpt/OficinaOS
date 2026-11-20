@@ -292,3 +292,118 @@ describe("notify: WHATSAPP enqueue consent gate", () => {
     expect(call[1].templateVars).not.toHaveProperty("reviewUrl");
   });
 });
+
+describe("notify: Meta template for business-initiated WhatsApp", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.createManyAndReturnInAppNotifications.mockResolvedValue([]);
+    mocks.queueNotification.mockResolvedValue(undefined);
+    mocks.findCustomerByPhone.mockResolvedValue({
+      phone: "+351910000001",
+      whatsappConsent: true,
+    });
+    mocks.findManyNotificationTemplatesByName.mockResolvedValue([
+      { body: "lembrete", channel: "WHATSAPP" },
+    ]);
+  });
+
+  it("attaches the configured pickup-reminder template to job_done_reminder", async () => {
+    mocks.findShopSettingsUnique.mockResolvedValue({
+      pickupReminderTemplate: "oficinaos_pickup_reminder",
+      shopName: "Loja Teste",
+      whatsappEnabled: true,
+    });
+
+    await notify(app, {
+      context: {
+        customerName: "Ana Silva",
+        jobCode: "RPR-001",
+        recipientPhone: "+351910000001",
+      },
+      eventName: "job_done_reminder",
+      jobId: "job-1",
+      recipients: {},
+    });
+
+    expect(mocks.queueNotification).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        metaTemplate: {
+          language: "pt",
+          name: "oficinaos_pickup_reminder",
+          params: ["Ana", "RPR-001", "Loja Teste"],
+        },
+      })
+    );
+  });
+
+  it("omits metaTemplate when no pickup-reminder template is configured", async () => {
+    mocks.findShopSettingsUnique.mockResolvedValue({
+      shopName: "Loja Teste",
+      whatsappEnabled: true,
+    });
+
+    await notify(app, {
+      context: {
+        customerName: "Ana",
+        jobCode: "RPR-001",
+        recipientPhone: "+351910000001",
+      },
+      eventName: "job_done_reminder",
+      recipients: {},
+    });
+
+    const call = mocks.queueNotification.mock.calls[0];
+    expect(call[1].metaTemplate).toBeUndefined();
+  });
+
+  it("does not attach metaTemplate to other events", async () => {
+    mocks.findShopSettingsUnique.mockResolvedValue({
+      pickupReminderTemplate: "oficinaos_pickup_reminder",
+      shopName: "Loja Teste",
+      whatsappEnabled: true,
+    });
+
+    await notify(app, {
+      context: {
+        customerName: "Ana",
+        jobCode: "RPR-001",
+        recipientPhone: "+351910000001",
+      },
+      eventName: "job_ready",
+      recipients: {},
+    });
+
+    const call = mocks.queueNotification.mock.calls[0];
+    expect(call[1].metaTemplate).toBeUndefined();
+  });
+
+  it("does not leak metaTemplate into SMS outbox entries", async () => {
+    mocks.findShopSettingsUnique.mockResolvedValue({
+      cloudEntitlements: ["sms"],
+      pickupReminderTemplate: "oficinaos_pickup_reminder",
+      shopName: "Loja Teste",
+      smsEnabled: true,
+      whatsappEnabled: true,
+    });
+    mocks.findManyNotificationTemplatesByName.mockResolvedValue([
+      { body: "lembrete", channel: "WHATSAPP" },
+    ]);
+
+    await notify(app, {
+      context: {
+        customerName: "Ana",
+        jobCode: "RPR-001",
+        recipientPhone: "+351910000001",
+      },
+      eventName: "job_done_reminder",
+      recipients: {},
+    });
+
+    const smsCall = mocks.queueNotification.mock.calls.find(
+      (c) => c[1].channel === "SMS"
+    );
+    expect(smsCall).toBeDefined();
+    expect(smsCall?.[1].metaTemplate).toBeUndefined();
+  });
+});

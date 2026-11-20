@@ -8,7 +8,9 @@ const mocks = vi.hoisted(() => ({
   findShopSettingsUnique: vi.fn(),
   transitionOutboxEntry: vi.fn(),
   sendWhatsApp: vi.fn(),
+  sendWhatsAppTemplate: vi.fn(),
   decryptWhatsAppConfig: vi.fn(),
+  sendEvolutionText: vi.fn(),
   sendSms: vi.fn(),
   decryptSmsConfig: vi.fn(),
 }));
@@ -22,7 +24,14 @@ vi.mock("../services/notification-renderer.js", () => ({
 
 vi.mock("../services/notification-sender.js", () => ({
   sendWhatsApp: mocks.sendWhatsApp,
+  sendWhatsAppTemplate: mocks.sendWhatsAppTemplate,
   decryptWhatsAppConfig: mocks.decryptWhatsAppConfig,
+  // whatsapp-channel calls formatPhone for the evolution/cloud paths.
+  formatPhone: (phone: string) => phone,
+}));
+
+vi.mock("../services/evolution.service.js", () => ({
+  sendEvolutionText: mocks.sendEvolutionText,
 }));
 
 vi.mock("../services/sms.service.js", () => ({
@@ -96,6 +105,30 @@ describe("queueNotification", () => {
       expect.objectContaining({
         job: { connect: { id: "job-42" } },
       })
+    );
+  });
+
+  it("stores the metaTemplate payload on the entry", async () => {
+    mocks.createOutboxEntry.mockResolvedValue({ id: "out-3" });
+    const metaTemplate = {
+      language: "pt",
+      name: "oficinaos_pickup_reminder",
+      params: ["Ana", "RPR-001", "Loja"],
+    };
+
+    await queueNotification(prisma, {
+      jobId: "job-42",
+      metaTemplate,
+      templateName: "job_done_reminder",
+      channel: "WHATSAPP",
+      recipientPhone: "05551234567",
+      templateVars: {},
+      templateBody: "Lembrete",
+    });
+
+    expect(mocks.createOutboxEntry).toHaveBeenCalledWith(
+      prisma,
+      expect.objectContaining({ metaTemplate })
     );
   });
 });
@@ -410,6 +443,139 @@ describe("processOutbox", () => {
         status: OutboxStatus.CANCELLED,
       })
     );
+  });
+
+  it("sends metaTemplate entries as an approved Meta template on the official transport", async () => {
+    mocks.findManyOutboxEntries.mockResolvedValue([
+      {
+        id: "out-tpl",
+        channel: "WHATSAPP",
+        metaTemplate: {
+          language: "pt",
+          name: "oficinaos_pickup_reminder",
+          params: ["Ana", "RPR-001", "Loja Teste"],
+        },
+        recipientPhone: "0912345678",
+        renderedBody: "freeform body that Meta would reject",
+        retryCount: 0,
+      },
+    ]);
+    mocks.findShopSettingsUnique.mockResolvedValue({
+      countryCode: "PT",
+      whatsappApiTokenEncrypted: "enc-token",
+      whatsappBusinessId: "biz-1",
+      whatsappEnabled: true,
+      whatsappPhoneNumberId: "phone-1",
+    });
+    mocks.decryptWhatsAppConfig.mockReturnValue({
+      apiToken: "decrypted-token",
+      businessId: "biz-1",
+      phoneNumberId: "phone-1",
+    });
+    mocks.sendWhatsAppTemplate.mockResolvedValue({ success: true });
+    mocks.findCustomerByPhone.mockResolvedValue({
+      phone: "0912345678",
+      whatsappConsent: true,
+    });
+
+    await processOutbox(prisma);
+
+    expect(mocks.sendWhatsAppTemplate).toHaveBeenCalledWith(
+      {
+        apiToken: "decrypted-token",
+        businessId: "biz-1",
+        phoneNumberId: "phone-1",
+      },
+      "0912345678",
+      "oficinaos_pickup_reminder",
+      "pt",
+      ["Ana", "RPR-001", "Loja Teste"],
+      "PT"
+    );
+    expect(mocks.sendWhatsApp).not.toHaveBeenCalled();
+    expect(mocks.transitionOutboxEntry).toHaveBeenCalledWith(
+      prisma,
+      "out-tpl",
+      OutboxStatus.QUEUED,
+      expect.objectContaining({ status: OutboxStatus.SENT })
+    );
+  });
+
+  it("keeps freeform text on Evolution even when metaTemplate is present", async () => {
+    const { encryptSecret } = await import("../lib/crypto.js");
+    mocks.findManyOutboxEntries.mockResolvedValue([
+      {
+        id: "out-evo",
+        channel: "WHATSAPP",
+        metaTemplate: {
+          language: "pt",
+          name: "oficinaos_pickup_reminder",
+          params: ["Ana", "RPR-001", "Loja"],
+        },
+        recipientPhone: "0912345678",
+        renderedBody: "Lembrete de levantamento",
+        retryCount: 0,
+      },
+    ]);
+    mocks.findShopSettingsUnique.mockResolvedValue({
+      cloudEntitlements: ["whatsapp-bot"],
+      countryCode: "PT",
+      evolutionApiKeyEncrypted: encryptSecret("evo-key"),
+      evolutionUrl: "http://192.168.1.50:8080",
+      whatsappEnabled: true,
+      whatsappLocalDisclaimerAt: new Date(),
+      whatsappTransport: "evolution",
+    });
+    mocks.sendEvolutionText.mockResolvedValue({ success: true });
+    mocks.findCustomerByPhone.mockResolvedValue({
+      phone: "0912345678",
+      whatsappConsent: true,
+    });
+
+    await processOutbox(prisma);
+
+    expect(mocks.sendEvolutionText).toHaveBeenCalledWith(
+      expect.objectContaining({ instance: "oficinaos" }),
+      "0912345678",
+      "Lembrete de levantamento"
+    );
+    expect(mocks.sendWhatsAppTemplate).not.toHaveBeenCalled();
+    expect(mocks.sendWhatsApp).not.toHaveBeenCalled();
+  });
+
+  it("falls back to freeform text when metaTemplate is malformed", async () => {
+    mocks.findManyOutboxEntries.mockResolvedValue([
+      {
+        id: "out-bad",
+        channel: "WHATSAPP",
+        metaTemplate: "not-an-object",
+        recipientPhone: "05551234567",
+        renderedBody: "Hello",
+        retryCount: 0,
+      },
+    ]);
+    mocks.findShopSettingsUnique.mockResolvedValue({
+      countryCode: "PT",
+      whatsappApiTokenEncrypted: "enc-token",
+      whatsappBusinessId: "biz-1",
+      whatsappEnabled: true,
+      whatsappPhoneNumberId: "phone-1",
+    });
+    mocks.decryptWhatsAppConfig.mockReturnValue({
+      apiToken: "decrypted-token",
+      businessId: "biz-1",
+      phoneNumberId: "phone-1",
+    });
+    mocks.sendWhatsApp.mockResolvedValue({ success: true });
+    mocks.findCustomerByPhone.mockResolvedValue({
+      phone: "05551234567",
+      whatsappConsent: true,
+    });
+
+    await processOutbox(prisma);
+
+    expect(mocks.sendWhatsAppTemplate).not.toHaveBeenCalled();
+    expect(mocks.sendWhatsApp).toHaveBeenCalled();
   });
 });
 

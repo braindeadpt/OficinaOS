@@ -1,3 +1,4 @@
+import type { Prisma } from "@generated/client";
 import { OutboxStatus } from "@generated/client";
 import { AppError } from "@shared/errors/app-error.js";
 import { findCustomerByPhone } from "../repositories/customer.repository.js";
@@ -16,6 +17,7 @@ import { renderTemplate } from "./notification-renderer.js";
 import { decryptSmsConfig, sendSms } from "./sms.service.js";
 import {
   resolveWhatsAppChannel,
+  sendWhatsAppTemplateVia,
   sendWhatsAppText,
   type WhatsAppChannel,
 } from "./whatsapp-channel.js";
@@ -43,12 +45,24 @@ export async function assertWhatsAppConsent(
   return null;
 }
 
+/**
+ * Approved Meta template payload stored on the outbox entry — resolved
+ * at enqueue time so retries send the same snapshot. `params` map to
+ * the template's positional body variables ({{1}}, {{2}}…).
+ */
+export interface MetaTemplatePayload {
+  language: string;
+  name: string;
+  params: string[];
+}
+
 interface OutboxEntry {
   channel: string;
   createdAt: Date;
   error: string | null;
   id: string;
   jobId: string | null;
+  metaTemplate?: unknown;
   nextRetryAt: Date | null;
   recipientPhone: string;
   renderedBody: string;
@@ -71,6 +85,7 @@ export async function queueNotification(
   prisma: DbClient,
   data: {
     jobId?: string;
+    metaTemplate?: MetaTemplatePayload;
     templateName: string;
     channel: "WHATSAPP" | "SMS";
     recipientPhone: string;
@@ -82,6 +97,7 @@ export async function queueNotification(
   await createOutboxEntry(prisma, {
     channel: data.channel,
     job: data.jobId ? { connect: { id: data.jobId } } : undefined,
+    metaTemplate: data.metaTemplate as Prisma.InputJsonValue | undefined,
     recipientPhone: data.recipientPhone,
     renderedBody,
     status: OutboxStatus.QUEUED,
@@ -178,6 +194,22 @@ async function cancelIfConsentMissing(
   return true;
 }
 
+function parseMetaTemplate(raw: unknown): MetaTemplatePayload | null {
+  if (typeof raw !== "object" || raw === null) {
+    return null;
+  }
+  const t = raw as Record<string, unknown>;
+  if (
+    typeof t.name !== "string" ||
+    typeof t.language !== "string" ||
+    !Array.isArray(t.params) ||
+    !t.params.every((p) => typeof p === "string")
+  ) {
+    return null;
+  }
+  return { language: t.language, name: t.name, params: t.params };
+}
+
 async function processWhatsAppEntry(
   prisma: DbClient,
   entry: OutboxEntry,
@@ -195,14 +227,30 @@ async function processWhatsAppEntry(
   if (blocked) {
     return;
   }
-  const result = await sendWhatsAppText(
-    prisma,
-    channel,
-    entry.recipientPhone,
-    entry.renderedBody,
-    countryCode,
-    settings
-  );
+  // Business-initiated sends on the official Meta transports must be an
+  // approved template outside the 24h window — freeform text is rejected.
+  // Evolution (unofficial) and SMS have no window: plain text still fits.
+  const meta = parseMetaTemplate(entry.metaTemplate);
+  const result =
+    meta && channel.mode !== "evolution"
+      ? await sendWhatsAppTemplateVia(
+          prisma,
+          channel,
+          entry.recipientPhone,
+          meta.name,
+          meta.language,
+          meta.params,
+          countryCode,
+          settings
+        )
+      : await sendWhatsAppText(
+          prisma,
+          channel,
+          entry.recipientPhone,
+          entry.renderedBody,
+          countryCode,
+          settings
+        );
   if (result.success) {
     await markSent(prisma, entry.id);
     return;

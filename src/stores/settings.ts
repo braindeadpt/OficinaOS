@@ -45,6 +45,7 @@ interface WhatsAppSettings {
   hasApiToken: boolean;
   hasEvolutionApiKey: boolean;
   phoneNumberId: string | null;
+  pickupReminderTemplate: string | null;
   remarketingCooldownDays: number;
   remarketingDays: number;
   remarketingEnabled: boolean;
@@ -143,6 +144,7 @@ interface SettingsState {
     remarketingDays?: number;
     remarketingCooldownDays?: number;
     remarketingTemplate?: string;
+    pickupReminderTemplate?: string;
     transport?: "meta" | "evolution";
     evolutionUrl?: string;
     evolutionInstance?: string;

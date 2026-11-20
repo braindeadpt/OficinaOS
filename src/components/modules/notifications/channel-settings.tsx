@@ -31,6 +31,7 @@ interface ChannelSettingsProps {
     remarketingDays?: number;
     remarketingCooldownDays?: number;
     remarketingTemplate?: string;
+    pickupReminderTemplate?: string;
     transport?: "meta" | "evolution";
     evolutionUrl?: string;
     evolutionInstance?: string;
@@ -437,6 +438,22 @@ function MetaWhatsAppFields({
           {t("remarketing_upsell")}
         </p>
       )}
+      <Field
+        hint={t("pickup_reminder_template_hint")}
+        label={t("pickup_reminder_template")}
+      >
+        <Input
+          autoComplete="off"
+          onChange={(e) =>
+            setForm((f) => ({
+              ...f,
+              pickupReminderTemplate: e.target.value,
+            }))
+          }
+          placeholder="oficinaos_pickup_reminder"
+          value={form.pickupReminderTemplate}
+        />
+      </Field>
     </>
   );
 }
@@ -450,6 +467,7 @@ interface WhatsAppFormState {
   evolutionInstance: string;
   evolutionUrl: string;
   phoneNumberId: string;
+  pickupReminderTemplate: string;
   remarketingCooldownDays: string;
   remarketingDays: string;
   remarketingEnabled: boolean;
@@ -478,6 +496,7 @@ export default function ChannelSettings({
     remarketingDays: "90",
     remarketingCooldownDays: "180",
     remarketingTemplate: "oficinaos_remarketing",
+    pickupReminderTemplate: "",
     transport: "meta",
     evolutionUrl: "",
     evolutionInstance: "",
@@ -515,6 +534,7 @@ export default function ChannelSettings({
         ),
         remarketingTemplate:
           whatsAppSettings.remarketingTemplate ?? "oficinaos_remarketing",
+        pickupReminderTemplate: whatsAppSettings.pickupReminderTemplate ?? "",
         transport: whatsAppSettings.transport ?? "meta",
         evolutionUrl: whatsAppSettings.evolutionUrl ?? "",
         evolutionInstance: whatsAppSettings.evolutionInstance ?? "",
@@ -533,6 +553,7 @@ export default function ChannelSettings({
         phoneNumberId: whatsAppForm.phoneNumberId || undefined,
         enabled: whatsAppForm.enabled,
         trackingBaseUrl: whatsAppForm.trackingBaseUrl,
+        pickupReminderTemplate: whatsAppForm.pickupReminderTemplate,
         ...(whatsAppSettings?.remarketingModule
           ? {
               remarketingEnabled: whatsAppForm.remarketingEnabled,

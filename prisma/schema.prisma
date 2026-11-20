@@ -981,6 +981,10 @@ model NotificationOutbox {
   channel        NotifyChannel
   recipientPhone String
   renderedBody   String        @db.Text
+  // Meta template payload for business-initiated WhatsApp sends
+  // ({name, language, params}) — required outside the 24h customer
+  // window on the official transports. Null → freeform text.
+  metaTemplate   Json?
   status         OutboxStatus  @default(QUEUED)
   error          String?       @db.Text
   retryCount     Int           @default(0)
@@ -1196,6 +1200,10 @@ model ShopSettings {
   remarketingDays             Int       @default(90)
   remarketingCooldownDays     Int       @default(180)
   remarketingTemplate         String?
+  // Nome do template Meta aprovado para o lembrete de levantamento
+  // (job DONE há dias por levantar). Sem ele o envio oficial sai em
+  // texto livre e a Meta rejeita fora da janela de 24h do cliente.
+  pickupReminderTemplate      String?
   // Public base URL used to build customer-facing links (e.g. WhatsApp
   // tracking links). Optional: shops on a LAN may not expose one.
   trackingBaseUrl             String?

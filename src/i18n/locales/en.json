@@ -2023,6 +2023,8 @@
   "remarketing_template": "Meta template name",
   "remarketing_template_hint": "Must exist and be APPROVED in your Meta Business account. Suggested body: \"Olá {{1}}! Já passou algum tempo desde a sua última reparação na {{2}}. Se o seu equipamento precisar de atenção, estamos aqui para ajudar.\"",
   "remarketing_upsell": "Automatic WhatsApp remarketing is available with the Remarketing module — ask your provider to enable it.",
+  "pickup_reminder_template": "Pickup reminder Meta template",
+  "pickup_reminder_template_hint": "Optional — needed for official WhatsApp sends outside the customer's 24h window (the reminder goes out days after the repair is ready). Must exist and be APPROVED in your Meta Business account. Body params: {{1}} = customer first name, {{2}} = repair code, {{3}} = shop name. Suggested body: \"Olá {{1}}! A sua reparação {{2}} continua à sua espera na {{3}} — passa para levantar quando puderes.\"",
   "jobStatus": {
     "INTAKE": "Intake",
     "WAITING_FOR_PARTS": "Waiting for Parts",

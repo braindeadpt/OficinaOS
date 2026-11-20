@@ -158,6 +158,20 @@ export const updateWhatsAppSettingsSchema = z
           }),
       ])
       .optional(),
+    // Template Meta aprovado para o lembrete de levantamento — o envio
+    // oficial precisa dele fora da janela de 24h do cliente.
+    pickupReminderTemplate: z
+      .union([
+        z.literal(""),
+        z
+          .string()
+          .trim()
+          .max(100)
+          .regex(/^[a-z0-9_]+$/, {
+            error: "validations.invalid_template_name",
+          }),
+      ])
+      .optional(),
     // Transporte WhatsApp: "meta" = Cloud API oficial (default);
     // "evolution" = Evolution API self-hosted na LAN (não-oficial,
     // risco de ban — exige disclaimerAccepted e módulo whatsapp-bot,
