@@ -11,14 +11,18 @@ vi.mock("../services/notification-dispatch.js", () => ({
 vi.useFakeTimers();
 
 const mockQueryRaw = vi.fn();
-const mockJobUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
+const mockExecuteRaw = vi.fn().mockResolvedValue(1);
+const mockFindShopSettings = vi
+  .fn()
+  .mockResolvedValue({ whatsappEnabled: true });
 const mockLog = { error: vi.fn(), warn: vi.fn() };
 
 const mockApp = {
   log: mockLog,
   prisma: {
     $queryRaw: mockQueryRaw,
-    job: { updateMany: mockJobUpdateMany },
+    $executeRaw: mockExecuteRaw,
+    shopSettings: { findUnique: mockFindShopSettings },
   },
 } as any;
 
@@ -30,7 +34,8 @@ const sqlOf = (call: unknown[]): string =>
 describe("startPickupReminderScheduler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockJobUpdateMany.mockResolvedValue({ count: 1 });
+    mockExecuteRaw.mockResolvedValue(1);
+    mockFindShopSettings.mockResolvedValue({ whatsappEnabled: true });
   });
 
   it("selects only jobs still in DONE status (delivered/returned/cancelled are excluded by the status predicate)", async () => {
@@ -127,11 +132,10 @@ describe("startPickupReminderScheduler", () => {
     const stop = startPickupReminderScheduler(mockApp);
     await vi.advanceTimersByTimeAsync(50);
 
-    expect(mockJobUpdateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ id: "j1", status: "DONE" }),
-      })
-    );
+    expect(mockExecuteRaw).toHaveBeenCalled();
+    const sql = sqlOf(mockExecuteRaw.mock.calls[0]);
+    expect(sql).toContain("status = 'DONE'");
+    expect(sql).toContain('"lastPickupReminderAt"');
 
     stop();
   });
@@ -145,7 +149,7 @@ describe("startPickupReminderScheduler", () => {
         customerPhone: "+351",
       },
     ]);
-    mockJobUpdateMany.mockResolvedValue({ count: 0 });
+    mockExecuteRaw.mockResolvedValue(0);
 
     const stop = startPickupReminderScheduler(mockApp);
     await vi.advanceTimersByTimeAsync(50);
@@ -219,6 +223,34 @@ describe("startPickupReminderScheduler", () => {
       expect.any(Error),
       "pickup reminder scheduler tick failed"
     );
+
+    stop();
+  });
+
+  it("requires consent and a phone in the eligibility query so claims map to a sendable channel", async () => {
+    mockQueryRaw.mockResolvedValue([]);
+
+    const stop = startPickupReminderScheduler(mockApp);
+    await vi.advanceTimersByTimeAsync(50);
+
+    const sql = sqlOf(mockQueryRaw.mock.calls[0]);
+    expect(sql).toContain('c."whatsappConsent" = true');
+    expect(sql).toContain("BTRIM(c.phone)");
+
+    stop();
+  });
+
+  it("skips the tick entirely when no customer messaging channel is enabled", async () => {
+    mockFindShopSettings.mockResolvedValue({
+      smsEnabled: false,
+      whatsappEnabled: false,
+    });
+
+    const stop = startPickupReminderScheduler(mockApp);
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(mockQueryRaw).not.toHaveBeenCalled();
+    expect(mocks.notify).not.toHaveBeenCalled();
 
     stop();
   });
