@@ -216,7 +216,7 @@ export async function sendCustomSms(
     if (config.successText && !body.includes(config.successText)) {
       return {
         success: false,
-        error: `SMS provider respondeu sem "${config.successText}" no corpo`,
+        error: `SMS provider responded without "${config.successText}" in the body`,
       };
     }
     return { success: true };

@@ -276,7 +276,7 @@ function cloudSmsError(status: number, body: unknown): string {
   if (status === 409) {
     return "SMS credentials missing in cloud — rerun setup";
   }
-  return msg ?? `Cloud devolveu ${status}`;
+  return msg ?? `Cloud returned ${status}`;
 }
 
 async function sendViaSmsCloud(
@@ -562,11 +562,27 @@ async function applyDeliveryReport(
       OutboxStatus.SENT,
       next
     );
-    return updated > 0;
+    if (updated > 0) {
+      return true;
+    }
   } catch (err) {
     log.warn({ err, refId }, "sms report transition failed");
     return false;
   }
+  // Zero rows updated on a terminal report: either the entry is still
+  // QUEUED (the report raced ahead of the send ack — keep it queued for
+  // the next poll) or the transition already persisted and the ack was
+  // lost / the report is a duplicate / the entry was deleted — in every
+  // one of those cases it is safe to ack, otherwise the report would sit
+  // in the cloud queue forever.
+  const entry = await prisma.notificationOutbox.findUnique({
+    select: { status: true },
+    where: { id: refId },
+  });
+  return (
+    entry == null ||
+    (entry.status !== OutboxStatus.QUEUED && entry.status !== OutboxStatus.SENT)
+  );
 }
 
 /**
