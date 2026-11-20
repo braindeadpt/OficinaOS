@@ -26,7 +26,7 @@ export const intakeDocumentSchema = z.object({
   estimatedDelivery: z.string().max(40).nullable(),
   imei: z.string().max(64).nullable(),
   loaner: z.boolean(),
-  loanerNote: z.string().max(200).nullable(),
+  loanerNote: z.string().max(360).nullable(),
   locale: z.string().max(10),
   problem: z.string().min(1).max(2000),
   repairs: z

@@ -1,6 +1,10 @@
 import type { PrismaClient } from "@generated/client";
 import { describe, expect, it, vi } from "vitest";
-import { renderLabelHtml, renderReceiptHtml } from "../receipt.service";
+import {
+  renderLabelHtml,
+  renderLoanerAgreementHtml,
+  renderReceiptHtml,
+} from "../receipt.service";
 
 function mockPrisma(settings: Record<string, unknown> | null) {
   return {
@@ -162,6 +166,60 @@ describe("renderReceiptHtml loaner device", () => {
   it("omits the loaner row when no device was loaned", async () => {
     const html = await render({ hasLoanerDevice: false });
     expect(html).not.toContain("empréstimo");
+  });
+});
+
+const DOC_REF_RE = /Documento #([0-9a-f]{12})/;
+
+describe("renderLoanerAgreementHtml signature integrity", () => {
+  // The job row carries an intake signature + hash — they seal the ficha, a
+  // different document. The agreement must never present them as covering
+  // its own liability clauses.
+  const AGREEMENT_JOB = {
+    createdAt: new Date("2026-01-15T10:00:00Z"),
+    customer: { name: "Maria Silva", phone: "912345678", taxId: "123456789" },
+    device: { brand: { name: "Apple" }, model: "iPhone 13" },
+    intakeDocumentHash: "abc123intakehashdef456",
+    intakeSignatureDataUrl: "data:image/png;base64,AAAA",
+    jobCode: "R-2026-0001",
+    loanerDevice: {
+      brand: "Nokia",
+      imei: "999888",
+      label: "Loja #1",
+      model: "105",
+    },
+    loanerNote: "Loja #1 (Nokia 105) · IMEI 999888",
+    loanerReturnedAt: null,
+    signedAt: new Date("2026-01-15T10:05:00Z"),
+  };
+
+  it("never renders the intake signature or its hash seal", async () => {
+    const html = await renderLoanerAgreementHtml(
+      mockPrisma(FULL_SETTINGS),
+      AGREEMENT_JOB
+    );
+    expect(html).not.toContain("data:image/png;base64,AAAA");
+    expect(html).not.toContain("abc123intakehashdef456");
+    expect(html).toContain("Assinatura do cliente");
+  });
+
+  it("prints an integrity reference bound to the printed content", async () => {
+    const ref = (html: string) => DOC_REF_RE.exec(html)?.[1] ?? null;
+    const a = await renderLoanerAgreementHtml(
+      mockPrisma(FULL_SETTINGS),
+      AGREEMENT_JOB
+    );
+    const b = await renderLoanerAgreementHtml(mockPrisma(FULL_SETTINGS), {
+      ...AGREEMENT_JOB,
+      loanerDevice: {
+        brand: "Nokia",
+        imei: "999888",
+        label: "Loja #2",
+        model: "105",
+      },
+    });
+    expect(ref(a)).toBeTruthy();
+    expect(ref(a)).not.toBe(ref(b));
   });
 });
 

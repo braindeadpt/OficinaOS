@@ -1,4 +1,6 @@
+import { createHash } from "node:crypto";
 import type { PrismaClient } from "@generated/client";
+import { canonicalize } from "@shared/intake-document.js";
 import type { OrdersReportDTO } from "@shared/types/reports";
 import QRCode from "qrcode";
 import { findShopSettingsUnique } from "../repositories/settings.repository.js";
@@ -868,7 +870,7 @@ const LOANER_AGREEMENT_STRINGS: Record<string, LoanerAgreementStrings> = {
     returnedOn: "Devolvido em",
     signatureLabel: "Assinatura do cliente",
     signatureTerms: "Li e aceito as condições de empréstimo acima descritas.",
-    signedDoc: "Documento assinado",
+    docRef: "Documento",
     title: "Termo de Responsabilidade — Equipamento de Empréstimo",
   },
   en: {
@@ -892,7 +894,7 @@ const LOANER_AGREEMENT_STRINGS: Record<string, LoanerAgreementStrings> = {
     returnedOn: "Returned on",
     signatureLabel: "Customer signature",
     signatureTerms: "I have read and accept the loan terms described above.",
-    signedDoc: "Signed document",
+    docRef: "Document",
     title: "Responsibility Agreement — Loaner Device",
   },
   fr: {
@@ -917,7 +919,7 @@ const LOANER_AGREEMENT_STRINGS: Record<string, LoanerAgreementStrings> = {
     signatureLabel: "Signature du client",
     signatureTerms:
       "J'ai lu et j'accepte les conditions de prêt décrites ci-dessus.",
-    signedDoc: "Document signé",
+    docRef: "Document",
     title: "Terme de Responsabilité — Appareil de Prêt",
   },
   es: {
@@ -942,7 +944,7 @@ const LOANER_AGREEMENT_STRINGS: Record<string, LoanerAgreementStrings> = {
     signatureLabel: "Firma del cliente",
     signatureTerms:
       "He leído y acepto las condiciones de préstamo descritas arriba.",
-    signedDoc: "Documento firmado",
+    docRef: "Documento",
     title: "Termo de Responsabilidad — Dispositivo de Préstamo",
   },
 };
@@ -950,8 +952,14 @@ const LOANER_AGREEMENT_STRINGS: Record<string, LoanerAgreementStrings> = {
 /**
  * Standalone A4 "termo de responsabilidade" for the loaned device — the
  * customer signs it at intake. The fleet unit (or the free-text note for
- * ad-hoc loans) is identified on the document, and the customer's intake
- * signature plus the document hash seal land here exactly like the receipt.
+ * ad-hoc loans) is identified on the document.
+ *
+ * The intake signature/h seal is NOT reused here: it authenticates the ficha,
+ * a different document that never contained these liability clauses. The term
+ * always prints a paper signature line plus an integrity seal — a sha256 over
+ * exactly what is printed (clauses, unit identity, customer, dates), so a
+ * reprint after a fleet edit produces a visibly different reference instead
+ * of silently authenticating changed content.
  */
 export async function renderLoanerAgreementHtml(
   prisma: DbClient,
@@ -966,8 +974,6 @@ export async function renderLoanerAgreementHtml(
     device: { brand: { name: string }; model: string };
     estimatedDate?: Date | null;
     imei?: string | null;
-    intakeDocumentHash?: string | null;
-    intakeSignatureDataUrl?: string | null;
     jobCode: string;
     loanerDevice?: {
       brand?: string | null;
@@ -977,7 +983,6 @@ export async function renderLoanerAgreementHtml(
     } | null;
     loanerNote?: string | null;
     loanerReturnedAt?: Date | null;
-    signedAt?: Date | null;
   },
   options?: { locale?: string }
 ): Promise<string> {
@@ -1008,16 +1013,29 @@ export async function renderLoanerAgreementHtml(
     ? `<tr><td>${s.returnedOn}</td><td style="text-align:right">${new Date(job.loanerReturnedAt).toLocaleString(s.dateLocale)}</td></tr>`
     : "";
 
-  const signatureBox = job.intakeSignatureDataUrl?.startsWith("data:image/")
-    ? `<img src="${esc(job.intakeSignatureDataUrl)}" alt="signature" />`
-    : `<div class="line">${s.signatureLabel}</div>`;
-  const seal = job.intakeDocumentHash
-    ? `<p style="font-size:8pt;color:#777">${esc(s.signedDoc)} #${esc(job.intakeDocumentHash.slice(0, 12))}${
-        job.signedAt
-          ? ` · ${new Date(job.signedAt).toLocaleString(s.dateLocale)}`
-          : ""
-      }</p>`
-    : "";
+  // Always a paper signature line — never the intake signature (see the
+  // function doc: that signature seals a different document).
+  const signatureBox = `<div class="line">${s.signatureLabel}</div>`;
+  const docRef = createHash("sha256")
+    .update(
+      canonicalize({
+        v: 1,
+        doc: "loaner-agreement",
+        jobCode: job.jobCode,
+        customer: [job.customer.name, job.customer.phone, job.customer.taxId],
+        loaner: ld ? [ld.label, ld.brand, ld.model, ld.imei] : null,
+        note: job.loanerNote ?? null,
+        clauses: s.clauses,
+        lentOn: new Date(job.createdAt).toISOString(),
+        returnedOn: job.loanerReturnedAt
+          ? new Date(job.loanerReturnedAt).toISOString()
+          : null,
+        locale: options?.locale ?? "pt",
+      })
+    )
+    .digest("hex")
+    .slice(0, 12);
+  const seal = `<p style="font-size:8pt;color:#777">${esc(s.docRef)} #${docRef}</p>`;
 
   const clauseItems = s.clauses
     .map((c, i) => `<li style="margin-bottom:2mm">${i + 1}. ${esc(c)}</li>`)

@@ -308,6 +308,12 @@ export const ERRORS = {
     status: 409,
     message: "errors.loaner_not_active",
   },
+  // Identity fields (label/brand/model/IMEI) can't be edited while the unit
+  // is out — the printed responsibility term would change under the loan.
+  LOANER_UNIT_ON_LOAN: {
+    status: 409,
+    message: "errors.loaner_unit_on_loan",
+  },
 
   // ── Part-request board (procuro-peça, Pro module: market) ──────────────
   PART_REQUEST_NOT_FOUND: {

@@ -1,6 +1,7 @@
 import { AuditAction, type PrismaClient } from "@generated/client";
 import { JobStatus } from "@shared/constants/job-statuses";
 import { AppError } from "@shared/errors/app-error.js";
+import { describeLoanerDevice } from "@shared/loaner-description.js";
 import type {
   CreateLoanerDeviceInput,
   UpdateLoanerDeviceInput,
@@ -84,21 +85,6 @@ export async function checkoutLoanerDevice(
   };
 }
 
-/** Printable description of a fleet unit — falls into loanerNote when the
- * form leaves it empty so the signed document always names the unit. */
-export function describeLoanerDevice(device: {
-  brand?: string | null;
-  imei?: string | null;
-  label: string;
-  model?: string | null;
-}): string {
-  const spec = [device.brand, device.model].filter(Boolean).join(" ");
-  const suffix = device.imei ? ` · IMEI ${device.imei}` : "";
-  return spec
-    ? `${device.label} (${spec})${suffix}`
-    : `${device.label}${suffix}`;
-}
-
 export async function listLoanerDevices(prisma: PrismaClient) {
   const devices = await prisma.loanerDevice.findMany({
     include: {
@@ -150,6 +136,24 @@ export async function updateLoanerDevice(
   if (!existing) {
     throw new AppError("LOANER_DEVICE_NOT_FOUND");
   }
+  // Identity fields are frozen while the unit is out — changing them would
+  // reprint the responsibility term with equipment the customer never
+  // received. notes/active stay editable; retire the unit or wait for the
+  // return before correcting its identity.
+  const identityChange =
+    input.label !== undefined ||
+    input.brand !== undefined ||
+    input.model !== undefined ||
+    input.imei !== undefined;
+  if (identityChange) {
+    const openLoan = await prisma.job.findFirst({
+      select: { id: true },
+      where: { ...OPEN_LOAN_WHERE, loanerDeviceId: id },
+    });
+    if (openLoan) {
+      throw new AppError("LOANER_UNIT_ON_LOAN");
+    }
+  }
   // Keep the columns honest: "" means "cleared", same as create's null.
   const emptyToNull = (v: string | null | undefined) =>
     v === undefined ? undefined : v?.trim() || null;
@@ -175,24 +179,33 @@ export async function markLoanerReturned(
   deviceId: string,
   userId: string
 ) {
-  const job = await prisma.job.findFirst({
-    select: { id: true, jobCode: true },
-    where: { ...OPEN_LOAN_WHERE, loanerDeviceId: deviceId },
-  });
-  if (!job) {
-    throw new AppError("LOANER_NOT_ACTIVE");
-  }
-  await prisma.$transaction(async (tx) => {
-    await tx.job.update({
-      data: { loanerReturnedAt: new Date() },
-      where: { id: job.id },
+  return await prisma.$transaction(async (tx) => {
+    // Same unit-row serialization as intake/reassignment — the open loan
+    // resolved below can't be swapped to another unit mid-transaction.
+    await tx.$queryRaw`SELECT "id" FROM "loaner_devices" WHERE "id" = ${deviceId} FOR UPDATE`;
+    const job = await tx.job.findFirst({
+      select: { id: true, jobCode: true },
+      where: { ...OPEN_LOAN_WHERE, loanerDeviceId: deviceId },
     });
+    if (!job) {
+      throw new AppError("LOANER_NOT_ACTIVE");
+    }
+    // Conditional update: the stamp lands only if the row is still THIS loan
+    // (same unit, unreturned, not cancelled). A concurrent reassignment or
+    // double return yields count 0 — never stamps the replacement unit.
+    const res = await tx.job.updateMany({
+      data: { loanerReturnedAt: new Date() },
+      where: { id: job.id, ...OPEN_LOAN_WHERE, loanerDeviceId: deviceId },
+    });
+    if (res.count === 0) {
+      throw new AppError("LOANER_NOT_ACTIVE");
+    }
     await createAuditLog(tx, {
       action: AuditAction.LOANER_RETURNED,
       jobId: job.id,
       toValue: deviceId,
       userId,
     });
+    return { jobId: job.id, jobCode: job.jobCode };
   });
-  return { jobId: job.id, jobCode: job.jobCode };
 }

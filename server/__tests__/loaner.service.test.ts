@@ -1,9 +1,9 @@
 import { AuditAction } from "@generated/client";
 import { isAppError } from "@shared/errors/app-error.js";
+import { describeLoanerDevice } from "@shared/loaner-description.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   assertLoanerAssignable,
-  describeLoanerDevice,
   listLoanerDevices,
   markLoanerReturned,
   updateLoanerDevice,
@@ -14,15 +14,22 @@ const loanerDeviceFindUnique = vi.fn();
 const loanerDeviceUpdate = vi.fn();
 const jobFindFirst = vi.fn();
 const jobUpdate = vi.fn();
+const jobUpdateMany = vi.fn();
 const auditLogCreate = vi.fn();
+const queryRaw = vi.fn();
 
 const tx = {
-  job: { findFirst: jobFindFirst, update: jobUpdate },
+  job: {
+    findFirst: jobFindFirst,
+    update: jobUpdate,
+    updateMany: jobUpdateMany,
+  },
   loanerDevice: {
     findUnique: loanerDeviceFindUnique,
     update: loanerDeviceUpdate,
   },
   auditLog: { create: auditLogCreate },
+  $queryRaw: queryRaw,
 };
 
 const prisma = {
@@ -116,6 +123,33 @@ describe("updateLoanerDevice", () => {
       (e) => isAppError(e) && e.code === "LOANER_DEVICE_NOT_FOUND"
     );
   });
+
+  it("blocks identity edits while the unit is on loan", async () => {
+    loanerDeviceFindUnique.mockResolvedValue({ id: "d1" });
+    jobFindFirst.mockResolvedValue({ id: "j1" });
+    await expect(
+      updateLoanerDevice(prisma, "d1", { imei: "123456" })
+    ).rejects.toSatisfy(
+      (e) => isAppError(e) && e.code === "LOANER_UNIT_ON_LOAN"
+    );
+    expect(loanerDeviceUpdate).not.toHaveBeenCalled();
+  });
+
+  it("allows notes/active edits while the unit is on loan", async () => {
+    loanerDeviceFindUnique.mockResolvedValue({ id: "d1" });
+    jobFindFirst.mockResolvedValue({ id: "j1" });
+    loanerDeviceUpdate.mockResolvedValue({ id: "d1" });
+    await updateLoanerDevice(prisma, "d1", { active: false, notes: "x" });
+    expect(loanerDeviceUpdate).toHaveBeenCalled();
+  });
+
+  it("allows identity edits when the unit is not on loan", async () => {
+    loanerDeviceFindUnique.mockResolvedValue({ id: "d1" });
+    jobFindFirst.mockResolvedValue(null);
+    loanerDeviceUpdate.mockResolvedValue({ id: "d1" });
+    await updateLoanerDevice(prisma, "d1", { label: "Loja #2" });
+    expect(loanerDeviceUpdate).toHaveBeenCalled();
+  });
 });
 
 describe("markLoanerReturned", () => {
@@ -124,19 +158,37 @@ describe("markLoanerReturned", () => {
     await expect(markLoanerReturned(prisma, "d1", "u1")).rejects.toSatisfy(
       (e) => isAppError(e) && e.code === "LOANER_NOT_ACTIVE"
     );
+    expect(jobUpdateMany).not.toHaveBeenCalled();
   });
 
-  it("stamps the job and audits the return", async () => {
+  it("rejects when the open loan changed under the request", async () => {
+    // Concurrent reassignment/double-return: the conditional update matches
+    // zero rows, so no stamp lands on the wrong unit and no audit is written.
     jobFindFirst.mockResolvedValue({ id: "j1", jobCode: "R-1" });
-    jobUpdate.mockResolvedValue({});
+    jobUpdateMany.mockResolvedValue({ count: 0 });
+    await expect(markLoanerReturned(prisma, "d1", "u1")).rejects.toSatisfy(
+      (e) => isAppError(e) && e.code === "LOANER_NOT_ACTIVE"
+    );
+    expect(auditLogCreate).not.toHaveBeenCalled();
+  });
+
+  it("stamps the job with a conditional update and audits the return", async () => {
+    jobFindFirst.mockResolvedValue({ id: "j1", jobCode: "R-1" });
+    jobUpdateMany.mockResolvedValue({ count: 1 });
     auditLogCreate.mockResolvedValue({});
 
     const result = await markLoanerReturned(prisma, "d1", "u1");
 
     expect(result).toEqual({ jobId: "j1", jobCode: "R-1" });
-    expect(jobUpdate).toHaveBeenCalledWith({
+    expect(queryRaw).toHaveBeenCalled();
+    expect(jobUpdateMany).toHaveBeenCalledWith({
       data: { loanerReturnedAt: expect.any(Date) },
-      where: { id: "j1" },
+      where: {
+        id: "j1",
+        loanerDeviceId: "d1",
+        loanerReturnedAt: null,
+        status: { not: "CANCELLED" },
+      },
     });
     expect(auditLogCreate).toHaveBeenCalledWith(
       expect.objectContaining({

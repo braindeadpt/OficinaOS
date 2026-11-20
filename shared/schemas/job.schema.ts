@@ -89,7 +89,8 @@ export const createJobSchema = z.object({
     .max(99_999_999.99)
     .optional(),
   hasLoanerDevice: z.boolean().optional(),
-  loanerNote: z.string().max(200).optional(),
+  // 360 fits describeLoanerDevice()'s worst case from valid fleet fields.
+  loanerNote: z.string().max(360).optional(),
   // Shop fleet unit handed out — loanerNote stays the printable text.
   loanerDeviceId: opaqueIdSchema.optional(),
   technicianId: opaqueIdSchema.optional(),
@@ -108,7 +109,7 @@ export const updateJobSchema = z.object({
   estimatedDate: z.coerce.date().nullable().optional(),
   depositAmount: z.number().min(0).max(99_999_999.99).nullable().optional(),
   hasLoanerDevice: z.boolean().optional(),
-  loanerNote: z.string().max(200).nullable().optional(),
+  loanerNote: z.string().max(360).nullable().optional(),
   loanerDeviceId: opaqueIdSchema.nullable().optional(),
   technicianId: opaqueIdSchema.nullable().optional(),
   isUrgent: z.boolean().optional(),

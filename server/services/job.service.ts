@@ -14,6 +14,7 @@ import type { RoleType } from "@shared/constants/roles";
 import { Role } from "@shared/constants/roles";
 import { AppError } from "@shared/errors/app-error.js";
 import { buildIntakeDocument } from "@shared/intake-document.js";
+import { describeLoanerDevice } from "@shared/loaner-description.js";
 import type {
   CreateJobInput,
   IntakeRepairItem,
@@ -59,7 +60,6 @@ import { createAuditLog } from "./audit.service.js";
 import {
   assertLoanerAssignable,
   checkoutLoanerDevice,
-  describeLoanerDevice,
 } from "./loaner.service.js";
 import { notify } from "./notification-dispatch.js";
 import {
@@ -723,16 +723,104 @@ function buildJobUpdateData(
   }
 
   // Re-linking a unit opens a fresh loan — a stale return stamp would make
-  // the new loan look already closed.
+  // the new loan look already closed. Disconnecting keeps the stamp: an open
+  // loan can't be disconnected at all (guarded in update()), so a surviving
+  // stamp is a true record of when the unit came back.
   if (loanerDeviceId === null) {
     data.loanerDevice = { disconnect: true };
-    data.loanerReturnedAt = null;
   } else if (loanerDeviceId) {
     data.loanerDevice = { connect: { id: loanerDeviceId } };
     data.loanerReturnedAt = null;
   }
 
   return data;
+}
+
+// The resulting loan state — a linked fleet unit *is* a loan, so the flag
+// can never contradict it and an open loan can't be silently disconnected
+// (the unit must be marked returned first, which leaves an audit trail).
+function validateLoanerUpdate(
+  job: Pick<Job, "hasLoanerDevice" | "loanerDeviceId" | "loanerReturnedAt">,
+  input: UpdateJobInput,
+  data: Prisma.JobUpdateInput
+): { error: "VALIDATION_ERROR"; errors: Record<string, string[]> } | null {
+  const linkedAfter =
+    input.loanerDeviceId === undefined
+      ? job.loanerDeviceId
+      : input.loanerDeviceId;
+  if (
+    input.loanerDeviceId === null &&
+    job.loanerDeviceId &&
+    !job.loanerReturnedAt
+  ) {
+    return {
+      error: "VALIDATION_ERROR",
+      errors: { loanerDeviceId: ["validations.loaner_disconnect_open"] },
+    };
+  }
+  if (linkedAfter && input.hasLoanerDevice === false) {
+    return {
+      error: "VALIDATION_ERROR",
+      errors: { hasLoanerDevice: ["validations.loaner_flag_linked"] },
+    };
+  }
+  if (
+    linkedAfter &&
+    input.hasLoanerDevice === undefined &&
+    !job.hasLoanerDevice
+  ) {
+    data.hasLoanerDevice = true;
+  }
+  return null;
+}
+
+// Fleet reassignment — same serialization as intake: the unit row is locked
+// before the availability check runs. A new unit means a new printable
+// identity: an omitted note always regenerates from the fleet row (a custom
+// note comes in the same PATCH).
+async function applyLoanerReassignment(
+  tx: DbClient,
+  input: UpdateJobInput,
+  jobId: string,
+  data: Prisma.JobUpdateInput
+) {
+  if (!input.loanerDeviceId) {
+    return;
+  }
+  await tx.$queryRaw`SELECT "id" FROM "loaner_devices" WHERE "id" = ${input.loanerDeviceId} FOR UPDATE`;
+  await assertLoanerAssignable(tx, input.loanerDeviceId, jobId);
+  if (input.loanerNote !== undefined) {
+    return;
+  }
+  const device = await tx.loanerDevice.findUniqueOrThrow({
+    where: { id: input.loanerDeviceId },
+  });
+  data.loanerNote = describeLoanerDevice(device);
+}
+
+// A unit swap isn't a physical return, but it does free the previous unit —
+// record which units were detached/attached or the fleet loses the trail.
+async function auditLoanerUnitChange(
+  prisma: PrismaClient,
+  job: Pick<Job, "loanerDeviceId">,
+  input: UpdateJobInput,
+  jobId: string,
+  userId: string
+) {
+  if (
+    input.loanerDeviceId === undefined ||
+    input.loanerDeviceId === (job.loanerDeviceId ?? null)
+  ) {
+    return;
+  }
+  await createAuditLog(prisma, {
+    action: AuditAction.JOB_UPDATED,
+    fromValue: job.loanerDeviceId ?? undefined,
+    jobId,
+    note: "Loaner unit changed",
+    toValue: input.loanerDeviceId ?? undefined,
+    userId,
+  });
 }
 
 export async function update(
@@ -776,23 +864,13 @@ export async function update(
 
   const { technicianId } = input;
 
-  // Fleet reassignment — same serialization as intake: the unit row is
-  // locked before the availability check runs, and a fresh link implies the
-  // loan happened (flag + printable note are kept honest).
+  const loanerError = validateLoanerUpdate(job, input, data);
+  if (loanerError) {
+    return loanerError;
+  }
+
   const updated = await prisma.$transaction(async (tx) => {
-    if (input.loanerDeviceId) {
-      await tx.$queryRaw`SELECT "id" FROM "loaner_devices" WHERE "id" = ${input.loanerDeviceId} FOR UPDATE`;
-      await assertLoanerAssignable(tx, input.loanerDeviceId, id);
-      if (data.hasLoanerDevice === undefined) {
-        data.hasLoanerDevice = true;
-      }
-      if (input.loanerNote === undefined && !job.loanerNote?.trim()) {
-        const device = await tx.loanerDevice.findUniqueOrThrow({
-          where: { id: input.loanerDeviceId },
-        });
-        data.loanerNote = describeLoanerDevice(device);
-      }
-    }
+    await applyLoanerReassignment(tx, input, id, data);
     return await jobUpdate(tx, id, data, JOB_INCLUDE);
   });
 
@@ -808,6 +886,8 @@ export async function update(
       userId,
     });
   }
+
+  await auditLoanerUnitChange(prisma, job, input, id, userId);
 
   const costFieldsChanged =
     "estimatedCost" in input || "depositAmount" in input;

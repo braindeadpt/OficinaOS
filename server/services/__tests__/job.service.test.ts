@@ -840,6 +840,185 @@ describe("update", () => {
       updateCall[0].data.estimatedDate.toISOString().startsWith("2024-12-25")
     ).toBe(true);
   });
+
+  describe("loaner reassignment", () => {
+    const jobWithLoaner = {
+      id: "job-1",
+      partsUsed: [],
+      repairs: [],
+      status: "PENDING",
+      hasLoanerDevice: true,
+      loanerDeviceId: "unit-a",
+      loanerNote: "Loja #1 (Nokia 105)",
+      loanerReturnedAt: null,
+    };
+
+    function prismaWithFleet() {
+      return mockPrisma({
+        loanerDevice: {
+          findUnique: vi.fn().mockResolvedValue({ active: true, id: "unit-b" }),
+          findUniqueOrThrow: vi.fn().mockResolvedValue({
+            brand: "Nokia",
+            id: "unit-b",
+            imei: null,
+            label: "Loja #2",
+            model: "105",
+          }),
+        },
+      });
+    }
+
+    it("rejects clearing the loan flag while a unit stays linked", async () => {
+      (prisma.job.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(
+        jobWithLoaner
+      );
+
+      const result = await update(
+        prisma,
+        "job-1",
+        { hasLoanerDevice: false },
+        "user-1"
+      );
+
+      expect(result).toEqual({
+        error: "VALIDATION_ERROR",
+        errors: { hasLoanerDevice: ["validations.loaner_flag_linked"] },
+      });
+      expect(prisma.job.update).not.toHaveBeenCalled();
+    });
+
+    it("rejects a false loan flag on a newly linked unit", async () => {
+      (prisma.job.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "job-1",
+        partsUsed: [],
+        repairs: [],
+        status: "PENDING",
+        hasLoanerDevice: false,
+        loanerDeviceId: null,
+      });
+
+      const result = await update(
+        prisma,
+        "job-1",
+        { hasLoanerDevice: false, loanerDeviceId: "unit-b" },
+        "user-1"
+      );
+
+      expect(result).toEqual({
+        error: "VALIDATION_ERROR",
+        errors: { hasLoanerDevice: ["validations.loaner_flag_linked"] },
+      });
+      expect(prisma.job.update).not.toHaveBeenCalled();
+    });
+
+    it("rejects disconnecting a unit that is still out", async () => {
+      (prisma.job.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(
+        jobWithLoaner
+      );
+
+      const result = await update(
+        prisma,
+        "job-1",
+        { loanerDeviceId: null },
+        "user-1"
+      );
+
+      expect(result).toEqual({
+        error: "VALIDATION_ERROR",
+        errors: { loanerDeviceId: ["validations.loaner_disconnect_open"] },
+      });
+      expect(prisma.job.update).not.toHaveBeenCalled();
+    });
+
+    it("disconnects a unit only after it was returned", async () => {
+      (prisma.job.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ...jobWithLoaner,
+        loanerReturnedAt: new Date("2026-01-02"),
+      });
+      (prisma.job.update as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "job-1",
+        partsUsed: [],
+        repairs: [],
+        status: "PENDING",
+      });
+
+      await update(prisma, "job-1", { loanerDeviceId: null }, "user-1");
+
+      const updateCall = (prisma.job.update as ReturnType<typeof vi.fn>).mock
+        .calls[0];
+      expect(updateCall[0].data.loanerDevice).toEqual({ disconnect: true });
+      // The return stamp survives — it records when the unit came back.
+      expect(updateCall[0].data.loanerReturnedAt).toBeUndefined();
+    });
+
+    it("regenerates the printable note when the unit changes", async () => {
+      const p = prismaWithFleet();
+      (p.job.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(
+        jobWithLoaner
+      );
+      (p.job.update as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "job-1",
+        partsUsed: [],
+        repairs: [],
+        status: "PENDING",
+      });
+
+      await update(p, "job-1", { loanerDeviceId: "unit-b" }, "user-1");
+
+      const updateCall = (p.job.update as ReturnType<typeof vi.fn>).mock
+        .calls[0];
+      // The old unit's generated description must not survive the swap.
+      expect(updateCall[0].data.loanerNote).toBe("Loja #2 (Nokia 105)");
+      expect(updateCall[0].data.loanerDevice).toEqual({
+        connect: { id: "unit-b" },
+      });
+      expect(updateCall[0].data.loanerReturnedAt).toBeNull();
+    });
+
+    it("keeps an explicit replacement note on reassignment", async () => {
+      const p = prismaWithFleet();
+      (p.job.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(
+        jobWithLoaner
+      );
+      (p.job.update as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "job-1",
+        partsUsed: [],
+        repairs: [],
+        status: "PENDING",
+      });
+
+      await update(
+        p,
+        "job-1",
+        { loanerDeviceId: "unit-b", loanerNote: "custom unit" },
+        "user-1"
+      );
+
+      const updateCall = (p.job.update as ReturnType<typeof vi.fn>).mock
+        .calls[0];
+      expect(updateCall[0].data.loanerNote).toBe("custom unit");
+    });
+
+    it("forces the loan flag on when a unit is linked", async () => {
+      const p = prismaWithFleet();
+      (p.job.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ...jobWithLoaner,
+        hasLoanerDevice: false,
+      });
+      (p.job.update as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "job-1",
+        partsUsed: [],
+        repairs: [],
+        status: "PENDING",
+      });
+
+      await update(p, "job-1", { loanerDeviceId: "unit-b" }, "user-1");
+
+      const updateCall = (p.job.update as ReturnType<typeof vi.fn>).mock
+        .calls[0];
+      expect(updateCall[0].data.hasLoanerDevice).toBe(true);
+    });
+  });
 });
 
 describe("create", () => {

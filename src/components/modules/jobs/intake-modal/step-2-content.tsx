@@ -1,4 +1,5 @@
 import { buildIntakeDocument } from "@shared/intake-document.js";
+import { describeLoanerDevice } from "@shared/loaner-description.js";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import SignaturePad from "@/components/reports/signature-pad";
@@ -291,13 +292,7 @@ interface LoanerFieldProps {
 }
 
 /** Same printable description the server derives — label + spec + IMEI. */
-function describeLoaner(device: LoanerDevice): string {
-  const spec = [device.brand, device.model].filter(Boolean).join(" ");
-  const suffix = device.imei ? ` · IMEI ${device.imei}` : "";
-  return spec
-    ? `${device.label} (${spec})${suffix}`
-    : `${device.label}${suffix}`;
-}
+const describeLoaner = describeLoanerDevice;
 
 function LoanerField({
   fieldError,
@@ -405,7 +400,7 @@ function LoanerField({
             label={t("intake.loaner_note")}
           >
             <Input
-              maxLength={200}
+              maxLength={360}
               onBlur={() => handleBlur("loanerNote")}
               onChange={(e) => update("loanerNote", e.target.value)}
               placeholder={t("intake.loaner_note_placeholder")}
