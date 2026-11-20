@@ -23,7 +23,9 @@ export function buildJobPayload(data: IntakeFormData) {
     reportedProblem: data.reportedProblem,
     conditionNotes: data.conditionNotes || undefined,
     deviceUnlockCode: data.deviceUnlockCode || undefined,
-    accessories: data.accessories.length > 0 ? data.accessories : undefined,
+    accessories: data.accessories.trim()
+      ? [data.accessories.trim()]
+      : undefined,
     intakeChecklist:
       Object.keys(data.checklist).length > 0 ? data.checklist : undefined,
     intakeSignatureDataUrl: data.signature ?? undefined,
