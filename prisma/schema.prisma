@@ -517,6 +517,10 @@ model Job {
 
   lastOverdueAlertAt DateTime? @db.Timestamptz
 
+  // "Come pick up" reminder — last time the customer was nudged while the
+  // repair sat DONE and uncollected; dedupe + claim field for the scheduler.
+  lastPickupReminderAt DateTime? @db.Timestamptz
+
   isWarrantyReturn  Boolean   @default(false)
   // Public portal link published to OficinaOS Cloud (module: portal).
   // accessCode is the unguessable token in the public URL.

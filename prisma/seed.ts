@@ -126,6 +126,8 @@ const LEGACY_EN_TEMPLATE_BODIES: Record<string, string> = {
   "job_cancelled:IN_APP":
     "Job cancelled{{if jobCode}} — {{jobCode}}{{endif}}{{if customerName}} for {{customerName}}{{endif}}",
   "job_overdue:IN_APP": "Job overdue{{if jobCode}} — {{jobCode}}{{endif}}",
+  "job_done_reminder:IN_APP":
+    "Pickup reminder sent to {{customerName}}{{if jobCode}} — {{jobCode}}{{endif}}",
   "warranty_return_created:IN_APP":
     "Warranty return created{{if jobCode}} — {{jobCode}}{{endif}}",
   "part_low_stock:IN_APP":
@@ -156,6 +158,8 @@ const LEGACY_EN_TEMPLATE_BODIES: Record<string, string> = {
     "Hello {{customerName}}, the estimate for your repair {{jobCode}} is ready: {{quoteAmount}} {{currency}}.{{if trackingUrl}}\nReview and approve it here: {{trackingUrl}}{{endif}}{{if shopName}} — {{shopName}}{{endif}}",
   "job_overdue:WHATSAPP":
     "Hello {{customerName}}, your repair {{jobCode}} is taking longer than expected. Our team is on it and we will update you shortly.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nTrack it here: {{trackingUrl}}{{endif}}",
+  "job_done_reminder:WHATSAPP":
+    "Hello {{customerName}}, your repair {{jobCode}} has been ready for pickup for a few days — please come collect it when convenient.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nTrack it here: {{trackingUrl}}{{endif}}",
   "warranty_return_created:WHATSAPP":
     "Hello {{customerName}}, we have registered a warranty return for your device {{jobCode}}. We will inspect it and keep you updated.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nTrack it here: {{trackingUrl}}{{endif}}",
   "part_low_stock:WHATSAPP":
@@ -218,6 +222,22 @@ async function seedNotificationTemplates() {
       name: "job_overdue",
       channel: "IN_APP" as const,
       body: "Reparação em atraso{{if jobCode}} — {{jobCode}}{{endif}}",
+      isDefault: true,
+    },
+    {
+      name: "job_done_reminder",
+      channel: "IN_APP" as const,
+      body: "Lembrete de levantamento enviado a {{customerName}}{{if jobCode}} — {{jobCode}}{{endif}}",
+      isDefault: true,
+    },
+    {
+      // Uncollected-repair nudge ("come pick it up"). The pickup-reminder
+      // scheduler sends this to the customer's WhatsApp after the job has
+      // sat DONE for days; consent gating is handled by the dispatch
+      // pipeline like every other automatic event.
+      name: "job_done_reminder",
+      channel: "WHATSAPP" as const,
+      body: "Olá {{customerName}}, a sua reparação {{jobCode}} está pronta a levantar há alguns dias — passe na loja quando lhe for conveniente.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nAcompanhe aqui: {{trackingUrl}}{{endif}}",
       isDefault: true,
     },
     {

@@ -77,6 +77,11 @@ const DISPATCH_CONTEXT: Record<string, Record<string, string>> = {
     jobCode: "RPR-2026-0001",
     recipientPhone: "+351910000001",
   },
+  job_done_reminder: {
+    customerName: "Ana Silva",
+    jobCode: "RPR-2026-0001",
+    recipientPhone: "+351910000001",
+  },
   warranty_return_created: {
     customerName: "Ana Silva",
     jobCode: "RPR-2026-0002",
@@ -117,6 +122,7 @@ const REQUIRED_WHATSAPP_EVENTS = [
   "job_returned",
   "job_cancelled",
   "job_overdue",
+  "job_done_reminder",
   "warranty_return_created",
   "part_low_stock",
   "quote_sent",
