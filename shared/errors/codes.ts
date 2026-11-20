@@ -290,6 +290,16 @@ export const ERRORS = {
     status: 409,
     message: "errors.signature_stale",
   },
+  // Sending the link by message needs a URL the customer's phone can reach
+  // from outside the shop — a cloud relay or a public APP_URL/tracking base.
+  SIGNATURE_LINK_NO_REMOTE: {
+    status: 400,
+    message: "errors.signature_link_no_remote",
+  },
+  SIGNATURE_LINK_NO_CHANNEL: {
+    status: 400,
+    message: "errors.signature_link_no_channel",
+  },
 
   // ── Loaner devices (equipamento de empréstimo) ─────────────────────────
   LOANER_DEVICE_NOT_FOUND: {

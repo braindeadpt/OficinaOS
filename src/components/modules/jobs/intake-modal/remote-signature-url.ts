@@ -47,6 +47,41 @@ function isPrivateLanIpv4(host: string): boolean {
   );
 }
 
+/**
+ * True when the URL opens from a phone OFF the shop network — the bar a
+ * link must clear to be worth sending by message. Public hostnames and
+ * public IPs pass; LAN ranges, .local, loopback, link-local and CGNAT
+ * (Tailscale) do not. Mirrors the server's isRemoteUrl.
+ */
+export function isRemoteSignUrl(url: string): boolean {
+  const h = hostOf(url);
+  if (!(h && (h.protocol === "http:" || h.protocol === "https:"))) {
+    return false;
+  }
+  if (isUndialable(h.host) || h.host.endsWith(".local")) {
+    return false;
+  }
+  const o = ipv4Octets(h.host);
+  if (o) {
+    const [a, b] = o;
+    if (
+      a === 10 ||
+      a === 127 ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 100 && b >= 64 && b <= 127)
+    ) {
+      return false;
+    }
+  } else if (!h.host.includes(".")) {
+    // Bare machine hostnames resolve via NetBIOS/mDNS on the LAN only —
+    // they dead-end the moment the phone leaves the shop network.
+    return false;
+  }
+  return true;
+}
+
 function isUndialable(host: string): boolean {
   return (
     host === "localhost" ||

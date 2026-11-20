@@ -2,6 +2,7 @@ import { AppError } from "@shared/errors/app-error.js";
 import { createSignatureSessionSchema } from "@shared/schemas/signature.schema.js";
 import type { FastifyPluginAsync } from "fastify";
 import { requirePermission } from "../middlewares/rbac.js";
+import { sendSignatureLink } from "../services/signature-link.service.js";
 import {
   deleteSignatureRelay,
   pairingSignatureCreds,
@@ -15,6 +16,7 @@ import {
   getSignatureSession,
   invalidateSignatureSession,
 } from "../services/signature-session.service.js";
+import { getUserId } from "../utils/request.js";
 
 // Staff endpoints for the remote intake signature: create a short-lived
 // session (its token becomes the QR the customer scans), poll it until the
@@ -133,6 +135,28 @@ export const signatureSessionRoutes: FastifyPluginAsync = async (app) => {
         deleteSignatureRelay(relay, token, req.log).catch(() => null);
       }
       return result;
+    },
+  });
+
+  app.post("/:token/send", {
+    preHandler: [requirePermission({ jobs: ["create"] })],
+    schema: {
+      tags: ["signature-sessions"],
+      summary:
+        "Send the live signing link to the customer via WhatsApp/SMS outbox",
+      params: {
+        type: "object",
+        properties: { token: { type: "string" } },
+        required: ["token"],
+      },
+    },
+    handler: async (req) => {
+      const { token } = req.params as { token: string };
+      return await sendSignatureLink(
+        { prisma: app.prisma, wsBroadcast: app.wsBroadcast },
+        token,
+        getUserId(req)
+      );
     },
   });
 };

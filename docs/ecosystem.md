@@ -187,12 +187,21 @@ template próprio usa o corpo WhatsApp com `*bold*` removido.
 | `job_overdue` | scheduler: `estimatedDate` passou e job aberto | "está a demorar" + tracking | `jobs/overdue-scheduler.ts` |
 | `quote_sent` | staff clica "enviar orçamento" | valor + link para aprovar/recusar | `job-quote.service.ts` |
 | `warranty_return_created` | devolução em garantia criada | "registámos a devolução" + tracking | `routes/jobs.ts` |
-| `signature_link` | staff envia link para assinar ficha/termo — **por implementar** | link `/sign/:token` (só faz sentido com URL remoto — cloud ou APP_URL público) | endpoint novo `POST /sign-sessions/:token/send` + botão nos dialogs |
+| `signature_link` | staff clica "enviar link" no dialog de assinatura (ficha ou termo) | link `/sign/:token` — só aparece se o URL for alcançável fora da loja (relay cloud ou APP_URL/trackingBase público); LAN pura não oferece o botão | `POST /sign-sessions/:token/send` → `signature-link.service.ts` |
 
 Só para staff (IN_APP): `pre_check_submitted`, `return_claim_resolved`,
 `part_low_stock`, e uma cópia IN_APP de cada evento de job para o OWNER.
 `quote_approved`/`quote_rejected` também só notificam staff — a resposta
 do cliente ao orçamento não deve gerar eco de volta ao cliente.
+
+**Consentimento transacional:** `signature_link` está em
+`STAFF_INITIATED_TEMPLATES` (`notification-outbox.service.ts`) — eventos
+que o staff dispara à mão para um cliente concreto (equivalente a copiar o
+link para o WhatsApp da loja) passam sem o opt-in `whatsappConsent`, que
+existe para mensagens automáticas. No intake o cliente pode ainda não ter
+registo na BD — o gate seria fatal para o caso de uso principal. Os gates
+de canal ativo e de configuração mantêm-se; o envio fica em audit
+(`NOTIFICATION_SENT`, destinatário mascarado, nunca o URL bearer).
 
 ### Módulos `diag-intake` + `ai-reports`
 

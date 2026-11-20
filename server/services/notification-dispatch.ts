@@ -10,7 +10,10 @@ import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import { logger } from "../utils/logger.js";
 import { isModuleEnabled } from "../utils/modules.js";
-import { queueNotification } from "./notification-outbox.service.js";
+import {
+  queueNotification,
+  STAFF_INITIATED_TEMPLATES,
+} from "./notification-outbox.service.js";
 import { renderTemplate } from "./notification-renderer.js";
 
 interface NotifyEvent {
@@ -126,8 +129,16 @@ const whatsAppHandler: ChannelHandler = {
     }
     // Consent gate at enqueue time: customers who did not opt in never
     // even enter the outbox. The outbox re-checks at send time.
+    // Staff-initiated templates (e.g. the signing link the staff just sent
+    // at the counter) are transactional — the staff click is the consent
+    // context, and the customer may not have a record yet at intake.
     const customer = await findCustomerByPhone(prisma, phone);
-    if (!customer?.whatsappConsent) {
+    if (
+      !(
+        STAFF_INITIATED_TEMPLATES.has(event.eventName) ||
+        customer?.whatsappConsent
+      )
+    ) {
       logger.info(
         `[notify] WHATSAPP handler: no WhatsApp consent for ${phone} on ${event.eventName} — skipping`
       );
@@ -160,8 +171,15 @@ const smsHandler: ChannelHandler = {
     }
     // Mesmo consent gate do WhatsApp — a flag whatsappConsent é o opt-in
     // do cliente a mensagens automáticas, qualquer que seja o canal.
+    // Templates iniciados pelo staff (link de assinatura) são transacionais
+    // e passam sem opt-in — ver STAFF_INITIATED_TEMPLATES.
     const customer = await findCustomerByPhone(prisma, phone);
-    if (!customer?.whatsappConsent) {
+    if (
+      !(
+        STAFF_INITIATED_TEMPLATES.has(event.eventName) ||
+        customer?.whatsappConsent
+      )
+    ) {
       logger.info(
         `[notify] SMS handler: no messaging consent for ${phone} on ${event.eventName} — skipping`
       );

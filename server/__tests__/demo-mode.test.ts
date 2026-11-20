@@ -582,6 +582,7 @@ describe("route classification — every /api route is decided", () => {
     "POST /api/sales/:id/print-receipt",
     "POST /api/sign-sessions",
     "POST /api/sign-sessions/:token/invalidate",
+    "POST /api/sign-sessions/:token/send",
     "POST /api/supplier-rmas",
     "POST /api/suppliers",
     "POST /api/tasks",

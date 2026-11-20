@@ -21,6 +21,19 @@ import {
 } from "./whatsapp-channel.js";
 
 /**
+ * Events a staff member fires by hand for a specific customer — not
+ * automated messaging. The signature link is the same action the staff
+ * would take by copying it into the shop's own WhatsApp: the customer is
+ * waiting for it, it is sent once per click and it expires with the
+ * session. These still respect the channel toggles and provider config;
+ * they skip only the opt-in consent flag, which exists to gate automated
+ * notifications, not staff-initiated service messages.
+ */
+export const STAFF_INITIATED_TEMPLATES: ReadonlySet<string> = new Set([
+  "signature_link",
+]);
+
+/**
  * WhatsApp consent gate. Only customers who opted in may receive messages;
  * the shop's own phone is always allowed (test notifications, shop contact).
  * Returns null when the send must be skipped, with a human-readable reason.
@@ -163,6 +176,9 @@ async function cancelIfConsentMissing(
   entry: OutboxEntry,
   shopPhone: string | null
 ): Promise<boolean> {
+  if (STAFF_INITIATED_TEMPLATES.has(entry.templateName)) {
+    return false;
+  }
   const consentError = await assertWhatsAppConsent(
     prisma,
     entry.recipientPhone,
