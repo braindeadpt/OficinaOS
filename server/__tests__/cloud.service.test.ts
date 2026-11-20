@@ -3,6 +3,7 @@ import type { FastifyBaseLogger } from "fastify";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { decryptSecret, isEncrypted } from "../lib/crypto.js";
 import {
+  cloudFetch,
   generateDiagPairingCode,
   getCloudStatus,
   listCloudStations,
@@ -64,6 +65,44 @@ function okJson(body: unknown, status = 200) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe("cloudFetch", () => {
+  function capturedHeaders() {
+    let headers: Record<string, string> | undefined;
+    vi.stubGlobal("fetch", (_url: string, init?: RequestInit) => {
+      headers = init?.headers as Record<string, string>;
+      return okJson({});
+    });
+    return () => headers;
+  }
+
+  it("omits content-type on bodyless requests (GET/DELETE)", async () => {
+    const headers = capturedHeaders();
+    // A JSON content-type with an empty body makes Fastify return 400 —
+    // DELETEs (portal unpublish, orphan cleanup) must not declare it.
+    await cloudFetch("https://cloud", "/portal/pages/tok", {
+      method: "DELETE",
+      token: "t",
+    });
+    expect(headers()?.["content-type"]).toBeUndefined();
+    expect(headers()?.authorization).toBe("Bearer t");
+
+    await cloudFetch("https://cloud", "/entitlements");
+    expect(headers()?.["content-type"]).toBeUndefined();
+  });
+
+  it("declares content-type when a payload is present, including null", async () => {
+    const headers = capturedHeaders();
+    await cloudFetch("https://cloud", "/portal/publish", {
+      body: { token: "x" },
+      method: "POST",
+    });
+    expect(headers()?.["content-type"]).toBe("application/json");
+
+    await cloudFetch("https://cloud", "/x", { body: null, method: "POST" });
+    expect(headers()?.["content-type"]).toBe("application/json");
+  });
 });
 
 describe("pairWithCloud", () => {
