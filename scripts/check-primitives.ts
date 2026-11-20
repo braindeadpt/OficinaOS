@@ -30,7 +30,7 @@ const BUDGET: Record<PrimitiveTag, number> = {
   input: 78,
   label: 67,
   select: 12,
-  textarea: 12,
+  textarea: 11,
 };
 
 interface Offence {

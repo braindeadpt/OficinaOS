@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   decryptWhatsAppConfig: vi.fn(),
   sendSms: vi.fn(),
   decryptSmsConfig: vi.fn(),
+  resolveSmsChannel: vi.fn(),
+  sendSmsMessage: vi.fn(),
 }));
 
 vi.mock("../services/notification-renderer.js", () => ({
@@ -28,6 +30,8 @@ vi.mock("../services/notification-sender.js", () => ({
 vi.mock("../services/sms.service.js", () => ({
   sendSms: mocks.sendSms,
   decryptSmsConfig: mocks.decryptSmsConfig,
+  resolveSmsChannel: mocks.resolveSmsChannel,
+  sendSmsMessage: mocks.sendSmsMessage,
 }));
 
 vi.mock("../repositories/notification.repository.js", () => ({
@@ -311,12 +315,12 @@ describe("processOutbox", () => {
       smsGatewayUrl: "http://192.168.1.50:8080",
       smsGatewayUser: "sms",
     });
-    mocks.decryptSmsConfig.mockReturnValue({
-      password: "p",
-      url: "http://192.168.1.50:8080",
-      user: "sms",
-    });
-    mocks.sendSms.mockResolvedValue({ success: true });
+    const channel = {
+      config: { password: "p", url: "http://192.168.1.50:8080", user: "sms" },
+      mode: "android" as const,
+    };
+    mocks.resolveSmsChannel.mockReturnValue(channel);
+    mocks.sendSmsMessage.mockResolvedValue({ success: true });
     mocks.findCustomerByPhone.mockResolvedValue({
       phone: "0912345678",
       whatsappConsent: true,
@@ -324,11 +328,12 @@ describe("processOutbox", () => {
 
     await processOutbox(prisma);
 
-    expect(mocks.sendSms).toHaveBeenCalledWith(
-      { password: "p", url: "http://192.168.1.50:8080", user: "sms" },
+    expect(mocks.sendSmsMessage).toHaveBeenCalledWith(
+      channel,
       "0912345678",
       "Reparação pronta",
-      "PT"
+      "PT",
+      "out-sms"
     );
     expect(mocks.sendWhatsApp).not.toHaveBeenCalled();
     expect(mocks.transitionOutboxEntry).toHaveBeenCalledWith(
@@ -356,12 +361,11 @@ describe("processOutbox", () => {
       smsGatewayUrl: "http://192.168.1.50:8080",
       smsGatewayUser: "sms",
     });
-    mocks.decryptSmsConfig.mockReturnValue({
-      password: "p",
-      url: "http://192.168.1.50:8080",
-      user: "sms",
+    mocks.resolveSmsChannel.mockReturnValue({
+      config: { password: "p", url: "http://192.168.1.50:8080", user: "sms" },
+      mode: "android",
     });
-    mocks.sendSms.mockResolvedValue({ success: true });
+    mocks.sendSmsMessage.mockResolvedValue({ success: true });
     mocks.findCustomerByPhone.mockResolvedValue({
       phone: "0912345678",
       whatsappConsent: true,
@@ -369,7 +373,7 @@ describe("processOutbox", () => {
 
     await processOutbox(prisma);
 
-    expect(mocks.sendSms).toHaveBeenCalled();
+    expect(mocks.sendSmsMessage).toHaveBeenCalled();
     expect(mocks.transitionOutboxEntry).toHaveBeenCalledWith(
       prisma,
       "out-sms2",

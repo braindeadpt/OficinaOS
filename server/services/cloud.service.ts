@@ -371,6 +371,17 @@ export async function syncCloudEntitlements(
       .catch((err) => log.warn({ err }, "whatsapp-bot sync failed"));
   }
 
+  // SMS cloud (módulo "sms"): migra as credenciais BulkSMS e recolhe
+  // replies enfileiradas pelo webhook da cloud — inbound managed que a
+  // app em LAN não consegue receber diretamente.
+  if (modules.includes("sms")) {
+    import("./sms.service.js")
+      .then(({ syncSmsCloud }) =>
+        syncSmsCloud(prisma, settings.cloudApiUrl ?? "", token, log, notifyCtx)
+      )
+      .catch((err) => log.warn({ err }, "sms-cloud sync failed"));
+  }
+
   const status = toStatus(updated);
   status.reachable = true;
   return status;

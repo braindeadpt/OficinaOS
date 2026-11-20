@@ -27,12 +27,24 @@ interface InvoicingSettings {
 }
 
 interface SmsSettings {
+  bulksmsTokenId: string | null;
+  cloudSender: string | null;
+  cloudWebhookUrl: string | null;
+  credentialsAtCloud: boolean;
+  customBodyFormat: "form" | "json";
+  customBodyTemplate: string | null;
+  customMethod: "GET" | "POST";
+  customSuccessText: string | null;
+  customUrl: string | null;
   enabled: boolean;
   gatewayUrl: string | null;
   gatewayUser: string | null;
+  hasBulksmsSecret: boolean;
+  hasCustomHeaders: boolean;
   hasPassword: boolean;
   inboundPath: string | null;
   moduleEnabled: boolean;
+  transport: "android" | "cloud" | "custom";
 }
 
 interface WhatsAppSettings {
@@ -129,9 +141,19 @@ interface SettingsState {
   }) => Promise<ShopSettings>;
   saveSmsSettings: (data: {
     enabled?: boolean;
+    transport?: "android" | "cloud" | "custom";
     gatewayPassword?: string;
     gatewayUrl?: string;
     gatewayUser?: string;
+    customUrl?: string;
+    customMethod?: "GET" | "POST";
+    customHeaders?: string;
+    customBodyTemplate?: string;
+    customBodyFormat?: "form" | "json";
+    customSuccessText?: string;
+    bulksmsTokenId?: string;
+    bulksmsTokenSecret?: string;
+    cloudSender?: string;
   }) => Promise<{ webhookRegistered: boolean }>;
   saveWhatsAppSettings: (data: {
     apiToken?: string;

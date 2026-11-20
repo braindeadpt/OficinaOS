@@ -125,6 +125,7 @@ enum NotifyChannel {
 enum OutboxStatus {
   QUEUED
   SENT
+  DELIVERED
   FAILED
   CANCELLED
 }
@@ -1199,12 +1200,42 @@ model ShopSettings {
   // sms-gate.app em modo Local Server. O envio é HTTP direto ao telemóvel;
   // o inbound chega por webhook registado no próprio aparelho.
   smsEnabled                  Boolean   @default(false)
+  // Transporte de envio: "android" = sms-gate na LAN (free) · "custom" =
+  // API HTTP arbitrária configurada pela loja (free, outbound only) ·
+  // "cloud" = provider gerido via OficinaOS Cloud (Pro module "sms" —
+  // credenciais BulkSMS na cloud, inbound/reports por webhook cloud).
+  smsTransport                String    @default("android")
   smsGatewayUrl               String?
   smsGatewayUser              String?
   smsGatewayPasswordEncrypted String?
   // Segredo no path do webhook inbound — o gateway não suporta headers
   // de auth, por isso a rota é /api/public/sms/inbound/<token>.
   smsWebhookToken             String?
+  // ── Transporte "custom" (free) — a loja descreve a API do provider
+  // dela: URL + headers (auth incluída, cifrado) + body template com
+  // placeholders {{to}}/{{text}}/{{from}} + formato json|form + texto
+  // opcional que a resposta tem de conter para contar como enviado.
+  smsCustomUrl                String?
+  smsCustomMethod             String    @default("POST")
+  smsCustomHeadersEncrypted   String?
+  smsCustomBodyTemplate       String?
+  smsCustomBodyFormat         String    @default("json")
+  smsCustomSuccessText        String?
+  // ── Transporte "cloud" (Pro module "sms") — BulkSMS da loja enviado
+  // pela cloud (POST /sms/send, 402 server-side). O par tokenId:secret
+  // vive local só até a cloud aceitar — depois é apagado como o token
+  // Meta. smsCloudSender é o remetente alfanumérico registado na conta
+  // BulkSMS (ex.: "OFICINA"); smsWebhookSecret gera o path do webhook
+  // de replies que a cloud regista na conta da loja.
+  smsBulksmsTokenId           String?
+  smsBulksmsSecretEncrypted   String?
+  smsCloudSender              String?
+  smsCredentialsAtCloud       Boolean   @default(false)
+  smsCloudWebhookSecret       String?
+  // URL público do webhook (cloud.devolve no push — a loja regista-o na
+  // Web App BulkSMS com scopes RECEIVED e SENT; o Webhooks API exige a
+  // password da conta, por isso a cloud não o pode auto-registar).
+  smsCloudWebhookUrl          String?
   // Remarketing automático (Pro module "remarketing") — proactive WhatsApp
   // re-engagement for customers idle for remarketingDays, throttled by a
   // cooldown and sent as a Meta-approved template message.

@@ -12,6 +12,7 @@ import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import { createAuditLog } from "./audit.service.js";
 import { notify } from "./notification-dispatch.js";
+import { resolveSmsChannel } from "./sms.service.js";
 
 // Sending a signing link is a staff-initiated action: the employee at the
 // counter would otherwise copy the URL into the shop's own WhatsApp or an
@@ -193,9 +194,9 @@ export async function sendSignatureLink(
   }
 
   const settings = await findShopSettingsUnique(app.prisma);
-  // SMS local (gateway Android) é free — o módulo "sms" gateia só os
-  // transportes geridos futuros, não o gateway da loja.
-  const smsReady = Boolean(settings?.smsEnabled);
+  // Canal SMS pronto = toggle + transporte resolvível (android LAN,
+  // custom HTTP ou cloud — o entitlement Pro enforça-se lá fora).
+  const smsReady = resolveSmsChannel(settings) !== null;
   if (!(settings?.whatsappEnabled || smsReady)) {
     throw new AppError("SIGNATURE_LINK_NO_CHANNEL");
   }

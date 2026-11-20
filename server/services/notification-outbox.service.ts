@@ -12,7 +12,11 @@ import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import { logger } from "../utils/logger.js";
 import { renderTemplate } from "./notification-renderer.js";
-import { decryptSmsConfig, sendSms } from "./sms.service.js";
+import {
+  resolveSmsChannel,
+  type SmsChannel,
+  sendSmsMessage,
+} from "./sms.service.js";
 import {
   resolveWhatsAppChannel,
   sendWhatsAppText,
@@ -240,7 +244,7 @@ async function processWhatsAppEntry(
 async function processSmsEntry(
   prisma: DbClient,
   entry: OutboxEntry,
-  config: { password: string; url: string; user: string },
+  channel: SmsChannel,
   countryCode: string,
   shopPhone: string | null
 ): Promise<void> {
@@ -251,11 +255,14 @@ async function processSmsEntry(
   if (blocked) {
     return;
   }
-  const result = await sendSms(
-    config,
+  // entry.id vai como dedupeId — no transporte cloud a cloud mapeia-o
+  // para o deduplication-id do provider e retries não duplicam envios.
+  const result = await sendSmsMessage(
+    channel,
     entry.recipientPhone,
     entry.renderedBody,
-    countryCode
+    countryCode,
+    entry.id
   );
   if (result.success) {
     await markSent(prisma, entry.id);
@@ -277,7 +284,7 @@ async function processSmsEntry(
 }
 
 interface ChannelConfigs {
-  sms: { password: string; url: string; user: string } | null;
+  sms: SmsChannel | null;
   whatsapp: WhatsAppChannel | null;
 }
 
@@ -405,22 +412,13 @@ type ShopSettingsRow = NonNullable<
   Awaited<ReturnType<typeof findShopSettingsUnique>>
 >;
 
-function getSmsConfig(row: ShopSettingsRow | null): {
-  password: string;
-  url: string;
-  user: string;
-} | null {
-  // SMS local (gateway Android) é free; o entitlement "sms" gateia só
-  // transportes geridos — um provider cloud futuro resolve-se aqui à
-  // parte, com a sua própria verificação de entitlement.
-  if (!row?.smsEnabled) {
+function getSmsConfig(row: ShopSettingsRow | null): SmsChannel | null {
+  // Resolve o transporte ativo — android (LAN, free), custom (HTTP da
+  // loja, free) ou cloud (BulkSMS relay, Pro "sms" enforçado lá fora).
+  if (!row) {
     return null;
   }
-  return decryptSmsConfig({
-    gatewayPasswordEncrypted: row.smsGatewayPasswordEncrypted,
-    gatewayUrl: row.smsGatewayUrl,
-    gatewayUser: row.smsGatewayUser,
-  });
+  return resolveSmsChannel(row);
 }
 
 export async function getOutboxLogs(
