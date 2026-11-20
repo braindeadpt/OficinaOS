@@ -48,7 +48,7 @@ export default function JobIntakeChips({
   intakeChecklist,
   qcChecklist,
 }: JobIntakeChipsProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const intakeChecks = renderChecklist(
     intakeChecklist,
     t("jobs_detail_checklist"),
@@ -67,14 +67,25 @@ export default function JobIntakeChips({
           <span className="font-label text-[11px] text-on-surface-variant uppercase tracking-widest">
             {t("jobs_detail_accessories")}
           </span>
-          {accessories.map((a) => (
-            <span
-              className="rounded-full bg-surface-container-highest px-3 py-1 font-label text-on-surface text-xs"
-              key={a}
-            >
-              {t(`intake.accessory_${a}`, { defaultValue: a })}
-            </span>
-          ))}
+          {accessories.map((a) =>
+            // Old intakes stored chip keys (translated via intake.accessory_*);
+            // new intakes store one free-text entry — show it verbatim.
+            i18n.exists(`intake.accessory_${a}`) ? (
+              <span
+                className="rounded-full bg-surface-container-highest px-3 py-1 font-label text-on-surface text-xs"
+                key={a}
+              >
+                {t(`intake.accessory_${a}`)}
+              </span>
+            ) : (
+              <span
+                className="font-body text-on-surface-variant text-xs"
+                key={a}
+              >
+                {a}
+              </span>
+            )
+          )}
         </div>
       )}
       {intakeChecks}

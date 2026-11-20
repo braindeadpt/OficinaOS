@@ -7,7 +7,9 @@ export type CheckState = "ok" | "fail" | null;
 export type IntakeChecklist = Record<string, CheckState>;
 
 export interface IntakeFormData {
-  accessories: string[];
+  // Free text: whatever the receptionist writes came/stayed with the
+  // device ("carregador original, caixa, ecrã antigo p/ reutilizar").
+  accessories: string;
   brand: string;
   brandId: string;
   checklist: IntakeChecklist;
@@ -39,15 +41,6 @@ export interface IntakeFormData {
 
 export const MAX_PHOTOS = 5;
 
-export const INTAKE_ACCESSORY_ITEMS = [
-  "charger",
-  "case",
-  "simCard",
-  "sdCard",
-  "box",
-  "other",
-] as const;
-
 export const INTAKE_CHECK_ITEMS = [
   "powersOn",
   "screen",
@@ -72,7 +65,7 @@ export function defaultDeliveryDatetime(now: Date = new Date()): string {
 }
 
 export const INITIAL_FORM: IntakeFormData = {
-  accessories: [],
+  accessories: "",
   brand: "",
   brandId: "",
   checklist: {},

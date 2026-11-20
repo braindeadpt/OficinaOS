@@ -52,7 +52,7 @@ export const createJobSchema = z.object({
     .max(2000),
   conditionNotes: z.string().max(2000).optional(),
   deviceUnlockCode: z.string().max(64).optional(),
-  accessories: z.array(z.string().max(40)).max(12).optional(),
+  accessories: z.array(z.string().max(500)).max(12).optional(),
   intakeChecklist: z
     .record(z.string(), z.enum(["ok", "fail"]).nullable())
     .optional(),
@@ -116,7 +116,7 @@ export const updateJobSchema = z.object({
   color: z.string().max(40).optional(),
   imei: serialField,
   deviceUnlockCode: z.string().max(64).nullable().optional(),
-  accessories: z.array(z.string().max(40)).max(12).optional(),
+  accessories: z.array(z.string().max(500)).max(12).optional(),
   intakeChecklist: z
     .record(z.string(), z.enum(["ok", "fail"]).nullable())
     .nullable()

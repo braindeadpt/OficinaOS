@@ -7,9 +7,9 @@ import { Field } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { fetchLoanerDevices, type LoanerDevice } from "@/lib/api-loaners";
 import { buildJobPayload } from "@/lib/build-job-payload";
-import AccessoriesPicker from "./accessories-picker";
 import FunctionalChecklist from "./functional-checklist";
 import RemoteSignatureDialog from "./remote-signature-dialog";
 import {
@@ -85,11 +85,16 @@ export default function Step2Content({
           )}
         </div>
 
-        <AccessoriesPicker
-          onChange={(v) => update("accessories", v)}
-          t={t}
-          value={form.accessories}
-        />
+        <Field id="accessories" label={t("intake.accessories_section")}>
+          <Textarea
+            id="accessories"
+            maxLength={500}
+            onChange={(e) => update("accessories", e.target.value)}
+            placeholder={t("intake.accessories_placeholder")}
+            rows={2}
+            value={form.accessories}
+          />
+        </Field>
 
         <FunctionalChecklist
           onChange={(v) => update("checklist", v)}

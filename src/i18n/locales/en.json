@@ -851,6 +851,7 @@
     "unlock_code": "Unlock code / PIN",
     "unlock_code_placeholder": "e.g. 1234 or pattern",
     "accessories_section": "Accessories received with the device",
+    "accessories_placeholder": "e.g. original charger, box, old screen for reuse...",
     "accessory_charger": "Charger",
     "accessory_case": "Case",
     "accessory_simCard": "SIM card",
