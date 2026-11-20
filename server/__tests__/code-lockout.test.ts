@@ -1,42 +1,78 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createCodeLockout, LOCKOUT_THRESHOLD } from "../utils/code-lockout.js";
 
+interface Row {
+  code: string;
+  failures: number;
+  lockedUntil: Date | null;
+}
+
+function fakePrisma() {
+  const rows = new Map<string, Row>();
+  return {
+    codeLockout: {
+      findUnique: vi.fn(({ where }: { where: { code: string } }) =>
+        Promise.resolve(rows.get(where.code) ?? null)
+      ),
+      deleteMany: vi.fn(({ where }: { where: { code: string } }) => {
+        rows.delete(where.code);
+        return Promise.resolve({ count: 1 });
+      }),
+      upsert: vi.fn(
+        ({
+          where,
+          create,
+          update,
+        }: {
+          where: { code: string };
+          create: Row;
+          update: Partial<Row>;
+        }) => {
+          const existing = rows.get(where.code);
+          rows.set(where.code, existing ? { ...existing, ...update } : create);
+          return Promise.resolve(rows.get(where.code));
+        }
+      ),
+    },
+  };
+}
+
 describe("createCodeLockout", () => {
-  it("is not locked before any failures", () => {
-    const lockout = createCodeLockout();
-    expect(lockout.isLocked("ABC123")).toBe(false);
+  it("is not locked before any failures", async () => {
+    const lockout = createCodeLockout(fakePrisma() as never);
+    expect(await lockout.isLocked("ABC123")).toBe(false);
   });
 
-  it("does not lock below the threshold", () => {
-    const lockout = createCodeLockout();
+  it("does not lock below the threshold", async () => {
+    const lockout = createCodeLockout(fakePrisma() as never);
     for (let i = 0; i < LOCKOUT_THRESHOLD - 1; i++) {
-      lockout.trackFailure("ABC123");
+      await lockout.trackFailure("ABC123");
     }
-    expect(lockout.isLocked("ABC123")).toBe(false);
+    expect(await lockout.isLocked("ABC123")).toBe(false);
   });
 
-  it("locks the code after LOCKOUT_THRESHOLD failures", () => {
-    const lockout = createCodeLockout();
+  it("locks the code after LOCKOUT_THRESHOLD failures", async () => {
+    const lockout = createCodeLockout(fakePrisma() as never);
     for (let i = 0; i < LOCKOUT_THRESHOLD; i++) {
-      lockout.trackFailure("ABC123");
+      await lockout.trackFailure("ABC123");
     }
-    expect(lockout.isLocked("ABC123")).toBe(true);
+    expect(await lockout.isLocked("ABC123")).toBe(true);
   });
 
-  it("does not leak failures across codes", () => {
-    const lockout = createCodeLockout();
+  it("does not leak failures across codes", async () => {
+    const lockout = createCodeLockout(fakePrisma() as never);
     for (let i = 0; i < LOCKOUT_THRESHOLD; i++) {
-      lockout.trackFailure("ABC123");
+      await lockout.trackFailure("ABC123");
     }
-    expect(lockout.isLocked("DEF456")).toBe(false);
+    expect(await lockout.isLocked("DEF456")).toBe(false);
   });
 
-  it("clear resets the lockout", () => {
-    const lockout = createCodeLockout();
+  it("clear resets the lockout", async () => {
+    const lockout = createCodeLockout(fakePrisma() as never);
     for (let i = 0; i < LOCKOUT_THRESHOLD; i++) {
-      lockout.trackFailure("ABC123");
+      await lockout.trackFailure("ABC123");
     }
-    lockout.clear("ABC123");
-    expect(lockout.isLocked("ABC123")).toBe(false);
+    await lockout.clear("ABC123");
+    expect(await lockout.isLocked("ABC123")).toBe(false);
   });
 });
