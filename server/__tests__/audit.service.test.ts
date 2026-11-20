@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createAuditLog } from "../services/audit.service.js";
+import {
+  cleanupOldAuditLogs,
+  createAuditLog,
+} from "../services/audit.service.js";
 
 const auditLogCreate = vi.fn();
+const auditLogDeleteMany = vi.fn();
 
 const prisma = {
-  auditLog: { create: auditLogCreate },
+  auditLog: { create: auditLogCreate, deleteMany: auditLogDeleteMany },
 } as unknown as Parameters<typeof createAuditLog>[0];
 
 beforeEach(() => {
@@ -109,5 +113,21 @@ describe("createAuditLog", () => {
     const call = auditLogCreate.mock.calls[0][0];
     expect(call.data.metadata).toBeUndefined();
     expect(call.data.note).toBe("Customer called");
+  });
+});
+
+describe("cleanupOldAuditLogs", () => {
+  it("deletes entries older than 24 months", async () => {
+    auditLogDeleteMany.mockResolvedValue({ count: 3 });
+
+    await cleanupOldAuditLogs(prisma);
+
+    const call = auditLogDeleteMany.mock.calls[0][0];
+    const cutoff = call.where.createdAt.lt as Date;
+    const expectedMin = new Date();
+    expectedMin.setMonth(expectedMin.getMonth() - 24);
+    // Cutoff was computed moments ago — it must sit just under 24 months back.
+    expect(cutoff.getTime()).toBeLessThanOrEqual(expectedMin.getTime());
+    expect(cutoff.getTime()).toBeGreaterThan(expectedMin.getTime() - 60_000);
   });
 });
