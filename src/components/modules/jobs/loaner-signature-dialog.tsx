@@ -1,6 +1,7 @@
 import QRCode from "qrcode";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import SignaturePad from "@/components/reports/signature-pad";
 import { Dialog } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
@@ -44,6 +45,11 @@ export default function LoanerSignatureDialog({
   open,
 }: LoanerSignatureDialogProps) {
   const { t } = useTranslation();
+  // "here": the customer draws on this screen (staff tablet/counter).
+  // "qr": a signing session is created and the customer opens /sign/:token.
+  const [mode, setMode] = useState<"here" | "qr">("here");
+  const [padDataUrl, setPadDataUrl] = useState<string | null>(null);
+  const [savingPad, setSavingPad] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -102,13 +108,46 @@ export default function LoanerSignatureDialog({
     }
   }, [jobId, invalidatePending]);
 
+  const savePadSignature = useCallback(async () => {
+    if (!(padDataUrl && jobId)) {
+      return;
+    }
+    setSavingPad(true);
+    setLoadError(false);
+    try {
+      await api.post(`/jobs/${jobId}/loaner-signature`, {
+        signatureDataUrl: padDataUrl,
+      });
+      onSignedRef.current();
+      onClose();
+    } catch {
+      setLoadError(true);
+    } finally {
+      setSavingPad(false);
+    }
+  }, [jobId, onClose, padDataUrl]);
+
   useEffect(() => {
-    if (!open) {
+    // Dialog children unmount on close but this component's state persists —
+    // reset so a reopen starts on a clean pad/mode, not stale leftovers.
+    if (open) {
+      setMode("here");
+      setPadDataUrl(null);
+      setSavingPad(false);
+      setLoadError(false);
+      setStale(false);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    // No session is created while the staff screen is the signing surface —
+    // opening the QR tab is what mints the link.
+    if (!(open && mode === "qr")) {
       return;
     }
     startSession();
     return invalidatePending;
-  }, [open, startSession, invalidatePending]);
+  }, [open, mode, startSession, invalidatePending]);
 
   useEffect(() => {
     if (!(open && qrDataUrl)) {
@@ -153,11 +192,11 @@ export default function LoanerSignatureDialog({
     return () => clearInterval(poll);
   }, [open, qrDataUrl, jobId, onClose]);
 
-  let content: React.ReactNode;
+  let qrContent: React.ReactNode;
   if (loadError) {
     // needsAppUrl: container install without APP_URL — the fix is config,
     // not a retry, so it gets its own message and no retry button.
-    content = (
+    qrContent = (
       <div className="mt-4 flex flex-col items-center gap-2">
         <p className="text-center text-error text-sm" role="alert">
           {t(
@@ -180,7 +219,7 @@ export default function LoanerSignatureDialog({
   } else if (stale) {
     // The job changed while the link was live — the signature no longer
     // covers the current agreement, so it can't be attached.
-    content = (
+    qrContent = (
       <div className="mt-4 flex flex-col items-center gap-2">
         <p className="text-center text-error text-sm" role="alert">
           {t("jobs_detail_loaner_sign_stale")}
@@ -195,7 +234,7 @@ export default function LoanerSignatureDialog({
       </div>
     );
   } else if (qrDataUrl) {
-    content = (
+    qrContent = (
       <>
         <img
           alt={t("intake.sign_remote_qr_alt")}
@@ -267,7 +306,7 @@ export default function LoanerSignatureDialog({
       </>
     );
   } else {
-    content = (
+    qrContent = (
       <div className="flex justify-center py-12">
         <Icon
           className="animate-spin text-3xl text-on-surface-variant"
@@ -277,15 +316,78 @@ export default function LoanerSignatureDialog({
     );
   }
 
+  const modeBtn = (active: boolean) =>
+    `flex items-center justify-center gap-2 rounded-lg px-3 py-2 font-label text-sm transition-colors ${
+      active
+        ? "bg-primary text-on-primary"
+        : "bg-surface-container-highest text-on-surface-variant hover:text-on-surface"
+    }`;
+
   return (
     <Dialog
-      description={t("jobs_detail_loaner_sign_scan")}
+      description={
+        mode === "qr"
+          ? t("jobs_detail_loaner_sign_scan")
+          : t("jobs_detail_loaner_sign_here_hint")
+      }
       onClose={onClose}
       open={open}
       size="sm"
       title={t("jobs_detail_loaner_sign_title")}
     >
-      <div className="flex flex-col items-center">{content}</div>
+      <div className="flex w-full flex-col items-center">
+        <div className="mb-4 grid w-full grid-cols-2 gap-2">
+          <button
+            className={modeBtn(mode === "here")}
+            onClick={() => setMode("here")}
+            type="button"
+          >
+            <Icon className="text-lg" name="draw" />
+            {t("jobs_detail_loaner_sign_mode_here")}
+          </button>
+          <button
+            className={modeBtn(mode === "qr")}
+            onClick={() => setMode("qr")}
+            type="button"
+          >
+            <Icon className="text-lg" name="qr_code" />
+            {t("jobs_detail_loaner_sign_mode_qr")}
+          </button>
+        </div>
+        {mode === "here" ? (
+          <div className="w-full">
+            <SignaturePad onChange={setPadDataUrl} />
+            {padDataUrl && (
+              <p className="ms-1 mt-1 flex items-center gap-1 font-label text-success text-xs">
+                <Icon className="text-sm" name="check_circle" />
+                {t("intake.signature_captured")}
+              </p>
+            )}
+            <button
+              className="mt-3 w-full rounded-xl bg-primary px-4 py-2.5 font-label text-on-primary text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!padDataUrl || savingPad}
+              onClick={savePadSignature}
+              type="button"
+            >
+              {savingPad ? (
+                <Icon
+                  className="animate-spin align-middle text-base"
+                  name="progress_activity"
+                />
+              ) : (
+                t("jobs_detail_loaner_sign_save")
+              )}
+            </button>
+            {loadError && mode === "here" && (
+              <p className="mt-2 text-center text-error text-sm" role="alert">
+                {t("intake.sign_remote_error")}
+              </p>
+            )}
+          </div>
+        ) : (
+          qrContent
+        )}
+      </div>
     </Dialog>
   );
 }

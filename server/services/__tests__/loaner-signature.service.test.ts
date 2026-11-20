@@ -125,7 +125,13 @@ describe("createLoanerSignatureSession", () => {
 describe("attachLoanerSignature", () => {
   it("moves signature, hash and snapshot onto the job", async () => {
     const prisma = mockPrisma(signedSession());
-    const result = await attachLoanerSignature(prisma, "job-1", TOKEN, "u-1");
+    const result = await attachLoanerSignature(
+      prisma,
+      "job-1",
+      { token: TOKEN },
+      "pt",
+      "u-1"
+    );
     expect(result.ok).toBe(true);
     expect(prisma.job.update).toHaveBeenCalledWith({
       where: { id: "job-1" },
@@ -148,7 +154,7 @@ describe("attachLoanerSignature", () => {
       loanerNote: "nota diferente",
     });
     await expect(
-      attachLoanerSignature(prisma, "job-1", TOKEN, "u-1")
+      attachLoanerSignature(prisma, "job-1", { token: TOKEN }, "pt", "u-1")
     ).rejects.toMatchObject({ code: "SIGNATURE_STALE" });
     expect(prisma.job.update).not.toHaveBeenCalled();
     expect(prisma.signatureSession.delete).not.toHaveBeenCalled();
@@ -159,14 +165,14 @@ describe("attachLoanerSignature", () => {
       signedSession({ signatureDataUrl: null, signedAt: null })
     );
     await expect(
-      attachLoanerSignature(prisma, "job-1", TOKEN, "u-1")
+      attachLoanerSignature(prisma, "job-1", { token: TOKEN }, "pt", "u-1")
     ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
   });
 
   it("rejects an intake session — wrong document kind", async () => {
     const prisma = mockPrisma(signedSession({ snapshot: { v: 2 } }));
     await expect(
-      attachLoanerSignature(prisma, "job-1", TOKEN, "u-1")
+      attachLoanerSignature(prisma, "job-1", { token: TOKEN }, "pt", "u-1")
     ).rejects.toMatchObject({ code: "SIGNATURE_STALE" });
   });
 
@@ -175,19 +181,103 @@ describe("attachLoanerSignature", () => {
       signedSession({ expiresAt: new Date(Date.now() - 1000) })
     );
     await expect(
-      attachLoanerSignature(expired, "job-1", TOKEN, "u-1")
+      attachLoanerSignature(expired, "job-1", { token: TOKEN }, "pt", "u-1")
     ).rejects.toMatchObject({ code: "SIGNATURE_SESSION_EXPIRED" });
 
     const missing = mockPrisma(null);
     await expect(
-      attachLoanerSignature(missing, "job-1", TOKEN, "u-1")
+      attachLoanerSignature(missing, "job-1", { token: TOKEN }, "pt", "u-1")
     ).rejects.toMatchObject({ code: "SIGNATURE_SESSION_EXPIRED" });
   });
 
   it("rejects malformed tokens without hitting the database", async () => {
     const prisma = mockPrisma();
     await expect(
-      attachLoanerSignature(prisma, "job-1", "not-a-token", "u-1")
+      attachLoanerSignature(
+        prisma,
+        "job-1",
+        { token: "not-a-token" },
+        "pt",
+        "u-1"
+      )
     ).rejects.toBeInstanceOf(AppError);
+  });
+
+  it("attaches an in-person signature — doc rebuilt from the job, via in_person", async () => {
+    const prisma = mockPrisma();
+    const result = await attachLoanerSignature(
+      prisma,
+      "job-1",
+      { signatureDataUrl: VALID_PNG },
+      "pt",
+      "u-1"
+    );
+    expect(result.ok).toBe(true);
+    const call = vi.mocked(prisma.job.update).mock.calls[0][0] as unknown as {
+      data: Record<string, unknown>;
+    };
+    expect(call.data.loanerAgreementSignatureDataUrl).toBe(VALID_PNG);
+    expect(call.data.loanerAgreementDocumentHash).toBe(
+      intakeDocumentHash(DOC, VALID_PNG)
+    );
+    expect(call.data.loanerAgreementSignedVia).toBe("in_person");
+    expect(call.data.loanerAgreementSignerIp).toBeNull();
+    expect(call.data.loanerAgreementSignerUserAgent).toBeNull();
+    expect(call.data.loanerAgreementSnapshot).toEqual(DOC);
+    expect(prisma.signatureSession.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("in-person attach still rejects jobs without an active loaner", async () => {
+    const prisma = mockPrisma();
+    prisma.job.findUnique.mockResolvedValue({ ...JOB, hasLoanerDevice: false });
+    await expect(
+      attachLoanerSignature(
+        prisma,
+        "job-1",
+        { signatureDataUrl: VALID_PNG },
+        "pt",
+        "u-1"
+      )
+    ).rejects.toMatchObject({ code: "JOB_NOT_FOUND" });
+  });
+
+  it("requires exactly one of token or signatureDataUrl", async () => {
+    const prisma = mockPrisma();
+    await expect(
+      attachLoanerSignature(prisma, "job-1", {}, "pt", "u-1")
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    await expect(
+      attachLoanerSignature(
+        prisma,
+        "job-1",
+        { signatureDataUrl: VALID_PNG, token: TOKEN },
+        "pt",
+        "u-1"
+      )
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    expect(prisma.job.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed or oversized in-person signatures before the tx", async () => {
+    const prisma = mockPrisma();
+    await expect(
+      attachLoanerSignature(
+        prisma,
+        "job-1",
+        { signatureDataUrl: "data:image/svg+xml,<svg/>" },
+        "pt",
+        "u-1"
+      )
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    await expect(
+      attachLoanerSignature(
+        prisma,
+        "job-1",
+        { signatureDataUrl: `data:image/png;base64,${"A".repeat(700 * 1024)}` },
+        "pt",
+        "u-1"
+      )
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    expect(prisma.job.findUnique).not.toHaveBeenCalled();
   });
 });

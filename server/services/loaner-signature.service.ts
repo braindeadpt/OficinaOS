@@ -5,6 +5,7 @@ import {
   buildLoanerAgreementDocument,
   type LoanerAgreementDocument,
 } from "@shared/loaner-agreement-document.js";
+import { SIGNATURE_DATA_URL_RE } from "@shared/schemas/signature.schema.js";
 import type { FastifyBaseLogger } from "fastify";
 import { createAuditLog } from "./audit.service.js";
 import {
@@ -15,6 +16,8 @@ import {
 import {
   consumeLoanerSignatureSession,
   createSignatureSession,
+  intakeDocumentHash,
+  MAX_SIGNATURE_BYTES,
 } from "./signature-session.service.js";
 
 // The loaner agreement signs through the same SignatureSession machinery as
@@ -72,18 +75,52 @@ export async function createLoanerSignatureSession(
   return { ...session, cloudSignUrl };
 }
 
+export interface AttachLoanerSignatureInput {
+  /** In-person flow: the customer drew on the staff screen (XOR token). */
+  signatureDataUrl?: string;
+  /** Remote flow: the signed SignatureSession token (XOR signatureDataUrl). */
+  token?: string;
+}
+
+interface AttachedSignatureFields {
+  dataUrl: string;
+  document: LoanerAgreementDocument;
+  documentHash: string | null;
+  signedAt: Date | null;
+  signedVia: string;
+  signerIp: string | null;
+  signerUserAgent: string | null;
+}
+
 /**
- * Moves a signed session onto the job: consume verifies the session is
- * signed and that the job still rebuilds the exact snapshot the customer
+ * Moves a signature onto the job. Remote path: consume verifies the session
+ * is signed and that the job still rebuilds the exact snapshot the customer
  * signed — a unit swap, note edit or customer change since the link was
  * made turns this into SIGNATURE_STALE instead of a dishonest document.
+ * In-person path: the document is rebuilt from the job inside this same
+ * transaction, so the hash can only ever cover what the database holds.
  */
 export async function attachLoanerSignature(
   prisma: PrismaClient,
   jobId: string,
-  token: string,
+  input: AttachLoanerSignatureInput,
+  locale: string,
   userId: string
 ) {
+  const signatureDataUrl =
+    typeof input.signatureDataUrl === "string" ? input.signatureDataUrl : null;
+  const token = typeof input.token === "string" ? input.token : null;
+  if (
+    (token === null) === (signatureDataUrl === null) ||
+    (signatureDataUrl !== null &&
+      !(
+        SIGNATURE_DATA_URL_RE.test(signatureDataUrl) &&
+        signatureDataUrl.length <= MAX_SIGNATURE_BYTES
+      ))
+  ) {
+    throw new AppError("VALIDATION_ERROR");
+  }
+
   return await prisma.$transaction(async (tx) => {
     const job = await tx.job.findUnique({
       where: { id: jobId },
@@ -92,25 +129,55 @@ export async function attachLoanerSignature(
     if (!(job?.hasLoanerDevice && job.status !== "CANCELLED")) {
       throw new AppError("JOB_NOT_FOUND");
     }
-    const session = await consumeLoanerSignatureSession(tx, token, job);
-    const snapshot = session.snapshot as unknown as LoanerAgreementDocument;
+
+    const fields: AttachedSignatureFields = signatureDataUrl
+      ? (() => {
+          const document = buildLoanerAgreementDocument(job, locale);
+          return {
+            dataUrl: signatureDataUrl,
+            document,
+            documentHash: intakeDocumentHash(document, signatureDataUrl),
+            signedAt: new Date(),
+            signedVia: "in_person",
+            signerIp: null,
+            signerUserAgent: null,
+          };
+        })()
+      : await (async () => {
+          const session = await consumeLoanerSignatureSession(
+            tx,
+            token as string,
+            job
+          );
+          return {
+            dataUrl: session.signatureDataUrl as string,
+            document: session.snapshot as unknown as LoanerAgreementDocument,
+            documentHash: session.documentHash,
+            signedAt: session.signedAt,
+            signedVia: "remote",
+            signerIp: session.signerIp,
+            signerUserAgent: session.signerUserAgent,
+          };
+        })();
+
     await tx.job.update({
       where: { id: job.id },
       data: {
-        loanerAgreementSignatureDataUrl: session.signatureDataUrl,
-        loanerAgreementDocumentHash: session.documentHash,
-        loanerAgreementSignedAt: session.signedAt,
-        loanerAgreementSignedVia: "remote",
-        loanerAgreementSignerIp: session.signerIp,
-        loanerAgreementSignerUserAgent: session.signerUserAgent,
-        loanerAgreementSnapshot: snapshot as unknown as Prisma.InputJsonValue,
+        loanerAgreementSignatureDataUrl: fields.dataUrl,
+        loanerAgreementDocumentHash: fields.documentHash,
+        loanerAgreementSignedAt: fields.signedAt,
+        loanerAgreementSignedVia: fields.signedVia,
+        loanerAgreementSignerIp: fields.signerIp,
+        loanerAgreementSignerUserAgent: fields.signerUserAgent,
+        loanerAgreementSnapshot:
+          fields.document as unknown as Prisma.InputJsonValue,
       },
     });
     await createAuditLog(tx, {
       action: AuditAction.JOB_UPDATED,
       jobId: job.id,
       note: "loaner-agreement-signed",
-      toValue: session.documentHash ?? undefined,
+      toValue: fields.documentHash ?? undefined,
       userId,
     });
     return { ok: true };

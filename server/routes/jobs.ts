@@ -1041,14 +1041,20 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
     },
     async (req, reply) => {
       const { id } = req.params as { id: string };
-      const token = (req.body as { token?: string } | undefined)?.token;
-      if (typeof token !== "string") {
-        throw new AppError("VALIDATION_ERROR");
-      }
+      const body = req.body as
+        | { signatureDataUrl?: unknown; token?: unknown }
+        | undefined;
       const result = await attachLoanerSignature(
         app.prisma,
         id,
-        token,
+        {
+          signatureDataUrl:
+            typeof body?.signatureDataUrl === "string"
+              ? body.signatureDataUrl
+              : undefined,
+          token: typeof body?.token === "string" ? body.token : undefined,
+        },
+        req.locale,
         getUserId(req)
       );
       return reply.send(result);

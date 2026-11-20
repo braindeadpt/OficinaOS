@@ -23,7 +23,7 @@ const SESSION_TTL_MS = 15 * 60 * 1000;
 const TOKEN_RE = /^[a-f0-9]{64}$/;
 // canvas.toDataURL("image/png") output — a stroke on a mostly-blank canvas is
 // tens of KB; 500 KB rejects anything that is not a real signature.
-const MAX_SIGNATURE_BYTES = 500 * 1024;
+export const MAX_SIGNATURE_BYTES = 500 * 1024;
 
 /** sha256 of the canonical document + the signature image — the job's proof. */
 export function intakeDocumentHash(
