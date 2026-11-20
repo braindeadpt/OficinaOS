@@ -448,12 +448,20 @@ const deviceCatalog = (
 };
 
 async function seedDevices() {
+  // Case-insensitive brand matching — see device-catalog.service.ts: older
+  // seeds created "Vivo" while the catalog says "vivo".
+  const existingBrands = await prisma.brand.findMany({
+    select: { id: true, name: true },
+  });
+  const brandsByLower = new Map(
+    existingBrands.map((b) => [b.name.toLowerCase(), b])
+  );
   for (const { name, models } of deviceCatalog.brands) {
-    const brand = await prisma.brand.upsert({
-      where: { name },
-      update: {},
-      create: { name },
-    });
+    let brand = brandsByLower.get(name.toLowerCase());
+    if (!brand) {
+      brand = await prisma.brand.create({ data: { name } });
+      brandsByLower.set(name.toLowerCase(), brand);
+    }
     const existing = await prisma.device.findMany({
       select: { category: true, id: true, model: true },
       where: { brandId: brand.id },

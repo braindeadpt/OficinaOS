@@ -156,6 +156,37 @@ describe.skipIf(!serverReachable)("device catalog sync (integration)", () => {
     });
   });
 
+  it("merges catalog brands case-insensitively into existing rows", async () => {
+    const db = getPrisma();
+    // Simulate a pre-upgrade DB: the catalog already synced "vivo", but an
+    // older install had seeded "Vivo" — rename to that casing, rewind the
+    // version stamp and re-sync as an upgrade would.
+    await db.brand.update({
+      data: { name: "Vivo" },
+      where: { name: "vivo" },
+    });
+    await db.shopSettings.updateMany({
+      data: { deviceCatalogVersion: 0 },
+    });
+    await syncDeviceCatalogIfStale(db);
+
+    const vivoBrands = await db.brand.findMany({
+      where: { name: { contains: "vivo", mode: "insensitive" } },
+    });
+    expect(vivoBrands).toHaveLength(1);
+    expect(vivoBrands[0]?.name).toBe("Vivo");
+
+    // Catalog models are still attached to that same brand.
+    const deviceCount = await db.device.count({
+      where: { brandId: vivoBrands[0]?.id },
+    });
+    expect(deviceCount).toBeGreaterThan(30);
+
+    await db.shopSettings.updateMany({
+      data: { deviceCatalogVersion: DEVICE_CATALOG_VERSION },
+    });
+  }, 120_000);
+
   it("never deletes shop-created brands or models", async () => {
     const db = getPrisma();
     const custom = await db.brand.create({ data: { name: "Marca Local" } });

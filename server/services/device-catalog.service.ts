@@ -40,12 +40,22 @@ export async function syncDeviceCatalogIfStale(
   let devicesCreated = 0;
   let devicesUpdated = 0;
 
+  // Brand names match case-insensitively: older seeds created "Vivo" while
+  // the catalog says "vivo" — an exact-name upsert would split the catalog
+  // across two brands. Existing rows keep their id, name and relations.
+  const existingBrands = await prisma.brand.findMany({
+    select: { id: true, name: true },
+  });
+  const brandsByLower = new Map(
+    existingBrands.map((b) => [b.name.toLowerCase(), b])
+  );
+
   for (const entry of BRANDS) {
-    const brand = await prisma.brand.upsert({
-      where: { name: entry.name },
-      update: {},
-      create: { name: entry.name },
-    });
+    let brand = brandsByLower.get(entry.name.toLowerCase());
+    if (!brand) {
+      brand = await prisma.brand.create({ data: { name: entry.name } });
+      brandsByLower.set(entry.name.toLowerCase(), brand);
+    }
 
     const existing = await prisma.device.findMany({
       select: { category: true, id: true, model: true },
