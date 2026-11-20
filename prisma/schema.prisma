@@ -155,6 +155,7 @@ enum AuditAction {
   QUOTE_RESPONDED
   DATA_EXPORTED
   DATA_IMPORTED
+  LOANER_RETURNED
 }
 
 enum QuoteStatus {
@@ -490,10 +491,16 @@ model Job {
   estimatedCost Decimal? @db.Decimal(10, 2)
   depositAmount Decimal? @db.Decimal(10, 2)
 
-  // Loaner device handed to the customer while theirs is in repair
-  // (loanerNote = which device / serial of the loaned one).
-  hasLoanerDevice Boolean @default(false)
-  loanerNote      String? @db.Text
+  // Loaner device handed to the customer while theirs is in repair.
+  // loanerNote = free-text description (also what prints/signs); the
+  // optional loanerDevice link points at the shop fleet unit and
+  // loanerReturnedAt stamps when it physically came back (null = still
+  // with the customer).
+  hasLoanerDevice  Boolean        @default(false)
+  loanerNote       String?        @db.Text
+  loanerDeviceId   String?
+  loanerDevice     LoanerDevice?  @relation(fields: [loanerDeviceId], references: [id], onDelete: SetNull)
+  loanerReturnedAt DateTime?      @db.Timestamptz
 
   estimatedDate DateTime? @db.Timestamptz
   createdAt     DateTime  @default(now()) @db.Timestamptz
@@ -562,6 +569,7 @@ model Job {
   @@index([status, createdAt])
   @@index([status, estimatedDate])
   @@index([imei])
+  @@index([loanerDeviceId])
   @@map("jobs")
 }
 
@@ -1357,6 +1365,34 @@ model TradeIn {
 
   @@index([status, createdAt])
   @@map("trade_ins")
+}
+
+// ─────────────────────────────────────────────
+// LOANER DEVICE (equipamento de empréstimo)
+// Shop-owned units handed to customers while theirs is in repair. "Out"
+// is derived — a job references the unit with loanerReturnedAt NULL in a
+// non-CANCELLED status — so a customer who keeps it past delivery stays
+// visible instead of silently freeing the unit.
+// ─────────────────────────────────────────────
+
+model LoanerDevice {
+  id    String  @id @default(cuid())
+  // How staff recognise the unit ("iPhone 8 — loja #2") — required, and
+  // what falls back into Job.loanerNote when the picker sets no text.
+  label String  @db.VarChar(120)
+  brand String? @db.VarChar(60)
+  model String? @db.VarChar(120)
+  imei  String? @db.VarChar(32)
+  notes String? @db.Text
+  // Retired units keep their loan history but can no longer be assigned.
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  jobs Job[]
+
+  @@index([active])
+  @@map("loaner_devices")
 }
 
 // ─────────────────────────────────────────────

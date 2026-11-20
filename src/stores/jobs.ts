@@ -133,7 +133,8 @@ interface JobsState {
     status: JobStatusType,
     reason?: string,
     actualLaborHours?: number,
-    qcChecklist?: Record<string, "ok" | "fail" | null>
+    qcChecklist?: Record<string, "ok" | "fail" | null>,
+    loanerReturned?: boolean
   ) => Promise<Job>;
   updateJob: (id: string, data: Record<string, unknown>) => Promise<Job>;
 }
@@ -240,7 +241,8 @@ export const useJobsStore = create<JobsState>((set) => ({
     status,
     reason,
     actualLaborHours,
-    qcChecklist
+    qcChecklist,
+    loanerReturned
   ) => {
     set({ error: null });
     try {
@@ -249,6 +251,7 @@ export const useJobsStore = create<JobsState>((set) => ({
         reason,
         actualLaborHours,
         qcChecklist,
+        loanerReturned,
       });
       const updated = res.data as Job;
       set((state) => ({

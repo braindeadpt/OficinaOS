@@ -12,6 +12,7 @@ import { healthRoutes } from "./routes/health.js";
 import { intakeRequestsRoutes } from "./routes/intake-requests.js";
 import { invoicingRoutes } from "./routes/invoicing.js";
 import { jobRoutes } from "./routes/jobs.js";
+import { loanersRoutes } from "./routes/loaners.js";
 import { marketPricesRoutes } from "./routes/market-prices.js";
 import { notificationsRoutes } from "./routes/notifications.js";
 import { partRequestsRoutes } from "./routes/part-requests.js";
@@ -68,6 +69,7 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
   app.register(saleRoutes, { prefix: "/api/sales" });
   app.register(returnClaimsRoutes, { prefix: "/api/return-claims" });
   app.register(tradeInsRoutes, { prefix: "/api/trade-ins" });
+  app.register(loanersRoutes, { prefix: "/api/loaners" });
   app.register(partRequestsRoutes, { prefix: "/api/part-requests" });
   app.register(marketPricesRoutes, { prefix: "/api/market-prices" });
   app.register(storefrontRoutes, { prefix: "/api/storefront" });

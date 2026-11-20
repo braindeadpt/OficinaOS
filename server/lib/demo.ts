@@ -70,6 +70,9 @@ const BLOCKED_MUTATIONS = [
   "/api/notifications/test",
   // Every report opens a public GitHub issue.
   "/api/feedback",
+  // Fleet edits + return stamps dirty the shared demo data; GETs stay
+  // open so the loaners board renders.
+  "/api/loaners",
 ] as const;
 
 // Better-auth exposes its whole surface under /api/auth/* — including the

@@ -1,10 +1,11 @@
 import { buildIntakeDocument } from "@shared/intake-document.js";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import SignaturePad from "@/components/reports/signature-pad";
 import { Field } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
+import { fetchLoanerDevices, type LoanerDevice } from "@/lib/api-loaners";
 import { buildJobPayload } from "@/lib/build-job-payload";
 import AccessoriesPicker from "./accessories-picker";
 import FunctionalChecklist from "./functional-checklist";
@@ -289,6 +290,15 @@ interface LoanerFieldProps {
   ) => void;
 }
 
+/** Same printable description the server derives — label + spec + IMEI. */
+function describeLoaner(device: LoanerDevice): string {
+  const spec = [device.brand, device.model].filter(Boolean).join(" ");
+  const suffix = device.imei ? ` · IMEI ${device.imei}` : "";
+  return spec
+    ? `${device.label} (${spec})${suffix}`
+    : `${device.label}${suffix}`;
+}
+
 function LoanerField({
   fieldError,
   form,
@@ -297,6 +307,46 @@ function LoanerField({
   update,
 }: LoanerFieldProps) {
   const active = form.hasLoanerDevice;
+  const [devices, setDevices] = useState<LoanerDevice[] | null>(null);
+
+  // Fleet list only loads when the toggle turns on — the intake modal is
+  // already heavy and most jobs never lend a unit.
+  useEffect(() => {
+    if (!active || devices !== null) {
+      return;
+    }
+    let cancelled = false;
+    fetchLoanerDevices()
+      .then((list) => {
+        if (!cancelled) {
+          setDevices(list);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDevices([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [active, devices]);
+
+  const pick = (id: string) => {
+    update("loanerDeviceId", id);
+    const device = devices?.find((d) => d.id === id);
+    if (device) {
+      update("loanerNote", describeLoaner(device));
+    }
+  };
+
+  // Units already out can't be assigned — only available ones (plus the
+  // currently picked one, for hydration) show up in the picker.
+  const options =
+    devices?.filter(
+      (d) => d.status === "available" || d.id === form.loanerDeviceId
+    ) ?? [];
+
   return (
     <div className="space-y-4">
       <button
@@ -328,20 +378,42 @@ function LoanerField({
       </button>
 
       {active && (
-        <Field
-          error={fieldError("loanerNote")}
-          id="loaner-note"
-          label={t("intake.loaner_note")}
-        >
-          <Input
-            maxLength={200}
-            onBlur={() => handleBlur("loanerNote")}
-            onChange={(e) => update("loanerNote", e.target.value)}
-            placeholder={t("intake.loaner_note_placeholder")}
-            type="text"
-            value={form.loanerNote}
-          />
-        </Field>
+        <>
+          <Field
+            error={fieldError("loanerDeviceId")}
+            id="loaner-device"
+            label={t("intake.loaner_pick")}
+          >
+            <select
+              className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface transition-all focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary"
+              id="loaner-device"
+              onBlur={() => handleBlur("loanerDeviceId")}
+              onChange={(e) => pick(e.target.value)}
+              value={form.loanerDeviceId}
+            >
+              <option value="">{t("intake.loaner_pick_none")}</option>
+              {options.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {describeLoaner(d)}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field
+            error={fieldError("loanerNote")}
+            id="loaner-note"
+            label={t("intake.loaner_note")}
+          >
+            <Input
+              maxLength={200}
+              onBlur={() => handleBlur("loanerNote")}
+              onChange={(e) => update("loanerNote", e.target.value)}
+              placeholder={t("intake.loaner_note_placeholder")}
+              type="text"
+              value={form.loanerNote}
+            />
+          </Field>
+        </>
       )}
     </div>
   );

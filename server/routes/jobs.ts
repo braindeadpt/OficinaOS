@@ -456,6 +456,7 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
         userId,
         notifyCtx,
         {
+          loanerReturned: parsed.data.loanerReturned,
           requestingRole: getRole(req),
           reason: parsed.data.reason,
           actualLaborHours: parsed.data.actualLaborHours ?? undefined,

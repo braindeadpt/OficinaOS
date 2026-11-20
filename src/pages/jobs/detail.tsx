@@ -54,9 +54,29 @@ function UrgentBadge({ visible }: { visible: boolean }) {
   );
 }
 
+/** Standalone A4 term print — only when intake handed a loaner out. */
+function LoanerAgreementButton({ job }: { job: Job }) {
+  const { t } = useTranslation();
+  if (!job.hasLoanerDevice) {
+    return null;
+  }
+  return (
+    <button
+      className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest px-4 font-medium text-on-surface-variant text-sm transition-colors hover:bg-surface-container hover:text-on-surface"
+      onClick={() =>
+        window.open(`/api/receipts/${job.id}/loaner-agreement`, "_blank")
+      }
+      type="button"
+    >
+      <Icon className="text-[18px]" name="description" />
+      {t("jobs_detail_print_loaner")}
+    </button>
+  );
+}
+
 /** Loaned-device spec cell — hidden unless a loaner was given at intake. */
 function LoanerSpec({ job }: { job: Job }) {
-  const { t } = useTranslation();
+  const { i18n, t } = useTranslation();
   if (!job.hasLoanerDevice) {
     return null;
   }
@@ -68,6 +88,21 @@ function LoanerSpec({ job }: { job: Job }) {
       <p className="mt-0.5 font-bold font-headline text-lg text-on-surface">
         {job.loanerNote || t("jobs_detail_loaner_yes")}
       </p>
+      {job.loanerDeviceId && (
+        <p
+          className={`mt-0.5 font-label text-xs ${
+            job.loanerReturnedAt ? "text-success" : "text-tertiary"
+          }`}
+        >
+          {job.loanerReturnedAt
+            ? t("jobs_detail_loaner_returned", {
+                date: new Date(job.loanerReturnedAt).toLocaleDateString(
+                  i18n.language
+                ),
+              })
+            : t("jobs_detail_loaner_out")}
+        </p>
+      )}
     </div>
   );
 }
@@ -419,6 +454,7 @@ export default function JobDetailPage() {
             <Icon className="text-[18px]" name="label" />
             {t("jobs_detail_print_label")}
           </button>
+          <LoanerAgreementButton job={job} />
           <Can perm={{ returns: ["create"] }}>
             {job.status === "DELIVERED" && (
               <button

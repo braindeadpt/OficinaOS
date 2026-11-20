@@ -56,6 +56,11 @@ import { assertJobMutable } from "../utils/job-mutations.js";
 import { logger } from "../utils/logger.js";
 import { toPublicShop } from "../utils/public-shop.js";
 import { createAuditLog } from "./audit.service.js";
+import {
+  assertLoanerAssignable,
+  checkoutLoanerDevice,
+  describeLoanerDevice,
+} from "./loaner.service.js";
 import { notify } from "./notification-dispatch.js";
 import {
   computeJobBalance,
@@ -109,6 +114,7 @@ async function validateTechnician(prisma: PrismaClient, technicianId: string) {
 const JOB_INCLUDE = {
   customer: true,
   device: { include: { brand: true } },
+  loanerDevice: true,
   notes: {
     include: {
       createdBy: { select: { id: true, name: true, username: true } },
@@ -390,6 +396,19 @@ async function remoteSignatureData(
   };
 }
 
+/** Loaner fields for the create payload — a linked fleet unit implies the
+ * loan happened, so the flag/note are never persisted dishonestly. */
+function loanerCreateFields(
+  input: CreateJobInput,
+  checkout: Awaited<ReturnType<typeof checkoutLoanerDevice>> | null
+) {
+  return {
+    hasLoanerDevice: input.hasLoanerDevice || Boolean(checkout),
+    loanerDevice: checkout?.connect,
+    loanerNote: checkout?.note ?? input.loanerNote ?? null,
+  };
+}
+
 export async function create(
   prisma: PrismaClient,
   input: CreateJobInput,
@@ -472,6 +491,13 @@ export async function create(
     // Throws SIGNATURE_STALE when the ficha drifted since the link was
     // created — the customer must sign a fresh document.
     const remoteData = await remoteSignatureData(tx, input);
+
+    // Fleet unit checkout — the row lock serializes simultaneous intakes so
+    // the same unit can never be handed out twice at once.
+    const checkout = input.loanerDeviceId
+      ? await checkoutLoanerDevice(tx, input.loanerDeviceId, input.loanerNote)
+      : null;
+
     const created = await jobCreateJob(
       tx,
       {
@@ -486,8 +512,7 @@ export async function create(
         customer: { connect: { id: customer.id } },
         imei: deviceIdentifier,
         depositAmount: input.depositAmount ?? null,
-        hasLoanerDevice: input.hasLoanerDevice ?? false,
-        loanerNote: input.loanerNote ?? null,
+        ...loanerCreateFields(input, checkout),
         device: { connect: { id: device.id } },
         estimatedCost: input.estimatedCost,
         estimatedDate: input.estimatedDate
@@ -664,6 +689,7 @@ function buildJobUpdateData(
     estimatedDate,
     imei,
     intakeChecklist,
+    loanerDeviceId,
     technicianId,
     ...rest
   } = input;
@@ -694,6 +720,16 @@ function buildJobUpdateData(
     data.technician = { disconnect: true };
   } else if (technicianId) {
     data.technician = { connect: { id: technicianId } };
+  }
+
+  // Re-linking a unit opens a fresh loan — a stale return stamp would make
+  // the new loan look already closed.
+  if (loanerDeviceId === null) {
+    data.loanerDevice = { disconnect: true };
+    data.loanerReturnedAt = null;
+  } else if (loanerDeviceId) {
+    data.loanerDevice = { connect: { id: loanerDeviceId } };
+    data.loanerReturnedAt = null;
   }
 
   return data;
@@ -740,7 +776,25 @@ export async function update(
 
   const { technicianId } = input;
 
-  const updated = await jobUpdate(prisma, id, data, JOB_INCLUDE);
+  // Fleet reassignment — same serialization as intake: the unit row is
+  // locked before the availability check runs, and a fresh link implies the
+  // loan happened (flag + printable note are kept honest).
+  const updated = await prisma.$transaction(async (tx) => {
+    if (input.loanerDeviceId) {
+      await tx.$queryRaw`SELECT "id" FROM "loaner_devices" WHERE "id" = ${input.loanerDeviceId} FOR UPDATE`;
+      await assertLoanerAssignable(tx, input.loanerDeviceId, id);
+      if (data.hasLoanerDevice === undefined) {
+        data.hasLoanerDevice = true;
+      }
+      if (input.loanerNote === undefined && !job.loanerNote?.trim()) {
+        const device = await tx.loanerDevice.findUniqueOrThrow({
+          where: { id: input.loanerDeviceId },
+        });
+        data.loanerNote = describeLoanerDevice(device);
+      }
+    }
+    return await jobUpdate(tx, id, data, JOB_INCLUDE);
+  });
 
   if (
     technicianId !== undefined &&
@@ -889,10 +943,15 @@ async function applyTransition(
 }
 
 function buildTransitionUpdateData(
-  job: { status: string; technicianId: string | null },
+  job: {
+    hasLoanerDevice: boolean;
+    status: string;
+    technicianId: string | null;
+  },
   newStatus: JobStatusType,
   userId: string,
   options?: {
+    loanerReturned?: boolean;
     reason?: string;
     actualLaborHours?: number;
     qcChecklist?: Record<string, "ok" | "fail" | null>;
@@ -918,6 +977,17 @@ function buildTransitionUpdateData(
     }
   }
 
+  // The unit physically came back as the customer picks up (DELIVERED) or
+  // takes the device unrepaired (RETURNED). Unchecked stays "out" — the
+  // customer may return it later via the loaners board.
+  if (
+    options?.loanerReturned &&
+    job.hasLoanerDevice &&
+    (newStatus === JobStatus.DELIVERED || newStatus === JobStatus.RETURNED)
+  ) {
+    updateData.loanerReturnedAt = new Date();
+  }
+
   const techAssigned = newStatus === JobStatus.IN_REPAIR && !job.technicianId;
   if (techAssigned) {
     updateData.technician = { connect: { id: userId } };
@@ -933,6 +1003,7 @@ export async function transitionStatus(
   userId: string,
   notifyCtx: NotifyContext,
   options?: {
+    loanerReturned?: boolean;
     reason?: string;
     requestingRole: RoleType;
     actualLaborHours?: number;
@@ -1007,6 +1078,21 @@ export async function transitionStatus(
         { err, eventName: templateName, jobId: id },
         "notify dispatch failed"
       );
+    });
+  }
+
+  // The stamped return is its own audit event — the STATUS_CHANGED row only
+  // proves the job moved, not that the unit came back.
+  if (
+    options?.loanerReturned &&
+    job.hasLoanerDevice &&
+    (newStatus === JobStatus.DELIVERED || newStatus === JobStatus.RETURNED)
+  ) {
+    await createAuditLog(prisma, {
+      action: AuditAction.LOANER_RETURNED,
+      jobId: id,
+      toValue: job.loanerDeviceId ?? job.loanerNote ?? undefined,
+      userId,
     });
   }
 

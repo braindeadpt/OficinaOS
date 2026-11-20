@@ -291,6 +291,24 @@ export const ERRORS = {
     message: "errors.signature_stale",
   },
 
+  // ── Loaner devices (equipamento de empréstimo) ─────────────────────────
+  LOANER_DEVICE_NOT_FOUND: {
+    status: 404,
+    message: "errors.loaner_device_not_found",
+  },
+  LOANER_DEVICE_UNAVAILABLE: {
+    status: 409,
+    message: "errors.loaner_device_unavailable",
+  },
+  LOANER_DEVICE_INACTIVE: {
+    status: 400,
+    message: "errors.loaner_device_inactive",
+  },
+  LOANER_NOT_ACTIVE: {
+    status: 409,
+    message: "errors.loaner_not_active",
+  },
+
   // ── Part-request board (procuro-peça, Pro module: market) ──────────────
   PART_REQUEST_NOT_FOUND: {
     status: 404,

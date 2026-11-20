@@ -23,6 +23,7 @@ interface DeliverJobDialogProps {
     estimatedCost?: unknown;
     hasLoanerDevice?: boolean;
     loanerNote?: string | null;
+    loanerReturnedAt?: string | Date | null;
     paymentOnDeliveryMethod?: string | null;
   };
   onCancel: () => void;
@@ -140,6 +141,9 @@ export default function DeliverJobDialog({
   const [method, setMethod] = useState<PaymentMethodType>("CASH");
   const [amount, setAmount] = useState("");
   const [acknowledgeUnpaid, setAcknowledgeUnpaid] = useState(false);
+  // The customer normally hands the unit back at pickup — unchecked leaves
+  // it "out" on the loaners board for later follow-up.
+  const [loanerReturned, setLoanerReturned] = useState(true);
   const [printReceipt, setPrintReceipt] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -156,6 +160,7 @@ export default function DeliverJobDialog({
     );
     setAmount(balanceDue > 0 ? balanceDue.toFixed(2) : "");
     setAcknowledgeUnpaid(false);
+    setLoanerReturned(true);
     setPrintReceipt(true);
     setError(null);
   }, [open, balanceDue, job.paymentOnDeliveryMethod]);
@@ -170,6 +175,7 @@ export default function DeliverJobDialog({
 
   const parsedAmount = parseAmount(amount);
   const paying = owes && recordPayment;
+  const loanerOut = Boolean(job.hasLoanerDevice && !job.loanerReturnedAt);
   const payingAmount =
     paying && Number.isFinite(parsedAmount) && parsedAmount > 0
       ? parsedAmount
@@ -206,7 +212,14 @@ export default function DeliverJobDialog({
       if (paying) {
         await addPayment(job.id, { amount: parsedAmount, method });
       }
-      await transitionStatus(job.id, "DELIVERED");
+      await transitionStatus(
+        job.id,
+        "DELIVERED",
+        undefined,
+        undefined,
+        undefined,
+        loanerOut ? loanerReturned : undefined
+      );
     } catch (err: unknown) {
       printWindow?.close();
       setError(getErrorMessage(err, t("jobs_status_change_error_unknown")));
@@ -226,6 +239,8 @@ export default function DeliverJobDialog({
     addPayment,
     balanceDue,
     job.id,
+    loanerOut,
+    loanerReturned,
     method,
     needsAcknowledgement,
     onDelivered,
@@ -366,6 +381,15 @@ export default function DeliverJobDialog({
                 </div>
               )}
             </div>
+          )}
+
+          {loanerOut && (
+            <Field horizontal label={t("deliver_dialog.loaner_returned")}>
+              <Checkbox
+                checked={loanerReturned}
+                onChange={(e) => setLoanerReturned(e.target.checked)}
+              />
+            </Field>
           )}
 
           <Field horizontal label={t("deliver_dialog.print_receipt")}>

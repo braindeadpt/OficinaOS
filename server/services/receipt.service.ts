@@ -827,6 +827,254 @@ ${footHtml}
 </body></html>`;
 }
 
+interface LoanerAgreementStrings {
+  clauses: string[];
+  customer: string;
+  dateLocale: string;
+  deviceInRepair: string;
+  email: string;
+  expectedReturn: string;
+  idDoc: string;
+  jobRef: string;
+  lentOn: string;
+  loanedDevice: string;
+  phone: string;
+  returnedOn: string;
+  signatureLabel: string;
+  signatureTerms: string;
+  signedDoc: string;
+  title: string;
+}
+
+const LOANER_AGREEMENT_STRINGS: Record<string, LoanerAgreementStrings> = {
+  pt: {
+    clauses: [
+      "O equipamento acima identificado é propriedade da loja e é cedido ao cliente a título de empréstimo temporário, sem custo, durante o período de reparação do seu equipamento.",
+      "O cliente obriga-se a devolver o equipamento no acto da entrega do seu equipamento, em idênticas condições de conservação e funcionamento em que o recebeu.",
+      "Em caso de perda, furto, dano ou não devolução, o cliente responsabiliza-se pelo custo de reparação ou substituição do equipamento por outro de características equivalentes.",
+      "O equipamento destina-se ao uso exclusivo do cliente, não podendo ser vendido, cedido, emprestado ou dado em garantia a terceiros.",
+      "A loja não se responsabiliza por dados, conteúdos ou utilizações registadas no equipamento durante o período de empréstimo.",
+    ],
+    customer: "Cliente",
+    dateLocale: "pt-PT",
+    deviceInRepair: "Equipamento em reparação",
+    email: "Email",
+    expectedReturn: "Devolução prevista",
+    idDoc: "NIF",
+    jobRef: "Ficha",
+    lentOn: "Data do empréstimo",
+    loanedDevice: "Equipamento emprestado",
+    phone: "Telefone",
+    returnedOn: "Devolvido em",
+    signatureLabel: "Assinatura do cliente",
+    signatureTerms: "Li e aceito as condições de empréstimo acima descritas.",
+    signedDoc: "Documento assinado",
+    title: "Termo de Responsabilidade — Equipamento de Empréstimo",
+  },
+  en: {
+    clauses: [
+      "The device identified above is the shop's property and is lent to the customer free of charge, for the duration of their own device's repair.",
+      "The customer undertakes to return the device when collecting their repaired device, in the same condition and working order as received.",
+      "In case of loss, theft, damage or failure to return, the customer is liable for the cost of repair or replacement with a device of equivalent specifications.",
+      "The device is for the customer's exclusive use and may not be sold, lent, transferred or pledged to third parties.",
+      "The shop is not responsible for any data, content or usage stored on the device during the loan period.",
+    ],
+    customer: "Customer",
+    dateLocale: "en-GB",
+    deviceInRepair: "Device in repair",
+    email: "Email",
+    expectedReturn: "Expected return",
+    idDoc: "Tax ID",
+    jobRef: "Job",
+    lentOn: "Loaned on",
+    loanedDevice: "Loaned device",
+    phone: "Phone",
+    returnedOn: "Returned on",
+    signatureLabel: "Customer signature",
+    signatureTerms: "I have read and accept the loan terms described above.",
+    signedDoc: "Signed document",
+    title: "Responsibility Agreement — Loaner Device",
+  },
+  fr: {
+    clauses: [
+      "L'appareil identifié ci-dessus est la propriété du magasin et est prêté au client gratuitement, pendant la durée de la réparation de son propre appareil.",
+      "Le client s'engage à restituer l'appareil lors de la récupération de son appareil réparé, dans le même état de conservation et de fonctionnement que lors de la réception.",
+      "En cas de perte, vol, dommage ou non-restitution, le client est responsable du coût de réparation ou de remplacement par un appareil de caractéristiques équivalentes.",
+      "L'appareil est réservé à l'usage exclusif du client et ne peut être vendu, prêté, cédé ou donné en garantie à des tiers.",
+      "Le magasin n'est pas responsable des données, contenus ou utilisations enregistrés sur l'appareil pendant la durée du prêt.",
+    ],
+    customer: "Client",
+    dateLocale: "fr-FR",
+    deviceInRepair: "Appareil en réparation",
+    email: "E-mail",
+    expectedReturn: "Retour prévu",
+    idDoc: "NIF",
+    jobRef: "Dossier",
+    lentOn: "Date du prêt",
+    loanedDevice: "Appareil prêté",
+    phone: "Téléphone",
+    returnedOn: "Restitué le",
+    signatureLabel: "Signature du client",
+    signatureTerms:
+      "J'ai lu et j'accepte les conditions de prêt décrites ci-dessus.",
+    signedDoc: "Document signé",
+    title: "Terme de Responsabilité — Appareil de Prêt",
+  },
+  es: {
+    clauses: [
+      "El dispositivo identificado arriba es propiedad de la tienda y se presta al cliente gratuitamente, durante el periodo de reparación de su propio dispositivo.",
+      "El cliente se compromete a devolver el dispositivo al recoger su equipo reparado, en las mismas condiciones de conservación y funcionamiento en que lo recibió.",
+      "En caso de pérdida, robo, daño o no devolución, el cliente responde por el coste de reparación o sustitución por un dispositivo de características equivalentes.",
+      "El dispositivo es para uso exclusivo del cliente y no puede ser vendido, prestado, cedido ni dado en garantía a terceros.",
+      "La tienda no se responsabiliza de los datos, contenidos o usos registrados en el dispositivo durante el periodo de préstamo.",
+    ],
+    customer: "Cliente",
+    dateLocale: "es-ES",
+    deviceInRepair: "Dispositivo en reparación",
+    email: "Correo",
+    expectedReturn: "Devolución prevista",
+    idDoc: "NIF",
+    jobRef: "Ficha",
+    lentOn: "Fecha del préstamo",
+    loanedDevice: "Dispositivo prestado",
+    phone: "Teléfono",
+    returnedOn: "Devuelto el",
+    signatureLabel: "Firma del cliente",
+    signatureTerms:
+      "He leído y acepto las condiciones de préstamo descritas arriba.",
+    signedDoc: "Documento firmado",
+    title: "Termo de Responsabilidad — Dispositivo de Préstamo",
+  },
+};
+
+/**
+ * Standalone A4 "termo de responsabilidade" for the loaned device — the
+ * customer signs it at intake. The fleet unit (or the free-text note for
+ * ad-hoc loans) is identified on the document, and the customer's intake
+ * signature plus the document hash seal land here exactly like the receipt.
+ */
+export async function renderLoanerAgreementHtml(
+  prisma: DbClient,
+  job: {
+    createdAt: Date;
+    customer: {
+      email?: string | null;
+      name: string;
+      phone: string;
+      taxId?: string | null;
+    };
+    device: { brand: { name: string }; model: string };
+    estimatedDate?: Date | null;
+    imei?: string | null;
+    intakeDocumentHash?: string | null;
+    intakeSignatureDataUrl?: string | null;
+    jobCode: string;
+    loanerDevice?: {
+      brand?: string | null;
+      imei?: string | null;
+      label: string;
+      model?: string | null;
+    } | null;
+    loanerNote?: string | null;
+    loanerReturnedAt?: Date | null;
+    signedAt?: Date | null;
+  },
+  options?: { locale?: string }
+): Promise<string> {
+  const settings = await findShopSettingsUnique(prisma);
+  const s =
+    LOANER_AGREEMENT_STRINGS[options?.locale ?? ""] ??
+    LOANER_AGREEMENT_STRINGS.pt;
+  const date = new Date(job.createdAt).toLocaleString(s.dateLocale);
+
+  // Fleet unit rows when linked; otherwise the free-text note is the only
+  // identification the document can show.
+  const ld = job.loanerDevice;
+  const loanerRows = ld
+    ? `<tr><td>${esc(ld.label)}</td><td style="text-align:right">${esc([ld.brand, ld.model].filter(Boolean).join(" "))}</td></tr>${
+        ld.imei
+          ? `<tr><td>IMEI/SN</td><td style="text-align:right">${esc(ld.imei)}</td></tr>`
+          : ""
+      }`
+    : "";
+  const loanerNoteRow = job.loanerNote?.trim()
+    ? `<tr><td colspan="2" style="padding-top:1mm;color:#444">${esc(job.loanerNote)}</td></tr>`
+    : "";
+
+  const expectedReturn = job.estimatedDate
+    ? `<tr><td>${s.expectedReturn}</td><td style="text-align:right">${new Date(job.estimatedDate).toLocaleDateString(s.dateLocale)}</td></tr>`
+    : "";
+  const returnedRow = job.loanerReturnedAt
+    ? `<tr><td>${s.returnedOn}</td><td style="text-align:right">${new Date(job.loanerReturnedAt).toLocaleString(s.dateLocale)}</td></tr>`
+    : "";
+
+  const signatureBox = job.intakeSignatureDataUrl?.startsWith("data:image/")
+    ? `<img src="${esc(job.intakeSignatureDataUrl)}" alt="signature" />`
+    : `<div class="line">${s.signatureLabel}</div>`;
+  const seal = job.intakeDocumentHash
+    ? `<p style="font-size:8pt;color:#777">${esc(s.signedDoc)} #${esc(job.intakeDocumentHash.slice(0, 12))}${
+        job.signedAt
+          ? ` · ${new Date(job.signedAt).toLocaleString(s.dateLocale)}`
+          : ""
+      }</p>`
+    : "";
+
+  const clauseItems = s.clauses
+    .map((c, i) => `<li style="margin-bottom:2mm">${i + 1}. ${esc(c)}</li>`)
+    .join("");
+
+  const footerHtml = settings?.receiptFooter
+    ? `<div class="foot"><div class="txt">${escMultiline(settings.receiptFooter)}</div></div>`
+    : "";
+
+  return `<!doctype html>
+<html lang="${options?.locale ?? "pt"}">
+<head>
+<meta charset="utf-8">
+<title>${s.title} ${esc(job.jobCode)}</title>
+<style>${A4_CSS}
+  .clauses { margin-top: 5mm; font-size: 10pt; }
+  .clauses ol { margin: 0; padding-left: 0; list-style: none; }
+</style>
+</head>
+<body>
+<div class="doc-head">
+  ${a4ShopHeader(settings)}
+  <div class="meta"><div class="doctype">${s.title}</div><div class="code">${esc(job.jobCode)}</div><div>${date}</div></div>
+</div>
+<div class="grid">
+  <div class="col">
+    <div class="lbl">${s.customer}</div>
+    <div><strong>${esc(job.customer.name)}</strong></div>
+    <div>${s.phone}: ${esc(job.customer.phone)}</div>
+    ${job.customer.email ? `<div>${s.email}: ${esc(job.customer.email)}</div>` : ""}
+    ${job.customer.taxId ? `<div>${s.idDoc}: ${esc(job.customer.taxId)}</div>` : ""}
+  </div>
+  <div class="col">
+    <div class="lbl">${s.deviceInRepair}</div>
+    <div><strong>${esc(job.device.brand.name)} ${esc(job.device.model)}</strong></div>
+    ${job.imei ? `<div>IMEI/SN: ${esc(job.imei)}</div>` : ""}
+    <div>${s.jobRef}: ${esc(job.jobCode)}</div>
+  </div>
+</div>
+<div class="problem">
+  <div class="lbl">${s.loanedDevice}</div>
+  <table style="width:100%;border-collapse:collapse;font-size:10pt">
+    ${loanerRows}${loanerNoteRow}
+    <tr><td>${s.lentOn}</td><td style="text-align:right">${date}</td></tr>
+    ${expectedReturn}${returnedRow}
+  </table>
+</div>
+<div class="clauses"><ol>${clauseItems}</ol></div>
+<div class="sign">
+  <p class="terms">${esc(s.signatureTerms)}</p>
+  <div class="box">${signatureBox}</div>
+</div>
+${seal}
+${footerHtml}
+</body></html>`;
+}
+
 interface SaleReceiptItem {
   lineTotal: number | { toNumber: () => number };
   name: string;

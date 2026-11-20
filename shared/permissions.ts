@@ -74,6 +74,9 @@ export const statement = {
   ] as const,
 
   tradeins: ["view", "create", "edit", "cancel"] as const,
+
+  // Shop loaner fleet — "return" records a unit physically coming back.
+  loaners: ["view", "manage", "return"] as const,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -143,6 +146,7 @@ export const ownerRole = ac.newRole({
     "viewShop",
   ],
   tradeins: ["view", "create", "edit", "cancel"],
+  loaners: ["view", "manage", "return"],
 });
 
 export const technicianRole = ac.newRole({
@@ -173,6 +177,8 @@ export const technicianRole = ac.newRole({
   returns: ["create", "edit", "triage", "resolveRework", "viewSelf"],
   // Trade-ins involve money — technicians can see them but not transact.
   tradeins: ["view"],
+  // Technicians assign units at intake and receive them back at the bench.
+  loaners: ["view", "return"],
 });
 
 export const frontDeskRole = ac.newRole({
@@ -197,6 +203,7 @@ export const frontDeskRole = ac.newRole({
   dashboard: ["viewFrontDesk"],
   returns: ["create", "edit", "viewSelf"],
   tradeins: ["view", "create", "edit", "cancel"],
+  loaners: ["view", "manage", "return"],
 });
 
 // ---------------------------------------------------------------------------
