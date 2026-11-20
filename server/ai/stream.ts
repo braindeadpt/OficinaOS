@@ -121,18 +121,32 @@ async function executeToolCalls(
   const followUpMessages: OpenAI.ChatCompletionMessageParam[] = [];
 
   for (const tc of toolCalls) {
-    const args = JSON.parse(tc.function.arguments || "{}");
     let result: string;
+    // A malformed `arguments` blob or a failing tool (e.g. rejected SQL) is
+    // a recoverable model mistake: return it as the tool result so the
+    // follow-up can correct itself instead of killing the whole stream.
+    try {
+      const args = JSON.parse(tc.function.arguments || "{}") as Record<
+        string,
+        unknown
+      >;
 
-    if (tc.function.name === "queryDatabase") {
-      const analystDb = await getAnalystClient();
-      result = analystDb
-        ? (await executeQueryDatabase(analystDb, args.sql)).data
-        : "SQL queries are unavailable: the analyst database role is not provisioned. It is created automatically at startup when DATABASE_URL has CREATEROLE — otherwise a DBA must grant it (see server/scripts/provision-analyst.ts).";
-    } else if (tc.function.name === "getSchema") {
-      result = (await executeGetSchema(prisma, args.tableName)).data;
-    } else {
-      result = `Unknown tool: ${tc.function.name}`;
+      if (tc.function.name === "queryDatabase") {
+        const analystDb = await getAnalystClient();
+        result = analystDb
+          ? (await executeQueryDatabase(analystDb, args.sql as string)).data
+          : "SQL queries are unavailable: the analyst database role is not provisioned. It is created automatically at startup when DATABASE_URL has CREATEROLE — otherwise a DBA must grant it (see server/scripts/provision-analyst.ts).";
+      } else if (tc.function.name === "getSchema") {
+        result = (
+          await executeGetSchema(prisma, args.tableName as string | undefined)
+        ).data;
+      } else {
+        result = `Unknown tool: ${tc.function.name}`;
+      }
+    } catch (err) {
+      result = `Tool ${tc.function.name} failed: ${
+        err instanceof Error ? err.message : String(err)
+      }`;
     }
 
     followUpMessages.push({
@@ -307,6 +321,7 @@ async function handleStreamCycle(
       prisma,
       settings,
       openaiMessages,
+      tools,
       toolCalls,
       agentName,
       assistantContent,
@@ -349,11 +364,19 @@ async function handleStreamCycle(
   controller.close();
 }
 
+/**
+ * Cap on tool-call rounds per user message. A failed tool now returns its
+ * error as the tool result, so the model may legitimately retry with a
+ * corrected call — a bound keeps a stubborn model from looping forever.
+ */
+const MAX_TOOL_ROUNDS = 4;
+
 async function handleToolCallsFollowUp(
   client: OpenAI,
   prisma: PrismaClient,
   settings: AiSettings,
   openaiMessages: OpenAI.ChatCompletionMessageParam[],
+  tools: ReturnType<typeof getToolDefinitions>,
   toolCalls: AccumulatedToolCall[],
   agentName: string,
   assistantContent: string,
@@ -361,41 +384,49 @@ async function handleToolCallsFollowUp(
   encoder: TextEncoder,
   resolvedAgent: ResolvedAgent
 ): Promise<string> {
-  const assistantMessage: OpenAI.ChatCompletionMessageParam = {
-    role: "assistant",
-    content: assistantContent || null,
-    tool_calls: toolCalls.map((call) => ({
-      ...call,
-      type: "function" as const,
-    })),
-  };
+  const messages: OpenAI.ChatCompletionMessageParam[] = [...openaiMessages];
+  let content = assistantContent;
+  // Text produced alongside the pending tool calls — only this round's
+  // content belongs in the assistant message, not the accumulated total.
+  let roundContent = assistantContent;
+  let pending = toolCalls;
 
-  const { followUpMessages } = await executeToolCalls(
-    prisma,
-    toolCalls,
-    controller,
-    encoder
-  );
+  for (let round = 0; round < MAX_TOOL_ROUNDS && pending.length > 0; round++) {
+    messages.push({
+      role: "assistant",
+      content: roundContent || null,
+      tool_calls: pending.map((call) => ({
+        ...call,
+        type: "function" as const,
+      })),
+    });
 
-  const allMessages: OpenAI.ChatCompletionMessageParam[] = [
-    ...openaiMessages,
-    assistantMessage,
-    ...followUpMessages,
-  ];
+    const { followUpMessages } = await executeToolCalls(
+      prisma,
+      pending,
+      controller,
+      encoder
+    );
+    messages.push(...followUpMessages);
 
-  const followUp = await client.chat.completions.create({
-    model: resolvedAgent.model ?? settings.model ?? "gpt-4o",
-    messages: allMessages,
-    temperature: resolvedAgent.temperature ?? settings.temperature ?? 0.7,
-    stream: true,
-  });
+    const followUp = await client.chat.completions.create({
+      model: resolvedAgent.model ?? settings.model ?? "gpt-4o",
+      messages,
+      tools,
+      temperature: resolvedAgent.temperature ?? settings.temperature ?? 0.7,
+      stream: true,
+    });
 
-  const { assistantContent: followUpContent } = await processStreamResponse(
-    followUp,
-    controller,
-    encoder,
-    agentName
-  );
+    const next = await processStreamResponse(
+      followUp,
+      controller,
+      encoder,
+      agentName
+    );
+    roundContent = next.assistantContent;
+    content += next.assistantContent;
+    pending = next.toolCalls;
+  }
 
-  return assistantContent + followUpContent;
+  return content;
 }

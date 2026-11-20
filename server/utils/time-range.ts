@@ -31,27 +31,40 @@ function zonedParts(tz: string, d: Date) {
 
 /**
  * Convert a zoned (year, month, day) at midnight to a UTC Date.
- * Uses the offset at UTC noon on the same date to handle DST correctly.
+ * The offset is computed at the candidate instant and refined until the
+ * zoned reading lands exactly on local midnight — a single pass over
+ * noon's offset misplaces the boundary by an hour on DST transition days
+ * (the offset changes between midnight and noon).
  */
 function utcFromZonedYmd(tz: string, y: number, m: number, d: number): Date {
-  // Reference point: UTC noon of the target date (always on the correct
-  // local day for offsets within ±12h, and close enough for ±14h).
-  const ref = Date.UTC(y, m - 1, d, 12, 0, 0);
-  const {
-    year: zY,
-    month: zM,
-    day: zD,
-    hour: zH,
-    minute: zMin,
-    second: zS,
-  } = zonedParts(tz, new Date(ref));
-
-  // Treat the zoned wall-clock reading as if it were UTC to compute offset
-  const zonedEpoch = Date.UTC(zY, zM - 1, zD, zH, zMin, zS);
-  const offsetMs = ref - zonedEpoch;
-
-  // Apply the same offset to midnight of the target date
-  return new Date(Date.UTC(y, m - 1, d, 0, 0, 0) + offsetMs);
+  const targetUtc = Date.UTC(y, m - 1, d, 0, 0, 0);
+  let instant = Date.UTC(y, m - 1, d, 12, 0, 0);
+  for (let i = 0; i < 4; i++) {
+    const p = zonedParts(tz, new Date(instant));
+    const zonedEpoch = Date.UTC(
+      p.year,
+      p.month - 1,
+      p.day,
+      p.hour,
+      p.minute,
+      p.second
+    );
+    const offsetMs = instant - zonedEpoch;
+    const candidate = targetUtc + offsetMs;
+    const cp = zonedParts(tz, new Date(candidate));
+    if (
+      cp.year === y &&
+      cp.month === m &&
+      cp.day === d &&
+      cp.hour === 0 &&
+      cp.minute === 0 &&
+      cp.second === 0
+    ) {
+      return new Date(candidate);
+    }
+    instant = candidate;
+  }
+  return new Date(instant);
 }
 
 export function todayRange(tz: string, now: Date = new Date()): DateRange {
@@ -67,6 +80,30 @@ export function todayRange(tz: string, now: Date = new Date()): DateRange {
   );
 
   return { start, end };
+}
+
+/**
+ * Bounds [start, end) of the shop-local calendar day containing `at`, in
+ * timezone `tz`, plus the local ISO date string (`YYYY-MM-DD`) that labels
+ * it. Unlike slicing the instant's own ISO date, this matches the day a
+ * person at the shop would call that moment.
+ */
+export function dayRange(
+  tz: string,
+  at: Date = new Date()
+): DateRange & { date: string } {
+  const { year, month, day } = zonedParts(tz, at);
+  const start = utcFromZonedYmd(tz, year, month, day);
+  const next = new Date(Date.UTC(year, month - 1, day + 1));
+  const end = utcFromZonedYmd(
+    tz,
+    next.getUTCFullYear(),
+    next.getUTCMonth() + 1,
+    next.getUTCDate()
+  );
+  const mm = String(month).padStart(2, "0");
+  const dd = String(day).padStart(2, "0");
+  return { start, end, date: `${year}-${mm}-${dd}` };
 }
 
 export function monthRange(tz: string, now: Date = new Date()): DateRange {
