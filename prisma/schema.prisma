@@ -195,6 +195,7 @@ model User {
   role                Role
   isActive            Boolean           @default(true)
   mustChangePassword  Boolean           @default(false)
+  twoFactorEnabled    Boolean           @default(false)
   failedLoginAttempts Int               @default(0)
   lockedUntil         DateTime?         @db.Timestamptz
   banned              Boolean           @default(false)
@@ -220,6 +221,7 @@ model User {
   sessions              Session[]
   accounts              Account[]
   verifications         Verification[]
+  twoFactor             TwoFactor?
   inAppNotifications    InAppNotification[]
   returnClaimsOpened    ReturnClaim[]       @relation("ReturnClaimOpenedBy")
   returnClaimsResolved  ReturnClaim[]       @relation("ReturnClaimResolvedBy")
@@ -1393,6 +1395,27 @@ model SignatureSession {
 }
 
 // ─────────────────────────────────────────────
+// TWO FACTOR (Better Auth — TOTP)
+// ─────────────────────────────────────────────
+
+// One row per user; secret and backup codes are stored encrypted by the
+// plugin (never returned). `verified=false` means the enrolment QR was
+// shown but the first code was never confirmed — that state does not
+// count as enabled and a pending row can be overwritten by re-enrolling.
+model TwoFactor {
+  id                      String    @id @default(cuid())
+  userId                  String    @unique
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  secret                  String
+  backupCodes             String
+  verified                Boolean   @default(true)
+  failedVerificationCount Int       @default(0)
+  lockedUntil             DateTime? @db.Timestamptz
+
+  @@map("two_factors")
+}
+
+// ─────────────────────────────────────────────
 // VERIFICATION (Better Auth)
 // ─────────────────────────────────────────────
 
@@ -1400,8 +1423,8 @@ model Verification {
   id         String   @id @default(cuid())
   identifier String
   value      String
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt  DateTime @db.Timestamptz
   createdAt  DateTime @default(now()) @db.Timestamptz
   updatedAt  DateTime @default(now()) @db.Timestamptz

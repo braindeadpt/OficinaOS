@@ -5,6 +5,7 @@ import { PersonalForm } from "@/components/modules/profile/personal-form";
 import { PersonalSpecSheet } from "@/components/modules/profile/personal-spec-sheet";
 import { SessionButton } from "@/components/modules/profile/session-button";
 import type { ActivityItem } from "@/components/modules/profile/shared";
+import { TwoFactorCard } from "@/components/modules/profile/two-factor-card";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -240,6 +241,8 @@ export function ProfileTabContent({
           onSuccessChange={setPasswordSuccess}
           success={passwordSuccess}
         />
+        <div className="h-2 rounded-full bg-surface-container-low" />
+        <TwoFactorCard />
         <div className="h-2 rounded-full bg-surface-container-low" />
         {sessionsLoading ? (
           <SessionSkeleton />
