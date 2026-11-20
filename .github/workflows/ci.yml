@@ -95,6 +95,63 @@ jobs:
             bun run check-coverage
           fi
 
+  e2e-smoke:
+    name: E2E smoke (docker compose)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+
+      # NODE_ENV=production rejects a localhost APP_URL — map a test
+      # hostname to loopback so the app and the smoke client agree on
+      # one origin.
+      - name: Map test hostname
+        run: echo "127.0.0.1 oficinaos.test" | sudo tee -a /etc/hosts
+
+      - name: Write compose .env
+        run: |
+          cat > .env <<'EOF'
+          NODE_ENV=production
+          APP_URL=http://oficinaos.test:4000
+          BETTER_AUTH_SECRET=ci-smoke-secret-at-least-32-chars-aaaa
+          COOKIE_SECRET=ci-smoke-cookie-secret-at-least-32-bbbb
+          AI_ENCRYPTION_KEY=ci-smoke-aes-key-at-least-32-chars-cccc
+          SEED_ADMIN_PASSWORD=ci-smoke-admin-password-123
+          LOG_LEVEL=warn
+          EOF
+
+      - name: docker compose up
+        run: docker compose up -d --build
+
+      - name: Wait for app health
+        run: |
+          timeout 180 bash -c '
+            until curl -fsS http://oficinaos.test:4000/health > /dev/null; do
+              sleep 2
+            done
+          ' || {
+            echo "--- app logs ---"
+            docker compose logs app | tail -100
+            exit 1
+          }
+
+      - name: Seed admin
+        run: docker compose exec -T app bun run db:seed
+
+      - name: Smoke test — login, intake, DONE
+        env:
+          BASE_URL: http://oficinaos.test:4000
+          SEED_ADMIN_PASSWORD: ci-smoke-admin-password-123
+        run: bun scripts/e2e-smoke.ts
+
+      - name: Dump app logs on failure
+        if: failure()
+        run: docker compose logs app | tail -200
+
   audit:
     name: Dependency audit
     runs-on: ubuntu-latest
