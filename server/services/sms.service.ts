@@ -575,13 +575,24 @@ async function applyDeliveryReport(
   // lost / the report is a duplicate / the entry was deleted — in every
   // one of those cases it is safe to ack, otherwise the report would sit
   // in the cloud queue forever.
-  const entry = await prisma.notificationOutbox.findUnique({
-    select: { status: true },
-    where: { id: refId },
-  });
+  const entry: { status: OutboxStatus } | null | "lookup-failed" =
+    await prisma.notificationOutbox
+      .findUnique({
+        select: { status: true },
+        where: { id: refId },
+      })
+      .catch((err: unknown) => {
+        log.warn({ err, refId }, "sms report status lookup failed");
+        return "lookup-failed";
+      });
+  if (entry === "lookup-failed") {
+    return false; // lookup falhou — retry no próximo poll
+  }
+  if (entry == null) {
+    return true; // entry apagada — ack seguro
+  }
   return (
-    entry == null ||
-    (entry.status !== OutboxStatus.QUEUED && entry.status !== OutboxStatus.SENT)
+    entry.status !== OutboxStatus.QUEUED && entry.status !== OutboxStatus.SENT
   );
 }
 
