@@ -110,6 +110,65 @@ export async function handleFailedSignIn(
   }
 }
 
+// The response carries the fresh session as a signed cookie
+// (`better-auth.session_token=<token>.<signature>`); the stored
+// Session.token is the part before the signature.
+const SESSION_TOKEN_COOKIE = /^better-auth\.session_token=([^;]+)/;
+
+function sessionTokenFromCookies(response: Response): string | undefined {
+  for (const cookie of response.headers.getSetCookie()) {
+    const match = SESSION_TOKEN_COOKIE.exec(cookie);
+    if (match?.[1]) {
+      const value = decodeURIComponent(match[1]);
+      const dot = value.lastIndexOf(".");
+      return dot > 0 ? value.slice(0, dot) : value;
+    }
+  }
+}
+
+async function auditTwoFactorVerify(
+  auth: Auth,
+  headers: Headers,
+  prisma: PrismaClient,
+  pathname: string,
+  response: Response
+): Promise<void> {
+  // A 2FA verify completes the pending sign-in: the credential POST
+  // was answered with twoFactorRedirect and no session, so it never
+  // hit the sign-in audit branch. The new session only exists on the
+  // response — read the user from the body, but only when the request
+  // itself carried no session (verifying from the profile to enable
+  // 2FA is not a sign-in).
+  const hasSession = await auth.api.getSession({ headers });
+  if (!hasSession?.user) {
+    const data = (await response
+      .clone()
+      .json()
+      .catch(() => null)) as {
+      user?: { id: string; username?: string; email?: string };
+    } | null;
+    if (data?.user) {
+      await auditSignInUser(prisma, data.user);
+    }
+    return;
+  }
+  if (pathname === "/api/auth/two-factor/verify-totp") {
+    // 2FA was just enabled from the profile: every other session must
+    // die server-side — relying on the client's revoke call would leave
+    // a stolen session alive if that request never lands.
+    const newToken = sessionTokenFromCookies(response);
+    if (newToken) {
+      try {
+        await prisma.session.deleteMany({
+          where: { userId: hasSession.user.id, token: { not: newToken } },
+        });
+      } catch (error) {
+        logger.warn({ err: error }, "Revoke sessions on 2FA enable failed");
+      }
+    }
+  }
+}
+
 function isSignInPost(method: string, pathname: string): boolean {
   return method === "POST" && pathname.includes("sign-in");
 }
@@ -132,26 +191,10 @@ async function auditAuthResponse(
 
   if (
     response.status === 200 &&
-    pathname === "/api/auth/two-factor/verify-totp"
+    (pathname === "/api/auth/two-factor/verify-totp" ||
+      pathname === "/api/auth/two-factor/verify-backup-code")
   ) {
-    // A TOTP verify completes the pending sign-in: the credential POST
-    // was answered with twoFactorRedirect and no session, so it never
-    // hit the audit branch above. The new session only exists on the
-    // response — read the user from the body, but only when the request
-    // itself carried no session (verifying from the profile to enable
-    // 2FA is not a sign-in).
-    const hasSession = await auth.api.getSession({ headers });
-    if (!hasSession?.user) {
-      const data = (await response
-        .clone()
-        .json()
-        .catch(() => null)) as {
-        user?: { id: string; username?: string; email?: string };
-      } | null;
-      if (data?.user) {
-        await auditSignInUser(prisma, data.user);
-      }
-    }
+    await auditTwoFactorVerify(auth, headers, prisma, pathname, response);
   }
 
   if (response.status !== 200 && isSignInPost(request.method, pathname)) {

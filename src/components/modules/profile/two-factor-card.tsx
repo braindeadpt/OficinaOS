@@ -67,11 +67,6 @@ export function TwoFactorCard() {
     setError("");
     try {
       await api.post("/auth/two-factor/verify-totp", { code: code.trim() });
-      // Enabling 2FA must kill older sessions — otherwise a stolen
-      // session keeps working without ever verifying a second factor.
-      await api.post("/auth/revoke-other-sessions").catch(() => {
-        // Older server without the endpoint — enrolment still succeeded.
-      });
       await checkSession(true);
       setStep("idle");
       setPassword("");
