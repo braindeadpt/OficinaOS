@@ -7,7 +7,7 @@ CREATE TABLE "code_lockouts" (
     "failures" INTEGER NOT NULL DEFAULT 0,
     "firstFailedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "lockedUntil" TIMESTAMPTZ,
-    "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMPTZ NOT NULL,
 
     CONSTRAINT "code_lockouts_pkey" PRIMARY KEY ("code")
 );
