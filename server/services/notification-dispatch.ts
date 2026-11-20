@@ -26,6 +26,10 @@ interface NotifyEvent {
   deliverBy?: Date;
   eventId?: string;
   eventName: string;
+  /** Channels this event must not dispatch to (e.g. WhatsApp when the
+   * caller already sent a Meta template directly — freeform text would
+   * be rejected by the Graph API outside the 24h window). */
+  excludeChannels?: NotifyChannel[];
   jobId?: string;
   recipients: {
     role?: RoleType;
@@ -335,16 +339,20 @@ export async function notify(
   }
   const inAppBody = resolveInAppBody(templates);
 
-  await HANDLERS.IN_APP.handle(app.prisma, app, event, {
-    jobId: event.jobId,
-    smsEnabled: shop.smsEnabled,
-    templateBody: inAppBody,
-    templateVars,
-    whatsappEnabled: shop.whatsappEnabled,
-  });
+  const excluded = new Set(event.excludeChannels ?? []);
+
+  if (!excluded.has("IN_APP")) {
+    await HANDLERS.IN_APP.handle(app.prisma, app, event, {
+      jobId: event.jobId,
+      smsEnabled: shop.smsEnabled,
+      templateBody: inAppBody,
+      templateVars,
+      whatsappEnabled: shop.whatsappEnabled,
+    });
+  }
 
   for (const template of templates) {
-    if (template.channel === "IN_APP") {
+    if (template.channel === "IN_APP" || excluded.has(template.channel)) {
       continue;
     }
     const handler = HANDLERS[template.channel];
@@ -369,7 +377,7 @@ export async function notify(
   // sempre (já tratado no loop acima).
   const smsTemplate = templates.find((t) => t.channel === "SMS");
   const waTemplate = templates.find((t) => t.channel === "WHATSAPP");
-  if (!smsTemplate && waTemplate) {
+  if (!smsTemplate && waTemplate && !excluded.has("SMS")) {
     await HANDLERS.SMS.handle(app.prisma, app, event, {
       jobId: event.jobId,
       smsEnabled: shop.smsEnabled,

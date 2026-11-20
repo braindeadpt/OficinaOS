@@ -1222,6 +1222,10 @@ model ShopSettings {
   remarketingDays             Int       @default(90)
   remarketingCooldownDays     Int       @default(180)
   remarketingTemplate         String?
+  // Pickup reminder (job_done_reminder): business-initiated message to a
+  // customer outside the 24h WhatsApp window — must be an APPROVED Meta
+  // template when the transport is meta/cloud. Evolution ignores it.
+  pickupReminderTemplate      String?
   // Public base URL used to build customer-facing links (e.g. WhatsApp
   // tracking links). Optional: shops on a LAN may not expose one.
   trackingBaseUrl             String?

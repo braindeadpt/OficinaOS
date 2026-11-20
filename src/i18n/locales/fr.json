@@ -2080,6 +2080,8 @@
   "remarketing_template": "Nom du modèle Meta",
   "remarketing_template_hint": "Doit exister et être APPROUVÉ dans votre compte Meta Business. Corps suggéré : \"Olá {{1}}! Já passou algum tempo desde a sua última reparação na {{2}}. Se o seu equipamento precisar de atenção, estamos aqui para ajudar.\"",
   "remarketing_upsell": "Le remarketing automatique de WhatsApp est disponible avec le module Remarketing : demandez à votre fournisseur de l'activer.",
+  "pickup_reminder_template": "Modèle Meta du rappel de collecte",
+  "pickup_reminder_template_hint": "Le rappel «prêt à récupérer» parvient au client des jours plus tard — en dehors de la fenêtre de 24 h de WhatsApp — donc sur le transport Meta il doit s'agir d'un modèle APPROUVÉ dans le compte Meta Business de la boutique. Variables du corps : {{1}} = prénom du client, {{2}} = code de la réparation, {{3}} = nom de la boutique.",
   "jobStatus": {
     "INTAKE": "Admission",
     "WAITING_FOR_PARTS": "En attente de pièces",
