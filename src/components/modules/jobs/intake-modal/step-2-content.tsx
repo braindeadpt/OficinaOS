@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { fetchLoanerDevices, type LoanerDevice } from "@/lib/api-loaners";
 import { buildJobPayload } from "@/lib/build-job-payload";
+import { useSettingsStore } from "@/stores/settings";
 import AccessoriesPicker from "./accessories-picker";
 import FunctionalChecklist from "./functional-checklist";
 import RemoteSignatureDialog from "./remote-signature-dialog";
@@ -42,11 +43,16 @@ export default function Step2Content({
   update,
 }: Step2Props) {
   const { i18n } = useTranslation();
+  // Shop-editable clauses win; empty setting falls back to the app default.
+  // The same text feeds the display, the remote-sign document and the
+  // intakeTermsText sent on submit — what the customer reads is what signs.
+  const customTerms = useSettingsStore((s) => s.shopSettings?.intakeTerms);
+  const termsText = customTerms?.trim() || t("intake.terms_text");
   // The frozen intake document a remote signature session signs over — same
   // builder the server uses to verify the ficha didn't drift before submit.
   const intakeDocument = buildIntakeDocument(
     buildJobPayload(form),
-    t("intake.terms_text"),
+    termsText,
     i18n.language
   );
   // Shown once the field was touched or the server flagged it on submit.
@@ -246,7 +252,7 @@ export default function Step2Content({
         <div>
           <span className={labelCls}>{t("intake.terms_title")}</span>
           <p className="rounded-xl bg-surface-container-lowest p-4 font-body text-on-surface-variant text-xs leading-relaxed ring-1 ring-outline-variant">
-            {t("intake.terms_text")}
+            {termsText}
           </p>
           <div className="mt-3">
             <SignaturePad onChange={(v) => update("signature", v)} />

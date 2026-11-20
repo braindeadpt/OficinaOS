@@ -50,6 +50,8 @@ export const updateShopSettingsSchema = z
     phone: z.string().max(32).optional(),
     currency: z.string().max(8).optional(),
     receiptFooter: z.string().max(2000).optional(),
+    // Claúsulas da ficha de entrada — null/vazio = predefinição da app.
+    intakeTerms: z.string().max(4000).optional(),
     // Printing presets — applied by the server-rendered receipt/label HTML.
     receiptPaper: z.enum(["58mm", "80mm", "a4"]).optional(),
     receiptShowImei: z.boolean().optional(),
@@ -95,6 +97,7 @@ export const updateShopSettingsSchema = z
       data.phone !== undefined ||
       data.currency !== undefined ||
       data.receiptFooter !== undefined ||
+      data.intakeTerms !== undefined ||
       data.receiptPaper !== undefined ||
       data.receiptShowImei !== undefined ||
       data.receiptShowProblem !== undefined ||

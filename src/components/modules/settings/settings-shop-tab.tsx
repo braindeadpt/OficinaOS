@@ -146,6 +146,7 @@ const SHOP_FORM_DEFAULT = {
   countryCode: "PT",
   currency: "EUR",
   receiptFooter: "",
+  intakeTerms: "",
   receiptPaper: "80mm" as "58mm" | "80mm" | "a4",
   receiptShowImei: true,
   receiptShowProblem: true,
@@ -161,6 +162,17 @@ const SHOP_FORM_DEFAULT = {
   reviewUrl: "",
 };
 
+function printerFormFromSettings(shopSettings: ShopSettings) {
+  return {
+    printerMode: (shopSettings.printerMode === "escpos"
+      ? "escpos"
+      : "browser") as "browser" | "escpos",
+    printerHost: shopSettings.printerHost ?? "",
+    printerPort: shopSettings.printerPort ?? 9100,
+    printerHighContrast: shopSettings.printerHighContrast ?? false,
+  };
+}
+
 function formFromSettings(shopSettings: ShopSettings) {
   const paper = shopSettings.receiptPaper as "58mm" | "80mm" | "a4" | null;
   const label = shopSettings.labelSize as "40x20" | "57x32" | "62x29" | null;
@@ -171,6 +183,7 @@ function formFromSettings(shopSettings: ShopSettings) {
     countryCode: shopSettings.countryCode ?? "PT",
     currency: shopSettings.currency ?? "EUR",
     receiptFooter: shopSettings.receiptFooter ?? "",
+    intakeTerms: shopSettings.intakeTerms ?? "",
     receiptPaper: paper ?? "80mm",
     receiptShowImei: shopSettings.receiptShowImei ?? true,
     receiptShowProblem: shopSettings.receiptShowProblem ?? true,
@@ -178,12 +191,7 @@ function formFromSettings(shopSettings: ShopSettings) {
     receiptShowQr: shopSettings.receiptShowQr ?? true,
     receiptShowWarranty: shopSettings.receiptShowWarranty ?? true,
     labelSize: label ?? "40x20",
-    printerMode: (shopSettings.printerMode === "escpos"
-      ? "escpos"
-      : "browser") as "browser" | "escpos",
-    printerHost: shopSettings.printerHost ?? "",
-    printerPort: shopSettings.printerPort ?? 9100,
-    printerHighContrast: shopSettings.printerHighContrast ?? false,
+    ...printerFormFromSettings(shopSettings),
     monthlyRevenueGoal:
       shopSettings.monthlyRevenueGoal === null ||
       shopSettings.monthlyRevenueGoal === undefined
@@ -427,6 +435,29 @@ export default function SettingsShopTab({
             />
           </Field>
         </div>
+      </div>
+
+      <div className="rounded-2xl bg-surface-container-low p-5">
+        <p className="mb-1 font-semibold text-on-surface text-sm">
+          {t("intake_terms_title")}
+        </p>
+        <p className="mb-4 font-label text-on-surface-variant text-xs">
+          {t("intake_terms_help")}
+        </p>
+        <Field label={t("intake_terms_label")}>
+          <Textarea
+            className="resize-y"
+            id="shop-intake-terms"
+            maxLength={4000}
+            onChange={(e) => {
+              setShopForm((f) => ({ ...f, intakeTerms: e.target.value }));
+              onDirtyChange(true);
+            }}
+            placeholder={t("intake.terms_text")}
+            rows={5}
+            value={shopForm.intakeTerms}
+          />
+        </Field>
       </div>
 
       <div className="rounded-2xl bg-surface-container-low p-5">

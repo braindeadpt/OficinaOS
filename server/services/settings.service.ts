@@ -140,6 +140,7 @@ const shopCreate = (input: UpdateShopSettingsInput) => ({
   id: "default",
   phone: input.phone ?? null,
   receiptFooter: input.receiptFooter ?? null,
+  intakeTerms: input.intakeTerms?.trim() || null,
   receiptPaper: input.receiptPaper ?? "80mm",
   receiptShowImei: input.receiptShowImei ?? true,
   receiptShowProblem: input.receiptShowProblem ?? true,
@@ -163,6 +164,10 @@ const shopUpdate = (input: UpdateShopSettingsInput) => ({
   currency: input.currency,
   phone: input.phone,
   receiptFooter: input.receiptFooter,
+  intakeTerms:
+    input.intakeTerms === undefined
+      ? undefined
+      : input.intakeTerms.trim() || null,
   receiptPaper: input.receiptPaper,
   receiptShowImei: input.receiptShowImei,
   receiptShowProblem: input.receiptShowProblem,

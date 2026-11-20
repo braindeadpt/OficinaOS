@@ -16,6 +16,7 @@ import { ChunkErrorBoundary } from "@/components/ui/chunk-error-boundary";
 import api, { getErrorMessage } from "@/lib/api";
 import { buildJobPayload } from "@/lib/build-job-payload";
 import { useJobsStore } from "@/stores/jobs";
+import { useSettingsStore } from "@/stores/settings";
 import { useUiStore } from "@/stores/ui";
 
 interface DashboardLayoutProps {
@@ -31,6 +32,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const createJob = useJobsStore((s) => s.createJob);
   const fetchJobs = useJobsStore((s) => s.fetchJobs);
   const fetchMetrics = useJobsStore((s) => s.fetchMetrics);
+  const intakeTerms = useSettingsStore((s) => s.shopSettings?.intakeTerms);
   const { pathname } = useLocation();
   const { t, i18n } = useTranslation();
 
@@ -57,9 +59,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       try {
         // The terms text is frozen into the signed document — send exactly
         // what the signature pad showed, in the UI language the customer saw.
+        // Shop-editable clauses (settings.intakeTerms) win over the default.
         const job = await createJob({
           ...buildJobPayload(data),
-          intakeTermsText: t("intake.terms_text"),
+          intakeTermsText: intakeTerms?.trim() || t("intake.terms_text"),
           intakeLocale: i18n.language,
         });
         toast.success(t("jobs_created_success", { id: job.jobCode || job.id }));
@@ -96,6 +99,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       fetchMetrics,
       showPrintPreview,
       markRequestConverted,
+      intakeTerms,
       t,
       i18n.language,
     ]

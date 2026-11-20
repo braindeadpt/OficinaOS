@@ -1166,6 +1166,9 @@ model ShopSettings {
   defaultWarrantyDays         Int       @default(30)
   timezone                    String? // IANA name, e.g. "Africa/Algiers". Null -> env TZ fallback.
   receiptFooter               String?   @db.Text
+  // Custom clauses shown on the repair intake ficha and frozen into the
+  // signed document. Null/empty = the app's built-in terms_text default.
+  intakeTerms                 String?   @db.Text
   // Printing — presets applied by the server-rendered receipt/label HTML.
   // receiptPaper: "58mm" | "80mm" (thermal roll) | "a4" (full document).
   receiptPaper                String    @default("80mm")

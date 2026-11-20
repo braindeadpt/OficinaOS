@@ -113,6 +113,7 @@ interface SettingsState {
     countryCode?: string;
     currency?: string;
     receiptFooter?: string;
+    intakeTerms?: string;
     receiptPaper?: "58mm" | "80mm" | "a4";
     receiptShowImei?: boolean;
     receiptShowProblem?: boolean;
