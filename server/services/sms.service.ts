@@ -271,10 +271,10 @@ export function resolveSmsChannel(
 function cloudSmsError(status: number, body: unknown): string {
   const msg = (body as { error?: { message?: string } } | null)?.error?.message;
   if (status === 402) {
-    return "O módulo SMS não está ativo na subscrição.";
+    return "SMS module not active in the subscription";
   }
   if (status === 409) {
-    return "Credenciais SMS em falta na cloud — repete o setup.";
+    return "SMS credentials missing in cloud — rerun setup";
   }
   return msg ?? `Cloud devolveu ${status}`;
 }
@@ -293,7 +293,7 @@ async function sendViaSmsCloud(
     token: shopToken,
   }).catch(() => null);
   if (!res) {
-    return { error: "a aguardar ligação à cloud", success: false };
+    return { error: "awaiting cloud connection", success: false };
   }
   if (!res.ok) {
     return { error: cloudSmsError(res.status, res.body), success: false };
@@ -536,21 +536,36 @@ async function applyDeliveryReport(
   refId: string | null | undefined,
   statusType: string | null | undefined,
   log: FastifyBaseLogger
-): Promise<void> {
+): Promise<boolean> {
   if (!(refId && statusType)) {
-    return; // report sem ligação possível — nada a fazer, ack segue
+    return true; // report sem ligação possível — nada a fazer, ack segue
   }
+  let next: { error?: string; status: OutboxStatus };
   if (statusType === "DELIVERED") {
-    await transitionOutboxEntry(prisma, refId, OutboxStatus.SENT, {
-      status: OutboxStatus.DELIVERED,
-    }).catch((err) => log.warn({ err, refId }, "sms report transition failed"));
-    return;
-  }
-  if (REPORT_FAILED_TYPES.has(statusType)) {
-    await transitionOutboxEntry(prisma, refId, OutboxStatus.SENT, {
-      error: `entrega falhou — ${statusType}`,
+    next = { status: OutboxStatus.DELIVERED };
+  } else if (REPORT_FAILED_TYPES.has(statusType)) {
+    next = {
+      error: `delivery failed — ${statusType}`,
       status: OutboxStatus.FAILED,
-    }).catch((err) => log.warn({ err, refId }, "sms report transition failed"));
+    };
+  } else {
+    return true; // estado intermédio — nada a gravar
+  }
+  // A transition failure or zero affected rows (entry still QUEUED —
+  // the report arrived before the send ack) means the status was never
+  // persisted: return false so the report stays queued for the next
+  // poll instead of being acked with a wrong outbox status.
+  try {
+    const updated = await transitionOutboxEntry(
+      prisma,
+      refId,
+      OutboxStatus.SENT,
+      next
+    );
+    return updated > 0;
+  } catch (err) {
+    log.warn({ err, refId }, "sms report transition failed");
+    return false;
   }
 }
 
@@ -567,13 +582,17 @@ async function processCloudInbound(
   log: FastifyBaseLogger
 ): Promise<boolean> {
   try {
-    if (!rateOk(msg.fromPhone)) {
-      return true;
-    }
-    // Delivery reports: não são texto para o bot — mapeiam ao estado
-    // da outbox entry que originou o envio (refId = dedupeId).
+    // Delivery reports não são texto do bot nem consomem a quota de
+    // replies do cliente — tratam-se antes do rate limit.
     if (msg.kind === "REPORT") {
-      await applyDeliveryReport(ctx.prisma, msg.refId, msg.statusType, log);
+      return await applyDeliveryReport(
+        ctx.prisma,
+        msg.refId,
+        msg.statusType,
+        log
+      );
+    }
+    if (!rateOk(msg.fromPhone)) {
       return true;
     }
     const inbound = {
@@ -590,13 +609,8 @@ async function processCloudInbound(
       out.text,
       countryCode
     );
-    if (!sent.success) {
-      log.warn(
-        { err: sent.error, to: msg.fromPhone },
-        "sms-cloud reply failed"
-      );
-      return false; // retry no próximo poll — sem ack
-    }
+    // Staff escalate first: a failed outbound reply must not swallow
+    // the customer's request for help (retries re-escalate — harmless).
     if (out.escalate) {
       await escalateToStaff(
         ctx,
@@ -605,6 +619,13 @@ async function processCloudInbound(
         out.customerName,
         out.jobId
       ).catch((err) => log.warn({ err }, "sms-cloud escalate failed"));
+    }
+    if (!sent.success) {
+      log.warn(
+        { err: sent.error, to: msg.fromPhone },
+        "sms-cloud reply failed"
+      );
+      return false; // retry no próximo poll — sem ack
     }
     return true;
   } catch (err) {

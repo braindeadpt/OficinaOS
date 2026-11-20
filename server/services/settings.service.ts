@@ -536,22 +536,38 @@ function applyCustomSmsFields(
 // para re-push (mudança de sender ou rotação de secret) ──
 function applyCloudSmsFields(
   data: SmsSettingsData,
-  input: UpdateSmsSettingsInput
+  input: UpdateSmsSettingsInput,
+  current?: {
+    smsBulksmsTokenId?: string | null;
+    smsCloudSender?: string | null;
+  } | null
 ) {
-  if (input.bulksmsTokenId !== undefined) {
-    data.smsBulksmsTokenId = input.bulksmsTokenId.trim() || null;
+  // The at-cloud flag only clears on a real change — re-saving identical
+  // values must not disable a working channel (the local secret was
+  // deleted on upload, so nothing could restore the flag).
+  const invalidate = () => {
     data.smsCredentialsAtCloud = false;
+  };
+  if (input.bulksmsTokenId !== undefined) {
+    const next = input.bulksmsTokenId.trim() || null;
+    data.smsBulksmsTokenId = next;
+    if (next !== (current?.smsBulksmsTokenId ?? null)) {
+      invalidate();
+    }
   }
   if (
     input.bulksmsTokenSecret !== undefined &&
     input.bulksmsTokenSecret !== ""
   ) {
     data.smsBulksmsSecretEncrypted = encryptSecret(input.bulksmsTokenSecret);
-    data.smsCredentialsAtCloud = false;
+    invalidate();
   }
   if (input.cloudSender !== undefined) {
-    data.smsCloudSender = input.cloudSender.trim() || null;
-    data.smsCredentialsAtCloud = false;
+    const next = input.cloudSender.trim() || null;
+    data.smsCloudSender = next;
+    if (next !== (current?.smsCloudSender ?? null)) {
+      invalidate();
+    }
   }
 }
 
@@ -581,7 +597,7 @@ export async function upsertSmsSettings(
     data.smsGatewayPasswordEncrypted = encryptSecret(input.gatewayPassword);
   }
   applyCustomSmsFields(data, input);
-  applyCloudSmsFields(data, input);
+  applyCloudSmsFields(data, input, await findShopSettingsUnique(prisma));
 
   return await upsertShopSettingsRepo(prisma, {
     create: {

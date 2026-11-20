@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   createManyAndReturnInAppNotifications: vi.fn(),
   findManyUsers: vi.fn(),
   respondToQuote: vi.fn(),
-  transitionOutboxEntry: vi.fn(),
+  transitionOutboxEntry: vi.fn(async () => 1),
 }));
 
 vi.mock("../../repositories/notification.repository.js", () => ({

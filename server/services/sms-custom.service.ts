@@ -19,7 +19,6 @@ import { formatPhone } from "./notification-sender.js";
  */
 
 const PLACEHOLDER_RE = /\{\{(to|text)\}\}/g;
-const TRAILING_SLASHES_RE = /\/+$/;
 const SEND_TIMEOUT_MS = 15_000;
 
 export interface CustomSmsConfig {
@@ -163,7 +162,7 @@ export function resolveCustomSmsConfig(
     headers,
     method,
     successText: settings.smsCustomSuccessText || null,
-    url: settings.smsCustomUrl.trim().replace(TRAILING_SLASHES_RE, ""),
+    url: settings.smsCustomUrl.trim(),
   };
 }
 
