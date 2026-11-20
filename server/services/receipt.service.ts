@@ -933,6 +933,28 @@ const LOANER_AGREEMENT_STRINGS: Record<string, LoanerAgreementStrings> = {
  * what is printed — so a reprint after a fleet edit produces a visibly
  * different reference.
  */
+/**
+ * Locale of the stored signature's frozen document, when present — the
+ * signed agreement is reprinted in the language the customer saw, never
+ * the browser's Accept-Language.
+ */
+function signedAgreementLocale(job: {
+  loanerAgreementSignatureDataUrl?: string | null;
+  loanerAgreementSnapshot?: unknown;
+}): string | null {
+  if (
+    !(
+      typeof job.loanerAgreementSignatureDataUrl === "string" &&
+      job.loanerAgreementSignatureDataUrl.startsWith("data:image/")
+    )
+  ) {
+    return null;
+  }
+  const locale = (job.loanerAgreementSnapshot as LoanerAgreementDocument | null)
+    ?.locale;
+  return locale && LOANER_AGREEMENT_STRINGS[locale] ? locale : null;
+}
+
 export async function renderLoanerAgreementHtml(
   prisma: DbClient,
   job: {
@@ -963,7 +985,10 @@ export async function renderLoanerAgreementHtml(
   options?: { locale?: string }
 ): Promise<string> {
   const settings = await findShopSettingsUnique(prisma);
-  const locale = options?.locale ?? "pt";
+  // A signed document is frozen in the language the customer saw — it is
+  // reprinted in that language, never the browser's Accept-Language.
+  const signedLocale = signedAgreementLocale(job);
+  const locale = signedLocale ?? options?.locale ?? "pt";
   const s = LOANER_AGREEMENT_STRINGS[locale] ?? LOANER_AGREEMENT_STRINGS.pt;
   const text = loanerAgreementText(locale);
   const date = new Date(job.createdAt).toLocaleString(s.dateLocale);
@@ -996,9 +1021,6 @@ export async function renderLoanerAgreementHtml(
   // too: the match rebuilds in the frozen locale, so printing in another
   // language would otherwise show a signature under clauses the customer
   // never saw.
-  const signedLocale = (
-    job.loanerAgreementSnapshot as LoanerAgreementDocument | null
-  )?.locale;
   const signatureApplies =
     typeof job.loanerAgreementSignatureDataUrl === "string" &&
     job.loanerAgreementSignatureDataUrl.startsWith("data:image/") &&

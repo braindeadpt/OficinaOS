@@ -239,10 +239,10 @@ describe("renderLoanerAgreementHtml signature integrity", () => {
     expect(html).not.toMatch(DOC_REF_RE);
   });
 
-  it("falls back to the paper line when the print language differs from the signed one", async () => {
-    // Signed in PT but printed in EN — the match rebuilds in the frozen
-    // locale, so without the locale gate the signature would sit under
-    // clauses the customer never saw.
+  it("reprints a signed agreement in the frozen language, not the browser's", async () => {
+    // Signed in PT; the print request comes in with EN (browser
+    // Accept-Language). The document is frozen in pt — the reprint uses
+    // that language so the stored signature and seal still apply.
     const html = await renderLoanerAgreementHtml(
       mockPrisma(FULL_SETTINGS),
       {
@@ -257,9 +257,9 @@ describe("renderLoanerAgreementHtml signature integrity", () => {
       },
       { locale: "en" }
     );
-    expect(html).not.toContain("data:image/png;base64,BBBB");
-    expect(html).not.toContain("Signed document #");
-    expect(html).toContain("Customer signature");
+    expect(html).toContain("data:image/png;base64,BBBB");
+    expect(html).toContain('lang="pt"');
+    expect(html).toContain("Documento assinado #");
   });
 
   it("falls back to the paper line when the signed snapshot went stale", async () => {
