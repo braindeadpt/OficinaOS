@@ -441,52 +441,42 @@ async function seedAgentDefinitions() {
   console.log("Agent definitions seeded.");
 }
 
-async function seedDevices() {
-  const brands = [
-    {
-      name: "Apple",
-      models: [
-        "iPhone 14",
-        "iPhone 15",
-        "iPhone 16",
-        "iPhone 16 Pro Max",
-        "iPhone SE",
-      ],
-    },
-    {
-      name: "Samsung",
-      models: [
-        "Galaxy S24",
-        "Galaxy A54",
-        "Galaxy A34",
-        "Galaxy Z Flip5",
-        "Galaxy M14",
-      ],
-    },
-    { name: "Huawei", models: ["P40", "Nova 11", "Y9 Prime", "Mate 40"] },
-    {
-      name: "Xiaomi",
-      models: ["Redmi 13", "Redmi Note 13 Pro", "Poco X6", "14"],
-    },
-    { name: "Oppo", models: ["Reno 10", "A78", "Find X5", "A58"] },
-    { name: "Vivo", models: ["V29", "X100", "Y36", "V30"] },
-    { name: "OnePlus", models: ["Nord CE 3", "12", "11", "Nord 3"] },
-    { name: "Google", models: ["Pixel 8", "Pixel 7a", "Pixel 8 Pro"] },
-  ];
+const deviceCatalog = (
+  await import("../shared/device-catalog.json", { with: { type: "json" } })
+).default as {
+  brands: { models: { category: string; model: string }[]; name: string }[];
+};
 
-  for (const { name, models } of brands) {
+async function seedDevices() {
+  for (const { name, models } of deviceCatalog.brands) {
     const brand = await prisma.brand.upsert({
       where: { name },
       update: {},
       create: { name },
     });
-    for (const model of models) {
-      await prisma.device.upsert({
-        where: { brandId_model: { brandId: brand.id, model } },
-        // Backfill category on seed rows created before the field existed.
-        update: { category: "phone" },
-        create: { brandId: brand.id, model, category: "phone" },
-      });
+    const existing = await prisma.device.findMany({
+      select: { category: true, id: true, model: true },
+      where: { brandId: brand.id },
+    });
+    const byModel = new Map(existing.map((d) => [d.model, d]));
+    const toCreate: {
+      brandId: string;
+      category: string;
+      model: string;
+    }[] = [];
+    for (const { category, model } of models) {
+      const ex = byModel.get(model);
+      if (!ex) {
+        toCreate.push({ brandId: brand.id, category, model });
+      } else if (ex.category !== category) {
+        await prisma.device.update({
+          data: { category },
+          where: { id: ex.id },
+        });
+      }
+    }
+    if (toCreate.length > 0) {
+      await prisma.device.createMany({ data: toCreate });
     }
   }
   console.log("Device brands and models seeded.");
