@@ -139,6 +139,61 @@ Consentimento partilhado (`whatsappConsent` = opt-in de mensagens
 automáticas, qualquer canal). Password do gateway encriptada
 (AES-256-GCM); token do webhook gerado por `generateSmsWebhookToken`.
 
+### Canais de mensagens — matriz free/Pro (regra canónica)
+
+**Free = transportes self-hosted e não-oficiais — custo e responsabilidade
+ficam do lado da loja (disclaimer aceite, ban/ToS são problema dela).
+Pro = apenas APIs oficiais, enviadas e enforçadas pela Cloud — a oferta
+premium é "nós tratamos".**
+
+| Canal | Free (infra da loja) | Pro (Cloud envia) |
+|---|---|---|
+| WhatsApp | Evolution/Baileys (`whatsappTransport:"evolution"`) — não-oficial, risco de ban, disclaimer obrigatório | Meta Business API — credenciais em `shops.whatsappAccessToken`, envio via `POST /whatsapp/send` (402 sem entitlement) |
+| SMS | SMS Gateway for Android na LAN — SIM/tarifário e limites da operadora da loja | Provider comercial (BulkSMS/Twilio/…) — `smsTransport:"cloud"`, credenciais na Cloud (`POST /shops/sms-credentials` + `POST /sms/send` — por construir quando surgir o 1.º provider pedido) |
+
+Regras:
+
+- Tudo o que é Pro sai pela Cloud → gate server-side por envio; tudo o que
+  é free sai da infra da loja → nada a enforçar. Nunca Baileys/scraping na
+  Cloud — "Pro" é só APIs com contrato.
+- **Estado da migração:** os gates atuais ainda marcam Evolution
+  (`whatsapp-bot`) e SMS-Android (`sms`) como Pro. A matriz é o alvo — o
+  flip para free é retirar o entitlement do transporte (disclaimer
+  Evolution e toggles de canal mantêm-se).
+- Meta direct local (`whatsappApiTokenEncrypted`) é legacy — existe só
+  para a migração e apaga-se no primeiro envio Cloud bem-sucedido.
+- `customer.whatsappConsent` é o opt-in único para toda a mensagem
+  automática, qualquer canal (WA, SMS ou provider futuro).
+
+### Notificações ao cliente — quando disparam e onde vivem
+
+Pipeline única para todos os eventos: código do domínio chama
+`notify()` (`notification-dispatch.ts`) → procura template por canal em
+`NotificationTemplate` (editável em Definições → Notificações) → gates de
+canal ativo + consentimento → `notification-outbox` (fila/retry/cancel) →
+transporte resolvido (meta/cloud/evolution ou sms-android). SMS sem
+template próprio usa o corpo WhatsApp com `*bold*` removido.
+
+| Evento | Dispara quando | Cliente recebe | Onde no código |
+|---|---|---|---|
+| `job_created` | reparação criada (intake) | "registada" + link de acompanhamento | `job.service.ts` — create |
+| `job_in_repair` | status → IN_REPAIR | "em reparação" + tracking | `updateStatus` — `STATUS_TEMPLATE_MAP` |
+| `job_waiting_parts` | status → WAITING_FOR_PARTS | "a aguardar peças" + tracking | idem |
+| `job_on_hold` | status → ON_HOLD | "em pausa" + tracking | idem |
+| `job_done` | status → DONE | **"reparado e pronto a levantar"** + tracking | idem |
+| `job_delivered` | status → DELIVERED | "entregue" + recibo/garantia + link de avaliação | idem |
+| `job_returned` | status → RETURNED | "devolvido" | idem |
+| `job_cancelled` | status → CANCELLED | "cancelada" | idem |
+| `job_overdue` | scheduler: `estimatedDate` passou e job aberto | "está a demorar" + tracking | `jobs/overdue-scheduler.ts` |
+| `quote_sent` | staff clica "enviar orçamento" | valor + link para aprovar/recusar | `job-quote.service.ts` |
+| `warranty_return_created` | devolução em garantia criada | "registámos a devolução" + tracking | `routes/jobs.ts` |
+| `signature_link` | staff envia link para assinar ficha/termo — **por implementar** | link `/sign/:token` (só faz sentido com URL remoto — cloud ou APP_URL público) | endpoint novo `POST /sign-sessions/:token/send` + botão nos dialogs |
+
+Só para staff (IN_APP): `pre_check_submitted`, `return_claim_resolved`,
+`part_low_stock`, e uma cópia IN_APP de cada evento de job para o OWNER.
+`quote_approved`/`quote_rejected` também só notificam staff — a resposta
+do cliente ao orçamento não deve gerar eco de volta ao cliente.
+
 ### Módulos `diag-intake` + `ai-reports`
 
 `oficinaos-diag` corre 100% local no PC do cliente. Se o utilizador meter o
