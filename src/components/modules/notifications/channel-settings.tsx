@@ -192,7 +192,7 @@ function SmsCustomFields({
       >
         <Textarea
           autoComplete="off"
-          className="font-mono text-xs"
+          className="resize-y font-mono text-xs"
           onChange={(e) =>
             setForm((f) => ({ ...f, customHeaders: e.target.value }))
           }
@@ -210,7 +210,7 @@ function SmsCustomFields({
       >
         <Textarea
           autoComplete="off"
-          className="font-mono text-xs"
+          className="resize-y font-mono text-xs"
           onChange={(e) =>
             setForm((f) => ({ ...f, customBodyTemplate: e.target.value }))
           }
