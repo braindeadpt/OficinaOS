@@ -19,6 +19,7 @@ const ChangePasswordPage = lazy(() => import("@/pages/auth/change-password"));
 const HelpPage = lazy(() => import("@/pages/help"));
 const LoginPage = lazy(() => import("@/pages/auth/login"));
 const ResetPasswordPage = lazy(() => import("@/pages/auth/reset-password"));
+const Setup2faPage = lazy(() => import("@/pages/auth/setup-2fa"));
 const SetupPage = lazy(() => import("@/pages/auth/setup"));
 const CustomersPage = lazy(() => import("@/pages/customers"));
 const CustomerDetailPage = lazy(() => import("@/pages/customers/detail"));
@@ -123,6 +124,7 @@ export default function App() {
           <Route element={<ResetPasswordPage />} path="/reset-password" />
           <Route element={<ProtectedRoute requireMustChangePassword={false} />}>
             <Route element={<ChangePasswordPage />} path="/change-password" />
+            <Route element={<Setup2faPage />} path="/setup-2fa" />
           </Route>
           <Route element={<ProtectedRoute />}>
             <Route

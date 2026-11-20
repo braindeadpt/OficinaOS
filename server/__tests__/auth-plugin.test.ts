@@ -57,6 +57,7 @@ const baseSession = {
   role: "OWNER",
   isActive: true,
   mustChangePassword: false,
+  twoFactorEnabled: true,
   sessionId: "sess-1",
 };
 
@@ -131,6 +132,44 @@ describe("auth preHandler", () => {
     );
     const app = await buildApp();
     const res = await app.inject({ url: "/api/auth/must-change-password" });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("requires OWNER accounts to set up 2FA before accessing other routes", async () => {
+    mocks.getSessionFromRequest.mockResolvedValue({
+      ...baseSession,
+      twoFactorEnabled: false,
+    });
+    const app = await buildApp();
+    const res = await app.inject({ url: "/api/secure" });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("TWO_FACTOR_SETUP_REQUIRED");
+  });
+
+  it("lets non-OWNER roles through without 2FA", async () => {
+    mocks.getSessionFromRequest.mockResolvedValue({
+      ...baseSession,
+      role: "TECHNICIAN",
+      twoFactorEnabled: false,
+    });
+    const app = await buildApp();
+    const res = await app.inject({ url: "/api/secure" });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("still allows /api/auth/* while 2FA setup is pending", async () => {
+    mocks.getSessionFromRequest.mockResolvedValue({
+      ...baseSession,
+      twoFactorEnabled: false,
+    });
+    mocks.authHandler.mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    );
+    const app = await buildApp();
+    const res = await app.inject({ url: "/api/auth/two-factor/enable" });
     expect(res.statusCode).toBe(200);
   });
 

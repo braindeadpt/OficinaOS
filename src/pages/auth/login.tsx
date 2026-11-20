@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate } from "react-router";
 import LanguageToggle from "@/components/modules/language-toggle";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import api from "@/lib/api";
 import { useDemoMode } from "@/lib/demo";
 import { useAuthStore } from "@/stores/auth";
@@ -194,6 +196,84 @@ function SignInForm({
         ) : (
           t("auth_authorize")
         )}
+      </button>
+    </form>
+  );
+}
+
+function TwoFactorForm({
+  loading,
+  error,
+  onSubmit,
+  onBack,
+}: {
+  loading: boolean;
+  error: string | null;
+  onSubmit: (code: string) => void;
+  onBack: () => void;
+}) {
+  const { t } = useTranslation();
+  const [code, setCode] = useState("");
+
+  return (
+    <form
+      aria-label={t("auth_2fa_title")}
+      className="space-y-5"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSubmit(code.trim());
+      }}
+    >
+      {error && (
+        <div
+          className="flex items-start gap-3 rounded-lg bg-error-container px-4 py-3"
+          role="alert"
+        >
+          <span
+            aria-hidden="true"
+            className="material-symbols-outlined mt-0.5 text-lg text-on-error-container"
+          >
+            error
+          </span>
+          <p className="font-medium text-on-error-container text-sm">
+            {t("auth_2fa_invalid")}
+          </p>
+        </div>
+      )}
+
+      <Field label={t("auth_2fa_code_label")}>
+        <Input
+          autoComplete="one-time-code"
+          iconStart="pin"
+          inputMode="numeric"
+          maxLength={8}
+          name="totp-code"
+          onChange={(e) => {
+            setCode(e.target.value);
+          }}
+          placeholder="000000"
+          required
+          type="text"
+          value={code}
+        />
+      </Field>
+
+      <button
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 font-bold font-headline text-on-primary text-sm uppercase tracking-wider transition-colors hover:bg-primary/90 active:bg-primary/80 disabled:cursor-not-allowed disabled:opacity-50"
+        disabled={loading}
+        type="submit"
+      >
+        {loading ? t("auth_signing_in") : t("auth_2fa_verify")}
+      </button>
+      <button
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-surface-container-highest py-3 font-bold font-headline text-on-surface text-sm uppercase tracking-wider transition-colors hover:bg-surface-container-high"
+        onClick={onBack}
+        type="button"
+      >
+        <span aria-hidden="true" className="material-symbols-outlined text-lg">
+          arrow_back
+        </span>
+        {t("auth_back_to_sign_in")}
       </button>
     </form>
   );
@@ -409,6 +489,9 @@ export default function LoginPage() {
   const notice = (location.state as { notice?: string } | null)?.notice;
 
   const login = useAuthStore((s) => s.login);
+  const verifyTwoFactor = useAuthStore((s) => s.verifyTwoFactor);
+  const pendingTwoFactor = useAuthStore((s) => s.pendingTwoFactor);
+  const clearPendingTwoFactor = useAuthStore((s) => s.clearPendingTwoFactor);
   const error = useAuthStore((s) => s.error);
   const clearError = useAuthStore((s) => s.clearError);
   const isDemo = useDemoMode();
@@ -457,6 +540,21 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login(username, password, rememberMe);
+      if (useAuthStore.getState().pendingTwoFactor) {
+        return;
+      }
+      navigate("/", { replace: true });
+    } catch {
+      // error is set in the store
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleTwoFactor(code: string) {
+    setLoading(true);
+    try {
+      await verifyTwoFactor(code);
       navigate("/", { replace: true });
     } catch {
       // error is set in the store
@@ -467,6 +565,7 @@ export default function LoginPage() {
 
   function handleBackToSignIn() {
     setShowForgotPassword(false);
+    clearPendingTwoFactor();
     clearError();
   }
 
@@ -516,6 +615,26 @@ export default function LoginPage() {
             {demoLoading ? t("loading") : t("demo_login_cta")}
           </button>
         </div>
+      );
+    }
+    if (pendingTwoFactor) {
+      return (
+        <>
+          <div className="mb-8">
+            <h2 className="mb-1 font-bold font-headline text-2xl text-on-surface">
+              {t("auth_2fa_title")}
+            </h2>
+            <p className="text-on-surface-variant text-sm">
+              {t("auth_2fa_desc")}
+            </p>
+          </div>
+          <TwoFactorForm
+            error={error}
+            loading={loading}
+            onBack={handleBackToSignIn}
+            onSubmit={handleTwoFactor}
+          />
+        </>
       );
     }
     if (showForgotPassword) {

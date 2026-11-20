@@ -4,7 +4,7 @@ import { ac, roles } from "@shared/permissions";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { fromNodeHeaders } from "better-auth/node";
-import { admin, username } from "better-auth/plugins";
+import { admin, twoFactor, username } from "better-auth/plugins";
 import { loadEnv, resolveUrls } from "../config/env.js";
 import { logger } from "../utils/logger.js";
 import { sendPasswordResetEmail } from "./email.js";
@@ -117,6 +117,10 @@ export function createAuth(prisma: PrismaClient) {
         ac,
         roles,
       }),
+      // TOTP enrolment is self-service at /profile; Owners are forced
+      // through it by the TWO_FACTOR_SETUP_REQUIRED gate in the auth
+      // plugin's preHandler.
+      twoFactor({ issuer: "OficinaOS" }),
     ],
   });
 }
@@ -146,6 +150,7 @@ export async function getSessionFromRequest(
     role: session.user.role as string,
     isActive: session.user.isActive as boolean,
     mustChangePassword: session.user.mustChangePassword as boolean,
+    twoFactorEnabled: session.user.twoFactorEnabled === true,
     sessionId: session.session.id,
   };
 }

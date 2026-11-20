@@ -195,6 +195,7 @@ model User {
   role                Role
   isActive            Boolean           @default(true)
   mustChangePassword  Boolean           @default(false)
+  twoFactorEnabled    Boolean           @default(false)
   failedLoginAttempts Int               @default(0)
   lockedUntil         DateTime?         @db.Timestamptz
   banned              Boolean           @default(false)
@@ -220,6 +221,7 @@ model User {
   sessions              Session[]
   accounts              Account[]
   verifications         Verification[]
+  twoFactor             TwoFactor?
   inAppNotifications    InAppNotification[]
   returnClaimsOpened    ReturnClaim[]       @relation("ReturnClaimOpenedBy")
   returnClaimsResolved  ReturnClaim[]       @relation("ReturnClaimResolvedBy")
@@ -1390,6 +1392,28 @@ model SignatureSession {
   relayed          Boolean   @default(false)
 
   @@map("signature_sessions")
+}
+
+// ─────────────────────────────────────────────
+// TWO FACTOR (Better Auth — TOTP)
+// ─────────────────────────────────────────────
+
+// One row per user; secret and backup codes are stored encrypted by the
+// plugin (never returned). `verified=false` means the enrolment QR was
+// shown but the first code was never confirmed — that state does not
+// count as enabled and a pending row can be overwritten by re-enrolling.
+model TwoFactor {
+  id                      String    @id @default(cuid())
+  userId                  String    @unique
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  secret                  String
+  backupCodes             String
+  verified                Boolean   @default(true)
+  failedVerificationCount Int       @default(0)
+  lockedUntil             DateTime? @db.Timestamptz
+
+  @@index([userId])
+  @@map("two_factors")
 }
 
 // ─────────────────────────────────────────────

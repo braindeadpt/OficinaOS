@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@generated/client";
+import { Role } from "@shared/constants/roles";
 import { AppError, isAppError } from "@shared/errors/app-error.js";
 import { fromNodeHeaders } from "better-auth/node";
 import type { FastifyPluginAsync } from "fastify";
@@ -215,7 +216,11 @@ const authPlugin: FastifyPluginAsync = async (app) => {
 
       if (
         response.status === 200 &&
-        isSignInPost(request.method, url.pathname)
+        (isSignInPost(request.method, url.pathname) ||
+          // A TOTP verify completes the pending sign-in: the credential
+          // POST was answered with twoFactorRedirect and no session, so
+          // it never hit the audit branch above.
+          url.pathname === "/api/auth/two-factor/verify-totp")
       ) {
         await auditSignIn(auth, headers, prisma);
       }
@@ -305,6 +310,18 @@ const authPlugin: FastifyPluginAsync = async (app) => {
       throw new AppError("PASSWORD_CHANGE_REQUIRED");
     }
 
+    // Owners must enrol in TOTP before touching the app — the session
+    // exists but every non-auth route refuses until twoFactorEnabled.
+    // Demo exempt: the seeded demo user is the only account and must
+    // stay reachable on the shared public demo.
+    if (
+      session.role === Role.OWNER &&
+      !session.twoFactorEnabled &&
+      !(isDemoMode() && session.username === DEMO_USERNAME)
+    ) {
+      throw new AppError("TWO_FACTOR_SETUP_REQUIRED");
+    }
+
     request.user = session;
   });
 };
@@ -324,6 +341,7 @@ declare module "fastify" {
       role: string;
       isActive: boolean;
       mustChangePassword: boolean;
+      twoFactorEnabled: boolean;
       sessionId: string;
     } | null;
   }

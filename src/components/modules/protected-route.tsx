@@ -1,7 +1,7 @@
 import type { RoleType } from "@shared/constants";
 import type { PermissionCheck } from "@shared/permissions";
 import { useTranslation } from "react-i18next";
-import { Navigate, Outlet } from "react-router";
+import { Navigate, Outlet, useLocation } from "react-router";
 import { useCan } from "@/hooks/use-can";
 import { useAuthStore } from "@/stores/auth";
 
@@ -16,6 +16,13 @@ export default function ProtectedRoute({
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isLoading = useAuthStore((s) => s.isLoading);
   const mustChangePassword = useAuthStore((s) => s.user?.mustChangePassword);
+  const location = useLocation();
+  const needsTwoFactor = useAuthStore(
+    (s) =>
+      s.user?.role === "OWNER" &&
+      s.user?.twoFactorEnabled !== true &&
+      location.pathname !== "/setup-2fa"
+  );
 
   if (isLoading) {
     return (
@@ -38,6 +45,12 @@ export default function ProtectedRoute({
 
   if (requireMustChangePassword && mustChangePassword) {
     return <Navigate replace to="/change-password" />;
+  }
+
+  // Owner without TOTP enrolment: the server refuses every non-auth route
+  // (TWO_FACTOR_SETUP_REQUIRED), so route them to the forced setup page.
+  if (needsTwoFactor) {
+    return <Navigate replace to="/setup-2fa" />;
   }
 
   return <Outlet />;

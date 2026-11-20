@@ -328,6 +328,10 @@ export const ERRORS = {
     status: 403,
     message: "errors.password_change_required",
   },
+  TWO_FACTOR_SETUP_REQUIRED: {
+    status: 403,
+    message: "errors.two_factor_setup_required",
+  },
   EMAIL_NOT_CONFIGURED: {
     status: 503,
     message: "errors.email_not_configured",
