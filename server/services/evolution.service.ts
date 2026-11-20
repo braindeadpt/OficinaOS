@@ -1,8 +1,10 @@
 /**
- * Evolution API (v2) — transporte WhatsApp local do módulo Pro
- * "whatsapp-bot". Corre num container na LAN da loja (Baileys /
+ * Evolution API (v2) — transporte WhatsApp local e free (não requer
+ * entitlement). Corre num container na LAN da loja (Baileys /
  * WhatsApp Web multi-device); não é a API oficial Meta e pode resultar
  * em ban do número — daí o disclaimer obrigatório antes de ativar.
+ * O módulo Pro "whatsapp-bot" gateia apenas as funções oficiais
+ * (relay Meta na cloud + bot inbound), nunca este transporte.
  *
  * Contrato validado com evoapicloud/evolution-api:v2.3.6:
  *   POST /instance/create            → cria instância (qrcode, hash)

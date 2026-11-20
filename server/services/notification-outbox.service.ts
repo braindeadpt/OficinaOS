@@ -11,7 +11,6 @@ import {
 import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import { logger } from "../utils/logger.js";
-import { isModuleEnabled } from "../utils/modules.js";
 import { renderTemplate } from "./notification-renderer.js";
 import { decryptSmsConfig, sendSms } from "./sms.service.js";
 import {
@@ -411,7 +410,10 @@ function getSmsConfig(row: ShopSettingsRow | null): {
   url: string;
   user: string;
 } | null {
-  if (!(row?.smsEnabled && isModuleEnabled(row, "sms"))) {
+  // SMS local (gateway Android) é free; o entitlement "sms" gateia só
+  // transportes geridos — um provider cloud futuro resolve-se aqui à
+  // parte, com a sua própria verificação de entitlement.
+  if (!row?.smsEnabled) {
     return null;
   }
   return decryptSmsConfig({

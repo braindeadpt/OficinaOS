@@ -1185,11 +1185,11 @@ model ShopSettings {
   // outbound passa a ir por POST /whatsapp/send e o token local é
   // apagado após o primeiro envio bem-sucedido.
   whatsappCredentialsAtCloud  Boolean   @default(false)
-  // Transporte WhatsApp (módulo Pro "whatsapp-bot"): "meta" = Cloud API
-  // oficial (relay na cloud ou credenciais locais legadas);
-  // "evolution" = Evolution API self-hosted na LAN da loja (Baileys —
-  // não-oficial, risco de ban). Envio só com whatsapp-bot entitlement
-  // + disclaimer aceite (whatsappLocalDisclaimerAt).
+  // Transporte WhatsApp: "meta" = Cloud API oficial (relay na cloud ou
+  // credenciais locais legadas — o módulo "whatsapp-bot" é enforced
+  // server-side pela cloud); "evolution" = Evolution API self-hosted na
+  // LAN da loja (Baileys — não-oficial, risco de ban), free com
+  // disclaimer aceite (whatsappLocalDisclaimerAt).
   whatsappTransport           String    @default("meta")
   evolutionUrl                String?
   evolutionInstance           String?

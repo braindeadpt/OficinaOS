@@ -2,7 +2,6 @@ import { decryptSecret, isEncrypted } from "../lib/crypto.js";
 import { assertNotDemoMode } from "../lib/demo.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
-import { isModuleEnabled } from "../utils/modules.js";
 import { cloudFetch } from "./cloud.service.js";
 import {
   type EvolutionConfig,
@@ -50,9 +49,11 @@ export interface SendResult {
 }
 
 /**
- * Transporte "evolution" (WhatsApp local, Pro): precisa do entitlement
- * "whatsapp-bot" e do disclaimer aceite — sem ambos resolve para null e
- * o outbox cancela os envios (mesmo efeito de revogar o módulo).
+ * Transporte "evolution" (WhatsApp local, free): corre na LAN da loja e é
+ * não-oficial — por isso exige o disclaimer de responsabilidade aceite,
+ * mas não o entitlement "whatsapp-bot" (esse fica para as funções
+ * oficiais: relay cloud Meta + bot inbound). Sem disclaimer resolve para
+ * null e o outbox cancela os envios.
  */
 function resolveEvolutionChannel(
   settings: SettingsLike
@@ -60,7 +61,6 @@ function resolveEvolutionChannel(
   if (
     settings.whatsappTransport !== "evolution" ||
     !settings.whatsappLocalDisclaimerAt ||
-    !isModuleEnabled(settings, "whatsapp-bot") ||
     !settings.evolutionUrl
   ) {
     return null;

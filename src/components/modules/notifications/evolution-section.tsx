@@ -18,7 +18,6 @@ interface EvolutionSectionProps {
   disclaimerStored: boolean;
   form: EvolutionFormState;
   hasApiKey: boolean;
-  moduleEnabled: boolean;
   onChange: (patch: Partial<EvolutionFormState>) => void;
   savedInstance: string | null;
   savedUrl: string | null;
@@ -42,15 +41,14 @@ const STATUS_COLORS: Record<string, string> = {
 
 /**
  * WhatsApp local (Evolution API) — config + pairing + health do
- * transporte self-hosted do módulo "whatsapp-bot". O disclaimer é um
- * gate de UI; o servidor revalida disclaimer + entitlement no PUT e no
- * outbox.
+ * transporte self-hosted não-oficial. É free: sem entitlement — mas o
+ * disclaimer de responsabilidade é gate de UI e o servidor revalida-o
+ * no PUT das settings e no outbox antes de cada envio.
  */
 export function EvolutionSection({
   disclaimerStored,
   form,
   hasApiKey,
-  moduleEnabled,
   onChange,
   savedInstance,
   savedUrl,
@@ -97,14 +95,6 @@ export function EvolutionSection({
       }
     };
   }, [refresh]);
-
-  if (!moduleEnabled) {
-    return (
-      <p className="rounded-xl bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
-        {t("whatsapp_module_locked")}
-      </p>
-    );
-  }
 
   const handlePair = async () => {
     setPairLoading(true);

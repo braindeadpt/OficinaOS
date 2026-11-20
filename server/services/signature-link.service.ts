@@ -10,7 +10,6 @@ import { loadEnv } from "../config/env.js";
 import { accessUrls } from "../lib/mdns.js";
 import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
-import { isModuleEnabled } from "../utils/modules.js";
 import { createAuditLog } from "./audit.service.js";
 import { notify } from "./notification-dispatch.js";
 
@@ -194,8 +193,9 @@ export async function sendSignatureLink(
   }
 
   const settings = await findShopSettingsUnique(app.prisma);
-  const smsReady =
-    Boolean(settings?.smsEnabled) && isModuleEnabled(settings, "sms");
+  // SMS local (gateway Android) é free — o módulo "sms" gateia só os
+  // transportes geridos futuros, não o gateway da loja.
+  const smsReady = Boolean(settings?.smsEnabled);
   if (!(settings?.whatsappEnabled || smsReady)) {
     throw new AppError("SIGNATURE_LINK_NO_CHANNEL");
   }
