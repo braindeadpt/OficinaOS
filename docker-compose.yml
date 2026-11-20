@@ -83,8 +83,8 @@ services:
           sleep 86400
         done
 
-  # Optional WhatsApp local transport (Pro module "whatsapp-bot" +
-  # disclaimer in Settings). Evolution API v2 (Baileys) with its own
+  # Optional WhatsApp local transport (free — only the disclaimer in
+  # Settings is required). Evolution API v2 (Baileys) with its own
   # Postgres — it never touches the app database. Start with:
   #   docker compose --profile wa-local up -d
   # then set URL http://evolution:8080 + EVOLUTION_API_KEY in Settings.

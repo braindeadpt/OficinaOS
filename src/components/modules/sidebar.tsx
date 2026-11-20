@@ -25,6 +25,7 @@ const NAV_GROUPS: { labelKey: string; paths: string[] }[] = [
       "/suppliers",
       "/rmas",
       "/purchase-orders",
+      "/loaners",
     ],
   },
   {

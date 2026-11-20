@@ -9,8 +9,10 @@ import {
 import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import { logger } from "../utils/logger.js";
-import { isModuleEnabled } from "../utils/modules.js";
-import { queueNotification } from "./notification-outbox.service.js";
+import {
+  queueNotification,
+  STAFF_INITIATED_TEMPLATES,
+} from "./notification-outbox.service.js";
 import { renderTemplate } from "./notification-renderer.js";
 
 interface NotifyEvent {
@@ -20,6 +22,8 @@ interface NotifyEvent {
     recipientPhone?: string;
     [key: string]: string | undefined;
   };
+  /** Hard send deadline — outbox entries past it are cancelled, not sent. */
+  deliverBy?: Date;
   eventId?: string;
   eventName: string;
   jobId?: string;
@@ -126,8 +130,16 @@ const whatsAppHandler: ChannelHandler = {
     }
     // Consent gate at enqueue time: customers who did not opt in never
     // even enter the outbox. The outbox re-checks at send time.
+    // Staff-initiated templates (e.g. the signing link the staff just sent
+    // at the counter) are transactional — the staff click is the consent
+    // context, and the customer may not have a record yet at intake.
     const customer = await findCustomerByPhone(prisma, phone);
-    if (!customer?.whatsappConsent) {
+    if (
+      !(
+        STAFF_INITIATED_TEMPLATES.has(event.eventName) ||
+        customer?.whatsappConsent
+      )
+    ) {
       logger.info(
         `[notify] WHATSAPP handler: no WhatsApp consent for ${phone} on ${event.eventName} — skipping`
       );
@@ -135,6 +147,7 @@ const whatsAppHandler: ChannelHandler = {
     }
     await queueNotification(prisma, {
       channel: "WHATSAPP",
+      deliverBy: event.deliverBy,
       jobId: event.jobId,
       recipientPhone: phone,
       templateBody: context.templateBody,
@@ -160,8 +173,15 @@ const smsHandler: ChannelHandler = {
     }
     // Mesmo consent gate do WhatsApp — a flag whatsappConsent é o opt-in
     // do cliente a mensagens automáticas, qualquer que seja o canal.
+    // Templates iniciados pelo staff (link de assinatura) são transacionais
+    // e passam sem opt-in — ver STAFF_INITIATED_TEMPLATES.
     const customer = await findCustomerByPhone(prisma, phone);
-    if (!customer?.whatsappConsent) {
+    if (
+      !(
+        STAFF_INITIATED_TEMPLATES.has(event.eventName) ||
+        customer?.whatsappConsent
+      )
+    ) {
       logger.info(
         `[notify] SMS handler: no messaging consent for ${phone} on ${event.eventName} — skipping`
       );
@@ -169,6 +189,7 @@ const smsHandler: ChannelHandler = {
     }
     await queueNotification(prisma, {
       channel: "SMS",
+      deliverBy: event.deliverBy,
       jobId: event.jobId,
       recipientPhone: phone,
       templateBody: context.templateBody,
@@ -208,9 +229,10 @@ async function resolveShopNotificationConfig(prisma: DbClient): Promise<{
       currency: shop?.currency ?? "EUR",
       reviewUrl: shop?.reviewUrl ?? null,
       shopName: shop?.shopName ?? "",
-      // Módulo Pro "sms": expirado/revogado para os envios mesmo que o
-      // toggle local continue ligado — retoma sozinho quando renova.
-      smsEnabled: Boolean(shop?.smsEnabled) && isModuleEnabled(shop, "sms"),
+      // SMS local (gateway Android na LAN) é free — o módulo Pro "sms"
+      // gateia apenas transportes geridos (provider via cloud), que se
+      // resolvem pela configuração, não pelo toggle do gateway.
+      smsEnabled: Boolean(shop?.smsEnabled),
       trackingBaseUrl: shop?.trackingBaseUrl ?? null,
       whatsappEnabled: shop?.whatsappEnabled ?? false,
     };

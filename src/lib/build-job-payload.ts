@@ -35,6 +35,7 @@ export function buildJobPayload(data: IntakeFormData) {
     isUrgent: data.isUrgent,
     depositAmount: data.deposit ? Number.parseFloat(data.deposit) : undefined,
     hasLoanerDevice: data.hasLoanerDevice || undefined,
+    loanerDeviceId: (data.hasLoanerDevice && data.loanerDeviceId) || undefined,
     loanerNote: data.loanerNote || undefined,
   };
 }

@@ -2,10 +2,10 @@ import { canonicalize, type IntakeDocument } from "@shared/intake-document.js";
 import QRCode from "qrcode";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import SignLinkShare from "@/components/modules/jobs/sign-link-share";
 import { Dialog } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
-import { Input } from "@/components/ui/input";
-import api from "@/lib/api";
+import api, { type ApiError } from "@/lib/api";
 import { pickSignBaseUrl } from "./remote-signature-url";
 
 // ~3s while a session is pending — each poll also triggers the cloud reply
@@ -52,7 +52,10 @@ export default function RemoteSignatureDialog({
   const { t } = useTranslation();
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [sendState, setSendState] = useState<
+    "idle" | "sending" | "sent" | "error"
+  >("idle");
+  const [sendErrorCode, setSendErrorCode] = useState<string | null>(null);
   const [expired, setExpired] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [needsAppUrl, setNeedsAppUrl] = useState(false);
@@ -86,7 +89,8 @@ export default function RemoteSignatureDialog({
     invalidatePending();
     setQrDataUrl(null);
     setRemoteUrl(null);
-    setCopied(false);
+    setSendState("idle");
+    setSendErrorCode(null);
     setExpired(false);
     setLoadError(false);
     setNeedsAppUrl(false);
@@ -96,8 +100,9 @@ export default function RemoteSignatureDialog({
         api.post("/sign-sessions", { document: doc }),
         api.get("/public/access-info"),
       ]);
-      const { token, cloudSignUrl } = sessionRes.data as {
+      const { token, cloudSignUrl, remoteSignUrl } = sessionRes.data as {
         cloudSignUrl?: string | null;
+        remoteSignUrl?: string | null;
         token: string;
       };
       sessionRef.current = token;
@@ -113,13 +118,41 @@ export default function RemoteSignatureDialog({
         setLoadError(true);
         return;
       }
-      setRemoteUrl(cloudSignUrl ?? null);
+      // The server resolved the shareable address with the same rules the
+      // send endpoint uses (trackingBaseUrl, then public bases) — non-null
+      // means a phone can open it from outside the shop. The cloud URL is
+      // remote by definition, so it doubles as the fallback.
+      setRemoteUrl(remoteSignUrl ?? cloudSignUrl ?? null);
       const qr = await QRCode.toDataURL(signUrl, { margin: 1, width: 192 });
       setQrDataUrl(qr);
     } catch {
       setLoadError(true);
     }
   }, [invalidatePending]);
+
+  // Staff-initiated send: the server pushes the live link through the
+  // shop's messaging channels (WhatsApp/SMS). Only offered when the link
+  // is reachable off-LAN — a LAN IP would dead-end on the customer's phone.
+  const sendLink = useCallback(async () => {
+    const token = sessionRef.current;
+    if (!token) {
+      return;
+    }
+    setSendState("sending");
+    try {
+      await api.post(`/sign-sessions/${token}/send`);
+      setSendState("sent");
+    } catch (err) {
+      setSendState("error");
+      const code = (err as ApiError).code;
+      setSendErrorCode(
+        code === "SIGNATURE_LINK_NO_REMOTE" ||
+          code === "SIGNATURE_LINK_NO_CHANNEL"
+          ? code
+          : null
+      );
+    }
+  }, []);
 
   // (Re)create a session whenever the dialog opens; closing it kills any
   // pending link (locally and its cloud copy).
@@ -237,40 +270,12 @@ export default function RemoteSignatureDialog({
               {t("intake.sign_remote_waiting")}
             </p>
             {remoteUrl && (
-              <div className="mt-3 w-full">
-                <p className="mb-1 text-center text-on-surface-variant text-xs">
-                  {t("intake.sign_remote_send_link")}
-                </p>
-                <div className="flex items-center gap-2">
-                  <div className="min-w-0 flex-1">
-                    <Input
-                      className="font-mono text-xs"
-                      onFocus={(e) => e.currentTarget.select()}
-                      readOnly
-                      value={remoteUrl}
-                    />
-                  </div>
-                  <button
-                    className="shrink-0 rounded-lg bg-surface-container-high px-3 py-2 font-label text-on-surface text-xs"
-                    onClick={async () => {
-                      // Só confirma se a cópia correu mesmo — um writeText
-                      // rejeitado (sem foco/permissão) não pode mostrar
-                      // «Copiado» com o link por copiar.
-                      try {
-                        await navigator.clipboard.writeText(remoteUrl);
-                        setCopied(true);
-                      } catch {
-                        /* clipboard indisponível — o input continua selecionável */
-                      }
-                    }}
-                    type="button"
-                  >
-                    {copied
-                      ? t("intake.sign_remote_copied")
-                      : t("intake.sign_remote_copy")}
-                  </button>
-                </div>
-              </div>
+              <SignLinkShare
+                onSend={sendLink}
+                sendErrorCode={sendErrorCode}
+                sendState={sendState}
+                url={remoteUrl}
+              />
             )}
           </>
         )}

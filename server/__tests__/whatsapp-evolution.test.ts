@@ -78,7 +78,9 @@ vi.mock("../services/update.service.js", () => ({
 import { resolveWhatsAppChannel } from "../services/whatsapp-channel.js";
 
 const EVO_ROW = {
-  cloudEntitlements: ["whatsapp-bot"],
+  // No entitlements on purpose — the local transport is free; tests that
+  // need Pro modules set cloudEntitlements explicitly.
+  cloudEntitlements: [],
   evolutionApiKeyEncrypted: "enc:key",
   evolutionInstance: "oficinaos",
   evolutionUrl: "http://evolution:8080",
@@ -148,7 +150,7 @@ beforeEach(() => {
 });
 
 describe("resolveWhatsAppChannel — transporte evolution", () => {
-  it("resolves the local channel with entitlement + disclaimer", () => {
+  it("resolves the local channel with the disclaimer accepted — free, no entitlement needed", () => {
     const channel = resolveWhatsAppChannel(EVO_ROW);
     expect(channel).toEqual({
       config: {
@@ -158,14 +160,6 @@ describe("resolveWhatsAppChannel — transporte evolution", () => {
       },
       mode: "evolution",
     });
-  });
-
-  it("returns null without the whatsapp-bot entitlement", () => {
-    const channel = resolveWhatsAppChannel({
-      ...EVO_ROW,
-      cloudEntitlements: [],
-    });
-    expect(channel).toBeNull();
   });
 
   it("returns null without the disclaimer acceptance", () => {
@@ -208,16 +202,15 @@ describe("PUT /api/settings/whatsapp — gates evolution", () => {
     transport: "evolution",
   };
 
-  it("blocks enabling local transport without whatsapp-bot module", async () => {
+  it("enables local transport without the whatsapp-bot module (free)", async () => {
     const app = buildApp(fakePrisma({ ...EVO_ROW, cloudEntitlements: [] }));
     const res = await app.inject({
       method: "PUT",
       payload,
       url: "/api/settings/whatsapp",
     });
-    expect(res.statusCode).toBe(402);
-    expect(res.json().code).toBe("CLOUD_MODULE_REQUIRED");
-    expect(mocks.upsertWhatsAppSettings).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+    expect(mocks.upsertWhatsAppSettings).toHaveBeenCalled();
   });
 
   it("requires the disclaimer when enabling local transport", async () => {
@@ -234,7 +227,7 @@ describe("PUT /api/settings/whatsapp — gates evolution", () => {
     expect(mocks.upsertWhatsAppSettings).not.toHaveBeenCalled();
   });
 
-  it("enables local transport with entitlement + disclaimer", async () => {
+  it("enables local transport with the disclaimer accepted", async () => {
     const app = buildApp(fakePrisma());
     const res = await app.inject({
       method: "PUT",
@@ -309,13 +302,13 @@ describe("Evolution pairing/status routes", () => {
     expect(res.json().state).toBe("connecting");
   });
 
-  it("pair requires the whatsapp-bot module", async () => {
+  it("pair works without the whatsapp-bot entitlement (free transport)", async () => {
     const app = buildApp(fakePrisma({ ...EVO_ROW, cloudEntitlements: [] }));
     const res = await app.inject({
       method: "POST",
       url: "/api/settings/whatsapp/evolution/pair",
     });
-    expect(res.statusCode).toBe(402);
+    expect(res.statusCode).toBe(200);
   });
 
   it("pair returns QR + pairing code", async () => {

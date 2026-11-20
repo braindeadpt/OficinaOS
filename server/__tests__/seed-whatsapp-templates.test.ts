@@ -109,6 +109,14 @@ const DISPATCH_CONTEXT: Record<string, Record<string, string>> = {
     deviceLabel: "iPhone 14",
     requestCode: "PRE-2026-000001",
   },
+  signature_link: {
+    customerName: "Ana Silva",
+    docLabel: "the intake form",
+    jobCode: "RPR-2026-0001",
+    recipientPhone: "+351910000001",
+    signUrl: "https://oficinaos.test/sign/abc123",
+    ttlMinutes: "30",
+  },
 };
 
 // Events the seed must provide WHATSAPP templates for.
@@ -126,6 +134,7 @@ const REQUIRED_WHATSAPP_EVENTS = [
   "warranty_return_created",
   "part_low_stock",
   "quote_sent",
+  "signature_link",
 ];
 
 const PLACEHOLDER_RE = /\{\{[^}]*\}\}/g;

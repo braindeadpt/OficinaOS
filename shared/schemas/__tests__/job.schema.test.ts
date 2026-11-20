@@ -60,9 +60,20 @@ describe("createJobSchema — loaner device", () => {
     expect(
       createJobSchema.safeParse({
         ...VALID_JOB,
-        loanerNote: "x".repeat(201),
+        loanerNote: "x".repeat(361),
       }).success
     ).toBe(false);
+  });
+
+  it("accepts a generated fleet description at the 360 cap", () => {
+    // describeLoanerDevice()'s worst case from valid fleet fields is ~343
+    // chars — the cap must admit it or intake rejects a valid unit.
+    expect(
+      createJobSchema.safeParse({
+        ...VALID_JOB,
+        loanerNote: "x".repeat(360),
+      }).success
+    ).toBe(true);
   });
 
   it("lets an update clear the note and unset the flag", () => {

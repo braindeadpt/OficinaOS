@@ -11,6 +11,7 @@ import {
 import { getById as getJobById } from "../services/job.service.js";
 import {
   renderLabelHtml,
+  renderLoanerAgreementHtml,
   renderReceiptHtml,
 } from "../services/receipt.service.js";
 import { getRole } from "../utils/request.js";
@@ -128,6 +129,44 @@ export const receiptRoutes: FastifyPluginAsync = async (app) => {
       );
       await sendEscPos(settings, data);
       return reply.send({ ok: true });
+    }
+  );
+
+  // Standalone A4 responsibility term for the loaned device — the document
+  // the customer signs at intake when a loaner goes out.
+  app.get(
+    "/:id/loaner-agreement",
+    {
+      preHandler: [requirePermission({ jobs: ["view"] })],
+      schema: {
+        tags: ["receipts"],
+        summary: "Loaner device responsibility term (A4 HTML)",
+        params: {
+          type: "object",
+          properties: { id: { type: "string" } },
+          required: ["id"],
+        },
+      },
+    },
+    async (req, reply) => {
+      const paramParsed = jobIdParamSchema.safeParse(req.params);
+      if (!paramParsed.success) {
+        throw new AppError("VALIDATION_ERROR");
+      }
+      const { id } = paramParsed.data;
+      const job = await getJobById(app.prisma, id);
+      if (!job?.hasLoanerDevice) {
+        throw new AppError("JOB_NOT_FOUND");
+      }
+
+      const html = await renderLoanerAgreementHtml(
+        app.prisma,
+        job as unknown as Parameters<typeof renderLoanerAgreementHtml>[1],
+        { locale: req.locale }
+      );
+      return reply
+        .header("Content-Type", "text/html; charset=utf-8")
+        .send(html);
     }
   );
 

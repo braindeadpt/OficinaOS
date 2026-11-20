@@ -1,5 +1,7 @@
+import { LANGUAGES } from "@shared/constants/languages";
 import { Role } from "@shared/constants/roles";
 import { AppError, throwIfError } from "@shared/errors/app-error.js";
+import { loanerAgreementMatches } from "@shared/loaner-agreement-document.js";
 import {
   addJobNoteSchema,
   addJobPartSchema,
@@ -54,6 +56,11 @@ import {
   add as addWaitingPart,
   remove as removeWaitingPart,
 } from "../services/job-waiting-parts.service.js";
+import {
+  attachLoanerSignature,
+  createLoanerSignatureSession,
+  getLoanerAgreementPreview,
+} from "../services/loaner-signature.service.js";
 import { notify } from "../services/notification-dispatch.js";
 import {
   clearPaymentOnDelivery,
@@ -70,6 +77,15 @@ import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
 const JOB_CODE_RE = /^[A-Za-z0-9-]+$/;
 const PHONE4_RE = /^\d{4}$/;
+
+/** Optional `locale` in a request body — only a supported app language wins. */
+function requestedLocale(body: unknown): string | null {
+  const locale = (body as { locale?: unknown } | undefined)?.locale;
+  return typeof locale === "string" &&
+    (LANGUAGES as readonly string[]).includes(locale)
+    ? locale
+    : null;
+}
 
 // biome-ignore lint/suspicious/useAwait: FastifyPluginAsync requires async
 export const jobRoutes: FastifyPluginAsync = async (app) => {
@@ -276,6 +292,13 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
       if (!job) {
         throw new AppError("JOB_NOT_FOUND");
       }
+      // A stored signature only counts while the job still produces the
+      // document the customer signed — the print applies the same rule, so
+      // the badge must not claim "signed" over drifted content.
+      const loanerSignatureValid = Boolean(
+        job.loanerAgreementSignatureDataUrl &&
+          loanerAgreementMatches(job.loanerAgreementSnapshot, job)
+      );
       const marginResult = await req.server.auth.api.userHasPermission({
         body: {
           role: getRole(req),
@@ -284,9 +307,9 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
       });
       if (marginResult.success) {
         const margin = computeMargin(job);
-        return reply.send({ ...job, margin });
+        return reply.send({ ...job, loanerSignatureValid, margin });
       }
-      return reply.send(job);
+      return reply.send({ ...job, loanerSignatureValid });
     }
   );
 
@@ -457,6 +480,7 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
         userId,
         notifyCtx,
         {
+          loanerReturned: parsed.data.loanerReturned,
           requestingRole: getRole(req),
           reason: parsed.data.reason,
           actualLaborHours: parsed.data.actualLaborHours ?? undefined,
@@ -987,6 +1011,100 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
       const { id } = req.params as { id: string };
       await unpublishJobPortal(app.prisma, id, req.log);
       return reply.status(204).send();
+    }
+  );
+
+  // Loaner agreement signing — the term is a separate document from the
+  // intake ficha. Creating the session freezes the canonical agreement the
+  // server built from the job; attaching moves the signature, document hash
+  // and snapshot onto the job once the job still produces that same
+  // document (a swapped unit or edited note turns it SIGNATURE_STALE).
+  app.post(
+    "/:id/loaner-signature-session",
+    {
+      schema: {
+        tags: ["jobs"],
+        summary: "Create a signing session for the loaner agreement",
+        params: {
+          type: "object",
+          properties: { id: { type: "string" } },
+          required: ["id"],
+        },
+      },
+      preHandler: [requirePermission({ jobs: ["edit"] })],
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      // The app language wins over the browser's Accept-Language — staff
+      // serve customers in the shop's language, not their own.
+      const locale = requestedLocale(req.body) ?? req.locale;
+      const result = await createLoanerSignatureSession(
+        app.prisma,
+        id,
+        locale,
+        req.log
+      );
+      return reply.send(result);
+    }
+  );
+
+  // In-person signing preview — the exact canonical document the customer
+  // is about to sign, so the staff screen can show the terms first.
+  app.get(
+    "/:id/loaner-agreement-preview",
+    {
+      schema: {
+        tags: ["jobs"],
+        summary: "Preview the loaner agreement document for a job",
+        params: {
+          type: "object",
+          properties: { id: { type: "string" } },
+          required: ["id"],
+        },
+      },
+      preHandler: [requirePermission({ jobs: ["edit"] })],
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const locale = requestedLocale(req.query) ?? req.locale;
+      const preview = await getLoanerAgreementPreview(app.prisma, id, locale);
+      return reply.send(preview);
+    }
+  );
+
+  app.post(
+    "/:id/loaner-signature",
+    {
+      schema: {
+        tags: ["jobs"],
+        summary: "Attach a signed loaner agreement session to the job",
+        params: {
+          type: "object",
+          properties: { id: { type: "string" } },
+          required: ["id"],
+        },
+      },
+      preHandler: [requirePermission({ jobs: ["edit"] })],
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const body = req.body as
+        | { locale?: unknown; signatureDataUrl?: unknown; token?: unknown }
+        | undefined;
+      const result = await attachLoanerSignature(
+        app.prisma,
+        id,
+        {
+          signatureDataUrl:
+            typeof body?.signatureDataUrl === "string"
+              ? body.signatureDataUrl
+              : undefined,
+          token: typeof body?.token === "string" ? body.token : undefined,
+        },
+        requestedLocale(req.body) ?? req.locale,
+        getUserId(req)
+      );
+      return reply.send(result);
     }
   );
 };

@@ -111,8 +111,8 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
-  # Optional WhatsApp local transport (Pro module "whatsapp-bot" +
-  # disclaimer in Settings). Evolution API v2 (Baileys) with its own
+  # Optional WhatsApp local transport (free — only the disclaimer in
+  # Settings is required). Evolution API v2 (Baileys) with its own
   # Postgres — it never touches the app database. Activate with
   # COMPOSE_PROFILES including "wa-local", set EVOLUTION_API_KEY in .env,
   # then Settings → WhatsApp → method "local": URL http://evolution:8080.

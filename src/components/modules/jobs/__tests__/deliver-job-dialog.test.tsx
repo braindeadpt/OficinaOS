@@ -32,7 +32,8 @@ import DeliverJobDialog from "../deliver-job-dialog";
 
 const QUOTED_RE = /deliver_dialog\.quoted_given/;
 const DEPOSIT_RE = /deliver_dialog\.deposit/;
-const LOANER_RE = /deliver_dialog\.loaner/;
+const LOANER_RE = /deliver_dialog\.loaner:/;
+const LOANER_RETURNED_RE = /deliver_dialog\.loaner_returned/;
 const LOANER_NOTE_RE = /Nokia 105/;
 
 const job = { id: "job-1", jobCode: "R-0001", status: "DONE" as const };
@@ -69,7 +70,14 @@ describe("DeliverJobDialog", () => {
       amount: 120,
       method: "CASH",
     });
-    expect(mockTransitionStatus).toHaveBeenCalledWith("job-1", "DELIVERED");
+    expect(mockTransitionStatus).toHaveBeenCalledWith(
+      "job-1",
+      "DELIVERED",
+      undefined,
+      undefined,
+      undefined,
+      undefined
+    );
     expect(mockAddPayment.mock.invocationCallOrder[0]).toBeLessThan(
       mockTransitionStatus.mock.invocationCallOrder[0]
     );
@@ -108,7 +116,14 @@ describe("DeliverJobDialog", () => {
     );
     await waitFor(() => expect(onDelivered).toHaveBeenCalled());
     expect(mockAddPayment).not.toHaveBeenCalled();
-    expect(mockTransitionStatus).toHaveBeenCalledWith("job-1", "DELIVERED");
+    expect(mockTransitionStatus).toHaveBeenCalledWith(
+      "job-1",
+      "DELIVERED",
+      undefined,
+      undefined,
+      undefined,
+      undefined
+    );
   });
 
   it("shows the agreed quote, deposit and loaner device", () => {
@@ -138,5 +153,63 @@ describe("DeliverJobDialog", () => {
     expect(screen.queryByText(QUOTED_RE)).toBeNull();
     expect(screen.queryByText(DEPOSIT_RE)).toBeNull();
     expect(screen.queryByText(LOANER_RE)).toBeNull();
+  });
+
+  it("stamps the loaner return by default when a unit is out", async () => {
+    render(
+      <DeliverJobDialog
+        balanceDue={0}
+        job={{ ...job, hasLoanerDevice: true }}
+        onCancel={vi.fn()}
+        onDelivered={vi.fn()}
+        open
+      />
+    );
+    // The return checkbox renders for a live loan and defaults to checked —
+    // the customer usually hands it back at pickup.
+    expect(screen.getByText(LOANER_RETURNED_RE)).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "deliver_dialog.confirm" })
+    );
+    await waitFor(() =>
+      expect(mockTransitionStatus).toHaveBeenCalledWith(
+        "job-1",
+        "DELIVERED",
+        undefined,
+        undefined,
+        undefined,
+        true
+      )
+    );
+  });
+
+  it("leaves the loaner out when the return box is unticked", async () => {
+    render(
+      <DeliverJobDialog
+        balanceDue={0}
+        job={{ ...job, hasLoanerDevice: true }}
+        onCancel={vi.fn()}
+        onDelivered={vi.fn()}
+        open
+      />
+    );
+    const label = screen.getByText(LOANER_RETURNED_RE);
+    const checkbox = label
+      .closest("div")
+      ?.parentElement?.querySelector("input[type=checkbox]");
+    fireEvent.click(checkbox as Element);
+    fireEvent.click(
+      screen.getByRole("button", { name: "deliver_dialog.confirm" })
+    );
+    await waitFor(() =>
+      expect(mockTransitionStatus).toHaveBeenCalledWith(
+        "job-1",
+        "DELIVERED",
+        undefined,
+        undefined,
+        undefined,
+        false
+      )
+    );
   });
 });

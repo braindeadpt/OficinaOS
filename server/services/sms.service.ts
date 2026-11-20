@@ -14,11 +14,13 @@ import type { NotifyContext } from "./job.service.js";
 import { formatPhone } from "./notification-sender.js";
 
 /**
- * Canal SMS (módulo Pro) via SMS Gateway for Android em modo Local
+ * Canal SMS local (free) via SMS Gateway for Android em modo Local
  * Server (sms-gate.app / capcom6). O telemóvel da loja expõe uma API HTTP
  * na LAN: a app envia com POST /message (Basic auth) e recebe inbound
  * através de um webhook que regista no próprio aparelho. Nada passa pela
- * cloud — o único "sair da loja" é o SMS na rede móvel.
+ * cloud — o único "sair da loja" é o SMS na rede móvel. O módulo Pro
+ * "sms" gateia apenas transportes geridos (provider comercial via
+ * cloud), nunca este gateway.
  */
 
 const TRAILING_SLASH_RE = /\/+$/;

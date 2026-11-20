@@ -9,6 +9,7 @@ export type Job = Prisma.JobGetPayload<{
   include: {
     customer: true;
     device: { include: { brand: true } };
+    loanerDevice: true;
     technician: { select: { id: true; name: true; username: true } };
     photos: true;
     notes: {
@@ -25,6 +26,7 @@ export type Job = Prisma.JobGetPayload<{
   // Server-computed fields (see job.service getById)
   balanceDue?: number;
   finalCost?: number;
+  loanerSignatureValid?: boolean;
   paidTotal?: number;
   margin?: number;
 };

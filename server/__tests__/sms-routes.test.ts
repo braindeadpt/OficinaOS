@@ -130,7 +130,7 @@ beforeEach(() => {
 });
 
 describe("PUT /api/settings/sms", () => {
-  it("enables when the sms module is granted", async () => {
+  it("enables the local gateway (free — no entitlement needed)", async () => {
     mocks.getSmsSettings.mockResolvedValue({ enabled: true });
     mocks.decryptSmsConfig.mockReturnValue(null);
     const app = buildApp(fakePrisma());
@@ -148,7 +148,8 @@ describe("PUT /api/settings/sms", () => {
     expect(mocks.upsertSmsSettings).toHaveBeenCalled();
   });
 
-  it("rejects enabling without the sms entitlement", async () => {
+  it("enables without the sms entitlement — the module only gates managed transports", async () => {
+    mocks.getSmsSettings.mockResolvedValue({ enabled: true });
     const app = buildApp(fakePrisma({ ...SMS_ROW, cloudEntitlements: [] }));
     const res = await app.inject({
       method: "PUT",
@@ -160,9 +161,8 @@ describe("PUT /api/settings/sms", () => {
       },
       url: "/api/settings/sms",
     });
-    expect(res.statusCode).toBe(402);
-    expect(res.json().code).toBe("CLOUD_MODULE_REQUIRED");
-    expect(mocks.upsertSmsSettings).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+    expect(mocks.upsertSmsSettings).toHaveBeenCalled();
   });
 
   it("accepts disabling even without the entitlement", async () => {
@@ -219,16 +219,21 @@ describe("PUT /api/settings/sms", () => {
 });
 
 describe("POST /api/settings/sms/test", () => {
-  it("rejects the test send without the sms entitlement", async () => {
+  it("sends the test without the sms entitlement (local gateway is free)", async () => {
+    mocks.decryptSmsConfig.mockReturnValue({
+      password: "p",
+      url: "http://192.168.1.50:8080",
+      user: "sms",
+    });
+    mocks.sendSms.mockResolvedValue({ success: true });
     const app = buildApp(fakePrisma({ ...SMS_ROW, cloudEntitlements: [] }));
     const res = await app.inject({
       method: "POST",
       payload: { phone: "912345678" },
       url: "/api/settings/sms/test",
     });
-    expect(res.statusCode).toBe(402);
-    expect(res.json().code).toBe("CLOUD_MODULE_REQUIRED");
-    expect(mocks.sendSms).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+    expect(mocks.sendSms).toHaveBeenCalled();
   });
 
   it("fails cleanly when the gateway is not configured", async () => {

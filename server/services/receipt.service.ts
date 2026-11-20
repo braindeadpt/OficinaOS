@@ -1,4 +1,12 @@
+import { createHash } from "node:crypto";
 import type { PrismaClient } from "@generated/client";
+import { canonicalize } from "@shared/intake-document.js";
+import {
+  buildLoanerAgreementDocument,
+  type LoanerAgreementDocument,
+  loanerAgreementMatches,
+  loanerAgreementText,
+} from "@shared/loaner-agreement-document.js";
 import type { OrdersReportDTO } from "@shared/types/reports";
 import QRCode from "qrcode";
 import { findShopSettingsUnique } from "../repositories/settings.repository.js";
@@ -824,6 +832,278 @@ ${totalsRows}
 ${warrantyHtml}
 ${signatureHtml}
 ${footHtml}
+</body></html>`;
+}
+
+interface LoanerAgreementStrings {
+  customer: string;
+  dateLocale: string;
+  deviceInRepair: string;
+  docRef: string;
+  email: string;
+  expectedReturn: string;
+  idDoc: string;
+  jobRef: string;
+  lentOn: string;
+  loanedDevice: string;
+  phone: string;
+  returnedOn: string;
+  signatureLabel: string;
+  signedDoc: string;
+}
+
+const LOANER_AGREEMENT_STRINGS: Record<string, LoanerAgreementStrings> = {
+  pt: {
+    customer: "Cliente",
+    dateLocale: "pt-PT",
+    deviceInRepair: "Equipamento em reparação",
+    email: "Email",
+    expectedReturn: "Devolução prevista",
+    idDoc: "NIF",
+    jobRef: "Ficha",
+    lentOn: "Data do empréstimo",
+    loanedDevice: "Equipamento emprestado",
+    phone: "Telefone",
+    returnedOn: "Devolvido em",
+    signatureLabel: "Assinatura do cliente",
+    docRef: "Documento",
+    signedDoc: "Documento assinado",
+  },
+  en: {
+    customer: "Customer",
+    dateLocale: "en-GB",
+    deviceInRepair: "Device in repair",
+    email: "Email",
+    expectedReturn: "Expected return",
+    idDoc: "Tax ID",
+    jobRef: "Job",
+    lentOn: "Loaned on",
+    loanedDevice: "Loaned device",
+    phone: "Phone",
+    returnedOn: "Returned on",
+    signatureLabel: "Customer signature",
+    docRef: "Document",
+    signedDoc: "Signed document",
+  },
+  fr: {
+    customer: "Client",
+    dateLocale: "fr-FR",
+    deviceInRepair: "Appareil en réparation",
+    email: "E-mail",
+    expectedReturn: "Retour prévu",
+    idDoc: "NIF",
+    jobRef: "Dossier",
+    lentOn: "Date du prêt",
+    loanedDevice: "Appareil prêté",
+    phone: "Téléphone",
+    returnedOn: "Restitué le",
+    signatureLabel: "Signature du client",
+    docRef: "Document",
+    signedDoc: "Document signé",
+  },
+  es: {
+    customer: "Cliente",
+    dateLocale: "es-ES",
+    deviceInRepair: "Dispositivo en reparación",
+    email: "Correo",
+    expectedReturn: "Devolución prevista",
+    idDoc: "NIF",
+    jobRef: "Ficha",
+    lentOn: "Fecha del préstamo",
+    loanedDevice: "Dispositivo prestado",
+    phone: "Teléfono",
+    returnedOn: "Devuelto el",
+    signatureLabel: "Firma del cliente",
+    docRef: "Documento",
+    signedDoc: "Documento firmado",
+  },
+};
+
+/**
+ * Standalone A4 "termo de responsabilidade" for the loaned device. When the
+ * agreement was signed digitally it renders the signature plus the
+ * "Documento assinado" seal — but only while the job's current data still
+ * rebuilds the exact canonical document that was signed; a unit swap, note
+ * edit or customer change falls back to the paper signature line instead of
+ * showing a signature that no longer covers the content.
+ *
+ * The intake signature/seal is NOT reused here: it authenticates the ficha,
+ * a different document that never contained these liability clauses.
+ * Unsigned prints carry the docRef integrity seal — a sha256 over exactly
+ * what is printed — so a reprint after a fleet edit produces a visibly
+ * different reference.
+ */
+/**
+ * Locale of the stored signature's frozen document, when present — the
+ * signed agreement is reprinted in the language the customer saw, never
+ * the browser's Accept-Language.
+ */
+function signedAgreementLocale(job: {
+  loanerAgreementSignatureDataUrl?: string | null;
+  loanerAgreementSnapshot?: unknown;
+}): string | null {
+  if (
+    !(
+      typeof job.loanerAgreementSignatureDataUrl === "string" &&
+      job.loanerAgreementSignatureDataUrl.startsWith("data:image/")
+    )
+  ) {
+    return null;
+  }
+  const locale = (job.loanerAgreementSnapshot as LoanerAgreementDocument | null)
+    ?.locale;
+  return locale && LOANER_AGREEMENT_STRINGS[locale] ? locale : null;
+}
+
+export async function renderLoanerAgreementHtml(
+  prisma: DbClient,
+  job: {
+    createdAt: Date;
+    customer: {
+      email?: string | null;
+      name: string;
+      phone: string;
+      taxId?: string | null;
+    };
+    device: { brand: { name: string }; model: string };
+    estimatedDate?: Date | null;
+    imei?: string | null;
+    jobCode: string;
+    loanerDevice?: {
+      brand?: string | null;
+      imei?: string | null;
+      label: string;
+      model?: string | null;
+    } | null;
+    loanerNote?: string | null;
+    loanerReturnedAt?: Date | null;
+    loanerAgreementSignatureDataUrl?: string | null;
+    loanerAgreementSnapshot?: unknown;
+    loanerAgreementDocumentHash?: string | null;
+    loanerAgreementSignedAt?: Date | null;
+  },
+  options?: { locale?: string }
+): Promise<string> {
+  const settings = await findShopSettingsUnique(prisma);
+  // A signed document is frozen in the language the customer saw — it is
+  // reprinted in that language, never the browser's Accept-Language.
+  const signedLocale = signedAgreementLocale(job);
+  const locale = signedLocale ?? options?.locale ?? "pt";
+  const s = LOANER_AGREEMENT_STRINGS[locale] ?? LOANER_AGREEMENT_STRINGS.pt;
+  const text = loanerAgreementText(locale);
+  const date = new Date(job.createdAt).toLocaleString(s.dateLocale);
+
+  // Fleet unit rows when linked; otherwise the free-text note is the only
+  // identification the document can show.
+  const ld = job.loanerDevice;
+  const loanerRows = ld
+    ? `<tr><td>${esc(ld.label)}</td><td style="text-align:right">${esc([ld.brand, ld.model].filter(Boolean).join(" "))}</td></tr>${
+        ld.imei
+          ? `<tr><td>IMEI/SN</td><td style="text-align:right">${esc(ld.imei)}</td></tr>`
+          : ""
+      }`
+    : "";
+  const loanerNoteRow = job.loanerNote?.trim()
+    ? `<tr><td colspan="2" style="padding-top:1mm;color:#444">${esc(job.loanerNote)}</td></tr>`
+    : "";
+
+  const expectedReturn = job.estimatedDate
+    ? `<tr><td>${s.expectedReturn}</td><td style="text-align:right">${new Date(job.estimatedDate).toLocaleDateString(s.dateLocale)}</td></tr>`
+    : "";
+  const returnedRow = job.loanerReturnedAt
+    ? `<tr><td>${s.returnedOn}</td><td style="text-align:right">${new Date(job.loanerReturnedAt).toLocaleString(s.dateLocale)}</td></tr>`
+    : "";
+
+  // The stored signature only applies while the job still produces the
+  // exact document the customer signed — same rule as attach-time, so a
+  // reprint after a unit swap falls back to the paper line rather than
+  // showing a signature under different content. The language must match
+  // too: the match rebuilds in the frozen locale, so printing in another
+  // language would otherwise show a signature under clauses the customer
+  // never saw.
+  const signatureApplies =
+    typeof job.loanerAgreementSignatureDataUrl === "string" &&
+    job.loanerAgreementSignatureDataUrl.startsWith("data:image/") &&
+    signedLocale === locale &&
+    loanerAgreementMatches(job.loanerAgreementSnapshot, job);
+  const signatureBox = signatureApplies
+    ? `<img src="${esc(job.loanerAgreementSignatureDataUrl as string)}" alt="signature" />`
+    : `<div class="line">${s.signatureLabel}</div>`;
+  // docRef covers the canonical printed content plus the physical return
+  // stamp (post-signing state that never belongs inside the signed doc).
+  const docRef = createHash("sha256")
+    .update(
+      canonicalize({
+        document: buildLoanerAgreementDocument(job, locale),
+        returnedOn: job.loanerReturnedAt
+          ? new Date(job.loanerReturnedAt).toISOString()
+          : null,
+      })
+    )
+    .digest("hex")
+    .slice(0, 12);
+  const seal =
+    signatureApplies && job.loanerAgreementDocumentHash
+      ? `<p style="font-size:8pt;color:#777">${esc(s.signedDoc)} #${esc(job.loanerAgreementDocumentHash.slice(0, 12))}${
+          job.loanerAgreementSignedAt
+            ? ` · ${new Date(job.loanerAgreementSignedAt).toLocaleString(s.dateLocale)}`
+            : ""
+        }</p>`
+      : `<p style="font-size:8pt;color:#777">${esc(s.docRef)} #${docRef}</p>`;
+
+  const clauseItems = text.clauses
+    .map((c, i) => `<li style="margin-bottom:2mm">${i + 1}. ${esc(c)}</li>`)
+    .join("");
+
+  const footerHtml = settings?.receiptFooter
+    ? `<div class="foot"><div class="txt">${escMultiline(settings.receiptFooter)}</div></div>`
+    : "";
+
+  return `<!doctype html>
+<html lang="${locale}">
+<head>
+<meta charset="utf-8">
+<title>${text.title} ${esc(job.jobCode)}</title>
+<style>${A4_CSS}
+  .clauses { margin-top: 5mm; font-size: 10pt; }
+  .clauses ol { margin: 0; padding-left: 0; list-style: none; }
+</style>
+</head>
+<body>
+<div class="doc-head">
+  ${a4ShopHeader(settings)}
+  <div class="meta"><div class="doctype">${text.title}</div><div class="code">${esc(job.jobCode)}</div><div>${date}</div></div>
+</div>
+<div class="grid">
+  <div class="col">
+    <div class="lbl">${s.customer}</div>
+    <div><strong>${esc(job.customer.name)}</strong></div>
+    <div>${s.phone}: ${esc(job.customer.phone)}</div>
+    ${job.customer.email ? `<div>${s.email}: ${esc(job.customer.email)}</div>` : ""}
+    ${job.customer.taxId ? `<div>${s.idDoc}: ${esc(job.customer.taxId)}</div>` : ""}
+  </div>
+  <div class="col">
+    <div class="lbl">${s.deviceInRepair}</div>
+    <div><strong>${esc(job.device.brand.name)} ${esc(job.device.model)}</strong></div>
+    ${job.imei ? `<div>IMEI/SN: ${esc(job.imei)}</div>` : ""}
+    <div>${s.jobRef}: ${esc(job.jobCode)}</div>
+  </div>
+</div>
+<div class="problem">
+  <div class="lbl">${s.loanedDevice}</div>
+  <table style="width:100%;border-collapse:collapse;font-size:10pt">
+    ${loanerRows}${loanerNoteRow}
+    <tr><td>${s.lentOn}</td><td style="text-align:right">${date}</td></tr>
+    ${expectedReturn}${returnedRow}
+  </table>
+</div>
+<div class="clauses"><ol>${clauseItems}</ol></div>
+<div class="sign">
+  <p class="terms">${esc(text.acceptance)}</p>
+  <div class="box">${signatureBox}</div>
+</div>
+${seal}
+${footerHtml}
 </body></html>`;
 }
 

@@ -30,6 +30,7 @@ const TechnicianDashboardPage = lazy(
 const ReturnsListPage = lazy(() => import("@/pages/returns"));
 const ReturnDetailPage = lazy(() => import("@/pages/returns/detail"));
 const TradeInsPage = lazy(() => import("@/pages/trade-ins"));
+const LoanersPage = lazy(() => import("@/pages/loaners"));
 const PartRequestsPage = lazy(() => import("@/pages/part-requests"));
 const MarketPricesPage = lazy(() => import("@/pages/market-prices"));
 const JobsPage = lazy(() => import("@/pages/jobs"));
@@ -231,6 +232,16 @@ export default function App() {
                   </DashboardLayout>
                 }
                 path="/trade-ins"
+              />
+            </Route>
+            <Route element={<RequirePermission perm={{ loaners: ["view"] }} />}>
+              <Route
+                element={
+                  <DashboardLayout>
+                    <LoanersPage />
+                  </DashboardLayout>
+                }
+                path="/loaners"
               />
             </Route>
             <Route element={<RequirePermission perm={{ jobs: ["view"] }} />}>

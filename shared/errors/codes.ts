@@ -290,6 +290,40 @@ export const ERRORS = {
     status: 409,
     message: "errors.signature_stale",
   },
+  // Sending the link by message needs a URL the customer's phone can reach
+  // from outside the shop — a cloud relay or a public APP_URL/tracking base.
+  SIGNATURE_LINK_NO_REMOTE: {
+    status: 400,
+    message: "errors.signature_link_no_remote",
+  },
+  SIGNATURE_LINK_NO_CHANNEL: {
+    status: 400,
+    message: "errors.signature_link_no_channel",
+  },
+
+  // ── Loaner devices (equipamento de empréstimo) ─────────────────────────
+  LOANER_DEVICE_NOT_FOUND: {
+    status: 404,
+    message: "errors.loaner_device_not_found",
+  },
+  LOANER_DEVICE_UNAVAILABLE: {
+    status: 409,
+    message: "errors.loaner_device_unavailable",
+  },
+  LOANER_DEVICE_INACTIVE: {
+    status: 400,
+    message: "errors.loaner_device_inactive",
+  },
+  LOANER_NOT_ACTIVE: {
+    status: 409,
+    message: "errors.loaner_not_active",
+  },
+  // Identity fields (label/brand/model/IMEI) can't be edited while the unit
+  // is out — the printed responsibility term would change under the loan.
+  LOANER_UNIT_ON_LOAN: {
+    status: 409,
+    message: "errors.loaner_unit_on_loan",
+  },
 
   // ── Part-request board (procuro-peça, Pro module: market) ──────────────
   PART_REQUEST_NOT_FOUND: {

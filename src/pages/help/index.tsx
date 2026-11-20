@@ -330,6 +330,18 @@ export default function HelpPage() {
           </p>
         </Section>
 
+        <Section icon="draw" title={t("help_sign_title")}>
+          <p className="mb-4 text-on-surface-variant text-sm">
+            {t("help_sign_intro")}
+          </p>
+          <Steps
+            keys={["help_sign_step1", "help_sign_step2", "help_sign_step3"]}
+          />
+          <p className="mt-4 rounded-xl bg-surface-container px-4 py-3 text-on-surface-variant text-xs">
+            {t("help_sign_note")}
+          </p>
+        </Section>
+
         <Section icon="healing" title={t("help_problems_title")}>
           <dl className="space-y-4">
             {problems.map(([q, a]) => (

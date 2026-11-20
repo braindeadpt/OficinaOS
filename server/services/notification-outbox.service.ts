@@ -11,7 +11,6 @@ import {
 import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import { logger } from "../utils/logger.js";
-import { isModuleEnabled } from "../utils/modules.js";
 import { renderTemplate } from "./notification-renderer.js";
 import { decryptSmsConfig, sendSms } from "./sms.service.js";
 import {
@@ -19,6 +18,19 @@ import {
   sendWhatsAppText,
   type WhatsAppChannel,
 } from "./whatsapp-channel.js";
+
+/**
+ * Events a staff member fires by hand for a specific customer — not
+ * automated messaging. The signature link is the same action the staff
+ * would take by copying it into the shop's own WhatsApp: the customer is
+ * waiting for it, it is sent once per click and it expires with the
+ * session. These still respect the channel toggles and provider config;
+ * they skip only the opt-in consent flag, which exists to gate automated
+ * notifications, not staff-initiated service messages.
+ */
+export const STAFF_INITIATED_TEMPLATES: ReadonlySet<string> = new Set([
+  "signature_link",
+]);
 
 /**
  * WhatsApp consent gate. Only customers who opted in may receive messages;
@@ -46,6 +58,7 @@ export async function assertWhatsAppConsent(
 interface OutboxEntry {
   channel: string;
   createdAt: Date;
+  deliverBy: Date | null;
   error: string | null;
   id: string;
   jobId: string | null;
@@ -70,6 +83,7 @@ let isProcessing = false;
 export async function queueNotification(
   prisma: DbClient,
   data: {
+    deliverBy?: Date;
     jobId?: string;
     templateName: string;
     channel: "WHATSAPP" | "SMS";
@@ -81,6 +95,7 @@ export async function queueNotification(
   const renderedBody = renderTemplate(data.templateBody, data.templateVars);
   await createOutboxEntry(prisma, {
     channel: data.channel,
+    deliverBy: data.deliverBy ?? null,
     job: data.jobId ? { connect: { id: data.jobId } } : undefined,
     recipientPhone: data.recipientPhone,
     renderedBody,
@@ -141,6 +156,16 @@ async function cancelIfExpired(
   prisma: DbClient,
   entry: OutboxEntry
 ): Promise<boolean> {
+  // A payload with its own deadline (a signing link whose session expires
+  // in minutes) dies at deliverBy — the generic 24h cutoff is far too late
+  // for it, and a retry landing after expiry would send a dead link.
+  if (entry.deliverBy && entry.deliverBy.getTime() <= Date.now()) {
+    await transitionOutboxEntry(prisma, entry.id, OutboxStatus.QUEUED, {
+      error: "Expired: delivery deadline passed",
+      status: OutboxStatus.CANCELLED,
+    });
+    return true;
+  }
   if (
     entry.createdAt &&
     Date.now() - entry.createdAt.getTime() > MAX_ENTRY_AGE_MS
@@ -163,6 +188,9 @@ async function cancelIfConsentMissing(
   entry: OutboxEntry,
   shopPhone: string | null
 ): Promise<boolean> {
+  if (STAFF_INITIATED_TEMPLATES.has(entry.templateName)) {
+    return false;
+  }
   const consentError = await assertWhatsAppConsent(
     prisma,
     entry.recipientPhone,
@@ -395,7 +423,10 @@ function getSmsConfig(row: ShopSettingsRow | null): {
   url: string;
   user: string;
 } | null {
-  if (!(row?.smsEnabled && isModuleEnabled(row, "sms"))) {
+  // SMS local (gateway Android) é free; o entitlement "sms" gateia só
+  // transportes geridos — um provider cloud futuro resolve-se aqui à
+  // parte, com a sua própria verificação de entitlement.
+  if (!row?.smsEnabled) {
     return null;
   }
   return decryptSmsConfig({
@@ -418,6 +449,7 @@ export async function getOutboxLogs(
   return entries.map((e) => ({
     channel: e.channel,
     createdAt: e.createdAt,
+    deliverBy: e.deliverBy,
     error: e.error,
     id: e.id,
     jobId: e.jobId,

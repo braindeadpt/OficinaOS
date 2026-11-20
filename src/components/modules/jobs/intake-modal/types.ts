@@ -26,6 +26,7 @@ export interface IntakeFormData {
   imei: string;
   isUrgent: boolean;
   isWarrantyReturn: boolean;
+  loanerDeviceId: string;
   loanerNote: string;
   model: string;
   modelId: string;
@@ -86,6 +87,7 @@ export const INITIAL_FORM: IntakeFormData = {
   deposit: "",
   deviceCategory: "phone",
   hasLoanerDevice: false,
+  loanerDeviceId: "",
   loanerNote: "",
   estimatedCost: "",
   estimatedDelivery: defaultDeliveryDatetime(),
@@ -147,6 +149,7 @@ const SERVER_FIELD_MAP: Record<string, ServerFieldTarget> = {
   estimatedCost: ["estimatedCost", 2],
   estimatedDate: ["estimatedDelivery", 2],
   hasLoanerDevice: ["hasLoanerDevice", 2],
+  loanerDeviceId: ["loanerDeviceId", 2],
   loanerNote: ["loanerNote", 2],
   imei: ["imei", 1],
   intakeChecklist: ["checklist", 2],

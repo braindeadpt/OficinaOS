@@ -89,7 +89,10 @@ export const createJobSchema = z.object({
     .max(99_999_999.99)
     .optional(),
   hasLoanerDevice: z.boolean().optional(),
-  loanerNote: z.string().max(200).optional(),
+  // 360 fits describeLoanerDevice()'s worst case from valid fleet fields.
+  loanerNote: z.string().max(360).optional(),
+  // Shop fleet unit handed out — loanerNote stays the printable text.
+  loanerDeviceId: opaqueIdSchema.optional(),
   technicianId: opaqueIdSchema.optional(),
   isUrgent: z.boolean().optional(),
   isWarrantyReturn: z.boolean().optional(),
@@ -106,7 +109,8 @@ export const updateJobSchema = z.object({
   estimatedDate: z.coerce.date().nullable().optional(),
   depositAmount: z.number().min(0).max(99_999_999.99).nullable().optional(),
   hasLoanerDevice: z.boolean().optional(),
-  loanerNote: z.string().max(200).nullable().optional(),
+  loanerNote: z.string().max(360).nullable().optional(),
+  loanerDeviceId: opaqueIdSchema.nullable().optional(),
   technicianId: opaqueIdSchema.nullable().optional(),
   isUrgent: z.boolean().optional(),
   color: z.string().max(40).optional(),
@@ -133,6 +137,8 @@ export const transitionStatusSchema = z
     ]),
     reason: z.string().trim().max(500).optional(),
     actualLaborHours: z.number().positive().optional().nullable(),
+    // Delivery confirmation: the loaned unit physically came back now.
+    loanerReturned: z.boolean().optional(),
     qcChecklist: z
       .record(z.string(), z.enum(["ok", "fail"]).nullable())
       .optional(),

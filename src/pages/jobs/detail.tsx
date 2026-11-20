@@ -18,6 +18,7 @@ import JobReferralsSection from "@/components/modules/jobs/job-referrals-section
 import JobRepairsSection from "@/components/modules/jobs/job-repairs-section";
 import JobReturnsHistorySection from "@/components/modules/jobs/job-returns-history-section";
 import JobWaitingPartsSection from "@/components/modules/jobs/job-waiting-parts-section";
+import LoanerSignatureDialog from "@/components/modules/jobs/loaner-signature-dialog";
 import StatusHistoryTimeline from "@/components/modules/jobs/status-history-timeline";
 import StatusPopover from "@/components/modules/jobs/status-popover";
 import TechnicianSelect from "@/components/modules/jobs/technician-select";
@@ -54,9 +55,94 @@ function UrgentBadge({ visible }: { visible: boolean }) {
   );
 }
 
+type LoanerSignState = "none" | "signed" | "stale";
+
+const LOANER_SIGN_META: Record<
+  LoanerSignState,
+  { className: string; icon: string; labelKey: string }
+> = {
+  none: {
+    className:
+      "border-outline-variant/60 bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container hover:text-on-surface",
+    icon: "draw",
+    labelKey: "jobs_detail_loaner_sign",
+  },
+  signed: {
+    className:
+      "border-success/60 bg-success-container/40 text-on-surface hover:bg-success-container/60",
+    icon: "check_circle",
+    labelKey: "jobs_detail_loaner_signed",
+  },
+  stale: {
+    className:
+      "border-tertiary/60 bg-tertiary-container/40 text-on-surface hover:bg-tertiary-container/60",
+    icon: "warning",
+    labelKey: "jobs_detail_loaner_sign_outdated",
+  },
+};
+
+/** Standalone A4 term print + digital signature — only when a loaner went out. */
+function LoanerAgreementButton({
+  job,
+  onSigned,
+}: {
+  job: Job;
+  onSigned: () => void;
+}) {
+  const { t } = useTranslation();
+  const [signOpen, setSignOpen] = useState(false);
+  if (!job.hasLoanerDevice) {
+    return null;
+  }
+  // Three states: nothing signed, a signature that still covers the current
+  // agreement, or a stored signature the document has drifted away from —
+  // the print falls back to a paper line in that last case, so the badge
+  // must invite a re-sign instead of claiming "signed".
+  const hasSignature = Boolean(job.loanerAgreementSignatureDataUrl);
+  const signedValid = hasSignature && job.loanerSignatureValid === true;
+  const signedStale = hasSignature && !signedValid;
+  let signState: LoanerSignState = "none";
+  if (signedValid) {
+    signState = "signed";
+  } else if (signedStale) {
+    signState = "stale";
+  }
+  const signMeta = LOANER_SIGN_META[signState];
+  return (
+    <>
+      <button
+        className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest px-4 font-medium text-on-surface-variant text-sm transition-colors hover:bg-surface-container hover:text-on-surface"
+        onClick={() =>
+          window.open(`/api/receipts/${job.id}/loaner-agreement`, "_blank")
+        }
+        type="button"
+      >
+        <Icon className="text-[18px]" name="description" />
+        {t("jobs_detail_print_loaner")}
+      </button>
+      <Can perm={{ jobs: ["edit"] }}>
+        <button
+          className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border px-4 font-medium text-sm transition-colors ${signMeta.className}`}
+          onClick={() => setSignOpen(true)}
+          type="button"
+        >
+          <Icon className="text-[18px]" name={signMeta.icon} />
+          {t(signMeta.labelKey)}
+        </button>
+      </Can>
+      <LoanerSignatureDialog
+        jobId={job.id}
+        onClose={() => setSignOpen(false)}
+        onSigned={onSigned}
+        open={signOpen}
+      />
+    </>
+  );
+}
+
 /** Loaned-device spec cell — hidden unless a loaner was given at intake. */
 function LoanerSpec({ job }: { job: Job }) {
-  const { t } = useTranslation();
+  const { i18n, t } = useTranslation();
   if (!job.hasLoanerDevice) {
     return null;
   }
@@ -68,6 +154,21 @@ function LoanerSpec({ job }: { job: Job }) {
       <p className="mt-0.5 font-bold font-headline text-lg text-on-surface">
         {job.loanerNote || t("jobs_detail_loaner_yes")}
       </p>
+      {job.loanerDeviceId && (
+        <p
+          className={`mt-0.5 font-label text-xs ${
+            job.loanerReturnedAt ? "text-success" : "text-tertiary"
+          }`}
+        >
+          {job.loanerReturnedAt
+            ? t("jobs_detail_loaner_returned", {
+                date: new Date(job.loanerReturnedAt).toLocaleDateString(
+                  i18n.language
+                ),
+              })
+            : t("jobs_detail_loaner_out")}
+        </p>
+      )}
     </div>
   );
 }
@@ -419,6 +520,13 @@ export default function JobDetailPage() {
             <Icon className="text-[18px]" name="label" />
             {t("jobs_detail_print_label")}
           </button>
+          <LoanerAgreementButton
+            job={job}
+            onSigned={() => {
+              toast.success(t("jobs_detail_loaner_sign_success"));
+              fetchJob();
+            }}
+          />
           <Can perm={{ returns: ["create"] }}>
             {job.status === "DELIVERED" && (
               <button

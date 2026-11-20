@@ -29,6 +29,7 @@ vi.mock("../../repositories/settings.repository.js", () => ({
 
 vi.mock("../notification-outbox.service.js", () => ({
   queueNotification: mocks.queueNotification,
+  STAFF_INITIATED_TEMPLATES: new Set(["signature_link"]),
 }));
 
 import { notify } from "../notification-dispatch.js";

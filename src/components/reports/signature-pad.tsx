@@ -22,21 +22,60 @@ export default function SignaturePad({ onChange }: SignaturePadProps) {
     if (!canvas) {
       return;
     }
-    // The canvas bitmap defaults to 300x150 — draw at devicePixelRatio and
-    // size it to the rendered box so pointer coords map 1:1 to pixels.
     const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = Math.max(1, Math.round(rect.width * dpr));
-    canvas.height = Math.max(1, Math.round(rect.height * dpr));
-    const ctx = canvas.getContext("2d");
-    if (!ctx) {
+    // The bitmap must match the rendered box — pointer coords map 1:1 to
+    // pixels. A one-shot measure races the parent <dialog>'s showModal():
+    // child effects run first, the canvas is still display:none (0×0) and
+    // the bitmap clamps to 1×1, silently clipping every stroke. A
+    // ResizeObserver fires once layout gives the canvas a real size, and
+    // again on later resizes — existing strokes are copied over scaled.
+    const styleCtx = (ctx: CanvasRenderingContext2D) => {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.lineWidth = 2;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = "#1b1b1f";
+    };
+    const resize = (widthCss: number, heightCss: number) => {
+      if (!(widthCss > 0 && heightCss > 0)) {
+        return;
+      }
+      const w = Math.round(widthCss * dpr);
+      const h = Math.round(heightCss * dpr);
+      if (canvas.width === w && canvas.height === h) {
+        return;
+      }
+      // Keep whatever was already drawn — a dialog opening or a rotation
+      // must not erase a half-finished signature.
+      const prev = document.createElement("canvas");
+      prev.width = canvas.width;
+      prev.height = canvas.height;
+      prev.getContext("2d")?.drawImage(canvas, 0, 0);
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        return;
+      }
+      styleCtx(ctx);
+      if (prev.width > 1 && prev.height > 1) {
+        ctx.drawImage(prev, 0, 0, widthCss, heightCss);
+      }
+    };
+    if (typeof ResizeObserver === "undefined") {
+      // Test environments without layout — measure once as before.
+      const rect = canvas.getBoundingClientRect();
+      resize(rect.width, rect.height);
       return;
     }
-    ctx.scale(dpr, dpr);
-    ctx.lineWidth = 2;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.strokeStyle = "#1b1b1f";
+    const observer = new ResizeObserver((entries) => {
+      const rect = entries[0]?.contentRect;
+      if (rect) {
+        resize(rect.width, rect.height);
+      }
+    });
+    observer.observe(canvas);
+    return () => observer.disconnect();
   }, []);
 
   function pos(e: React.PointerEvent<HTMLCanvasElement>): {

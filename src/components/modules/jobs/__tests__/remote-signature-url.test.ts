@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { pickSignBaseUrl } from "../intake-modal/remote-signature-url";
+import {
+  isRemoteSignUrl,
+  pickSignBaseUrl,
+} from "../intake-modal/remote-signature-url";
 
 describe("pickSignBaseUrl", () => {
   // The signature QR must open on the customer's phone over the shop LAN.
@@ -61,5 +64,29 @@ describe("pickSignBaseUrl", () => {
       pickSignBaseUrl(["http://0.0.0.0:4000", "http://10.0.0.9:4000"])
     ).toBe("http://10.0.0.9:4000");
     expect(pickSignBaseUrl(["http://0.0.0.0:4000"])).toBeNull();
+  });
+});
+
+describe("isRemoteSignUrl — IPv6 literals", () => {
+  // A bracketed literal has no dot — without the IPv6 branch it fell into
+  // the bare-hostname rejection and a public v6 APP_URL looked unreachable.
+  it("accepts a globally routable IPv6 literal", () => {
+    expect(isRemoteSignUrl("https://[2606:4700:4700::1111]:4000")).toBe(true);
+    expect(isRemoteSignUrl("http://[2001:4860:4860::8888]")).toBe(true);
+  });
+
+  it.each([
+    "https://[::1]:4000",
+    "https://[::]:4000",
+    "https://[fe80::1]:4000",
+    "https://[fd00::1]:4000",
+    "https://[::ffff:192.168.1.1]:4000",
+  ])("rejects the non-public literal %s", (url) => {
+    expect(isRemoteSignUrl(url)).toBe(false);
+  });
+
+  it("still rejects bare hostnames without a dot", () => {
+    expect(isRemoteSignUrl("http://LOJA-PC:4000")).toBe(false);
+    expect(isRemoteSignUrl("https://repairs.example.pt")).toBe(true);
   });
 });
