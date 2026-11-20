@@ -76,8 +76,24 @@ jobs:
       - name: Build
         run: bun run build
 
-      - name: Test
-        run: bun run test
+      - name: Test with coverage
+        run: bun run test:coverage
+
+      - name: Coverage ratchet
+        # The floor in scripts/coverage-budget.json only goes up: fail when
+        # coverage drops below it, and on PRs fail when the floor itself was
+        # lowered vs the base branch. Raise it with `bun run coverage:update`.
+        run: |
+          if [ -n "$GITHUB_BASE_REF" ]; then
+            git fetch --depth=1 origin "$GITHUB_BASE_REF"
+            if git show FETCH_HEAD:scripts/coverage-budget.json > /tmp/base-coverage-budget.json 2>/dev/null; then
+              bun run scripts/check-coverage.ts --base /tmp/base-coverage-budget.json
+            else
+              bun run check-coverage
+            fi
+          else
+            bun run check-coverage
+          fi
 
   audit:
     name: Dependency audit
