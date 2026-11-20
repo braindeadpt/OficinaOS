@@ -386,12 +386,15 @@ async function handleToolCallsFollowUp(
 ): Promise<string> {
   const messages: OpenAI.ChatCompletionMessageParam[] = [...openaiMessages];
   let content = assistantContent;
+  // Text produced alongside the pending tool calls — only this round's
+  // content belongs in the assistant message, not the accumulated total.
+  let roundContent = assistantContent;
   let pending = toolCalls;
 
   for (let round = 0; round < MAX_TOOL_ROUNDS && pending.length > 0; round++) {
     messages.push({
       role: "assistant",
-      content: content || null,
+      content: roundContent || null,
       tool_calls: pending.map((call) => ({
         ...call,
         type: "function" as const,
@@ -420,6 +423,7 @@ async function handleToolCallsFollowUp(
       encoder,
       agentName
     );
+    roundContent = next.assistantContent;
     content += next.assistantContent;
     pending = next.toolCalls;
   }
