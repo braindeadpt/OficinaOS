@@ -27,6 +27,7 @@ describe("HelpPage", () => {
       "help_shop_title",
       "help_install_title",
       "help_remote_title",
+      "help_sign_title",
       "help_problems_title",
     ]) {
       expect(screen.getByText(key)).toBeInTheDocument();
