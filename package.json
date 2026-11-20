@@ -70,7 +70,7 @@
     "tailwindcss": "^4.2.2",
     "typescript": "^6.0.2",
     "ultracite": "7.6.0",
-    "vite": "^8.0.8",
+    "vite": "^8.3.3",
     "vitest": "^4.1.4"
   },
   "name": "oficinaos",
@@ -132,7 +132,6 @@
     "source-map-js": "^1.2.2",
     "tar": "^7.5.22",
     "undici": "^7.30.1",
-    "vite": "^8.3.3",
     "ws": "^8.22.1",
     "zod": "^4.6.7"
   },
