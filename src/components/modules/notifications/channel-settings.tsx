@@ -6,6 +6,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import type { useSettingsStore } from "@/stores/settings";
 import { EvolutionSection } from "./evolution-section";
@@ -189,9 +190,9 @@ function SmsCustomFields({
         hint={t("sms_custom_headers_hint")}
         label={t("sms_custom_headers")}
       >
-        <textarea
+        <Textarea
           autoComplete="off"
-          className="min-h-16 w-full rounded-xl bg-surface-container px-4 py-2.5 font-mono text-on-surface text-xs focus:bg-surface-container-lowest"
+          className="resize-y font-mono text-xs"
           onChange={(e) =>
             setForm((f) => ({ ...f, customHeaders: e.target.value }))
           }
@@ -207,9 +208,9 @@ function SmsCustomFields({
         hint={t("sms_custom_template_hint")}
         label={t("sms_custom_template")}
       >
-        <textarea
+        <Textarea
           autoComplete="off"
-          className="min-h-16 w-full rounded-xl bg-surface-container px-4 py-2.5 font-mono text-on-surface text-xs focus:bg-surface-container-lowest"
+          className="resize-y font-mono text-xs"
           onChange={(e) =>
             setForm((f) => ({ ...f, customBodyTemplate: e.target.value }))
           }
