@@ -9,6 +9,9 @@ import type { DbClient } from "../repositories/types.js";
 
 export const LOCKOUT_THRESHOLD = 5;
 export const LOCKOUT_DURATION_MS = 60 * 60 * 1000;
+// Below-threshold failures only count within a rolling window — the previous
+// in-memory map aged them out every 15 minutes.
+export const FAILURE_WINDOW_MS = 15 * 60 * 1000;
 
 export interface CodeLockoutStore {
   clear(code: string): Promise<void>;
@@ -38,20 +41,30 @@ export function createCodeLockout(prisma: DbClient): CodeLockoutStore {
       const existing = await prisma.codeLockout.findUnique({
         where: { code },
       });
-      const expired =
+      const lockExpired =
         existing?.lockedUntil && existing.lockedUntil.getTime() <= now;
-      const failures = expired ? 1 : (existing?.failures ?? 0) + 1;
-      let lockedUntil = existing?.lockedUntil ?? null;
-      if (failures >= LOCKOUT_THRESHOLD) {
-        lockedUntil = new Date(now + LOCKOUT_DURATION_MS);
-      } else if (expired) {
-        lockedUntil = null;
-      }
-      await prisma.codeLockout.upsert({
+      const windowExpired =
+        existing && now - existing.firstFailedAt.getTime() > FAILURE_WINDOW_MS;
+      const reset = !existing || lockExpired || windowExpired;
+
+      // Atomic upsert: concurrent failures never lose increments.
+      const row = await prisma.codeLockout.upsert({
         where: { code },
-        create: { code, failures, lockedUntil },
-        update: { failures, lockedUntil },
+        create: { code, failures: 1 },
+        update: reset
+          ? { failures: 1, firstFailedAt: new Date(now), lockedUntil: null }
+          : { failures: { increment: 1 } },
       });
+
+      if (
+        row.failures >= LOCKOUT_THRESHOLD &&
+        !(row.lockedUntil && row.lockedUntil.getTime() > now)
+      ) {
+        await prisma.codeLockout.update({
+          where: { code },
+          data: { lockedUntil: new Date(now + LOCKOUT_DURATION_MS) },
+        });
+      }
     },
   };
 }

@@ -74,7 +74,13 @@ function buildApp() {
     codeLockout: {
       findUnique: vi.fn().mockResolvedValue(null),
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
-      upsert: vi.fn().mockResolvedValue(null),
+      upsert: vi.fn().mockResolvedValue({
+        code: "ABC123",
+        failures: 1,
+        firstFailedAt: new Date(),
+        lockedUntil: null,
+      }),
+      update: vi.fn().mockResolvedValue(null),
     },
   });
   (app.decorate as (name: string, value: unknown) => void)("auth", {

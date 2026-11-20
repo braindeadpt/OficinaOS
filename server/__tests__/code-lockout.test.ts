@@ -4,6 +4,7 @@ import { createCodeLockout, LOCKOUT_THRESHOLD } from "../utils/code-lockout.js";
 interface Row {
   code: string;
   failures: number;
+  firstFailedAt: Date;
   lockedUntil: Date | null;
 }
 
@@ -18,6 +19,15 @@ function fakePrisma() {
         rows.delete(where.code);
         return Promise.resolve({ count: 1 });
       }),
+      update: vi.fn(
+        ({ where, data }: { where: { code: string }; data: Partial<Row> }) => {
+          const existing = rows.get(where.code);
+          if (existing) {
+            rows.set(where.code, { ...existing, ...data });
+          }
+          return Promise.resolve(rows.get(where.code) ?? null);
+        }
+      ),
       upsert: vi.fn(
         ({
           where,
@@ -29,7 +39,20 @@ function fakePrisma() {
           update: Partial<Row>;
         }) => {
           const existing = rows.get(where.code);
-          rows.set(where.code, existing ? { ...existing, ...update } : create);
+          if (existing) {
+            const merged = { ...existing, ...update };
+            const inc = update.failures as { increment?: number } | undefined;
+            if (inc?.increment) {
+              merged.failures = existing.failures + inc.increment;
+            }
+            rows.set(where.code, merged);
+          } else {
+            rows.set(where.code, {
+              ...create,
+              firstFailedAt: new Date(),
+              lockedUntil: create.lockedUntil ?? null,
+            });
+          }
           return Promise.resolve(rows.get(where.code));
         }
       ),

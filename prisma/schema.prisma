@@ -1729,10 +1729,11 @@ model CommercialAgreement {
 // job code block further guesses on it for an hour. Stored in the DB so a
 // restart does not reset the counters.
 model CodeLockout {
-  code        String    @id
-  failures    Int       @default(0)
-  lockedUntil DateTime? @db.Timestamptz
-  updatedAt   DateTime  @updatedAt @db.Timestamptz
+  code          String    @id
+  failures      Int       @default(0)
+  firstFailedAt DateTime  @default(now()) @db.Timestamptz
+  lockedUntil   DateTime? @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @db.Timestamptz
 
   @@map("code_lockouts")
 }
