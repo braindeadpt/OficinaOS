@@ -1,3 +1,9 @@
+import {
+  ipv4Octets,
+  isPublicIpv4Octets,
+  isPublicIpv6,
+} from "@shared/utils/ip-address";
+
 /**
  * Picks the base URL a phone should open, from /public/access-info. Used by
  * the remote-signature QR and the /help QR so both always agree.
@@ -16,7 +22,6 @@
  * Wildcard hosts (0.0.0.0 / ::) are bind addresses, not dialable ones — they
  * count as unreachable everywhere below, same as loopback.
  */
-const IPV4_HOST_RE = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 
 function hostOf(url: string): { host: string; protocol: string } | null {
   try {
@@ -25,15 +30,6 @@ function hostOf(url: string): { host: string; protocol: string } | null {
   } catch {
     return null;
   }
-}
-
-function ipv4Octets(host: string): number[] | null {
-  const m = IPV4_HOST_RE.exec(host);
-  if (!m) {
-    return null;
-  }
-  const octets = m.slice(1).map(Number);
-  return octets.every((o) => o <= 255) ? octets : null;
 }
 
 function isPrivateLanIpv4(host: string): boolean {
@@ -61,17 +57,15 @@ export function isRemoteSignUrl(url: string): boolean {
   if (isUndialable(h.host) || h.host.endsWith(".local")) {
     return false;
   }
-  const o = ipv4Octets(h.host);
-  if (o) {
-    const [a, b] = o;
-    if (
-      a === 10 ||
-      a === 127 ||
-      (a === 169 && b === 254) ||
-      (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168) ||
-      (a === 100 && b >= 64 && b <= 127)
-    ) {
+  const octets = ipv4Octets(h.host);
+  if (octets) {
+    if (!isPublicIpv4Octets(octets)) {
+      return false;
+    }
+  } else if (h.host.startsWith("[")) {
+    // IPv6 literal — brackets are part of URL.hostname, so it would
+    // otherwise fall into the bare-hostname rejection below.
+    if (!isPublicIpv6(h.host)) {
       return false;
     }
   } else if (!h.host.includes(".")) {
@@ -103,7 +97,7 @@ function isPublicHttps(url: string): boolean {
     ipv4Octets(h.host) === null &&
     !h.host.endsWith(".local") &&
     !isUndialable(h.host) &&
-    h.host.includes(".")
+    (h.host.includes(".") || isPublicIpv6(h.host))
   );
 }
 

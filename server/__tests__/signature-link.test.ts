@@ -266,7 +266,9 @@ describe("sendSignatureLink — loaner sessions", () => {
       expect.objectContaining({ where: { jobCode: "REP-0042" } })
     );
     const outbox = prisma.notificationOutbox.create.mock.calls[0][0];
-    expect(outbox.data.renderedBody).toContain("the loaner agreement");
+    // The snapshot is PT — the doc label follows the document's language,
+    // not a fixed English string.
+    expect(outbox.data.renderedBody).toContain("o termo de responsabilidade");
     const audit = prisma.auditLog.create.mock.calls[0][0];
     expect(audit.data.jobId).toBe("job-1");
     expect(audit.data.action).toBe("NOTIFICATION_SENT");
@@ -285,6 +287,102 @@ describe("sendSignatureLink — loaner sessions", () => {
     await expect(
       sendSignatureLink(app, TOKEN, "staff-1")
     ).rejects.toMatchObject({ code: "SIGNATURE_STALE" });
+    expect(prisma.notificationOutbox.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("sendSignatureLink — localized doc labels", () => {
+  it.each([
+    ["pt", "o termo de responsabilidade"],
+    ["en", "the loaner agreement"],
+    ["es", "el acuerdo de préstamo"],
+    ["fr", "le contrat de prêt"],
+  ])("labels a %s loaner agreement as %s", async (locale, label) => {
+    const job = loanerJob();
+    prisma.signatureSession.findUnique.mockResolvedValue(
+      loanerSession({ snapshot: buildLoanerAgreementDocument(job, locale) })
+    );
+    prisma.job.findUnique.mockResolvedValue(job);
+    prisma.shopSettings.findUnique.mockResolvedValue(defaultSettings());
+
+    await sendSignatureLink(app, TOKEN, "staff-1");
+
+    const outbox = prisma.notificationOutbox.create.mock.calls[0][0];
+    expect(outbox.data.renderedBody).toContain(label);
+  });
+
+  it.each([
+    ["pt", "a ficha de receção"],
+    ["en", "the intake form"],
+    ["es", "la ficha de admisión"],
+    ["fr", "la fiche d'admission"],
+  ])("labels a %s intake form as %s", async (locale, label) => {
+    prisma.signatureSession.findUnique.mockResolvedValue(
+      intakeSession({
+        relayed: true,
+        snapshot: {
+          v: 1,
+          locale,
+          customerName: "Ana Silva",
+          customerPhone: PHONE,
+          problem: "Broken screen",
+        },
+      })
+    );
+    prisma.shopSettings.findUnique.mockResolvedValue(defaultSettings());
+
+    await sendSignatureLink(app, TOKEN, "staff-1");
+
+    const outbox = prisma.notificationOutbox.create.mock.calls[0][0];
+    expect(outbox.data.renderedBody).toContain(label);
+  });
+});
+
+describe("sendSignatureLink — delivery deadline", () => {
+  it("stamps the outbox entry with the session expiry", async () => {
+    const session = intakeSession({ relayed: true });
+    prisma.signatureSession.findUnique.mockResolvedValue(session);
+    prisma.shopSettings.findUnique.mockResolvedValue(defaultSettings());
+
+    await sendSignatureLink(app, TOKEN, "staff-1");
+
+    const outbox = prisma.notificationOutbox.create.mock.calls[0][0];
+    expect(outbox.data.deliverBy).toEqual(session.expiresAt);
+  });
+});
+
+describe("sendSignatureLink — IPv6 base URLs", () => {
+  it("accepts a globally routable IPv6 trackingBaseUrl", async () => {
+    prisma.signatureSession.findUnique.mockResolvedValue(intakeSession());
+    prisma.shopSettings.findUnique.mockResolvedValue(
+      defaultSettings({
+        trackingBaseUrl: "https://[2606:4700:4700::1111]:4000/",
+      })
+    );
+
+    await sendSignatureLink(app, TOKEN, "staff-1");
+
+    const outbox = prisma.notificationOutbox.create.mock.calls[0][0];
+    expect(outbox.data.renderedBody).toContain(
+      `https://[2606:4700:4700::1111]:4000/sign/${TOKEN}`
+    );
+  });
+
+  it.each([
+    "https://[::1]:4000",
+    "https://[::]:4000",
+    "https://[fe80::1]:4000",
+    "https://[fd00::1]:4000",
+    "https://[::ffff:192.168.1.1]:4000",
+  ])("refuses the non-public IPv6 base %s", async (url) => {
+    prisma.signatureSession.findUnique.mockResolvedValue(intakeSession());
+    prisma.shopSettings.findUnique.mockResolvedValue(
+      defaultSettings({ cloudApiUrl: null, trackingBaseUrl: url })
+    );
+
+    await expect(
+      sendSignatureLink(app, TOKEN, "staff-1")
+    ).rejects.toMatchObject({ code: "SIGNATURE_LINK_NO_REMOTE" });
     expect(prisma.notificationOutbox.create).not.toHaveBeenCalled();
   });
 });

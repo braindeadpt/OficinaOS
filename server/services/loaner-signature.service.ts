@@ -4,9 +4,11 @@ import { AppError } from "@shared/errors/app-error.js";
 import {
   buildLoanerAgreementDocument,
   type LoanerAgreementDocument,
+  publicLoanerAgreementView,
 } from "@shared/loaner-agreement-document.js";
 import { SIGNATURE_DATA_URL_RE } from "@shared/schemas/signature.schema.js";
 import type { FastifyBaseLogger } from "fastify";
+import { resolveRemoteSignUrl } from "../lib/remote-sign-url.js";
 import { createAuditLog } from "./audit.service.js";
 import {
   publishSignatureRelay,
@@ -72,7 +74,33 @@ export async function createLoanerSignatureSession(
       session.expiresAt = remoteExpiresAt;
     }
   }
-  return { ...session, cloudSignUrl };
+  // Same server-side resolution as the intake session route — the dialog
+  // offers "send" whenever the link is reachable off-LAN.
+  const remoteSignUrl = await resolveRemoteSignUrl(prisma, {
+    relayed: Boolean(cloudSignUrl),
+    token: session.token,
+  });
+  return { ...session, cloudSignUrl, remoteSignUrl };
+}
+
+/**
+ * The exact document the in-person signing screen previews — built from the
+ * persisted job through the same canonical builder the signature freezes,
+ * so what the customer reads is what gets hashed.
+ */
+export async function getLoanerAgreementPreview(
+  prisma: PrismaClient,
+  jobId: string,
+  locale: string
+) {
+  const job = await prisma.job.findUnique({
+    where: { id: jobId },
+    include: LOANER_SIGN_INCLUDE,
+  });
+  if (!(job?.hasLoanerDevice && job.status !== "CANCELLED")) {
+    throw new AppError("JOB_NOT_FOUND");
+  }
+  return publicLoanerAgreementView(buildLoanerAgreementDocument(job, locale));
 }
 
 export interface AttachLoanerSignatureInput {

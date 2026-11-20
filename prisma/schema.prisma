@@ -1001,6 +1001,10 @@ model NotificationOutbox {
   error          String?       @db.Text
   retryCount     Int           @default(0)
   nextRetryAt    DateTime?     @db.Timestamptz
+  // Hard send deadline for time-sensitive payloads (e.g. a signing link
+  // whose session expires in minutes) — the worker cancels the entry
+  // instead of delivering a link that is already dead.
+  deliverBy      DateTime?     @db.Timestamptz
   createdAt      DateTime      @default(now()) @db.Timestamptz
   sentAt         DateTime?     @db.Timestamptz
 

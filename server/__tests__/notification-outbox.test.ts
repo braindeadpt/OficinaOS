@@ -71,12 +71,32 @@ describe("queueNotification", () => {
 
     expect(mocks.createOutboxEntry).toHaveBeenCalledWith(prisma, {
       channel: "WHATSAPP",
+      deliverBy: null,
       job: undefined,
       recipientPhone: "05551234567",
       renderedBody: "Hello Ahmed, job RPR-001 is ready.",
       status: OutboxStatus.QUEUED,
       templateName: "job-ready",
     });
+  });
+
+  it("persists a delivery deadline when the payload carries one", async () => {
+    mocks.createOutboxEntry.mockResolvedValue({ id: "out-3" });
+    const deliverBy = new Date(Date.now() + 15 * 60_000);
+
+    await queueNotification(prisma, {
+      deliverBy,
+      templateName: "signature_link",
+      channel: "WHATSAPP",
+      recipientPhone: "05551234567",
+      templateVars: {},
+      templateBody: "Sign here: {{signUrl}}",
+    });
+
+    expect(mocks.createOutboxEntry).toHaveBeenCalledWith(
+      prisma,
+      expect.objectContaining({ deliverBy })
+    );
   });
 
   it("passes jobId when provided", async () => {
@@ -410,6 +430,76 @@ describe("processOutbox", () => {
         status: OutboxStatus.CANCELLED,
       })
     );
+  });
+
+  it("cancels a signing link whose session deadline already passed", async () => {
+    // Fresh entry (<24h) but past its deliverBy — a signing session dies in
+    // minutes, so the generic age cutoff alone would deliver a dead link.
+    mocks.findManyOutboxEntries.mockResolvedValue([
+      {
+        id: "out-8",
+        channel: "WHATSAPP",
+        createdAt: new Date(),
+        deliverBy: new Date(Date.now() - 60_000),
+        recipientPhone: "05551234567",
+        renderedBody: "Sign: https://x/sign/abc",
+        retryCount: 2,
+      },
+    ]);
+    mocks.findShopSettingsUnique.mockResolvedValue({
+      countryCode: "PT",
+      whatsappApiTokenEncrypted: "enc-token",
+      whatsappBusinessId: "biz-1",
+      whatsappEnabled: true,
+      whatsappPhoneNumberId: "phone-1",
+    });
+    mocks.transitionOutboxEntry.mockResolvedValue(1);
+
+    await processOutbox(prisma);
+
+    expect(mocks.sendWhatsApp).not.toHaveBeenCalled();
+    expect(mocks.transitionOutboxEntry).toHaveBeenCalledWith(
+      prisma,
+      "out-8",
+      OutboxStatus.QUEUED,
+      expect.objectContaining({ status: OutboxStatus.CANCELLED })
+    );
+  });
+
+  it("still sends an entry whose deliverBy is in the future", async () => {
+    mocks.findManyOutboxEntries.mockResolvedValue([
+      {
+        id: "out-9",
+        channel: "WHATSAPP",
+        createdAt: new Date(),
+        deliverBy: new Date(Date.now() + 10 * 60_000),
+        recipientPhone: "05551234567",
+        renderedBody: "Sign: https://x/sign/abc",
+        retryCount: 0,
+      },
+    ]);
+    mocks.findShopSettingsUnique.mockResolvedValue({
+      countryCode: "PT",
+      whatsappApiTokenEncrypted: "enc-token",
+      whatsappBusinessId: "biz-1",
+      whatsappEnabled: true,
+      whatsappPhoneNumberId: "phone-1",
+    });
+    mocks.decryptWhatsAppConfig.mockReturnValue({
+      apiToken: "decrypted-token",
+      businessId: "biz-1",
+      phoneNumberId: "phone-1",
+    });
+    mocks.sendWhatsApp.mockResolvedValue({ success: true });
+    mocks.transitionOutboxEntry.mockResolvedValue(1);
+    mocks.findCustomerByPhone.mockResolvedValue({
+      phone: "05551234567",
+      whatsappConsent: true,
+    });
+
+    await processOutbox(prisma);
+
+    expect(mocks.sendWhatsApp).toHaveBeenCalledOnce();
   });
 });
 

@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   attachLoanerSignature,
   createLoanerSignatureSession,
+  getLoanerAgreementPreview,
 } from "../loaner-signature.service.js";
 import { intakeDocumentHash } from "../signature-session.service.js";
 
@@ -119,6 +120,56 @@ describe("createLoanerSignatureSession", () => {
     expect(created.data.snapshot.doc).toBe(LOANER_AGREEMENT_DOC_KIND);
     expect(created.data.snapshot.jobCode).toBe("R-2026-0001");
     expect(result.cloudSignUrl).toBeNull();
+  });
+
+  it("returns the server-resolved remote sign URL for the share controls", async () => {
+    const prisma = noRelaySettings(mockPrisma());
+    (prisma as unknown as Record<string, unknown>).shopSettings = {
+      findUnique: vi.fn().mockResolvedValue({
+        cloudApiUrl: null,
+        cloudShopTokenEncrypted: null,
+        trackingBaseUrl: "https://repairs.example.pt/",
+      }),
+    };
+
+    const result = await createLoanerSignatureSession(
+      prisma,
+      "job-1",
+      "pt",
+      log
+    );
+
+    // Same address the send endpoint would use — the dialog never has to
+    // re-derive reachability from the LAN access-info list.
+    expect(result.remoteSignUrl).toBe(
+      `https://repairs.example.pt/sign/${result.token}`
+    );
+  });
+});
+
+describe("getLoanerAgreementPreview", () => {
+  it("returns the canonical document the signature will freeze", async () => {
+    const prisma = mockPrisma();
+
+    const preview = await getLoanerAgreementPreview(prisma, "job-1", "pt");
+
+    expect(preview.kind).toBe(LOANER_AGREEMENT_DOC_KIND);
+    expect(preview.problem).toContain("iPhone 14");
+    expect(preview.device).toContain("Loja #1");
+    expect(preview.note).toBeTruthy();
+    expect(preview.termsText).toContain("1.");
+  });
+
+  it("rejects jobs without an active loaner", async () => {
+    const prisma = mockPrisma();
+    prisma.job.findUnique.mockResolvedValue({
+      ...JOB,
+      hasLoanerDevice: false,
+    });
+
+    await expect(
+      getLoanerAgreementPreview(prisma, "job-1", "pt")
+    ).rejects.toMatchObject({ code: "JOB_NOT_FOUND" });
   });
 });
 

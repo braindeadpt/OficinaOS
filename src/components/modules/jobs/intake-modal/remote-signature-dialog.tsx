@@ -6,7 +6,7 @@ import SignLinkShare from "@/components/modules/jobs/sign-link-share";
 import { Dialog } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
 import api, { type ApiError } from "@/lib/api";
-import { isRemoteSignUrl, pickSignBaseUrl } from "./remote-signature-url";
+import { pickSignBaseUrl } from "./remote-signature-url";
 
 // ~3s while a session is pending — each poll also triggers the cloud reply
 // pull server-side, so a customer at the counter never waits for the ~2min
@@ -100,8 +100,9 @@ export default function RemoteSignatureDialog({
         api.post("/sign-sessions", { document: doc }),
         api.get("/public/access-info"),
       ]);
-      const { token, cloudSignUrl } = sessionRes.data as {
+      const { token, cloudSignUrl, remoteSignUrl } = sessionRes.data as {
         cloudSignUrl?: string | null;
+        remoteSignUrl?: string | null;
         token: string;
       };
       sessionRef.current = token;
@@ -117,9 +118,11 @@ export default function RemoteSignatureDialog({
         setLoadError(true);
         return;
       }
-      // The link is shareable/sendable only when a phone can open it from
-      // outside the shop: the cloud relay, or a public base URL.
-      setRemoteUrl(cloudSignUrl ?? (isRemoteSignUrl(signUrl) ? signUrl : null));
+      // The server resolved the shareable address with the same rules the
+      // send endpoint uses (trackingBaseUrl, then public bases) — non-null
+      // means a phone can open it from outside the shop. The cloud URL is
+      // remote by definition, so it doubles as the fallback.
+      setRemoteUrl(remoteSignUrl ?? cloudSignUrl ?? null);
       const qr = await QRCode.toDataURL(signUrl, { margin: 1, width: 192 });
       setQrDataUrl(qr);
     } catch {

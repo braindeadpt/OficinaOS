@@ -47,6 +47,9 @@ interface PublicDocument {
   // "loaner-agreement" marks the loaner term (a document separate from the
   // intake ficha) — it carries the same mapped fields plus structured ones.
   kind?: "loaner-agreement";
+  // Loaner agreement only: staff note that is part of the signed document
+  // — shown separately when a fleet unit already identifies the device.
+  note?: string | null;
   problem: string;
   termsText: string;
   urgent: boolean;
@@ -249,6 +252,16 @@ export default function SignPage() {
                         </dt>
                         <dd className="font-medium text-on-surface">
                           {document.estimatedCost.toFixed(2)} €
+                        </dd>
+                      </div>
+                    )}
+                    {document.note && (
+                      <div className="flex justify-between gap-4">
+                        <dt className="shrink-0 text-on-surface-variant">
+                          {t("sign_doc_note")}
+                        </dt>
+                        <dd className="text-right font-medium text-on-surface">
+                          {document.note}
                         </dd>
                       </div>
                     )}

@@ -3,6 +3,7 @@ import type { PrismaClient } from "@generated/client";
 import { canonicalize } from "@shared/intake-document.js";
 import {
   buildLoanerAgreementDocument,
+  type LoanerAgreementDocument,
   loanerAgreementMatches,
   loanerAgreementText,
 } from "@shared/loaner-agreement-document.js";
@@ -991,10 +992,17 @@ export async function renderLoanerAgreementHtml(
   // The stored signature only applies while the job still produces the
   // exact document the customer signed — same rule as attach-time, so a
   // reprint after a unit swap falls back to the paper line rather than
-  // showing a signature under different content.
+  // showing a signature under different content. The language must match
+  // too: the match rebuilds in the frozen locale, so printing in another
+  // language would otherwise show a signature under clauses the customer
+  // never saw.
+  const signedLocale = (
+    job.loanerAgreementSnapshot as LoanerAgreementDocument | null
+  )?.locale;
   const signatureApplies =
     typeof job.loanerAgreementSignatureDataUrl === "string" &&
     job.loanerAgreementSignatureDataUrl.startsWith("data:image/") &&
+    signedLocale === locale &&
     loanerAgreementMatches(job.loanerAgreementSnapshot, job);
   const signatureBox = signatureApplies
     ? `<img src="${esc(job.loanerAgreementSignatureDataUrl as string)}" alt="signature" />`

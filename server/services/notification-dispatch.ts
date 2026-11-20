@@ -23,6 +23,8 @@ interface NotifyEvent {
     recipientPhone?: string;
     [key: string]: string | undefined;
   };
+  /** Hard send deadline — outbox entries past it are cancelled, not sent. */
+  deliverBy?: Date;
   eventId?: string;
   eventName: string;
   jobId?: string;
@@ -146,6 +148,7 @@ const whatsAppHandler: ChannelHandler = {
     }
     await queueNotification(prisma, {
       channel: "WHATSAPP",
+      deliverBy: event.deliverBy,
       jobId: event.jobId,
       recipientPhone: phone,
       templateBody: context.templateBody,
@@ -187,6 +190,7 @@ const smsHandler: ChannelHandler = {
     }
     await queueNotification(prisma, {
       channel: "SMS",
+      deliverBy: event.deliverBy,
       jobId: event.jobId,
       recipientPhone: phone,
       templateBody: context.templateBody,

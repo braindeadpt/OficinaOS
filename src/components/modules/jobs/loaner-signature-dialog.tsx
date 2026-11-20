@@ -6,10 +6,7 @@ import SignaturePad from "@/components/reports/signature-pad";
 import { Dialog } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
 import api, { type ApiError } from "@/lib/api";
-import {
-  isRemoteSignUrl,
-  pickSignBaseUrl,
-} from "./intake-modal/remote-signature-url";
+import { pickSignBaseUrl } from "./intake-modal/remote-signature-url";
 
 // ~3s while a session is pending — each poll also triggers the cloud reply
 // pull server-side, so a customer at the counter never waits for the ~2min
@@ -34,6 +31,18 @@ interface SessionStatus {
   signed: boolean;
 }
 
+/** Redacted view of the loaner agreement — same shape /sign renders. */
+interface LoanerAgreementPreview {
+  acceptance: string;
+  clauses: string[];
+  customerName: string;
+  device: string;
+  estimatedDelivery: string | null;
+  note: string | null;
+  problem: string;
+  title: string;
+}
+
 /**
  * Digital signature of the loaner responsibility agreement — a document
  * separate from the intake ficha. The session is created server-side from
@@ -47,7 +56,7 @@ export default function LoanerSignatureDialog({
   onSigned,
   open,
 }: LoanerSignatureDialogProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   // "here": the customer draws on this screen (staff tablet/counter).
   // "qr": a signing session is created and the customer opens /sign/:token.
   const [mode, setMode] = useState<"here" | "qr">("here");
@@ -63,6 +72,9 @@ export default function LoanerSignatureDialog({
   const [stale, setStale] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [needsAppUrl, setNeedsAppUrl] = useState(false);
+  // The canonical agreement the in-person pad signs — fetched so the
+  // customer reads the exact clauses before drawing.
+  const [preview, setPreview] = useState<LoanerAgreementPreview | null>(null);
   const sessionRef = useRef<string | null>(null);
   // A signed-but-not-yet-attached session must survive close — its row is
   // consumed by the attach call, so invalidation skips it.
@@ -90,11 +102,14 @@ export default function LoanerSignatureDialog({
     setNeedsAppUrl(false);
     try {
       const [sessionRes, infoRes] = await Promise.all([
-        api.post(`/jobs/${jobId}/loaner-signature-session`),
+        api.post(`/jobs/${jobId}/loaner-signature-session`, {
+          locale: i18n.language,
+        }),
         api.get("/public/access-info"),
       ]);
-      const { token, cloudSignUrl } = sessionRes.data as {
+      const { token, cloudSignUrl, remoteSignUrl } = sessionRes.data as {
         cloudSignUrl?: string | null;
+        remoteSignUrl?: string | null;
         token: string;
       };
       sessionRef.current = token;
@@ -107,15 +122,16 @@ export default function LoanerSignatureDialog({
         setLoadError(true);
         return;
       }
-      // The link is shareable/sendable only when a phone can open it from
-      // outside the shop: the cloud relay, or a public base URL.
-      setRemoteUrl(cloudSignUrl ?? (isRemoteSignUrl(signUrl) ? signUrl : null));
+      // The server resolved the shareable address with the same rules the
+      // send endpoint uses — non-null means a phone can open it remotely.
+      // The cloud URL is remote by definition, so it doubles as the fallback.
+      setRemoteUrl(remoteSignUrl ?? cloudSignUrl ?? null);
       const qr = await QRCode.toDataURL(signUrl, { margin: 1, width: 192 });
       setQrDataUrl(qr);
     } catch {
       setLoadError(true);
     }
-  }, [jobId, invalidatePending]);
+  }, [i18n.language, jobId, invalidatePending]);
 
   // Staff-initiated send: the server pushes the live link through the
   // shop's messaging channels (WhatsApp/SMS). Only offered when the link
@@ -149,6 +165,7 @@ export default function LoanerSignatureDialog({
     setLoadError(false);
     try {
       await api.post(`/jobs/${jobId}/loaner-signature`, {
+        locale: i18n.language,
         signatureDataUrl: padDataUrl,
       });
       onSignedRef.current();
@@ -158,7 +175,7 @@ export default function LoanerSignatureDialog({
     } finally {
       setSavingPad(false);
     }
-  }, [jobId, onClose, padDataUrl]);
+  }, [i18n.language, jobId, onClose, padDataUrl]);
 
   useEffect(() => {
     // Dialog children unmount on close but this component's state persists —
@@ -198,7 +215,10 @@ export default function LoanerSignatureDialog({
           clearInterval(poll);
           signedTokenRef.current = token;
           try {
-            await api.post(`/jobs/${jobId}/loaner-signature`, { token });
+            await api.post(`/jobs/${jobId}/loaner-signature`, {
+              locale: i18n.language,
+              token,
+            });
             onSignedRef.current();
             onClose();
           } catch (err) {
@@ -223,7 +243,33 @@ export default function LoanerSignatureDialog({
       }
     }, POLL_MS);
     return () => clearInterval(poll);
-  }, [open, qrDataUrl, jobId, onClose]);
+  }, [i18n.language, open, qrDataUrl, jobId, onClose]);
+
+  // The in-person tab signs the same canonical document the server freezes —
+  // fetch its preview so the customer reads the terms before drawing.
+  useEffect(() => {
+    if (!(open && mode === "here")) {
+      return;
+    }
+    let cancelled = false;
+    api
+      .get(`/jobs/${jobId}/loaner-agreement-preview`, {
+        params: { locale: i18n.language },
+      })
+      .then((res) => {
+        if (!cancelled) {
+          setPreview(res.data as LoanerAgreementPreview);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPreview(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, mode, jobId, i18n.language]);
 
   let qrContent: React.ReactNode;
   if (loadError) {
@@ -361,6 +407,69 @@ export default function LoanerSignatureDialog({
         </div>
         {mode === "here" ? (
           <div className="w-full">
+            {preview && (
+              <div className="mb-3 max-h-56 overflow-y-auto rounded-xl bg-surface-container-lowest p-3 text-left ring-1 ring-outline-variant">
+                <p className="font-label font-semibold text-[11px] text-on-surface-variant uppercase tracking-widest">
+                  {preview.title}
+                </p>
+                <dl className="mt-2 space-y-1 text-sm">
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-on-surface-variant">
+                      {t("sign_doc_customer")}
+                    </dt>
+                    <dd className="font-medium text-on-surface">
+                      {preview.customerName}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-on-surface-variant">
+                      {t("sign_doc_loaner_unit")}
+                    </dt>
+                    <dd className="font-medium text-on-surface">
+                      {preview.device}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <dt className="shrink-0 text-on-surface-variant">
+                      {t("sign_doc_repair_device")}
+                    </dt>
+                    <dd className="text-right font-medium text-on-surface">
+                      {preview.problem}
+                    </dd>
+                  </div>
+                  {preview.note && (
+                    <div className="flex justify-between gap-4">
+                      <dt className="shrink-0 text-on-surface-variant">
+                        {t("sign_doc_note")}
+                      </dt>
+                      <dd className="text-right font-medium text-on-surface">
+                        {preview.note}
+                      </dd>
+                    </div>
+                  )}
+                  {preview.estimatedDelivery && (
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-on-surface-variant">
+                        {t("sign_doc_delivery")}
+                      </dt>
+                      <dd className="font-medium text-on-surface">
+                        {new Date(preview.estimatedDelivery).toLocaleString(
+                          i18n.language
+                        )}
+                      </dd>
+                    </div>
+                  )}
+                </dl>
+                <ol className="mt-3 list-decimal space-y-1.5 ps-4 text-on-surface-variant text-xs leading-relaxed">
+                  {preview.clauses.map((clause) => (
+                    <li key={clause}>{clause}</li>
+                  ))}
+                </ol>
+                <p className="mt-2 font-medium text-on-surface-variant text-xs">
+                  {preview.acceptance}
+                </p>
+              </div>
+            )}
             <SignaturePad onChange={setPadDataUrl} />
             {padDataUrl && (
               <p className="ms-1 mt-1 flex items-center gap-1 font-label text-success text-xs">

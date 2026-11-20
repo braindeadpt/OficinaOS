@@ -160,6 +160,10 @@ const LEGACY_EN_TEMPLATE_BODIES: Record<string, string> = {
     "Hello {{customerName}}, we have registered a warranty return for your device {{jobCode}}. We will inspect it and keep you updated.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nTrack it here: {{trackingUrl}}{{endif}}",
   "part_low_stock:WHATSAPP":
     "Low stock alert: {{partName}} is down to {{partQuantity}} units (reorder level: {{partReorderLevel}}).{{if shopName}} — {{shopName}}{{endif}}",
+  "signature_link:IN_APP":
+    "Signature link sent to {{customerName}}{{if jobCode}} — {{jobCode}}{{endif}}",
+  "signature_link:WHATSAPP":
+    "Hello {{customerName}}, please review and sign {{docLabel}}{{if jobCode}} for repair {{jobCode}}{{endif}}: {{signUrl}} (valid for {{ttlMinutes}} min).{{if shopName}} — {{shopName}}{{endif}}",
 };
 
 // Default templates in PT-PT (the product's primary market). The SMS
@@ -341,6 +345,20 @@ async function seedNotificationTemplates() {
       name: "part_low_stock",
       channel: "WHATSAPP" as const,
       body: "Alerta de stock baixo: {{partName}} tem apenas {{partQuantity}} unidades (nível de encomenda: {{partReorderLevel}}).{{if shopName}} — {{shopName}}{{endif}}",
+      isDefault: true,
+    },
+    {
+      // Staff-initiated signing link (intake ficha or loaner term) — the
+      // docLabel var is localized server-side from the frozen document.
+      name: "signature_link",
+      channel: "IN_APP" as const,
+      body: "Link de assinatura enviado a {{customerName}}{{if jobCode}} — {{jobCode}}{{endif}}",
+      isDefault: true,
+    },
+    {
+      name: "signature_link",
+      channel: "WHATSAPP" as const,
+      body: "Olá {{customerName}}, por favor reveja e assine {{docLabel}}{{if jobCode}} da reparação {{jobCode}}{{endif}}: {{signUrl}} (válido durante {{ttlMinutes}} min).{{if shopName}} — {{shopName}}{{endif}}",
       isDefault: true,
     },
   ];

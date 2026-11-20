@@ -1,6 +1,7 @@
 import { AppError } from "@shared/errors/app-error.js";
 import { createSignatureSessionSchema } from "@shared/schemas/signature.schema.js";
 import type { FastifyPluginAsync } from "fastify";
+import { resolveRemoteSignUrl } from "../lib/remote-sign-url.js";
 import { requirePermission } from "../middlewares/rbac.js";
 import { sendSignatureLink } from "../services/signature-link.service.js";
 import {
@@ -66,7 +67,15 @@ export const signatureSessionRoutes: FastifyPluginAsync = async (app) => {
           session.expiresAt = remoteExpiresAt;
         }
       }
-      return { ...session, cloudSignUrl };
+      // The shareable address resolved with the same rules the send
+      // endpoint uses — trackingBaseUrl first, then public APP_URL — so
+      // the dialogs can offer "send" whenever a phone could actually open
+      // the link, not only when the QR base happens to be public.
+      const remoteSignUrl = await resolveRemoteSignUrl(app.prisma, {
+        relayed: Boolean(cloudSignUrl),
+        token: session.token,
+      });
+      return { ...session, cloudSignUrl, remoteSignUrl };
     },
   });
 

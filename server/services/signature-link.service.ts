@@ -6,8 +6,7 @@ import {
   type LoanerAgreementDocument,
   loanerAgreementMatches,
 } from "@shared/loaner-agreement-document.js";
-import { loadEnv } from "../config/env.js";
-import { accessUrls } from "../lib/mdns.js";
+import { resolveRemoteSignUrl } from "../lib/remote-sign-url.js";
 import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import { isModuleEnabled } from "../utils/modules.js";
@@ -23,92 +22,18 @@ import { notify } from "./notification-dispatch.js";
 // the channel toggles). Marketing-style events keep the consent gate.
 export const SIGNATURE_LINK_EVENT = "signature_link";
 
-const TRAILING_SLASH_RE = /\/+$/;
-const IPV4_HOST_RE = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+// The message is rendered inside an editable template, but the document
+// name itself must follow the frozen document's language — a PT agreement
+// must not produce "assine the loaner agreement". Falls back to PT, the
+// product default, for unknown locales.
+const DOC_LABELS: Record<string, { intake: string; loaner: string }> = {
+  en: { intake: "the intake form", loaner: "the loaner agreement" },
+  es: { intake: "la ficha de admisión", loaner: "el acuerdo de préstamo" },
+  fr: { intake: "la fiche d'admission", loaner: "le contrat de prêt" },
+  pt: { intake: "a ficha de receção", loaner: "o termo de responsabilidade" },
+};
+
 const NON_DIGIT_RE = /\D/g;
-
-/**
- * True when a base URL can be opened from a phone outside the shop network.
- * Mirrors the public/undialable rules in src/.../remote-signature-url.ts —
- * a public hostname, public IP or https tunnel qualifies; LAN IPs, .local
- * names, loopback and CGNAT ranges do not.
- */
-function isRemoteUrl(raw: string): boolean {
-  let url: URL;
-  try {
-    url = new URL(raw);
-  } catch {
-    return false;
-  }
-  if (!(url.protocol === "http:" || url.protocol === "https:")) {
-    return false;
-  }
-  const host = url.hostname.toLowerCase();
-  if (
-    host === "localhost" ||
-    host.endsWith(".localhost") ||
-    host.endsWith(".local") ||
-    host === "0.0.0.0" ||
-    host === "::" ||
-    host === "::1" ||
-    host === "[::1]" ||
-    host === "[::]"
-  ) {
-    return false;
-  }
-  const m = IPV4_HOST_RE.exec(host);
-  if (m) {
-    const [a, b] = [Number(m[1]), Number(m[2])];
-    if (
-      a === 0 ||
-      a === 10 ||
-      a === 127 ||
-      (a === 169 && b === 254) ||
-      (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168) ||
-      (a === 100 && b >= 64 && b <= 127)
-    ) {
-      return false;
-    }
-  } else if (!host.includes(".")) {
-    // Bare machine hostnames resolve via NetBIOS/mDNS on the LAN only —
-    // they dead-end the moment the phone leaves the shop network.
-    return false;
-  }
-  return true;
-}
-
-/**
- * The URL that goes into the message must be the same one the QR encodes:
- * the cloud relay when the session was published there, otherwise a public
- * base the shop exposes itself (trackingBaseUrl first — it is the
- * customer-facing address — then APP_URL from the access-info list).
- */
-async function resolveRemoteSignUrl(
-  prisma: DbClient,
-  session: { relayed: boolean; token: string }
-): Promise<string | null> {
-  const settings = await findShopSettingsUnique(prisma);
-  if (session.relayed && settings?.cloudApiUrl) {
-    return `${settings.cloudApiUrl.replace(TRAILING_SLASH_RE, "")}/sign/${session.token}`;
-  }
-  const candidates: string[] = [];
-  if (settings?.trackingBaseUrl) {
-    candidates.push(settings.trackingBaseUrl);
-  }
-  const env = loadEnv();
-  candidates.push(
-    ...accessUrls({
-      appUrl: env.APP_URL,
-      mdnsHostname: env.MDNS_HOSTNAME,
-      port: env.PORT,
-    }).urls
-  );
-  const base = candidates.find(isRemoteUrl);
-  return base
-    ? `${base.replace(TRAILING_SLASH_RE, "")}/sign/${session.token}`
-    : null;
-}
 
 const maskPhone = (phone: string) =>
   `•••${phone.replace(NON_DIGIT_RE, "").slice(-4)}`;
@@ -154,7 +79,7 @@ export async function sendSignatureLink(
 
   let jobId: string | undefined;
   let jobCode: string | undefined;
-  let docLabel: string;
+  let isLoanerDoc = false;
   if ((snapshot as LoanerAgreementDocument).doc === LOANER_AGREEMENT_DOC_KIND) {
     const loanerDoc = snapshot as LoanerAgreementDocument;
     const job = await app.prisma.job.findUnique({
@@ -175,10 +100,14 @@ export async function sendSignatureLink(
     }
     jobId = job.id;
     jobCode = job.jobCode;
-    docLabel = "the loaner agreement";
-  } else {
-    docLabel = "the intake form";
+    isLoanerDoc = true;
   }
+
+  // The frozen document carries the language the customer saw — the label
+  // inserted into the template follows it, not the staff member's locale.
+  const docLocale = (snapshot as { locale?: string }).locale ?? "pt";
+  const labels = DOC_LABELS[docLocale] ?? DOC_LABELS.pt;
+  const docLabel = isLoanerDoc ? labels.loaner : labels.intake;
 
   const phone = snapshot.customerPhone?.trim();
   if (!phone) {
@@ -205,6 +134,9 @@ export async function sendSignatureLink(
     Math.round((session.expiresAt.getTime() - Date.now()) / 60_000)
   );
   await notify(app, {
+    // The link dies with the session — a retry landing after expiry would
+    // deliver a dead URL, so the outbox entries carry the same deadline.
+    deliverBy: session.expiresAt,
     eventName: SIGNATURE_LINK_EVENT,
     jobId,
     context: {

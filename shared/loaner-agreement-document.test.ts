@@ -134,4 +134,20 @@ describe("publicLoanerAgreementView", () => {
     // needs to see exactly which device is being lent, unlike the device
     // under repair whose identifiers stay redacted. (Unit IMEI is visible.)
   });
+
+  it("keeps the loaner note visible when a fleet unit is linked", () => {
+    // The note is hashed into the snapshot and printed under the signature —
+    // hiding it from the signing page would let staff attach undisclosed
+    // conditions to a document the customer never reviewed.
+    expect(view.note).toBe(doc.note);
+    expect(view.note).toBeTruthy();
+  });
+
+  it("surfaces the note as the device label when no fleet unit is linked", () => {
+    const noUnit = publicLoanerAgreementView(
+      buildLoanerAgreementDocument({ ...SOURCE, loanerDevice: null }, "pt")
+    );
+    expect(noUnit.note).toBeNull();
+    expect(noUnit.device).toContain("Nokia 105");
+  });
 });

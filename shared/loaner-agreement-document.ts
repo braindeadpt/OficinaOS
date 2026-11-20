@@ -188,6 +188,10 @@ export function publicLoanerAgreementView(doc: LoanerAgreementDocument) {
   const unitLabel = doc.unit
     ? describeLoanerDevice(doc.unit)
     : (doc.note ?? "");
+  // The note is part of the signed snapshot and prints under the signature
+  // — the customer must see it before signing even when a fleet unit
+  // already identifies the loaned device.
+  const note = doc.unit ? doc.note : null;
   const repairDevice = [doc.deviceBrand, doc.deviceModel]
     .filter(Boolean)
     .join(" ");
@@ -199,6 +203,7 @@ export function publicLoanerAgreementView(doc: LoanerAgreementDocument) {
     device: unitLabel,
     estimatedCost: null,
     estimatedDelivery: doc.expectedReturn,
+    note,
     problem: repairDevice,
     termsText: [
       text.title,

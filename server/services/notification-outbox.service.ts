@@ -59,6 +59,7 @@ export async function assertWhatsAppConsent(
 interface OutboxEntry {
   channel: string;
   createdAt: Date;
+  deliverBy: Date | null;
   error: string | null;
   id: string;
   jobId: string | null;
@@ -83,6 +84,7 @@ let isProcessing = false;
 export async function queueNotification(
   prisma: DbClient,
   data: {
+    deliverBy?: Date;
     jobId?: string;
     templateName: string;
     channel: "WHATSAPP" | "SMS";
@@ -94,6 +96,7 @@ export async function queueNotification(
   const renderedBody = renderTemplate(data.templateBody, data.templateVars);
   await createOutboxEntry(prisma, {
     channel: data.channel,
+    deliverBy: data.deliverBy ?? null,
     job: data.jobId ? { connect: { id: data.jobId } } : undefined,
     recipientPhone: data.recipientPhone,
     renderedBody,
@@ -154,6 +157,16 @@ async function cancelIfExpired(
   prisma: DbClient,
   entry: OutboxEntry
 ): Promise<boolean> {
+  // A payload with its own deadline (a signing link whose session expires
+  // in minutes) dies at deliverBy — the generic 24h cutoff is far too late
+  // for it, and a retry landing after expiry would send a dead link.
+  if (entry.deliverBy && entry.deliverBy.getTime() <= Date.now()) {
+    await transitionOutboxEntry(prisma, entry.id, OutboxStatus.QUEUED, {
+      error: "Expired: delivery deadline passed",
+      status: OutboxStatus.CANCELLED,
+    });
+    return true;
+  }
   if (
     entry.createdAt &&
     Date.now() - entry.createdAt.getTime() > MAX_ENTRY_AGE_MS
@@ -434,6 +447,7 @@ export async function getOutboxLogs(
   return entries.map((e) => ({
     channel: e.channel,
     createdAt: e.createdAt,
+    deliverBy: e.deliverBy,
     error: e.error,
     id: e.id,
     jobId: e.jobId,

@@ -239,6 +239,29 @@ describe("renderLoanerAgreementHtml signature integrity", () => {
     expect(html).not.toMatch(DOC_REF_RE);
   });
 
+  it("falls back to the paper line when the print language differs from the signed one", async () => {
+    // Signed in PT but printed in EN — the match rebuilds in the frozen
+    // locale, so without the locale gate the signature would sit under
+    // clauses the customer never saw.
+    const html = await renderLoanerAgreementHtml(
+      mockPrisma(FULL_SETTINGS),
+      {
+        ...AGREEMENT_JOB,
+        loanerAgreementSignatureDataUrl: "data:image/png;base64,BBBB",
+        loanerAgreementSnapshot: buildLoanerAgreementDocument(
+          AGREEMENT_JOB,
+          "pt"
+        ),
+        loanerAgreementDocumentHash: "aa11bb22cc33dd44",
+        loanerAgreementSignedAt: new Date("2026-01-15T10:06:00Z"),
+      },
+      { locale: "en" }
+    );
+    expect(html).not.toContain("data:image/png;base64,BBBB");
+    expect(html).not.toContain("Signed document #");
+    expect(html).toContain("Customer signature");
+  });
+
   it("falls back to the paper line when the signed snapshot went stale", async () => {
     // The fleet unit was swapped after signing — the signature no longer
     // covers the printed unit, so the agreement must not present it.

@@ -20,10 +20,10 @@ export async function count(prisma: DbClient, where: JobWhereInput) {
   return await prisma.job.count({ where });
 }
 
-export async function findUnique(
+export async function findUnique<T extends JobInclude>(
   prisma: DbClient,
   id: string,
-  include: JobInclude
+  include: T
 ) {
   return await prisma.job.findUnique({ where: { id }, include });
 }

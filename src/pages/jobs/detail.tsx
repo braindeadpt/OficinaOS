@@ -55,6 +55,32 @@ function UrgentBadge({ visible }: { visible: boolean }) {
   );
 }
 
+type LoanerSignState = "none" | "signed" | "stale";
+
+const LOANER_SIGN_META: Record<
+  LoanerSignState,
+  { className: string; icon: string; labelKey: string }
+> = {
+  none: {
+    className:
+      "border-outline-variant/60 bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container hover:text-on-surface",
+    icon: "draw",
+    labelKey: "jobs_detail_loaner_sign",
+  },
+  signed: {
+    className:
+      "border-success/60 bg-success-container/40 text-on-surface hover:bg-success-container/60",
+    icon: "check_circle",
+    labelKey: "jobs_detail_loaner_signed",
+  },
+  stale: {
+    className:
+      "border-tertiary/60 bg-tertiary-container/40 text-on-surface hover:bg-tertiary-container/60",
+    icon: "warning",
+    labelKey: "jobs_detail_loaner_sign_outdated",
+  },
+};
+
 /** Standalone A4 term print + digital signature — only when a loaner went out. */
 function LoanerAgreementButton({
   job,
@@ -68,7 +94,20 @@ function LoanerAgreementButton({
   if (!job.hasLoanerDevice) {
     return null;
   }
-  const signed = Boolean(job.loanerAgreementSignatureDataUrl);
+  // Three states: nothing signed, a signature that still covers the current
+  // agreement, or a stored signature the document has drifted away from —
+  // the print falls back to a paper line in that last case, so the badge
+  // must invite a re-sign instead of claiming "signed".
+  const hasSignature = Boolean(job.loanerAgreementSignatureDataUrl);
+  const signedValid = hasSignature && job.loanerSignatureValid === true;
+  const signedStale = hasSignature && !signedValid;
+  let signState: LoanerSignState = "none";
+  if (signedValid) {
+    signState = "signed";
+  } else if (signedStale) {
+    signState = "stale";
+  }
+  const signMeta = LOANER_SIGN_META[signState];
   return (
     <>
       <button
@@ -83,19 +122,12 @@ function LoanerAgreementButton({
       </button>
       <Can perm={{ jobs: ["edit"] }}>
         <button
-          className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border px-4 font-medium text-sm transition-colors ${
-            signed
-              ? "border-success/60 bg-success-container/40 text-on-surface hover:bg-success-container/60"
-              : "border-outline-variant/60 bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
-          }`}
+          className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border px-4 font-medium text-sm transition-colors ${signMeta.className}`}
           onClick={() => setSignOpen(true)}
           type="button"
         >
-          <Icon
-            className="text-[18px]"
-            name={signed ? "check_circle" : "draw"}
-          />
-          {t(signed ? "jobs_detail_loaner_signed" : "jobs_detail_loaner_sign")}
+          <Icon className="text-[18px]" name={signMeta.icon} />
+          {t(signMeta.labelKey)}
         </button>
       </Can>
       <LoanerSignatureDialog
