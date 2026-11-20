@@ -10,6 +10,7 @@ import { loadEnv } from "./config/env.js";
 import { setAppInstance } from "./jobs/app-registry.js";
 import { startCloudPoller } from "./jobs/cloud-poller.js";
 import { startOverdueScheduler } from "./jobs/overdue-scheduler.js";
+import { startPickupReminderScheduler } from "./jobs/pickup-reminder-scheduler.js";
 import { startMdnsResponder } from "./lib/mdns.js";
 import { isFileRequestPath } from "./lib/spa-fallback.js";
 import { cacheControlFor } from "./lib/static-cache.js";
@@ -145,6 +146,7 @@ setAppInstance(app);
 // is never started.
 const noop = () => undefined;
 const stopOverdue = startOverdueScheduler(app);
+const stopPickupReminder = startPickupReminderScheduler(app);
 const stopCloudPoller = env.DEMO_MODE ? noop : startCloudPoller(app);
 const stopLowStock = startLowStockScheduler(app);
 const stopRemarketing = env.DEMO_MODE ? noop : startRemarketingScheduler(app);
@@ -251,6 +253,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, async () => {
     app.log.info(`Received ${signal}, shutting down...`);
     stopOverdue();
+    stopPickupReminder();
     stopCloudPoller();
     stopLowStock();
     stopRemarketing();
