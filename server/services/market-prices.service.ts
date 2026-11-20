@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@generated/client";
+import type { Prisma, PrismaClient } from "@generated/client";
 import type { FastifyBaseLogger } from "fastify";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
@@ -25,6 +25,82 @@ export function normalizePriceKey(name: string): string {
     .slice(0, 200);
 }
 
+const CATALOG_PAGE = 500;
+
+interface CatalogRow {
+  category: string | null;
+  defaultPrice: Prisma.Decimal;
+  id: string;
+  name: string;
+}
+
+interface CatalogTable {
+  findMany(args: {
+    cursor?: { id: string };
+    orderBy: { id: "asc" };
+    select: { category: true; defaultPrice: true; id: true; name: true };
+    skip?: number;
+    take: number;
+    where: { isActive: boolean };
+  }): Promise<CatalogRow[]>;
+}
+
+/** Active catalog rows in bounded keyset pages — a large catalog never lands in one query. */
+async function readCatalogPages(table: CatalogTable): Promise<CatalogRow[]> {
+  const rows: CatalogRow[] = [];
+  let cursor: { id: string } | undefined;
+  for (;;) {
+    const page = await table.findMany({
+      cursor,
+      orderBy: { id: "asc" },
+      select: { category: true, defaultPrice: true, id: true, name: true },
+      skip: cursor ? 1 : 0,
+      take: CATALOG_PAGE,
+      where: { isActive: true },
+    });
+    rows.push(...page);
+    if (page.length < CATALOG_PAGE) {
+      return rows;
+    }
+    const last = page.at(-1);
+    if (!last) {
+      return rows;
+    }
+    cursor = { id: last.id };
+  }
+}
+
+export interface PriceItem {
+  category: string | null;
+  kind: "repair" | "part";
+  name: string;
+  priceCents: number;
+}
+
+/** Catálogo ativo (reparações + peças) normalizado para preços de mercado. */
+export async function listActivePriceItems(
+  prisma: PrismaClient
+): Promise<PriceItem[]> {
+  const [repairs, parts] = await Promise.all([
+    readCatalogPages(prisma.repairCatalog),
+    readCatalogPages(prisma.partsCatalog),
+  ]);
+  return [
+    ...repairs.map((r) => ({
+      category: r.category,
+      kind: "repair" as const,
+      name: r.name,
+      priceCents: Math.round(Number(r.defaultPrice) * 100),
+    })),
+    ...parts.map((p) => ({
+      category: p.category,
+      kind: "part" as const,
+      name: p.name,
+      priceCents: Math.round(Number(p.defaultPrice) * 100),
+    })),
+  ];
+}
+
 /** Marca o snapshot de preços como "por sincronizar" — o próximo poll empurra-o. */
 export async function markPricesDirty(prisma: DbClient): Promise<void> {
   await prisma.shopSettings.update({
@@ -48,36 +124,10 @@ export async function pushMarketPrices(
     return;
   }
 
-  const [repairs, parts] = await Promise.all([
-    prisma.repairCatalog.findMany({
-      where: { isActive: true },
-      select: { category: true, defaultPrice: true, name: true },
-      take: 1000,
-    }),
-    prisma.partsCatalog.findMany({
-      where: { isActive: true },
-      select: { category: true, defaultPrice: true, name: true },
-      take: 1000,
-    }),
-  ]);
+  const items = await listActivePriceItems(prisma);
 
   const res = await cloudFetch(apiUrl, "/prices/contribute", {
-    body: {
-      items: [
-        ...repairs.map((r) => ({
-          category: r.category,
-          kind: "repair",
-          name: r.name,
-          priceCents: Math.round(Number(r.defaultPrice) * 100),
-        })),
-        ...parts.map((p) => ({
-          category: p.category,
-          kind: "part",
-          name: p.name,
-          priceCents: Math.round(Number(p.defaultPrice) * 100),
-        })),
-      ],
-    },
+    body: { items },
     method: "POST",
     token,
   }).catch(() => null);
