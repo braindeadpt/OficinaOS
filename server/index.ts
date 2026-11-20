@@ -21,6 +21,7 @@ import prismaPlugin from "./plugins/prisma.js";
 import securityPlugin from "./plugins/security.js";
 import { websocketPlugin, wsBroadcast } from "./plugins/websocket.js";
 import { registerApiRoutes } from "./register-api-routes.js";
+import { cleanupOldAuditLogs } from "./services/audit.service.js";
 import { startLowStockScheduler } from "./services/low-stock.service.js";
 import { cleanupReadNotifications } from "./services/notification-inapp.service.js";
 import { startOutboxWorker } from "./services/notification-outbox.service.js";
@@ -150,17 +151,20 @@ const stopLowStock = startLowStockScheduler(app);
 const stopRemarketing = env.DEMO_MODE ? noop : startRemarketingScheduler(app);
 const stopOutboxWorker = env.DEMO_MODE ? noop : startOutboxWorker(app.prisma);
 const CLEANUP_INTERVAL_MS = 15 * 60 * 1000;
-const cleanupHandle = setInterval(() => {
-  cleanupReadNotifications(app.prisma).catch((err) => {
-    app.log.error(err, "Notification cleanup error");
-  });
-}, CLEANUP_INTERVAL_MS);
+const runCleanup = () =>
+  Promise.all([
+    cleanupReadNotifications(app.prisma).catch((err) => {
+      app.log.error(err, "Notification cleanup error");
+    }),
+    cleanupOldAuditLogs(app.prisma).catch((err) => {
+      app.log.error(err, "Audit log cleanup error");
+    }),
+  ]);
+const cleanupHandle = setInterval(runCleanup, CLEANUP_INTERVAL_MS);
 if (cleanupHandle.unref) {
   cleanupHandle.unref();
 }
-cleanupReadNotifications(app.prisma).catch((err) => {
-  app.log.warn(err, "Initial notification cleanup skipped");
-});
+runCleanup();
 
 app.addHook("onReady", async () => {
   await initValidationI18n();
