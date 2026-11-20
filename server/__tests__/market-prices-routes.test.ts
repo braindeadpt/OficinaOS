@@ -25,12 +25,23 @@ function fakePrisma(overrides: Partial<SettingsRow> = {}) {
   };
   return {
     repairCatalog: {
-      findMany: vi.fn(async () => [
-        { defaultPrice: 120, name: "Ecrã iPhone 12" },
-      ]),
+      findMany: vi.fn(
+        async (_args?: {
+          cursor?: { id: string };
+          skip?: number;
+          take?: number;
+        }): Promise<
+          {
+            category?: string | null;
+            defaultPrice: number;
+            id?: string;
+            name: string;
+          }[]
+        > => [{ defaultPrice: 120, name: "Ecrã iPhone 12" }]
+      ),
     },
     partsCatalog: {
-      findMany: vi.fn(async () => []),
+      findMany: vi.fn(async (_args?: { take?: number }) => []),
     },
     shopSettings: {
       findUnique: vi.fn(async () => ({ ...row })),
@@ -189,6 +200,48 @@ describe("market-prices — GET stats", () => {
     const [stat] = res.json().stats;
     expect(stat.minCents).toBeNull();
     expect(stat.maxCents).toBeNull();
+  });
+
+  it("reads a large own catalog in pages (cursor on id)", async () => {
+    fetchMock.mockReturnValueOnce(
+      cloudJson({
+        stats: [
+          {
+            avgCents: 2000,
+            category: null,
+            key: "repair 500",
+            kind: "repair",
+            maxCents: null,
+            medianCents: 2000,
+            minCents: null,
+            name: "Repair 500",
+            shopCount: 5,
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+      })
+    );
+    const prisma = fakePrisma();
+    const firstPage = Array.from({ length: 500 }, (_, i) => ({
+      defaultPrice: 10,
+      id: `r${i}`,
+      name: `Repair ${i}`,
+    }));
+    prisma.repairCatalog.findMany
+      .mockResolvedValueOnce(firstPage)
+      .mockResolvedValueOnce([
+        { defaultPrice: 20, id: "r500", name: "Repair 500" },
+      ]);
+    const app = buildApp(prisma);
+    const res = await app.inject({ method: "GET", url: "/api/market-prices" });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.repairCatalog.findMany).toHaveBeenCalledTimes(2);
+    const secondCall = prisma.repairCatalog.findMany.mock.calls[1]?.[0] ?? {};
+    expect(secondCall.cursor).toEqual({ id: "r499" });
+    expect(secondCall.skip).toBe(1);
+    expect(secondCall.take).toBe(500);
+    // The second-page row is merged into ownPriceCents — not discarded.
+    expect(res.json().stats[0].ownPriceCents).toBe(2000);
   });
 
   it("cloud 402 MODULE_NOT_ENTITLED becomes local CLOUD_MODULE_REQUIRED", async () => {
