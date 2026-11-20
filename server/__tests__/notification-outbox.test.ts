@@ -359,7 +359,7 @@ describe("processOutbox", () => {
     );
   });
 
-  it("holds SMS entries when the sms entitlement is missing", async () => {
+  it("sends SMS entries without the sms entitlement (local gateway is free)", async () => {
     mocks.findManyOutboxEntries.mockResolvedValue([
       {
         id: "out-sms2",
@@ -389,8 +389,13 @@ describe("processOutbox", () => {
 
     await processOutbox(prisma);
 
-    expect(mocks.sendSms).not.toHaveBeenCalled();
-    expect(mocks.transitionOutboxEntry).not.toHaveBeenCalled();
+    expect(mocks.sendSms).toHaveBeenCalled();
+    expect(mocks.transitionOutboxEntry).toHaveBeenCalledWith(
+      prisma,
+      "out-sms2",
+      OutboxStatus.QUEUED,
+      expect.objectContaining({ status: OutboxStatus.SENT })
+    );
   });
 
   it("cancels entries older than 24h instead of sending them", async () => {

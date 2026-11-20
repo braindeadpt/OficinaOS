@@ -110,15 +110,16 @@ via `server/services/evolution.service.ts`; pairing por QR/pairingCode em
 `GET /settings/whatsapp/evolution/status` (open/connecting/close) e
 `DELETE`-like logout em `/evolution/disconnect`.
 
-Gates (app-side — Pro "por convenção", como os outros módulos locais):
-entitlement `whatsapp-bot` + `whatsappLocalDisclaimerAt` obrigatórios no
-PUT e revalidados em `resolveWhatsAppChannel` antes de cada envio; sem
-eles o canal resolve null e o outbox cancela. `syncFullHistory=false` —
-nada do histórico do cliente é importado. Remarketing exige templates
-Meta → recusado no modo local. A sessão/chaves nunca saem da loja (RGPD
-limpo); risco de ban do número fica documentado no disclaimer do UI.
+Gates (app-side): `whatsappLocalDisclaimerAt` obrigatório no PUT das
+settings e revalidado em `resolveWhatsAppChannel` antes de cada envio;
+sem ele o canal resolve null e o outbox cancela. **É free** — não exige
+nenhum entitlement (o `whatsapp-bot` gateia só as funções oficiais:
+relay Meta na cloud + bot inbound). `syncFullHistory=false` — nada do
+histórico do cliente é importado. Remarketing exige templates Meta →
+recusado no modo local. A sessão/chaves nunca saem da loja (RGPD limpo);
+risco de ban do número fica documentado no disclaimer do UI.
 
-### Canal SMS (módulo Pro `sms` — gateway Android local)
+### Canal SMS (free — gateway Android local)
 
 ```
 Outbound: evento → notification-dispatch → outbox →
@@ -132,9 +133,11 @@ Inbound:  cliente SMS → SMS Gateway for Android → webhook
 100% LAN: nada passa pela Cloud nem pela Meta — só sai o SMS pela rede móvel.
 É o canal "de arranque" da loja que ainda não tem WhatsApp Business aprovado.
 Sem template SMS dedicado, o dispatch usa o corpo WhatsApp com `*bold*`
-removido (SMS não renderiza markdown). Corre localmente mas é **módulo Pro
-`sms`** — entitlement cached em `cloudEntitlements`, verificado no PUT de
-settings, no teste e no outbox (entries são canceladas sem o módulo).
+removido (SMS não renderiza markdown). Corre localmente e é **free** — o
+módulo Pro `sms` gateia apenas transportes geridos (provider comercial via
+Cloud, por construir); o gateway Android da loja não exige entitlement.
+A responsabilidade é da loja: o SIM é dela, a fatura da operadora e os
+limites anti-spam também.
 Consentimento partilhado (`whatsappConsent` = opt-in de mensagens
 automáticas, qualquer canal). Password do gateway encriptada
 (AES-256-GCM); token do webhook gerado por `generateSmsWebhookToken`.
@@ -156,10 +159,9 @@ Regras:
 - Tudo o que é Pro sai pela Cloud → gate server-side por envio; tudo o que
   é free sai da infra da loja → nada a enforçar. Nunca Baileys/scraping na
   Cloud — "Pro" é só APIs com contrato.
-- **Estado da migração:** os gates atuais ainda marcam Evolution
-  (`whatsapp-bot`) e SMS-Android (`sms`) como Pro. A matriz é o alvo — o
-  flip para free é retirar o entitlement do transporte (disclaimer
-  Evolution e toggles de canal mantêm-se).
+- **Estado: migrado.** Evolution e SMS-Android são free desde o flip
+  (disclaimer Evolution mantido); os entitlements `whatsapp-bot`/`sms`
+  passaram a gatear apenas os transportes oficiais/geridos.
 - Meta direct local (`whatsappApiTokenEncrypted`) é legacy — existe só
   para a migração e apaga-se no primeiro envio Cloud bem-sucedido.
 - `customer.whatsappConsent` é o opt-in único para toda a mensagem
@@ -185,6 +187,7 @@ template próprio usa o corpo WhatsApp com `*bold*` removido.
 | `job_returned` | status → RETURNED | "devolvido" | idem |
 | `job_cancelled` | status → CANCELLED | "cancelada" | idem |
 | `job_overdue` | scheduler: `estimatedDate` passou e job aberto | "está a demorar" + tracking | `jobs/overdue-scheduler.ts` |
+| `job_done_reminder` | scheduler: job em DONE há 3+ dias sem entrega (timestamp lido do audit `STATUS_CHANGED`), re-lembra a cada 72h | "vem levantar" + tracking | `jobs/pickup-reminder-scheduler.ts` (PR em revisão — `feat/pickup-reminder`) |
 | `quote_sent` | staff clica "enviar orçamento" | valor + link para aprovar/recusar | `job-quote.service.ts` |
 | `warranty_return_created` | devolução em garantia criada | "registámos a devolução" + tracking | `routes/jobs.ts` |
 | `signature_link` | staff clica "enviar link" no dialog de assinatura (ficha ou termo) | link `/sign/:token` — só aparece se o URL for alcançável fora da loja (relay cloud ou APP_URL/trackingBase público); LAN pura não oferece o botão | `POST /sign-sessions/:token/send` → `signature-link.service.ts` |
@@ -228,7 +231,7 @@ linguagem simples gerado na Cloud.
 |---|---|---|---|
 | `portal` | Portal do cliente | app: `server/services/portal.service.ts`; cloud: `src/routes/portal.ts`, `public/portal.html` | Live, E2E testado |
 | `signature-remote` | Assinatura remota | app: `server/services/signature-relay.service.ts`; cloud: `src/routes/signature.ts`, `public/sign.html`, `SignatureRelaySession` | Implementado |
-| `whatsapp-bot` | Bot de WhatsApp | app: `whatsapp-bot.service.ts` + `whatsapp-channel.ts`; cloud: webhook + `WhatsAppInbound` + relay `POST /whatsapp/send` | Live, E2E provado (SIM → APPROVED real) |
+| `whatsapp-bot` | WhatsApp oficial (bot + relay Meta) | app: `whatsapp-bot.service.ts` + `whatsapp-channel.ts`; cloud: webhook + `WhatsAppInbound` + relay `POST /whatsapp/send`. NÃO gateia o transporte Evolution (free) | Live, E2E provado (SIM → APPROVED real) |
 | `diag-intake` | Receção de diagnósticos | app: `intake-request.service.ts` (fila em Pedidos); cloud: `src/routes/intake.ts` | Implementado |
 | `ai-reports` | Relatórios IA | cloud: `src/routes/reports.ts`, `src/ai-report.ts` | Implementado |
 | `market` | Procuro-peça B2B | app: `part-requests.service.ts`; cloud: `src/routes/part-requests.ts` | Live |
