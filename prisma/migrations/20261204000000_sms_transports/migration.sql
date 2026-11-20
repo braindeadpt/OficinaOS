@@ -2,7 +2,7 @@
 -- "custom" (free, shop-configured HTTP provider — outbound only) and
 -- "cloud" (Pro module "sms" — BulkSMS credentials relayed by
 -- OficinaOS Cloud, inbound replies + delivery via cloud webhook).
-ALTER TABLE "ShopSettings"
+ALTER TABLE "shop_settings"
   ADD COLUMN "smsTransport" TEXT NOT NULL DEFAULT 'android',
   ADD COLUMN "smsCustomUrl" TEXT,
   ADD COLUMN "smsCustomMethod" TEXT NOT NULL DEFAULT 'POST',
