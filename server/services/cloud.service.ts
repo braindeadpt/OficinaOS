@@ -45,7 +45,11 @@ export async function cloudFetch(
     const res = await fetch(`${apiUrl.replace(TRAILING_SLASHES, "")}${path}`, {
       method: init.method ?? "GET",
       headers: {
-        "content-type": "application/json",
+        // Fastify returns 400 on an empty JSON body — only declare the
+        // content-type when there is actually a payload (DELETEs have none).
+        ...(init.body === undefined
+          ? {}
+          : { "content-type": "application/json" }),
         ...(init.token ? { authorization: `Bearer ${init.token}` } : {}),
       },
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
