@@ -70,7 +70,20 @@ function buildApp() {
     });
   });
 
-  (app.decorate as (name: string, value: unknown) => void)("prisma", {});
+  (app.decorate as (name: string, value: unknown) => void)("prisma", {
+    codeLockout: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      upsert: vi.fn().mockResolvedValue({
+        code: "ABC123",
+        failures: 1,
+        firstFailedAt: new Date(),
+        lockedUntil: null,
+      }),
+      update: vi.fn().mockResolvedValue(null),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
+  });
   (app.decorate as (name: string, value: unknown) => void)("auth", {
     api: { userHasPermission: vi.fn().mockResolvedValue({ success: true }) },
   });

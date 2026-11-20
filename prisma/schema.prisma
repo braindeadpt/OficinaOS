@@ -1723,3 +1723,17 @@ model CommercialAgreement {
   @@index([renewsAt])
   @@map("commercial_agreements")
 }
+
+// Failed-lookup lockout for the public tracking endpoints (/api/jobs/lookup,
+// /lookup-receipt, /api/public/quote-respond): LOCKOUT_THRESHOLD misses on one
+// job code block further guesses on it for an hour. Stored in the DB so a
+// restart does not reset the counters.
+model CodeLockout {
+  code          String    @id
+  failures      Int       @default(0)
+  firstFailedAt DateTime  @default(now()) @db.Timestamptz
+  lockedUntil   DateTime? @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @db.Timestamptz
+
+  @@map("code_lockouts")
+}

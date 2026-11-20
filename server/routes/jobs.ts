@@ -64,7 +64,7 @@ import {
   unpublishJobPortal,
 } from "../services/portal.service.js";
 import { renderReceiptHtml } from "../services/receipt.service.js";
-import { codeLockout } from "../utils/code-lockout.js";
+import { createCodeLockout } from "../utils/code-lockout.js";
 import { getRole, getUserId } from "../utils/request.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
@@ -73,6 +73,7 @@ const PHONE4_RE = /^\d{4}$/;
 
 // biome-ignore lint/suspicious/useAwait: FastifyPluginAsync requires async
 export const jobRoutes: FastifyPluginAsync = async (app) => {
+  const codeLockout = createCodeLockout(app.prisma);
   app.addHook("preHandler", requirePermission({ jobs: ["view"] }));
 
   // Public: no auth — used by customer self-tracking page.
@@ -114,7 +115,7 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
       // biome-ignore lint/style/noNonNullAssertion: validated above
       const phone4Str = phone4!;
 
-      if (codeLockout.isLocked(codeStr)) {
+      if (await codeLockout.isLocked(codeStr)) {
         throw new AppError("JOB_NOT_FOUND");
       }
 
@@ -123,11 +124,11 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
         throw new AppError("JOB_NOT_FOUND");
       }
       if (!result.job) {
-        codeLockout.trackFailure(codeStr);
+        await codeLockout.trackFailure(codeStr);
         throw new AppError("JOB_NOT_FOUND");
       }
 
-      codeLockout.clear(codeStr);
+      await codeLockout.clear(codeStr);
       return reply.send(result.job);
     },
   });
@@ -168,7 +169,7 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
       // biome-ignore lint/style/noNonNullAssertion: validated above
       const phone4Str = phone4!;
 
-      if (codeLockout.isLocked(codeStr)) {
+      if (await codeLockout.isLocked(codeStr)) {
         throw new AppError("JOB_NOT_FOUND");
       }
 
@@ -177,11 +178,11 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
         throw new AppError("JOB_NOT_FOUND");
       }
       if (!result.job) {
-        codeLockout.trackFailure(codeStr);
+        await codeLockout.trackFailure(codeStr);
         throw new AppError("JOB_NOT_FOUND");
       }
 
-      codeLockout.clear(codeStr);
+      await codeLockout.clear(codeStr);
       const { appUrl: baseUrl } = resolveUrls();
       const html = await renderReceiptHtml(
         app.prisma,
