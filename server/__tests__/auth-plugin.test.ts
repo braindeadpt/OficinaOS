@@ -57,6 +57,7 @@ const baseSession = {
   role: "OWNER",
   isActive: true,
   mustChangePassword: false,
+  twoFactorEnabled: true,
   sessionId: "sess-1",
 };
 

@@ -16,7 +16,6 @@ export default function ProtectedRoute({
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isLoading = useAuthStore((s) => s.isLoading);
   const mustChangePassword = useAuthStore((s) => s.user?.mustChangePassword);
-
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">

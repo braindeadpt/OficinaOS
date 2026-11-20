@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { PrismaClient } from "@generated/client";
 import { AppError } from "@shared/errors/app-error.js";
 import type { FastifyBaseLogger } from "fastify";
@@ -17,6 +18,12 @@ import { respondToQuote } from "./job-quote.service.js";
  */
 
 const TRAILING_SLASH_RE = /\/+$/;
+
+// A cloud guarda só sha256(token): as listagens devolvem tokenHash e as
+// comparações são sempre contra o hash do accessCode local.
+function tokenHash(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
 
 async function cloudAuth(
   prisma: PrismaClient
@@ -106,7 +113,7 @@ export async function unpublishJobPortal(
 
 interface CloudPage {
   jobCode: string;
-  token: string;
+  tokenHash: string;
   updatedAt: string;
 }
 
@@ -135,7 +142,7 @@ async function republishStalePages(ctx: SyncCtx): Promise<void> {
   }
   const cloudPages = (pagesRes.body as { pages?: CloudPage[] }).pages ?? [];
   const pages = cloudPages.reduce<Record<string, Date>>((m, p) => {
-    m[p.token] = new Date(p.updatedAt);
+    m[p.tokenHash] = new Date(p.updatedAt);
     return m;
   }, {});
 
@@ -148,13 +155,14 @@ async function republishStalePages(ctx: SyncCtx): Promise<void> {
       updatedAt: true,
     },
   });
-  const liveTokens = new Set(published.map((j) => j.accessCode));
+  const liveHashes = new Set(published.map((j) => tokenHash(j.accessCode)));
 
   // Órfãs: páginas públicas na cloud mas despublicadas localmente
-  // (a loja removeu o link enquanto a cloud estava inacessível).
+  // (a loja removeu o link enquanto a cloud estava inacessível). O token
+  // cru já não vem da cloud — apaga-se pelo hash.
   for (const page of cloudPages) {
-    if (!liveTokens.has(page.token)) {
-      await cloudFetch(ctx.apiUrl, `/portal/pages/${page.token}`, {
+    if (!liveHashes.has(page.tokenHash)) {
+      await cloudFetch(ctx.apiUrl, `/portal/pages/by-hash/${page.tokenHash}`, {
         method: "DELETE",
         token: ctx.token,
       }).catch(() => null);
@@ -162,7 +170,7 @@ async function republishStalePages(ctx: SyncCtx): Promise<void> {
   }
 
   for (const job of published) {
-    const cloudStamp = pages[job.accessCode];
+    const cloudStamp = pages[tokenHash(job.accessCode)];
     if (cloudStamp && cloudStamp >= job.updatedAt) {
       continue;
     }

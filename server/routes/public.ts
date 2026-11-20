@@ -13,7 +13,7 @@ import {
   submitSignatureSession,
 } from "../services/signature-session.service.js";
 import { handleInboundSms } from "../services/sms.service.js";
-import { codeLockout } from "../utils/code-lockout.js";
+import { createCodeLockout } from "../utils/code-lockout.js";
 import { parseImageDataUrl, toPublicShop } from "../utils/public-shop.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
@@ -56,6 +56,7 @@ function parseQuoteRespondBody(body: unknown) {
 // Rate limit lives in config/route-security.ts (10 per 15 min, per IP).
 // biome-ignore lint/suspicious/useAwait: FastifyPluginAsync requires async
 export const publicRoutes: FastifyPluginAsync = async (app) => {
+  const codeLockout = createCodeLockout(app.prisma);
   app.post("/quote-respond", {
     schema: {
       tags: ["jobs"],
@@ -75,7 +76,7 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
     handler: async (req, reply) => {
       const input = parseQuoteRespondBody(req.body);
 
-      if (codeLockout.isLocked(input.code)) {
+      if (await codeLockout.isLocked(input.code)) {
         throw new AppError("JOB_NOT_FOUND");
       }
 
@@ -90,14 +91,14 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
       // A phone miss must look identical to an unknown code — and it counts
       // toward the per-code lockout.
       if (result.error === "PHONE_MISMATCH") {
-        codeLockout.trackFailure(input.code);
+        await codeLockout.trackFailure(input.code);
         throw new AppError("JOB_NOT_FOUND");
       }
       if (result.error) {
         throw new AppError(result.error);
       }
 
-      codeLockout.clear(input.code);
+      await codeLockout.clear(input.code);
       const quote = result.quote;
       return reply.send({
         id: quote?.id,

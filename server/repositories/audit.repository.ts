@@ -74,6 +74,10 @@ export function findManyWithInclude(
   });
 }
 
+export function deleteMany(prisma: DbClient, where: AuditLogWhereInput) {
+  return prisma.auditLog.deleteMany({ where });
+}
+
 export function findUnique(
   prisma: DbClient,
   where: Prisma.AuditLogWhereUniqueInput,

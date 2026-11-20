@@ -50,6 +50,12 @@ jobs:
       - name: Apply migrations
         run: bun run db:migrate-deploy
 
+      - name: Prisma drift check
+        # Diff the migrated database against schema.prisma — fails the job
+        # when migrations and the schema disagree (e.g. a db push or a
+        # hand-edited migration that drifted).
+        run: bunx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+
       - name: Unique migration timestamps
         run: |
           git fetch --depth=1 origin "${GITHUB_BASE_REF:-main}"
@@ -70,8 +76,81 @@ jobs:
       - name: Build
         run: bun run build
 
-      - name: Test
-        run: bun run test
+      - name: Test with coverage
+        run: bun run test:coverage
+
+      - name: Coverage ratchet
+        # The floor in scripts/coverage-budget.json only goes up: fail when
+        # coverage drops below it, and on PRs fail when the floor itself was
+        # lowered vs the base branch. Raise it with `bun run coverage:update`.
+        run: |
+          if [ -n "$GITHUB_BASE_REF" ]; then
+            git fetch --depth=1 origin "$GITHUB_BASE_REF"
+            if git show FETCH_HEAD:scripts/coverage-budget.json > /tmp/base-coverage-budget.json 2>/dev/null; then
+              bun run scripts/check-coverage.ts --base /tmp/base-coverage-budget.json
+            else
+              bun run check-coverage
+            fi
+          else
+            bun run check-coverage
+          fi
+
+  e2e-smoke:
+    name: E2E smoke (docker compose)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+
+      # NODE_ENV=production rejects a localhost APP_URL — map a test
+      # hostname to loopback so the app and the smoke client agree on
+      # one origin.
+      - name: Map test hostname
+        run: echo "127.0.0.1 oficinaos.test" | sudo tee -a /etc/hosts
+
+      - name: Write compose .env
+        run: |
+          cat > .env <<'EOF'
+          NODE_ENV=production
+          APP_URL=http://oficinaos.test:4000
+          BETTER_AUTH_SECRET=ci-smoke-secret-at-least-32-chars-aaaa
+          COOKIE_SECRET=ci-smoke-cookie-secret-at-least-32-bbbb
+          AI_ENCRYPTION_KEY=ci-smoke-aes-key-at-least-32-chars-cccc
+          SEED_ADMIN_PASSWORD=ci-smoke-admin-password-123
+          LOG_LEVEL=warn
+          EOF
+
+      - name: docker compose up
+        run: docker compose up -d --build
+
+      - name: Wait for app health
+        run: |
+          timeout 180 bash -c '
+            until curl -fsS http://oficinaos.test:4000/health > /dev/null; do
+              sleep 2
+            done
+          ' || {
+            echo "--- app logs ---"
+            docker compose logs app | tail -100
+            exit 1
+          }
+
+      - name: Seed admin
+        run: docker compose exec -T app bun run db:seed
+
+      - name: Smoke test — login, intake, DONE
+        env:
+          BASE_URL: http://oficinaos.test:4000
+          SEED_ADMIN_PASSWORD: ci-smoke-admin-password-123
+        run: bun scripts/e2e-smoke.ts
+
+      - name: Dump app logs on failure
+        if: failure()
+        run: docker compose logs app | tail -200
 
   audit:
     name: Dependency audit

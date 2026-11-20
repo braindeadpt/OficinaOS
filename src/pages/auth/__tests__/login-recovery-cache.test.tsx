@@ -43,8 +43,14 @@ vi.mock("@/stores/auth", () => ({
         error: null,
         clearError: mockClearError,
         checkSession: mockCheckSession,
+        pendingTwoFactor: false,
+        clearPendingTwoFactor: vi.fn(),
+        verifyTwoFactor: vi.fn(),
       }),
-    { setState: vi.fn(), getState: vi.fn() }
+    {
+      setState: vi.fn(),
+      getState: vi.fn(() => ({ pendingTwoFactor: false })),
+    }
   ),
 }));
 

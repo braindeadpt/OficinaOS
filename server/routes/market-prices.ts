@@ -6,6 +6,7 @@ import { requirePermission } from "../middlewares/rbac.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import { cloudFetch } from "../services/cloud.service.js";
 import {
+  listActivePriceItems,
   normalizePriceKey,
   pushMarketPrices,
   withdrawMarketPrices,
@@ -63,27 +64,11 @@ async function requireMarketPrices(
 
 /** Own catalog prices keyed `${kind}:${normalized name}` — first wins. */
 async function ownPriceMap(prisma: PrismaClient) {
-  const [repairs, parts] = await Promise.all([
-    prisma.repairCatalog.findMany({
-      where: { isActive: true },
-      select: { defaultPrice: true, name: true },
-    }),
-    prisma.partsCatalog.findMany({
-      where: { isActive: true },
-      select: { defaultPrice: true, name: true },
-    }),
-  ]);
   const map = new Map<string, number>();
-  for (const r of repairs) {
-    const k = `repair:${normalizePriceKey(r.name)}`;
+  for (const item of await listActivePriceItems(prisma)) {
+    const k = `${item.kind}:${normalizePriceKey(item.name)}`;
     if (!map.has(k)) {
-      map.set(k, Math.round(Number(r.defaultPrice) * 100));
-    }
-  }
-  for (const p of parts) {
-    const k = `part:${normalizePriceKey(p.name)}`;
-    if (!map.has(k)) {
-      map.set(k, Math.round(Number(p.defaultPrice) * 100));
+      map.set(k, item.priceCents);
     }
   }
   return map;

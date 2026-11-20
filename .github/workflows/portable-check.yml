@@ -277,10 +277,11 @@ jobs:
           (Get-Item "$env:RUNNER_TEMP\portable-7z.zip").Length
 
       - name: Probe N — validar que o zip extrai limpo
-        timeout-minutes: 5
+        timeout-minutes: 10
         run: |
           Write-Host "MARKER-N-START"
-          Expand-Archive "$env:RUNNER_TEMP\portable-ca.zip" "$env:SystemDrive\portable-extract-test"
+          # 7z (já no runner) extrai muito mais rápido que Expand-Archive em zips grandes
+          & "C:\Program Files\7-Zip\7z.exe" x "$env:RUNNER_TEMP\portable-ca.zip" "-o$env:SystemDrive\portable-extract-test" | Select-Object -Last 5
           Test-Path "$env:SystemDrive\portable-extract-test\oficinaos-portable-k\app\package.json"
           Test-Path "$env:SystemDrive\portable-extract-test\oficinaos-portable-k\bun\bun.exe"
           Test-Path "$env:SystemDrive\portable-extract-test\oficinaos-portable-k\pgsql\bin\pg_ctl.exe"

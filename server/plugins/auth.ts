@@ -18,6 +18,25 @@ import {
 } from "../services/account-lockout.service.js";
 import { logger } from "../utils/logger.js";
 
+async function auditSignInUser(
+  prisma: PrismaClient,
+  user: { id: string; username?: string | null; email?: string | null }
+): Promise<void> {
+  try {
+    await prisma.auditLog.create({
+      data: {
+        jobId: null,
+        userId: user.id,
+        action: "USER_SIGN_IN",
+        toValue: `Sign-in for ${user.username ?? user.email}`,
+      },
+    });
+    await resetFailedAttempts(prisma, user.id);
+  } catch (error) {
+    logger.warn({ err: error }, "Audit sign-in failure");
+  }
+}
+
 async function auditSignIn(
   auth: Auth,
   headers: Headers,
@@ -26,15 +45,7 @@ async function auditSignIn(
   try {
     const session = await auth.api.getSession({ headers });
     if (session?.user) {
-      await prisma.auditLog.create({
-        data: {
-          jobId: null,
-          userId: session.user.id,
-          action: "USER_SIGN_IN",
-          toValue: `Sign-in for ${session.user.username ?? session.user.email}`,
-        },
-      });
-      await resetFailedAttempts(prisma, session.user.id);
+      await auditSignInUser(prisma, session.user);
     }
   } catch (error) {
     logger.warn({ err: error }, "Audit sign-in failure");
@@ -99,8 +110,96 @@ export async function handleFailedSignIn(
   }
 }
 
+// The response carries the fresh session as a signed cookie
+// (`better-auth.session_token=<token>.<signature>`); the stored
+// Session.token is the part before the signature.
+const SESSION_TOKEN_COOKIE = /^better-auth\.session_token=([^;]+)/;
+
+function sessionTokenFromCookies(response: Response): string | undefined {
+  for (const cookie of response.headers.getSetCookie()) {
+    const match = SESSION_TOKEN_COOKIE.exec(cookie);
+    if (match?.[1]) {
+      const value = decodeURIComponent(match[1]);
+      const dot = value.lastIndexOf(".");
+      return dot > 0 ? value.slice(0, dot) : value;
+    }
+  }
+}
+
+async function auditTwoFactorVerify(
+  auth: Auth,
+  headers: Headers,
+  prisma: PrismaClient,
+  pathname: string,
+  response: Response
+): Promise<void> {
+  // A 2FA verify completes the pending sign-in: the credential POST
+  // was answered with twoFactorRedirect and no session, so it never
+  // hit the sign-in audit branch. The new session only exists on the
+  // response — read the user from the body, but only when the request
+  // itself carried no session (verifying from the profile to enable
+  // 2FA is not a sign-in).
+  const hasSession = await auth.api.getSession({ headers });
+  if (!hasSession?.user) {
+    const data = (await response
+      .clone()
+      .json()
+      .catch(() => null)) as {
+      user?: { id: string; username?: string; email?: string };
+    } | null;
+    if (data?.user) {
+      await auditSignInUser(prisma, data.user);
+    }
+    return;
+  }
+  if (pathname === "/api/auth/two-factor/verify-totp") {
+    // 2FA was just enabled from the profile: every other session must
+    // die server-side — relying on the client's revoke call would leave
+    // a stolen session alive if that request never lands.
+    const newToken = sessionTokenFromCookies(response);
+    if (newToken) {
+      try {
+        await prisma.session.deleteMany({
+          where: { userId: hasSession.user.id, token: { not: newToken } },
+        });
+      } catch (error) {
+        logger.warn({ err: error }, "Revoke sessions on 2FA enable failed");
+      }
+    }
+  }
+}
+
 function isSignInPost(method: string, pathname: string): boolean {
   return method === "POST" && pathname.includes("sign-in");
+}
+
+// Post-handler bookkeeping for the /api/auth/* proxy: sign-in audit,
+// the completed-2FA audit (the session only exists on the response), and
+// failed-sign-in lockout tracking.
+async function auditAuthResponse(
+  auth: Auth,
+  headers: Headers,
+  prisma: PrismaClient,
+  request: { method: string; body: unknown },
+  url: URL,
+  response: Response
+): Promise<void> {
+  const pathname = url.pathname;
+  if (response.status === 200 && isSignInPost(request.method, pathname)) {
+    await auditSignIn(auth, headers, prisma);
+  }
+
+  if (
+    response.status === 200 &&
+    (pathname === "/api/auth/two-factor/verify-totp" ||
+      pathname === "/api/auth/two-factor/verify-backup-code")
+  ) {
+    await auditTwoFactorVerify(auth, headers, prisma, pathname, response);
+  }
+
+  if (response.status !== 200 && isSignInPost(request.method, pathname)) {
+    await handleFailedSignIn(prisma, request);
+  }
 }
 
 // Better Auth serves the reset request under both names across versions.
@@ -213,19 +312,7 @@ const authPlugin: FastifyPluginAsync = async (app) => {
 
       const response = await auth.handler(req);
 
-      if (
-        response.status === 200 &&
-        isSignInPost(request.method, url.pathname)
-      ) {
-        await auditSignIn(auth, headers, prisma);
-      }
-
-      if (
-        response.status !== 200 &&
-        isSignInPost(request.method, url.pathname)
-      ) {
-        await handleFailedSignIn(prisma, request);
-      }
+      await auditAuthResponse(auth, headers, prisma, request, url, response);
 
       app.log.info(
         { status: response.status, path: url.pathname, method: request.method },
@@ -324,6 +411,7 @@ declare module "fastify" {
       role: string;
       isActive: boolean;
       mustChangePassword: boolean;
+      twoFactorEnabled: boolean;
       sessionId: string;
     } | null;
   }
