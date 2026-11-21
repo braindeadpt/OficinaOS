@@ -154,7 +154,9 @@ export default function SettingsCloudTab({
   async function handleUnpair() {
     setBusy(true);
     try {
-      await api.delete("/settings/cloud");
+      const res = (await api.delete("/settings/cloud")) as {
+        cloudDeleted?: boolean;
+      };
       setStatus({
         paired: false,
         apiUrl,
@@ -164,7 +166,14 @@ export default function SettingsCloudTab({
         syncedAt: null,
         reachable: null,
       });
-      onToast(t("cloud_unpaired"), "success");
+      onToast(
+        t(
+          res.cloudDeleted === false
+            ? "cloud_unpaired_partial"
+            : "cloud_unpaired"
+        ),
+        "success"
+      );
     } catch (err) {
       onToast(getErrorMessage(err, t("errors.generic")), "error");
     } finally {
@@ -372,7 +381,7 @@ export default function SettingsCloudTab({
       {confirmUnpair && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay">
           <ConfirmDiscardDialog
-            description={t("cloud_settings_desc")}
+            description={t("cloud_disconnect_confirm")}
             discardLabel={t("cloud_disconnect")}
             keepLabel={t("cancel")}
             onDiscard={() => {

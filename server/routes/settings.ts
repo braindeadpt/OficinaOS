@@ -236,8 +236,8 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
     },
     async (req, reply) => {
       assertNotDemoMode();
-      await unpairCloud(app.prisma, req.log);
-      return reply.send({ ok: true });
+      const { cloudDeleted } = await unpairCloud(app.prisma, req.log);
+      return reply.send({ ok: true, cloudDeleted });
     }
   );
 

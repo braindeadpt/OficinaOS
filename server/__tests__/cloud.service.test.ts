@@ -28,7 +28,9 @@ interface ShopRow {
   cloudShopTokenEncrypted: string | null;
   cloudSyncedAt: Date | null;
   id: string;
+  pricesDirty?: boolean;
   shopName: string;
+  storeDirty?: boolean;
 }
 
 function fakePrisma(initial: Partial<ShopRow> = {}) {
@@ -340,9 +342,10 @@ describe("unpairCloud", () => {
       "fetch",
       vi.fn(() => okJson({}))
     );
+    const { encryptSecret } = await import("../lib/crypto.js");
     const { prisma, row } = fakePrisma({
       cloudApiUrl: "https://x",
-      cloudShopTokenEncrypted: "v1:a:b:c",
+      cloudShopTokenEncrypted: encryptSecret("tok-abc"),
       cloudShopId: "s1",
       cloudShopName: "Loja",
       cloudEntitlements: ["m"],
@@ -354,20 +357,44 @@ describe("unpairCloud", () => {
     expect(row.cloudShopId).toBeNull();
   });
 
-  it("deletes the shop row on the cloud via DELETE /shops/me", async () => {
+  it("deletes the shop row on the cloud via authenticated DELETE /shops/me", async () => {
     const fetchSpy = vi.fn(() => okJson({}));
     vi.stubGlobal("fetch", fetchSpy);
-    const { prisma } = fakePrisma({
+    const { encryptSecret } = await import("../lib/crypto.js");
+    const { prisma, row } = fakePrisma({
       cloudApiUrl: "https://x",
-      cloudShopTokenEncrypted: "v1:a:b:c",
+      cloudShopTokenEncrypted: encryptSecret("tok-abc"),
     });
-    await unpairCloud(prisma as never);
+    const result = await unpairCloud(prisma as never);
+    expect(result.cloudDeleted).toBe(true);
     const [url, init] = fetchSpy.mock.calls[0] as unknown as [
       string,
       RequestInit,
     ];
     expect(url).toBe("https://x/shops/me");
     expect(init.method).toBe("DELETE");
+    expect((init.headers as Record<string, string>).authorization).toBe(
+      "Bearer tok-abc"
+    );
+    // Remote copies were wiped — re-dirty so a re-pair re-uploads them.
+    expect(row.storeDirty).toBe(true);
+    expect(row.pricesDirty).toBe(true);
+  });
+
+  it("reports cloudDeleted=false when the cloud is unreachable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.reject(new Error("network down")))
+    );
+    const { encryptSecret } = await import("../lib/crypto.js");
+    const { prisma, row } = fakePrisma({
+      cloudApiUrl: "https://x",
+      cloudShopTokenEncrypted: encryptSecret("tok-abc"),
+    });
+    const result = await unpairCloud(prisma as never);
+    // Local unpair is best-effort and still completes.
+    expect(result.cloudDeleted).toBe(false);
+    expect(row.cloudApiUrl).toBeNull();
   });
 
   it("falls back to whatsapp-credentials delete on old clouds (404)", async () => {
@@ -383,11 +410,14 @@ describe("unpairCloud", () => {
       }
       return okJson({});
     });
+    const { encryptSecret } = await import("../lib/crypto.js");
     const { prisma } = fakePrisma({
       cloudApiUrl: "https://x",
-      cloudShopTokenEncrypted: "v1:a:b:c",
+      cloudShopTokenEncrypted: encryptSecret("tok-abc"),
     });
-    await unpairCloud(prisma as never);
+    const result = await unpairCloud(prisma as never);
+    // Legacy path only wipes credentials — remote data may remain.
+    expect(result.cloudDeleted).toBe(false);
     expect(urls).toEqual([
       "https://x/shops/me",
       "https://x/shops/whatsapp-credentials",

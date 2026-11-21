@@ -428,12 +428,14 @@ export async function getCloudStatus(
   return toStatus(settings);
 }
 
-/** Remove the pairing — Pro modules stop working until re-paired. */
+/** Remove the pairing — Pro modules stop working until re-paired.
+ * Returns whether the cloud-side shop data was confirmed deleted. */
 export async function unpairCloud(
   prisma: PrismaClient,
   log?: FastifyBaseLogger
-): Promise<void> {
+): Promise<{ cloudDeleted: boolean }> {
   const settings = await getOrCreateShopSettings(prisma);
+  let cloudDeleted = false;
   // Explicit unpair is a cancellation: the cloud deletes the Shop row and
   // every owned record cascades with it — tokens, entitlements, relay
   // queues, reports — so nothing of the shop's survives the relationship.
@@ -450,13 +452,20 @@ export async function unpairCloud(
         "cloud unreachable during unpair — cloud-side data left behind"
       );
     } else if (res.status === 404) {
+      // Legacy cloud without /shops/me: only the narrow credentials wipe
+      // exists, so remote data (queues, pages, reports) is left behind.
       await cloudFetch(settings.cloudApiUrl, "/shops/whatsapp-credentials", {
         method: "DELETE",
         token,
       }).catch(() => null);
-    } else if (!res.ok) {
+    } else if (res.ok) {
+      cloudDeleted = true;
+    } else {
       log?.warn({ status: res.status }, "cloud shop delete failed");
     }
+  } else {
+    // Nothing was ever sent — nothing to delete remotely.
+    cloudDeleted = true;
   }
   await prisma.shopSettings.update({
     where: { id: "default" },
@@ -468,8 +477,14 @@ export async function unpairCloud(
       cloudEntitlements: Prisma.DbNull,
       cloudSyncedAt: null,
       whatsappCredentialsAtCloud: false,
+      // The remote copies were just wiped — after a re-pair the next sync
+      // must re-upload the storefront and price contributions, or both
+      // silently stay absent while looking "in sync" locally.
+      storeDirty: true,
+      pricesDirty: true,
     },
   });
+  return { cloudDeleted };
 }
 
 // ── Customer diagnostic intake (Pro module: diag-intake) ────────────
