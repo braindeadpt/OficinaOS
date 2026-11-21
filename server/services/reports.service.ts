@@ -966,7 +966,10 @@ export async function ordersReport(
       partsCost,
       repairsTotal,
     };
-    // Same revenue base as the orders summary: billed repairs + billed parts.
+    // Same revenue base as the orders summary for itemized jobs: billed
+    // repairs + billed parts. Unrecorded totals fall back to the estimate
+    // in the summary's totalValue but carry no row margin — there is no
+    // billed amount to divide.
     const billedTotal = repairsTotal + partsCost;
     if (includeMargin && billedTotal > 0) {
       row.margin =
