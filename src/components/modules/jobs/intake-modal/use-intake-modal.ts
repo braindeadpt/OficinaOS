@@ -95,6 +95,8 @@ export function useIntakeModal({
     );
 
   const [photoPreviews, setPhotoPreviews] = useState<PhotoPreview[]>([]);
+  const photoPreviewsRef = useRef<PhotoPreview[]>([]);
+  photoPreviewsRef.current = photoPreviews;
   const [photoError, setPhotoError] = useState<string | null>(null);
   const submissionTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
   const initialSnapshotRef = useRef<IntakeFormData | null>(null);
@@ -403,6 +405,12 @@ export function useIntakeModal({
       if (overflowLockCount === 0) {
         document.body.style.overflow = "";
       }
+      // Object URLs must not leak on discard/close/unmount — only the
+      // successful-submit path revoked them before.
+      for (const p of photoPreviewsRef.current) {
+        URL.revokeObjectURL(p.url);
+      }
+      photoPreviewsRef.current = [];
     };
   }, [open, onClose, prefill]);
 

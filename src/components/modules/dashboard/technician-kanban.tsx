@@ -14,6 +14,12 @@ import { Icon } from "@/components/ui/icon";
 import { useDashboardStore } from "@/stores/dashboard";
 import { useJobsStore } from "@/stores/jobs";
 
+const AMOUNT_REGEX = /^\d*([.,]\d{0,2})?$/;
+
+function parseAmount(raw: string): number {
+  return Number.parseFloat(raw.replace(",", "."));
+}
+
 export default function TechnicianKanban() {
   const { t } = useTranslation();
   const { techData, fetchTechnician } = useDashboardStore();
@@ -72,16 +78,19 @@ export default function TechnicianKanban() {
 
   const startTransition = (job: KanbanJobDTO, nextStatus: JobStatusType) => {
     setActiveDropdown(null);
+
+    // If it doesn't require extra inputs, execute immediately — only
+    // ON_HOLD/DONE open the modal below (reason / labor hours + QC).
+    if (nextStatus !== JobStatus.ON_HOLD && nextStatus !== JobStatus.DONE) {
+      executeTransition(job.id, nextStatus);
+      return;
+    }
+
     setTransitioningJob(job);
     setTargetStatus(nextStatus);
     setHoldReason("");
     setLaborHours("");
     setQc({});
-
-    // If it doesn't require extra inputs, execute immediately
-    if (nextStatus !== JobStatus.ON_HOLD && nextStatus !== JobStatus.DONE) {
-      executeTransition(job.id, nextStatus);
-    }
   };
 
   const executeTransition = async (
@@ -122,7 +131,7 @@ export default function TechnicianKanban() {
         undefined
       );
     } else if (targetStatus === JobStatus.DONE) {
-      const hoursNum = Number.parseFloat(laborHours);
+      const hoursNum = parseAmount(laborHours);
       if (Number.isNaN(hoursNum) || hoursNum <= 0) {
         toast.error(t("validations.labor_hours_positive"));
         return;
@@ -408,10 +417,14 @@ export default function TechnicianKanban() {
                 <>
                   <input
                     className="w-full rounded-xl bg-surface-container-high p-3 font-medium text-on-surface text-sm ring-1 ring-surface-container-highest"
-                    onChange={(e) => setLaborHours(e.target.value)}
+                    inputMode="decimal"
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "" || AMOUNT_REGEX.test(v)) {
+                        setLaborHours(v);
+                      }
+                    }}
                     placeholder={t("tech_dashboard.labor_hours_placeholder")}
-                    step="0.1"
-                    type="number"
                     value={laborHours}
                   />
                   <div className="mt-4 max-h-[40vh] overflow-y-auto">

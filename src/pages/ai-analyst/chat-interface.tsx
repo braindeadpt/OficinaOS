@@ -826,7 +826,9 @@ function ChatInterface({ agentEnabled = true }: ChatInterfaceProps) {
         setIsTyping(false);
         scrollToBottom();
         inputRef.current?.focus();
-        abortRef.current = null;
+        if (abortRef.current === controller) {
+          abortRef.current = null;
+        }
       }
     },
     [
@@ -861,6 +863,11 @@ function ChatInterface({ agentEnabled = true }: ChatInterfaceProps) {
       for (let i = index - 1; i >= 0; i--) {
         const candidate = messages[i];
         if (candidate?.role === "user") {
+          // Drop the failed assistant message and the user prompt it
+          // answered — sendMessage appends a fresh pair.
+          setMessages((prev) =>
+            prev.filter((m) => m.id !== messageId && m.id !== candidate.id)
+          );
           sendMessageRef.current(candidate.content);
           return;
         }

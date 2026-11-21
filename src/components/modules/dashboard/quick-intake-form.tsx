@@ -8,6 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useJobsStore } from "@/stores/jobs";
 
+const AMOUNT_REGEX = /^\d*([.,]\d{0,2})?$/;
+
+function parseAmount(raw: string): number {
+  return Number.parseFloat(raw.replace(",", "."));
+}
+
 export default function QuickIntakeForm() {
   const { t } = useTranslation();
   const [customerName, setCustomerName] = useState("");
@@ -32,7 +38,7 @@ export default function QuickIntakeForm() {
         estimatedCost:
           estimatedCost.trim() === ""
             ? undefined
-            : Number.parseFloat(estimatedCost) || 0,
+            : parseAmount(estimatedCost) || 0,
       });
       setCustomerName("");
       setCustomerPhone("");
@@ -111,11 +117,14 @@ export default function QuickIntakeForm() {
             </Field>
             <Field label={t("front_desk.estimated_cost")}>
               <Input
-                min={0}
-                onChange={(e) => setEstimatedCost(e.target.value)}
+                inputMode="decimal"
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "" || AMOUNT_REGEX.test(v)) {
+                    setEstimatedCost(v);
+                  }
+                }}
                 placeholder={t("intake.estimated_cost_pending")}
-                step="0.01"
-                type="number"
                 value={estimatedCost}
               />
             </Field>

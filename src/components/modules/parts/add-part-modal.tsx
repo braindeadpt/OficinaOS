@@ -50,8 +50,12 @@ interface AddPartModalProps {
 }
 
 const CATEGORIES: PartCategoryType[] = Object.values(PartCategory);
-const PRICE_REGEX = /^\d*\.?\d{0,2}$/;
+const PRICE_REGEX = /^\d*([.,]\d{0,2})?$/;
 const INT_REGEX = /^\d{0,6}$/;
+
+function parseAmount(raw: string): number {
+  return Number.parseFloat(raw.replace(",", "."));
+}
 
 const INITIAL_FORM: AddPartFormData = {
   name: "",
@@ -73,8 +77,7 @@ function isDirty(
     return (
       form.name !== editingPart.name ||
       form.category !== editingPart.category ||
-      Number.parseFloat(form.defaultPrice) !==
-        Number(editingPart.defaultPrice) ||
+      parseAmount(form.defaultPrice) !== Number(editingPart.defaultPrice) ||
       form.supplier !== (editingPart.supplier ?? "") ||
       form.supplierId !== (editingPart.supplierId ?? "") ||
       form.isActive !== editingPart.isActive ||
@@ -145,11 +148,7 @@ export default function AddPartModal({
       if (key === "category" && value) {
         setErrors((prev) => ({ ...prev, category: undefined }));
       }
-      if (
-        key === "defaultPrice" &&
-        value &&
-        Number.parseFloat(String(value)) > 0
-      ) {
+      if (key === "defaultPrice" && value && parseAmount(String(value)) > 0) {
         setErrors((prev) => ({ ...prev, defaultPrice: undefined }));
       }
     },
@@ -178,7 +177,7 @@ export default function AddPartModal({
     if (!form.category) {
       newErrors.category = t("add_part_modal.error_category_required");
     }
-    const priceVal = Number.parseFloat(form.defaultPrice);
+    const priceVal = parseAmount(form.defaultPrice);
     if (!form.defaultPrice || Number.isNaN(priceVal) || priceVal <= 0) {
       newErrors.defaultPrice = t("add_part_modal.error_price_invalid");
     }
@@ -331,7 +330,7 @@ export default function AddPartModal({
                   autoComplete="off"
                   className="ps-10 font-mono"
                   id="part-price"
-                  min="0"
+                  inputMode="decimal"
                   onChange={(e) => {
                     const val = e.target.value;
                     if (val === "" || PRICE_REGEX.test(val)) {
@@ -340,8 +339,6 @@ export default function AddPartModal({
                   }}
                   placeholder="0"
                   required
-                  step="0.01"
-                  type="number"
                   value={form.defaultPrice}
                 />
                 {errors.defaultPrice && (

@@ -75,7 +75,7 @@ foreach ($d in @($pgData, "$dataRoot\uploads", "$dataRoot\backups", $logDir)) {
 
 function New-Secret([int]$len = 48) {
     $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_'
-    -join (1..$len | ForEach-Object { $chars[(Get-Random -Max $chars.Length)] })
+    -join (1..$len | ForEach-Object { $chars[[System.Security.Cryptography.RandomNumberGenerator]::GetInt32($chars.Length)] })
 }
 
 # app\.env — segredos gerados uma vez; upgrades preservam o ficheiro

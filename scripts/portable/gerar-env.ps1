@@ -7,7 +7,7 @@ if (Test-Path $envPath) { exit 0 } # ja existe — nao sobrescrever segredos
 
 function New-Secret([int]$len = 48) {
     $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_'
-    -join (1..$len | ForEach-Object { $chars[(Get-Random -Max $chars.Length)] })
+    -join (1..$len | ForEach-Object { $chars[[System.Security.Cryptography.RandomNumberGenerator]::GetInt32($chars.Length)] })
 }
 
 $ip = (Get-NetIPAddress -AddressFamily IPv4 |

@@ -4,6 +4,7 @@ import type { FastifyBaseLogger } from "fastify";
 import { decryptSecret } from "../lib/crypto.js";
 import { assertNotDemoMode } from "../lib/demo.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
+import { isModuleEnabled } from "../utils/modules.js";
 
 /**
  * Faturação (módulo Pro "invoicing") — emissão de documentos fiscais via
@@ -43,6 +44,7 @@ interface InvoiceCustomer {
 
 interface SettingsLike {
   cloudEntitlements: unknown;
+  cloudSyncedAt: Date | null;
   invoicingAccount: string | null;
   invoicingApiKeyEncrypted: string | null;
   invoicingEnabled: boolean;
@@ -63,10 +65,10 @@ async function loadInvoicingConfig(prisma: PrismaClient): Promise<{
   const settings = (await getOrCreateShopSettings(
     prisma
   )) as unknown as SettingsLike;
-  const modules = Array.isArray(settings.cloudEntitlements)
-    ? (settings.cloudEntitlements as string[])
-    : [];
-  if (!modules.includes(MODULE)) {
+  // Aqui a cache É a enforcement — a chamada ao InvoiceXpress não passa
+  // pela cloud, por isso a lista tem de estar fresca (isModuleEnabled
+  // aplica o TTL de 24h à última sync).
+  if (!isModuleEnabled(settings, MODULE)) {
     throw new AppError("CLOUD_MODULE_REQUIRED");
   }
   if (!settings.invoicingEnabled) {
@@ -121,6 +123,7 @@ async function ixFetch(
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
       headers: { "content-type": "application/json" },
       method: init.method ?? "GET",
+      signal: AbortSignal.timeout(15_000),
     }
   ).catch(() => null);
   if (!res) {
@@ -218,6 +221,39 @@ async function issueDocument(
 // worker's isProcessing flag).
 const issuingKeys = new Set<string>();
 
+/**
+ * Persists the issued document's link on the local record. The provider
+ * call already created an irreversible numbered fiscal document, so a
+ * failed full update must never leave `invoiceDocId` empty — a retry
+ * would then issue a SECOND legal document. Fallback: record the docId
+ * alone; if even that fails, log.fatal for manual reconciliation.
+ */
+async function persistIssuedInvoice(opts: {
+  docId: string;
+  log: FastifyBaseLogger;
+  ref: string;
+  writeDocIdOnly: () => Promise<unknown>;
+  writeFull: () => Promise<unknown>;
+}) {
+  try {
+    await opts.writeFull();
+  } catch (err) {
+    try {
+      await opts.writeDocIdOnly();
+      opts.log.error(
+        { docId: opts.docId, err, ref: opts.ref },
+        "invoice metadata write failed — docId recorded, reconcile fields"
+      );
+    } catch (persistErr) {
+      opts.log.fatal(
+        { docId: opts.docId, err: persistErr, ref: opts.ref },
+        "FISCAL_DOC_ORPHANED — provider document exists but is unrecorded; reconcile manually and DO NOT re-issue"
+      );
+    }
+    throw err;
+  }
+}
+
 export async function issueInvoiceForSale(
   prisma: PrismaClient,
   saleId: string,
@@ -253,15 +289,26 @@ export async function issueInvoiceForSale(
       reference: sale.saleCode,
     });
 
-    await prisma.sale.update({
-      data: {
-        invoiceDocId: issued.docId,
-        invoiceDocType: issued.docType,
-        invoiceNumber: issued.number,
-        invoicePermalink: issued.permalink,
-        invoicedAt: new Date(),
-      },
-      where: { id: sale.id },
+    await persistIssuedInvoice({
+      docId: issued.docId,
+      log,
+      ref: sale.saleCode,
+      writeDocIdOnly: () =>
+        prisma.sale.update({
+          data: { invoiceDocId: issued.docId },
+          where: { id: sale.id },
+        }),
+      writeFull: () =>
+        prisma.sale.update({
+          data: {
+            invoiceDocId: issued.docId,
+            invoiceDocType: issued.docType,
+            invoiceNumber: issued.number,
+            invoicePermalink: issued.permalink,
+            invoicedAt: new Date(),
+          },
+          where: { id: sale.id },
+        }),
     });
     return issued;
   } finally {
@@ -323,15 +370,26 @@ export async function issueInvoiceForJob(
       reference: job.jobCode,
     });
 
-    await prisma.job.update({
-      data: {
-        invoiceDocId: issued.docId,
-        invoiceDocType: issued.docType,
-        invoiceNumber: issued.number,
-        invoicePermalink: issued.permalink,
-        invoicedAt: new Date(),
-      },
-      where: { id: job.id },
+    await persistIssuedInvoice({
+      docId: issued.docId,
+      log,
+      ref: job.jobCode,
+      writeDocIdOnly: () =>
+        prisma.job.update({
+          data: { invoiceDocId: issued.docId },
+          where: { id: job.id },
+        }),
+      writeFull: () =>
+        prisma.job.update({
+          data: {
+            invoiceDocId: issued.docId,
+            invoiceDocType: issued.docType,
+            invoiceNumber: issued.number,
+            invoicePermalink: issued.permalink,
+            invoicedAt: new Date(),
+          },
+          where: { id: job.id },
+        }),
     });
     return issued;
   } finally {

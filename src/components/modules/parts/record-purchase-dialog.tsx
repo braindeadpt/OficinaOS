@@ -1,8 +1,15 @@
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { useModalEffects } from "@/hooks/use-modal-effects";
 import api, { type ApiError } from "@/lib/api";
 import { usePartsCatalogStore } from "@/stores/parts-catalog";
+
+const AMOUNT_REGEX = /^\d*([.,]\d{0,2})?$/;
+
+function parseAmount(raw: string): number {
+  return Number.parseFloat(raw.replace(",", "."));
+}
 
 export default function RecordPurchaseDialog({
   onClose,
@@ -12,6 +19,7 @@ export default function RecordPurchaseDialog({
   part: { id: string; name: string; stockQuantity: number };
 }) {
   const { t } = useTranslation();
+  const dialogRef = useRef<HTMLDivElement>(null);
   const [quantity, setQuantity] = useState("");
   const [unitCost, setUnitCost] = useState("");
   const [supplier, setSupplier] = useState("");
@@ -19,12 +27,7 @@ export default function RecordPurchaseDialog({
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, []);
+  useModalEffects(true, onClose, dialogRef);
 
   const handleSubmit = async () => {
     const qty = Number.parseInt(quantity, 10);
@@ -35,7 +38,7 @@ export default function RecordPurchaseDialog({
     try {
       await api.post(`/parts/${part.id}/stock-movements`, {
         quantity: qty,
-        ...(unitCost ? { unitCost: Number.parseFloat(unitCost) } : {}),
+        ...(unitCost ? { unitCost: parseAmount(unitCost) } : {}),
         ...(supplier.trim() ? { supplier: supplier.trim() } : {}),
         ...(reference.trim() ? { reference: reference.trim() } : {}),
         ...(note.trim() ? { note: note.trim() } : {}),
@@ -65,7 +68,10 @@ export default function RecordPurchaseDialog({
         onClick={onClose}
         type="button"
       />
-      <div className="modal-surface relative z-10 flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-surface-container-lowest shadow-2xl">
+      <div
+        className="modal-surface relative z-10 flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-surface-container-lowest shadow-2xl"
+        ref={dialogRef}
+      >
         <div className="border-outline-variant border-b px-6 py-4">
           <h2 className="font-bold font-headline text-lg text-on-surface">
             {t("parts_record_purchase")}
@@ -106,10 +112,12 @@ export default function RecordPurchaseDialog({
                   className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface"
                   id="purchase-cost"
                   inputMode="decimal"
-                  min="0"
-                  onChange={(e) => setUnitCost(e.target.value)}
-                  step="0.01"
-                  type="number"
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === "" || AMOUNT_REGEX.test(v)) {
+                      setUnitCost(v);
+                    }
+                  }}
                   value={unitCost}
                 />
               </div>

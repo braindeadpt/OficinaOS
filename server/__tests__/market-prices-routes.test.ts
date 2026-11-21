@@ -10,6 +10,7 @@ interface SettingsRow {
   cloudApiUrl: string | null;
   cloudEntitlements: unknown;
   cloudShopTokenEncrypted: string | null;
+  cloudSyncedAt: Date | null;
   pricesDirty: boolean;
   sharePrices: boolean;
 }
@@ -18,6 +19,7 @@ function fakePrisma(overrides: Partial<SettingsRow> = {}) {
   const row: SettingsRow = {
     cloudApiUrl: CLOUD_URL,
     cloudEntitlements: ["market-prices"],
+    cloudSyncedAt: new Date(),
     cloudShopTokenEncrypted: encryptSecret("shop-token-secret"),
     pricesDirty: true,
     sharePrices: false,

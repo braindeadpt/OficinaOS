@@ -7,12 +7,14 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { Can } from "@/components/modules/can";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 import { useModalEffects } from "@/hooks/use-modal-effects";
 import api from "@/lib/api";
 
@@ -35,6 +37,8 @@ interface SupplierOption {
   name: string;
 }
 
+const AMOUNT_REGEX = /^\d*([.,]\d{0,2})?$/;
+
 const EMPTY_FORM = {
   costFinal: "",
   expectedReturnAt: "",
@@ -43,6 +47,10 @@ const EMPTY_FORM = {
   reference: "",
   supplierId: "",
 };
+
+function parseAmount(raw: string): number {
+  return Number.parseFloat(raw.replace(",", "."));
+}
 
 export default function JobExternalRepairsSection({
   jobId,
@@ -154,7 +162,8 @@ export default function JobExternalRepairsSection({
     setBusy(true);
     try {
       await api.post(`/external-repairs/${returning.id}/return`, {
-        costFinal: returnCost.trim() === "" ? undefined : Number(returnCost),
+        costFinal:
+          returnCost.trim() === "" ? undefined : parseAmount(returnCost),
       });
       toast.success(t("external_repairs.returned"));
       setReturning(null);
@@ -169,12 +178,19 @@ export default function JobExternalRepairsSection({
   };
 
   const cancel = async (id: string) => {
+    if (busy) {
+      return;
+    }
+    setBusy(true);
     try {
       await api.post(`/external-repairs/${id}/cancel`);
+      setCancelling(null);
       await load();
       onChanged?.();
     } catch {
       toast.error(t("external_repairs.save_failed"));
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -182,6 +198,7 @@ export default function JobExternalRepairsSection({
   // Delivered/cancelled jobs are terminal — the server rejects new sends,
   // so don't offer a form that can only fail on submit.
   const canSend = jobStatus !== "DELIVERED" && jobStatus !== "CANCELLED";
+  const fmtCurrency = useFormatCurrency();
   const fmt = (iso: string | null) =>
     iso ? new Date(iso).toLocaleDateString() : "—";
 
@@ -197,15 +214,17 @@ export default function JobExternalRepairsSection({
           )}
         </h2>
         {!openRepair && canSend && (
-          <Button
-            icon="send"
-            onClick={openSend}
-            size="sm"
-            type="button"
-            variant="secondary"
-          >
-            {t("external_repairs.send")}
-          </Button>
+          <Can perm={{ jobs: ["edit"] }}>
+            <Button
+              icon="send"
+              onClick={openSend}
+              size="sm"
+              type="button"
+              variant="secondary"
+            >
+              {t("external_repairs.send")}
+            </Button>
+          </Can>
         )}
       </div>
 
@@ -241,7 +260,9 @@ export default function JobExternalRepairsSection({
                         date: fmt(r.returnedAt),
                       }),
                     r.costFinal !== null &&
-                      t("external_repairs.cost", { cost: r.costFinal }),
+                      t("external_repairs.cost", {
+                        cost: fmtCurrency(r.costFinal),
+                      }),
                   ]
                     .filter(Boolean)
                     .join(" · ")}
@@ -257,7 +278,7 @@ export default function JobExternalRepairsSection({
                   {t(`external_repairs.status_${r.status.toLowerCase()}`)}
                 </span>
                 {r.status === "SENT" && (
-                  <>
+                  <Can perm={{ jobs: ["edit"] }}>
                     <Button
                       onClick={() => {
                         setReturning(r);
@@ -277,7 +298,7 @@ export default function JobExternalRepairsSection({
                     >
                       {t("external_repairs.cancel")}
                     </Button>
-                  </>
+                  </Can>
                 )}
               </div>
             </li>
@@ -436,9 +457,13 @@ export default function JobExternalRepairsSection({
               <Field label={t("external_repairs.cost_final")}>
                 <Input
                   inputMode="decimal"
-                  onChange={(e) => setReturnCost(e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === "" || AMOUNT_REGEX.test(v)) {
+                      setReturnCost(v);
+                    }
+                  }}
                   placeholder="0.00"
-                  type="number"
                   value={returnCost}
                 />
               </Field>
@@ -491,11 +516,7 @@ export default function JobExternalRepairsSection({
               </Button>
               <Button
                 loading={busy}
-                onClick={async () => {
-                  const id = cancelling.id;
-                  setCancelling(null);
-                  await cancel(id);
-                }}
+                onClick={() => cancel(cancelling.id)}
                 size="sm"
                 type="button"
                 variant="primary"

@@ -25,18 +25,22 @@ export async function add(
     return mutabilityError;
   }
 
-  const waitingPart = await createWaitingPartRepo(prisma, {
-    job: { connect: { id: jobId } },
-    partName: input.partName,
-    supplier: input.supplier ?? null,
-  });
+  const waitingPart = await prisma.$transaction(async (tx) => {
+    const created = await createWaitingPartRepo(tx, {
+      job: { connect: { id: jobId } },
+      partName: input.partName,
+      supplier: input.supplier ?? null,
+    });
 
-  await createAuditLog(prisma, {
-    jobId,
-    userId,
-    action: AuditAction.PART_ADDED,
-    note: `Waiting part added: ${input.partName}`,
-    toValue: input.partName,
+    await createAuditLog(tx, {
+      jobId,
+      userId,
+      action: AuditAction.PART_ADDED,
+      note: `Waiting part added: ${input.partName}`,
+      toValue: input.partName,
+    });
+
+    return created;
   });
 
   return waitingPart;
@@ -53,14 +57,16 @@ export async function remove(
     return null;
   }
 
-  await deleteWaitingPart(prisma, waitingId);
+  await prisma.$transaction(async (tx) => {
+    await deleteWaitingPart(tx, waitingId);
 
-  await createAuditLog(prisma, {
-    jobId,
-    userId,
-    action: AuditAction.PART_REMOVED,
-    note: `Waiting part removed: ${waitingPart.partName}`,
-    fromValue: waitingPart.partName,
+    await createAuditLog(tx, {
+      jobId,
+      userId,
+      action: AuditAction.PART_REMOVED,
+      note: `Waiting part removed: ${waitingPart.partName}`,
+      fromValue: waitingPart.partName,
+    });
   });
 
   return true;

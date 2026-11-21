@@ -10,6 +10,7 @@ interface SettingsRow {
   cloudApiUrl: string | null;
   cloudEntitlements: unknown;
   cloudShopTokenEncrypted: string | null;
+  cloudSyncedAt: Date | null;
 }
 
 function fakePrisma(overrides: Partial<SettingsRow> = {}) {
@@ -17,6 +18,7 @@ function fakePrisma(overrides: Partial<SettingsRow> = {}) {
     cloudApiUrl: CLOUD_URL,
     cloudShopTokenEncrypted: encryptSecret("shop-token-secret"),
     cloudEntitlements: ["market"],
+    cloudSyncedAt: new Date(),
     ...overrides,
   };
   return {

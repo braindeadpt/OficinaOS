@@ -879,7 +879,9 @@ model JobRepair {
 model Payment {
   id    String @id @default(cuid())
   jobId String
-  job   Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  // Payments are fiscal records — Restrict so a Job delete can never cascade
+  // them away silently (jobs are soft-lifecycle, never hard-deleted today).
+  job   Job    @relation(fields: [jobId], references: [id], onDelete: Restrict)
 
   method    PaymentMethod
   amount    Decimal       @db.Decimal(10, 2)

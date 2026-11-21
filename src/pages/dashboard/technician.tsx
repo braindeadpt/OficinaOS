@@ -117,11 +117,12 @@ export default function TechnicianDashboardPage() {
       id: s.jobCode,
       repairType: s.repairSummary,
       status: s.status,
+      // estimatedDate is date-only ("YYYY-MM-DD") — appending T00:00:00
+      // keeps it a local midnight so the locale date doesn't shift a day.
       time: s.estimatedDate
-        ? new Date(s.estimatedDate).toLocaleTimeString(i18n.language, {
-            hour: "2-digit",
-            minute: "2-digit",
-          })
+        ? new Date(`${s.estimatedDate}T00:00:00`).toLocaleDateString(
+            i18n.language
+          )
         : "—",
     }));
   }, [techData?.todaySchedule, i18n.language]);

@@ -262,7 +262,13 @@ async function collectReplies(ctx: SyncCtx): Promise<void> {
       ackIds.push(r.id);
     } catch (err) {
       ctx.log.warn({ err, replyId: r.id }, "portal reply failed");
-      ackIds.push(r.id); // poisoned reply — don't retry forever
+      // AppError = falha de negócio (job em estado incompatível, etc.) —
+      // a resposta nunca vai passar, ack para não re-tentar para sempre.
+      // Falhas transitórias (BD, rede) ficam sem ack: a cloud re-entrega
+      // no próximo ciclo e a resposta do cliente não se perde.
+      if (err instanceof AppError) {
+        ackIds.push(r.id);
+      }
     }
   }
 

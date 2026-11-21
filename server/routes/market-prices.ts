@@ -11,6 +11,7 @@ import {
   pushMarketPrices,
   withdrawMarketPrices,
 } from "../services/market-prices.service.js";
+import { isModuleEnabled } from "../utils/modules.js";
 
 const MODULE = "market-prices";
 
@@ -47,10 +48,7 @@ async function requireMarketPrices(
   if (!(settings.cloudApiUrl && settings.cloudShopTokenEncrypted)) {
     throw new AppError("CLOUD_NOT_PAIRED");
   }
-  const modules = Array.isArray(settings.cloudEntitlements)
-    ? (settings.cloudEntitlements as string[])
-    : [];
-  if (!modules.includes(MODULE)) {
+  if (!isModuleEnabled(settings, MODULE)) {
     throw new AppError("CLOUD_MODULE_REQUIRED");
   }
   return {

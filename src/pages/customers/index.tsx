@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 import { toast } from "sonner";
+import { Can } from "@/components/modules/can";
 import AddCustomerModal from "@/components/modules/customers/add-customer-modal";
 import ConsentToggle from "@/components/modules/customers/consent-toggle";
 import { Button } from "@/components/ui/button";
@@ -253,15 +254,17 @@ export default function CustomersPage() {
             {t("customers_desc")}
           </p>
         </div>
-        <Button
-          icon="add"
-          onClick={() => setShowAddModal(true)}
-          size="md"
-          type="button"
-          variant="primary-gradient"
-        >
-          {t("add_customer")}
-        </Button>
+        <Can perm={{ customers: ["create"] }}>
+          <Button
+            icon="add"
+            onClick={() => setShowAddModal(true)}
+            size="md"
+            type="button"
+            variant="primary-gradient"
+          >
+            {t("add_customer")}
+          </Button>
+        </Can>
       </div>
 
       {!showEmptyCatalog && (

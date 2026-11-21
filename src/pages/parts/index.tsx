@@ -4,6 +4,7 @@ import type { PartsCatalog } from "@shared/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router";
+import { Can } from "@/components/modules/can";
 import AddPartModal, {
   type AddPartSubmitData,
 } from "@/components/modules/parts/add-part-modal";
@@ -258,39 +259,43 @@ function DesktopPartRow({
             >
               <Icon name="history" size="sm" />
             </button>
-            <button
-              aria-label={t("parts_record_purchase")}
-              className="flex h-11 w-11 items-center justify-center rounded-xl text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-primary"
-              onClick={() => onShowPurchase(part)}
-              type="button"
-            >
-              <Icon name="shopping_cart" size="sm" />
-            </button>
-            <button
-              aria-label={t("edit_part")}
-              className="flex h-11 w-11 items-center justify-center rounded-xl text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-primary"
-              onClick={() => onEdit(part)}
-              type="button"
-            >
-              <Icon name="edit" size="sm" />
-            </button>
-            <button
-              aria-label={isActive ? t("deactivate_part") : t("activate_part")}
-              className={`flex h-11 w-11 items-center justify-center rounded-xl transition-colors ${toggleBtnCls}`}
-              disabled={togglingId === part.id}
-              onClick={() => onShowConfirm(part.id)}
-              type="button"
-            >
-              <Icon name={isActive ? "toggle_on" : "toggle_off"} size="sm" />
-            </button>
-            <button
-              aria-label={t("delete_part")}
-              className="flex h-11 w-11 items-center justify-center rounded-xl text-on-surface-variant transition-colors hover:bg-error-container hover:text-on-error-container"
-              onClick={() => onShowDelete(part.id)}
-              type="button"
-            >
-              <Icon name="delete" size="sm" />
-            </button>
+            <Can perm={{ parts: ["manageCatalog"] }}>
+              <button
+                aria-label={t("parts_record_purchase")}
+                className="flex h-11 w-11 items-center justify-center rounded-xl text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-primary"
+                onClick={() => onShowPurchase(part)}
+                type="button"
+              >
+                <Icon name="shopping_cart" size="sm" />
+              </button>
+              <button
+                aria-label={t("edit_part")}
+                className="flex h-11 w-11 items-center justify-center rounded-xl text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-primary"
+                onClick={() => onEdit(part)}
+                type="button"
+              >
+                <Icon name="edit" size="sm" />
+              </button>
+              <button
+                aria-label={
+                  isActive ? t("deactivate_part") : t("activate_part")
+                }
+                className={`flex h-11 w-11 items-center justify-center rounded-xl transition-colors ${toggleBtnCls}`}
+                disabled={togglingId === part.id}
+                onClick={() => onShowConfirm(part.id)}
+                type="button"
+              >
+                <Icon name={isActive ? "toggle_on" : "toggle_off"} size="sm" />
+              </button>
+              <button
+                aria-label={t("delete_part")}
+                className="flex h-11 w-11 items-center justify-center rounded-xl text-on-surface-variant transition-colors hover:bg-error-container hover:text-on-error-container"
+                onClick={() => onShowDelete(part.id)}
+                type="button"
+              >
+                <Icon name="delete" size="sm" />
+              </button>
+            </Can>
           </div>
         )}
       </td>
@@ -429,47 +434,51 @@ function MobilePartCard({
             >
               <Icon name="history" size="sm" />
             </button>
-            <button
-              aria-label={t("parts_record_purchase")}
-              className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl font-bold text-on-surface-variant text-xs transition-all hover:bg-surface-container-high hover:text-primary"
-              onClick={() => onShowPurchase(part)}
-              type="button"
-            >
-              <Icon name="shopping_cart" size="sm" />
-            </button>
-            <button
-              aria-label={t("edit_part")}
-              className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl font-bold text-on-surface-variant text-xs transition-all hover:bg-surface-container-high hover:text-primary"
-              onClick={() => onEdit(part)}
-              type="button"
-            >
-              <Icon name="edit" size="sm" />
-              <span>{t("edit")}</span>
-            </button>
-            <button
-              aria-label={isActive ? t("deactivate_part") : t("activate_part")}
-              className={`flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl font-bold text-xs transition-all ${
-                isActive
-                  ? "text-on-surface-variant hover:bg-surface-container-high hover:text-primary"
-                  : "text-primary hover:bg-primary-container"
-              }`}
-              disabled={togglingId === part.id}
-              onClick={() => onShowConfirm(part.id)}
-              type="button"
-            >
-              <Icon name={isActive ? "toggle_on" : "toggle_off"} size="sm" />
-              <span>
-                {isActive ? t("deactivate_part") : t("activate_part")}
-              </span>
-            </button>
-            <button
-              aria-label={t("delete_part")}
-              className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl font-bold text-on-surface-variant text-xs transition-all hover:bg-error-container hover:text-on-error-container"
-              onClick={() => onShowDelete(part.id)}
-              type="button"
-            >
-              <Icon name="delete" size="sm" />
-            </button>
+            <Can perm={{ parts: ["manageCatalog"] }}>
+              <button
+                aria-label={t("parts_record_purchase")}
+                className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl font-bold text-on-surface-variant text-xs transition-all hover:bg-surface-container-high hover:text-primary"
+                onClick={() => onShowPurchase(part)}
+                type="button"
+              >
+                <Icon name="shopping_cart" size="sm" />
+              </button>
+              <button
+                aria-label={t("edit_part")}
+                className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl font-bold text-on-surface-variant text-xs transition-all hover:bg-surface-container-high hover:text-primary"
+                onClick={() => onEdit(part)}
+                type="button"
+              >
+                <Icon name="edit" size="sm" />
+                <span>{t("edit")}</span>
+              </button>
+              <button
+                aria-label={
+                  isActive ? t("deactivate_part") : t("activate_part")
+                }
+                className={`flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl font-bold text-xs transition-all ${
+                  isActive
+                    ? "text-on-surface-variant hover:bg-surface-container-high hover:text-primary"
+                    : "text-primary hover:bg-primary-container"
+                }`}
+                disabled={togglingId === part.id}
+                onClick={() => onShowConfirm(part.id)}
+                type="button"
+              >
+                <Icon name={isActive ? "toggle_on" : "toggle_off"} size="sm" />
+                <span>
+                  {isActive ? t("deactivate_part") : t("activate_part")}
+                </span>
+              </button>
+              <button
+                aria-label={t("delete_part")}
+                className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl font-bold text-on-surface-variant text-xs transition-all hover:bg-error-container hover:text-on-error-container"
+                onClick={() => onShowDelete(part.id)}
+                type="button"
+              >
+                <Icon name="delete" size="sm" />
+              </button>
+            </Can>
           </>
         )}
       </div>
@@ -823,14 +832,16 @@ function EmptyCatalogState({
       <p className="mt-1 mb-6 max-w-xs text-on-surface-variant text-sm">
         {t("empty_catalog_desc")}
       </p>
-      <button
-        className="flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3 font-bold text-on-primary text-sm shadow-md shadow-primary/10 transition-all hover:bg-primary/90 active:scale-[0.98]"
-        onClick={onAdd}
-        type="button"
-      >
-        <Icon name="add" size="sm" />
-        <span>{t("add_new_part")}</span>
-      </button>
+      <Can perm={{ parts: ["manageCatalog"] }}>
+        <button
+          className="flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3 font-bold text-on-primary text-sm shadow-md shadow-primary/10 transition-all hover:bg-primary/90 active:scale-[0.98]"
+          onClick={onAdd}
+          type="button"
+        >
+          <Icon name="add" size="sm" />
+          <span>{t("add_new_part")}</span>
+        </button>
+      </Can>
     </div>
   );
 }
@@ -1100,14 +1111,16 @@ export default function PartsCatalogPage() {
             {t("parts_inventory_desc")}
           </p>
         </div>
-        <button
-          className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-bold text-on-primary text-sm shadow-md shadow-primary/10 transition-all hover:bg-primary/90 active:scale-[0.98] sm:flex-none md:px-8"
-          onClick={() => setShowAddModal(true)}
-          type="button"
-        >
-          <Icon name="add" size="sm" />
-          <span className="whitespace-nowrap">{t("add_new_part")}</span>
-        </button>
+        <Can perm={{ parts: ["manageCatalog"] }}>
+          <button
+            className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-bold text-on-primary text-sm shadow-md shadow-primary/10 transition-all hover:bg-primary/90 active:scale-[0.98] sm:flex-none md:px-8"
+            onClick={() => setShowAddModal(true)}
+            type="button"
+          >
+            <Icon name="add" size="sm" />
+            <span className="whitespace-nowrap">{t("add_new_part")}</span>
+          </button>
+        </Can>
       </div>
 
       {!showEmptyCatalog && (

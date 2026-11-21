@@ -91,7 +91,7 @@ export const LOANER_AGREEMENT_TEXT: Record<string, LoanerAgreementText> = {
     ],
     acceptance:
       "He leído y acepto las condiciones de préstamo descritas arriba.",
-    title: "Termo de Responsabilidad — Dispositivo de Préstamo",
+    title: "Término de Responsabilidad — Dispositivo de Préstamo",
   },
 };
 

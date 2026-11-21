@@ -8,7 +8,7 @@ import SupplierRmasPage from "..";
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), error: vi.fn() }));
 
-vi.mock("@/hooks/use-can", () => ({ useCan: () => false }));
+vi.mock("@/hooks/use-can", () => ({ useCan: () => true }));
 vi.mock("@/hooks/use-technicians", () => ({
   useTechnicians: () => ({ technicians: [] }),
 }));

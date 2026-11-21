@@ -4,7 +4,7 @@ $ErrorActionPreference = "Stop"
 
 function New-Secret([int]$len = 48) {
     $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_'
-    -join (1..$len | ForEach-Object { $chars[(Get-Random -Max $chars.Length)] })
+    -join (1..$len | ForEach-Object { $chars[[System.Security.Cryptography.RandomNumberGenerator]::GetInt32($chars.Length)] })
 }
 
 # IP local da rede (ignora adaptadores virtuais Docker/WSL/Hyper-V)

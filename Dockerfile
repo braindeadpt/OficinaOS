@@ -12,4 +12,8 @@ RUN DATABASE_URL="postgresql://build:build@localhost:5432/build" bun run build
 ENV NODE_ENV=production
 EXPOSE 4000
 
+# Run as the image's non-root user; /app/uploads is the named-volume write path.
+RUN mkdir -p /app/uploads && chown bun:bun /app/uploads
+USER bun
+
 CMD ["bun", "run", "start:prod"]

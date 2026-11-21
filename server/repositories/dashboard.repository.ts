@@ -257,5 +257,7 @@ export function findKanbanJobs(prisma: DbClient, where: Prisma.JobWhereInput) {
       device: { select: { model: true, brand: { select: { name: true } } } },
     },
     orderBy: [{ isUrgent: "desc" }, { createdAt: "desc" }],
+    // Cap the board — an unbounded include×2 query ran per dashboard poll.
+    take: 200,
   });
 }
