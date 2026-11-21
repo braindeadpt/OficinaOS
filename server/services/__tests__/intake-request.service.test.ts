@@ -30,7 +30,9 @@ function mockPrisma(
       create: vi.fn(),
       findMany: vi.fn().mockResolvedValue([]),
       findUnique: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       ...((overrides as Record<string, unknown>).intakeRequest || {}),
     },
     job: {
@@ -40,6 +42,9 @@ function mockPrisma(
     $queryRaw: vi.fn().mockResolvedValue([{ lastSeq: 7 }]),
     ...overrides,
   };
+  (mock as { $transaction?: unknown }).$transaction = vi.fn(
+    async (fn: (tx: unknown) => unknown) => await fn(mock)
+  );
   return mock as unknown as PrismaClient;
 }
 
@@ -248,12 +253,9 @@ describe("convertIntakeRequest", () => {
 
     await convertIntakeRequest(prisma, "req-1", "job-1");
 
-    expect(prisma.intakeRequest.update).toHaveBeenCalledWith({
-      data: {
-        job: { connect: { id: "job-1" } },
-        status: "CONVERTED",
-      },
-      where: { id: "req-1" },
+    expect(prisma.intakeRequest.updateMany).toHaveBeenCalledWith({
+      data: { jobId: "job-1", status: "CONVERTED" },
+      where: { id: "req-1", status: "PENDING" },
     });
     expect(prisma.customer.update).not.toHaveBeenCalled();
   });

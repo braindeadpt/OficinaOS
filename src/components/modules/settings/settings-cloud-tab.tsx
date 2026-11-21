@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import ConfirmDiscardDialog from "@/components/ui/confirm-discard-dialog";
 import { Field } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
@@ -29,8 +30,10 @@ interface CloudStation {
 }
 
 export default function SettingsCloudTab({
+  onDirtyChange,
   onToast,
 }: {
+  onDirtyChange?: (dirty: boolean) => void;
   onToast: (msg: string, type: "success" | "error") => void;
 }) {
   const { t } = useTranslation();
@@ -44,6 +47,8 @@ export default function SettingsCloudTab({
     expiresAt: string;
   } | null>(null);
   const [stations, setStations] = useState<CloudStation[] | null>(null);
+  const [confirmUnpair, setConfirmUnpair] = useState(false);
+  const [confirmRevokeId, setConfirmRevokeId] = useState<string | null>(null);
 
   const stationStatus = (s: CloudStation): string => {
     if (s.revokedAt) {
@@ -319,7 +324,7 @@ export default function SettingsCloudTab({
                     {s.scope === "diag" && !s.revokedAt && (
                       <Button
                         disabled={busy}
-                        onClick={() => handleRevokeStation(s.id)}
+                        onClick={() => setConfirmRevokeId(s.id)}
                         size="sm"
                         variant="destructive"
                       >
@@ -338,7 +343,10 @@ export default function SettingsCloudTab({
           </div>
 
           <SettingsStorefrontSection onToast={onToast} />
-          <SettingsInvoicingSection onToast={onToast} />
+          <SettingsInvoicingSection
+            onDirtyChange={onDirtyChange}
+            onToast={onToast}
+          />
 
           <div className="flex gap-2">
             <Button
@@ -352,13 +360,48 @@ export default function SettingsCloudTab({
             <Button
               disabled={busy}
               icon="link_off"
-              onClick={handleUnpair}
+              onClick={() => setConfirmUnpair(true)}
               variant="destructive"
             >
               {t("cloud_disconnect")}
             </Button>
           </div>
         </>
+      )}
+
+      {confirmUnpair && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay">
+          <ConfirmDiscardDialog
+            description={t("cloud_settings_desc")}
+            discardLabel={t("cloud_disconnect")}
+            keepLabel={t("cancel")}
+            onDiscard={() => {
+              setConfirmUnpair(false);
+              handleUnpair();
+            }}
+            onKeepEditing={() => setConfirmUnpair(false)}
+            open
+            title={t("cloud_disconnect")}
+          />
+        </div>
+      )}
+
+      {confirmRevokeId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay">
+          <ConfirmDiscardDialog
+            description={t("cloud_station_revoked")}
+            discardLabel={t("cloud_station_revoke")}
+            keepLabel={t("cancel")}
+            onDiscard={() => {
+              const tokenId = confirmRevokeId;
+              setConfirmRevokeId(null);
+              handleRevokeStation(tokenId);
+            }}
+            onKeepEditing={() => setConfirmRevokeId(null)}
+            open
+            title={t("cloud_station_revoke")}
+          />
+        </div>
       )}
     </div>
   );

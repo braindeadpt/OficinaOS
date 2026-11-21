@@ -253,6 +253,7 @@ describe("PUT /api/settings/whatsapp — gates evolution", () => {
       fakePrisma({
         ...EVO_ROW,
         cloudEntitlements: ["whatsapp-bot", "remarketing"],
+        cloudSyncedAt: new Date(),
       })
     );
     const res = await app.inject({

@@ -156,11 +156,15 @@ const SHOP_FORM_DEFAULT = {
   labelSize: "40x20" as "40x20" | "57x32" | "62x29",
   printerMode: "browser" as "browser" | "escpos",
   printerHost: "",
-  printerPort: 9100,
+  printerPort: "9100",
   printerHighContrast: false,
   monthlyRevenueGoal: "",
   reviewUrl: "",
 };
+
+function formsEqual(a: typeof SHOP_FORM_DEFAULT, b: typeof SHOP_FORM_DEFAULT) {
+  return (Object.keys(a) as (keyof typeof a)[]).every((k) => a[k] === b[k]);
+}
 
 function formFromSettings(shopSettings: ShopSettings) {
   const paper = shopSettings.receiptPaper as "58mm" | "80mm" | "a4" | null;
@@ -184,7 +188,9 @@ function formFromSettings(shopSettings: ShopSettings) {
       ? "escpos"
       : "browser") as "browser" | "escpos",
     printerHost: shopSettings.printerHost ?? "",
-    printerPort: shopSettings.printerPort ?? 9100,
+    // Kept as a string so clearing the field doesn't snap back to 9100 —
+    // coerced to a number only on save / printer test.
+    printerPort: String(shopSettings.printerPort ?? 9100),
     printerHighContrast: shopSettings.printerHighContrast ?? false,
     monthlyRevenueGoal: shopSettings.monthlyRevenueGoal?.toString() ?? "",
     reviewUrl: shopSettings.reviewUrl ?? "",
@@ -225,13 +231,20 @@ export default function SettingsShopTab({
   }));
 
   useEffect(() => {
-    if (shopSettings) {
-      const form = formFromSettings(shopSettings);
-      setShopForm(form);
-      setShopFormInitial(form);
-      setGoalError(null);
+    if (!shopSettings) {
+      return;
     }
-  }, [shopSettings]);
+    // Reseeding on every store identity change would wipe in-progress edits
+    // (e.g. a background refetch or the post-save refresh). Only take fresh
+    // server data when the form is pristine.
+    if (!formsEqual(shopForm, shopFormInitial)) {
+      return;
+    }
+    const form = formFromSettings(shopSettings);
+    setShopForm(form);
+    setShopFormInitial(form);
+    setGoalError(null);
+  }, [shopSettings, shopForm, shopFormInitial]);
 
   useEffect(() => {
     if (!shopSettings) {
@@ -260,6 +273,7 @@ export default function SettingsShopTab({
         ...shopForm,
         monthlyRevenueGoal: parsedGoal,
         printerHost: shopForm.printerHost.trim() || null,
+        printerPort: Number(shopForm.printerPort) || 9100,
       };
       // intakeTerms is omitted when untouched: another workstation may have
       // saved newer clauses since this form loaded, and resending the stale
@@ -285,7 +299,7 @@ export default function SettingsShopTab({
     try {
       await api.post("/settings/printer-test", {
         host: shopForm.printerHost.trim() || undefined,
-        port: shopForm.printerPort,
+        port: Number(shopForm.printerPort) || 9100,
       });
       onToast(t("print_test_success"), "success");
     } catch {
@@ -539,7 +553,7 @@ export default function SettingsShopTab({
                   onChange={(e) => {
                     setShopForm((f) => ({
                       ...f,
-                      printerPort: Number(e.target.value) || 9100,
+                      printerPort: e.target.value,
                     }));
                     onDirtyChange(true);
                   }}

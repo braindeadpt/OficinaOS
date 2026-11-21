@@ -110,6 +110,50 @@ export function fetchCsrfToken(): Promise<string | null> {
 
 const MUTATION_METHODS = new Set(["post", "put", "patch", "delete"]);
 
+const AUTH_ENDPOINT_PREFIXES = [
+  "/auth/sign-in",
+  "/auth/sign-out",
+  "/auth/get-session",
+  "/auth/change-password",
+  "/auth/must-change-password",
+  "/auth/request-password-reset",
+  "/auth/reset-password",
+  "/auth/two-factor/",
+];
+
+const PUBLIC_ROUTE_PREFIXES = [
+  "/login",
+  "/setup",
+  "/reset-password",
+  "/tracking",
+  "/sign",
+  "/pre-check",
+  "/embed",
+  "/help",
+];
+
+// Redirect to /login only when a session exists to lose (401 = expired) and
+// the current page isn't public — tracking/sign/embed pages fire their own
+// 401s and must never bounce the visitor to /login.
+async function redirectOnSessionExpiry(url: string): Promise<void> {
+  if (AUTH_ENDPOINT_PREFIXES.some((ep) => url.includes(ep))) {
+    return;
+  }
+  const { pathname } = window.location;
+  const isPublicRoute = PUBLIC_ROUTE_PREFIXES.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`)
+  );
+  if (isPublicRoute) {
+    return;
+  }
+  // Dynamic import: the auth store imports this module, so a static import
+  // here would be a circular dependency.
+  const { useAuthStore } = await import("@/stores/auth");
+  if (useAuthStore.getState().isAuthenticated) {
+    window.location.href = "/login";
+  }
+}
+
 api.interceptors.request.use(async (config) => {
   if (MUTATION_METHODS.has(config.method?.toLowerCase() ?? "")) {
     const token = await fetchCsrfToken();
@@ -152,21 +196,7 @@ api.interceptors.response.use(
     }
 
     if (error.response?.status === 401) {
-      const url = error.config?.url ?? "";
-      const authEndpoints = [
-        "/auth/sign-in",
-        "/auth/sign-out",
-        "/auth/get-session",
-        "/auth/change-password",
-        "/auth/must-change-password",
-        "/auth/request-password-reset",
-        "/auth/reset-password",
-        "/auth/two-factor/",
-      ];
-      const isAuthEndpoint = authEndpoints.some((ep) => url.includes(ep));
-      if (!isAuthEndpoint) {
-        window.location.href = "/login";
-      }
+      await redirectOnSessionExpiry(error.config?.url ?? "");
     }
     const apiError = error.response?.data as
       | { code?: string; message?: string; details?: unknown }

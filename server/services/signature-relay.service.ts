@@ -13,7 +13,8 @@ import {
 import type { FastifyBaseLogger } from "fastify";
 import { decryptSecret } from "../lib/crypto.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
-import { cloudFetch, HINT_TTL_MS } from "./cloud.service.js";
+import { HINT_TTL_MS } from "../utils/modules.js";
+import { cloudFetch } from "./cloud.service.js";
 import { submitSignatureSession } from "./signature-session.service.js";
 
 // v1: the link is valid only while the intake dialog stays open — it exists

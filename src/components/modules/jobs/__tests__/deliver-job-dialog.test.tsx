@@ -66,20 +66,17 @@ describe("DeliverJobDialog", () => {
       })
     );
     await waitFor(() => expect(onDelivered).toHaveBeenCalled());
-    expect(mockAddPayment).toHaveBeenCalledWith("job-1", {
-      amount: 120,
-      method: "CASH",
-    });
+    // Payment travels inside the transition request — a refused delivery
+    // must not leave an orphan payment behind.
+    expect(mockAddPayment).not.toHaveBeenCalled();
     expect(mockTransitionStatus).toHaveBeenCalledWith(
       "job-1",
       "DELIVERED",
       undefined,
       undefined,
       undefined,
-      undefined
-    );
-    expect(mockAddPayment.mock.invocationCallOrder[0]).toBeLessThan(
-      mockTransitionStatus.mock.invocationCallOrder[0]
+      undefined,
+      { amount: 120, method: "CASH" }
     );
     expect(mockPrintJobReceipt).toHaveBeenCalledWith("job-1");
   });
@@ -119,6 +116,7 @@ describe("DeliverJobDialog", () => {
     expect(mockTransitionStatus).toHaveBeenCalledWith(
       "job-1",
       "DELIVERED",
+      undefined,
       undefined,
       undefined,
       undefined,
@@ -178,7 +176,8 @@ describe("DeliverJobDialog", () => {
         undefined,
         undefined,
         undefined,
-        true
+        true,
+        undefined
       )
     );
   });
@@ -208,7 +207,8 @@ describe("DeliverJobDialog", () => {
         undefined,
         undefined,
         undefined,
-        false
+        false,
+        undefined
       )
     );
   });

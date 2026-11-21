@@ -121,6 +121,10 @@ export function findRevenueBreakdown(prisma: DbClient, where: JobWhereInput) {
         select: { model: true, brand: { select: { name: true } } },
       },
       partsUsed: { select: { totalCost: true } },
+      externalRepairs: {
+        where: { status: "RETURNED" },
+        select: { costFinal: true },
+      },
       repairs: { select: { price: true } },
       auditLogs: {
         where: {
@@ -150,6 +154,10 @@ export function findOrdersForReport(prisma: DbClient, where: JobWhereInput) {
         select: { model: true, brand: { select: { name: true } } },
       },
       partsUsed: { select: { totalCost: true } },
+      externalRepairs: {
+        where: { status: "RETURNED" },
+        select: { costFinal: true },
+      },
       repairs: { select: { price: true } },
       auditLogs: {
         where: {
@@ -308,10 +316,12 @@ export function queryRawProfitMargin(
   // the window (e.g. delivered → undone → delivered) would multiply its
   // parts cost once per matching audit row.
   return prisma.$queryRaw<{ cost: string }[]>`
-    SELECT COALESCE(SUM(pt."totalCost"), 0) AS cost
+    SELECT COALESCE(SUM(COALESCE(pt."totalCost", 0) + COALESCE(er."cost", 0)), 0) AS cost
     FROM "jobs" j
     LEFT JOIN (SELECT "jobId", SUM("totalCost") AS "totalCost" FROM "job_parts" GROUP BY "jobId") pt
       ON pt."jobId" = j."id"
+    LEFT JOIN (SELECT "jobId", SUM("costFinal") AS "cost" FROM "external_repairs" WHERE "status" = 'RETURNED' GROUP BY "jobId") er
+      ON er."jobId" = j."id"
     WHERE j."status" IN ('DONE', 'DELIVERED')
       AND EXISTS (
         SELECT 1 FROM "audit_logs" al

@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { requirePermission } from "../middlewares/rbac.js";
+import { isModuleEnabled } from "../utils/modules.js";
 
 // Lightweight capability probe for POS/job UIs — staff roles have no
 // `settings` permission, so they cannot read /api/settings/invoicing to
@@ -20,16 +21,13 @@ export const invoicingRoutes: FastifyPluginAsync = async (app) => {
       const row = await app.prisma.shopSettings.findUnique({
         where: { id: "default" },
       });
-      const modules = Array.isArray(row?.cloudEntitlements)
-        ? (row.cloudEntitlements as string[])
-        : [];
       return reply.send({
         enabled: Boolean(
           row?.invoicingEnabled &&
             row.invoicingAccount &&
             row.invoicingApiKeyEncrypted
         ),
-        module: modules.includes("invoicing"),
+        module: isModuleEnabled(row, "invoicing"),
       });
     }
   );

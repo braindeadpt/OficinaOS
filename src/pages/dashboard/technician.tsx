@@ -66,6 +66,9 @@ const ACTION_ICON_MAP: Record<
   },
 };
 
+// Placeholder quota until the daily goal becomes a per-shop setting.
+const DAILY_GOAL_JOBS = 5;
+
 const PARTS_ALERTS_EMPTY: Array<{
   name: string;
   quantity: number;
@@ -117,11 +120,12 @@ export default function TechnicianDashboardPage() {
       id: s.jobCode,
       repairType: s.repairSummary,
       status: s.status,
+      // estimatedDate is date-only ("YYYY-MM-DD") — appending T00:00:00
+      // keeps it a local midnight so the locale date doesn't shift a day.
       time: s.estimatedDate
-        ? new Date(s.estimatedDate).toLocaleTimeString(i18n.language, {
-            hour: "2-digit",
-            minute: "2-digit",
-          })
+        ? new Date(`${s.estimatedDate}T00:00:00`).toLocaleDateString(
+            i18n.language
+          )
         : "—",
     }));
   }, [techData?.todaySchedule, i18n.language]);
@@ -206,26 +210,6 @@ export default function TechnicianDashboardPage() {
             {t("tech_dashboard.subtitle")}
           </p>
         </div>
-        <div className="flex w-full flex-wrap gap-3 sm:w-auto">
-          <button
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-surface-container-highest px-4 py-2.5 font-bold font-headline text-on-secondary-fixed-variant text-sm transition-all hover:bg-surface-container-high sm:flex-none md:px-6"
-            type="button"
-          >
-            <Icon className="text-[18px] md:text-[20px]" name="monitoring" />
-            <span className="whitespace-nowrap">
-              {t("tech_dashboard.my_performance")}
-            </span>
-          </button>
-          <button
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 font-bold font-headline text-on-primary text-sm transition-all hover:opacity-90 sm:flex-none md:px-8"
-            type="button"
-          >
-            <Icon className="text-[18px] md:text-[20px]" name="swap_horiz" />
-            <span className="whitespace-nowrap">
-              {t("tech_dashboard.update_status")}
-            </span>
-          </button>
-        </div>
       </div>
 
       <div className="mb-10 grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6 lg:grid-cols-4">
@@ -248,27 +232,27 @@ export default function TechnicianDashboardPage() {
 
         <MetricCard
           detail={
-            completedToday >= 5
+            completedToday >= DAILY_GOAL_JOBS
               ? t("tech_dashboard.daily_goal_achieved")
               : t("tech_dashboard.daily_goal_keep_going")
           }
           icon="emoji_events"
           iconColor="text-tertiary"
           label={t("tech_dashboard.daily_goal")}
-          value={`${completedToday}/5`}
+          value={`${completedToday}/${DAILY_GOAL_JOBS}`}
         >
           <div className="h-1 w-full overflow-hidden rounded-full bg-surface-container-highest">
             <div
               className="h-full bg-tertiary"
               style={{
-                width: `${Math.min(100, Math.round((completedToday / 5) * 100))}%`,
+                width: `${Math.min(100, Math.round((completedToday / DAILY_GOAL_JOBS) * 100))}%`,
               }}
             />
           </div>
           <span className="mt-2 block font-bold text-tertiary text-xs">
             {t("tech_dashboard.daily_goal_progress", {
               completed: completedToday,
-              target: 5,
+              target: DAILY_GOAL_JOBS,
             })}
           </span>
         </MetricCard>
@@ -285,7 +269,9 @@ export default function TechnicianDashboardPage() {
               <div className="h-2 w-2 rounded-full bg-tertiary" key={n} />
             ))}
           </div>
-          {waitingForParts > 0 && (
+          {/* "1 arriving today" is literal — show it only for a single
+              pending part; other counts read off the value above. */}
+          {waitingForParts === 1 && (
             <p className="mt-3 font-bold text-tertiary text-xs">
               {t("tech_dashboard.one_arriving_today")}
             </p>
@@ -293,12 +279,12 @@ export default function TechnicianDashboardPage() {
         </MetricCard>
 
         <MetricCard
-          detail={`${avgRepairTime}${t("tech_dashboard.avg_repair_time_unit")}`}
+          detail={`${avgRepairTime.toFixed(1)}${t("tech_dashboard.avg_repair_time_unit")}`}
           icon="timer"
           iconColor="text-primary-container"
           label={t("tech_dashboard.avg_repair_time")}
           unit="h"
-          value={String(avgRepairTime)}
+          value={avgRepairTime.toFixed(1)}
         >
           <div className="flex gap-1">
             {[1, 2, 3, 4, 5].map((i) => (

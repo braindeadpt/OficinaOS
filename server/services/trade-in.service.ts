@@ -122,5 +122,14 @@ export async function transitionTradeIn(
   if (target === "PURCHASED" && !tradeIn.signatureDataUrl) {
     throw new AppError("TRADE_IN_SIGNATURE_REQUIRED");
   }
-  return await update(prisma, id, { status: target as never });
+  // Conditional claim: two concurrent transitions must not both pass the
+  // status check — the loser gets count 0 instead of a second transition.
+  const claimed = await prisma.tradeIn.updateMany({
+    data: { status: target as never },
+    where: { id, status: tradeIn.status },
+  });
+  if (claimed.count === 0) {
+    throw new AppError("TRADE_IN_INVALID_STATE");
+  }
+  return await prisma.tradeIn.findUniqueOrThrow({ where: { id } });
 }

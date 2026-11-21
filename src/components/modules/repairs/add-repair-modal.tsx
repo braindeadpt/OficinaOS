@@ -16,7 +16,11 @@ export interface RepairFormData {
   name: string;
 }
 
-const PRICE_REGEX = /^\d*\.?\d{0,2}$/;
+const PRICE_REGEX = /^\d*([.,]\d{0,2})?$/;
+
+function parseAmount(raw: string): number {
+  return Number.parseFloat(raw.replace(",", "."));
+}
 
 const INITIAL_FORM: RepairFormData = {
   basePrice: "",
@@ -49,7 +53,7 @@ function isDirty(
     return (
       form.name !== editingRepair.name ||
       form.category !== (editingRepair.category as RepairCategoryType) ||
-      Number.parseFloat(form.basePrice) !==
+      parseAmount(form.basePrice) !==
         Number.parseFloat(String(editingRepair.defaultPrice))
     );
   }
@@ -105,11 +109,7 @@ export default function AddRepairModal({
       if (key === "name" && value.toString().trim()) {
         setErrors((prev) => ({ ...prev, name: undefined }));
       }
-      if (
-        key === "basePrice" &&
-        value &&
-        Number.parseFloat(String(value)) > 0
-      ) {
+      if (key === "basePrice" && value && parseAmount(String(value)) > 0) {
         setErrors((prev) => ({ ...prev, basePrice: undefined }));
       }
     },
@@ -135,7 +135,7 @@ export default function AddRepairModal({
     if (!form.name.trim()) {
       newErrors.name = t("repair_modal.error_name_required");
     }
-    const priceVal = Number.parseFloat(form.basePrice);
+    const priceVal = parseAmount(form.basePrice);
     if (!form.basePrice || Number.isNaN(priceVal) || priceVal <= 0) {
       newErrors.basePrice = t("repair_modal.error_price_invalid");
     }
@@ -278,7 +278,7 @@ export default function AddRepairModal({
                   autoComplete="off"
                   className="ps-10 font-mono"
                   id="repair-price"
-                  min="0"
+                  inputMode="decimal"
                   onChange={(e) => {
                     const val = e.target.value;
                     if (val === "" || PRICE_REGEX.test(val)) {
@@ -286,8 +286,6 @@ export default function AddRepairModal({
                     }
                   }}
                   placeholder="0"
-                  step="0.01"
-                  type="number"
                   value={form.basePrice}
                 />
                 {errors.basePrice && (

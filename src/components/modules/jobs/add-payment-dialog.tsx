@@ -7,12 +7,18 @@ import { useFormatCurrency } from "@/hooks/use-format-currency";
 import type { ApiError } from "@/lib/api";
 import { useJobsStore } from "@/stores/jobs";
 
+const AMOUNT_REGEX = /^\d*([.,]\d{0,2})?$/;
+
 interface AddPaymentDialogProps {
   balanceDue: number;
   jobId: string;
   onAdded: () => void;
   onClose: () => void;
   open: boolean;
+}
+
+function parseAmount(raw: string): number {
+  return Number.parseFloat(raw.replace(",", "."));
 }
 
 export default function AddPaymentDialog({
@@ -36,7 +42,10 @@ export default function AddPaymentDialog({
       return;
     }
     setMethod("CASH");
-    setAmount(balanceDue > 0 ? String(balanceDue) : "");
+    // Normalize to cents first — a float balance like 35.0499999 must
+    // prefill "35.05", the exact value the server recomputes from decimals.
+    const balanceCents = Math.round(balanceDue * 100);
+    setAmount(balanceCents > 0 ? (balanceCents / 100).toFixed(2) : "");
     setReference("");
     setNote("");
     setSubmitError(null);
@@ -60,7 +69,7 @@ export default function AddPaymentDialog({
   }, [open, onClose]);
 
   const handleSubmit = useCallback(async () => {
-    const parsedAmount = Number.parseFloat(amount);
+    const parsedAmount = parseAmount(amount);
     if (Number.isNaN(parsedAmount) || parsedAmount <= 0) {
       return;
     }
@@ -92,7 +101,7 @@ export default function AddPaymentDialog({
     return null;
   }
 
-  const parsedAmount = Number.parseFloat(amount);
+  const parsedAmount = parseAmount(amount);
   const canSubmit =
     !Number.isNaN(parsedAmount) && parsedAmount > 0 && !submitting;
   const remainingAfter =
@@ -160,11 +169,12 @@ export default function AddPaymentDialog({
                 className="h-12 w-full rounded-xl bg-surface-container-highest px-4 text-on-surface"
                 id="payment-amount"
                 inputMode="decimal"
-                max={balanceDue}
-                min="0.01"
-                onChange={(e) => setAmount(e.target.value)}
-                step="0.01"
-                type="number"
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "" || AMOUNT_REGEX.test(v)) {
+                    setAmount(v);
+                  }
+                }}
                 value={amount}
               />
               <p className="mt-1 font-label text-on-surface-variant text-xs">

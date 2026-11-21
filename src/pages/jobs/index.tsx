@@ -45,6 +45,17 @@ export default function JobsPage() {
   );
   const [groupFilter, setGroupFilter] = useState<StatusGroupKey | "ALL">("ALL");
   const [searchQuery, setSearchQuery] = useState("");
+
+  // ?status= deep links can arrive while the page is already mounted
+  // (command palette, dashboard links) — keep the filter in sync.
+  useEffect(() => {
+    setStatusFilter(
+      requestedStatus &&
+        (Object.values(JobStatus) as string[]).includes(requestedStatus)
+        ? (requestedStatus as JobStatusType)
+        : "ALL"
+    );
+  }, [requestedStatus]);
   const openIntakeModal = useUiStore((s) => s.openIntakeModal);
   const debouncedSearch = useDebounce(searchQuery, 300);
 

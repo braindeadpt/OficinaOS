@@ -48,9 +48,11 @@ export const tradeInsRoutes: FastifyPluginAsync = async (app) => {
           throw new AppError("VALIDATION_ERROR");
         }
       }
+      const limit = Math.min(Math.max(1, Number(q.limit) || 20), 100);
+      const page = Math.max(1, Number(q.page) || 1);
       const result = await listTradeIns(app.prisma, {
-        limit: q.limit ? Number(q.limit) : undefined,
-        page: q.page ? Number(q.page) : undefined,
+        limit,
+        page,
         status: q.status,
       });
       return reply.send(result);

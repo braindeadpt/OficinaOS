@@ -104,7 +104,9 @@ jobs:
         with:
           images: ${{ env.IMAGE }}
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
+            # `latest` is the shop auto-update channel (watchtower pulls it) —
+            # it must follow released tags, not every main push.
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
             type=ref,event=branch
             type=semver,pattern={{version}}
 

@@ -1,6 +1,7 @@
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
+import { isModuleEnabled } from "../utils/modules.js";
 import {
   resolveWhatsAppChannel,
   sendWhatsAppTemplateVia,
@@ -48,12 +49,10 @@ export async function runRemarketingSweep(
   ) {
     return 0;
   }
-  const modules = Array.isArray(settings.cloudEntitlements)
-    ? (settings.cloudEntitlements as string[])
-    : [];
-  // Hint de UI — a enforcement real é server-side: o envio passa pelo
-  // relay da cloud quando as credenciais migraram.
-  if (!modules.includes(MODULE)) {
+  // Gate com TTL: no transporte "local" (token Meta legacy) o envio vai
+  // direto à Graph API sem enforcement da cloud — a cache tem de estar
+  // fresca para o módulo contar como ativo.
+  if (!isModuleEnabled(settings, MODULE)) {
     return 0;
   }
   const channel = resolveWhatsAppChannel(settings);

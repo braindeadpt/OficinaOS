@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Can } from "@/components/modules/can";
 import EditCustomerDialog from "@/components/modules/customers/edit-customer-dialog";
 import CostSummary from "@/components/modules/jobs/cost-summary";
+import JobExternalRepairsSection from "@/components/modules/jobs/job-external-repairs-section";
 import JobIntakeChips from "@/components/modules/jobs/job-intake-chips";
 import JobNotesSection from "@/components/modules/jobs/job-notes-section";
 import JobPartsSection from "@/components/modules/jobs/job-parts-section";
@@ -285,7 +286,10 @@ export default function JobDetailPage() {
     };
   }, [job]);
 
-  if (loading) {
+  // Full skeleton only for the first load — `fetchJob` also runs as the
+  // onChanged refetch for every section below, and flashing the skeleton on
+  // each refetch wipes the page the user is looking at.
+  if (loading && !job) {
     return (
       <div className="mx-auto max-w-3xl animate-pulse px-4 py-6 sm:px-6 lg:max-w-4xl">
         <div className="h-5 w-32 rounded bg-surface-container-high" />
@@ -316,7 +320,7 @@ export default function JobDetailPage() {
     );
   }
 
-  if (error || !job) {
+  if (!job) {
     return (
       <div className="py-20 text-center">
         <Icon className="text-3xl text-error" name="error" />
@@ -646,6 +650,15 @@ export default function JobDetailPage() {
             {t("rmas.title")}
           </Link>
         </Can>
+      </div>
+
+      {/* ── Reparação externa — garantia ou reparador terceiro ── */}
+      <div className="mt-8 rounded-2xl bg-surface-container p-6">
+        <JobExternalRepairsSection
+          jobId={job.id}
+          jobStatus={job.status}
+          onChanged={() => fetchJob()}
+        />
       </div>
 
       {/* ── Notes ── */}

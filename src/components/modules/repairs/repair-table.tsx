@@ -1,5 +1,6 @@
 import type { RepairCategoryType } from "@shared/constants";
 import { useTranslation } from "react-i18next";
+import { Can } from "@/components/modules/can";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
 import { REPAIR_CATEGORY_TONES } from "@/lib/category-display";
 
@@ -119,48 +120,50 @@ export default function RepairTable({
                 </td>
                 <td className="p-4 text-end">
                   <div className="flex items-center justify-end gap-1">
-                    <button
-                      aria-label={t("edit_repair", { name: repair.name })}
-                      className="flex h-11 w-11 items-center justify-center rounded-lg text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-primary"
-                      onClick={() => onEdit(repair)}
-                      title={t("edit_repair", { name: repair.name })}
-                      type="button"
-                    >
-                      <span className="material-symbols-outlined text-[20px]">
-                        edit
-                      </span>
-                    </button>
-                    <button
-                      aria-label={
-                        repair.isActive
-                          ? t("deactivate_repair")
-                          : t("activate_repair")
-                      }
-                      className={`flex h-11 w-11 items-center justify-center rounded-lg transition-colors ${repair.isActive ? "text-on-surface-variant hover:bg-surface-container-high hover:text-primary" : "text-primary hover:bg-primary-container"}`}
-                      disabled={togglingId === repair.id}
-                      onClick={() => onToggleActive(repair)}
-                      title={
-                        repair.isActive
-                          ? t("deactivate_repair")
-                          : t("activate_repair")
-                      }
-                      type="button"
-                    >
-                      <span className="material-symbols-outlined text-[20px]">
-                        {repair.isActive ? "toggle_on" : "toggle_off"}
-                      </span>
-                    </button>
-                    <button
-                      aria-label={t("delete_repair")}
-                      className="flex h-11 w-11 items-center justify-center rounded-lg text-on-surface-variant transition-colors hover:bg-error-container hover:text-on-error-container"
-                      onClick={() => onShowDelete(repair.id)}
-                      title={t("delete_repair")}
-                      type="button"
-                    >
-                      <span className="material-symbols-outlined text-[20px]">
-                        delete
-                      </span>
-                    </button>
+                    <Can perm={{ repairs: ["manageCatalog"] }}>
+                      <button
+                        aria-label={t("edit_repair", { name: repair.name })}
+                        className="flex h-11 w-11 items-center justify-center rounded-lg text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-primary"
+                        onClick={() => onEdit(repair)}
+                        title={t("edit_repair", { name: repair.name })}
+                        type="button"
+                      >
+                        <span className="material-symbols-outlined text-[20px]">
+                          edit
+                        </span>
+                      </button>
+                      <button
+                        aria-label={
+                          repair.isActive
+                            ? t("deactivate_repair")
+                            : t("activate_repair")
+                        }
+                        className={`flex h-11 w-11 items-center justify-center rounded-lg transition-colors ${repair.isActive ? "text-on-surface-variant hover:bg-surface-container-high hover:text-primary" : "text-primary hover:bg-primary-container"}`}
+                        disabled={togglingId === repair.id}
+                        onClick={() => onToggleActive(repair)}
+                        title={
+                          repair.isActive
+                            ? t("deactivate_repair")
+                            : t("activate_repair")
+                        }
+                        type="button"
+                      >
+                        <span className="material-symbols-outlined text-[20px]">
+                          {repair.isActive ? "toggle_on" : "toggle_off"}
+                        </span>
+                      </button>
+                      <button
+                        aria-label={t("delete_repair")}
+                        className="flex h-11 w-11 items-center justify-center rounded-lg text-on-surface-variant transition-colors hover:bg-error-container hover:text-on-error-container"
+                        onClick={() => onShowDelete(repair.id)}
+                        title={t("delete_repair")}
+                        type="button"
+                      >
+                        <span className="material-symbols-outlined text-[20px]">
+                          delete
+                        </span>
+                      </button>
+                    </Can>
                   </div>
                 </td>
               </tr>

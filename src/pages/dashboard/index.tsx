@@ -11,8 +11,9 @@ import { TaskPanel } from "@/components/modules/tasks/task-panel";
 import { Icon } from "@/components/ui/icon";
 import MetricCard from "@/components/ui/metric-card";
 import { useCan } from "@/hooks/use-can";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 import api from "@/lib/api";
-import { currencySymbol, formatNumber } from "@/lib/format";
+import { formatNumber } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth";
 import { useDashboardStore } from "@/stores/dashboard";
 import { useSettingsStore } from "@/stores/settings";
@@ -137,7 +138,7 @@ function MetricsGrid({
   const canViewReturns = useCan({ returns: ["viewSelf"] });
   const canViewShop = useCan({ returns: ["viewShop"] });
   const [warrantyCost, setWarrantyCost] = useState<number | null>(null);
-  const currency = useSettingsStore((s) => s.shopSettings?.currency) ?? "EUR";
+  const fmt = useFormatCurrency();
 
   useEffect(() => {
     if (!(canViewShop && data)) {
@@ -171,7 +172,7 @@ function MetricsGrid({
   const marginDir = marginChange >= 0 ? "up" : "down";
 
   const formatPct = useCallback(
-    (val: number) => `${val >= 0 ? "+" : ""}${val}`,
+    (val: number) => `${val >= 0 ? "+" : ""}${val.toFixed(1)}`,
     []
   );
 
@@ -230,8 +231,7 @@ function MetricsGrid({
         iconColor="text-on-secondary-container"
         label={t("revenue_this_month")}
         labelTooltip={t("dashboard_page.revenue_tooltip")}
-        unit={currencySymbol(currency)}
-        value={data ? data.revenueThisMonth.toFixed(2) : "--"}
+        value={data ? fmt(data.revenueThisMonth) : "--"}
       >
         {data?.revenueChangePct != null && data.revenueThisMonth > 0 && (
           <div
@@ -491,9 +491,13 @@ export default function DashboardPage() {
   const userName = useAuthStore((s) => s.user?.name || s.user?.username || "");
   const { data, fetchDashboard, isLoading } = useDashboardStore();
   const canCreateJob = useCan({ jobs: ["create"] });
+  const canViewReturns = useCan({ returns: ["viewSelf"] });
   const [openReturnsCount, setOpenReturnsCount] = useState(0);
 
   useEffect(() => {
+    if (!canViewReturns) {
+      return;
+    }
     let cancelled = false;
     api
       .get("/return-claims", { params: { status: "OPEN", limit: 1 } })
@@ -508,7 +512,7 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [canViewReturns]);
 
   const aiSettings = useSettingsStore((s) => s.aiSettings);
   const fetchAiSettings = useSettingsStore((s) => s.fetchAiSettings);
@@ -540,8 +544,17 @@ export default function DashboardPage() {
     () => Object.values(pipelineCounts).reduce((sum, c) => sum + c, 0),
     [pipelineCounts]
   );
+  // Bench utilization is active work over jobs still in the shop — closed
+  // statuses (DELIVERED/RETURNED/CANCELLED) would dilute the ratio.
+  const openPipelineTotal =
+    pipelineTotal -
+    pipelineCounts.DELIVERED -
+    pipelineCounts.RETURNED -
+    pipelineCounts.CANCELLED;
   const benchUtilization =
-    pipelineTotal > 0 ? Math.round((activeJobs / pipelineTotal) * 100) : 0;
+    openPipelineTotal > 0
+      ? Math.round((activeJobs / openPipelineTotal) * 100)
+      : 0;
 
   const hasData = pipelineTotal > 0 || data?.completedToday !== undefined;
   const isEmpty = !(isLoading || hasData);

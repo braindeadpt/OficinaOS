@@ -142,6 +142,17 @@ export default function JobsTable({
                         />
                       )}
                       <StatusBadge size="sm" status={job.status} />
+                      {job.rawJob?.externalRepairs?.[0] && (
+                        <span
+                          className="inline-flex items-center gap-0.5 rounded-full bg-tertiary/15 px-2 py-0.5 font-label text-[10px] text-tertiary uppercase"
+                          title={job.rawJob.externalRepairs[0].supplier.name}
+                        >
+                          <Icon name="local_shipping" size="xs" />
+                          {t("external_repairs.badge", {
+                            name: job.rawJob.externalRepairs[0].supplier.name,
+                          })}
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="px-3 pointer-coarse:py-2.5 py-1">

@@ -2,6 +2,7 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 import { toast } from "sonner";
+import { Can } from "@/components/modules/can";
 import { RecordWorkflow } from "@/components/modules/tasks/record-workflow";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -231,15 +232,17 @@ export default function SuppliersPage() {
             {t("suppliers.desc")}
           </p>
         </div>
-        <Button
-          icon="add"
-          onClick={() => setModal("new")}
-          size="md"
-          type="button"
-          variant="primary-gradient"
-        >
-          {t("suppliers.add")}
-        </Button>
+        <Can perm={{ parts: ["manageCatalog"] }}>
+          <Button
+            icon="add"
+            onClick={() => setModal("new")}
+            size="md"
+            type="button"
+            variant="primary-gradient"
+          >
+            {t("suppliers.add")}
+          </Button>
+        </Can>
       </div>
 
       <div className="mb-5">
@@ -311,24 +314,26 @@ export default function SuppliersPage() {
                   {t("suppliers.rma_count", { count: s._count?.rmas ?? 0 })}
                 </span>
                 <div className="flex gap-1">
-                  <button
-                    aria-label={t("edit")}
-                    className="flex h-10 w-10 items-center justify-center rounded-full text-outline hover:bg-surface-container-high"
-                    onClick={() => setModal(s)}
-                    type="button"
-                  >
-                    <span className="material-symbols-outlined">edit</span>
-                  </button>
-                  <button
-                    aria-label={t("suppliers.toggle_active")}
-                    className="flex h-10 w-10 items-center justify-center rounded-full text-outline hover:bg-surface-container-high"
-                    onClick={() => toggleActive(s)}
-                    type="button"
-                  >
-                    <span className="material-symbols-outlined">
-                      {s.isActive ? "visibility_off" : "visibility"}
-                    </span>
-                  </button>
+                  <Can perm={{ parts: ["manageCatalog"] }}>
+                    <button
+                      aria-label={t("edit")}
+                      className="flex h-10 w-10 items-center justify-center rounded-full text-outline hover:bg-surface-container-high"
+                      onClick={() => setModal(s)}
+                      type="button"
+                    >
+                      <span className="material-symbols-outlined">edit</span>
+                    </button>
+                    <button
+                      aria-label={t("suppliers.toggle_active")}
+                      className="flex h-10 w-10 items-center justify-center rounded-full text-outline hover:bg-surface-container-high"
+                      onClick={() => toggleActive(s)}
+                      type="button"
+                    >
+                      <span className="material-symbols-outlined">
+                        {s.isActive ? "visibility_off" : "visibility"}
+                      </span>
+                    </button>
+                  </Can>
                 </div>
               </li>
             ))}

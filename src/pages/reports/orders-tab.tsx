@@ -24,13 +24,8 @@ export default function OrdersTab() {
   const setStatus = useReportsStore((s) => s.setOrdersStatus);
   const fetchOrders = useReportsStore((s) => s.fetchOrders);
   const range = useReportsStore((s) => s.range);
-  const customFrom = useReportsStore((s) => s.customFrom);
-  const customTo = useReportsStore((s) => s.customTo);
 
-  const base =
-    customFrom && customTo
-      ? `from=${encodeURIComponent(customFrom)}&to=${encodeURIComponent(customTo)}`
-      : `range=${range}`;
+  const base = `range=${range}`;
   const pdfUrl = `/api/reports/orders/pdf?${base}${status ? `&status=${status}` : ""}`;
 
   const exportCsv = () => {

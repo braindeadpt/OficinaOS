@@ -22,6 +22,7 @@ const log = {
 
 const SETTINGS = {
   cloudEntitlements: ["invoicing"],
+  cloudSyncedAt: new Date(),
   invoicingAccount: "loja-fix",
   invoicingApiKeyEncrypted: "enc-key",
   invoicingEnabled: true,

@@ -9,6 +9,7 @@ import {
   storefrontUrl,
 } from "../services/storefront.service.js";
 import { logoDataUrlError } from "../utils/file-validation.js";
+import { isModuleEnabled } from "../utils/modules.js";
 import {
   resolveValidationMessage,
   resolveZodErrors,
@@ -97,18 +98,15 @@ export const storefrontRoutes: FastifyPluginAsync = async (app) => {
     },
     async (_req, reply) => {
       const s = await getOrCreateShopSettings(app.prisma);
-      const modules = Array.isArray(s.cloudEntitlements)
-        ? (s.cloudEntitlements as string[])
-        : [];
       const itemCount = await app.prisma.partsCatalog.count({
         where: { listedOnline: true, isActive: true },
       });
       return reply.send({
         ...storefrontView(s, s.cloudApiUrl),
         itemCount,
-        module: modules.includes(MODULE),
+        module: isModuleEnabled(s, MODULE),
         paired: Boolean(s.cloudShopTokenEncrypted),
-        plus: modules.includes(PLUS_MODULE),
+        plus: isModuleEnabled(s, PLUS_MODULE),
       });
     }
   );
@@ -130,20 +128,17 @@ export const storefrontRoutes: FastifyPluginAsync = async (app) => {
         });
       }
       const s = await getOrCreateShopSettings(app.prisma);
-      const modules = Array.isArray(s.cloudEntitlements)
-        ? (s.cloudEntitlements as string[])
-        : [];
       if (!(s.cloudShopTokenEncrypted && s.cloudApiUrl)) {
         throw new AppError("CLOUD_NOT_PAIRED");
       }
-      if (!modules.includes(MODULE)) {
+      if (!isModuleEnabled(s, MODULE)) {
         throw new AppError("CLOUD_MODULE_REQUIRED");
       }
 
       const { description, email, published, slug } = parsed.data;
       assertLogoValid(parsed.data.logo, req.locale);
       // Paid theme fields require storefront-plus — rejected before save.
-      if (hasThemeInput(parsed.data) && !modules.includes(PLUS_MODULE)) {
+      if (hasThemeInput(parsed.data) && !isModuleEnabled(s, PLUS_MODULE)) {
         throw new AppError("CLOUD_MODULE_REQUIRED");
       }
       await app.prisma.shopSettings.update({

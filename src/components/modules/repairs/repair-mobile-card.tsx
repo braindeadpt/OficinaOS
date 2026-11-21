@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Can } from "@/components/modules/can";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
 import { REPAIR_CATEGORY_TONES } from "@/lib/category-display";
 import type { RepairItem } from "./repair-table";
@@ -64,43 +65,47 @@ export default function RepairMobileCard({
         </div>
       </div>
       <div className="mt-3 flex items-center gap-2">
-        <button
-          aria-label={t("edit_repair", { name: repair.name })}
-          className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl font-bold text-on-surface-variant text-xs transition-all hover:bg-surface-container-high hover:text-primary"
-          onClick={() => onEdit(repair)}
-          type="button"
-        >
-          <span className="material-symbols-outlined text-[18px]">edit</span>
-          <span>{t("edit")}</span>
-        </button>
-        <button
-          aria-label={
-            repair.isActive ? t("deactivate_repair") : t("activate_repair")
-          }
-          className={`flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl font-bold text-xs transition-all ${
-            repair.isActive
-              ? "text-on-surface-variant hover:bg-surface-container-high hover:text-primary"
-              : "text-primary hover:bg-primary-container"
-          }`}
-          disabled={togglingId === repair.id}
-          onClick={() => onToggleActive(repair)}
-          type="button"
-        >
-          <span className="material-symbols-outlined text-[18px]">
-            {repair.isActive ? "toggle_on" : "toggle_off"}
-          </span>
-          <span>
-            {repair.isActive ? t("deactivate_repair") : t("activate_repair")}
-          </span>
-        </button>
-        <button
-          aria-label={t("delete_repair")}
-          className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl font-bold text-on-surface-variant text-xs transition-all hover:bg-error-container hover:text-on-error-container"
-          onClick={() => onShowDelete(repair.id)}
-          type="button"
-        >
-          <span className="material-symbols-outlined text-[18px]">delete</span>
-        </button>
+        <Can perm={{ repairs: ["manageCatalog"] }}>
+          <button
+            aria-label={t("edit_repair", { name: repair.name })}
+            className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl font-bold text-on-surface-variant text-xs transition-all hover:bg-surface-container-high hover:text-primary"
+            onClick={() => onEdit(repair)}
+            type="button"
+          >
+            <span className="material-symbols-outlined text-[18px]">edit</span>
+            <span>{t("edit")}</span>
+          </button>
+          <button
+            aria-label={
+              repair.isActive ? t("deactivate_repair") : t("activate_repair")
+            }
+            className={`flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl font-bold text-xs transition-all ${
+              repair.isActive
+                ? "text-on-surface-variant hover:bg-surface-container-high hover:text-primary"
+                : "text-primary hover:bg-primary-container"
+            }`}
+            disabled={togglingId === repair.id}
+            onClick={() => onToggleActive(repair)}
+            type="button"
+          >
+            <span className="material-symbols-outlined text-[18px]">
+              {repair.isActive ? "toggle_on" : "toggle_off"}
+            </span>
+            <span>
+              {repair.isActive ? t("deactivate_repair") : t("activate_repair")}
+            </span>
+          </button>
+          <button
+            aria-label={t("delete_repair")}
+            className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl font-bold text-on-surface-variant text-xs transition-all hover:bg-error-container hover:text-on-error-container"
+            onClick={() => onShowDelete(repair.id)}
+            type="button"
+          >
+            <span className="material-symbols-outlined text-[18px]">
+              delete
+            </span>
+          </button>
+        </Can>
       </div>
     </div>
   );

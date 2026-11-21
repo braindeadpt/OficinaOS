@@ -99,7 +99,7 @@ services:
   # dump (14-day retention) is the rollback path — there is no pre-update
   # dump here, unlike ATUALIZAR.bat.
   watchtower:
-    image: containrrr/watchtower:latest
+    image: containrrr/watchtower:1.7.1
     profiles: ["auto-update"]
     restart: unless-stopped
     environment:

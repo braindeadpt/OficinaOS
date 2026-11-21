@@ -34,6 +34,7 @@ const SETTINGS = {
   whatsappBusinessId: "biz",
   whatsappPhoneNumberId: "pnid",
   cloudEntitlements: ["remarketing"],
+  cloudSyncedAt: new Date(),
   shopName: "Loja Fix",
   countryCode: "PT",
 };

@@ -13,6 +13,8 @@ const CODE_RE = /^RET-\d{4}-000007$/;
 function makePrisma(overrides: Record<string, unknown> = {}) {
   const tradeIn = {
     findUnique: vi.fn().mockResolvedValue(null),
+    findUniqueOrThrow: vi.fn().mockResolvedValue({ id: "ti-1" }),
+    updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     findMany: vi.fn().mockResolvedValue([]),
     count: vi.fn().mockResolvedValue(0),
     create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
@@ -147,7 +149,7 @@ describe("transitionTradeIn", () => {
   it("moves OFFERED to PURCHASED when the seller signature exists", async () => {
     const prisma = prismaWith("OFFERED", "data:image/png;base64,x");
     await transitionTradeIn(prisma, "ti-1", "PURCHASED");
-    expect(prisma.tradeIn.update).toHaveBeenCalledWith(
+    expect(prisma.tradeIn.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: { status: "PURCHASED" } })
     );
   });
@@ -169,7 +171,7 @@ describe("transitionTradeIn", () => {
   it("moves PURCHASED to SOLD and blocks further transitions", async () => {
     const purchased = prismaWith("PURCHASED");
     await transitionTradeIn(purchased, "ti-1", "SOLD");
-    expect(purchased.tradeIn.update).toHaveBeenCalledWith(
+    expect(purchased.tradeIn.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: { status: "SOLD" } })
     );
 
@@ -182,7 +184,7 @@ describe("transitionTradeIn", () => {
   it("cancels an open offer", async () => {
     const prisma = prismaWith("OFFERED");
     await transitionTradeIn(prisma, "ti-1", "CANCELLED");
-    expect(prisma.tradeIn.update).toHaveBeenCalledWith(
+    expect(prisma.tradeIn.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: { status: "CANCELLED" } })
     );
   });

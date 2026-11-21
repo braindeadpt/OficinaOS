@@ -7,6 +7,7 @@ import { dashboardRoutes } from "./routes/dashboard.js";
 import { dataIoRoutes } from "./routes/data-io.js";
 import { demoRoutes } from "./routes/demo.js";
 import { devicesRoutes } from "./routes/devices.js";
+import { externalRepairsRoutes } from "./routes/external-repairs.js";
 import { feedbackRoutes } from "./routes/feedback.js";
 import { healthRoutes } from "./routes/health.js";
 import { intakeRequestsRoutes } from "./routes/intake-requests.js";
@@ -79,6 +80,7 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
   app.register(feedbackRoutes, { prefix: "/api/feedback" });
   app.register(suppliersRoutes, { prefix: "/api/suppliers" });
   app.register(supplierRmasRoutes, { prefix: "/api/supplier-rmas" });
+  app.register(externalRepairsRoutes, { prefix: "/api" });
   app.register(workflowRoutes, { prefix: "/api/workflow" });
   app.register(businessRoutes, { prefix: "/api/business" });
   app.register(purchaseOrdersRoutes, { prefix: "/api/purchase-orders" });

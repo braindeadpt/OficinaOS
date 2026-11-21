@@ -494,6 +494,19 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
       if (!permCheck.success) {
         throw new AppError("FORBIDDEN_STATUS_TRANSITION");
       }
+      // A handover payment inside the transition needs the same permission
+      // as recording it standalone — status rights alone must not collect money.
+      if (parsed.data.payment) {
+        const payPerm = await app.auth.api.userHasPermission({
+          body: {
+            role: getRole(req),
+            permissions: { payments: ["create"] },
+          },
+        });
+        if (!payPerm.success) {
+          throw new AppError("FORBIDDEN");
+        }
+      }
 
       const userId = getUserId(req);
       const notifyCtx = { prisma: app.prisma, wsBroadcast: app.wsBroadcast };
@@ -505,6 +518,7 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
         notifyCtx,
         {
           loanerReturned: parsed.data.loanerReturned,
+          payment: parsed.data.payment,
           requestingRole: getRole(req),
           reason: parsed.data.reason,
           actualLaborHours: parsed.data.actualLaborHours ?? undefined,

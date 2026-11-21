@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   auditLogCreate: vi.fn(),
 }));
 
-const prisma = {
+const prismaBase = {
   job: { findUnique: mocks.jobFindUnique },
   jobPartsWaiting: {
     create: mocks.jobPartsWaitingCreate,
@@ -18,7 +18,13 @@ const prisma = {
     delete: mocks.jobPartsWaitingDelete,
   },
   auditLog: { create: mocks.auditLogCreate },
+};
+const prisma = {
+  ...prismaBase,
 } as unknown as import("@generated/client").PrismaClient;
+(prisma as unknown as { $transaction: unknown }).$transaction = vi.fn(
+  async (fn: (tx: typeof prisma) => unknown) => await fn(prisma)
+);
 
 vi.mock("../services/audit.service.js", () => ({
   createAuditLog: vi.fn().mockResolvedValue(undefined),

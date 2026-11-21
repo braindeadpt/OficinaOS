@@ -53,13 +53,58 @@ export default function JobActionsMenu({ job }: JobActionsMenuProps) {
     setError(null);
   }, []);
 
-  useLayoutEffect(() => {
-    if (!(open && triggerRef.current)) {
+  const reposition = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) {
       return;
     }
-    const rect = triggerRef.current.getBoundingClientRect();
-    setMenuPos({ x: rect.right - 256, y: rect.bottom + 8 });
-  }, [open]);
+    const rect = trigger.getBoundingClientRect();
+    const menuWidth = 256;
+    const menuHeight = menuRef.current?.offsetHeight ?? 0;
+    const x = Math.max(
+      8,
+      Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8)
+    );
+    let y = rect.bottom + 8;
+    // Flip above the trigger when the menu would overflow the viewport
+    // bottom; clamp when neither side fits fully.
+    if (menuHeight > 0 && y + menuHeight > window.innerHeight - 8) {
+      const above = rect.top - menuHeight - 8;
+      y = above >= 8 ? above : Math.max(8, window.innerHeight - menuHeight - 8);
+    }
+    setMenuPos((prev) =>
+      prev && prev.x === x && prev.y === y ? prev : { x, y }
+    );
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      return;
+    }
+    reposition();
+  }, [open, reposition]);
+
+  // Once the menu is mounted, re-run with its real height so the
+  // bottom-overflow flip is accurate (menuPos change stops the loop).
+  useLayoutEffect(() => {
+    if (open && menuPos) {
+      reposition();
+    }
+  }, [open, menuPos, reposition]);
+
+  // The trigger moves under the fixed-position portal when any ancestor —
+  // or the window — scrolls. Recompute so the menu doesn't go stale.
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    window.addEventListener("resize", reposition);
+    document.addEventListener("scroll", reposition, true);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      document.removeEventListener("scroll", reposition, true);
+    };
+  }, [open, reposition]);
 
   useEffect(() => {
     if (!open) {
@@ -147,9 +192,13 @@ export default function JobActionsMenu({ job }: JobActionsMenuProps) {
         menuPos &&
         createPortal(
           <div
-            className="fixed z-50 w-64 rounded-xl border border-outline-variant/20 bg-surface-container-lowest py-2 shadow-2xl"
+            className="fixed z-50 w-64 overflow-y-auto rounded-xl border border-outline-variant/20 bg-surface-container-lowest py-2 shadow-2xl"
             ref={menuRef}
-            style={{ left: menuPos.x, top: menuPos.y }}
+            style={{
+              left: menuPos.x,
+              top: menuPos.y,
+              maxHeight: "calc(100vh - 16px)",
+            }}
           >
             {statusTransitions.length > 0 && (
               <>

@@ -269,7 +269,23 @@ export const pairCloudSchema = z.object({
     .string()
     .trim()
     .max(2048)
-    .regex(/^https?:\/\//, { error: "validations.invalid_url" }),
+    .regex(/^https?:\/\//, { error: "validations.invalid_url" })
+    // The pairing code + shop token travel over this URL — https only,
+    // except loopback (local cloud dev instance).
+    .refine(
+      (value) => {
+        try {
+          const url = new URL(value);
+          return (
+            url.protocol === "https:" ||
+            ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)
+          );
+        } catch {
+          return false;
+        }
+      },
+      { error: "validations.invalid_url" }
+    ),
   code: z
     .string()
     .trim()

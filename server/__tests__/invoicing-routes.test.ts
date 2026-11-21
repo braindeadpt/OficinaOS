@@ -17,6 +17,7 @@ vi.mock("../services/invoicing.service.js", () => ({
 
 interface SettingsRow {
   cloudEntitlements: unknown;
+  cloudSyncedAt: Date | null;
   invoicingAccount: string | null;
   invoicingApiKeyEncrypted: string | null;
   invoicingEnabled: boolean;
@@ -26,6 +27,7 @@ interface SettingsRow {
 function fakePrisma(overrides: Partial<SettingsRow> = {}) {
   const row: SettingsRow = {
     cloudEntitlements: ["invoicing"],
+    cloudSyncedAt: new Date(),
     invoicingAccount: "loja-fix",
     invoicingApiKeyEncrypted: "v1:enc",
     invoicingEnabled: true,

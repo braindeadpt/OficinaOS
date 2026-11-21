@@ -196,22 +196,25 @@ export async function setPaymentOnDelivery(
   method: PaymentOnDeliveryMethodType,
   userId: string
 ) {
-  const job = await findJobWithPayments(prisma, jobId);
-  if (!job) {
-    return null;
-  }
-  if (isPaymentBlocked(job.status)) {
-    return { error: "JOB_IN_TERMINAL_STATUS" as const };
-  }
-  if (job.paymentOnDeliveryMethod) {
-    return { error: "PAYMENT_ON_DELIVERY_ALREADY_MARKED" as const };
-  }
-  const { balanceDue } = computeJobBalance(job);
-  if (balanceDue <= 0) {
-    return { error: "NO_PAYMENT_DUE" as const };
-  }
+  return await prisma.$transaction(async (tx) => {
+    // Lock the row and revalidate inside the tx — the prechecks (status,
+    // already-marked, balance) race with a concurrent mark/deliver.
+    await tx.$queryRaw`SELECT "id" FROM "jobs" WHERE "id" = ${jobId} FOR UPDATE`;
+    const job = await findJobWithPayments(tx, jobId);
+    if (!job) {
+      return null;
+    }
+    if (isPaymentBlocked(job.status)) {
+      return { error: "JOB_IN_TERMINAL_STATUS" as const };
+    }
+    if (job.paymentOnDeliveryMethod) {
+      return { error: "PAYMENT_ON_DELIVERY_ALREADY_MARKED" as const };
+    }
+    const { balanceDue } = computeJobBalance(job);
+    if (balanceDue <= 0) {
+      return { error: "NO_PAYMENT_DUE" as const };
+    }
 
-  await prisma.$transaction(async (tx) => {
     await jobUpdate(tx, jobId, { paymentOnDeliveryMethod: method }, {});
     await createAuditLog(tx, {
       action: AuditAction.JOB_UPDATED,
@@ -220,9 +223,9 @@ export async function setPaymentOnDelivery(
       toValue: method,
       userId,
     });
-  });
 
-  return { balanceDue, method };
+    return { balanceDue, method };
+  });
 }
 
 export async function clearPaymentOnDelivery(
