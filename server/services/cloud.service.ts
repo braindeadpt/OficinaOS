@@ -429,13 +429,15 @@ export async function getCloudStatus(
 }
 
 /** Remove the pairing — Pro modules stop working until re-paired.
- * Returns whether the cloud-side shop data was confirmed deleted. */
+ * `cloudDeleted` reports the remote outcome: `true` deletion confirmed,
+ * `false` attempted but unconfirmed (data may remain), `null` nothing
+ * was ever sent — distinguishable from a confirmed cleanup. */
 export async function unpairCloud(
   prisma: PrismaClient,
   log?: FastifyBaseLogger
-): Promise<{ cloudDeleted: boolean }> {
+): Promise<{ cloudDeleted: boolean | null }> {
   const settings = await getOrCreateShopSettings(prisma);
-  let cloudDeleted = false;
+  let cloudDeleted: boolean | null = null;
   // Explicit unpair is a cancellation: the cloud deletes the Shop row and
   // every owned record cascades with it — tokens, entitlements, relay
   // queues, reports — so nothing of the shop's survives the relationship.
@@ -448,12 +450,14 @@ export async function unpairCloud(
       token,
     }).catch(() => null);
     if (res === null) {
+      cloudDeleted = false;
       log?.warn(
         "cloud unreachable during unpair — cloud-side data left behind"
       );
     } else if (res.status === 404) {
       // Legacy cloud without /shops/me: only the narrow credentials wipe
       // exists, so remote data (queues, pages, reports) is left behind.
+      cloudDeleted = false;
       await cloudFetch(settings.cloudApiUrl, "/shops/whatsapp-credentials", {
         method: "DELETE",
         token,
@@ -461,12 +465,11 @@ export async function unpairCloud(
     } else if (res.ok) {
       cloudDeleted = true;
     } else {
+      cloudDeleted = false;
       log?.warn({ status: res.status }, "cloud shop delete failed");
     }
-  } else {
-    // Nothing was ever sent — nothing to delete remotely.
-    cloudDeleted = true;
   }
+  // No credentials stored → never paired → cloudDeleted stays null.
   await prisma.shopSettings.update({
     where: { id: "default" },
     data: {

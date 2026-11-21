@@ -154,9 +154,9 @@ export default function SettingsCloudTab({
   async function handleUnpair() {
     setBusy(true);
     try {
-      const res = (await api.delete("/settings/cloud")) as {
-        cloudDeleted?: boolean;
-      };
+      const { data: res } = await api.delete<{ cloudDeleted: boolean }>(
+        "/settings/cloud"
+      );
       setStatus({
         paired: false,
         apiUrl,
