@@ -15,11 +15,12 @@ import {
 } from "@shared/schemas/job.schema";
 import { paymentOnDeliverySchema } from "@shared/schemas/payment.schema";
 import { sendQuoteSchema } from "@shared/schemas/quote.schema";
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { resolveUrls } from "../config/env.js";
 import { requirePermission } from "../middlewares/rbac.js";
 import { issueInvoiceForJob } from "../services/invoicing.service.js";
 import {
+  type AssignAccess,
   computeMargin,
   create as createJob,
   getById as getJobById,
@@ -85,6 +86,19 @@ function requestedLocale(body: unknown): string | null {
     (LANGUAGES as readonly string[]).includes(locale)
     ? locale
     : null;
+}
+
+async function resolveAssignAccess(req: FastifyRequest): Promise<AssignAccess> {
+  const role = getRole(req);
+  const [assign, selfAssign] = await Promise.all([
+    req.server.auth.api.userHasPermission({
+      body: { role, permissions: { jobs: ["assign"] } },
+    }),
+    req.server.auth.api.userHasPermission({
+      body: { role, permissions: { jobs: ["selfAssign"] } },
+    }),
+  ]);
+  return { canAssign: assign.success, canSelfAssign: selfAssign.success };
 }
 
 // biome-ignore lint/suspicious/useAwait: FastifyPluginAsync requires async
@@ -426,7 +440,17 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
         });
       }
       const userId = getUserId(req);
-      const result = await updateJob(app.prisma, id, parsed.data, userId);
+      const assignAccess =
+        parsed.data.technicianId === undefined
+          ? undefined
+          : await resolveAssignAccess(req);
+      const result = await updateJob(
+        app.prisma,
+        id,
+        parsed.data,
+        userId,
+        assignAccess
+      );
       if (!result) {
         throw new AppError("JOB_NOT_FOUND");
       }
