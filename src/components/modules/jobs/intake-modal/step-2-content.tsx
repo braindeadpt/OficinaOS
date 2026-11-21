@@ -7,9 +7,9 @@ import { Field } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { useIntakeTerms } from "@/hooks/use-intake-terms";
 import { fetchLoanerDevices, type LoanerDevice } from "@/lib/api-loaners";
 import { buildJobPayload } from "@/lib/build-job-payload";
-import { useSettingsStore } from "@/stores/settings";
 import AccessoriesPicker from "./accessories-picker";
 import FunctionalChecklist from "./functional-checklist";
 import RemoteSignatureDialog from "./remote-signature-dialog";
@@ -46,7 +46,7 @@ export default function Step2Content({
   // Shop-editable clauses win; empty setting falls back to the app default.
   // The same text feeds the display, the remote-sign document and the
   // intakeTermsText sent on submit — what the customer reads is what signs.
-  const customTerms = useSettingsStore((s) => s.shopSettings?.intakeTerms);
+  const customTerms = useIntakeTerms();
   const termsText = customTerms?.trim() || t("intake.terms_text");
   // The frozen intake document a remote signature session signs over — same
   // builder the server uses to verify the ficha didn't drift before submit.

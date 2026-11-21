@@ -13,10 +13,10 @@ import TopBar from "@/components/modules/top-bar";
 import UpdateBanner from "@/components/modules/update-banner";
 import { ShopSettingsProvider } from "@/components/providers/shop-settings-provider";
 import { ChunkErrorBoundary } from "@/components/ui/chunk-error-boundary";
+import { useIntakeTerms } from "@/hooks/use-intake-terms";
 import api, { getErrorMessage } from "@/lib/api";
 import { buildJobPayload } from "@/lib/build-job-payload";
 import { useJobsStore } from "@/stores/jobs";
-import { useSettingsStore } from "@/stores/settings";
 import { useUiStore } from "@/stores/ui";
 
 interface DashboardLayoutProps {
@@ -32,7 +32,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const createJob = useJobsStore((s) => s.createJob);
   const fetchJobs = useJobsStore((s) => s.fetchJobs);
   const fetchMetrics = useJobsStore((s) => s.fetchMetrics);
-  const intakeTerms = useSettingsStore((s) => s.shopSettings?.intakeTerms);
+  const intakeTerms = useIntakeTerms();
   const { pathname } = useLocation();
   const { t, i18n } = useTranslation();
 
