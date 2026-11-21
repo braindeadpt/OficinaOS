@@ -63,7 +63,7 @@ export const aiRoutes: FastifyPluginAsync = async (app) => {
   }
 
   // Lightweight status for any role with ai:access — /settings/ai requires
-  // settings:view, so technicians would otherwise always see AI as off.
+  // settings:view, so non-admin roles would otherwise always see AI as off.
   app.get(
     "/status",
     {

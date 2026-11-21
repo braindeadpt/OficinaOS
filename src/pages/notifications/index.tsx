@@ -38,8 +38,8 @@ export default function NotificationsPage() {
   const [outboxLoaded, setOutboxLoaded] = useState(false);
   const [mode, setMode] = useState<NotificationMode>("alerts");
   // Setup = WhatsApp channel settings (settings:view); delete/cancel/test =
-  // notifications:manage. A technician with only notifications:read gets
-  // the alerts inbox and nothing that 403s.
+  // notifications:manage. A technician (read+send, no manage) gets the
+  // alerts inbox and nothing that 403s.
   const canViewSettings = useCan({ settings: ["view"] });
   const canManage = useCan({ notifications: ["manage"] });
 

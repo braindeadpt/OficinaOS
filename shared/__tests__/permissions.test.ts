@@ -218,10 +218,17 @@ describe("TECHNICIAN role", () => {
     expect(technicianRole.statements).not.toHaveProperty("session");
   });
 
-  it("has ai access", () => {
-    expect(technicianRole.statements).toHaveProperty("ai");
-    const ai = technicianRole.statements.ai as readonly string[];
-    expect(ai).toContain("access");
+  it("has NO ai access — analyst reads job_notes with customer PII (OWNER-only)", () => {
+    expect(technicianRole.statements).not.toHaveProperty("ai");
+  });
+
+  it("has notifications read and send — techs trigger customer messages", () => {
+    const { notifications } = technicianRole.statements as {
+      notifications: readonly string[];
+    };
+    expect(notifications).toContain("read");
+    expect(notifications).toContain("send");
+    expect(notifications).not.toContain("manage");
   });
 });
 

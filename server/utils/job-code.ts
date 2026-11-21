@@ -21,7 +21,9 @@ export async function generateJobCode(prisma: PrismaClient): Promise<{
   accessCode: string;
 }> {
   const year = new Date().getFullYear();
-  const accessCode = crypto.randomBytes(8).toString("hex");
+  // 128 bits: o token É a credencial do portal público e o formato está
+  // documentado no llms.txt — entropia alta é a defesa contra enumeração.
+  const accessCode = crypto.randomBytes(16).toString("hex");
 
   const rows = await prisma.$queryRaw<Array<{ lastSeq: number | string }>>`
     INSERT INTO "job_counters" ("year", "lastSeq")

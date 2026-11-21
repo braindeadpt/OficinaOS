@@ -656,7 +656,7 @@ export function createImportedJob(
 
     const jobCode =
       input.jobCode ?? (await generateJobCode(tx as PrismaClient)).jobCode;
-    const accessCode = crypto.randomBytes(8).toString("hex");
+    const accessCode = crypto.randomBytes(16).toString("hex");
 
     const job = await tx.job.create({
       data: {

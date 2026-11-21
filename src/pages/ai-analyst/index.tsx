@@ -3,8 +3,8 @@ import api from "@/lib/api";
 import ChatInterface from "./chat-interface";
 
 export default function AiAnalystPage() {
-  // /ai/status is permission-gated by ai:access, not settings:view — a
-  // technician using the analyst must not need settings access.
+  // /ai/status is permission-gated by ai:access, not settings:view — the
+  // analyst must not require settings access (OWNER-only today).
   const [enabled, setEnabled] = useState<boolean | null>(null);
 
   useEffect(() => {
