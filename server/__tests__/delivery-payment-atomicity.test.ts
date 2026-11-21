@@ -278,9 +278,9 @@ describe.skipIf(!serverReachable)(
       `);
       let paymentInsertAttempted = false;
       try {
-        await expect(
-          deliverWithPayment(db, job.id, g.user.id)
-        ).rejects.toThrow();
+        await expect(deliverWithPayment(db, job.id, g.user.id)).rejects.toThrow(
+          "forced failure after payment insert"
+        );
         // nextval() survives the rollback — is_called proves the payment
         // INSERT ran inside the transaction before the UPDATE failed.
         const probe = (await db.$queryRawUnsafe(

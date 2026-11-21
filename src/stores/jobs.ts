@@ -1,4 +1,5 @@
-import type { JobStatusType, PaymentMethodType } from "@shared/constants";
+import type { JobStatusType } from "@shared/constants/job-statuses";
+import type { PaymentMethodType } from "@shared/constants/payment-methods";
 import type {
   Job,
   JobNote,
