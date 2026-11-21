@@ -601,7 +601,7 @@ export default function JobDetailPage() {
           </h2>
           <StatusHistoryTimeline
             jobId={job.id}
-            refreshKey={job.updatedAt.toISOString()}
+            refreshKey={String(job.updatedAt)}
           />
         </div>
       </div>
@@ -633,7 +633,7 @@ export default function JobDetailPage() {
           jobId={job.id}
           onChanged={() => fetchJob()}
           paymentOnDeliveryMethod={job.paymentOnDeliveryMethod ?? null}
-          refreshKey={job.updatedAt.toISOString()}
+          refreshKey={String(job.updatedAt)}
           status={job.status}
         />
       </div>
