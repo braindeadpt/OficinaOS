@@ -31,17 +31,22 @@ export interface BackupStatus {
 
 /**
  * Reads the backup sidecar status. In Docker mode the db-backup
- * container's heartbeat and dump volumes are mounted on the app at
- * UPLOAD_DIR/backups-status and UPLOAD_DIR/backups (see
- * docker-compose*.yml); in portable mode BACKUP.ps1 writes the same
- * layout under app\uploads\. Missing files degrade gracefully to
- * nulls so the UI can show "backups not configured" instead of
- * erroring.
+ * container's heartbeat and dump volumes are mounted on the app outside
+ * UPLOAD_DIR (BACKUP_HEARTBEAT_DIR / BACKUP_DIR, see docker-compose*.yml);
+ * the Windows scripts write UPLOAD_DIR/backups-status and
+ * UPLOAD_DIR/backups, which uploads-static never serves. Missing files
+ * degrade gracefully to nulls so the UI can show "backups not
+ * configured" instead of erroring.
  */
 export async function getBackupStatus(): Promise<BackupStatus> {
-  const uploadDir = path.resolve(loadEnv().UPLOAD_DIR);
-  const heartbeatDir = path.join(uploadDir, "backups-status");
-  const dumpDir = path.join(uploadDir, "backups");
+  const env = loadEnv();
+  const uploadDir = path.resolve(env.UPLOAD_DIR);
+  const heartbeatDir = path.resolve(
+    env.BACKUP_HEARTBEAT_DIR ?? path.join(uploadDir, "backups-status")
+  );
+  const dumpDir = path.resolve(
+    env.BACKUP_DIR ?? path.join(uploadDir, "backups")
+  );
   const heartbeatFile = path.join(heartbeatDir, "last-backup.txt");
   const remoteCopyFile = path.join(heartbeatDir, "last-remote-copy.txt");
   const restoreCheckFile = path.join(heartbeatDir, "last-restore-check.txt");

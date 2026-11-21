@@ -32,6 +32,7 @@ function mockPrisma(
       findFirst: vi.fn(),
       findMany: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       count: vi.fn(),
       groupBy: vi.fn(),
       create: vi.fn(),
@@ -668,11 +669,157 @@ describe("getMetrics", () => {
   });
 });
 
+const OWNER_ACCESS = { canAssign: true, canSelfAssign: true };
+const SELF_ASSIGN_ACCESS = { canAssign: false, canSelfAssign: true };
+
 describe("update", () => {
   let prisma: ReturnType<typeof mockPrisma>;
 
   beforeEach(() => {
     prisma = mockPrisma();
+  });
+
+  describe("technician assignment permissions", () => {
+    function mockJob(technicianId: string | null) {
+      (prisma.job.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "job-1",
+        partsUsed: [],
+        repairs: [],
+        status: "PENDING",
+        technicianId,
+      });
+      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "tech-1",
+        role: Role.TECHNICIAN,
+      });
+      (prisma.job.update as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "job-1",
+        partsUsed: [],
+        repairs: [],
+        status: "PENDING",
+      });
+    }
+
+    it("forbids reassigning to another technician without jobs:assign", async () => {
+      mockJob("tech-2");
+
+      const result = await update(
+        prisma,
+        "job-1",
+        { technicianId: "tech-1" },
+        "tech-1",
+        SELF_ASSIGN_ACCESS
+      );
+
+      expect(result).toEqual({ error: "FORBIDDEN" });
+      expect(prisma.job.update).not.toHaveBeenCalled();
+    });
+
+    it("forbids assigning an unassigned job to someone else with only selfAssign", async () => {
+      mockJob(null);
+
+      const result = await update(
+        prisma,
+        "job-1",
+        { technicianId: "tech-2" },
+        "tech-1",
+        SELF_ASSIGN_ACCESS
+      );
+
+      expect(result).toEqual({ error: "FORBIDDEN" });
+    });
+
+    it("forbids unassigning without jobs:assign", async () => {
+      mockJob("tech-1");
+
+      const result = await update(
+        prisma,
+        "job-1",
+        { technicianId: null },
+        "tech-1",
+        SELF_ASSIGN_ACCESS
+      );
+
+      expect(result).toEqual({ error: "FORBIDDEN" });
+    });
+
+    it("forbids any assignment change by default", async () => {
+      mockJob(null);
+
+      const result = await update(
+        prisma,
+        "job-1",
+        { technicianId: "tech-1" },
+        "tech-1"
+      );
+
+      expect(result).toEqual({ error: "FORBIDDEN" });
+    });
+
+    it("allows claiming an unassigned job with selfAssign", async () => {
+      mockJob(null);
+
+      const result = await update(
+        prisma,
+        "job-1",
+        { technicianId: "tech-1" },
+        "tech-1",
+        SELF_ASSIGN_ACCESS
+      );
+
+      expect(result).not.toHaveProperty("error");
+      expect(prisma.job.update).toHaveBeenCalled();
+    });
+
+    it("allows resending the current technician without jobs:assign", async () => {
+      mockJob("tech-2");
+
+      const result = await update(
+        prisma,
+        "job-1",
+        { technicianId: "tech-2" },
+        "tech-1"
+      );
+
+      expect(result).not.toHaveProperty("error");
+    });
+
+    it("aborts when the technician changed after the permission check", async () => {
+      mockJob(null);
+      (prisma.job.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({
+        count: 0,
+      });
+
+      await expect(
+        update(
+          prisma,
+          "job-1",
+          { technicianId: "tech-1" },
+          "tech-1",
+          SELF_ASSIGN_ACCESS
+        )
+      ).rejects.toMatchObject({ code: "CONFLICT" });
+      expect(prisma.job.updateMany).toHaveBeenCalledWith({
+        where: { id: "job-1", technicianId: null },
+        data: { updatedAt: expect.any(Date) },
+      });
+      expect(prisma.job.update).not.toHaveBeenCalled();
+    });
+
+    it("allows reassignment with jobs:assign", async () => {
+      mockJob("tech-2");
+
+      const result = await update(
+        prisma,
+        "job-1",
+        { technicianId: "tech-1" },
+        "owner-1",
+        OWNER_ACCESS
+      );
+
+      expect(result).not.toHaveProperty("error");
+      expect(prisma.job.update).toHaveBeenCalled();
+    });
   });
 
   it("returns null when job not found", async () => {
@@ -711,7 +858,8 @@ describe("update", () => {
       prisma,
       "job-1",
       { technicianId: "invalid" },
-      "user-1"
+      "user-1",
+      OWNER_ACCESS
     );
 
     expect(result).toEqual({ error: "INVALID_TECHNICIAN" });
@@ -733,7 +881,8 @@ describe("update", () => {
       prisma,
       "job-1",
       { technicianId: "user-2" },
-      "user-1"
+      "user-1",
+      OWNER_ACCESS
     );
 
     expect(result).toEqual({ error: "INVALID_TECHNICIAN" });
@@ -762,7 +911,8 @@ describe("update", () => {
       prisma,
       "job-1",
       { technicianId: "tech-1" },
-      "user-1"
+      "user-1",
+      OWNER_ACCESS
     );
 
     expect(result).not.toHaveProperty("error");
@@ -784,7 +934,13 @@ describe("update", () => {
       status: "PENDING",
     });
 
-    await update(prisma, "job-1", { technicianId: null }, "user-1");
+    await update(
+      prisma,
+      "job-1",
+      { technicianId: null },
+      "user-1",
+      OWNER_ACCESS
+    );
 
     const updateCall = (prisma.job.update as ReturnType<typeof vi.fn>).mock
       .calls[0];

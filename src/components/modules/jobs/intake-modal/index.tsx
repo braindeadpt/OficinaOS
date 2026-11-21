@@ -10,7 +10,9 @@ import { useIntakeModal } from "./use-intake-modal";
 
 export default function IntakeModal({
   intakeTerms,
+  intakeTermsFailed,
   onClose,
+  onRetryIntakeTerms,
   onSubmit,
   open,
   prefill,
@@ -183,7 +185,9 @@ export default function IntakeModal({
               errors={m.errors}
               form={m.form}
               handleBlur={m.handleBlur}
+              onRetryTerms={onRetryIntakeTerms}
               t={m.t}
+              termsFailed={intakeTermsFailed}
               touched={m.touched}
               update={m.update}
             />

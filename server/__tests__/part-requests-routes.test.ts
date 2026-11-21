@@ -45,6 +45,11 @@ function buildApp(
         message: error.message,
         details: error.details,
       });
+    } else if ((error as { validation?: unknown }).validation) {
+      // Mirrors server/plugins/security.ts — Fastify schema errors are 400.
+      reply
+        .status((error as { statusCode?: number }).statusCode ?? 400)
+        .send({ code: "VALIDATION_ERROR", message: "errors.validation_error" });
     } else {
       reply.status(500).send({
         code: "INTERNAL_ERROR",
@@ -202,6 +207,27 @@ describe("part-requests proxy — replies & close", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().replies[0].contact).toBe("910000000");
+  });
+
+  it("rejects a traversal :id without calling the cloud (POST /:id/close)", async () => {
+    const app = buildApp(fakePrisma());
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/part-requests/..%2F..%2Fshops%2Fpairing-codes%3F/close",
+      payload: { status: "FOUND" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a traversal :id without calling the cloud (GET /:id/replies)", async () => {
+    const app = buildApp(fakePrisma());
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/part-requests/..%2F..%2Fshops%2Fintake%3F/replies",
+    });
+    expect(res.statusCode).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("POST /:id/close forwards the status", async () => {
