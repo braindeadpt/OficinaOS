@@ -429,16 +429,34 @@ export async function getCloudStatus(
 }
 
 /** Remove the pairing — Pro modules stop working until re-paired. */
-export async function unpairCloud(prisma: PrismaClient): Promise<void> {
+export async function unpairCloud(
+  prisma: PrismaClient,
+  log?: FastifyBaseLogger
+): Promise<void> {
   const settings = await getOrCreateShopSettings(prisma);
-  // Explicit unpair is a cancellation: the cloud deletes the stored Meta
-  // credentials so nothing of the shop's survives the relationship.
+  // Explicit unpair is a cancellation: the cloud deletes the Shop row and
+  // every owned record cascades with it — tokens, entitlements, relay
+  // queues, reports — so nothing of the shop's survives the relationship.
+  // Clouds older than the /shops/me endpoint still get the narrower
+  // credentials-only cleanup.
   if (settings.cloudApiUrl && settings.cloudShopTokenEncrypted) {
     const token = decryptSecret(settings.cloudShopTokenEncrypted);
-    await cloudFetch(settings.cloudApiUrl, "/shops/whatsapp-credentials", {
+    const res = await cloudFetch(settings.cloudApiUrl, "/shops/me", {
       method: "DELETE",
       token,
     }).catch(() => null);
+    if (res === null) {
+      log?.warn(
+        "cloud unreachable during unpair — cloud-side data left behind"
+      );
+    } else if (res.status === 404) {
+      await cloudFetch(settings.cloudApiUrl, "/shops/whatsapp-credentials", {
+        method: "DELETE",
+        token,
+      }).catch(() => null);
+    } else if (!res.ok) {
+      log?.warn({ status: res.status }, "cloud shop delete failed");
+    }
   }
   await prisma.shopSettings.update({
     where: { id: "default" },

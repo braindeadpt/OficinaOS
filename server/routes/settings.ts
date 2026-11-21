@@ -234,9 +234,9 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
         summary: "Unpair this installation from OficinaOS Cloud",
       },
     },
-    async (_req, reply) => {
+    async (req, reply) => {
       assertNotDemoMode();
-      await unpairCloud(app.prisma);
+      await unpairCloud(app.prisma, req.log);
       return reply.send({ ok: true });
     }
   );

@@ -353,6 +353,46 @@ describe("unpairCloud", () => {
     expect(row.cloudApiUrl).toBeNull();
     expect(row.cloudShopId).toBeNull();
   });
+
+  it("deletes the shop row on the cloud via DELETE /shops/me", async () => {
+    const fetchSpy = vi.fn(() => okJson({}));
+    vi.stubGlobal("fetch", fetchSpy);
+    const { prisma } = fakePrisma({
+      cloudApiUrl: "https://x",
+      cloudShopTokenEncrypted: "v1:a:b:c",
+    });
+    await unpairCloud(prisma as never);
+    const [url, init] = fetchSpy.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe("https://x/shops/me");
+    expect(init.method).toBe("DELETE");
+  });
+
+  it("falls back to whatsapp-credentials delete on old clouds (404)", async () => {
+    const urls: string[] = [];
+    vi.stubGlobal("fetch", (url: string) => {
+      urls.push(url);
+      if (url.endsWith("/shops/me")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ error: { code: "NOT_FOUND" } }), {
+            status: 404,
+          })
+        );
+      }
+      return okJson({});
+    });
+    const { prisma } = fakePrisma({
+      cloudApiUrl: "https://x",
+      cloudShopTokenEncrypted: "v1:a:b:c",
+    });
+    await unpairCloud(prisma as never);
+    expect(urls).toEqual([
+      "https://x/shops/me",
+      "https://x/shops/whatsapp-credentials",
+    ]);
+  });
 });
 
 describe("pullCloudIntake", () => {
