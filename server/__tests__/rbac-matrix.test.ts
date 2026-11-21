@@ -836,7 +836,8 @@ describe("RBAC Matrix", () => {
       it("OWNER can read AI status", async () => {
         const app = buildApp("user-1", Role.OWNER);
         const res = await app.inject({ method: "GET", url: "/api/ai/status" });
-        expect(res.statusCode).not.toBe(403);
+        expect(res.statusCode).toBe(200);
+        expect(res.json()).toEqual({ enabled: false, hasApiKey: false });
       });
 
       it("TECHNICIAN cannot read AI status — analyst reads job_notes PII", async () => {
