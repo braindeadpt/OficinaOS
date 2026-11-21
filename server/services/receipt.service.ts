@@ -1518,6 +1518,7 @@ export async function renderLabelHtml(
     padding-left: 1mm;
     display: flex; flex-direction: column; justify-content: center;
   }
+  .info .code { font-weight: 700; font-size: ${label.font}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .info .dev { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: ${label.sub}; }
   .info .pb { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: ${label.sub}; color: #333; }
   .info .price { font-weight: 700; font-size: ${label.font}; }
@@ -1531,6 +1532,7 @@ export async function renderLabelHtml(
       ${qrImg}
     </div>
     <div class="info">
+      <div class="code">${esc(job.jobCode)}</div>
       <div class="dev">${device}</div>
       <div class="pb">${problem}</div>
       ${price ? `<div class="price">${price}</div>` : ""}
