@@ -72,6 +72,44 @@ describe("renderReceiptHtml paper presets", () => {
   });
 });
 
+describe("renderReceiptHtml signed clauses", () => {
+  const A4 = { ...FULL_SETTINGS, receiptPaper: "a4" };
+
+  it("A4 prints the clauses frozen in the signed snapshot", async () => {
+    const job = {
+      ...BASE_JOB,
+      intakeTermsSnapshot: {
+        termsText: "Cláusulas <b>da loja</b>\nSegunda linha",
+      },
+    };
+    const html = await renderReceiptHtml(mockPrisma(A4), job, "", {});
+    expect(html).toContain("Cláusulas");
+    expect(html).toContain("Segunda linha");
+    expect(html).not.toContain("<b>da loja</b>");
+  });
+
+  it("A4 falls back to the shop clauses when there is no snapshot", async () => {
+    const prisma = mockPrisma({ ...A4, intakeTerms: "Termos atuais da loja" });
+    const html = await renderReceiptHtml(prisma, BASE_JOB, "", {});
+    expect(html).toContain("Termos atuais da loja");
+  });
+
+  it("thermal keeps the short built-in declaration", async () => {
+    const job = {
+      ...BASE_JOB,
+      intakeTermsSnapshot: { termsText: "Cláusulas da loja" },
+    };
+    const html = await renderReceiptHtml(
+      mockPrisma(FULL_SETTINGS),
+      job,
+      "",
+      {}
+    );
+    expect(html).not.toContain("Cláusulas da loja");
+    expect(html).toContain("aceito os termos de reparação");
+  });
+});
+
 describe("renderReceiptHtml high contrast", () => {
   it("bolds every line and blacks out grays when printerHighContrast is on", async () => {
     const prisma = mockPrisma({ ...FULL_SETTINGS, printerHighContrast: true });

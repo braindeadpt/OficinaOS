@@ -40,6 +40,23 @@ function esc(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+// The signed ficha snapshot carries the exact clause text the customer saw.
+// Fall back to the shop's current clauses, then the built-in declaration.
+function receiptTermsText(
+  snapshot: unknown,
+  shopTerms: string | null | undefined,
+  fallback: string
+): string {
+  const fromSnapshot =
+    snapshot && typeof snapshot === "object" && "termsText" in snapshot
+      ? (snapshot as { termsText?: unknown }).termsText
+      : null;
+  if (typeof fromSnapshot === "string" && fromSnapshot.trim()) {
+    return fromSnapshot;
+  }
+  return shopTerms?.trim() || fallback;
+}
+
 function escMultiline(s: string): string {
   return esc(s).replace(/\r?\n/g, "<br>");
 }
@@ -513,6 +530,7 @@ export async function renderReceiptHtml(
     hasLoanerDevice?: boolean | null;
     loanerNote?: string | null;
     intakeSignatureDataUrl?: string | null;
+    intakeTermsSnapshot?: unknown;
     intakeDocumentHash?: string | null;
     signedAt?: Date | null;
     createdAt: Date;
@@ -784,8 +802,13 @@ ${
   const signatureBox = job.intakeSignatureDataUrl?.startsWith("data:image/")
     ? `<img src="${esc(job.intakeSignatureDataUrl)}" alt="signature" />`
     : `<div class="line">${s.signatureLabel}</div>`;
+  const termsText = receiptTermsText(
+    job.intakeTermsSnapshot,
+    settings?.intakeTerms,
+    s.termsSigned
+  );
   const signatureHtml = prefs.showSignature
-    ? `<div class="sign"><p class="terms">${esc(s.termsSigned)}</p><div class="box">${signatureBox}</div>${signatureSealHtml(job, s)}</div>`
+    ? `<div class="sign"><p class="terms">${escMultiline(termsText)}</p><div class="box">${signatureBox}</div>${signatureSealHtml(job, s)}</div>`
     : "";
 
   const qrHtml =
