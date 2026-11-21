@@ -9,7 +9,7 @@ function makePrisma() {
   const auditCreate = vi.fn().mockResolvedValue({});
   const paymentCreate = vi.fn().mockResolvedValue({ id: "pay-auto-1" });
   const jobUpdate = vi.fn().mockResolvedValue({});
-  return {
+  const prisma = {
     auditCreate,
     jobUpdate,
     paymentCreate,
@@ -18,10 +18,12 @@ function makePrisma() {
     $transaction: vi.fn(async (fn: (tx: unknown) => unknown) =>
       fn({
         auditLog: { create: auditCreate },
-        // settlePaymentOnDelivery locks and re-reads the job row
-        // in-transaction, so the tx needs the full job model.
+        // settlePaymentOnDelivery/setPaymentOnDelivery lock and re-read
+        // the job row in-transaction — delegate to the outer mock so the
+        // scenario configured per-test applies inside the tx too.
         job: {
-          findUnique: vi.fn().mockResolvedValue(baseJob),
+          findUnique: (args: unknown) =>
+            (prisma.job.findUnique as (a: unknown) => unknown)(args),
           update: jobUpdate,
         },
         payment: { create: paymentCreate },
@@ -29,6 +31,7 @@ function makePrisma() {
       })
     ),
   } as unknown as any;
+  return prisma;
 }
 
 // parts 3000 + repairs 2000 - deposit 500 - payments 1000 = 3500 due

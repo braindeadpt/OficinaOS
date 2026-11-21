@@ -672,7 +672,8 @@ model JobQuote {
 
 // ─────────────────────────────────────────────
 // JOB PHOTOS
-// Max 5 per job enforced via DB trigger (see migration).
+// Max 5 per job enforced in job-photos.service (job row lock + recheck under
+// the same transaction — no DB trigger).
 // path points to file on local VPS disk.
 // ─────────────────────────────────────────────
 

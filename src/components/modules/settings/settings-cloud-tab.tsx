@@ -30,8 +30,10 @@ interface CloudStation {
 }
 
 export default function SettingsCloudTab({
+  onDirtyChange,
   onToast,
 }: {
+  onDirtyChange?: (dirty: boolean) => void;
   onToast: (msg: string, type: "success" | "error") => void;
 }) {
   const { t } = useTranslation();
@@ -341,7 +343,10 @@ export default function SettingsCloudTab({
           </div>
 
           <SettingsStorefrontSection onToast={onToast} />
-          <SettingsInvoicingSection onToast={onToast} />
+          <SettingsInvoicingSection
+            onDirtyChange={onDirtyChange}
+            onToast={onToast}
+          />
 
           <div className="flex gap-2">
             <Button

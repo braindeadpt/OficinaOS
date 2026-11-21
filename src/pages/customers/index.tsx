@@ -174,8 +174,11 @@ export default function CustomersPage() {
     consentSummary,
     customers,
     isLoading,
+    isLoadingMore,
+    nextCursor,
     totalCount,
     fetchCustomers,
+    loadMoreCustomers,
     exportCustomersCsv,
     isExporting,
   } = useCustomersStore();
@@ -224,6 +227,15 @@ export default function CustomersPage() {
     }
   }, [consentFilter, debouncedSearch, exportCustomersCsv, t]);
 
+  const hasMore = nextCursor !== null && !isLoading;
+
+  const handleLoadMore = useCallback(() => {
+    loadMoreCustomers(
+      debouncedSearch.trim() || undefined,
+      consentFilter || undefined
+    );
+  }, [loadMoreCustomers, debouncedSearch, consentFilter]);
+
   const customersWithJobs = useMemo(
     () => customers.filter((c) => (c._count?.jobs ?? 0) > 0).length,
     [customers]
@@ -270,7 +282,9 @@ export default function CustomersPage() {
       {!showEmptyCatalog && (
         <section aria-label={t("customers")}>
           <h3 className="sr-only">{t("customers")}</h3>
-          <div className="mb-6 grid gap-4 sm:grid-cols-[1.5fr_1fr_1.25fr]">
+          <div
+            className={`mb-6 grid gap-4 ${hasMore ? "sm:grid-cols-2" : "sm:grid-cols-[1.5fr_1fr_1.25fr]"}`}
+          >
             <div className="rounded-2xl bg-surface-container-low p-5">
               <p className="font-medium text-on-surface-variant text-xs uppercase tracking-wide">
                 {t("total_customers")}
@@ -279,14 +293,18 @@ export default function CustomersPage() {
                 {totalCount}
               </p>
             </div>
-            <div className="rounded-2xl bg-surface-container p-5">
-              <p className="font-medium text-on-surface-variant text-xs uppercase tracking-wide">
-                {t("customers_with_jobs")}
-              </p>
-              <p className="mt-1 font-extrabold font-headline text-2xl text-on-surface">
-                {customersWithJobs}
-              </p>
-            </div>
+            {/* Only meaningful once every matching customer is loaded — a
+                partial page would under-report. */}
+            {!hasMore && (
+              <div className="rounded-2xl bg-surface-container p-5">
+                <p className="font-medium text-on-surface-variant text-xs uppercase tracking-wide">
+                  {t("customers_with_jobs")}
+                </p>
+                <p className="mt-1 font-extrabold font-headline text-2xl text-on-surface">
+                  {customersWithJobs}
+                </p>
+              </div>
+            )}
             <div className="rounded-2xl bg-surface-container p-5">
               <p className="font-medium text-on-surface-variant text-xs uppercase tracking-wide">
                 {t("customers_optin_rate")}
@@ -409,6 +427,26 @@ export default function CustomersPage() {
                   <MobileCustomerCard customer={c} key={c.id} t={t} />
                 ))}
           </div>
+        </div>
+      )}
+
+      {hasMore && (
+        <div className="flex justify-center py-4">
+          <button
+            className="flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-surface-container-high px-6 py-3 font-bold text-on-surface-variant text-sm transition-all hover:bg-surface-container-highest active:scale-[0.98]"
+            disabled={isLoadingMore}
+            onClick={handleLoadMore}
+            type="button"
+          >
+            {isLoadingMore && (
+              <Icon
+                className="animate-spin"
+                name="progress_activity"
+                size="sm"
+              />
+            )}
+            <span>{t("load_more")}</span>
+          </button>
         </div>
       )}
 

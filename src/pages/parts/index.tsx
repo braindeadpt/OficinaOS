@@ -1,7 +1,7 @@
 import type { PartCategoryType } from "@shared/constants";
 import { PartCategory } from "@shared/constants";
 import type { PartsCatalog } from "@shared/types";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router";
 import { Can } from "@/components/modules/can";
@@ -932,10 +932,28 @@ export default function PartsCatalogPage() {
 
   const debouncedSearch = useDebounce(search, 300);
 
+  // One timer at a time: a second toast clears the first's timer instead of
+  // letting it fire early and hide the newer message.
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showToast = useCallback((message: string, isError = false) => {
     setToast({ isError, message });
-    setTimeout(() => setToast(null), 4000);
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+    }
+    toastTimerRef.current = setTimeout(() => {
+      toastTimerRef.current = null;
+      setToast(null);
+    }, 4000);
   }, []);
+
+  useEffect(
+    () => () => {
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current);
+      }
+    },
+    []
+  );
 
   const fetchParams = useMemo(
     () => ({

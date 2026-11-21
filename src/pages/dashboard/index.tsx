@@ -172,7 +172,7 @@ function MetricsGrid({
   const marginDir = marginChange >= 0 ? "up" : "down";
 
   const formatPct = useCallback(
-    (val: number) => `${val >= 0 ? "+" : ""}${val}`,
+    (val: number) => `${val >= 0 ? "+" : ""}${val.toFixed(1)}`,
     []
   );
 
@@ -544,8 +544,17 @@ export default function DashboardPage() {
     () => Object.values(pipelineCounts).reduce((sum, c) => sum + c, 0),
     [pipelineCounts]
   );
+  // Bench utilization is active work over jobs still in the shop — closed
+  // statuses (DELIVERED/RETURNED/CANCELLED) would dilute the ratio.
+  const openPipelineTotal =
+    pipelineTotal -
+    pipelineCounts.DELIVERED -
+    pipelineCounts.RETURNED -
+    pipelineCounts.CANCELLED;
   const benchUtilization =
-    pipelineTotal > 0 ? Math.round((activeJobs / pipelineTotal) * 100) : 0;
+    openPipelineTotal > 0
+      ? Math.round((activeJobs / openPipelineTotal) * 100)
+      : 0;
 
   const hasData = pipelineTotal > 0 || data?.completedToday !== undefined;
   const isEmpty = !(isLoading || hasData);

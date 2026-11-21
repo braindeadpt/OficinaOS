@@ -355,7 +355,7 @@ export default function TechnicianKanban() {
                                 {isDropdownOpen && (
                                   <>
                                     <button
-                                      aria-label="Close dropdown"
+                                      aria-label={t("close")}
                                       className="fixed inset-0 z-10 cursor-default"
                                       onClick={() => setActiveDropdown(null)}
                                       type="button"

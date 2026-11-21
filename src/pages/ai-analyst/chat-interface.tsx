@@ -1111,7 +1111,7 @@ function ChatInterface({ agentEnabled = true }: ChatInterfaceProps) {
               <span>
                 {t("ai_agent_press")}{" "}
                 <span className="rounded bg-surface-container-high px-1.5 py-0.5 font-mono text-[10px]">
-                  {navigator.platform?.includes("Mac") ? "⌘" : "Ctrl"} + Enter
+                  Enter
                 </span>{" "}
                 {t("ai_agent_to_send")}
               </span>

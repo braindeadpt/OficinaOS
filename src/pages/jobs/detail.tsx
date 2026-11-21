@@ -286,7 +286,10 @@ export default function JobDetailPage() {
     };
   }, [job]);
 
-  if (loading) {
+  // Full skeleton only for the first load — `fetchJob` also runs as the
+  // onChanged refetch for every section below, and flashing the skeleton on
+  // each refetch wipes the page the user is looking at.
+  if (loading && !job) {
     return (
       <div className="mx-auto max-w-3xl animate-pulse px-4 py-6 sm:px-6 lg:max-w-4xl">
         <div className="h-5 w-32 rounded bg-surface-container-high" />
@@ -317,7 +320,7 @@ export default function JobDetailPage() {
     );
   }
 
-  if (error || !job) {
+  if (!job) {
     return (
       <div className="py-20 text-center">
         <Icon className="text-3xl text-error" name="error" />

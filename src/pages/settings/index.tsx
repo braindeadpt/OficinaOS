@@ -94,17 +94,15 @@ export default function SettingsPage() {
     if (!(requestedTab && TAB_KEYS.includes(requestedTab))) {
       return;
     }
-    setActiveTab((current) => {
-      if (current === requestedTab) {
-        return current;
-      }
-      if (isDirty(current)) {
-        setPendingTab(requestedTab);
-        return current;
-      }
-      return requestedTab;
-    });
-  }, [searchParams, isDirty]);
+    if (requestedTab === activeTab) {
+      return;
+    }
+    if (isDirty(activeTab)) {
+      setPendingTab(requestedTab);
+      return;
+    }
+    setActiveTab(requestedTab);
+  }, [searchParams, activeTab, isDirty]);
 
   useEffect(() => {
     if (activeTab === "notifications" && notificationTemplates.length === 0) {
@@ -303,6 +301,7 @@ export default function SettingsPage() {
             )}
             {activeTab === "cloud" && !isDemo && (
               <SettingsCloudTab
+                onDirtyChange={(d) => markDirty("cloud", d)}
                 onToast={(msg, type) =>
                   type === "error" ? toast.error(msg) : toast.success(msg)
                 }

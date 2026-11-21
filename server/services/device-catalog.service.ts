@@ -43,52 +43,57 @@ export async function syncDeviceCatalogIfStale(
   // Brand names match case-insensitively: older seeds created "Vivo" while
   // the catalog says "vivo" — an exact-name upsert would split the catalog
   // across two brands. Existing rows keep their id, name and relations.
-  const existingBrands = await prisma.brand.findMany({
-    select: { id: true, name: true },
-  });
-  const brandsByLower = new Map(
-    existingBrands.map((b) => [b.name.toLowerCase(), b])
-  );
-
-  for (const entry of BRANDS) {
-    let brand = brandsByLower.get(entry.name.toLowerCase());
-    if (!brand) {
-      brand = await prisma.brand.create({ data: { name: entry.name } });
-      brandsByLower.set(entry.name.toLowerCase(), brand);
-    }
-
-    const existing = await prisma.device.findMany({
-      select: { category: true, id: true, model: true },
-      where: { brandId: brand.id },
+  // One transaction: a crash mid-sync must not leave a partial catalog with
+  // the version already bumped (the bump is the "done" marker).
+  await prisma.$transaction(async (tx) => {
+    const existingBrands = await tx.brand.findMany({
+      select: { id: true, name: true },
     });
-    const byModel = new Map(existing.map((d) => [d.model, d]));
+    const brandsByLower = new Map(
+      existingBrands.map((b) => [b.name.toLowerCase(), b])
+    );
 
-    const toCreate: { brandId: string; category: string; model: string }[] = [];
-    for (const m of entry.models) {
-      const ex = byModel.get(m.model);
-      if (!ex) {
-        toCreate.push({
-          brandId: brand.id,
-          category: m.category,
-          model: m.model,
-        });
-      } else if (ex.category !== m.category) {
-        await prisma.device.update({
-          data: { category: m.category },
-          where: { id: ex.id },
-        });
-        devicesUpdated++;
+    for (const entry of BRANDS) {
+      let brand = brandsByLower.get(entry.name.toLowerCase());
+      if (!brand) {
+        brand = await tx.brand.create({ data: { name: entry.name } });
+        brandsByLower.set(entry.name.toLowerCase(), brand);
+      }
+
+      const existing = await tx.device.findMany({
+        select: { category: true, id: true, model: true },
+        where: { brandId: brand.id },
+      });
+      const byModel = new Map(existing.map((d) => [d.model, d]));
+
+      const toCreate: { brandId: string; category: string; model: string }[] =
+        [];
+      for (const m of entry.models) {
+        const ex = byModel.get(m.model);
+        if (!ex) {
+          toCreate.push({
+            brandId: brand.id,
+            category: m.category,
+            model: m.model,
+          });
+        } else if (ex.category !== m.category) {
+          await tx.device.update({
+            data: { category: m.category },
+            where: { id: ex.id },
+          });
+          devicesUpdated++;
+        }
+      }
+      if (toCreate.length > 0) {
+        const res = await tx.device.createMany({ data: toCreate });
+        devicesCreated += res.count;
       }
     }
-    if (toCreate.length > 0) {
-      const res = await prisma.device.createMany({ data: toCreate });
-      devicesCreated += res.count;
-    }
-  }
 
-  await prisma.shopSettings.update({
-    data: { deviceCatalogVersion: DEVICE_CATALOG_VERSION },
-    where: { id: settings.id },
+    await tx.shopSettings.update({
+      data: { deviceCatalogVersion: DEVICE_CATALOG_VERSION },
+      where: { id: settings.id },
+    });
   });
 
   const result = {

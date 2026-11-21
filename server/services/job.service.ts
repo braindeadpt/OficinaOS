@@ -826,7 +826,7 @@ async function applyLoanerReassignment(
 // A unit swap isn't a physical return, but it does free the previous unit —
 // record which units were detached/attached or the fleet loses the trail.
 async function auditLoanerUnitChange(
-  prisma: PrismaClient,
+  prisma: DbClient,
   job: Pick<Job, "loanerDeviceId">,
   input: UpdateJobInput,
   jobId: string,
@@ -971,41 +971,43 @@ export async function update(
       await lockTechnicianSnapshot(tx, id, job.technicianId ?? null);
     }
     await applyLoanerReassignment(tx, input, id, data);
-    return await jobUpdate(tx, id, data, JOB_INCLUDE);
+    const updatedJob = await jobUpdate(tx, id, data, JOB_INCLUDE);
+
+    if (
+      technicianId !== undefined &&
+      technicianId !== (job.technicianId ?? undefined)
+    ) {
+      await createAuditLog(tx, {
+        action: AuditAction.TECHNICIAN_ASSIGNED,
+        fromValue: job.technicianId ?? undefined,
+        jobId: id,
+        toValue: technicianId ?? "unassigned",
+        userId,
+      });
+    }
+
+    await auditLoanerUnitChange(tx, job, input, id, userId);
+
+    const costFieldsChanged =
+      "estimatedCost" in input || "depositAmount" in input;
+    if (costFieldsChanged) {
+      await createAuditLog(tx, {
+        action: AuditAction.COST_UPDATED,
+        jobId: id,
+        note: "Cost fields updated",
+        userId,
+      });
+    } else if (hasNonSpecialFieldChanges(input) || technicianId !== undefined) {
+      await createAuditLog(tx, {
+        action: AuditAction.JOB_UPDATED,
+        jobId: id,
+        note: "Job fields updated",
+        userId,
+      });
+    }
+
+    return updatedJob;
   });
-
-  if (
-    technicianId !== undefined &&
-    technicianId !== (job.technicianId ?? undefined)
-  ) {
-    await createAuditLog(prisma, {
-      action: AuditAction.TECHNICIAN_ASSIGNED,
-      fromValue: job.technicianId ?? undefined,
-      jobId: id,
-      toValue: technicianId ?? "unassigned",
-      userId,
-    });
-  }
-
-  await auditLoanerUnitChange(prisma, job, input, id, userId);
-
-  const costFieldsChanged =
-    "estimatedCost" in input || "depositAmount" in input;
-  if (costFieldsChanged) {
-    await createAuditLog(prisma, {
-      action: AuditAction.COST_UPDATED,
-      jobId: id,
-      note: "Cost fields updated",
-      userId,
-    });
-  } else if (hasNonSpecialFieldChanges(input) || technicianId !== undefined) {
-    await createAuditLog(prisma, {
-      action: AuditAction.JOB_UPDATED,
-      jobId: id,
-      note: "Job fields updated",
-      userId,
-    });
-  }
 
   return { ...updated, finalCost: computeFinalCost(updated) };
 }
