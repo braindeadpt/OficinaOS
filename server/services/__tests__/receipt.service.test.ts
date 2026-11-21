@@ -76,21 +76,34 @@ describe("renderReceiptHtml signed clauses", () => {
   const A4 = { ...FULL_SETTINGS, receiptPaper: "a4" };
 
   it("A4 prints the clauses frozen in the signed snapshot", async () => {
+    const prisma = mockPrisma({
+      ...A4,
+      intakeTerms: "TERMOS ACTUAIS QUE NAO FORAM ASSINADOS",
+    });
     const job = {
       ...BASE_JOB,
       intakeTermsSnapshot: {
         termsText: "Cláusulas <b>da loja</b>\nSegunda linha",
       },
     };
-    const html = await renderReceiptHtml(mockPrisma(A4), job, "", {});
+    const html = await renderReceiptHtml(prisma, job, "", {});
     expect(html).toContain("Cláusulas");
     expect(html).toContain("Segunda linha");
     expect(html).not.toContain("<b>da loja</b>");
+    expect(html).not.toContain("TERMOS ACTUAIS");
   });
 
-  it("A4 falls back to the shop clauses when there is no snapshot", async () => {
+  it("A4 does not present current clauses as signed for legacy jobs", async () => {
     const prisma = mockPrisma({ ...A4, intakeTerms: "Termos atuais da loja" });
     const html = await renderReceiptHtml(prisma, BASE_JOB, "", {});
+    expect(html).not.toContain("Termos atuais da loja");
+    expect(html).toContain("aceito os termos de reparação");
+  });
+
+  it("A4 shows the shop clauses on unsigned jobs", async () => {
+    const prisma = mockPrisma({ ...A4, intakeTerms: "Termos atuais da loja" });
+    const job = { ...BASE_JOB, intakeSignatureDataUrl: null };
+    const html = await renderReceiptHtml(prisma, job, "", {});
     expect(html).toContain("Termos atuais da loja");
   });
 

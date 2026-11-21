@@ -41,11 +41,15 @@ function esc(s: string): string {
 }
 
 // The signed ficha snapshot carries the exact clause text the customer saw.
-// Fall back to the shop's current clauses, then the built-in declaration.
+// Signed jobs without a snapshot predate it — showing today's clauses next to
+// that signature would claim they were agreed, so fall back to the fixed
+// declaration. Unsigned jobs have no signature to misattribute; current shop
+// clauses are informational there.
 function receiptTermsText(
   snapshot: unknown,
   shopTerms: string | null | undefined,
-  fallback: string
+  fallback: string,
+  hasSignature: boolean
 ): string {
   const fromSnapshot =
     snapshot && typeof snapshot === "object" && "termsText" in snapshot
@@ -53,6 +57,9 @@ function receiptTermsText(
       : null;
   if (typeof fromSnapshot === "string" && fromSnapshot.trim()) {
     return fromSnapshot;
+  }
+  if (hasSignature) {
+    return fallback;
   }
   return shopTerms?.trim() || fallback;
 }
@@ -799,13 +806,16 @@ ${
           .join("")}</table></div>`
       : "";
 
-  const signatureBox = job.intakeSignatureDataUrl?.startsWith("data:image/")
-    ? `<img src="${esc(job.intakeSignatureDataUrl)}" alt="signature" />`
+  const hasSignature =
+    job.intakeSignatureDataUrl?.startsWith("data:image/") ?? false;
+  const signatureBox = hasSignature
+    ? `<img src="${esc(job.intakeSignatureDataUrl as string)}" alt="signature" />`
     : `<div class="line">${s.signatureLabel}</div>`;
   const termsText = receiptTermsText(
     job.intakeTermsSnapshot,
     settings?.intakeTerms,
-    s.termsSigned
+    s.termsSigned,
+    hasSignature
   );
   const signatureHtml = prefs.showSignature
     ? `<div class="sign"><p class="terms">${escMultiline(termsText)}</p><div class="box">${signatureBox}</div>${signatureSealHtml(job, s)}</div>`
