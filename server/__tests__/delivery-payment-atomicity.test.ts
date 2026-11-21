@@ -245,6 +245,21 @@ describe.skipIf(!serverReachable)(
 
       // Force the job UPDATE to fail AFTER the payment insert: the whole
       // transaction must roll back — no payment, no status change.
+      // The sequence probe proves the payment INSERT actually ran inside
+      // the transaction: nextval() is non-transactional, so it stays
+      // incremented even though the row rolled back.
+      await db.$executeRawUnsafe(`
+        CREATE SEQUENCE payment_insert_probe;
+        CREATE OR REPLACE FUNCTION probe_payment_insert()
+        RETURNS trigger AS $func$
+        BEGIN
+          PERFORM nextval('payment_insert_probe');
+          RETURN NEW;
+        END;
+        $func$ LANGUAGE plpgsql;
+        CREATE TRIGGER probe_payment_ins AFTER INSERT ON payments
+        FOR EACH ROW EXECUTE FUNCTION probe_payment_insert()
+      `);
       await db.$executeRawUnsafe(`
         CREATE OR REPLACE FUNCTION reject_delivered_for_test()
         RETURNS trigger AS $func$
@@ -261,19 +276,38 @@ describe.skipIf(!serverReachable)(
         BEFORE UPDATE OF status ON jobs
         FOR EACH ROW EXECUTE FUNCTION reject_delivered_for_test()
       `);
+      let paymentInsertAttempted = false;
       try {
         await expect(
           deliverWithPayment(db, job.id, g.user.id)
         ).rejects.toThrow();
+        // nextval() survives the rollback — is_called proves the payment
+        // INSERT ran inside the transaction before the UPDATE failed.
+        const probe = (await db.$queryRawUnsafe(
+          "SELECT is_called FROM payment_insert_probe"
+        )) as { is_called: boolean }[];
+        paymentInsertAttempted = probe[0]?.is_called === true;
       } finally {
         await db.$executeRawUnsafe(
           "DROP TRIGGER IF EXISTS reject_delivered_test ON jobs"
         );
         await db.$executeRawUnsafe(
+          "DROP TRIGGER IF EXISTS probe_payment_ins ON payments"
+        );
+        await db.$executeRawUnsafe(
           "DROP FUNCTION IF EXISTS reject_delivered_for_test()"
+        );
+        await db.$executeRawUnsafe(
+          "DROP FUNCTION IF EXISTS probe_payment_insert()"
+        );
+        await db.$executeRawUnsafe(
+          "DROP SEQUENCE IF EXISTS payment_insert_probe"
         );
       }
 
+      // The insert was attempted inside the tx (probe fired) yet nothing
+      // persisted — payment, status and audit all rolled back together.
+      expect(paymentInsertAttempted).toBe(true);
       expect(await db.payment.count({ where: { jobId: job.id } })).toBe(0);
       expect(
         (await db.job.findUniqueOrThrow({ where: { id: job.id } })).status
@@ -319,6 +353,18 @@ describe.skipIf(!serverReachable)(
       const g = await seedGraph(db, "d0004");
       const job = await db.job.create({
         data: { ...jobFields(g, "d0004") },
+      });
+      // Billed repair so the balance covers the €10 handover payment —
+      // without it the delivery would always lose to PAYMENT_EXCEEDS_BALANCE
+      // and the "delivery wins, send rejected" branch would never run.
+      await db.jobRepair.create({
+        data: {
+          category: "HARDWARE",
+          createdById: g.user.id,
+          jobId: job.id,
+          price: 100,
+          repairName: "Screen",
+        },
       });
 
       const [delivered, sent] = await Promise.allSettled([
