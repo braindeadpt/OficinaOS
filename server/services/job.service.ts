@@ -823,11 +823,63 @@ async function auditLoanerUnitChange(
   });
 }
 
+export interface AssignAccess {
+  canAssign: boolean;
+  canSelfAssign: boolean;
+}
+
+const NO_ASSIGN_ACCESS: AssignAccess = {
+  canAssign: false,
+  canSelfAssign: false,
+};
+
+// jobs:assign may set any technician; jobs:selfAssign may only claim an
+// unassigned job for the caller.
+function assertAssignmentAllowed(
+  currentTechnicianId: string | null,
+  nextTechnicianId: string | null | undefined,
+  userId: string,
+  access: AssignAccess
+) {
+  if (
+    nextTechnicianId === undefined ||
+    nextTechnicianId === currentTechnicianId ||
+    access.canAssign
+  ) {
+    return null;
+  }
+  const isSelfClaim =
+    access.canSelfAssign &&
+    currentTechnicianId === null &&
+    nextTechnicianId === userId;
+  return isSelfClaim ? null : { error: "FORBIDDEN" as const };
+}
+
+async function checkTechnicianChange(
+  prisma: PrismaClient,
+  currentTechnicianId: string | null,
+  nextTechnicianId: string | null | undefined,
+  userId: string,
+  access: AssignAccess
+) {
+  const assignError = assertAssignmentAllowed(
+    currentTechnicianId,
+    nextTechnicianId,
+    userId,
+    access
+  );
+  if (assignError || !nextTechnicianId) {
+    return assignError;
+  }
+  return await validateTechnician(prisma, nextTechnicianId);
+}
+
 export async function update(
   prisma: PrismaClient,
   id: string,
   input: UpdateJobInput,
-  userId: string
+  userId: string,
+  assignAccess: AssignAccess = NO_ASSIGN_ACCESS
 ) {
   const job = await findUniqueSimple(prisma, id);
   if (!job) {
@@ -838,11 +890,15 @@ export async function update(
     return mutabilityError;
   }
 
-  if (input.technicianId !== undefined && input.technicianId !== null) {
-    const validation = await validateTechnician(prisma, input.technicianId);
-    if (validation) {
-      return validation;
-    }
+  const technicianError = await checkTechnicianChange(
+    prisma,
+    job.technicianId ?? null,
+    input.technicianId,
+    userId,
+    assignAccess
+  );
+  if (technicianError) {
+    return technicianError;
   }
 
   let deviceCategory: string | null | undefined;
