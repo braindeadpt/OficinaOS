@@ -170,9 +170,11 @@ export const technicianRole = ac.newRole({
   sales: ["view", "create"],
   repairs: ["viewCatalog", "manageCatalog"],
   reports: ["viewSelf"],
-  notifications: ["read"],
+  notifications: ["read", "send"],
   // No settings
-  ai: ["access"],
+  // No ai — the analyst reads job_notes (free text with customer contacts);
+  // exposing it to every technician profile widened PII access beyond what
+  // the bench needs. OWNER-only by product decision (2026-11).
   dashboard: ["viewTechnician"],
   returns: ["create", "edit", "triage", "resolveRework", "viewSelf"],
   // Trade-ins involve money — technicians can see them but not transact.

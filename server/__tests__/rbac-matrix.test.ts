@@ -2,6 +2,7 @@ import { Role, type RoleType } from "@shared/constants/roles";
 import { AppError, isAppError } from "@shared/errors/app-error.js";
 import Fastify from "fastify";
 import { beforeAll, describe, expect, it, vi } from "vitest";
+import { aiRoutes } from "../routes/ai.js";
 import { customersRoutes } from "../routes/customers.js";
 import { jobRoutes } from "../routes/jobs.js";
 import { notificationsRoutes } from "../routes/notifications.js";
@@ -243,8 +244,7 @@ const rolePermissions: Record<RoleType, Record<string, string[]>> = {
     sales: ["view", "create"],
     repairs: ["viewCatalog", "manageCatalog"],
     reports: ["viewSelf"],
-    notifications: ["read"],
-    ai: ["access"],
+    notifications: ["read", "send"],
     dashboard: ["viewTechnician"],
     returns: ["create", "edit", "triage", "resolveRework", "viewSelf"],
     user: ["list", "get"],
@@ -364,6 +364,7 @@ function buildApp(userId: string | null, role: RoleType | null = null) {
   app.register(notificationsRoutes, { prefix: "/api/notifications" });
   app.register(receiptRoutes, { prefix: "/api/receipts" });
   app.register(returnClaimsRoutes, { prefix: "/api/return-claims" });
+  app.register(aiRoutes, { prefix: "/api/ai" });
 
   return app;
 }
@@ -825,6 +826,36 @@ describe("RBAC Matrix", () => {
           url: "/api/notifications/templates/template-1",
           payload: { body: "Updated template" },
         });
+        expect(res.statusCode).toBe(403);
+      });
+    });
+  });
+
+  describe("AI Routes (OWNER-only)", () => {
+    describe("GET /api/ai/status", () => {
+      it("OWNER can read AI status", async () => {
+        const app = buildApp("user-1", Role.OWNER);
+        const res = await app.inject({ method: "GET", url: "/api/ai/status" });
+        expect(res.statusCode).not.toBe(403);
+      });
+
+      it("TECHNICIAN cannot read AI status — analyst reads job_notes PII", async () => {
+        const app = buildApp("user-1", Role.TECHNICIAN);
+        const res = await app.inject({ method: "GET", url: "/api/ai/status" });
+        expect(res.statusCode).toBe(403);
+      });
+
+      it("FRONT_DESK cannot read AI status", async () => {
+        const app = buildApp("user-1", Role.FRONT_DESK);
+        const res = await app.inject({ method: "GET", url: "/api/ai/status" });
+        expect(res.statusCode).toBe(403);
+      });
+    });
+
+    describe("GET /api/ai (conversations)", () => {
+      it("TECHNICIAN cannot list AI conversations", async () => {
+        const app = buildApp("user-1", Role.TECHNICIAN);
+        const res = await app.inject({ method: "GET", url: "/api/ai" });
         expect(res.statusCode).toBe(403);
       });
     });

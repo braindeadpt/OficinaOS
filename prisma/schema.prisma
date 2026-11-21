@@ -438,7 +438,7 @@ model SalePayment {
 // estimatedCost is optional: shops often price only after diagnosis
 // (null = "por orçamentar").
 // finalCost is computed on read: Sum(JobRepair.price) + Sum(JobPart.totalCost).
-// accessCode should be generated with crypto.randomBytes(8).toString('hex').
+// accessCode should be generated with crypto.randomBytes(16).toString('hex').
 // ─────────────────────────────────────────────
 
 model Job {
