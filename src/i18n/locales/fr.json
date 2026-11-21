@@ -2582,6 +2582,7 @@
     "mark_returned": "Marquer comme retourné",
     "returned": "Réparation externe marquée comme retournée",
     "cancel": "Annuler",
+    "cancel_confirm": "Annuler cet envoi externe ? ",
     "saved": "Réparation externe enregistrée",
     "save_failed": "Impossible d'enregistrer la réparation externe",
     "load_failed": "Impossible de charger les fournisseurs",

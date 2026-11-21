@@ -49,6 +49,7 @@ export default function JobExternalRepairsSection({
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
   const [open, setOpen] = useState(false);
   const [returning, setReturning] = useState<ExternalRepair | null>(null);
+  const [cancelling, setCancelling] = useState<ExternalRepair | null>(null);
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [returnCost, setReturnCost] = useState("");
@@ -200,6 +201,11 @@ export default function JobExternalRepairsSection({
                     .filter(Boolean)
                     .join(" · ")}
                 </p>
+                {r.notes && (
+                  <p className="mt-1 whitespace-pre-line text-on-surface-variant text-xs">
+                    {r.notes}
+                  </p>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <span className="font-label text-on-surface-variant text-xs uppercase">
@@ -219,7 +225,7 @@ export default function JobExternalRepairsSection({
                       {t("external_repairs.mark_returned")}
                     </Button>
                     <Button
-                      onClick={() => cancel(r.id)}
+                      onClick={() => setCancelling(r)}
                       size="sm"
                       type="button"
                       variant="ghost"
@@ -246,7 +252,7 @@ export default function JobExternalRepairsSection({
             onClick={() => setOpen(false)}
             type="button"
           />
-          <div className="modal-surface relative z-10 w-full overflow-hidden rounded-b-none bg-surface-container-lowest shadow-2xl sm:max-w-md sm:rounded-xl">
+          <div className="modal-surface relative z-10 max-h-[85dvh] w-full overflow-y-auto rounded-b-none bg-surface-container-lowest shadow-2xl sm:max-w-md sm:rounded-xl">
             <div className="flex items-center justify-between px-6 py-4">
               <h3 className="font-bold font-headline text-lg text-on-surface">
                 {t("external_repairs.send")}
@@ -349,7 +355,7 @@ export default function JobExternalRepairsSection({
             onClick={() => setReturning(null)}
             type="button"
           />
-          <div className="modal-surface relative z-10 w-full overflow-hidden rounded-b-none bg-surface-container-lowest shadow-2xl sm:max-w-md sm:rounded-xl">
+          <div className="modal-surface relative z-10 max-h-[85dvh] w-full overflow-y-auto rounded-b-none bg-surface-container-lowest shadow-2xl sm:max-w-md sm:rounded-xl">
             <div className="flex items-center justify-between px-6 py-4">
               <h3 className="font-bold font-headline text-lg text-on-surface">
                 {t("external_repairs.mark_returned")}
@@ -386,6 +392,49 @@ export default function JobExternalRepairsSection({
                 variant="primary-gradient"
               >
                 {t("external_repairs.mark_returned")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cancelling && (
+        <div
+          aria-modal="true"
+          className="fixed inset-0 z-[60] flex items-end sm:items-center sm:justify-center"
+          role="dialog"
+        >
+          <button
+            aria-label={t("close_modal")}
+            className="absolute inset-0 bg-overlay"
+            onClick={() => setCancelling(null)}
+            type="button"
+          />
+          <div className="modal-surface relative z-10 w-full rounded-b-none bg-surface-container-lowest p-6 shadow-2xl sm:max-w-md sm:rounded-xl">
+            <h3 className="font-bold font-headline text-lg text-on-surface">
+              {t("external_repairs.cancel_confirm")}
+            </h3>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                onClick={() => setCancelling(null)}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                {t("close_modal")}
+              </Button>
+              <Button
+                loading={busy}
+                onClick={async () => {
+                  const id = cancelling.id;
+                  setCancelling(null);
+                  await cancel(id);
+                }}
+                size="sm"
+                type="button"
+                variant="primary"
+              >
+                {t("external_repairs.cancel")}
               </Button>
             </div>
           </div>

@@ -2582,6 +2582,7 @@
     "mark_returned": "Marcar como devuelto",
     "returned": "Reparación externa marcada como devuelta",
     "cancel": "Cancelar",
+    "cancel_confirm": "¿Cancelar este envío externo? ",
     "saved": "Reparación externa guardada",
     "save_failed": "No se pudo guardar la reparación externa",
     "load_failed": "No se pudieron cargar proveedores",

@@ -2582,6 +2582,7 @@
     "mark_returned": "Mark as returned",
     "returned": "External repair marked as returned",
     "cancel": "Cancel",
+    "cancel_confirm": "Cancel this external send? The record cannot be reopened.",
     "saved": "External repair saved",
     "save_failed": "Could not save the external repair",
     "load_failed": "Could not load suppliers",

@@ -1144,6 +1144,23 @@ export async function transitionStatus(
     };
   }
 
+  // A device out at an external repairer cannot be delivered — it is not in
+  // the shop. The send form is blocked on DELIVERED jobs in the other
+  // direction (external-repair.service).
+  if (newStatus === "DELIVERED") {
+    const openExternal = await prisma.externalRepair.findFirst({
+      where: { jobId: id, status: "SENT" },
+      select: { id: true },
+    });
+    if (openExternal) {
+      return {
+        allowedTransitions: allowed,
+        currentStatus: job.status,
+        error: "CONFLICT_STATUS_TRANSITION" as const,
+      };
+    }
+  }
+
   const { updateData, techAssigned } = buildTransitionUpdateData(
     job,
     newStatus,

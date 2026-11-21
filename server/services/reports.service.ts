@@ -161,6 +161,9 @@ export async function revenueReport(
     const partsCost = toMoney(
       j.partsUsed.reduce((s, p) => s + toMoney(p.totalCost), 0)
     );
+    const externalCost = toMoney(
+      j.externalRepairs.reduce((s, r) => s + toMoney(r.costFinal ?? 0), 0)
+    );
     const repairsTotal = toMoney(
       j.repairs.reduce((s, r) => s + toMoney(r.price), 0)
     );
@@ -177,7 +180,9 @@ export async function revenueReport(
     };
     if (includeMargin && repairsTotal > 0) {
       row.margin =
-        Math.round(((repairsTotal - partsCost) / repairsTotal) * 10_000) / 100;
+        Math.round(
+          ((repairsTotal - partsCost - externalCost) / repairsTotal) * 10_000
+        ) / 100;
     }
     return row;
   });
@@ -936,13 +941,16 @@ export async function ordersReport(
     const partsCost = toMoney(
       j.partsUsed.reduce((s, p) => s + toMoney(p.totalCost), 0)
     );
+    const externalCost = toMoney(
+      j.externalRepairs.reduce((s, r) => s + toMoney(r.costFinal ?? 0), 0)
+    );
     const repairsTotal = toMoney(
       j.repairs.reduce((s, r) => s + toMoney(r.price), 0)
     );
     const recorded = partsCost + repairsTotal;
     const value = toMoney(recorded > 0 ? recorded : j.estimatedCost);
     totalValue += value;
-    totalCost += partsCost;
+    totalCost += partsCost + externalCost;
     const row: OrdersReportDTO["rows"][number] = {
       jobCode: j.jobCode,
       customerName: j.customer.name,
@@ -956,7 +964,9 @@ export async function ordersReport(
     };
     if (includeMargin && repairsTotal > 0) {
       row.margin =
-        Math.round(((repairsTotal - partsCost) / repairsTotal) * 10_000) / 100;
+        Math.round(
+          ((repairsTotal - partsCost - externalCost) / repairsTotal) * 10_000
+        ) / 100;
     }
     return row;
   });

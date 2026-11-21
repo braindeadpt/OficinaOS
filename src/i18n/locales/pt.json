@@ -2559,7 +2559,7 @@
     "empty": "Esta reparação ainda não foi encaminhada para nenhuma loja."
   },
   "external_repairs": {
-    "title": "Reparação externo",
+    "title": "Reparação externa",
     "send": "Enviar para reparação externa",
     "badge": "Fora — {{name}}",
     "empty": "Este trabalho não foi enviado para reparação externa.",
@@ -2580,10 +2580,11 @@
     "cost_final": "Custo final cobrado",
     "return_hint": "Marque a reparação de {{name}} como retornado. Deixe o custo em branco para os casos de garantia.",
     "mark_returned": "Marcar como devolvido",
-    "returned": "Reparação externa marcada como devolvido",
+    "returned": "Reparação externa marcada como devolvida",
     "cancel": "Cancelar",
-    "saved": "Reparação externa salvo",
-    "save_failed": "Não foi possível guardar a reparação externo",
+    "cancel_confirm": "Cancelar este envio externo? O registo não pode ser reaberto.",
+    "saved": "Reparação externa guardada",
+    "save_failed": "Não foi possível guardar a reparação externa",
     "load_failed": "Não foi possível carregar fornecedores",
     "status_sent": "Enviado",
     "status_returned": "Devolvido",

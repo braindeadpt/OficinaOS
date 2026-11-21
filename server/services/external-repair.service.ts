@@ -10,6 +10,27 @@ const repairInclude = {
   createdBy: { select: { id: true, name: true, username: true } },
 } as const;
 
+const OPEN_REPAIR_ERROR = {
+  errors: { externalRepair: ["validations.invalid_option"] },
+} as const;
+
+function isUniqueViolation(e: unknown): boolean {
+  return (
+    typeof e === "object" &&
+    e !== null &&
+    "code" in e &&
+    (e as { code?: string }).code === "P2002"
+  );
+}
+
+// Date-only input ("YYYY-MM-DD") coerces to UTC midnight; store at noon UTC so
+// every realistic shop timezone renders the same calendar day.
+function toNoonUtc(d: Date): Date {
+  return new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12)
+  );
+}
+
 export async function createExternalRepair(
   prisma: PrismaClient,
   jobId: string,
@@ -19,6 +40,9 @@ export async function createExternalRepair(
   const job = await prisma.job.findUnique({ where: { id: jobId } });
   if (!job) {
     throw new AppError("JOB_NOT_FOUND");
+  }
+  if (job.status === "DELIVERED" || job.status === "CANCELLED") {
+    throw new AppError("VALIDATION_ERROR", OPEN_REPAIR_ERROR);
   }
   const supplier = await prisma.supplier.findUnique({
     where: { id: data.supplierId },
@@ -30,24 +54,34 @@ export async function createExternalRepair(
   }
   const open = await prisma.externalRepair.findFirst({
     where: { jobId, status: "SENT" },
+    select: { id: true },
   });
   if (open) {
-    throw new AppError("VALIDATION_ERROR", {
-      errors: { externalRepair: ["validations.invalid_option"] },
-    });
+    throw new AppError("VALIDATION_ERROR", OPEN_REPAIR_ERROR);
   }
-  return await prisma.externalRepair.create({
-    data: {
-      jobId,
-      supplierId: data.supplierId,
-      kind: data.kind,
-      reference: data.reference || null,
-      notes: data.notes || null,
-      expectedReturnAt: data.expectedReturnAt ?? null,
-      createdById: userId,
-    },
-    include: repairInclude,
-  });
+  try {
+    return await prisma.externalRepair.create({
+      data: {
+        jobId,
+        supplierId: data.supplierId,
+        kind: data.kind,
+        reference: data.reference || null,
+        notes: data.notes || null,
+        expectedReturnAt: data.expectedReturnAt
+          ? toNoonUtc(data.expectedReturnAt)
+          : null,
+        createdById: userId,
+      },
+      include: repairInclude,
+    });
+  } catch (e) {
+    // Partial unique index external_repairs_one_open_per_job — a concurrent
+    // send won the race between our check and this insert.
+    if (isUniqueViolation(e)) {
+      throw new AppError("VALIDATION_ERROR", OPEN_REPAIR_ERROR);
+    }
+    throw e;
+  }
 }
 
 export async function listExternalRepairs(prisma: PrismaClient, jobId: string) {
@@ -58,45 +92,60 @@ export async function listExternalRepairs(prisma: PrismaClient, jobId: string) {
   });
 }
 
+async function transitionOpenRepair(
+  prisma: PrismaClient,
+  id: string,
+  data: {
+    status: "RETURNED" | "CANCELLED";
+    returnedAt?: Date;
+    costFinal?: number | null;
+    notes?: string | null;
+  }
+) {
+  // Conditional update: only a still-SENT row transitions, so a concurrent
+  // return/cancel loses instead of overwriting the winner's fields.
+  const updated = await prisma.externalRepair.updateMany({
+    where: { id, status: "SENT" },
+    data,
+  });
+  if (updated.count === 0) {
+    const exists = await prisma.externalRepair.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!exists) {
+      throw new AppError("NOT_FOUND");
+    }
+    throw new AppError("VALIDATION_ERROR", {
+      errors: { status: ["validations.invalid_option"] },
+    });
+  }
+  return await prisma.externalRepair.findUniqueOrThrow({
+    where: { id },
+    include: repairInclude,
+  });
+}
+
 export async function returnExternalRepair(
   prisma: PrismaClient,
   id: string,
   data: ExternalRepairReturnInput
 ) {
-  const repair = await prisma.externalRepair.findUnique({ where: { id } });
+  const repair = await prisma.externalRepair.findUnique({
+    where: { id },
+    select: { notes: true },
+  });
   if (!repair) {
     throw new AppError("NOT_FOUND");
   }
-  if (repair.status !== "SENT") {
-    throw new AppError("VALIDATION_ERROR", {
-      errors: { status: ["validations.invalid_option"] },
-    });
-  }
-  return await prisma.externalRepair.update({
-    where: { id },
-    data: {
-      status: "RETURNED",
-      returnedAt: new Date(),
-      costFinal: data.costFinal ?? null,
-      notes: data.notes ?? repair.notes,
-    },
-    include: repairInclude,
+  return await transitionOpenRepair(prisma, id, {
+    status: "RETURNED",
+    returnedAt: new Date(),
+    costFinal: data.costFinal ?? null,
+    notes: data.notes ?? repair.notes,
   });
 }
 
 export async function cancelExternalRepair(prisma: PrismaClient, id: string) {
-  const repair = await prisma.externalRepair.findUnique({ where: { id } });
-  if (!repair) {
-    throw new AppError("NOT_FOUND");
-  }
-  if (repair.status !== "SENT") {
-    throw new AppError("VALIDATION_ERROR", {
-      errors: { status: ["validations.invalid_option"] },
-    });
-  }
-  return await prisma.externalRepair.update({
-    where: { id },
-    data: { status: "CANCELLED" },
-    include: repairInclude,
-  });
+  return await transitionOpenRepair(prisma, id, { status: "CANCELLED" });
 }
