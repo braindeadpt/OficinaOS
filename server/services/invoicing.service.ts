@@ -1,9 +1,10 @@
 import type { PrismaClient } from "@generated/client";
-import { AppError } from "@shared/errors/app-error.js";
+import { AppError, isAppError } from "@shared/errors/app-error.js";
 import type { FastifyBaseLogger } from "fastify";
 import { decryptSecret } from "../lib/crypto.js";
 import { assertNotDemoMode } from "../lib/demo.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
+import { isModuleEnabled } from "../utils/modules.js";
 
 /**
  * Faturação (módulo Pro "invoicing") — emissão de documentos fiscais via
@@ -43,6 +44,7 @@ interface InvoiceCustomer {
 
 interface SettingsLike {
   cloudEntitlements: unknown;
+  cloudSyncedAt: Date | null;
   invoicingAccount: string | null;
   invoicingApiKeyEncrypted: string | null;
   invoicingEnabled: boolean;
@@ -63,10 +65,10 @@ async function loadInvoicingConfig(prisma: PrismaClient): Promise<{
   const settings = (await getOrCreateShopSettings(
     prisma
   )) as unknown as SettingsLike;
-  const modules = Array.isArray(settings.cloudEntitlements)
-    ? (settings.cloudEntitlements as string[])
-    : [];
-  if (!modules.includes(MODULE)) {
+  // Aqui a cache É a enforcement — a chamada ao InvoiceXpress não passa
+  // pela cloud, por isso a lista tem de estar fresca (isModuleEnabled
+  // aplica o TTL de 24h à última sync).
+  if (!isModuleEnabled(settings, MODULE)) {
     throw new AppError("CLOUD_MODULE_REQUIRED");
   }
   if (!settings.invoicingEnabled) {
@@ -121,10 +123,12 @@ async function ixFetch(
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
       headers: { "content-type": "application/json" },
       method: init.method ?? "GET",
+      signal: AbortSignal.timeout(15_000),
     }
   ).catch(() => null);
   if (!res) {
-    throw new AppError("INVOICING_PROVIDER_FAILED");
+    // Timeout/rede: resultado ambíguo — o provider pode ter criado o doc.
+    throw new AppError("INVOICING_PROVIDER_FAILED", { ambiguous: true });
   }
   const body = (await res.json().catch(() => null)) as Record<
     string,
@@ -188,10 +192,13 @@ async function issueDocument(
 
   const docId = created.id;
   if (!docId) {
+    // 2xx sem id legível — o documento pode existir server-side.
     log.warn({ created }, "InvoiceXpress create returned no document id");
-    throw new AppError("INVOICING_PROVIDER_FAILED");
+    throw new AppError("INVOICING_PROVIDER_FAILED", { ambiguous: true });
   }
 
+  // A partir daqui o documento JÁ existe: qualquer falha no finalize é
+  // ambígua para efeitos de retry, mesmo uma rejeição definitiva.
   const finalized = await ixFetch(
     account,
     apiKey,
@@ -200,7 +207,15 @@ async function issueDocument(
       body: { invoice: { state: "finalized" } },
       method: "PUT",
     }
-  );
+  ).catch((err) => {
+    if (isAppError(err) && err.code === "INVOICING_PROVIDER_FAILED") {
+      throw new AppError("INVOICING_PROVIDER_FAILED", {
+        ambiguous: true,
+        providerStatus: err.details?.providerStatus,
+      });
+    }
+    throw err;
+  });
 
   return {
     docId: String(docId),
@@ -217,6 +232,51 @@ async function issueDocument(
 // claim serializes it (single-instance deployment, like the outbox
 // worker's isProcessing flag).
 const issuingKeys = new Set<string>();
+// Timeout/rede é ambíguo: o documento fiscal pode existir no provider sem o
+// sabermos. Nesses casos o claim fica retido este tempo e o operador deve
+// verificar o InvoiceXpress antes de retry — nunca emitir um 2º doc.
+const AMBIGUOUS_CLAIM_HOLD_MS = 10 * 60_000;
+
+function isAmbiguousProviderFailure(err: unknown): boolean {
+  return (
+    err instanceof AppError &&
+    err.code === "INVOICING_PROVIDER_FAILED" &&
+    err.details?.ambiguous === true
+  );
+}
+
+/**
+ * Persists the issued document's link on the local record. The provider
+ * call already created an irreversible numbered fiscal document, so a
+ * failed full update must never leave `invoiceDocId` empty — a retry
+ * would then issue a SECOND legal document. Fallback: record the docId
+ * alone; if even that fails, log.fatal for manual reconciliation.
+ */
+async function persistIssuedInvoice(opts: {
+  docId: string;
+  log: FastifyBaseLogger;
+  ref: string;
+  writeDocIdOnly: () => Promise<unknown>;
+  writeFull: () => Promise<unknown>;
+}) {
+  try {
+    await opts.writeFull();
+  } catch (err) {
+    try {
+      await opts.writeDocIdOnly();
+      opts.log.error(
+        { docId: opts.docId, err, ref: opts.ref },
+        "invoice metadata write failed — docId recorded, reconcile fields"
+      );
+    } catch (persistErr) {
+      opts.log.fatal(
+        { docId: opts.docId, err: persistErr, ref: opts.ref },
+        "FISCAL_DOC_ORPHANED — provider document exists but is unrecorded; reconcile manually and DO NOT re-issue"
+      );
+    }
+    throw err;
+  }
+}
 
 export async function issueInvoiceForSale(
   prisma: PrismaClient,
@@ -228,6 +288,7 @@ export async function issueInvoiceForSale(
     throw new AppError("ALREADY_INVOICED");
   }
   issuingKeys.add(claimKey);
+  let ambiguousFailure = false;
   try {
     const sale = await prisma.sale.findUnique({
       include: { customer: true, items: true },
@@ -253,19 +314,47 @@ export async function issueInvoiceForSale(
       reference: sale.saleCode,
     });
 
-    await prisma.sale.update({
-      data: {
-        invoiceDocId: issued.docId,
-        invoiceDocType: issued.docType,
-        invoiceNumber: issued.number,
-        invoicePermalink: issued.permalink,
-        invoicedAt: new Date(),
-      },
-      where: { id: sale.id },
+    await persistIssuedInvoice({
+      docId: issued.docId,
+      log,
+      ref: sale.saleCode,
+      writeDocIdOnly: () =>
+        prisma.sale.update({
+          data: { invoiceDocId: issued.docId },
+          where: { id: sale.id },
+        }),
+      writeFull: () =>
+        prisma.sale.update({
+          data: {
+            invoiceDocId: issued.docId,
+            invoiceDocType: issued.docType,
+            invoiceNumber: issued.number,
+            invoicePermalink: issued.permalink,
+            invoicedAt: new Date(),
+          },
+          where: { id: sale.id },
+        }),
     });
     return issued;
+  } catch (err) {
+    ambiguousFailure = isAmbiguousProviderFailure(err);
+    if (ambiguousFailure) {
+      log.error(
+        { claimKey, err },
+        "invoice issue outcome unknown — check InvoiceXpress before retrying; retries blocked for 10min"
+      );
+      setTimeout(
+        () => issuingKeys.delete(claimKey),
+        AMBIGUOUS_CLAIM_HOLD_MS
+      ).unref();
+      // Código próprio → a UI distingue "verificar provider" de "falhou".
+      throw new AppError("INVOICING_OUTCOME_UNKNOWN");
+    }
+    throw err;
   } finally {
-    issuingKeys.delete(claimKey);
+    if (!ambiguousFailure) {
+      issuingKeys.delete(claimKey);
+    }
   }
 }
 
@@ -279,6 +368,7 @@ export async function issueInvoiceForJob(
     throw new AppError("ALREADY_INVOICED");
   }
   issuingKeys.add(claimKey);
+  let ambiguousFailure = false;
   try {
     const job = await prisma.job.findUnique({
       include: { customer: true },
@@ -323,18 +413,46 @@ export async function issueInvoiceForJob(
       reference: job.jobCode,
     });
 
-    await prisma.job.update({
-      data: {
-        invoiceDocId: issued.docId,
-        invoiceDocType: issued.docType,
-        invoiceNumber: issued.number,
-        invoicePermalink: issued.permalink,
-        invoicedAt: new Date(),
-      },
-      where: { id: job.id },
+    await persistIssuedInvoice({
+      docId: issued.docId,
+      log,
+      ref: job.jobCode,
+      writeDocIdOnly: () =>
+        prisma.job.update({
+          data: { invoiceDocId: issued.docId },
+          where: { id: job.id },
+        }),
+      writeFull: () =>
+        prisma.job.update({
+          data: {
+            invoiceDocId: issued.docId,
+            invoiceDocType: issued.docType,
+            invoiceNumber: issued.number,
+            invoicePermalink: issued.permalink,
+            invoicedAt: new Date(),
+          },
+          where: { id: job.id },
+        }),
     });
     return issued;
+  } catch (err) {
+    ambiguousFailure = isAmbiguousProviderFailure(err);
+    if (ambiguousFailure) {
+      log.error(
+        { claimKey, err },
+        "invoice issue outcome unknown — check InvoiceXpress before retrying; retries blocked for 10min"
+      );
+      setTimeout(
+        () => issuingKeys.delete(claimKey),
+        AMBIGUOUS_CLAIM_HOLD_MS
+      ).unref();
+      // Código próprio → a UI distingue "verificar provider" de "falhou".
+      throw new AppError("INVOICING_OUTCOME_UNKNOWN");
+    }
+    throw err;
   } finally {
-    issuingKeys.delete(claimKey);
+    if (!ambiguousFailure) {
+      issuingKeys.delete(claimKey);
+    }
   }
 }

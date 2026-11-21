@@ -2,6 +2,7 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router";
 import { toast } from "sonner";
+import { Can } from "@/components/modules/can";
 import { RecordWorkflow } from "@/components/modules/tasks/record-workflow";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -269,15 +270,17 @@ export default function SupplierRmasPage() {
             {t("rmas.desc")}
           </p>
         </div>
-        <Button
-          icon="add"
-          onClick={() => setShowModal(true)}
-          size="md"
-          type="button"
-          variant="primary-gradient"
-        >
-          {t("rmas.add")}
-        </Button>
+        <Can perm={{ parts: ["manageCatalog"] }}>
+          <Button
+            icon="add"
+            onClick={() => setShowModal(true)}
+            size="md"
+            type="button"
+            variant="primary-gradient"
+          >
+            {t("rmas.add")}
+          </Button>
+        </Can>
       </div>
 
       <div className="mb-5 sm:w-64">
@@ -352,18 +355,27 @@ export default function SupplierRmasPage() {
                       .join(" · ")}
                   </p>
                 </div>
-                <Select
-                  aria-label={t("rmas.status")}
-                  className="sm:w-44"
-                  onChange={(e) => setStatus(rma, e.target.value)}
-                  value={rma.status}
+                <Can
+                  fallback={
+                    <span className="text-sm">
+                      {t(`rmas.status_${rma.status.toLowerCase()}`)}
+                    </span>
+                  }
+                  perm={{ parts: ["manageCatalog"] }}
                 >
-                  {STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      {t(`rmas.status_${s.toLowerCase()}`)}
-                    </option>
-                  ))}
-                </Select>
+                  <Select
+                    aria-label={t("rmas.status")}
+                    className="sm:w-44"
+                    onChange={(e) => setStatus(rma, e.target.value)}
+                    value={rma.status}
+                  >
+                    {STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {t(`rmas.status_${s.toLowerCase()}`)}
+                      </option>
+                    ))}
+                  </Select>
+                </Can>
               </li>
             ))}
           </ul>

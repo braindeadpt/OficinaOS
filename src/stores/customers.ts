@@ -54,7 +54,9 @@ interface CustomersState {
   isExporting: boolean;
   isLoading: boolean;
   isLoadingCustomer: boolean;
+  isLoadingMore: boolean;
   isUpdating: boolean;
+  loadMoreCustomers: (search?: string, consent?: string) => Promise<void>;
   nextCursor: string | null;
   searchCustomers: (query: string) => Promise<CustomerListItem[]>;
   totalCount: number;
@@ -78,6 +80,7 @@ export const useCustomersStore = create<CustomersState>((set) => ({
   isLoading: false,
   isLoadingCustomer: false,
   isExporting: false,
+  isLoadingMore: false,
   isUpdating: false,
   nextCursor: null,
   totalCount: 0,
@@ -149,6 +152,41 @@ export const useCustomersStore = create<CustomersState>((set) => ({
     }
   },
 
+  loadMoreCustomers: async (search, consent) => {
+    const state = useCustomersStore.getState();
+    if (!state.nextCursor || state.isLoadingMore) {
+      return;
+    }
+    set({ isLoadingMore: true });
+    try {
+      const params: Record<string, unknown> = {
+        limit: 50,
+        cursor: state.nextCursor,
+      };
+      if (search) {
+        params.search = search;
+      }
+      if (consent) {
+        params.consent = consent;
+      }
+      const res = await api.get("/customers", { params });
+      const data = res.data as {
+        customers: CustomerListItem[];
+        nextCursor: string | null;
+      };
+      set((s) => ({
+        customers: [...s.customers, ...data.customers],
+        nextCursor: data.nextCursor,
+        isLoadingMore: false,
+      }));
+    } catch (err: unknown) {
+      set({
+        isLoadingMore: false,
+        error: getErrorMessage(err, i18n.t("errors.fetch_customers")),
+      });
+    }
+  },
+
   searchCustomers: async (query) => {
     try {
       const res = await api.get("/customers/search", {
@@ -178,7 +216,38 @@ export const useCustomersStore = create<CustomersState>((set) => ({
     set({ isUpdating: true, error: null });
     try {
       const res = await api.patch(`/customers/${id}`, data);
-      return res.data as Customer;
+      const updated = res.data as Customer;
+      // The PATCH response has no _count/jobs relations — merge the scalars
+      // into the loaded list item and the open detail record so neither
+      // goes stale until the next fetch. Dates arrive as ISO strings over
+      // JSON; the shared Customer type declares Date, so map explicitly.
+      set((state) => ({
+        customers: state.customers.map((c) =>
+          c.id === id
+            ? {
+                ...c,
+                email: updated.email,
+                name: updated.name,
+                phone: updated.phone,
+                whatsappConsent: updated.whatsappConsent,
+                whatsappConsentAt: updated.whatsappConsentAt
+                  ? new Date(updated.whatsappConsentAt).toISOString()
+                  : null,
+              }
+            : c
+        ),
+        currentCustomer:
+          state.currentCustomer?.id === id
+            ? {
+                ...state.currentCustomer,
+                email: updated.email,
+                name: updated.name,
+                phone: updated.phone,
+              }
+            : state.currentCustomer,
+        isUpdating: false,
+      }));
+      return updated;
     } catch (err: unknown) {
       const message = getErrorMessage(err, i18n.t("errors.update_customer"));
       set({ error: message, isUpdating: false });

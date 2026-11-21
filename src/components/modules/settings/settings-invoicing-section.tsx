@@ -18,8 +18,10 @@ interface InvoicingStatus {
 const TAX_NAMES = ["IVA23", "IVA13", "IVA6", "IVA0"] as const;
 
 export default function SettingsInvoicingSection({
+  onDirtyChange,
   onToast,
 }: {
+  onDirtyChange?: (dirty: boolean) => void;
   onToast: (msg: string, type: "success" | "error") => void;
 }) {
   const { t } = useTranslation();
@@ -57,6 +59,7 @@ export default function SettingsInvoicingSection({
         ...(apiKey ? { apiKey } : {}),
       });
       await refresh();
+      onDirtyChange?.(false);
       onToast(t("invoicing.saved"), "success");
     } catch (err) {
       onToast(getErrorMessage(err, t("invoicing.save_failed")), "error");
@@ -83,7 +86,10 @@ export default function SettingsInvoicingSection({
       <Field label={t("invoicing.account")}>
         <Input
           autoComplete="off"
-          onChange={(e) => setAccount(e.target.value)}
+          onChange={(e) => {
+            setAccount(e.target.value);
+            onDirtyChange?.(true);
+          }}
           placeholder={t("invoicing.account_placeholder")}
           value={account}
         />
@@ -93,7 +99,10 @@ export default function SettingsInvoicingSection({
         <div>
           <Input
             autoComplete="off"
-            onChange={(e) => setApiKey(e.target.value)}
+            onChange={(e) => {
+              setApiKey(e.target.value);
+              onDirtyChange?.(true);
+            }}
             placeholder={
               status.hasApiKey
                 ? t("invoicing.api_key_set")
@@ -109,7 +118,13 @@ export default function SettingsInvoicingSection({
       </Field>
 
       <Field label={t("invoicing.tax_name")}>
-        <Select onChange={(e) => setTaxName(e.target.value)} value={taxName}>
+        <Select
+          onChange={(e) => {
+            setTaxName(e.target.value);
+            onDirtyChange?.(true);
+          }}
+          value={taxName}
+        >
           {TAX_NAMES.map((rate) => (
             <option key={rate} value={rate}>
               {rate}
@@ -128,7 +143,10 @@ export default function SettingsInvoicingSection({
         <Switch
           ariaLabelledBy="invoicing-enabled-label"
           checked={enabled}
-          onChange={setEnabled}
+          onChange={(checked) => {
+            setEnabled(checked);
+            onDirtyChange?.(true);
+          }}
         />
       </div>
 

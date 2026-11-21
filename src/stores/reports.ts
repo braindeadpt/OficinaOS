@@ -22,8 +22,6 @@ interface ReportsState {
     error?: string;
   };
   closeCashSession: (input: CloseCashSessionInput) => Promise<void>;
-  customFrom: string | null;
-  customTo: string | null;
   fetchCash: () => Promise<void>;
   fetchCashSession: () => Promise<void>;
   fetchInsights: () => Promise<void>;
@@ -45,24 +43,46 @@ interface ReportsState {
   reopenCashSession: () => Promise<void>;
   returns: { data?: ReturnsReportDTO; loading: boolean; error?: string };
   revenue: { data?: RevenueReportDTO; loading: boolean; error?: string };
-  setCustomRange: (from: string, to: string) => void;
   setOrdersStatus: (status?: string) => void;
   setRange: (range: TimeRangePreset) => void;
 }
 
 function queryParams(state: ReportsState): string {
-  if (state.customFrom && state.customTo) {
-    return `?from=${encodeURIComponent(state.customFrom)}&to=${encodeURIComponent(state.customTo)}`;
-  }
   return `?range=${state.range}`;
+}
+
+// Monotonic per-slice request ids — a slower response issued for a previous
+// range must never overwrite data fetched for the current one.
+type RangeSlice =
+  | "insights"
+  | "operations"
+  | "orders"
+  | "partsConsumption"
+  | "returns"
+  | "revenue";
+
+const requestSeq: Record<RangeSlice, number> = {
+  insights: 0,
+  operations: 0,
+  orders: 0,
+  partsConsumption: 0,
+  returns: 0,
+  revenue: 0,
+};
+
+function nextSeq(slice: RangeSlice): number {
+  requestSeq[slice] += 1;
+  return requestSeq[slice];
+}
+
+function isLatest(slice: RangeSlice, seq: number): boolean {
+  return requestSeq[slice] === seq;
 }
 
 export const useReportsStore = create<ReportsState>((set, get) => ({
   range: "30d",
   cash: { loading: false },
   cashSession: { loading: false },
-  customFrom: null,
-  customTo: null,
   revenue: { loading: false },
   orders: { loading: false },
   ordersStatus: undefined,
@@ -72,16 +92,22 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
   insights: { loading: false },
   returns: { loading: false },
 
-  setRange: (range) => set({ range, customFrom: null, customTo: null }),
-  setCustomRange: (from, to) => set({ customFrom: from, customTo: to }),
+  setRange: (range) => set({ range }),
 
   fetchRevenue: async () => {
+    const seq = nextSeq("revenue");
     set({ revenue: { ...get().revenue, loading: true, error: undefined } });
     try {
       const q = queryParams(get());
       const res = await api.get(`/reports/revenue${q}`);
+      if (!isLatest("revenue", seq)) {
+        return;
+      }
       set({ revenue: { data: res.data as RevenueReportDTO, loading: false } });
     } catch (err: unknown) {
+      if (!isLatest("revenue", seq)) {
+        return;
+      }
       set({
         revenue: {
           ...get().revenue,
@@ -93,13 +119,20 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
   },
 
   fetchOrders: async (status?: string) => {
+    const seq = nextSeq("orders");
     set({ orders: { ...get().orders, loading: true, error: undefined } });
     try {
       const q = queryParams(get());
       const st = status ? `&status=${status}` : "";
       const res = await api.get(`/reports/orders${q}${st}`);
+      if (!isLatest("orders", seq)) {
+        return;
+      }
       set({ orders: { data: res.data as OrdersReportDTO, loading: false } });
     } catch (err: unknown) {
+      if (!isLatest("orders", seq)) {
+        return;
+      }
       set({
         orders: {
           ...get().orders,
@@ -111,16 +144,23 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
   },
 
   fetchOperations: async () => {
+    const seq = nextSeq("operations");
     set({
       operations: { ...get().operations, loading: true, error: undefined },
     });
     try {
       const q = queryParams(get());
       const res = await api.get(`/reports/operations${q}`);
+      if (!isLatest("operations", seq)) {
+        return;
+      }
       set({
         operations: { data: res.data as OperationsReportDTO, loading: false },
       });
     } catch (err: unknown) {
+      if (!isLatest("operations", seq)) {
+        return;
+      }
       set({
         operations: {
           ...get().operations,
@@ -132,14 +172,21 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
   },
 
   fetchInsights: async () => {
+    const seq = nextSeq("insights");
     set({ insights: { ...get().insights, loading: true, error: undefined } });
     try {
       const q = queryParams(get());
       const res = await api.get(`/reports/insights${q}`);
+      if (!isLatest("insights", seq)) {
+        return;
+      }
       set({
         insights: { data: res.data as InsightsReportDTO, loading: false },
       });
     } catch (err: unknown) {
+      if (!isLatest("insights", seq)) {
+        return;
+      }
       set({
         insights: {
           ...get().insights,
@@ -151,6 +198,7 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
   },
 
   fetchPartsConsumption: async () => {
+    const seq = nextSeq("partsConsumption");
     set({
       partsConsumption: {
         ...get().partsConsumption,
@@ -161,6 +209,9 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
     try {
       const q = queryParams(get());
       const res = await api.get(`/reports/parts-consumption${q}`);
+      if (!isLatest("partsConsumption", seq)) {
+        return;
+      }
       set({
         partsConsumption: {
           data: res.data as PartsConsumptionReportDTO,
@@ -168,6 +219,9 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
         },
       });
     } catch (err: unknown) {
+      if (!isLatest("partsConsumption", seq)) {
+        return;
+      }
       set({
         partsConsumption: {
           ...get().partsConsumption,
@@ -251,14 +305,21 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
   },
 
   fetchReturns: async () => {
+    const seq = nextSeq("returns");
     set({ returns: { ...get().returns, loading: true, error: undefined } });
     try {
       const q = queryParams(get());
       const res = await api.get(`/reports/returns${q}`);
+      if (!isLatest("returns", seq)) {
+        return;
+      }
       set({
         returns: { data: res.data as ReturnsReportDTO, loading: false },
       });
     } catch (err: unknown) {
+      if (!isLatest("returns", seq)) {
+        return;
+      }
       set({
         returns: {
           ...get().returns,

@@ -2,6 +2,7 @@ import type { Customer } from "@shared/types";
 import { isValidPhone } from "@shared/utils/phone";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import ConfirmDiscardDialog from "@/components/ui/confirm-discard-dialog";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { useModalEffects } from "@/hooks/use-modal-effects";
@@ -22,11 +23,16 @@ interface FormData {
   whatsappConsent: boolean;
 }
 
-function buildUpdatePayload(
-  form: FormData,
-  customer: Customer
-): Record<string, string> {
-  const data: Record<string, string> = {};
+interface UpdatePayload {
+  email?: string;
+  name?: string;
+  phone?: string;
+  taxId?: string;
+  whatsappConsent?: boolean;
+}
+
+function buildUpdatePayload(form: FormData, customer: Customer): UpdatePayload {
+  const data: UpdatePayload = {};
   if (form.name.trim() !== customer.name) {
     data.name = form.name.trim();
   }
@@ -40,9 +46,19 @@ function buildUpdatePayload(
     data.taxId = form.taxId.trim();
   }
   if (form.whatsappConsent !== (customer.whatsappConsent ?? false)) {
-    data.whatsappConsent = String(form.whatsappConsent);
+    data.whatsappConsent = form.whatsappConsent;
   }
   return data;
+}
+
+function isDirty(form: FormData, customer: Customer): boolean {
+  return (
+    form.name !== customer.name ||
+    form.phone !== customer.phone ||
+    form.email !== (customer.email ?? "") ||
+    form.taxId !== (customer.taxId ?? "") ||
+    form.whatsappConsent !== (customer.whatsappConsent ?? false)
+  );
 }
 
 export default function EditCustomerDialog({
@@ -61,11 +77,27 @@ export default function EditCustomerDialog({
   });
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [showDiscardDialog, setShowDiscardDialog] = useState(false);
   const updateCustomer = useCustomersStore((s) => s.updateCustomer);
   const dialogRef = useRef<HTMLDivElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
-  useModalEffects(open, onClose, dialogRef);
+  const handleClose = useCallback(() => {
+    if (isDirty(form, customer)) {
+      setShowDiscardDialog(true);
+      return;
+    }
+    onClose();
+  }, [form, customer, onClose]);
+
+  // Escape/backdrop-agnostic close goes through handleClose so a dirty
+  // form hits the discard confirm instead of vanishing silently.
+  useModalEffects(open, handleClose, dialogRef);
+
+  const handleDiscard = useCallback(() => {
+    setShowDiscardDialog(false);
+    onClose();
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) {
@@ -133,8 +165,13 @@ export default function EditCustomerDialog({
       <button
         aria-label={t("close_modal")}
         className="absolute inset-0 bg-overlay"
-        onClick={onClose}
+        onClick={handleClose}
         type="button"
+      />
+      <ConfirmDiscardDialog
+        onDiscard={handleDiscard}
+        onKeepEditing={() => setShowDiscardDialog(false)}
+        open={showDiscardDialog}
       />
       <div
         className="modal-surface relative z-10 flex max-h-[85vh] w-full flex-col overflow-hidden rounded-b-none bg-surface-container-lowest shadow-2xl sm:max-h-[80vh] sm:max-w-md sm:rounded-xl"
@@ -149,7 +186,7 @@ export default function EditCustomerDialog({
           </h2>
           <button
             className="flex h-10 w-10 items-center justify-center rounded-full text-outline hover:bg-surface-container-high"
-            onClick={onClose}
+            onClick={handleClose}
             type="button"
           >
             <span className="material-symbols-outlined">close</span>
@@ -232,7 +269,7 @@ export default function EditCustomerDialog({
         <div className="flex justify-end gap-3 px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <button
             className="min-h-[44px] px-4 py-2 font-bold font-headline text-on-surface-variant text-sm hover:text-on-surface"
-            onClick={onClose}
+            onClick={handleClose}
             type="button"
           >
             {t("customer_edit_cancel")}

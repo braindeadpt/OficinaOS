@@ -354,6 +354,12 @@ export const ERRORS = {
     status: 502,
     message: "errors.invoicing_provider_failed",
   },
+  // Resultado desconhecido (timeout/rede): o doc fiscal pode já existir no
+  // provider — o utilizador deve verificar antes de tentar de novo.
+  INVOICING_OUTCOME_UNKNOWN: {
+    status: 502,
+    message: "errors.invoice_outcome_unknown",
+  },
   ALREADY_INVOICED: {
     status: 409,
     message: "errors.already_invoiced",

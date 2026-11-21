@@ -105,24 +105,36 @@ export async function upload(
   await fs.writeFile(filePath, buffer);
 
   const relativePath = `job-photos/${jobId}/${filename}`;
-  let photo: Awaited<ReturnType<typeof createPhotoRepo>>;
+  let photo: Awaited<ReturnType<typeof createPhotoRepo>> | null;
   try {
-    photo = await createPhotoRepo(prisma, {
-      job: { connect: { id: jobId } },
-      path: relativePath,
-      ...(options?.stage ? { stage: options.stage } : {}),
+    photo = await prisma.$transaction(async (tx) => {
+      // Serialize per-job uploads: without the row lock two concurrent
+      // inserts can both pass the count check and exceed MAX_PHOTOS.
+      await tx.$queryRaw`SELECT "id" FROM "jobs" WHERE "id" = ${jobId} FOR UPDATE`;
+      if ((await countPhotos(tx, jobId)) >= MAX_PHOTOS) {
+        return null;
+      }
+      const created = await createPhotoRepo(tx, {
+        job: { connect: { id: jobId } },
+        path: relativePath,
+        ...(options?.stage ? { stage: options.stage } : {}),
+      });
+      await createAuditLog(tx, {
+        jobId,
+        userId,
+        action: AuditAction.PHOTO_ADDED,
+        toValue: filename,
+      });
+      return created;
     });
   } catch (err) {
     await fs.unlink(filePath).catch(() => undefined);
     throw err;
   }
-
-  await createAuditLog(prisma, {
-    jobId,
-    userId,
-    action: AuditAction.PHOTO_ADDED,
-    toValue: filename,
-  });
+  if (!photo) {
+    await fs.unlink(filePath).catch(() => undefined);
+    return { error: "PHOTO_LIMIT_REACHED" as const };
+  }
 
   return photo;
 }

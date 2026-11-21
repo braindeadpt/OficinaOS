@@ -7,7 +7,13 @@ if (Test-Path $envPath) { exit 0 } # ja existe — nao sobrescrever segredos
 
 function New-Secret([int]$len = 48) {
     $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_'
-    -join (1..$len | ForEach-Object { $chars[(Get-Random -Max $chars.Length)] })
+    # CSPRNG compatível com PowerShell 5.1 e 7+ (GetInt32 só existe no .NET Core)
+    $rng = [System.Security.Cryptography.RNGCryptoServiceProvider]::new()
+    $bytes = [byte[]]::new($len)
+    $rng.GetBytes($bytes)
+    $rng.Dispose()
+    # $chars tem 64 símbolos — 256 % 64 = 0, módulo sem viés
+    -join ($bytes | ForEach-Object { $chars[$_ % $chars.Length] })
 }
 
 $ip = (Get-NetIPAddress -AddressFamily IPv4 |

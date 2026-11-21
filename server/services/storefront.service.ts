@@ -6,6 +6,7 @@ import { findManyUsers } from "../repositories/notification.repository.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import { generateIntakeRequestCode } from "../utils/intake-request-code.js";
+import { isModuleEnabled } from "../utils/modules.js";
 import { cloudFetch } from "./cloud.service.js";
 import type { NotifyContext } from "./job.service.js";
 import { notify } from "./notification-dispatch.js";
@@ -56,6 +57,7 @@ export async function markStoreDirtyIfListed(
 interface SettingsRow {
   address: string | null;
   cloudEntitlements: unknown;
+  cloudSyncedAt: Date | null;
   phone: string | null;
   storeAccentColor: string | null;
   storeDescription: string | null;
@@ -110,10 +112,7 @@ export async function pushStorefront(
   // Tema pago: a cloud trata o PUT como snapshot completo — campos de tema
   // ausentes voltam aos defaults. Só se enviam com o entitlement plus em
   // cache; sem ele, a cloud rejeitaria o push inteiro (402).
-  const modules = Array.isArray(settings.cloudEntitlements)
-    ? (settings.cloudEntitlements as string[])
-    : [];
-  const theme = modules.includes("storefront-plus")
+  const theme = isModuleEnabled(settings, "storefront-plus")
     ? {
         accentColor: settings.storeAccentColor ?? null,
         logo: splitDataUrl(settings.storeLogoData),

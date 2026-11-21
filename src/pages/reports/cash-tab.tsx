@@ -155,10 +155,13 @@ export default function CashTab() {
                   </tr>
                 </thead>
                 <tbody>
+                  {/* Rows are grouped by user id server-side but the DTO
+                      drops it — same-named staff produce separate rows, so
+                      key on the row's values rather than name alone. */}
                   {byUser.map((u) => (
                     <tr
                       className="border-outline-variant/50 border-b last:border-0"
-                      key={u.name}
+                      key={`${u.name}-${u.count}-${u.total}`}
                     >
                       <td className="px-4 py-3 font-medium text-on-surface">
                         {u.name}

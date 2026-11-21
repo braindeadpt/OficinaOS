@@ -134,7 +134,7 @@ export default function ConversationItem({
         {menuOpen && (
           <>
             <button
-              aria-label="Close menu"
+              aria-label={t("close")}
               className="fixed inset-0 z-10"
               onClick={(e) => {
                 e.stopPropagation();

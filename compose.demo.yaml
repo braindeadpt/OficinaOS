@@ -102,6 +102,12 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    # The app entrypoint chowns the uploads volume and su-drops to the
+    # bun user — without these caps the container exits on boot.
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
     mem_limit: 768m
     cpus: 1.0
     pids_limit: 256

@@ -40,7 +40,12 @@ const mockPrisma = {
     findFirst: mocks.jobPhotoFindFirst,
     delete: mocks.jobPhotoDelete,
   },
+  $queryRaw: vi.fn().mockResolvedValue([{ id: "job-1" }]),
 } as any;
+// Photo insert runs inside a tx (row lock + recheck); the same mocks serve as tx.
+mockPrisma.$transaction = vi.fn(
+  async (fn: (tx: typeof mockPrisma) => unknown) => await fn(mockPrisma)
+);
 
 function jpegBuffer() {
   // JPEG magic bytes: FF D8 FF followed by filler

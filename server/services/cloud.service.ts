@@ -8,11 +8,17 @@ import { create as createIntakeRequest } from "../repositories/intake-request.re
 import { findManyUsers } from "../repositories/notification.repository.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import { generateIntakeRequestCode } from "../utils/intake-request-code.js";
+import { HINT_TTL_MS } from "../utils/modules.js";
 import type { NotifyContext } from "./job.service.js";
 import { notify } from "./notification-dispatch.js";
 
 const FETCH_TIMEOUT_MS = 10_000;
-export const HINT_TTL_MS = 24 * 3600 * 1000;
+
+/**
+ * Names of the detached sub-syncs currently running — module-level so the
+ * guard survives between poller ticks.
+ */
+const SUB_SYNCS_IN_FLIGHT = new Set<string>();
 
 interface CloudErrorBody {
   error?: { code?: string; message?: string };
@@ -293,29 +299,47 @@ export async function syncCloudEntitlements(
     },
   });
 
+  // Sub-syncs correm desanexados mas nunca sobrepostos: um sync mais lento
+  // que o intervalo do poller não é relançado no ciclo seguinte enquanto
+  // ainda estiver em voo (evita publishes/acks duplicados).
+  // Factory, not a started promise: when the guard skips a sync still in
+  // flight, nothing was launched — a started promise would end up unhandled
+  // and an unhandled rejection can stop the process.
+  const launch = (name: string, run: () => Promise<unknown>): void => {
+    if (SUB_SYNCS_IN_FLIGHT.has(name)) {
+      return;
+    }
+    SUB_SYNCS_IN_FLIGHT.add(name);
+    run()
+      .catch((err) => log.warn({ err, sync: name }, "cloud sub-sync failed"))
+      .finally(() => {
+        SUB_SYNCS_IN_FLIGHT.delete(name);
+      });
+  };
+
   // Pull pending customer diagnostics whenever the shop is entitled — a
   // missed pull never loses data (cloud keeps reports until acked).
   if (modules.includes("diag-intake")) {
-    pullCloudIntake(prisma, token, settings.cloudApiUrl, log, notifyCtx).catch(
-      (err) => log.warn({ err }, "cloud intake pull failed")
+    launch("diag-intake", () =>
+      pullCloudIntake(prisma, token, settings.cloudApiUrl ?? "", log, notifyCtx)
     );
   }
 
   // Portal público: re-publica páginas cujo job mudou e recolhe respostas
   // de orçamento feitas pelos clientes no link público.
   if (modules.includes("portal")) {
-    import("./portal.service.js")
-      .then(({ syncPortal }) =>
+    launch("portal", () =>
+      import("./portal.service.js").then(({ syncPortal }) =>
         syncPortal(prisma, settings.cloudApiUrl ?? "", token, log, notifyCtx)
       )
-      .catch((err) => log.warn({ err }, "cloud portal sync failed"));
+    );
   }
 
   // Loja online: publica a montra quando há alterações pendentes e
   // recolhe reservas feitas pelos clientes na página pública.
   if (modules.includes("storefront")) {
-    import("./storefront.service.js")
-      .then(({ syncStorefront }) =>
+    launch("storefront", () =>
+      import("./storefront.service.js").then(({ syncStorefront }) =>
         syncStorefront(
           prisma,
           settings.cloudApiUrl ?? "",
@@ -324,46 +348,46 @@ export async function syncCloudEntitlements(
           notifyCtx
         )
       )
-      .catch((err) => log.warn({ err }, "storefront sync failed"));
+    );
   }
 
   // Assinatura remota: recolhe assinaturas capturadas na página pública
   // /sign/:token da cloud e entrega-as às sessões locais correspondentes —
   // o poll do diálogo apanha-as sem saber que vieram de fora da LAN.
   if (modules.includes("signature-remote")) {
-    import("./signature-relay.service.js")
-      .then(({ pullSignatureReplies }) =>
+    launch("signature-remote", () =>
+      import("./signature-relay.service.js").then(({ pullSignatureReplies }) =>
         pullSignatureReplies(prisma, settings.cloudApiUrl ?? "", token, log)
       )
-      .catch((err) => log.warn({ err }, "signature relay pull failed"));
+    );
   }
 
   // Multi-loja: empurra o snapshot diário agregado (hoje + ontem) para o
   // dashboard do dono na cloud. Só números — nenhum dado de clientes.
   if (modules.includes("multi-shop")) {
-    import("./shop-metrics.service.js")
-      .then(({ syncShopMetrics }) =>
+    launch("multi-shop", () =>
+      import("./shop-metrics.service.js").then(({ syncShopMetrics }) =>
         syncShopMetrics(prisma, settings.cloudApiUrl ?? "", token, log)
       )
-      .catch((err) => log.warn({ err }, "shop-metrics sync failed"));
+    );
   }
 
   // Preços de mercado: empurra o snapshot anónimo de preços quando a loja
   // optou pela partilha e há alterações pendentes.
   if (modules.includes("market-prices")) {
-    import("./market-prices.service.js")
-      .then(({ syncMarketPrices }) =>
+    launch("market-prices", () =>
+      import("./market-prices.service.js").then(({ syncMarketPrices }) =>
         syncMarketPrices(prisma, settings.cloudApiUrl ?? "", token, log)
       )
-      .catch((err) => log.warn({ err }, "market-prices sync failed"));
+    );
   }
 
   // WhatsApp bot: regista o phone_number_id na cloud e processa mensagens
   // inbound enfileiradas pelo webhook da Meta (responder é daqui, com as
   // credenciais Meta que nunca saem da loja).
   if (modules.includes("whatsapp-bot")) {
-    import("./whatsapp-bot.service.js")
-      .then(({ syncWhatsAppBot }) =>
+    launch("whatsapp-bot", () =>
+      import("./whatsapp-bot.service.js").then(({ syncWhatsAppBot }) =>
         syncWhatsAppBot(
           prisma,
           settings.cloudApiUrl ?? "",
@@ -372,7 +396,7 @@ export async function syncCloudEntitlements(
           notifyCtx
         )
       )
-      .catch((err) => log.warn({ err }, "whatsapp-bot sync failed"));
+    );
   }
 
   const status = toStatus(updated);

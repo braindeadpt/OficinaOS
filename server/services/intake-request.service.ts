@@ -121,18 +121,27 @@ export async function convertIntakeRequest(
     throw new AppError("JOB_NOT_FOUND");
   }
 
-  // Consent the customer granted on the public form flows to the record the
-  // job just created — this is the lawful opt-in WhatsApp delivery needs.
-  if (request.whatsappOptIn) {
-    await customerUpdate(prisma, job.customerId, {
-      whatsappConsent: true,
-      whatsappConsentAt: new Date(),
+  return await prisma.$transaction(async (tx) => {
+    // Claim atomically: two concurrent conversions must not both pass the
+    // PENDING check — the loser gets count 0 instead of overwriting jobId.
+    const claimed = await tx.intakeRequest.updateMany({
+      data: { jobId, status: IntakeRequestStatus.CONVERTED },
+      where: { id, status: IntakeRequestStatus.PENDING },
     });
-  }
+    if (claimed.count === 0) {
+      throw new AppError("INTAKE_REQUEST_NOT_PENDING");
+    }
 
-  return await update(prisma, id, {
-    job: { connect: { id: jobId } },
-    status: IntakeRequestStatus.CONVERTED,
+    // Consent the customer granted on the public form flows to the record
+    // the job just created — lawful opt-in WhatsApp delivery needs.
+    if (request.whatsappOptIn) {
+      await customerUpdate(tx, job.customerId, {
+        whatsappConsent: true,
+        whatsappConsentAt: new Date(),
+      });
+    }
+
+    return await tx.intakeRequest.findUniqueOrThrow({ where: { id } });
   });
 }
 

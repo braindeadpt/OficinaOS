@@ -10,6 +10,7 @@ import { decryptSecret } from "../lib/crypto.js";
 import { requirePermission } from "../middlewares/rbac.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import { cloudFetch } from "../services/cloud.service.js";
+import { isModuleEnabled } from "../utils/modules.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
 const MODULE = "market";
@@ -34,10 +35,7 @@ async function requireMarket(prisma: PrismaClient): Promise<CloudAuth> {
   if (!(settings.cloudApiUrl && settings.cloudShopTokenEncrypted)) {
     throw new AppError("CLOUD_NOT_PAIRED");
   }
-  const modules = Array.isArray(settings.cloudEntitlements)
-    ? (settings.cloudEntitlements as string[])
-    : [];
-  if (!modules.includes(MODULE)) {
+  if (!isModuleEnabled(settings, MODULE)) {
     throw new AppError("CLOUD_MODULE_REQUIRED");
   }
   return {

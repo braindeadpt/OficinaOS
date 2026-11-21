@@ -490,6 +490,7 @@ export default function SettingsAiTab({
   const [deleteTarget, setDeleteTarget] = useState<AgentDefinition | null>(
     null
   );
+  const [deleting, setDeleting] = useState(false);
 
   const deleteDialogRef = useRef<HTMLDivElement>(null);
 
@@ -597,9 +598,10 @@ export default function SettingsAiTab({
   }
 
   async function handleDeleteAgent() {
-    if (!deleteTarget) {
+    if (!deleteTarget || deleting) {
       return;
     }
+    setDeleting(true);
     try {
       await api.delete(`/ai/definitions/${deleteTarget.id}`);
       toast.success(t("ai_defs_deleted"));
@@ -607,6 +609,8 @@ export default function SettingsAiTab({
       await fetchAgents();
     } catch {
       toast.error(t("settings_save_error"));
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -934,10 +938,16 @@ export default function SettingsAiTab({
                 {t("cancel")}
               </button>
               <button
-                className="flex min-h-11 items-center gap-2 rounded-xl bg-error px-5 py-2.5 font-bold text-on-error text-sm transition-all active:opacity-80"
+                className="flex min-h-11 items-center gap-2 rounded-xl bg-error px-5 py-2.5 font-bold text-on-error text-sm transition-all active:opacity-80 disabled:opacity-60"
+                disabled={deleting}
                 onClick={handleDeleteAgent}
                 type="button"
               >
+                {deleting && (
+                  <span className="material-symbols-outlined animate-spin text-[18px]">
+                    progress_activity
+                  </span>
+                )}
                 {t("delete")}
               </button>
             </div>

@@ -10,6 +10,7 @@ import {
   JOB_STATUS_FLOW,
   JobStatus,
 } from "@shared/constants/job-statuses";
+import type { PaymentMethodType } from "@shared/constants/payment-methods";
 import type { RoleType } from "@shared/constants/roles";
 import { Role } from "@shared/constants/roles";
 import { AppError } from "@shared/errors/app-error.js";
@@ -50,6 +51,7 @@ import {
   findUnique as jobFindUnique,
   update as jobUpdate,
 } from "../repositories/job.repository.js";
+import { createPayment as createPaymentRepo } from "../repositories/payment.repository.js";
 import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import { generateJobCode } from "../utils/job-code.js";
@@ -83,6 +85,9 @@ export interface NotifyContext {
 export function computeMargin(job: {
   finalCost: number | { toNumber: () => number };
   partsUsed: Array<{ totalCost: number | { toNumber: () => number } }>;
+  externalRepairs?: Array<{
+    costFinal: number | { toNumber: () => number } | null;
+  }>;
 }): number {
   const finalCost =
     typeof job.finalCost === "number"
@@ -93,7 +98,16 @@ export function computeMargin(job: {
       typeof p.totalCost === "number" ? p.totalCost : p.totalCost.toNumber();
     return s + cost;
   }, 0);
-  return finalCost - partsCost;
+  const externalCost = (job.externalRepairs ?? []).reduce((s, r) => {
+    if (r.costFinal === null) {
+      return s;
+    }
+    return (
+      s +
+      (typeof r.costFinal === "number" ? r.costFinal : r.costFinal.toNumber())
+    );
+  }, 0);
+  return finalCost - partsCost - externalCost;
 }
 
 const VALID_TECH_ROLES: Set<RoleType> = new Set([Role.OWNER, Role.TECHNICIAN]);
@@ -123,6 +137,10 @@ const JOB_INCLUDE = {
   },
   partsUsed: true,
   partsWaiting: true,
+  externalRepairs: {
+    include: { supplier: { select: { id: true, name: true } } },
+    orderBy: { sentAt: "desc" as const },
+  },
   payments: { select: { amount: true, method: true, createdAt: true } },
   photos: true,
   repairs: { include: { repair: { select: { warrantyDays: true } } } },
@@ -215,6 +233,13 @@ export async function list(prisma: PrismaClient, query: JobListQueryInput) {
     customer: true,
     device: { include: { brand: true } },
     technician: { select: { id: true, name: true, username: true } },
+    // Latest open external repair — powers the "Externo — X" badge.
+    externalRepairs: {
+      where: { status: "SENT" as const },
+      select: { supplier: { select: { name: true } } },
+      take: 1,
+      orderBy: { sentAt: "desc" as const },
+    },
   } as const satisfies Prisma.JobInclude;
 
   // List rows never need the heavy/sensitive intake fields — the signature
@@ -801,7 +826,7 @@ async function applyLoanerReassignment(
 // A unit swap isn't a physical return, but it does free the previous unit —
 // record which units were detached/attached or the fleet loses the trail.
 async function auditLoanerUnitChange(
-  prisma: PrismaClient,
+  prisma: DbClient,
   job: Pick<Job, "loanerDeviceId">,
   input: UpdateJobInput,
   jobId: string,
@@ -946,41 +971,43 @@ export async function update(
       await lockTechnicianSnapshot(tx, id, job.technicianId ?? null);
     }
     await applyLoanerReassignment(tx, input, id, data);
-    return await jobUpdate(tx, id, data, JOB_INCLUDE);
+    const updatedJob = await jobUpdate(tx, id, data, JOB_INCLUDE);
+
+    if (
+      technicianId !== undefined &&
+      technicianId !== (job.technicianId ?? undefined)
+    ) {
+      await createAuditLog(tx, {
+        action: AuditAction.TECHNICIAN_ASSIGNED,
+        fromValue: job.technicianId ?? undefined,
+        jobId: id,
+        toValue: technicianId ?? "unassigned",
+        userId,
+      });
+    }
+
+    await auditLoanerUnitChange(tx, job, input, id, userId);
+
+    const costFieldsChanged =
+      "estimatedCost" in input || "depositAmount" in input;
+    if (costFieldsChanged) {
+      await createAuditLog(tx, {
+        action: AuditAction.COST_UPDATED,
+        jobId: id,
+        note: "Cost fields updated",
+        userId,
+      });
+    } else if (hasNonSpecialFieldChanges(input) || technicianId !== undefined) {
+      await createAuditLog(tx, {
+        action: AuditAction.JOB_UPDATED,
+        jobId: id,
+        note: "Job fields updated",
+        userId,
+      });
+    }
+
+    return updatedJob;
   });
-
-  if (
-    technicianId !== undefined &&
-    technicianId !== (job.technicianId ?? undefined)
-  ) {
-    await createAuditLog(prisma, {
-      action: AuditAction.TECHNICIAN_ASSIGNED,
-      fromValue: job.technicianId ?? undefined,
-      jobId: id,
-      toValue: technicianId ?? "unassigned",
-      userId,
-    });
-  }
-
-  await auditLoanerUnitChange(prisma, job, input, id, userId);
-
-  const costFieldsChanged =
-    "estimatedCost" in input || "depositAmount" in input;
-  if (costFieldsChanged) {
-    await createAuditLog(prisma, {
-      action: AuditAction.COST_UPDATED,
-      jobId: id,
-      note: "Cost fields updated",
-      userId,
-    });
-  } else if (hasNonSpecialFieldChanges(input) || technicianId !== undefined) {
-    await createAuditLog(prisma, {
-      action: AuditAction.JOB_UPDATED,
-      jobId: id,
-      note: "Job fields updated",
-      userId,
-    });
-  }
 
   return { ...updated, finalCost: computeFinalCost(updated) };
 }
@@ -1030,10 +1057,71 @@ async function validateCancellation(
 interface TransitionArgs {
   fromStatus: string;
   newStatus: JobStatusType;
+  payment?: { amount: number; method: PaymentMethodType };
   reason?: string;
   techAssigned: boolean;
   updateData: Prisma.JobUpdateInput;
   userId: string;
+}
+
+// Runs inside the transition transaction under the job lock: refuses
+// delivery while an external repair is still out (a send created
+// concurrently is seen or blocked instead of racing past), and records an
+// optional handover payment against the locked balance — atomically with
+// the status change, so a refused delivery leaves nothing behind.
+async function assertHandover(
+  tx: Prisma.TransactionClient,
+  id: string,
+  userId: string,
+  payment?: { amount: number; method: PaymentMethodType }
+) {
+  const openExternal = await tx.externalRepair.findFirst({
+    where: { jobId: id, status: "SENT" },
+    select: { id: true },
+  });
+  if (openExternal) {
+    throw new AppError("CONFLICT_STATUS_TRANSITION", {
+      blockedBy: "EXTERNAL_REPAIR_OPEN",
+    });
+  }
+  if (!payment) {
+    return;
+  }
+  const balanceJob = await tx.job.findUnique({
+    where: { id },
+    select: {
+      depositAmount: true,
+      payments: { select: { amount: true } },
+      partsUsed: { select: { totalCost: true } },
+      repairs: { select: { price: true } },
+    },
+  });
+  if (!balanceJob) {
+    throw new AppError("JOB_NOT_FOUND");
+  }
+  const { balanceDue } = computeJobBalance(balanceJob);
+  if (payment.amount > balanceDue) {
+    throw new AppError("PAYMENT_EXCEEDS_BALANCE", { balanceDue });
+  }
+  const created = await createPaymentRepo(tx, {
+    amount: payment.amount,
+    job: { connect: { id } },
+    method: payment.method,
+    note: null,
+    reference: null,
+    createdBy: { connect: { id: userId } },
+  });
+  await createAuditLog(tx, {
+    action: AuditAction.PAYMENT_ADDED,
+    jobId: id,
+    metadata: {
+      autoSource: "DELIVERY",
+      method: payment.method,
+      paymentId: created.id,
+    },
+    toValue: `${payment.amount} ${payment.method}`,
+    userId,
+  });
 }
 
 async function applyTransition(
@@ -1053,6 +1141,10 @@ async function applyTransition(
       });
       if (!fresh || fresh.status !== args.fromStatus) {
         throw new AppError("CONFLICT_STATUS_TRANSITION");
+      }
+
+      if (args.newStatus === JobStatus.DELIVERED) {
+        await assertHandover(tx, id, args.userId, args.payment);
       }
 
       const updatedJob = await jobUpdate(tx, id, args.updateData, JOB_INCLUDE);
@@ -1085,10 +1177,18 @@ async function applyTransition(
       error.code === "CONFLICT_STATUS_TRANSITION"
     ) {
       const current = await findUniqueSimple(prisma, id);
+      const flow = current
+        ? (JOB_STATUS_FLOW[current.status as JobStatusType] ?? [])
+        : [];
+      // An open external repair blocks DELIVERED specifically — advertising
+      // it as an allowed alternative would contradict the refusal.
+      const blockedBy = (error.details as { blockedBy?: string } | undefined)
+        ?.blockedBy;
       return {
-        allowedTransitions: current
-          ? (JOB_STATUS_FLOW[current.status as JobStatusType] ?? [])
-          : [],
+        allowedTransitions:
+          blockedBy === "EXTERNAL_REPAIR_OPEN"
+            ? flow.filter((s) => s !== JobStatus.DELIVERED)
+            : flow,
         currentStatus: current?.status,
         error: "CONFLICT_STATUS_TRANSITION" as const,
       };
@@ -1159,6 +1259,7 @@ export async function transitionStatus(
   notifyCtx: NotifyContext,
   options?: {
     loanerReturned?: boolean;
+    payment?: { amount: number; method: PaymentMethodType };
     reason?: string;
     requestingRole: RoleType;
     actualLaborHours?: number;
@@ -1196,6 +1297,12 @@ export async function transitionStatus(
     };
   }
 
+  // A handover payment only makes sense on the DELIVERED transition —
+  // anywhere else it would record money against a job still in progress.
+  if (options?.payment && newStatus !== JobStatus.DELIVERED) {
+    return { error: "VALIDATION_ERROR" as const };
+  }
+
   const { updateData, techAssigned } = buildTransitionUpdateData(
     job,
     newStatus,
@@ -1206,6 +1313,7 @@ export async function transitionStatus(
   const applied = await applyTransition(prisma, id, {
     fromStatus: job.status,
     newStatus,
+    payment: options?.payment,
     reason: options?.reason,
     techAssigned,
     updateData,

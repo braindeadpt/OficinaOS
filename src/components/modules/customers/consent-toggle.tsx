@@ -52,6 +52,7 @@ export default function ConsentToggle({
       } catch {
         setConsent(previous); // rollback
         setConsentAt(previousAt);
+        toast.error(t("errors.update_customer"));
       }
     },
     [consent, consentAt, customer.id, customer.name, updateCustomer, t]

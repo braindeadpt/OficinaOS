@@ -59,8 +59,17 @@ interface SalesState {
   updateQuantity: (index: number, quantity: number) => void;
 }
 
+// Money math in integer cents — float accumulation drifts (0.1 + 0.2 ≠ 0.3)
+// and the payment-mismatch check below must not see phantom cent differences.
+function computeTotalCents(cart: CartLine[]): number {
+  return cart.reduce(
+    (s, l) => s + Math.round(l.unitPrice * 100) * l.quantity,
+    0
+  );
+}
+
 function computeTotal(cart: CartLine[]): number {
-  return cart.reduce((s, l) => s + l.unitPrice * l.quantity, 0);
+  return computeTotalCents(cart) / 100;
 }
 
 export const useSalesStore = create<SalesState>((set) => ({
@@ -143,7 +152,7 @@ export const useSalesStore = create<SalesState>((set) => ({
 
   checkout: async (payments) => {
     set({ error: null });
-    const { cart, cartTotal } = useSalesStore.getState();
+    const { cart } = useSalesStore.getState();
     if (cart.length === 0) {
       return Promise.reject(new Error("empty cart"));
     }
@@ -157,9 +166,11 @@ export const useSalesStore = create<SalesState>((set) => ({
       })),
       payments,
     };
-    if (
-      Math.abs(payments.reduce((s, p) => s + p.amount, 0) - cartTotal) > 0.01
-    ) {
+    const paymentsCents = payments.reduce(
+      (s, p) => s + Math.round(p.amount * 100),
+      0
+    );
+    if (paymentsCents !== computeTotalCents(cart)) {
       return Promise.reject(new Error("payment mismatch"));
     }
     set({ isCheckingOut: true });

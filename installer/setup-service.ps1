@@ -75,7 +75,13 @@ foreach ($d in @($pgData, "$dataRoot\uploads", "$dataRoot\backups", $logDir)) {
 
 function New-Secret([int]$len = 48) {
     $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_'
-    -join (1..$len | ForEach-Object { $chars[(Get-Random -Max $chars.Length)] })
+    # CSPRNG compatível com PowerShell 5.1 e 7+ (GetInt32 só existe no .NET Core)
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::new()
+    $bytes = [byte[]]::new($len)
+    $rng.GetBytes($bytes)
+    $rng.Dispose()
+    # $chars tem 64 símbolos — 256 % 64 = 0, módulo sem viés
+    -join ($bytes | ForEach-Object { $chars[$_ % $chars.Length] })
 }
 
 # app\.env — segredos gerados uma vez; upgrades preservam o ficheiro

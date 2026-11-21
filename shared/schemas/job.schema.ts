@@ -8,6 +8,7 @@ import { DEVICE_CATEGORIES } from "@shared/constants/device-categories";
 import { serialField } from "@shared/utils/imei";
 import { z } from "zod";
 import { opaqueIdSchema } from "./id.schema";
+import { addPaymentSchema } from "./payment.schema";
 import { phoneSchema } from "./phone.schema";
 import { SIGNATURE_DATA_URL_RE } from "./signature.schema";
 
@@ -139,6 +140,10 @@ export const transitionStatusSchema = z
     actualLaborHours: z.number().positive().optional().nullable(),
     // Delivery confirmation: the loaned unit physically came back now.
     loanerReturned: z.boolean().optional(),
+    // Optional payment collected at handover — recorded in the same
+    // transaction as the DELIVERED transition, so a refused delivery can
+    // never leave an orphaned payment behind.
+    payment: addPaymentSchema.pick({ amount: true, method: true }).optional(),
     qcChecklist: z
       .record(z.string(), z.enum(["ok", "fail"]).nullable())
       .optional(),

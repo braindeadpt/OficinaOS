@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import { RecordWorkflow } from "@/components/modules/tasks/record-workflow";
 import TradeInModal from "@/components/modules/trade-ins/trade-in-modal";
 import ConfirmDiscardDialog from "@/components/ui/confirm-discard-dialog";
 import { Icon } from "@/components/ui/icon";
 import { useCan } from "@/hooks/use-can";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 import {
   fetchTradeIns,
   type TradeIn,
@@ -12,7 +14,6 @@ import {
   type TradeInStatus,
   transitionTradeIn,
 } from "@/lib/api-trade-ins";
-import { formatCurrency } from "@/lib/format";
 
 const PAGE_SIZE = 20;
 const STATUSES: TradeInStatus[] = ["OFFERED", "PURCHASED", "SOLD", "CANCELLED"];
@@ -33,6 +34,7 @@ const SKELETON_COLS = ["c1", "c2", "c3", "c4", "c5", "c6", "c7"];
 
 export default function TradeInsPage() {
   const { t } = useTranslation();
+  const fmt = useFormatCurrency();
   const canCreate = useCan({ tradeins: ["create"] });
   const canEdit = useCan({ tradeins: ["edit"] });
   const canCancel = useCan({ tradeins: ["cancel"] });
@@ -233,7 +235,7 @@ export default function TradeInsPage() {
                       {t(`tradeins.condition_${item.condition.toLowerCase()}`)}
                     </td>
                     <td className="px-5 py-4 text-right font-bold text-on-surface">
-                      {formatCurrency(Number(item.purchasePrice))}
+                      {fmt(Number(item.purchasePrice))}
                     </td>
                     <td className="px-5 py-4">
                       <span
@@ -285,12 +287,16 @@ export default function TradeInsPage() {
                           )}
                         <button
                           className="rounded-lg p-2 text-on-surface-variant transition-colors hover:bg-surface-container"
-                          onClick={() =>
-                            window.open(
+                          onClick={() => {
+                            const w = window.open(
                               `/api/trade-ins/${item.id}/receipt`,
                               "_blank"
-                            )
-                          }
+                            );
+                            // Popup blocked → no silent dead click.
+                            if (!w) {
+                              toast.error(t("errors.generic"));
+                            }
+                          }}
                           title={t("tradeins.action_receipt")}
                           type="button"
                         >

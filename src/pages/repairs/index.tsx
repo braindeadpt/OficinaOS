@@ -3,6 +3,7 @@ import type { RepairCatalog } from "@shared/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router";
+import { Can } from "@/components/modules/can";
 import type { RepairFormData } from "@/components/modules/repairs/add-repair-modal";
 import AddRepairModal from "@/components/modules/repairs/add-repair-modal";
 import CategoryHealth from "@/components/modules/repairs/category-health";
@@ -185,7 +186,7 @@ export default function RepairsPage() {
     await createRepair({
       name: data.name,
       category: data.category,
-      defaultPrice: Number(data.basePrice),
+      defaultPrice: Number.parseFloat(data.basePrice.replace(",", ".")),
     });
   };
 
@@ -204,7 +205,7 @@ export default function RepairsPage() {
       await updateRepair(editingRepair.id, {
         name: data.name,
         category: data.category,
-        defaultPrice: Number(data.basePrice),
+        defaultPrice: Number.parseFloat(data.basePrice.replace(",", ".")),
       });
       setEditingRepair(null);
       showToast(t("repair_updated_successfully"));
@@ -324,15 +325,17 @@ export default function RepairsPage() {
             </div>
           </div>
         </div>
-        <Button
-          icon="add"
-          onClick={() => setShowAddModal(true)}
-          size="md"
-          type="button"
-          variant="primary-gradient"
-        >
-          {t("add_service")}
-        </Button>
+        <Can perm={{ repairs: ["manageCatalog"] }}>
+          <Button
+            icon="add"
+            onClick={() => setShowAddModal(true)}
+            size="md"
+            type="button"
+            variant="primary-gradient"
+          >
+            {t("add_service")}
+          </Button>
+        </Can>
       </div>
 
       {error && (

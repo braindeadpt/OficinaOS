@@ -11,7 +11,12 @@ const INTERVAL_MS = 2 * 60 * 1000;
  * CLOUD_NOT_PAIRED before any network call.
  */
 export function startCloudPoller(app: FastifyInstance): () => void {
+  let ticking = false;
   const tick = async (): Promise<void> => {
+    if (ticking) {
+      return; // ciclo anterior ainda corre — não sobrepor ticks
+    }
+    ticking = true;
     try {
       await syncCloudEntitlements(app.prisma, app.log, {
         prisma: app.prisma,
@@ -22,6 +27,8 @@ export function startCloudPoller(app: FastifyInstance): () => void {
       if (!(err instanceof AppError)) {
         app.log.error(err, "cloud poller tick failed");
       }
+    } finally {
+      ticking = false;
     }
   };
 

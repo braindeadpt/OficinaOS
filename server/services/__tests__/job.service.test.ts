@@ -71,6 +71,14 @@ function mockPrisma(
       findUnique: vi.fn(),
       ...((overrides as Record<string, unknown>).returnClaim || {}),
     },
+    externalRepair: {
+      findFirst: vi.fn().mockResolvedValue(null),
+      ...((overrides as Record<string, unknown>).externalRepair || {}),
+    },
+    payment: {
+      create: vi.fn().mockResolvedValue({ id: "pay-1" }),
+      ...((overrides as Record<string, unknown>).payment || {}),
+    },
     $transaction: vi.fn((callback: (client: typeof mock) => Promise<unknown>) =>
       callback(mock)
     ),
@@ -137,6 +145,19 @@ describe("computeMargin", () => {
       partsUsed: [{ totalCost: 3000 }],
     });
     expect(margin).toBe(-1000);
+  });
+
+  it("subtracts external repair costs from margin", () => {
+    const margin = computeMargin({
+      finalCost: 8000,
+      partsUsed: [{ totalCost: 2000 }],
+      externalRepairs: [
+        { costFinal: 1500 },
+        { costFinal: null },
+        { costFinal: { toNumber: () => 500 } },
+      ],
+    });
+    expect(margin).toBe(4000);
   });
 
   it("handles Decimal-like objects with toNumber", () => {
@@ -1497,5 +1518,117 @@ describe("transitionStatus", () => {
     );
 
     expect(result).toEqual({ error: "REWORK_JOB_HAS_OPEN_CLAIM" });
+  });
+
+  it("refuses DELIVERED under the job lock when an external repair is open", async () => {
+    (prisma.job.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "job-1",
+      partsUsed: [],
+      repairs: [],
+      status: "DONE",
+    });
+    (
+      prisma.externalRepair.findFirst as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({ id: "er-1" });
+
+    const result = await transitionStatus(
+      prisma,
+      "job-1",
+      "DELIVERED",
+      "user-1",
+      mockNotifyCtx,
+      { requestingRole: Role.OWNER }
+    );
+
+    expect(result).toHaveProperty("error", "CONFLICT_STATUS_TRANSITION");
+    expect(result).toHaveProperty("currentStatus", "DONE");
+    // DELIVERED must not be advertised as an allowed alternative.
+    expect(
+      (result as { allowedTransitions?: string[] }).allowedTransitions
+    ).not.toContain("DELIVERED");
+    expect(prisma.job.update).not.toHaveBeenCalled();
+  });
+
+  it("records the handover payment inside the delivery transaction", async () => {
+    (prisma.job.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      depositAmount: null,
+      id: "job-1",
+      partsUsed: [{ totalCost: { toNumber: () => 20 } }],
+      payments: [],
+      repairs: [{ price: { toNumber: () => 100 } }],
+      status: "DONE",
+    });
+    (prisma.job.update as ReturnType<typeof vi.fn>).mockResolvedValue({
+      customer: { name: "Cliente", phone: null },
+      id: "job-1",
+      jobCode: "J-1",
+      partsUsed: [],
+      repairs: [],
+      status: "DELIVERED",
+    });
+
+    const result = await transitionStatus(
+      prisma,
+      "job-1",
+      "DELIVERED",
+      "user-1",
+      mockNotifyCtx,
+      {
+        payment: { amount: 50, method: "CASH" },
+        requestingRole: Role.OWNER,
+      }
+    );
+
+    expect(result).not.toHaveProperty("error");
+    expect(prisma.payment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ amount: 50, method: "CASH" }),
+      })
+    );
+    expect(prisma.job.update).toHaveBeenCalled();
+  });
+
+  it("rejects a handover payment above the locked balance", async () => {
+    (prisma.job.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      depositAmount: null,
+      id: "job-1",
+      partsUsed: [],
+      payments: [],
+      repairs: [],
+      status: "DONE",
+    });
+
+    await expect(
+      transitionStatus(prisma, "job-1", "DELIVERED", "user-1", mockNotifyCtx, {
+        payment: { amount: 50, method: "CASH" },
+        requestingRole: Role.OWNER,
+      })
+    ).rejects.toMatchObject({ code: "PAYMENT_EXCEEDS_BALANCE" });
+    expect(prisma.payment.create).not.toHaveBeenCalled();
+    expect(prisma.job.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects a payment payload on non-DELIVERED transitions", async () => {
+    (prisma.job.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "job-1",
+      partsUsed: [],
+      repairs: [],
+      status: "IN_REPAIR",
+    });
+
+    const result = await transitionStatus(
+      prisma,
+      "job-1",
+      "DONE",
+      "user-1",
+      mockNotifyCtx,
+      {
+        payment: { amount: 10, method: "CASH" },
+        requestingRole: Role.OWNER,
+      }
+    );
+
+    expect(result).toEqual({ error: "VALIDATION_ERROR" });
+    expect(prisma.payment.create).not.toHaveBeenCalled();
   });
 });

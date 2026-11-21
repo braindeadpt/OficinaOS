@@ -134,7 +134,6 @@ export default function DeliverJobDialog({
   const fmt = useFormatCurrency();
   const dialogRef = useRef<HTMLDivElement>(null);
   const transitionStatus = useJobsStore((s) => s.transitionStatus);
-  const addPayment = useJobsStore((s) => s.addPayment);
 
   const owes = balanceDue > 0;
   const [recordPayment, setRecordPayment] = useState(owes);
@@ -209,16 +208,17 @@ export default function DeliverJobDialog({
 
     setSubmitting(true);
     try {
-      if (paying) {
-        await addPayment(job.id, { amount: parsedAmount, method });
-      }
+      // Delivery + optional payment go in ONE request: the server validates
+      // the transition (open external repair, balance) and writes the payment
+      // inside the same transaction — a refused delivery leaves nothing.
       await transitionStatus(
         job.id,
         "DELIVERED",
         undefined,
         undefined,
         undefined,
-        loanerOut ? loanerReturned : undefined
+        loanerOut ? loanerReturned : undefined,
+        paying ? { amount: parsedAmount, method } : undefined
       );
     } catch (err: unknown) {
       printWindow?.close();
@@ -236,7 +236,6 @@ export default function DeliverJobDialog({
     onDelivered();
   }, [
     acknowledgeUnpaid,
-    addPayment,
     balanceDue,
     job.id,
     loanerOut,

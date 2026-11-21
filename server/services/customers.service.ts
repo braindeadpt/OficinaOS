@@ -171,10 +171,10 @@ export async function list(
 
   let nextCursor: string | null = null;
   if (customers.length > limit) {
-    const last = customers.pop();
-    if (last) {
-      nextCursor = last.id;
-    }
+    customers.pop(); // probe record — detecta a página seguinte, não entra na resposta
+    // Cursor = último registo INCLUÍDO — `id < cursor` é exclusivo, usar o
+    // probe saltava um cliente por página.
+    nextCursor = customers.at(-1)?.id ?? null;
   }
 
   // Global opt-in overview (unfiltered): powers the consent-rate card.

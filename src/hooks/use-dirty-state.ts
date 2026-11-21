@@ -19,6 +19,11 @@ export function useDirtyState() {
 
   const hasAnyDirty = dirtyTabs.size > 0;
 
+  // Only tab switches inside the settings page are guarded (pendingTab →
+  // ConfirmDiscardDialog). Full in-app navigation blocking isn't possible:
+  // React Router's useBlocker requires a data router, and the app mounts a
+  // plain <BrowserRouter>/<Routes> tree (see src/app.tsx). beforeunload
+  // still covers tab close/reload.
   useEffect(() => {
     if (!hasAnyDirty) {
       return;

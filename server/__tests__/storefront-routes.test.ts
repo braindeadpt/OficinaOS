@@ -10,6 +10,7 @@ interface SettingsRow {
   cloudApiUrl: string | null;
   cloudEntitlements: unknown;
   cloudShopTokenEncrypted: string | null;
+  cloudSyncedAt: Date | null;
   storeAccentColor: string | null;
   storeDescription: string | null;
   storeDirty: boolean;
@@ -25,6 +26,7 @@ function fakePrisma(overrides: Partial<SettingsRow> = {}) {
     cloudApiUrl: CLOUD_URL,
     cloudShopTokenEncrypted: encryptSecret("shop-token-secret"),
     cloudEntitlements: ["storefront"],
+    cloudSyncedAt: new Date(),
     storeAccentColor: null,
     storeDescription: null,
     storeDirty: false,
@@ -249,6 +251,7 @@ describe("storefront routes — PUT", () => {
     fetchMock.mockReturnValueOnce(cloudJson({ ok: true, slug: "minha-loja" }));
     const { prisma, row } = fakePrisma({
       cloudEntitlements: ["storefront", "storefront-plus"],
+      cloudSyncedAt: new Date(),
     });
     const app = buildApp(prisma);
     // Real 32×32 PNG — the PUT now validates magic bytes + dimensions.
@@ -282,6 +285,7 @@ describe("storefront routes — PUT", () => {
   it("rejects a logo that is not a valid image", async () => {
     const { prisma } = fakePrisma({
       cloudEntitlements: ["storefront", "storefront-plus"],
+      cloudSyncedAt: new Date(),
     });
     const app = buildApp(prisma);
     const res = await app.inject({
@@ -313,6 +317,7 @@ describe("storefront routes — PUT", () => {
   it("GET exposes the plus flag and stored theme", async () => {
     const { prisma } = fakePrisma({
       cloudEntitlements: ["storefront", "storefront-plus"],
+      cloudSyncedAt: new Date(),
       storeAccentColor: "#00ff00",
       storeTemplate: "compacta",
     });

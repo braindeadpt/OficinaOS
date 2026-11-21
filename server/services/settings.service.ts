@@ -324,9 +324,6 @@ export async function getWhatsAppSettings(prisma: PrismaClient) {
       whatsappModule: false,
     };
   }
-  const modules = Array.isArray(row.cloudEntitlements)
-    ? (row.cloudEntitlements as string[])
-    : [];
   return {
     businessId: row.whatsappBusinessId,
     credentialsAtCloud: row.whatsappCredentialsAtCloud,
@@ -340,12 +337,12 @@ export async function getWhatsAppSettings(prisma: PrismaClient) {
     remarketingCooldownDays: row.remarketingCooldownDays,
     remarketingDays: row.remarketingDays,
     remarketingEnabled: row.remarketingEnabled,
-    remarketingModule: modules.includes("remarketing"),
+    remarketingModule: isModuleEnabled(row, "remarketing"),
     pickupReminderTemplate: row.pickupReminderTemplate,
     remarketingTemplate: row.remarketingTemplate,
     trackingBaseUrl: row.trackingBaseUrl,
     transport: row.whatsappTransport,
-    whatsappModule: modules.includes("whatsapp-bot"),
+    whatsappModule: isModuleEnabled(row, "whatsapp-bot"),
   };
 }
 
@@ -515,14 +512,11 @@ export async function upsertSmsSettings(
 
 export async function getInvoicingSettings(prisma: PrismaClient) {
   const row = await findShopSettingsUnique(prisma);
-  const modules = Array.isArray(row?.cloudEntitlements)
-    ? (row.cloudEntitlements as string[])
-    : [];
   return {
     account: row?.invoicingAccount ?? null,
     enabled: row?.invoicingEnabled ?? false,
     hasApiKey: Boolean(row?.invoicingApiKeyEncrypted),
-    module: modules.includes("invoicing"),
+    module: isModuleEnabled(row, "invoicing"),
     taxName: row?.invoicingTaxName ?? "IVA23",
   };
 }

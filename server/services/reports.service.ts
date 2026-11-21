@@ -161,6 +161,9 @@ export async function revenueReport(
     const partsCost = toMoney(
       j.partsUsed.reduce((s, p) => s + toMoney(p.totalCost), 0)
     );
+    const externalCost = toMoney(
+      j.externalRepairs.reduce((s, r) => s + toMoney(r.costFinal ?? 0), 0)
+    );
     const repairsTotal = toMoney(
       j.repairs.reduce((s, r) => s + toMoney(r.price), 0)
     );
@@ -175,9 +178,15 @@ export async function revenueReport(
       completedAt:
         j.auditLogs[0]?.createdAt?.toISOString() ?? j.updatedAt.toISOString(),
     };
-    if (includeMargin && repairsTotal > 0) {
+    // Margin uses the same revenue base as the summary: billed repairs AND
+    // billed parts (parts pass through at cost, so they grow the base but
+    // cancel in the numerator).
+    const billedTotal = repairsTotal + partsCost;
+    if (includeMargin && billedTotal > 0) {
       row.margin =
-        Math.round(((repairsTotal - partsCost) / repairsTotal) * 10_000) / 100;
+        Math.round(
+          ((billedTotal - partsCost - externalCost) / billedTotal) * 10_000
+        ) / 100;
     }
     return row;
   });
@@ -936,13 +945,16 @@ export async function ordersReport(
     const partsCost = toMoney(
       j.partsUsed.reduce((s, p) => s + toMoney(p.totalCost), 0)
     );
+    const externalCost = toMoney(
+      j.externalRepairs.reduce((s, r) => s + toMoney(r.costFinal ?? 0), 0)
+    );
     const repairsTotal = toMoney(
       j.repairs.reduce((s, r) => s + toMoney(r.price), 0)
     );
     const recorded = partsCost + repairsTotal;
     const value = toMoney(recorded > 0 ? recorded : j.estimatedCost);
     totalValue += value;
-    totalCost += partsCost;
+    totalCost += partsCost + externalCost;
     const row: OrdersReportDTO["rows"][number] = {
       jobCode: j.jobCode,
       customerName: j.customer.name,
@@ -954,9 +966,16 @@ export async function ordersReport(
       partsCost,
       repairsTotal,
     };
-    if (includeMargin && repairsTotal > 0) {
+    // Same revenue base as the orders summary for itemized jobs: billed
+    // repairs + billed parts. Unrecorded totals fall back to the estimate
+    // in the summary's totalValue but carry no row margin — there is no
+    // billed amount to divide.
+    const billedTotal = repairsTotal + partsCost;
+    if (includeMargin && billedTotal > 0) {
       row.margin =
-        Math.round(((repairsTotal - partsCost) / repairsTotal) * 10_000) / 100;
+        Math.round(
+          ((billedTotal - partsCost - externalCost) / billedTotal) * 10_000
+        ) / 100;
     }
     return row;
   });

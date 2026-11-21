@@ -245,8 +245,8 @@ function TwoFactorForm({
         <Input
           autoComplete="one-time-code"
           iconStart="pin"
-          inputMode="numeric"
-          maxLength={8}
+          inputMode="text"
+          maxLength={11}
           name="totp-code"
           onChange={(e) => {
             setCode(e.target.value);

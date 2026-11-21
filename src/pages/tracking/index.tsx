@@ -1113,6 +1113,11 @@ export default function TrackingPage() {
         );
         setLastSearchParams({ code, phone4 });
       } catch (err: unknown) {
+        // A transient failure on a background poll must not replace an
+        // already-rendered tracking result with the error screen.
+        if (silent) {
+          return;
+        }
         // The API client turns a 429 into { code: "RATE_LIMITED", message }
         // with the wait already spelled out.
         const rateLimited =
@@ -1147,7 +1152,9 @@ export default function TrackingPage() {
         );
         setLastSearchParams({ code, phone4: "" });
       } catch {
-        setError(tRef.current("tracking_job_not_found"));
+        if (!silent) {
+          setError(tRef.current("tracking_job_not_found"));
+        }
       } finally {
         setIsLoading(false);
       }

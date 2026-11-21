@@ -22,7 +22,7 @@ import api from "@/lib/api";
 import { BusinessHistory } from "./history";
 import { MessageLinks } from "./message-links";
 
-const MONEY_PATTERN = /^\d{1,10}(\.\d{1,2})?$/;
+const MONEY_PATTERN = /^\d{1,10}([.,]\d{1,2})?$/;
 type Module = "tickets" | "messages" | "agreements";
 interface Entry {
   customer?: { id: string; name: string };
@@ -105,6 +105,15 @@ function empty(module: Module): Record<string, string> {
   }
   return result;
 }
+function serializeField(field: FormField, raw: string): unknown {
+  if (field.type === "date") {
+    return raw ? new Date(`${raw}T00:00:00Z`).toISOString() : null;
+  }
+  if (field.type === "money" || field.type === "rate") {
+    return raw.replace(",", ".");
+  }
+  return raw;
+}
 export default function BusinessPage({ module }: { module: Module }) {
   const { t } = useTranslation();
   const [params] = useSearchParams();
@@ -164,11 +173,7 @@ export default function BusinessPage({ module }: { module: Module }) {
         supplierId: form.supplierId || null,
       };
       for (const field of fields[module]) {
-        if (field.type === "date") {
-          data[field.name] = form[field.name]
-            ? new Date(`${form[field.name]}T00:00:00Z`).toISOString()
-            : null;
-        }
+        data[field.name] = serializeField(field, form[field.name]);
       }
       if (editing) {
         await api.patch(`/business/${module}/${editing}`, data);
@@ -197,9 +202,9 @@ export default function BusinessPage({ module }: { module: Module }) {
     )
   ) {
     commission = commissionGross(
-      form.commissionBasisNet,
-      form.commissionRate,
-      form.vatRate
+      form.commissionBasisNet.replace(",", "."),
+      form.commissionRate.replace(",", "."),
+      form.vatRate.replace(",", ".")
     );
   }
   return (
@@ -451,13 +456,11 @@ function BusinessFormField({
     const numeric = field.type === "money" || field.type === "rate";
     control = (
       <Input
-        max={field.type === "rate" ? "100" : undefined}
+        inputMode={numeric ? "decimal" : undefined}
         maxLength={300}
-        min={numeric ? "0" : undefined}
         onChange={(event) => onChange(event.target.value)}
         required={field.required}
-        step={numeric ? "0.01" : undefined}
-        type={numeric ? "number" : (field.type ?? "text")}
+        type={numeric ? "text" : (field.type ?? "text")}
         value={value}
       />
     );

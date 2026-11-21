@@ -1,4 +1,5 @@
-import type { JobStatusType } from "@shared/constants";
+import type { JobStatusType } from "@shared/constants/job-statuses";
+import type { PaymentMethodType } from "@shared/constants/payment-methods";
 import type {
   Job,
   JobNote,
@@ -134,7 +135,8 @@ interface JobsState {
     reason?: string,
     actualLaborHours?: number,
     qcChecklist?: Record<string, "ok" | "fail" | null>,
-    loanerReturned?: boolean
+    loanerReturned?: boolean,
+    payment?: { amount: number; method: PaymentMethodType }
   ) => Promise<Job>;
   updateJob: (id: string, data: Record<string, unknown>) => Promise<Job>;
 }
@@ -242,7 +244,8 @@ export const useJobsStore = create<JobsState>((set) => ({
     reason,
     actualLaborHours,
     qcChecklist,
-    loanerReturned
+    loanerReturned,
+    payment
   ) => {
     set({ error: null });
     try {
@@ -252,6 +255,7 @@ export const useJobsStore = create<JobsState>((set) => ({
         actualLaborHours,
         qcChecklist,
         loanerReturned,
+        payment,
       });
       const updated = res.data as Job;
       set((state) => ({

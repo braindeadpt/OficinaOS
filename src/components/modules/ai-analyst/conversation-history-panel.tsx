@@ -28,7 +28,7 @@ async function fetchConversations(
   return data;
 }
 
-function useConversations(_refreshKey: number) {
+function useConversations(refreshKey: number) {
   const { t } = useTranslation();
   const [conversations, setConversations] = useState<ConversationItemData[]>(
     []
@@ -74,8 +74,10 @@ function useConversations(_refreshKey: number) {
   }, [cursor, loading, search, t]);
 
   useEffect(() => {
-    loadInitial(search || undefined);
-  }, [search, loadInitial]);
+    if (refreshKey >= 0) {
+      loadInitial(search || undefined);
+    }
+  }, [search, loadInitial, refreshKey]);
 
   useEffect(() => {
     const el = sentinelRef.current;
@@ -101,6 +103,7 @@ function useConversations(_refreshKey: number) {
     loading,
     search,
     sentinelRef,
+    setConversations,
     setSearch,
   };
 }
@@ -312,8 +315,14 @@ export default function ConversationHistoryPanel() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [mobileSheetOpen, setMobileSheetOpen]);
 
-  const { conversations, loading, search, sentinelRef, setSearch } =
-    useConversations(refreshKey);
+  const {
+    conversations,
+    loading,
+    search,
+    sentinelRef,
+    setConversations,
+    setSearch,
+  } = useConversations(refreshKey);
 
   const [renameTarget, setRenameTarget] = useState<{
     id: string;
@@ -338,11 +347,14 @@ export default function ConversationHistoryPanel() {
     async (id: string, starred: boolean) => {
       try {
         await api.put(`/ai/${id}`, { starred });
+        setConversations((prev) =>
+          prev.map((c) => (c.id === id ? { ...c, starred } : c))
+        );
       } catch {
         toast.error(t("ai_agent_stream_error"));
       }
     },
-    [t]
+    [setConversations, t]
   );
 
   const handleDelete = useCallback((id: string) => {
@@ -355,6 +367,7 @@ export default function ConversationHistoryPanel() {
     }
     try {
       await api.delete(`/ai/${deleteTarget}`);
+      setConversations((prev) => prev.filter((c) => c.id !== deleteTarget));
       if (activeId === deleteTarget) {
         setActiveId(null);
       }
@@ -362,7 +375,7 @@ export default function ConversationHistoryPanel() {
       toast.error(t("ai_agent_stream_error"));
     }
     setDeleteTarget(null);
-  }, [deleteTarget, activeId, setActiveId, t]);
+  }, [deleteTarget, activeId, setActiveId, setConversations, t]);
 
   const handleRename = useCallback((id: string, _title: string) => {
     setRenameTarget({ id, title: _title });
@@ -375,12 +388,17 @@ export default function ConversationHistoryPanel() {
       }
       try {
         await api.put(`/ai/${renameTarget.id}`, { title: newTitle });
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === renameTarget.id ? { ...c, title: newTitle } : c
+          )
+        );
       } catch {
         toast.error(t("ai_agent_stream_error"));
       }
       setRenameTarget(null);
     },
-    [renameTarget, t]
+    [renameTarget, setConversations, t]
   );
 
   const handleResize = useCallback(

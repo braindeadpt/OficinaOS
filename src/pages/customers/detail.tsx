@@ -1,7 +1,9 @@
 import type { JobStatusType } from "@shared/constants";
+import { isValidPhone } from "@shared/utils/phone";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router";
+import { toast } from "sonner";
 import { RecordWorkflow } from "@/components/modules/tasks/record-workflow";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { BusinessHistory } from "@/pages/business/history";
@@ -18,6 +20,7 @@ export default function CustomerDetailPage() {
     error,
   } = useCustomersStore();
   const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editEmail, setEditEmail] = useState("");
@@ -68,16 +71,35 @@ export default function CustomerDetailPage() {
   }
 
   const handleSave = async () => {
+    if (saving) {
+      return;
+    }
+    const name = editName.trim();
+    const phone = editPhone.trim();
+    const email = editEmail.trim();
+    if (!name) {
+      toast.error(t("validations.enter_name"));
+      return;
+    }
+    if (!isValidPhone(phone)) {
+      toast.error(t("validations.invalid_phone"));
+      return;
+    }
+    setSaving(true);
     try {
       await updateCustomer(currentCustomer.id, {
-        name: editName,
-        phone: editPhone,
-        email: editEmail || undefined,
+        name,
+        phone,
+        // Empty string clears the field server-side (PATCH schema accepts
+        // "" → null); undefined would leave the old email untouched.
+        email,
       });
       await fetchCustomer(currentCustomer.id);
       setEditing(false);
     } catch {
       // updateCustomer and fetchCustomer both set error state in the store
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -155,8 +177,14 @@ export default function CustomerDetailPage() {
                 value={editEmail}
               />
             </div>
+            {error && (
+              <p className="font-medium text-error text-sm" role="alert">
+                {error}
+              </p>
+            )}
             <button
-              className="rounded-lg bg-primary px-4 py-2 font-bold text-on-primary text-sm"
+              className="rounded-lg bg-primary px-4 py-2 font-bold text-on-primary text-sm disabled:opacity-60"
+              disabled={saving}
               onClick={handleSave}
               type="button"
             >

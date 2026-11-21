@@ -21,6 +21,9 @@ export type Job = Prisma.JobGetPayload<{
     partsUsed: true;
     payments: { select: { amount: true } };
     repairs: true;
+    externalRepairs: {
+      include: { supplier: { select: { id: true; name: true } } };
+    };
   };
 }> & {
   // Server-computed fields (see job.service getById)

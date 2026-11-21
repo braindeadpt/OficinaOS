@@ -55,6 +55,7 @@ import {
 } from "../services/sms.service.js";
 import { getUpdateState, startUpdate } from "../services/update.service.js";
 import { pushCredentialsToCloud } from "../services/whatsapp-channel.js";
+import { isModuleEnabled } from "../utils/modules.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
 /**
@@ -413,10 +414,10 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       // Enabling remarketing requires the Pro module — enforced again by
       // the sweep on the cached entitlements.
       const s = await getOrCreateShopSettings(app.prisma);
-      const modules = Array.isArray(s.cloudEntitlements)
-        ? (s.cloudEntitlements as string[])
-        : [];
-      if (parsed.data.remarketingEnabled && !modules.includes("remarketing")) {
+      if (
+        parsed.data.remarketingEnabled &&
+        !isModuleEnabled(s, "remarketing")
+      ) {
         throw new AppError("CLOUD_MODULE_REQUIRED");
       }
       assertEvolutionGates(parsed.data, s);
@@ -669,10 +670,7 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       // gates on the cached entitlements.
       if (parsed.data.enabled) {
         const s = await getOrCreateShopSettings(app.prisma);
-        const modules = Array.isArray(s.cloudEntitlements)
-          ? (s.cloudEntitlements as string[])
-          : [];
-        if (!modules.includes("invoicing")) {
+        if (!isModuleEnabled(s, "invoicing")) {
           throw new AppError("CLOUD_MODULE_REQUIRED");
         }
       }
