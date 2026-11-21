@@ -40,13 +40,15 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql://reparilo:reparilo@db:5432/reparilo
+      BACKUP_DIR: /app/backups
+      BACKUP_HEARTBEAT_DIR: /app/backups-status
     volumes:
       - uploads:/app/uploads
-      # backup-status.service.ts reads UPLOAD_DIR/backups-status and
-      # UPLOAD_DIR/backups — mount the sidecar volumes there so the
-      # Settings → Backups indicator sees the heartbeat + dump count.
-      - backups-heartbeat:/app/uploads/backups-status
-      - backups:/app/uploads/backups
+      # Settings → Backups reads the sidecar's heartbeat + dump count.
+      # Read-only and OUTSIDE /app/uploads: everything under UPLOAD_DIR is
+      # reachable at /api/uploads/ by any logged-in user.
+      - backups-heartbeat:/app/backups-status:ro
+      - backups:/app/backups:ro
 
   db-backup:
     image: postgres:16-alpine

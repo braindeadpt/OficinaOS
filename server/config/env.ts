@@ -100,6 +100,11 @@ const schema = z
 
     // ── Filesystem ────────────────────────────────────────────
     UPLOAD_DIR: z.string().default("./uploads"),
+    // Backup dumps + heartbeats read by Settings → Backups. Docker mounts
+    // them outside UPLOAD_DIR; unset falls back to UPLOAD_DIR/backups and
+    // UPLOAD_DIR/backups-status (Windows layouts, never served statically).
+    BACKUP_DIR: z.string().optional(),
+    BACKUP_HEARTBEAT_DIR: z.string().optional(),
 
     // ── LAN discovery (optional) ──────────────────────────────
     // Advertises <MDNS_HOSTNAME>.local via mDNS so devices keep connecting
