@@ -4,7 +4,6 @@ import type {
   ShopSettings,
 } from "@shared/types";
 import { create } from "zustand";
-import { invalidateIntakeTermsCache } from "@/hooks/use-intake-terms";
 import i18n from "@/i18n";
 import api, { getErrorMessage } from "@/lib/api";
 
@@ -256,7 +255,6 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       const res = await api.put("/settings/shop", data);
       const updated = res.data as ShopSettings;
       set({ shopSettings: updated });
-      invalidateIntakeTermsCache();
       return updated;
     } catch (err: unknown) {
       const message = getErrorMessage(err, i18n.t("errors.save_shop_settings"));

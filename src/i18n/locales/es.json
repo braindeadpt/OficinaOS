@@ -872,6 +872,7 @@
     "terms_text": "Declaro que el dispositivo descrito en este formulario me pertenece, autorizo ​​su reparación en las condiciones acordadas y acepto los términos de servicio de la tienda, incluido el presupuesto indicado y la responsabilidad de recoger el dispositivo dentro de los 90 días. También autorizo a la tienda a acceder a los datos del dispositivo (archivos, fotos, mensajes) y a realizar copias de seguridad, exclusivamente para fines de diagnóstico y reparación, sin cederlos a terceros ni utilizarlos para otros fines, salvo obligación legal.",
     "signature_captured": "Firma capturada",
     "sign_remote_button": "Firmar en el móvil del cliente",
+    "terms_load_error": "No se pudieron cargar los términos de reparación. Comprueba la conexión e inténtalo de nuevo — la firma permanece desactivada hasta que se carguen.",
     "sign_remote_title": "Firma remota",
     "sign_remote_scan": "El cliente escanea el código y firma en su propio móvil — la firma llega aquí automáticamente.",
     "sign_remote_waiting": "Esperando la firma…",

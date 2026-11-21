@@ -162,17 +162,6 @@ const SHOP_FORM_DEFAULT = {
   reviewUrl: "",
 };
 
-function printerFormFromSettings(shopSettings: ShopSettings) {
-  return {
-    printerMode: (shopSettings.printerMode === "escpos"
-      ? "escpos"
-      : "browser") as "browser" | "escpos",
-    printerHost: shopSettings.printerHost ?? "",
-    printerPort: shopSettings.printerPort ?? 9100,
-    printerHighContrast: shopSettings.printerHighContrast ?? false,
-  };
-}
-
 function formFromSettings(shopSettings: ShopSettings) {
   const paper = shopSettings.receiptPaper as "58mm" | "80mm" | "a4" | null;
   const label = shopSettings.labelSize as "40x20" | "57x32" | "62x29" | null;
@@ -191,12 +180,13 @@ function formFromSettings(shopSettings: ShopSettings) {
     receiptShowQr: shopSettings.receiptShowQr ?? true,
     receiptShowWarranty: shopSettings.receiptShowWarranty ?? true,
     labelSize: label ?? "40x20",
-    ...printerFormFromSettings(shopSettings),
-    monthlyRevenueGoal:
-      shopSettings.monthlyRevenueGoal === null ||
-      shopSettings.monthlyRevenueGoal === undefined
-        ? ""
-        : String(shopSettings.monthlyRevenueGoal),
+    printerMode: (shopSettings.printerMode === "escpos"
+      ? "escpos"
+      : "browser") as "browser" | "escpos",
+    printerHost: shopSettings.printerHost ?? "",
+    printerPort: shopSettings.printerPort ?? 9100,
+    printerHighContrast: shopSettings.printerHighContrast ?? false,
+    monthlyRevenueGoal: shopSettings.monthlyRevenueGoal?.toString() ?? "",
     reviewUrl: shopSettings.reviewUrl ?? "",
   };
 }
@@ -266,11 +256,21 @@ export default function SettingsShopTab({
     setGoalError(null);
     onSavingChange(true);
     try {
-      await saveShopSettings({
+      const payload = {
         ...shopForm,
         monthlyRevenueGoal: parsedGoal,
         printerHost: shopForm.printerHost.trim() || null,
-      });
+      };
+      // intakeTerms is omitted when untouched: another workstation may have
+      // saved newer clauses since this form loaded, and resending the stale
+      // copy would silently overwrite them. An intentional clear still sends
+      // "" — the server stores it as null.
+      if (shopForm.intakeTerms === shopFormInitial.intakeTerms) {
+        const { intakeTerms: _unchanged, ...rest } = payload;
+        await saveShopSettings(rest);
+      } else {
+        await saveShopSettings(payload);
+      }
       setShopFormInitial({ ...shopForm });
       onDirtyChange(false);
       onToast(t("shop_config_saved"), "success");

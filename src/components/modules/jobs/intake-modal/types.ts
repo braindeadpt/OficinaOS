@@ -100,7 +100,11 @@ export interface IntakeModalProps {
    * null = app default, undefined = still loading (signing disabled).
    */
   intakeTerms?: string | null;
+  /** Terms fetch failed — signing stays disabled until a retry succeeds. */
+  intakeTermsFailed?: boolean;
   onClose: () => void;
+  /** Re-run the terms fetch after a failure. */
+  onRetryIntakeTerms?: () => void;
   onSubmit: (data: IntakeFormData) => Promise<void>;
   open: boolean;
   /** Pre-checked intake request conversion — merged over INITIAL_FORM on open. */
