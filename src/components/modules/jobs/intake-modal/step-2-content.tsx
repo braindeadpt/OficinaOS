@@ -22,6 +22,8 @@ import {
 } from "./types";
 
 interface Step2Props {
+  /** Resolved once per intake by the dashboard — undefined while loading. */
+  customTerms?: string | null;
   errors: Partial<Record<keyof IntakeFormData, string>>;
   form: IntakeFormData;
   handleBlur: (field: keyof IntakeFormData) => void;
@@ -34,6 +36,7 @@ interface Step2Props {
 }
 
 export default function Step2Content({
+  customTerms,
   errors,
   form,
   handleBlur,
@@ -42,11 +45,17 @@ export default function Step2Content({
   update,
 }: Step2Props) {
   const { i18n } = useTranslation();
+  // Shop-editable clauses win; empty setting falls back to the app default.
+  // The same resolved value feeds the display, the remote-sign document and
+  // the intakeTermsText sent on submit — what the customer reads signs.
+  // undefined = still loading for THIS intake → signing stays disabled.
+  const termsLoading = customTerms === undefined;
+  const termsText = customTerms?.trim() || t("intake.terms_text");
   // The frozen intake document a remote signature session signs over — same
   // builder the server uses to verify the ficha didn't drift before submit.
   const intakeDocument = buildIntakeDocument(
     buildJobPayload(form),
-    t("intake.terms_text"),
+    termsText,
     i18n.language
   );
   // Shown once the field was touched or the server flagged it on submit.
@@ -250,26 +259,34 @@ export default function Step2Content({
 
         <div>
           <span className={labelCls}>{t("intake.terms_title")}</span>
-          <p className="rounded-xl bg-surface-container-lowest p-4 font-body text-on-surface-variant text-xs leading-relaxed ring-1 ring-outline-variant">
-            {t("intake.terms_text")}
-          </p>
-          <div className="mt-3">
-            <SignaturePad onChange={(v) => update("signature", v)} />
-            {form.signature && (
-              <p className="ms-1 mt-1 flex items-center gap-1 font-label text-success text-xs">
-                <Icon className="text-sm" name="check_circle" />
-                {t("intake.signature_captured")}
+          {termsLoading ? (
+            <p className="rounded-xl bg-surface-container-lowest p-4 font-body text-on-surface-variant text-xs leading-relaxed ring-1 ring-outline-variant">
+              {t("loading")}
+            </p>
+          ) : (
+            <>
+              <p className="rounded-xl bg-surface-container-lowest p-4 font-body text-on-surface-variant text-xs leading-relaxed ring-1 ring-outline-variant">
+                {termsText}
               </p>
-            )}
-            <button
-              className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-surface-container-highest px-4 py-2.5 font-label text-on-surface-variant text-sm transition-colors hover:bg-surface-container hover:text-on-surface"
-              onClick={() => setRemoteSignOpen(true)}
-              type="button"
-            >
-              <Icon className="text-lg" name="qr_code" />
-              {t("intake.sign_remote_button")}
-            </button>
-          </div>
+              <div className="mt-3">
+                <SignaturePad onChange={(v) => update("signature", v)} />
+                {form.signature && (
+                  <p className="ms-1 mt-1 flex items-center gap-1 font-label text-success text-xs">
+                    <Icon className="text-sm" name="check_circle" />
+                    {t("intake.signature_captured")}
+                  </p>
+                )}
+                <button
+                  className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-surface-container-highest px-4 py-2.5 font-label text-on-surface-variant text-sm transition-colors hover:bg-surface-container hover:text-on-surface"
+                  onClick={() => setRemoteSignOpen(true)}
+                  type="button"
+                >
+                  <Icon className="text-lg" name="qr_code" />
+                  {t("intake.sign_remote_button")}
+                </button>
+              </div>
+            </>
+          )}
           <RemoteSignatureDialog
             document={intakeDocument}
             onClose={() => setRemoteSignOpen(false)}

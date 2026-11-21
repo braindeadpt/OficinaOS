@@ -13,6 +13,7 @@ import TopBar from "@/components/modules/top-bar";
 import UpdateBanner from "@/components/modules/update-banner";
 import { ShopSettingsProvider } from "@/components/providers/shop-settings-provider";
 import { ChunkErrorBoundary } from "@/components/ui/chunk-error-boundary";
+import { useIntakeTermsSession } from "@/hooks/use-intake-terms";
 import api, { getErrorMessage } from "@/lib/api";
 import { buildJobPayload } from "@/lib/build-job-payload";
 import { useJobsStore } from "@/stores/jobs";
@@ -31,6 +32,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const createJob = useJobsStore((s) => s.createJob);
   const fetchJobs = useJobsStore((s) => s.fetchJobs);
   const fetchMetrics = useJobsStore((s) => s.fetchMetrics);
+  // Resolved once per intake open — the same value feeds the displayed
+  // clauses, the remote-sign document and this submit, so the customer can
+  // never sign text different from what was shown.
+  const intakeTerms = useIntakeTermsSession(intakeModalOpen);
   const { pathname } = useLocation();
   const { t, i18n } = useTranslation();
 
@@ -57,9 +62,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       try {
         // The terms text is frozen into the signed document — send exactly
         // what the signature pad showed, in the UI language the customer saw.
+        // Shop-editable clauses (settings.intakeTerms) win over the default.
         const job = await createJob({
           ...buildJobPayload(data),
-          intakeTermsText: t("intake.terms_text"),
+          intakeTermsText: intakeTerms?.trim() || t("intake.terms_text"),
           intakeLocale: i18n.language,
         });
         toast.success(t("jobs_created_success", { id: job.jobCode || job.id }));
@@ -96,6 +102,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       fetchMetrics,
       showPrintPreview,
       markRequestConverted,
+      intakeTerms,
       t,
       i18n.language,
     ]
@@ -130,6 +137,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         </main>
         <BottomNav />
         <IntakeModal
+          intakeTerms={intakeTerms}
           onClose={closeIntakeModal}
           onSubmit={handleIntakeSubmit}
           open={intakeModalOpen}

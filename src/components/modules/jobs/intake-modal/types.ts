@@ -95,6 +95,11 @@ export const INITIAL_FORM: IntakeFormData = {
 };
 
 export interface IntakeModalProps {
+  /**
+   * Shop clauses resolved once per intake: string = custom terms,
+   * null = app default, undefined = still loading (signing disabled).
+   */
+  intakeTerms?: string | null;
   onClose: () => void;
   onSubmit: (data: IntakeFormData) => Promise<void>;
   open: boolean;

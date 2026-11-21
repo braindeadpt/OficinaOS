@@ -10,6 +10,7 @@ import { devicesRoutes } from "./routes/devices.js";
 import { feedbackRoutes } from "./routes/feedback.js";
 import { healthRoutes } from "./routes/health.js";
 import { intakeRequestsRoutes } from "./routes/intake-requests.js";
+import { intakeTermsRoutes } from "./routes/intake-terms.js";
 import { invoicingRoutes } from "./routes/invoicing.js";
 import { jobRoutes } from "./routes/jobs.js";
 import { loanersRoutes } from "./routes/loaners.js";
@@ -61,6 +62,7 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
   app.register(devicesRoutes, { prefix: "/api/brands" });
   app.register(usersRoutes, { prefix: "/api/users" });
   app.register(notificationsRoutes, { prefix: "/api/notifications" });
+  app.register(intakeTermsRoutes, { prefix: "/api/settings" });
   app.register(settingsRoutes, { prefix: "/api/settings" });
   app.register(signatureSessionRoutes, { prefix: "/api/sign-sessions" });
   app.register(dashboardRoutes, { prefix: "/api/dashboard" });
