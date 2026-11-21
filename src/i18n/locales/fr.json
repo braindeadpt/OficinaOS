@@ -869,7 +869,7 @@
     "check_ok": "D'ACCORD",
     "check_fail": "Échec",
     "terms_title": "Conditions de réparation",
-    "terms_text": "Je déclare que l'appareil décrit dans ce formulaire m'appartient, j'autorise sa réparation dans les conditions convenues et j'accepte les conditions de service de la boutique, incluant le devis indiqué et la responsabilité de récupérer l'appareil sous 90 jours. J'autorise également la boutique à accéder aux données de l'appareil (fichiers, photos, messages) et à effectuer des sauvegardes, exclusivement à des fins de diagnostic et de réparation, sans les céder à des tiers ni les utiliser à d'autres fins, sauf obligation légale.",
+    "terms_text": "Je déclare que l'appareil décrit dans ce formulaire m'appartient, j'autorise sa réparation dans les conditions convenues et j'accepte les conditions de service de la boutique, incluant le devis indiqué et la responsabilité de récupérer l'appareil sous 90 jours. J'autorise également la boutique à accéder aux données de l'appareil strictement nécessaires au diagnostic et à la réparation (fichiers, photos, messages) et à effectuer des sauvegardes, sans les céder à des tiers ni les utiliser à d'autres fins, sauf obligation légale.",
     "signature_captured": "Signature capturée",
     "sign_remote_button": "Signer sur le téléphone du client",
     "sign_remote_title": "Signature à distance",
