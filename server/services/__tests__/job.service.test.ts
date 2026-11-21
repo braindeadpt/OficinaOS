@@ -138,6 +138,19 @@ describe("computeMargin", () => {
     expect(margin).toBe(-1000);
   });
 
+  it("subtracts external repair costs from margin", () => {
+    const margin = computeMargin({
+      finalCost: 8000,
+      partsUsed: [{ totalCost: 2000 }],
+      externalRepairs: [
+        { costFinal: 1500 },
+        { costFinal: null },
+        { costFinal: { toNumber: () => 500 } },
+      ],
+    });
+    expect(margin).toBe(4000);
+  });
+
   it("handles Decimal-like objects with toNumber", () => {
     const margin = computeMargin({
       finalCost: { toNumber: () => 8000 },

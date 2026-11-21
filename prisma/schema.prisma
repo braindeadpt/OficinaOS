@@ -227,6 +227,7 @@ model User {
   returnClaimsOpened    ReturnClaim[]       @relation("ReturnClaimOpenedBy")
   returnClaimsResolved  ReturnClaim[]       @relation("ReturnClaimResolvedBy")
   supplierRmas          SupplierRma[]
+  externalRepairsCreated ExternalRepair[]
   jobReferrals          JobReferral[]
   tasksAssigned         WorkshopTask[]      @relation("TaskAssignee")
   tasksCreated          WorkshopTask[]      @relation("TaskCreator")
@@ -573,10 +574,11 @@ model Job {
   returnClaimsAgainst ReturnClaim[] @relation("OriginalJobReturnClaims")
   reworkClaim         ReturnClaim?  @relation("ReworkJobReturnClaim")
 
-  intakeRequests IntakeRequest[]
-  referrals      JobReferral[]
-  supplierRmas   SupplierRma[]
-  tasks          WorkshopTask[]
+  intakeRequests  IntakeRequest[]
+  referrals       JobReferral[]
+  supplierRmas    SupplierRma[]
+  externalRepairs ExternalRepair[]
+  tasks           WorkshopTask[]
 
   @@index([customerId])
   @@index([deviceId])
@@ -1527,8 +1529,9 @@ model Supplier {
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 
-  rmas  SupplierRma[]
-  parts PartsCatalog[]
+  rmas             SupplierRma[]
+  externalRepairs  ExternalRepair[]
+  parts            PartsCatalog[]
 
   @@index([name])
   @@map("suppliers")
@@ -1597,6 +1600,49 @@ model JobReferral {
   @@index([status])
   @@index([createdById])
   @@map("job_referrals")
+}
+
+// ─────────────────────────────────────────────
+// EXTERNAL REPAIR — device sent out for warranty or third-party repair
+// ─────────────────────────────────────────────
+
+enum ExternalRepairKind {
+  WARRANTY
+  REPAIRER
+}
+
+enum ExternalRepairStatus {
+  SENT
+  RETURNED
+  CANCELLED
+}
+
+model ExternalRepair {
+  id         String               @id @default(cuid())
+  jobId      String
+  job        Job                  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  supplierId String
+  supplier   Supplier             @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+
+  kind             ExternalRepairKind   @default(REPAIRER)
+  status           ExternalRepairStatus @default(SENT)
+  reference        String?
+  notes            String?              @db.Text
+  expectedReturnAt DateTime?            @db.Timestamptz
+  sentAt           DateTime             @default(now()) @db.Timestamptz
+  returnedAt       DateTime?            @db.Timestamptz
+  costFinal        Decimal?             @db.Decimal(12, 2)
+
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now()) @db.Timestamptz
+  updatedAt   DateTime @updatedAt @db.Timestamptz
+
+  @@index([jobId])
+  @@index([supplierId])
+  @@index([status])
+  @@index([createdById])
+  @@map("external_repairs")
 }
 
 model WorkshopTask {

@@ -83,6 +83,9 @@ export interface NotifyContext {
 export function computeMargin(job: {
   finalCost: number | { toNumber: () => number };
   partsUsed: Array<{ totalCost: number | { toNumber: () => number } }>;
+  externalRepairs?: Array<{
+    costFinal: number | { toNumber: () => number } | null;
+  }>;
 }): number {
   const finalCost =
     typeof job.finalCost === "number"
@@ -93,7 +96,16 @@ export function computeMargin(job: {
       typeof p.totalCost === "number" ? p.totalCost : p.totalCost.toNumber();
     return s + cost;
   }, 0);
-  return finalCost - partsCost;
+  const externalCost = (job.externalRepairs ?? []).reduce((s, r) => {
+    if (r.costFinal === null) {
+      return s;
+    }
+    return (
+      s +
+      (typeof r.costFinal === "number" ? r.costFinal : r.costFinal.toNumber())
+    );
+  }, 0);
+  return finalCost - partsCost - externalCost;
 }
 
 const VALID_TECH_ROLES: Set<RoleType> = new Set([Role.OWNER, Role.TECHNICIAN]);
@@ -123,6 +135,10 @@ const JOB_INCLUDE = {
   },
   partsUsed: true,
   partsWaiting: true,
+  externalRepairs: {
+    include: { supplier: { select: { id: true, name: true } } },
+    orderBy: { sentAt: "desc" as const },
+  },
   payments: { select: { amount: true, method: true, createdAt: true } },
   photos: true,
   repairs: { include: { repair: { select: { warrantyDays: true } } } },
@@ -215,6 +231,13 @@ export async function list(prisma: PrismaClient, query: JobListQueryInput) {
     customer: true,
     device: { include: { brand: true } },
     technician: { select: { id: true, name: true, username: true } },
+    // Latest open external repair — powers the "Externo — X" badge.
+    externalRepairs: {
+      where: { status: "SENT" as const },
+      select: { supplier: { select: { name: true } } },
+      take: 1,
+      orderBy: { sentAt: "desc" as const },
+    },
   } as const satisfies Prisma.JobInclude;
 
   // List rows never need the heavy/sensitive intake fields — the signature

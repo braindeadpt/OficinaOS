@@ -18,6 +18,7 @@ interface JobMobileCardProps {
   rawJob?: {
     id: string;
     technician?: { id: string; name: string } | null;
+    externalRepairs?: { supplier: { name: string } }[];
   };
   status: JobStatusType;
 }
@@ -56,6 +57,13 @@ export default function JobMobileCard({
             <Icon className="text-base text-error" name="priority_high" />
           )}
           <StatusBadge status={status} />
+          {rawJob?.externalRepairs?.[0] && (
+            <span className="rounded-full bg-tertiary/15 px-2 py-0.5 font-label text-[10px] text-tertiary uppercase">
+              {t("external_repairs.badge", {
+                name: rawJob.externalRepairs[0].supplier.name,
+              })}
+            </span>
+          )}
         </div>
       </div>
 

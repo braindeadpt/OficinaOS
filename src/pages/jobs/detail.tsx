@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Can } from "@/components/modules/can";
 import EditCustomerDialog from "@/components/modules/customers/edit-customer-dialog";
 import CostSummary from "@/components/modules/jobs/cost-summary";
+import JobExternalRepairsSection from "@/components/modules/jobs/job-external-repairs-section";
 import JobIntakeChips from "@/components/modules/jobs/job-intake-chips";
 import JobNotesSection from "@/components/modules/jobs/job-notes-section";
 import JobPartsSection from "@/components/modules/jobs/job-parts-section";
@@ -646,6 +647,14 @@ export default function JobDetailPage() {
             {t("rmas.title")}
           </Link>
         </Can>
+      </div>
+
+      {/* ── Reparação externa — garantia ou reparador terceiro ── */}
+      <div className="mt-8 rounded-2xl bg-surface-container p-6">
+        <JobExternalRepairsSection
+          jobId={job.id}
+          onChanged={() => fetchJob()}
+        />
       </div>
 
       {/* ── Notes ── */}
