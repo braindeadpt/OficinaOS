@@ -855,6 +855,22 @@ function assertAssignmentAllowed(
   return isSelfClaim ? null : { error: "FORBIDDEN" as const };
 }
 
+// Compare-and-set on the technician the permission check was made against:
+// the row lock serializes concurrent edits, and a changed value aborts.
+async function lockTechnicianSnapshot(
+  tx: DbClient,
+  jobId: string,
+  checkedTechnicianId: string | null
+) {
+  const { count } = await tx.job.updateMany({
+    where: { id: jobId, technicianId: checkedTechnicianId },
+    data: { updatedAt: new Date() },
+  });
+  if (count === 0) {
+    throw new AppError("CONFLICT");
+  }
+}
+
 async function checkTechnicianChange(
   prisma: PrismaClient,
   currentTechnicianId: string | null,
@@ -926,6 +942,9 @@ export async function update(
   }
 
   const updated = await prisma.$transaction(async (tx) => {
+    if (technicianId !== undefined) {
+      await lockTechnicianSnapshot(tx, id, job.technicianId ?? null);
+    }
     await applyLoanerReassignment(tx, input, id, data);
     return await jobUpdate(tx, id, data, JOB_INCLUDE);
   });

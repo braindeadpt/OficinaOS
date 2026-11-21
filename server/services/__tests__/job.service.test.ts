@@ -32,6 +32,7 @@ function mockPrisma(
       findFirst: vi.fn(),
       findMany: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       count: vi.fn(),
       groupBy: vi.fn(),
       create: vi.fn(),
@@ -760,6 +761,28 @@ describe("update", () => {
       );
 
       expect(result).not.toHaveProperty("error");
+    });
+
+    it("aborts when the technician changed after the permission check", async () => {
+      mockJob(null);
+      (prisma.job.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({
+        count: 0,
+      });
+
+      await expect(
+        update(
+          prisma,
+          "job-1",
+          { technicianId: "tech-1" },
+          "tech-1",
+          SELF_ASSIGN_ACCESS
+        )
+      ).rejects.toMatchObject({ code: "CONFLICT" });
+      expect(prisma.job.updateMany).toHaveBeenCalledWith({
+        where: { id: "job-1", technicianId: null },
+        data: { updatedAt: expect.any(Date) },
+      });
+      expect(prisma.job.update).not.toHaveBeenCalled();
     });
 
     it("allows reassignment with jobs:assign", async () => {
