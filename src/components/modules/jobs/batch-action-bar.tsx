@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Icon } from "@/components/ui/icon";
+import { useCan } from "@/hooks/use-can";
 import { useClickOutside } from "@/hooks/use-click-outside";
 import { useTechnicians } from "@/hooks/use-technicians";
 import { useJobsStore } from "@/stores/jobs";
@@ -23,6 +24,7 @@ export default function BatchActionBar({
   const transitionStatus = useJobsStore((s) => s.transitionStatus);
   const updateJob = useJobsStore((s) => s.updateJob);
   const { technicians, isLoading: techsLoading } = useTechnicians();
+  const canAssign = useCan({ jobs: ["edit", "assign"] });
   const [loading, setLoading] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const [techOpen, setTechOpen] = useState(false);
@@ -218,41 +220,43 @@ export default function BatchActionBar({
           </div>
         )}
 
-        <div className="relative" ref={techMenuRef}>
-          <button
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-bold font-label text-on-surface text-xs uppercase tracking-wider transition-colors hover:bg-surface-container-low"
-            disabled={loading}
-            onClick={() => setTechOpen((p) => !p)}
-            type="button"
-          >
-            <Icon className="text-sm" name="person" />
-            {t("batch_assign_tech")}
-          </button>
-          {techOpen && (
-            <div className="absolute bottom-full left-0 mb-2 w-48 rounded-xl border border-outline-variant/20 bg-surface-container-lowest py-1 shadow-xl">
-              <button
-                className="flex w-full items-center gap-2 px-3 py-2 font-medium text-on-surface text-sm transition-colors hover:bg-surface-container-low"
-                disabled={loading}
-                onClick={() => handleAssignTechnician(null)}
-                type="button"
-              >
-                {t("unassigned")}
-              </button>
-              {!techsLoading &&
-                technicians.map((tech) => (
-                  <button
-                    className="flex w-full items-center gap-2 px-3 py-2 font-medium text-on-surface text-sm transition-colors hover:bg-surface-container-low"
-                    disabled={loading}
-                    key={tech.id}
-                    onClick={() => handleAssignTechnician(tech.id)}
-                    type="button"
-                  >
-                    {tech.name}
-                  </button>
-                ))}
-            </div>
-          )}
-        </div>
+        {canAssign && (
+          <div className="relative" ref={techMenuRef}>
+            <button
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-bold font-label text-on-surface text-xs uppercase tracking-wider transition-colors hover:bg-surface-container-low"
+              disabled={loading}
+              onClick={() => setTechOpen((p) => !p)}
+              type="button"
+            >
+              <Icon className="text-sm" name="person" />
+              {t("batch_assign_tech")}
+            </button>
+            {techOpen && (
+              <div className="absolute bottom-full left-0 mb-2 w-48 rounded-xl border border-outline-variant/20 bg-surface-container-lowest py-1 shadow-xl">
+                <button
+                  className="flex w-full items-center gap-2 px-3 py-2 font-medium text-on-surface text-sm transition-colors hover:bg-surface-container-low"
+                  disabled={loading}
+                  onClick={() => handleAssignTechnician(null)}
+                  type="button"
+                >
+                  {t("unassigned")}
+                </button>
+                {!techsLoading &&
+                  technicians.map((tech) => (
+                    <button
+                      className="flex w-full items-center gap-2 px-3 py-2 font-medium text-on-surface text-sm transition-colors hover:bg-surface-container-low"
+                      disabled={loading}
+                      key={tech.id}
+                      onClick={() => handleAssignTechnician(tech.id)}
+                      type="button"
+                    >
+                      {tech.name}
+                    </button>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
 
         <button
           className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-bold font-label text-on-surface-variant text-xs uppercase tracking-wider transition-colors hover:bg-surface-container-low"

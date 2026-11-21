@@ -23,6 +23,7 @@ import securityPlugin from "./plugins/security.js";
 import { websocketPlugin, wsBroadcast } from "./plugins/websocket.js";
 import { registerApiRoutes } from "./register-api-routes.js";
 import { cleanupOldAuditLogs } from "./services/audit.service.js";
+import { syncDeviceCatalogIfStale } from "./services/device-catalog.service.js";
 import { startLowStockScheduler } from "./services/low-stock.service.js";
 import { cleanupReadNotifications } from "./services/notification-inapp.service.js";
 import { startOutboxWorker } from "./services/notification-outbox.service.js";
@@ -152,6 +153,11 @@ const stopCloudPoller = env.DEMO_MODE ? noop : startCloudPoller(app);
 const stopLowStock = startLowStockScheduler(app);
 const stopRemarketing = env.DEMO_MODE ? noop : startRemarketingScheduler(app);
 const stopOutboxWorker = env.DEMO_MODE ? noop : startOutboxWorker(app.prisma);
+// Bundled device catalog (brands/models) — version-gated, upserts once
+// per catalog release, never deletes. Safe in DEMO_MODE: local DB only.
+syncDeviceCatalogIfStale(app.prisma).catch((err) => {
+  app.log.error(err, "Device catalog sync error");
+});
 const CLEANUP_INTERVAL_MS = 15 * 60 * 1000;
 const runCleanup = () =>
   Promise.all([

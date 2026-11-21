@@ -1229,6 +1229,10 @@ model ShopSettings {
   // customer outside the 24h WhatsApp window — must be an APPROVED Meta
   // template when the transport is meta/cloud. Evolution ignores it.
   pickupReminderTemplate      String?
+  // Version of the bundled device catalog last synced into brands/devices.
+  // The startup sync upserts only when the bundled catalog is newer —
+  // existing rows (and their categories) are never deleted.
+  deviceCatalogVersion        Int       @default(0)
   // Public base URL used to build customer-facing links (e.g. WhatsApp
   // tracking links). Optional: shops on a LAN may not expose one.
   trackingBaseUrl             String?

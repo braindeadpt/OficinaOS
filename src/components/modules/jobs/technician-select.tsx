@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useCan } from "@/hooks/use-can";
 import { useTechnicians } from "@/hooks/use-technicians";
+import { useAuthStore } from "@/stores/auth";
 import { useJobsStore } from "@/stores/jobs";
 
 interface TechnicianSelectProps {
@@ -21,7 +22,10 @@ export default function TechnicianSelect({
   size = "md",
 }: TechnicianSelectProps) {
   const { t } = useTranslation();
-  const canEdit = useCan({ jobs: ["edit"] });
+  const canAssign = useCan({ jobs: ["edit", "assign"] });
+  const canSelfAssign = useCan({ jobs: ["edit", "selfAssign"] });
+  const userId = useAuthStore((s) => s.user?.id);
+  const canChange = canAssign || (canSelfAssign && !currentTechnicianId);
   const { technicians, isLoading } = useTechnicians();
   const updateJob = useJobsStore((s) => s.updateJob);
   const [assigning, setAssigning] = useState(false);
@@ -49,7 +53,7 @@ export default function TechnicianSelect({
     [jobId, updateJob, onChanged, currentTechnicianId, t]
   );
 
-  if (!canEdit) {
+  if (!canChange) {
     return (
       <span
         className={`font-body font-medium ${size === "sm" ? "text-xs" : "text-sm"}`}
@@ -87,11 +91,13 @@ export default function TechnicianSelect({
         value={currentTechnicianId ?? "__none__"}
       >
         <option value="__none__">{t("unassigned")}</option>
-        {technicians.map((tech) => (
-          <option key={tech.id} value={tech.id}>
-            {tech.name}
-          </option>
-        ))}
+        {technicians
+          .filter((tech) => canAssign || tech.id === userId)
+          .map((tech) => (
+            <option key={tech.id} value={tech.id}>
+              {tech.name}
+            </option>
+          ))}
       </select>
       {error && <span className="font-label text-error text-xs">{error}</span>}
     </div>

@@ -10,7 +10,7 @@ export const SIGNATURE_DATA_URL_RE = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/;
 // Frozen document carried by a signature session — validated on create so a
 // malformed snapshot can't produce a job that never verifies.
 export const intakeDocumentSchema = z.object({
-  accessories: z.array(z.string().max(40)).max(12),
+  accessories: z.array(z.string().max(500)).max(12),
   checklist: z.record(z.string(), z.enum(["ok", "fail"]).nullable()),
   color: z.string().max(40).nullable(),
   conditionNotes: z.string().max(2000).nullable(),
