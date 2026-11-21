@@ -10,6 +10,7 @@ import {
   JOB_STATUS_FLOW,
   JobStatus,
 } from "@shared/constants/job-statuses";
+import type { PaymentMethodType } from "@shared/constants/payment-methods";
 import type { RoleType } from "@shared/constants/roles";
 import { Role } from "@shared/constants/roles";
 import { AppError } from "@shared/errors/app-error.js";
@@ -50,6 +51,7 @@ import {
   findUnique as jobFindUnique,
   update as jobUpdate,
 } from "../repositories/job.repository.js";
+import { createPayment as createPaymentRepo } from "../repositories/payment.repository.js";
 import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import { generateJobCode } from "../utils/job-code.js";
@@ -978,10 +980,71 @@ async function validateCancellation(
 interface TransitionArgs {
   fromStatus: string;
   newStatus: JobStatusType;
+  payment?: { amount: number; method: PaymentMethodType };
   reason?: string;
   techAssigned: boolean;
   updateData: Prisma.JobUpdateInput;
   userId: string;
+}
+
+// Runs inside the transition transaction under the job lock: refuses
+// delivery while an external repair is still out (a send created
+// concurrently is seen or blocked instead of racing past), and records an
+// optional handover payment against the locked balance — atomically with
+// the status change, so a refused delivery leaves nothing behind.
+async function assertHandover(
+  tx: Prisma.TransactionClient,
+  id: string,
+  userId: string,
+  payment?: { amount: number; method: PaymentMethodType }
+) {
+  const openExternal = await tx.externalRepair.findFirst({
+    where: { jobId: id, status: "SENT" },
+    select: { id: true },
+  });
+  if (openExternal) {
+    throw new AppError("CONFLICT_STATUS_TRANSITION", {
+      blockedBy: "EXTERNAL_REPAIR_OPEN",
+    });
+  }
+  if (!payment) {
+    return;
+  }
+  const balanceJob = await tx.job.findUnique({
+    where: { id },
+    select: {
+      depositAmount: true,
+      payments: { select: { amount: true } },
+      partsUsed: { select: { totalCost: true } },
+      repairs: { select: { price: true } },
+    },
+  });
+  if (!balanceJob) {
+    throw new AppError("JOB_NOT_FOUND");
+  }
+  const { balanceDue } = computeJobBalance(balanceJob);
+  if (payment.amount > balanceDue) {
+    throw new AppError("PAYMENT_EXCEEDS_BALANCE", { balanceDue });
+  }
+  const created = await createPaymentRepo(tx, {
+    amount: payment.amount,
+    job: { connect: { id } },
+    method: payment.method,
+    note: null,
+    reference: null,
+    createdBy: { connect: { id: userId } },
+  });
+  await createAuditLog(tx, {
+    action: AuditAction.PAYMENT_ADDED,
+    jobId: id,
+    metadata: {
+      autoSource: "DELIVERY",
+      method: payment.method,
+      paymentId: created.id,
+    },
+    toValue: `${payment.amount} ${payment.method}`,
+    userId,
+  });
 }
 
 async function applyTransition(
@@ -1001,6 +1064,10 @@ async function applyTransition(
       });
       if (!fresh || fresh.status !== args.fromStatus) {
         throw new AppError("CONFLICT_STATUS_TRANSITION");
+      }
+
+      if (args.newStatus === JobStatus.DELIVERED) {
+        await assertHandover(tx, id, args.userId, args.payment);
       }
 
       const updatedJob = await jobUpdate(tx, id, args.updateData, JOB_INCLUDE);
@@ -1033,10 +1100,18 @@ async function applyTransition(
       error.code === "CONFLICT_STATUS_TRANSITION"
     ) {
       const current = await findUniqueSimple(prisma, id);
+      const flow = current
+        ? (JOB_STATUS_FLOW[current.status as JobStatusType] ?? [])
+        : [];
+      // An open external repair blocks DELIVERED specifically — advertising
+      // it as an allowed alternative would contradict the refusal.
+      const blockedBy = (error.details as { blockedBy?: string } | undefined)
+        ?.blockedBy;
       return {
-        allowedTransitions: current
-          ? (JOB_STATUS_FLOW[current.status as JobStatusType] ?? [])
-          : [],
+        allowedTransitions:
+          blockedBy === "EXTERNAL_REPAIR_OPEN"
+            ? flow.filter((s) => s !== JobStatus.DELIVERED)
+            : flow,
         currentStatus: current?.status,
         error: "CONFLICT_STATUS_TRANSITION" as const,
       };
@@ -1107,6 +1182,7 @@ export async function transitionStatus(
   notifyCtx: NotifyContext,
   options?: {
     loanerReturned?: boolean;
+    payment?: { amount: number; method: PaymentMethodType };
     reason?: string;
     requestingRole: RoleType;
     actualLaborHours?: number;
@@ -1144,21 +1220,10 @@ export async function transitionStatus(
     };
   }
 
-  // A device out at an external repairer cannot be delivered — it is not in
-  // the shop. The send form is blocked on DELIVERED jobs in the other
-  // direction (external-repair.service).
-  if (newStatus === "DELIVERED") {
-    const openExternal = await prisma.externalRepair.findFirst({
-      where: { jobId: id, status: "SENT" },
-      select: { id: true },
-    });
-    if (openExternal) {
-      return {
-        allowedTransitions: allowed,
-        currentStatus: job.status,
-        error: "CONFLICT_STATUS_TRANSITION" as const,
-      };
-    }
+  // A handover payment only makes sense on the DELIVERED transition —
+  // anywhere else it would record money against a job still in progress.
+  if (options?.payment && newStatus !== JobStatus.DELIVERED) {
+    return { error: "VALIDATION_ERROR" as const };
   }
 
   const { updateData, techAssigned } = buildTransitionUpdateData(
@@ -1171,6 +1236,7 @@ export async function transitionStatus(
   const applied = await applyTransition(prisma, id, {
     fromStatus: job.status,
     newStatus,
+    payment: options?.payment,
     reason: options?.reason,
     techAssigned,
     updateData,

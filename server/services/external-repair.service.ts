@@ -37,46 +37,55 @@ export async function createExternalRepair(
   data: ExternalRepairCreateInput,
   userId: string
 ) {
-  const job = await prisma.job.findUnique({ where: { id: jobId } });
-  if (!job) {
-    throw new AppError("JOB_NOT_FOUND");
-  }
-  if (job.status === "DELIVERED" || job.status === "CANCELLED") {
-    throw new AppError("VALIDATION_ERROR", OPEN_REPAIR_ERROR);
-  }
-  const supplier = await prisma.supplier.findUnique({
-    where: { id: data.supplierId },
-  });
-  if (!supplier?.isActive) {
-    throw new AppError("VALIDATION_ERROR", {
-      errors: { supplierId: ["validations.invalid_option"] },
-    });
-  }
-  const open = await prisma.externalRepair.findFirst({
-    where: { jobId, status: "SENT" },
-    select: { id: true },
-  });
-  if (open) {
-    throw new AppError("VALIDATION_ERROR", OPEN_REPAIR_ERROR);
-  }
   try {
-    return await prisma.externalRepair.create({
-      data: {
-        jobId,
-        supplierId: data.supplierId,
-        kind: data.kind,
-        reference: data.reference || null,
-        notes: data.notes || null,
-        expectedReturnAt: data.expectedReturnAt
-          ? toNoonUtc(data.expectedReturnAt)
-          : null,
-        createdById: userId,
-      },
-      include: repairInclude,
+    // Same job-row lock the status transition takes: a delivery and a send
+    // can no longer both pass their checks before either writes — whoever
+    // gets the lock second re-reads the committed state and loses.
+    return await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "jobs" WHERE "id" = ${jobId} FOR UPDATE`;
+      const job = await tx.job.findUnique({
+        where: { id: jobId },
+        select: { status: true },
+      });
+      if (!job) {
+        throw new AppError("JOB_NOT_FOUND");
+      }
+      if (job.status === "DELIVERED" || job.status === "CANCELLED") {
+        throw new AppError("VALIDATION_ERROR", OPEN_REPAIR_ERROR);
+      }
+      const supplier = await tx.supplier.findUnique({
+        where: { id: data.supplierId },
+      });
+      if (!supplier?.isActive) {
+        throw new AppError("VALIDATION_ERROR", {
+          errors: { supplierId: ["validations.invalid_option"] },
+        });
+      }
+      const open = await tx.externalRepair.findFirst({
+        where: { jobId, status: "SENT" },
+        select: { id: true },
+      });
+      if (open) {
+        throw new AppError("VALIDATION_ERROR", OPEN_REPAIR_ERROR);
+      }
+      return await tx.externalRepair.create({
+        data: {
+          jobId,
+          supplierId: data.supplierId,
+          kind: data.kind,
+          reference: data.reference || null,
+          notes: data.notes || null,
+          expectedReturnAt: data.expectedReturnAt
+            ? toNoonUtc(data.expectedReturnAt)
+            : null,
+          createdById: userId,
+        },
+        include: repairInclude,
+      });
     });
   } catch (e) {
-    // Partial unique index external_repairs_one_open_per_job — a concurrent
-    // send won the race between our check and this insert.
+    // Partial unique index external_repairs_one_open_per_job — belt and
+    // braces behind the locked re-check above.
     if (isUniqueViolation(e)) {
       throw new AppError("VALIDATION_ERROR", OPEN_REPAIR_ERROR);
     }

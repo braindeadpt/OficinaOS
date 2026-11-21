@@ -653,6 +653,7 @@ export default function JobDetailPage() {
       <div className="mt-8 rounded-2xl bg-surface-container p-6">
         <JobExternalRepairsSection
           jobId={job.id}
+          jobStatus={job.status}
           onChanged={() => fetchJob()}
         />
       </div>

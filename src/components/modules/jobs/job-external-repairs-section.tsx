@@ -1,4 +1,10 @@
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -7,6 +13,7 @@ import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useModalEffects } from "@/hooks/use-modal-effects";
 import api from "@/lib/api";
 
 interface ExternalRepair {
@@ -39,9 +46,11 @@ const EMPTY_FORM = {
 
 export default function JobExternalRepairsSection({
   jobId,
+  jobStatus,
   onChanged,
 }: {
   jobId: string;
+  jobStatus: string;
   onChanged?: () => void;
 }) {
   const { t } = useTranslation();
@@ -53,6 +62,39 @@ export default function JobExternalRepairsSection({
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [returnCost, setReturnCost] = useState("");
+  const sendDialogRef = useRef<HTMLDivElement>(null);
+  const returnDialogRef = useRef<HTMLDivElement>(null);
+  const cancelDialogRef = useRef<HTMLDivElement>(null);
+
+  // Same focus-trap/Escape behaviour as the shared dialogs — the manual
+  // panels used to leave focus on the button behind the overlay.
+  useModalEffects(
+    open,
+    () => {
+      if (!busy) {
+        setOpen(false);
+      }
+    },
+    sendDialogRef
+  );
+  useModalEffects(
+    returning !== null,
+    () => {
+      if (!busy) {
+        setReturning(null);
+      }
+    },
+    returnDialogRef
+  );
+  useModalEffects(
+    cancelling !== null,
+    () => {
+      if (!busy) {
+        setCancelling(null);
+      }
+    },
+    cancelDialogRef
+  );
 
   const load = useCallback(async () => {
     try {
@@ -137,6 +179,9 @@ export default function JobExternalRepairsSection({
   };
 
   const openRepair = repairs.find((r) => r.status === "SENT");
+  // Delivered/cancelled jobs are terminal — the server rejects new sends,
+  // so don't offer a form that can only fail on submit.
+  const canSend = jobStatus !== "DELIVERED" && jobStatus !== "CANCELLED";
   const fmt = (iso: string | null) =>
     iso ? new Date(iso).toLocaleDateString() : "—";
 
@@ -151,7 +196,7 @@ export default function JobExternalRepairsSection({
             </span>
           )}
         </h2>
-        {!openRepair && (
+        {!openRepair && canSend && (
           <Button
             icon="send"
             onClick={openSend}
@@ -242,6 +287,7 @@ export default function JobExternalRepairsSection({
 
       {open && (
         <div
+          aria-labelledby="ext-repair-send-title"
           aria-modal="true"
           className="fixed inset-0 z-[60] flex items-end sm:items-center sm:justify-center"
           role="dialog"
@@ -252,9 +298,15 @@ export default function JobExternalRepairsSection({
             onClick={() => setOpen(false)}
             type="button"
           />
-          <div className="modal-surface relative z-10 max-h-[85dvh] w-full overflow-y-auto rounded-b-none bg-surface-container-lowest shadow-2xl sm:max-w-md sm:rounded-xl">
+          <div
+            className="modal-surface relative z-10 max-h-[85dvh] w-full overflow-y-auto rounded-b-none bg-surface-container-lowest shadow-2xl sm:max-w-md sm:rounded-xl"
+            ref={sendDialogRef}
+          >
             <div className="flex items-center justify-between px-6 py-4">
-              <h3 className="font-bold font-headline text-lg text-on-surface">
+              <h3
+                className="font-bold font-headline text-lg text-on-surface"
+                id="ext-repair-send-title"
+              >
                 {t("external_repairs.send")}
               </h3>
               <button
@@ -345,6 +397,7 @@ export default function JobExternalRepairsSection({
 
       {returning && (
         <div
+          aria-labelledby="ext-repair-return-title"
           aria-modal="true"
           className="fixed inset-0 z-[60] flex items-end sm:items-center sm:justify-center"
           role="dialog"
@@ -355,9 +408,15 @@ export default function JobExternalRepairsSection({
             onClick={() => setReturning(null)}
             type="button"
           />
-          <div className="modal-surface relative z-10 max-h-[85dvh] w-full overflow-y-auto rounded-b-none bg-surface-container-lowest shadow-2xl sm:max-w-md sm:rounded-xl">
+          <div
+            className="modal-surface relative z-10 max-h-[85dvh] w-full overflow-y-auto rounded-b-none bg-surface-container-lowest shadow-2xl sm:max-w-md sm:rounded-xl"
+            ref={returnDialogRef}
+          >
             <div className="flex items-center justify-between px-6 py-4">
-              <h3 className="font-bold font-headline text-lg text-on-surface">
+              <h3
+                className="font-bold font-headline text-lg text-on-surface"
+                id="ext-repair-return-title"
+              >
                 {t("external_repairs.mark_returned")}
               </h3>
               <button
@@ -400,6 +459,7 @@ export default function JobExternalRepairsSection({
 
       {cancelling && (
         <div
+          aria-labelledby="ext-repair-cancel-title"
           aria-modal="true"
           className="fixed inset-0 z-[60] flex items-end sm:items-center sm:justify-center"
           role="dialog"
@@ -410,8 +470,14 @@ export default function JobExternalRepairsSection({
             onClick={() => setCancelling(null)}
             type="button"
           />
-          <div className="modal-surface relative z-10 w-full rounded-b-none bg-surface-container-lowest p-6 shadow-2xl sm:max-w-md sm:rounded-xl">
-            <h3 className="font-bold font-headline text-lg text-on-surface">
+          <div
+            className="modal-surface relative z-10 w-full rounded-b-none bg-surface-container-lowest p-6 shadow-2xl sm:max-w-md sm:rounded-xl"
+            ref={cancelDialogRef}
+          >
+            <h3
+              className="font-bold font-headline text-lg text-on-surface"
+              id="ext-repair-cancel-title"
+            >
               {t("external_repairs.cancel_confirm")}
             </h3>
             <div className="mt-4 flex justify-end gap-2">

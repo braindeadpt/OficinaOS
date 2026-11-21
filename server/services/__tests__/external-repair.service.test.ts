@@ -10,7 +10,7 @@ import {
 function mockPrisma(
   overrides: Partial<Record<keyof PrismaClient, unknown>> = {}
 ) {
-  return {
+  const prisma = {
     job: { findUnique: vi.fn() },
     supplier: { findUnique: vi.fn() },
     externalRepair: {
@@ -21,8 +21,14 @@ function mockPrisma(
       create: vi.fn(),
       updateMany: vi.fn(),
     },
+    $queryRaw: vi.fn().mockResolvedValue([]),
     ...overrides,
   } as unknown as PrismaClient;
+  // Interactive transactions run against the same mock — tx === prisma.
+  (prisma as unknown as Record<string, unknown>).$transaction = vi.fn(
+    (cb: (tx: PrismaClient) => unknown) => cb(prisma)
+  );
+  return prisma;
 }
 
 const createData = {

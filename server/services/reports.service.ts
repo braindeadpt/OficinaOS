@@ -178,10 +178,14 @@ export async function revenueReport(
       completedAt:
         j.auditLogs[0]?.createdAt?.toISOString() ?? j.updatedAt.toISOString(),
     };
-    if (includeMargin && repairsTotal > 0) {
+    // Margin uses the same revenue base as the summary: billed repairs AND
+    // billed parts (parts pass through at cost, so they grow the base but
+    // cancel in the numerator).
+    const billedTotal = repairsTotal + partsCost;
+    if (includeMargin && billedTotal > 0) {
       row.margin =
         Math.round(
-          ((repairsTotal - partsCost - externalCost) / repairsTotal) * 10_000
+          ((billedTotal - partsCost - externalCost) / billedTotal) * 10_000
         ) / 100;
     }
     return row;
@@ -962,10 +966,12 @@ export async function ordersReport(
       partsCost,
       repairsTotal,
     };
-    if (includeMargin && repairsTotal > 0) {
+    // Same revenue base as the orders summary: billed repairs + billed parts.
+    const billedTotal = repairsTotal + partsCost;
+    if (includeMargin && billedTotal > 0) {
       row.margin =
         Math.round(
-          ((repairsTotal - partsCost - externalCost) / repairsTotal) * 10_000
+          ((billedTotal - partsCost - externalCost) / billedTotal) * 10_000
         ) / 100;
     }
     return row;
