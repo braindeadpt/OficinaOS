@@ -423,6 +423,22 @@ describe("unpairCloud", () => {
       "https://x/shops/whatsapp-credentials",
     ]);
   });
+
+  it("reports cloudDeleted=null when no credentials are stored", async () => {
+    // null = no deletion request was sent in this operation. A previous
+    // partial unpair may have left remote data behind — but without a
+    // token there is nothing to authenticate the delete with.
+    const fetchSpy = vi.fn(() => okJson({}));
+    vi.stubGlobal("fetch", fetchSpy);
+    const { prisma, row } = fakePrisma({});
+    const result = await unpairCloud(prisma as never);
+    expect(result.cloudDeleted).toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    // Local cleanup + re-dirty still happen so a re-pair re-uploads.
+    expect(row.cloudApiUrl).toBeNull();
+    expect(row.storeDirty).toBe(true);
+    expect(row.pricesDirty).toBe(true);
+  });
 });
 
 describe("pullCloudIntake", () => {

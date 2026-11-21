@@ -469,7 +469,11 @@ export async function unpairCloud(
       log?.warn({ status: res.status }, "cloud shop delete failed");
     }
   }
-  // No credentials stored → never paired → cloudDeleted stays null.
+  // No credentials → no deletion request was sent in this operation, so
+  // cloudDeleted stays null. That does NOT prove the shop was never
+  // paired — a previous partial unpair may already have wiped the local
+  // token while data still sits remote. The UI treats null as "nothing
+  // to confirm", which is accurate: we can't delete what we can't auth.
   await prisma.shopSettings.update({
     where: { id: "default" },
     data: {
