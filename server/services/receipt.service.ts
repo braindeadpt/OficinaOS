@@ -329,7 +329,7 @@ const LABEL_PRESETS: Record<
   LabelSize,
   { font: string; h: string; qr: string; sub: string; w: string }
 > = {
-  "40x20": { font: "7pt", h: "20mm", qr: "12mm", sub: "6pt", w: "40mm" },
+  "40x20": { font: "7pt", h: "20mm", qr: "11mm", sub: "6pt", w: "40mm" },
   "57x32": { font: "8pt", h: "32mm", qr: "16mm", sub: "7pt", w: "57mm" },
   "62x29": { font: "8pt", h: "29mm", qr: "15mm", sub: "7pt", w: "62mm" },
 };
@@ -1528,7 +1528,8 @@ export async function renderLabelHtml(
   @media screen { body { border: 1px dashed #999; } }
 </style>
 </head>
-<body${noAutoPrint ? "" : '<script src="/label-print.js"></script>'}>
+<body>
+${noAutoPrint ? "" : '<script src="/label-print.js"></script>'}
   <div class="logo-top">${logoHtml}</div>
   <div class="code">${esc(job.jobCode)}</div>
   <div class="content">
