@@ -42,7 +42,10 @@ export default function AddPaymentDialog({
       return;
     }
     setMethod("CASH");
-    setAmount(balanceDue > 0 ? balanceDue.toFixed(2) : "");
+    // Normalize to cents first — a float balance like 35.0499999 must
+    // prefill "35.05", the exact value the server recomputes from decimals.
+    const balanceCents = Math.round(balanceDue * 100);
+    setAmount(balanceCents > 0 ? (balanceCents / 100).toFixed(2) : "");
     setReference("");
     setNote("");
     setSubmitError(null);

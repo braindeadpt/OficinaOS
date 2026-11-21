@@ -302,12 +302,15 @@ export async function syncCloudEntitlements(
   // Sub-syncs correm desanexados mas nunca sobrepostos: um sync mais lento
   // que o intervalo do poller não é relançado no ciclo seguinte enquanto
   // ainda estiver em voo (evita publishes/acks duplicados).
-  const launch = (name: string, run: Promise<unknown>): void => {
+  // Factory, not a started promise: when the guard skips a sync still in
+  // flight, nothing was launched — a started promise would end up unhandled
+  // and an unhandled rejection can stop the process.
+  const launch = (name: string, run: () => Promise<unknown>): void => {
     if (SUB_SYNCS_IN_FLIGHT.has(name)) {
       return;
     }
     SUB_SYNCS_IN_FLIGHT.add(name);
-    run
+    run()
       .catch((err) => log.warn({ err, sync: name }, "cloud sub-sync failed"))
       .finally(() => {
         SUB_SYNCS_IN_FLIGHT.delete(name);
@@ -317,17 +320,15 @@ export async function syncCloudEntitlements(
   // Pull pending customer diagnostics whenever the shop is entitled — a
   // missed pull never loses data (cloud keeps reports until acked).
   if (modules.includes("diag-intake")) {
-    launch(
-      "diag-intake",
-      pullCloudIntake(prisma, token, settings.cloudApiUrl, log, notifyCtx)
+    launch("diag-intake", () =>
+      pullCloudIntake(prisma, token, settings.cloudApiUrl ?? "", log, notifyCtx)
     );
   }
 
   // Portal público: re-publica páginas cujo job mudou e recolhe respostas
   // de orçamento feitas pelos clientes no link público.
   if (modules.includes("portal")) {
-    launch(
-      "portal",
+    launch("portal", () =>
       import("./portal.service.js").then(({ syncPortal }) =>
         syncPortal(prisma, settings.cloudApiUrl ?? "", token, log, notifyCtx)
       )
@@ -337,8 +338,7 @@ export async function syncCloudEntitlements(
   // Loja online: publica a montra quando há alterações pendentes e
   // recolhe reservas feitas pelos clientes na página pública.
   if (modules.includes("storefront")) {
-    launch(
-      "storefront",
+    launch("storefront", () =>
       import("./storefront.service.js").then(({ syncStorefront }) =>
         syncStorefront(
           prisma,
@@ -355,8 +355,7 @@ export async function syncCloudEntitlements(
   // /sign/:token da cloud e entrega-as às sessões locais correspondentes —
   // o poll do diálogo apanha-as sem saber que vieram de fora da LAN.
   if (modules.includes("signature-remote")) {
-    launch(
-      "signature-remote",
+    launch("signature-remote", () =>
       import("./signature-relay.service.js").then(({ pullSignatureReplies }) =>
         pullSignatureReplies(prisma, settings.cloudApiUrl ?? "", token, log)
       )
@@ -366,8 +365,7 @@ export async function syncCloudEntitlements(
   // Multi-loja: empurra o snapshot diário agregado (hoje + ontem) para o
   // dashboard do dono na cloud. Só números — nenhum dado de clientes.
   if (modules.includes("multi-shop")) {
-    launch(
-      "multi-shop",
+    launch("multi-shop", () =>
       import("./shop-metrics.service.js").then(({ syncShopMetrics }) =>
         syncShopMetrics(prisma, settings.cloudApiUrl ?? "", token, log)
       )
@@ -377,8 +375,7 @@ export async function syncCloudEntitlements(
   // Preços de mercado: empurra o snapshot anónimo de preços quando a loja
   // optou pela partilha e há alterações pendentes.
   if (modules.includes("market-prices")) {
-    launch(
-      "market-prices",
+    launch("market-prices", () =>
       import("./market-prices.service.js").then(({ syncMarketPrices }) =>
         syncMarketPrices(prisma, settings.cloudApiUrl ?? "", token, log)
       )
@@ -389,8 +386,7 @@ export async function syncCloudEntitlements(
   // inbound enfileiradas pelo webhook da Meta (responder é daqui, com as
   // credenciais Meta que nunca saem da loja).
   if (modules.includes("whatsapp-bot")) {
-    launch(
-      "whatsapp-bot",
+    launch("whatsapp-bot", () =>
       import("./whatsapp-bot.service.js").then(({ syncWhatsAppBot }) =>
         syncWhatsAppBot(
           prisma,

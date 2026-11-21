@@ -355,7 +355,14 @@ export default function SupplierRmasPage() {
                       .join(" · ")}
                   </p>
                 </div>
-                <Can perm={{ parts: ["manageCatalog"] }}>
+                <Can
+                  fallback={
+                    <span className="text-sm">
+                      {t(`rmas.status_${rma.status.toLowerCase()}`)}
+                    </span>
+                  }
+                  perm={{ parts: ["manageCatalog"] }}
+                >
                   <Select
                     aria-label={t("rmas.status")}
                     className="sm:w-44"

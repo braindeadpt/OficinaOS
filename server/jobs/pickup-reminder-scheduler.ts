@@ -111,6 +111,11 @@ async function processPickupReminders(app: FastifyInstance): Promise<void> {
     WHERE j.status = 'DONE'
       AND c."whatsappConsent" = true
       AND NULLIF(BTRIM(c.phone), '') IS NOT NULL
+      -- Device is away at an external repairer — nothing to pick up yet.
+      AND NOT EXISTS (
+        SELECT 1 FROM "external_repairs" er
+        WHERE er."jobId" = j.id AND er.status = 'SENT'
+      )
       AND (j."lastPickupReminderAt" IS NULL
            OR j."lastPickupReminderAt" < ${reRemindBefore})
       AND COALESCE(

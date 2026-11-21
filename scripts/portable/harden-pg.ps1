@@ -25,7 +25,11 @@ if ((Test-Path $hba) -and
     ([IO.File]::ReadAllText($hba) -match '(?m)^[^#\r\n][^\r\n]*\btrust\b')) {
     if (-not $pgPass) {
         $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_'
-        $pgPass = -join (1..24 | ForEach-Object { $chars[[System.Security.Cryptography.RandomNumberGenerator]::GetInt32($chars.Length)] })
+        $rng = [System.Security.Cryptography.RNGCryptoServiceProvider]::new()
+        $bytes = [byte[]]::new(24)
+        $rng.GetBytes($bytes)
+        $rng.Dispose()
+        $pgPass = -join ($bytes | ForEach-Object { $chars[$_ % $chars.Length] })
     }
     & "$pgBin\psql.exe" -h 127.0.0.1 -p 5433 -U postgres -d postgres -tAc `
         "ALTER USER postgres PASSWORD '$pgPass'"

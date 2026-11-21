@@ -257,7 +257,8 @@ export function findKanbanJobs(prisma: DbClient, where: Prisma.JobWhereInput) {
       device: { select: { model: true, brand: { select: { name: true } } } },
     },
     orderBy: [{ isUrgent: "desc" }, { createdAt: "desc" }],
-    // Cap the board — an unbounded include×2 query ran per dashboard poll.
-    take: 200,
+    // Bounded but generous — a single shop's ACTIVE jobs realistically stay
+    // under this; urgent jobs always sort first so nothing critical hides.
+    take: 500,
   });
 }

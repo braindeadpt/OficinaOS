@@ -127,7 +127,8 @@ async function ixFetch(
     }
   ).catch(() => null);
   if (!res) {
-    throw new AppError("INVOICING_PROVIDER_FAILED");
+    // Timeout/rede: resultado ambíguo — o provider pode ter criado o doc.
+    throw new AppError("INVOICING_PROVIDER_FAILED", { ambiguous: true });
   }
   const body = (await res.json().catch(() => null)) as Record<
     string,
@@ -220,6 +221,18 @@ async function issueDocument(
 // claim serializes it (single-instance deployment, like the outbox
 // worker's isProcessing flag).
 const issuingKeys = new Set<string>();
+// Timeout/rede é ambíguo: o documento fiscal pode existir no provider sem o
+// sabermos. Nesses casos o claim fica retido este tempo e o operador deve
+// verificar o InvoiceXpress antes de retry — nunca emitir um 2º doc.
+const AMBIGUOUS_CLAIM_HOLD_MS = 10 * 60_000;
+
+function isAmbiguousProviderFailure(err: unknown): boolean {
+  return (
+    err instanceof AppError &&
+    err.code === "INVOICING_PROVIDER_FAILED" &&
+    err.details?.ambiguous === true
+  );
+}
 
 /**
  * Persists the issued document's link on the local record. The provider
@@ -264,6 +277,7 @@ export async function issueInvoiceForSale(
     throw new AppError("ALREADY_INVOICED");
   }
   issuingKeys.add(claimKey);
+  let ambiguousFailure = false;
   try {
     const sale = await prisma.sale.findUnique({
       include: { customer: true, items: true },
@@ -311,8 +325,23 @@ export async function issueInvoiceForSale(
         }),
     });
     return issued;
+  } catch (err) {
+    ambiguousFailure = isAmbiguousProviderFailure(err);
+    if (ambiguousFailure) {
+      log.error(
+        { claimKey, err },
+        "invoice issue outcome unknown — check InvoiceXpress before retrying; retries blocked for 10min"
+      );
+      setTimeout(
+        () => issuingKeys.delete(claimKey),
+        AMBIGUOUS_CLAIM_HOLD_MS
+      ).unref();
+    }
+    throw err;
   } finally {
-    issuingKeys.delete(claimKey);
+    if (!ambiguousFailure) {
+      issuingKeys.delete(claimKey);
+    }
   }
 }
 
@@ -326,6 +355,7 @@ export async function issueInvoiceForJob(
     throw new AppError("ALREADY_INVOICED");
   }
   issuingKeys.add(claimKey);
+  let ambiguousFailure = false;
   try {
     const job = await prisma.job.findUnique({
       include: { customer: true },
@@ -392,7 +422,22 @@ export async function issueInvoiceForJob(
         }),
     });
     return issued;
+  } catch (err) {
+    ambiguousFailure = isAmbiguousProviderFailure(err);
+    if (ambiguousFailure) {
+      log.error(
+        { claimKey, err },
+        "invoice issue outcome unknown — check InvoiceXpress before retrying; retries blocked for 10min"
+      );
+      setTimeout(
+        () => issuingKeys.delete(claimKey),
+        AMBIGUOUS_CLAIM_HOLD_MS
+      ).unref();
+    }
+    throw err;
   } finally {
-    issuingKeys.delete(claimKey);
+    if (!ambiguousFailure) {
+      issuingKeys.delete(claimKey);
+    }
   }
 }
