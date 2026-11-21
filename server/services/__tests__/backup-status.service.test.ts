@@ -1,8 +1,10 @@
+import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   readFile: vi.fn(),
   readdir: vi.fn(),
+  env: { UPLOAD_DIR: "/tmp/uploads-test" } as Record<string, string>,
 }));
 
 vi.mock("node:fs", () => ({
@@ -13,7 +15,7 @@ vi.mock("node:fs", () => ({
 }));
 
 vi.mock("../../config/env.js", () => ({
-  loadEnv: () => ({ UPLOAD_DIR: "/tmp/uploads-test" }),
+  loadEnv: () => mocks.env,
 }));
 
 import { getBackupStatus } from "../backup-status.service.js";
@@ -49,6 +51,44 @@ describe("getBackupStatus", () => {
   beforeEach(() => {
     mocks.readFile.mockReset();
     mocks.readdir.mockReset();
+    mocks.env = { UPLOAD_DIR: "/tmp/uploads-test" };
+  });
+
+  it("reads BACKUP_DIR / BACKUP_HEARTBEAT_DIR when set (Docker, outside UPLOAD_DIR)", async () => {
+    mocks.env = {
+      UPLOAD_DIR: "/tmp/uploads-test",
+      BACKUP_DIR: "/tmp/backups-test",
+      BACKUP_HEARTBEAT_DIR: "/tmp/backups-status-test",
+    };
+    mockFs(files(), ["oficinaos-20260929-030000.sql.gz"]);
+
+    await getBackupStatus();
+
+    expect(mocks.readdir).toHaveBeenCalledWith(
+      path.resolve("/tmp/backups-test")
+    );
+    expect(mocks.readFile).toHaveBeenCalledWith(
+      path.join(path.resolve("/tmp/backups-status-test"), "last-backup.txt"),
+      "utf8"
+    );
+  });
+
+  it("falls back to UPLOAD_DIR/backups* when unset (Windows layouts)", async () => {
+    mockFs(files());
+
+    await getBackupStatus();
+
+    expect(mocks.readdir).toHaveBeenCalledWith(
+      path.join(path.resolve("/tmp/uploads-test"), "backups")
+    );
+    expect(mocks.readFile).toHaveBeenCalledWith(
+      path.join(
+        path.resolve("/tmp/uploads-test"),
+        "backups-status",
+        "last-backup.txt"
+      ),
+      "utf8"
+    );
   });
 
   it("reports a fresh heartbeat with the dump count", async () => {
