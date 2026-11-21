@@ -1,4 +1,4 @@
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginCallback } from "fastify";
 import { requirePermission } from "../middlewares/rbac.js";
 import { getShopSettings } from "../services/settings.service.js";
 
@@ -9,8 +9,7 @@ import { getShopSettings } from "../services/settings.service.js";
  * configured terms, not silently fall back to the app default.
  * Returns ONLY intakeTerms — never the rest of the shop settings.
  */
-// biome-ignore lint/suspicious/useAwait: FastifyPluginAsync requires async
-export const intakeTermsRoutes: FastifyPluginAsync = async (app) => {
+export const intakeTermsRoutes: FastifyPluginCallback = (app, _opts, done) => {
   app.addHook("preHandler", requirePermission({ jobs: ["create"] }));
 
   app.get(
@@ -21,4 +20,6 @@ export const intakeTermsRoutes: FastifyPluginAsync = async (app) => {
       return reply.send({ intakeTerms: settings?.intakeTerms ?? null });
     }
   );
+
+  done();
 };

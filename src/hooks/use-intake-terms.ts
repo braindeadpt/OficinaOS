@@ -6,9 +6,9 @@ import api from "@/lib/api";
  * settings:view which FRONT_DESK/TECHNICIAN lack, so the signed ficha must
  * not depend on the full settings payload.
  *
- * `undefined` = not loaded yet (or the fetch failed — retried on next
- * mount); `null` = loaded and the shop uses the app default; a string is
- * the shop's custom clauses.
+ * Cache states: `undefined` = not loaded (or the fetch failed — retried on
+ * the next intake); `null` = loaded and the shop uses the app default;
+ * a string is the shop's custom clauses.
  */
 let cached: string | null | undefined;
 let inFlight: Promise<void> | null = null;
@@ -24,7 +24,7 @@ function loadIntakeTerms(): Promise<void> {
             : null;
       })
       .catch(() => {
-        // Leave `cached` undefined so the next mount retries instead of
+        // Leave `cached` undefined so the next intake retries instead of
         // treating a failed load as an intentionally empty setting.
       })
       .finally(() => {
@@ -34,21 +34,45 @@ function loadIntakeTerms(): Promise<void> {
   return inFlight;
 }
 
-/** Call after saving shop settings so intakes pick up new clauses. */
+/** Terms for the next intake — cached unless a settings save invalidated it. */
+export async function fetchIntakeTerms(): Promise<string | null> {
+  if (cached === undefined) {
+    await loadIntakeTerms();
+  }
+  return cached ?? null;
+}
+
+/** Call after saving shop settings so the next intake picks up new clauses. */
 export function invalidateIntakeTermsCache(): void {
   cached = undefined;
 }
 
-export function useIntakeTerms(): string | null | undefined {
-  const [terms, setTerms] = useState<string | null | undefined>(cached);
+/**
+ * Terms resolved ONCE per intake (`active` = intake modal open). The same
+ * value feeds the displayed clauses, the remote-sign document and the
+ * in-person submit — `undefined` while loading, so consumers must not
+ * enable signing until it resolves.
+ */
+export function useIntakeTermsSession(
+  active: boolean
+): string | null | undefined {
+  const [terms, setTerms] = useState<string | null | undefined>(undefined);
 
   useEffect(() => {
-    if (cached !== undefined) {
-      setTerms(cached);
+    if (!active) {
+      setTerms(undefined);
       return;
     }
-    loadIntakeTerms().then(() => setTerms(cached));
-  }, []);
+    let cancelled = false;
+    fetchIntakeTerms().then((value) => {
+      if (!cancelled) {
+        setTerms(value);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [active]);
 
   return terms;
 }

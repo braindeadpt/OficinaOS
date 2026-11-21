@@ -9,6 +9,7 @@ import Step2Content from "./step-2-content";
 import { useIntakeModal } from "./use-intake-modal";
 
 export default function IntakeModal({
+  intakeTerms,
   onClose,
   onSubmit,
   open,
@@ -178,6 +179,7 @@ export default function IntakeModal({
 
           {m.step === 2 && (
             <Step2Content
+              customTerms={intakeTerms}
               errors={m.errors}
               form={m.form}
               handleBlur={m.handleBlur}
