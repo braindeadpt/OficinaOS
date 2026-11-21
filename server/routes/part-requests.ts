@@ -14,6 +14,10 @@ import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
 const MODULE = "market";
 
+// Cloud IDs are cuids — anything else could traverse into other cloud
+// endpoints once interpolated into the proxied request path.
+const CLOUD_ID_PATTERN = "^[A-Za-z0-9_-]{1,64}$";
+
 interface CloudAuth {
   apiUrl: string;
   token: string;
@@ -128,7 +132,7 @@ export const partRequestsRoutes: FastifyPluginAsync = async (app) => {
       preHandler: [requirePermission({ jobs: ["create"] })],
       schema: {
         params: {
-          properties: { id: { type: "string" } },
+          properties: { id: { pattern: CLOUD_ID_PATTERN, type: "string" } },
           required: ["id"],
           type: "object",
         },
@@ -148,10 +152,14 @@ export const partRequestsRoutes: FastifyPluginAsync = async (app) => {
       }
       const { id } = req.params as { id: string };
       const auth = await requireMarket(app.prisma);
-      const body = await proxy(auth, `/part-requests/${id}/close`, {
-        body: parsed.data,
-        method: "POST",
-      });
+      const body = await proxy(
+        auth,
+        `/part-requests/${encodeURIComponent(id)}/close`,
+        {
+          body: parsed.data,
+          method: "POST",
+        }
+      );
       return reply.send(body);
     }
   );
@@ -162,7 +170,7 @@ export const partRequestsRoutes: FastifyPluginAsync = async (app) => {
       preHandler: [requirePermission({ jobs: ["create"] })],
       schema: {
         params: {
-          properties: { id: { type: "string" } },
+          properties: { id: { pattern: CLOUD_ID_PATTERN, type: "string" } },
           required: ["id"],
           type: "object",
         },
@@ -182,10 +190,14 @@ export const partRequestsRoutes: FastifyPluginAsync = async (app) => {
       }
       const { id } = req.params as { id: string };
       const auth = await requireMarket(app.prisma);
-      const body = await proxy(auth, `/part-requests/${id}/replies`, {
-        body: parsed.data,
-        method: "POST",
-      });
+      const body = await proxy(
+        auth,
+        `/part-requests/${encodeURIComponent(id)}/replies`,
+        {
+          body: parsed.data,
+          method: "POST",
+        }
+      );
       return reply.status(201).send(body);
     }
   );
@@ -196,7 +208,7 @@ export const partRequestsRoutes: FastifyPluginAsync = async (app) => {
       preHandler: [requirePermission({ jobs: ["view"] })],
       schema: {
         params: {
-          properties: { id: { type: "string" } },
+          properties: { id: { pattern: CLOUD_ID_PATTERN, type: "string" } },
           required: ["id"],
           type: "object",
         },
@@ -207,7 +219,10 @@ export const partRequestsRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       const { id } = req.params as { id: string };
       const auth = await requireMarket(app.prisma);
-      const body = await proxy(auth, `/part-requests/${id}/replies`);
+      const body = await proxy(
+        auth,
+        `/part-requests/${encodeURIComponent(id)}/replies`
+      );
       return reply.send(body);
     }
   );
