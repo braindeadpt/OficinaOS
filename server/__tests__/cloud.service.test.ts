@@ -28,7 +28,9 @@ interface ShopRow {
   cloudShopTokenEncrypted: string | null;
   cloudSyncedAt: Date | null;
   id: string;
+  pricesDirty?: boolean;
   shopName: string;
+  storeDirty?: boolean;
 }
 
 function fakePrisma(initial: Partial<ShopRow> = {}) {
@@ -340,9 +342,10 @@ describe("unpairCloud", () => {
       "fetch",
       vi.fn(() => okJson({}))
     );
+    const { encryptSecret } = await import("../lib/crypto.js");
     const { prisma, row } = fakePrisma({
       cloudApiUrl: "https://x",
-      cloudShopTokenEncrypted: "v1:a:b:c",
+      cloudShopTokenEncrypted: encryptSecret("tok-abc"),
       cloudShopId: "s1",
       cloudShopName: "Loja",
       cloudEntitlements: ["m"],
@@ -352,6 +355,89 @@ describe("unpairCloud", () => {
     expect(row.cloudShopTokenEncrypted).toBeNull();
     expect(row.cloudApiUrl).toBeNull();
     expect(row.cloudShopId).toBeNull();
+  });
+
+  it("deletes the shop row on the cloud via authenticated DELETE /shops/me", async () => {
+    const fetchSpy = vi.fn(() => okJson({}));
+    vi.stubGlobal("fetch", fetchSpy);
+    const { encryptSecret } = await import("../lib/crypto.js");
+    const { prisma, row } = fakePrisma({
+      cloudApiUrl: "https://x",
+      cloudShopTokenEncrypted: encryptSecret("tok-abc"),
+    });
+    const result = await unpairCloud(prisma as never);
+    expect(result.cloudDeleted).toBe(true);
+    const [url, init] = fetchSpy.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe("https://x/shops/me");
+    expect(init.method).toBe("DELETE");
+    expect((init.headers as Record<string, string>).authorization).toBe(
+      "Bearer tok-abc"
+    );
+    // Remote copies were wiped — re-dirty so a re-pair re-uploads them.
+    expect(row.storeDirty).toBe(true);
+    expect(row.pricesDirty).toBe(true);
+  });
+
+  it("reports cloudDeleted=false when the cloud is unreachable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.reject(new Error("network down")))
+    );
+    const { encryptSecret } = await import("../lib/crypto.js");
+    const { prisma, row } = fakePrisma({
+      cloudApiUrl: "https://x",
+      cloudShopTokenEncrypted: encryptSecret("tok-abc"),
+    });
+    const result = await unpairCloud(prisma as never);
+    // Local unpair is best-effort and still completes.
+    expect(result.cloudDeleted).toBe(false);
+    expect(row.cloudApiUrl).toBeNull();
+  });
+
+  it("falls back to whatsapp-credentials delete on old clouds (404)", async () => {
+    const urls: string[] = [];
+    vi.stubGlobal("fetch", (url: string) => {
+      urls.push(url);
+      if (url.endsWith("/shops/me")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ error: { code: "NOT_FOUND" } }), {
+            status: 404,
+          })
+        );
+      }
+      return okJson({});
+    });
+    const { encryptSecret } = await import("../lib/crypto.js");
+    const { prisma } = fakePrisma({
+      cloudApiUrl: "https://x",
+      cloudShopTokenEncrypted: encryptSecret("tok-abc"),
+    });
+    const result = await unpairCloud(prisma as never);
+    // Legacy path only wipes credentials — remote data may remain.
+    expect(result.cloudDeleted).toBe(false);
+    expect(urls).toEqual([
+      "https://x/shops/me",
+      "https://x/shops/whatsapp-credentials",
+    ]);
+  });
+
+  it("reports cloudDeleted=null when no credentials are stored", async () => {
+    // null = no deletion request was sent in this operation. A previous
+    // partial unpair may have left remote data behind — but without a
+    // token there is nothing to authenticate the delete with.
+    const fetchSpy = vi.fn(() => okJson({}));
+    vi.stubGlobal("fetch", fetchSpy);
+    const { prisma, row } = fakePrisma({});
+    const result = await unpairCloud(prisma as never);
+    expect(result.cloudDeleted).toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    // Local cleanup + re-dirty still happen so a re-pair re-uploads.
+    expect(row.cloudApiUrl).toBeNull();
+    expect(row.storeDirty).toBe(true);
+    expect(row.pricesDirty).toBe(true);
   });
 });
 

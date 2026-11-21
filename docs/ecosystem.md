@@ -95,8 +95,15 @@ hint de UI (expira 24h após o último sync). Instalações antigas continuam a
 enviar com o token local (`whatsappApiTokenEncrypted`, AES-256-GCM em
 `AI_ENCRYPTION_KEY`) até ao primeiro envio Cloud bem-sucedido — nessa altura
 o token local é apagado. A Cloud não guarda nem regista corpos de mensagem;
-os logs levam só id/estado/erro e telefone mascarado. Unpair da loja apaga as
-credenciais na Cloud (`DELETE /shops/whatsapp-credentials`).
+os logs levam só id/estado/erro e telefone mascarado.
+
+**Unpair**: a app chama `DELETE /shops/me` — a Cloud apaga a linha `Shop` e o
+cascade (`onDelete: Cascade`) leva tudo o que é dela: tokens, entitlements,
+relatórios intake, filas WhatsApp/SMS, respostas de portal, sessões de
+assinatura, storefront, métricas e contribuições de preços. Tokens com scope
+`diag` não conseguem chamar este endpoint (a bancada não desaparelha a loja).
+Em Clouds antigas sem o endpoint a app cai para o cleanup parcial
+(`DELETE /shops/whatsapp-credentials`).
 
 #### Transporte alternativo: WhatsApp local (Evolution API)
 
