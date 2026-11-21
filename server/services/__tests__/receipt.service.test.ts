@@ -312,4 +312,17 @@ describe("renderLabelHtml identification", () => {
     const html = await renderLabelHtml(mockPrisma(null), BASE_JOB, "", {});
     expect(html).toContain('<div class="code">R-2026-0001</div>');
   });
+
+  it("auto-prints via external script — the route CSP blocks inline handlers", async () => {
+    const html = await renderLabelHtml(mockPrisma(null), BASE_JOB, "", {});
+    expect(html).toContain('<script src="/label-print.js"></script>');
+    expect(html).not.toContain("onload=");
+  });
+
+  it("omits the print script in preview mode", async () => {
+    const html = await renderLabelHtml(mockPrisma(null), BASE_JOB, "", {
+      noAutoPrint: true,
+    });
+    expect(html).not.toContain("label-print.js");
+  });
 });

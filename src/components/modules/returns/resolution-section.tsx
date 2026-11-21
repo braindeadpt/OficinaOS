@@ -9,6 +9,7 @@ import {
   resolveClaim as resolveClaimApi,
   spawnRework as spawnReworkApi,
 } from "@/lib/api-return-claims";
+import { useUiStore } from "@/stores/ui";
 import type { ReturnClaimDetail } from "@/types/return-claim";
 
 interface Props {
@@ -58,6 +59,8 @@ export default function ResolutionSection({ claim }: Props) {
     try {
       const r = await spawnReworkApi(claim.id);
       toast.success(t("returns_toast_rework_spawned"));
+      // Same post-creation step as intake: offer the QR label for the unit.
+      useUiStore.getState().showPrintPreview(r.reworkJobId);
       navigate(`/jobs/${r.reworkJobId}`);
     } finally {
       setSpawning(false);

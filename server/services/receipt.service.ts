@@ -1502,6 +1502,10 @@ export async function renderLabelHtml(
     margin-bottom: 0.5mm;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
+  .code {
+    font-weight: 700; font-size: ${label.font};
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
   .content {
     display: flex; align-items: stretch;
     flex: 1 1 auto;
@@ -1518,21 +1522,20 @@ export async function renderLabelHtml(
     padding-left: 1mm;
     display: flex; flex-direction: column; justify-content: center;
   }
-  .info .code { font-weight: 700; font-size: ${label.font}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .info .dev { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: ${label.sub}; }
   .info .pb { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: ${label.sub}; color: #333; }
   .info .price { font-weight: 700; font-size: ${label.font}; }
   @media screen { body { border: 1px dashed #999; } }
 </style>
 </head>
-<body${noAutoPrint ? "" : ' onload="window.print(); setTimeout(function(){ window.close(); }, 500);"'}>
+<body${noAutoPrint ? "" : '<script src="/label-print.js"></script>'}>
   <div class="logo-top">${logoHtml}</div>
+  <div class="code">${esc(job.jobCode)}</div>
   <div class="content">
     <div class="qr">
       ${qrImg}
     </div>
     <div class="info">
-      <div class="code">${esc(job.jobCode)}</div>
       <div class="dev">${device}</div>
       <div class="pb">${problem}</div>
       ${price ? `<div class="price">${price}</div>` : ""}
