@@ -7,6 +7,7 @@ import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useJobsStore } from "@/stores/jobs";
+import { useUiStore } from "@/stores/ui";
 
 export default function QuickIntakeForm() {
   const { t } = useTranslation();
@@ -22,7 +23,7 @@ export default function QuickIntakeForm() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      await useJobsStore.getState().createJob({
+      const job = await useJobsStore.getState().createJob({
         customerName,
         customerPhone,
         deviceBrand,
@@ -34,6 +35,9 @@ export default function QuickIntakeForm() {
             ? undefined
             : Number.parseFloat(estimatedCost) || 0,
       });
+      // Same post-create step as the full intake: offer the QR label so the
+      // device stays identifiable even without a printed ficha.
+      useUiStore.getState().showPrintPreview(job.id);
       setCustomerName("");
       setCustomerPhone("");
       setDeviceBrand("");

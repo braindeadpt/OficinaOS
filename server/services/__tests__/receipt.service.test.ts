@@ -357,3 +357,23 @@ describe("renderLabelHtml label sizes", () => {
     expect(html).toContain("size: 62mm 29mm");
   });
 });
+
+describe("renderLabelHtml identification", () => {
+  it("prints the job code as readable text for scanner-free lookup", async () => {
+    const html = await renderLabelHtml(mockPrisma(null), BASE_JOB, "", {});
+    expect(html).toContain('<div class="code">R-2026-0001</div>');
+  });
+
+  it("auto-prints via external script — the route CSP blocks inline handlers", async () => {
+    const html = await renderLabelHtml(mockPrisma(null), BASE_JOB, "", {});
+    expect(html).toContain('<script src="/label-print.js"></script>');
+    expect(html).not.toContain("onload=");
+  });
+
+  it("omits the print script in preview mode", async () => {
+    const html = await renderLabelHtml(mockPrisma(null), BASE_JOB, "", {
+      noAutoPrint: true,
+    });
+    expect(html).not.toContain("label-print.js");
+  });
+});

@@ -353,7 +353,7 @@ const LABEL_PRESETS: Record<
   LabelSize,
   { font: string; h: string; qr: string; sub: string; w: string }
 > = {
-  "40x20": { font: "7pt", h: "20mm", qr: "12mm", sub: "6pt", w: "40mm" },
+  "40x20": { font: "7pt", h: "20mm", qr: "11mm", sub: "6pt", w: "40mm" },
   "57x32": { font: "8pt", h: "32mm", qr: "16mm", sub: "7pt", w: "57mm" },
   "62x29": { font: "8pt", h: "29mm", qr: "15mm", sub: "7pt", w: "62mm" },
 };
@@ -1535,6 +1535,10 @@ export async function renderLabelHtml(
     margin-bottom: 0.5mm;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
+  .code {
+    font-weight: 700; font-size: ${label.font};
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
   .content {
     display: flex; align-items: stretch;
     flex: 1 1 auto;
@@ -1557,8 +1561,10 @@ export async function renderLabelHtml(
   @media screen { body { border: 1px dashed #999; } }
 </style>
 </head>
-<body${noAutoPrint ? "" : ' onload="window.print(); setTimeout(function(){ window.close(); }, 500);"'}>
+<body>
+${noAutoPrint ? "" : '<script src="/label-print.js"></script>'}
   <div class="logo-top">${logoHtml}</div>
+  <div class="code">${esc(job.jobCode)}</div>
   <div class="content">
     <div class="qr">
       ${qrImg}
