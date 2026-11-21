@@ -162,13 +162,6 @@ const SHOP_FORM_DEFAULT = {
   reviewUrl: "",
 };
 
-function revenueGoalField(shopSettings: ShopSettings) {
-  return shopSettings.monthlyRevenueGoal === null ||
-    shopSettings.monthlyRevenueGoal === undefined
-    ? ""
-    : String(shopSettings.monthlyRevenueGoal);
-}
-
 function formFromSettings(shopSettings: ShopSettings) {
   const paper = shopSettings.receiptPaper as "58mm" | "80mm" | "a4" | null;
   const label = shopSettings.labelSize as "40x20" | "57x32" | "62x29" | null;
@@ -193,7 +186,7 @@ function formFromSettings(shopSettings: ShopSettings) {
     printerHost: shopSettings.printerHost ?? "",
     printerPort: shopSettings.printerPort ?? 9100,
     printerHighContrast: shopSettings.printerHighContrast ?? false,
-    monthlyRevenueGoal: revenueGoalField(shopSettings),
+    monthlyRevenueGoal: shopSettings.monthlyRevenueGoal?.toString() ?? "",
     reviewUrl: shopSettings.reviewUrl ?? "",
   };
 }

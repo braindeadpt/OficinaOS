@@ -97,4 +97,30 @@ describe("useIntakeTermsSession", () => {
     expect(result.current.terms).toBeUndefined();
     expect(result.current.failed).toBe(false);
   });
+
+  it("issues a fresh request when reopened before the previous one resolved", async () => {
+    let resolveFirst: ((v: unknown) => void) | undefined;
+    get
+      .mockImplementationOnce(
+        () =>
+          new Promise((res) => {
+            resolveFirst = res;
+          })
+      )
+      .mockResolvedValue({ data: { intakeTerms: "Termos B" } });
+    const { result, rerender } = renderSession();
+
+    rerender({ active: true });
+    expect(get).toHaveBeenCalledTimes(1);
+
+    // Close while the request is still in flight, then reopen — the new
+    // intake must query again, not inherit the previous session's request.
+    rerender({ active: false });
+    rerender({ active: true });
+    expect(get).toHaveBeenCalledTimes(2);
+
+    // The stale first response must not overwrite the reopened session.
+    resolveFirst?.({ data: { intakeTerms: "Termos A" } });
+    await waitFor(() => expect(result.current.terms).toBe("Termos B"));
+  });
 });

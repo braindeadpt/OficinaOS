@@ -69,7 +69,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         // Shop-editable clauses (settings.intakeTerms) win over the default.
         const job = await createJob({
           ...buildJobPayload(data),
-          intakeTermsText: intakeTerms?.trim() || t("intake.terms_text"),
+          // undefined while terms are loading/failed — never freeze the
+          // built-in default into a document the shop did not configure.
+          intakeTermsText:
+            intakeTerms === undefined
+              ? undefined
+              : intakeTerms?.trim() || t("intake.terms_text"),
           intakeLocale: i18n.language,
         });
         toast.success(t("jobs_created_success", { id: job.jobCode || job.id }));

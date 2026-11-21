@@ -6,24 +6,16 @@ import api from "@/lib/api";
  * settings:view which FRONT_DESK/TECHNICIAN lack, so the signed ficha must
  * not depend on the full settings payload.
  *
- * No cross-intake cache: clauses can be edited on another workstation at any
- * time, so every intake opening queries the server and the result is frozen
- * only for that intake. `inFlight` still dedups concurrent opens.
+ * No cross-intake cache and no shared in-flight request: clauses can be
+ * edited on another workstation at any time, so every intake opening
+ * queries the server and the result is frozen only for that intake.
  */
-let inFlight: Promise<string | null> | null = null;
-
 function loadIntakeTerms(): Promise<string | null> {
-  if (!inFlight) {
-    inFlight = api
-      .get("/settings/intake-terms")
-      .then((res) =>
-        typeof res.data?.intakeTerms === "string" ? res.data.intakeTerms : null
-      )
-      .finally(() => {
-        inFlight = null;
-      });
-  }
-  return inFlight;
+  return api
+    .get("/settings/intake-terms")
+    .then((res) =>
+      typeof res.data?.intakeTerms === "string" ? res.data.intakeTerms : null
+    );
 }
 
 /** Fresh terms for the next intake — always queries the server. */
