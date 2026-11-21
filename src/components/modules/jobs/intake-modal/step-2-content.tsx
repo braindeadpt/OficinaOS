@@ -21,13 +21,43 @@ import {
   textareaErrorCls,
 } from "./types";
 
+function TermsLoadError({
+  onRetry,
+  t,
+}: {
+  onRetry?: () => void;
+  t: (key: string) => string;
+}) {
+  return (
+    <div className="rounded-xl bg-surface-container-lowest p-4 ring-1 ring-error/40">
+      <p className="font-body text-on-surface-variant text-xs leading-relaxed">
+        {t("intake.terms_load_error")}
+      </p>
+      {onRetry && (
+        <button
+          className="mt-3 flex items-center justify-center gap-2 rounded-xl bg-surface-container-highest px-4 py-2 font-label text-on-surface-variant text-sm transition-colors hover:bg-surface-container hover:text-on-surface"
+          onClick={onRetry}
+          type="button"
+        >
+          <Icon className="text-lg" name="refresh" />
+          {t("retry")}
+        </button>
+      )}
+    </div>
+  );
+}
+
 interface Step2Props {
   /** Resolved once per intake by the dashboard — undefined while loading. */
   customTerms?: string | null;
   errors: Partial<Record<keyof IntakeFormData, string>>;
   form: IntakeFormData;
   handleBlur: (field: keyof IntakeFormData) => void;
+  /** Re-run the terms fetch after a failure. */
+  onRetryTerms?: () => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
+  /** Terms fetch failed — signing stays disabled until a retry succeeds. */
+  termsFailed?: boolean;
   touched: Partial<Record<keyof IntakeFormData, boolean>>;
   update: <K extends keyof IntakeFormData>(
     key: K,
@@ -37,6 +67,8 @@ interface Step2Props {
 
 export default function Step2Content({
   customTerms,
+  onRetryTerms,
+  termsFailed,
   errors,
   form,
   handleBlur,
@@ -259,34 +291,42 @@ export default function Step2Content({
 
         <div>
           <span className={labelCls}>{t("intake.terms_title")}</span>
-          {termsLoading ? (
-            <p className="rounded-xl bg-surface-container-lowest p-4 font-body text-on-surface-variant text-xs leading-relaxed ring-1 ring-outline-variant">
-              {t("loading")}
-            </p>
-          ) : (
-            <>
-              <p className="rounded-xl bg-surface-container-lowest p-4 font-body text-on-surface-variant text-xs leading-relaxed ring-1 ring-outline-variant">
-                {termsText}
-              </p>
-              <div className="mt-3">
-                <SignaturePad onChange={(v) => update("signature", v)} />
-                {form.signature && (
-                  <p className="ms-1 mt-1 flex items-center gap-1 font-label text-success text-xs">
-                    <Icon className="text-sm" name="check_circle" />
-                    {t("intake.signature_captured")}
-                  </p>
-                )}
-                <button
-                  className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-surface-container-highest px-4 py-2.5 font-label text-on-surface-variant text-sm transition-colors hover:bg-surface-container hover:text-on-surface"
-                  onClick={() => setRemoteSignOpen(true)}
-                  type="button"
-                >
-                  <Icon className="text-lg" name="qr_code" />
-                  {t("intake.sign_remote_button")}
-                </button>
-              </div>
-            </>
-          )}
+          {(() => {
+            if (termsFailed) {
+              return <TermsLoadError onRetry={onRetryTerms} t={t} />;
+            }
+            if (termsLoading) {
+              return (
+                <p className="rounded-xl bg-surface-container-lowest p-4 font-body text-on-surface-variant text-xs leading-relaxed ring-1 ring-outline-variant">
+                  {t("loading")}
+                </p>
+              );
+            }
+            return (
+              <>
+                <p className="rounded-xl bg-surface-container-lowest p-4 font-body text-on-surface-variant text-xs leading-relaxed ring-1 ring-outline-variant">
+                  {termsText}
+                </p>
+                <div className="mt-3">
+                  <SignaturePad onChange={(v) => update("signature", v)} />
+                  {form.signature && (
+                    <p className="ms-1 mt-1 flex items-center gap-1 font-label text-success text-xs">
+                      <Icon className="text-sm" name="check_circle" />
+                      {t("intake.signature_captured")}
+                    </p>
+                  )}
+                  <button
+                    className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-surface-container-highest px-4 py-2.5 font-label text-on-surface-variant text-sm transition-colors hover:bg-surface-container hover:text-on-surface"
+                    onClick={() => setRemoteSignOpen(true)}
+                    type="button"
+                  >
+                    <Icon className="text-lg" name="qr_code" />
+                    {t("intake.sign_remote_button")}
+                  </button>
+                </div>
+              </>
+            );
+          })()}
           <RemoteSignatureDialog
             document={intakeDocument}
             onClose={() => setRemoteSignOpen(false)}

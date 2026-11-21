@@ -35,7 +35,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   // Resolved once per intake open — the same value feeds the displayed
   // clauses, the remote-sign document and this submit, so the customer can
   // never sign text different from what was shown.
-  const intakeTerms = useIntakeTermsSession(intakeModalOpen);
+  const {
+    failed: intakeTermsFailed,
+    retry: retryIntakeTerms,
+    terms: intakeTerms,
+  } = useIntakeTermsSession(intakeModalOpen);
   const { pathname } = useLocation();
   const { t, i18n } = useTranslation();
 
@@ -138,7 +142,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         <BottomNav />
         <IntakeModal
           intakeTerms={intakeTerms}
+          intakeTermsFailed={intakeTermsFailed}
           onClose={closeIntakeModal}
+          onRetryIntakeTerms={retryIntakeTerms}
           onSubmit={handleIntakeSubmit}
           open={intakeModalOpen}
           prefill={intakeModalPrefill ?? undefined}

@@ -3,10 +3,7 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import api from "@/lib/api";
-import {
-  invalidateIntakeTermsCache,
-  useIntakeTermsSession,
-} from "../use-intake-terms";
+import { useIntakeTermsSession } from "../use-intake-terms";
 
 vi.mock("@/lib/api", () => ({
   default: { get: vi.fn() },
@@ -24,18 +21,18 @@ function renderSession(initialActive = false) {
 describe("useIntakeTermsSession", () => {
   beforeEach(() => {
     get.mockReset();
-    invalidateIntakeTermsCache();
   });
 
   it("stays undefined until the intake opens, then resolves custom terms", async () => {
     get.mockResolvedValue({ data: { intakeTerms: "Cláusulas da loja" } });
     const { result, rerender } = renderSession();
 
-    expect(result.current).toBeUndefined();
+    expect(result.current.terms).toBeUndefined();
+    expect(result.current.failed).toBe(false);
     expect(get).not.toHaveBeenCalled();
 
     rerender({ active: true });
-    await waitFor(() => expect(result.current).toBe("Cláusulas da loja"));
+    await waitFor(() => expect(result.current.terms).toBe("Cláusulas da loja"));
     expect(get).toHaveBeenCalledWith("/settings/intake-terms");
   });
 
@@ -43,37 +40,61 @@ describe("useIntakeTermsSession", () => {
     get.mockResolvedValue({ data: { intakeTerms: null } });
     const { result } = renderSession(true);
 
-    await waitFor(() => expect(result.current).toBeNull());
+    await waitFor(() => expect(result.current.terms).toBeNull());
+    expect(result.current.failed).toBe(false);
   });
 
-  it("re-resolves fresh terms after a settings save invalidates the cache", async () => {
-    // Terms A resolved for the first intake.
+  it("fetches fresh terms on every intake open — edits on another workstation propagate", async () => {
+    // First intake resolves terms A.
     get.mockResolvedValue({ data: { intakeTerms: "Termos A" } });
     const { result, rerender } = renderSession();
     rerender({ active: true });
-    await waitFor(() => expect(result.current).toBe("Termos A"));
+    await waitFor(() => expect(result.current.terms).toBe("Termos A"));
 
-    // Owner saves terms B — saveShopSettings invalidates the cache — then
-    // opens a new intake WITHOUT leaving the page (the reported bug: the
-    // dashboard kept submitting A while the form displayed B).
-    invalidateIntakeTermsCache();
+    // The owner saves terms B elsewhere; this tab never saved anything, so
+    // no invalidation runs — the next open must still pick up B.
     get.mockResolvedValue({ data: { intakeTerms: "Termos B" } });
     rerender({ active: false });
     rerender({ active: true });
 
-    await waitFor(() => expect(result.current).toBe("Termos B"));
+    await waitFor(() => expect(result.current.terms).toBe("Termos B"));
+    expect(get).toHaveBeenCalledTimes(2);
   });
 
-  it("keeps cached terms across intakes when nothing changed", async () => {
+  it("keeps the resolved terms frozen while the intake stays open", async () => {
+    get.mockResolvedValue({ data: { intakeTerms: "Termos A" } });
+    const { result } = renderSession(true);
+    await waitFor(() => expect(result.current.terms).toBe("Termos A"));
+
+    // A later open would see B, but THIS intake must not change mid-signature.
+    get.mockResolvedValue({ data: { intakeTerms: "Termos B" } });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(result.current.terms).toBe("Termos A");
+    expect(get).toHaveBeenCalledTimes(1);
+  });
+
+  it("flags failure without falling back to defaults, and retry recovers", async () => {
+    get.mockRejectedValueOnce(new Error("network down"));
+    const { result } = renderSession(true);
+
+    await waitFor(() => expect(result.current.failed).toBe(true));
+    // Terms stays undefined — signing must remain disabled, never default.
+    expect(result.current.terms).toBeUndefined();
+
+    get.mockResolvedValue({ data: { intakeTerms: "Cláusulas da loja" } });
+    result.current.retry();
+    await waitFor(() => expect(result.current.terms).toBe("Cláusulas da loja"));
+    expect(result.current.failed).toBe(false);
+  });
+
+  it("resets to loading state when the intake closes", async () => {
     get.mockResolvedValue({ data: { intakeTerms: "Termos A" } });
     const { result, rerender } = renderSession();
     rerender({ active: true });
-    await waitFor(() => expect(result.current).toBe("Termos A"));
+    await waitFor(() => expect(result.current.terms).toBe("Termos A"));
 
     rerender({ active: false });
-    rerender({ active: true });
-
-    await waitFor(() => expect(result.current).toBe("Termos A"));
-    expect(get).toHaveBeenCalledTimes(1);
+    expect(result.current.terms).toBeUndefined();
+    expect(result.current.failed).toBe(false);
   });
 });

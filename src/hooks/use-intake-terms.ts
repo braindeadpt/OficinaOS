@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import api from "@/lib/api";
 
 /**
@@ -6,27 +6,19 @@ import api from "@/lib/api";
  * settings:view which FRONT_DESK/TECHNICIAN lack, so the signed ficha must
  * not depend on the full settings payload.
  *
- * Cache states: `undefined` = not loaded (or the fetch failed — retried on
- * the next intake); `null` = loaded and the shop uses the app default;
- * a string is the shop's custom clauses.
+ * No cross-intake cache: clauses can be edited on another workstation at any
+ * time, so every intake opening queries the server and the result is frozen
+ * only for that intake. `inFlight` still dedups concurrent opens.
  */
-let cached: string | null | undefined;
-let inFlight: Promise<void> | null = null;
+let inFlight: Promise<string | null> | null = null;
 
-function loadIntakeTerms(): Promise<void> {
+function loadIntakeTerms(): Promise<string | null> {
   if (!inFlight) {
     inFlight = api
       .get("/settings/intake-terms")
-      .then((res) => {
-        cached =
-          typeof res.data?.intakeTerms === "string"
-            ? res.data.intakeTerms
-            : null;
-      })
-      .catch(() => {
-        // Leave `cached` undefined so the next intake retries instead of
-        // treating a failed load as an intentionally empty setting.
-      })
+      .then((res) =>
+        typeof res.data?.intakeTerms === "string" ? res.data.intakeTerms : null
+      )
       .finally(() => {
         inFlight = null;
       });
@@ -34,17 +26,24 @@ function loadIntakeTerms(): Promise<void> {
   return inFlight;
 }
 
-/** Terms for the next intake — cached unless a settings save invalidated it. */
-export async function fetchIntakeTerms(): Promise<string | null> {
-  if (cached === undefined) {
-    await loadIntakeTerms();
-  }
-  return cached ?? null;
+/** Fresh terms for the next intake — always queries the server. */
+export function fetchIntakeTerms(): Promise<string | null> {
+  return loadIntakeTerms();
 }
 
-/** Call after saving shop settings so the next intake picks up new clauses. */
-export function invalidateIntakeTermsCache(): void {
-  cached = undefined;
+export interface IntakeTermsSession {
+  /**
+   * True when the fetch failed. Terms stays `undefined` so signing remains
+   * disabled — a failed load must never fall back to the default clauses.
+   */
+  failed: boolean;
+  /** Re-run the fetch after a failure. */
+  retry: () => void;
+  /**
+   * `undefined` while loading; `null` = loaded and the shop uses the app
+   * default; a string is the shop's custom clauses.
+   */
+  terms: string | null | undefined;
 }
 
 /**
@@ -53,26 +52,43 @@ export function invalidateIntakeTermsCache(): void {
  * in-person submit — `undefined` while loading, so consumers must not
  * enable signing until it resolves.
  */
-export function useIntakeTermsSession(
-  active: boolean
-): string | null | undefined {
-  const [terms, setTerms] = useState<string | null | undefined>(undefined);
+export function useIntakeTermsSession(active: boolean): IntakeTermsSession {
+  const [state, setState] = useState<{
+    failed: boolean;
+    terms: string | null | undefined;
+  }>({ failed: false, terms: undefined });
+  // Monotonic request id — a stale response (closed intake, superseded retry)
+  // must never overwrite newer state.
+  const requestSeq = useRef(0);
+
+  const run = useCallback(() => {
+    const seq = ++requestSeq.current;
+    fetchIntakeTerms()
+      .then((value) => {
+        if (requestSeq.current === seq) {
+          setState({ failed: false, terms: value });
+        }
+      })
+      .catch(() => {
+        if (requestSeq.current === seq) {
+          setState({ failed: true, terms: undefined });
+        }
+      });
+  }, []);
 
   useEffect(() => {
     if (!active) {
-      setTerms(undefined);
+      requestSeq.current += 1;
+      setState({ failed: false, terms: undefined });
       return;
     }
-    let cancelled = false;
-    fetchIntakeTerms().then((value) => {
-      if (!cancelled) {
-        setTerms(value);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [active]);
+    run();
+  }, [active, run]);
 
-  return terms;
+  const retry = useCallback(() => {
+    setState({ failed: false, terms: undefined });
+    run();
+  }, [run]);
+
+  return { failed: state.failed, retry, terms: state.terms };
 }
