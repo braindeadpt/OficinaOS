@@ -136,8 +136,12 @@ export default function JobPaymentsSection({
     try {
       await issueJobInvoice(jobId);
       onChanged();
-    } catch {
-      setInvoiceError(t("payments.invoice_failed"));
+    } catch (err) {
+      setInvoiceError(
+        (err as { code?: string })?.code === "INVOICING_OUTCOME_UNKNOWN"
+          ? t("errors.invoice_outcome_unknown")
+          : t("payments.invoice_failed")
+      );
     } finally {
       setInvoiceBusy(false);
     }

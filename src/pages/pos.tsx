@@ -62,11 +62,11 @@ function issueInvoiceToast(
     })
     .catch((e: unknown) => {
       const code = (e as ApiError & { code?: string }).code;
-      toast.error(
-        code === "ALREADY_INVOICED"
-          ? t("pos.invoice_already")
-          : t("pos.invoice_failed")
-      );
+      const messages: Record<string, string> = {
+        ALREADY_INVOICED: t("pos.invoice_already"),
+        INVOICING_OUTCOME_UNKNOWN: t("errors.invoice_outcome_unknown"),
+      };
+      toast.error(messages[code ?? ""] ?? t("pos.invoice_failed"));
     });
 }
 

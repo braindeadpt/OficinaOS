@@ -6,4 +6,6 @@ set -e
 # to the non-root bun user for the app process.
 chown -R bun:bun /app/uploads 2>/dev/null || true
 
-exec su -s /bin/sh bun -c 'export HOME=/home/bun; cd /app; exec bun run start:prod'
+# Forward the container CMD/args so `docker run img <cmd>` overrides work —
+# the first shell arg (bun) becomes $0, the rest become "$@" for the exec.
+exec su -s /bin/sh -c 'export HOME=/home/bun; cd /app; exec "$@"' bun bun "$@"

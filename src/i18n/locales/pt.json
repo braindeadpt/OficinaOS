@@ -629,6 +629,7 @@
     "loaner_unit_on_loan": "Esta unidade está emprestada — aguarde a devolução antes de editar a sua identificação",
     "invoicing_not_configured": "A faturação não está configurada — defina a conta InvoiceXpress e a chave API em Definições",
     "invoicing_provider_failed": "O fornecedor de faturação rejeitou ou falhou a solicitação. Tente novamente ou verifique as definições da conta",
+    "invoice_outcome_unknown": "Resultado da emissão desconhecido — o documento pode já existir. Verifique o InvoiceXpress antes de tentar novamente",
     "already_invoiced": "Já foi emitida uma fatura para este registo",
     "password_change_required": "Deve alterar a sua palavra-passe antes de continuar",
     "two_factor_enable_failed": "Não foi possível iniciar a configuração de dois fatores — verifique a sua palavra-passe",

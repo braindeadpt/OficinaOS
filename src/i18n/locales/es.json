@@ -629,6 +629,7 @@
     "loaner_unit_on_loan": "Esta unidad está en préstamo: espere la devolución antes de editar su identificación.",
     "invoicing_not_configured": "La facturación no está configurada: configure la cuenta de InvoiceXpress y la clave API en Configuración",
     "invoicing_provider_failed": "El proveedor de facturación rechazó o falló la solicitud. Vuelva a intentarlo o verifique la configuración de la cuenta.",
+    "invoice_outcome_unknown": "Resultado de la emisión desconocido: es posible que el documento ya exista. Compruebe InvoiceXpress antes de reintentarlo",
     "already_invoiced": "Ya se emitió un documento fiscal para este registro.",
     "password_change_required": "Debes cambiar tu contraseña antes de continuar.",
     "two_factor_enable_failed": "No se pudo iniciar la configuración de dos factores: verifique su contraseña",

@@ -629,6 +629,7 @@
     "loaner_unit_on_loan": "This unit is on loan — wait for the return before editing its identification",
     "invoicing_not_configured": "Invoicing is not configured — set the InvoiceXpress account and API key in Settings",
     "invoicing_provider_failed": "The invoicing provider rejected or failed the request — try again or check the account settings",
+    "invoice_outcome_unknown": "Issue outcome unknown — the document may already exist. Check InvoiceXpress before retrying",
     "already_invoiced": "A fiscal document was already issued for this record",
     "password_change_required": "You must change your password before continuing",
     "two_factor_enable_failed": "Could not start two-factor setup — check your password",

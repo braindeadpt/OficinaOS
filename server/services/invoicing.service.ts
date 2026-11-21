@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@generated/client";
-import { AppError } from "@shared/errors/app-error.js";
+import { AppError, isAppError } from "@shared/errors/app-error.js";
 import type { FastifyBaseLogger } from "fastify";
 import { decryptSecret } from "../lib/crypto.js";
 import { assertNotDemoMode } from "../lib/demo.js";
@@ -192,10 +192,13 @@ async function issueDocument(
 
   const docId = created.id;
   if (!docId) {
+    // 2xx sem id legível — o documento pode existir server-side.
     log.warn({ created }, "InvoiceXpress create returned no document id");
-    throw new AppError("INVOICING_PROVIDER_FAILED");
+    throw new AppError("INVOICING_PROVIDER_FAILED", { ambiguous: true });
   }
 
+  // A partir daqui o documento JÁ existe: qualquer falha no finalize é
+  // ambígua para efeitos de retry, mesmo uma rejeição definitiva.
   const finalized = await ixFetch(
     account,
     apiKey,
@@ -204,7 +207,15 @@ async function issueDocument(
       body: { invoice: { state: "finalized" } },
       method: "PUT",
     }
-  );
+  ).catch((err) => {
+    if (isAppError(err) && err.code === "INVOICING_PROVIDER_FAILED") {
+      throw new AppError("INVOICING_PROVIDER_FAILED", {
+        ambiguous: true,
+        providerStatus: err.details?.providerStatus,
+      });
+    }
+    throw err;
+  });
 
   return {
     docId: String(docId),
@@ -336,6 +347,8 @@ export async function issueInvoiceForSale(
         () => issuingKeys.delete(claimKey),
         AMBIGUOUS_CLAIM_HOLD_MS
       ).unref();
+      // Código próprio → a UI distingue "verificar provider" de "falhou".
+      throw new AppError("INVOICING_OUTCOME_UNKNOWN");
     }
     throw err;
   } finally {
@@ -433,6 +446,8 @@ export async function issueInvoiceForJob(
         () => issuingKeys.delete(claimKey),
         AMBIGUOUS_CLAIM_HOLD_MS
       ).unref();
+      // Código próprio → a UI distingue "verificar provider" de "falhou".
+      throw new AppError("INVOICING_OUTCOME_UNKNOWN");
     }
     throw err;
   } finally {
