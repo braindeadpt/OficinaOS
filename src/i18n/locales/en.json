@@ -869,7 +869,7 @@
     "check_ok": "OK",
     "check_fail": "Fails",
     "terms_title": "Repair terms",
-    "terms_text": "I declare that the device described in this form belongs to me, I authorize its repair under the agreed conditions, and I accept the shop's terms of service, including the stated estimate and the responsibility of collecting the device within 90 days. I also authorize the shop to access the device's data (files, photos, messages) and to make backups, exclusively for diagnosis and repair purposes, without sharing them with third parties or using them for other purposes, except where required by law.",
+    "terms_text": "I declare that the device described in this form belongs to me, I authorize its repair under the agreed conditions, and I accept the shop's terms of service, including the stated estimate and the responsibility of collecting the device within 90 days. I also authorize the shop to access device data strictly necessary for diagnosis and repair (files, photos, messages) and to make backups of only that data, without sharing it with third parties or using it for other purposes, except where required by law.",
     "signature_captured": "Signature captured",
     "sign_remote_button": "Sign on the customer's phone",
     "terms_load_error": "Could not load the repair terms. Check the connection and try again — signing is disabled until they load.",
