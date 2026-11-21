@@ -18,6 +18,9 @@ interface HistoryEntry {
 
 interface StatusHistoryTimelineProps {
   jobId: string;
+  // Bumped (job.updatedAt) on every job mutation so entries like a delivery
+  // status change appear without remounting the page.
+  refreshKey: string;
 }
 
 const STATUS_SET = new Set<string>(Object.values(JobStatus));
@@ -48,6 +51,7 @@ function formatValue(
 
 export default function StatusHistoryTimeline({
   jobId,
+  refreshKey,
 }: StatusHistoryTimelineProps) {
   const { t } = useTranslation();
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
@@ -66,8 +70,10 @@ export default function StatusHistoryTimeline({
   }, [jobId]);
 
   useEffect(() => {
-    fetchHistory();
-  }, [fetchHistory]);
+    if (refreshKey) {
+      fetchHistory();
+    }
+  }, [fetchHistory, refreshKey]);
 
   if (loading) {
     return (

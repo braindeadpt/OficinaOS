@@ -269,13 +269,6 @@ export default function TechnicianDashboardPage() {
               <div className="h-2 w-2 rounded-full bg-tertiary" key={n} />
             ))}
           </div>
-          {/* "1 arriving today" is literal — show it only for a single
-              pending part; other counts read off the value above. */}
-          {waitingForParts === 1 && (
-            <p className="mt-3 font-bold text-tertiary text-xs">
-              {t("tech_dashboard.one_arriving_today")}
-            </p>
-          )}
         </MetricCard>
 
         <MetricCard

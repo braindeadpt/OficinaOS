@@ -50,7 +50,7 @@ export default function SettingsPage() {
   const { t } = useTranslation();
   const isDemo = useDemoMode();
   const baseId = useId();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
     const requestedTab = searchParams.get("tab") as SettingsTab | null;
     return requestedTab && TAB_KEYS.includes(requestedTab)
@@ -142,6 +142,9 @@ export default function SettingsPage() {
       return;
     }
     setActiveTab(key);
+    // Keep the URL in sync — the deep-link effect otherwise reads the stale
+    // ?tab= param and flips straight back to it.
+    setSearchParams({ tab: key });
     tabRefs.current[key]?.focus();
   }
 
@@ -156,6 +159,7 @@ export default function SettingsPage() {
     }
     markDirty(activeTab, false);
     setActiveTab(pendingTab);
+    setSearchParams({ tab: pendingTab });
     tabRefs.current[pendingTab]?.focus();
     setPendingTab(null);
   }

@@ -230,6 +230,13 @@ export default function SettingsShopTab({
     reset: () => setShopForm({ ...shopFormInitial }),
   }));
 
+  // Latest form/initial read through a ref — depending on the states
+  // themselves would re-fire this effect after every write (infinite loop).
+  const formStateRef = useRef({ form: shopForm, initial: shopFormInitial });
+  useEffect(() => {
+    formStateRef.current = { form: shopForm, initial: shopFormInitial };
+  });
+
   useEffect(() => {
     if (!shopSettings) {
       return;
@@ -237,14 +244,19 @@ export default function SettingsShopTab({
     // Reseeding on every store identity change would wipe in-progress edits
     // (e.g. a background refetch or the post-save refresh). Only take fresh
     // server data when the form is pristine.
-    if (!formsEqual(shopForm, shopFormInitial)) {
+    const { form: current, initial } = formStateRef.current;
+    if (!formsEqual(current, initial)) {
       return;
     }
     const form = formFromSettings(shopSettings);
+    // Identical normalized values → skip the writes (no new references).
+    if (formsEqual(current, form)) {
+      return;
+    }
     setShopForm(form);
     setShopFormInitial(form);
     setGoalError(null);
-  }, [shopSettings, shopForm, shopFormInitial]);
+  }, [shopSettings]);
 
   useEffect(() => {
     if (!shopSettings) {

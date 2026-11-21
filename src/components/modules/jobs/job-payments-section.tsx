@@ -25,6 +25,9 @@ interface JobPaymentsSectionProps {
   jobId: string;
   onChanged: () => void;
   paymentOnDeliveryMethod: string | null;
+  // Bumped (job.updatedAt) whenever the job mutates server-side — e.g. a
+  // delivery that records a payment — so this list refetches, not only on mount.
+  refreshKey: string;
   status: string;
 }
 
@@ -36,6 +39,7 @@ export default function JobPaymentsSection({
   jobId,
   onChanged,
   paymentOnDeliveryMethod,
+  refreshKey,
   status,
 }: JobPaymentsSectionProps) {
   const { t } = useTranslation();
@@ -69,8 +73,10 @@ export default function JobPaymentsSection({
   }, [jobId]);
 
   useEffect(() => {
-    fetchPayments();
-  }, [fetchPayments]);
+    if (refreshKey) {
+      fetchPayments();
+    }
+  }, [fetchPayments, refreshKey]);
 
   const handleRemove = useCallback(
     async (paymentId: string) => {

@@ -599,7 +599,10 @@ export default function JobDetailPage() {
           <h2 className="mb-4 font-bold font-headline text-base text-on-surface">
             {t("jobs_detail_history")}
           </h2>
-          <StatusHistoryTimeline jobId={job.id} />
+          <StatusHistoryTimeline
+            jobId={job.id}
+            refreshKey={job.updatedAt.toISOString()}
+          />
         </div>
       </div>
 
@@ -630,6 +633,7 @@ export default function JobDetailPage() {
           jobId={job.id}
           onChanged={() => fetchJob()}
           paymentOnDeliveryMethod={job.paymentOnDeliveryMethod ?? null}
+          refreshKey={job.updatedAt.toISOString()}
           status={job.status}
         />
       </div>
@@ -657,6 +661,9 @@ export default function JobDetailPage() {
         <JobExternalRepairsSection
           jobId={job.id}
           jobStatus={job.status}
+          // key força remount ao trocar de ordem — um diálogo de envio
+          // deixado aberto via Ctrl+K não grava dados na ordem seguinte.
+          key={job.id}
           onChanged={() => fetchJob()}
         />
       </div>
