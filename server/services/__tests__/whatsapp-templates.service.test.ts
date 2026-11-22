@@ -241,6 +241,98 @@ describe("syncWhatsAppTemplates", () => {
     );
   });
 
+  it("lookup inalcançável preserva o estado anterior em vez de gravar MISSING", async () => {
+    // Regressão Devin r12: um timeout na consulta de um nome renomeado
+    // gravava MISSING como se a Meta confirmasse a ausência — a fila
+    // adiava 30min com o modelo ainda aprovado.
+    mocks.getOrCreateShopSettings.mockResolvedValue(localSettings);
+    notificationTemplate.findMany.mockResolvedValue([
+      { body: "Olá {{customerName}}, REP {{jobCode}}.", name: "job_ready" },
+    ]);
+    notificationOutbox.findMany.mockResolvedValue([
+      { templateName: "job_done" },
+    ]);
+    shopSettingsFindUnique.mockResolvedValue({
+      whatsappTemplatesJson: {
+        job_done: { status: "APPROVED", syncedAt: "2026-11-01T00:00:00Z" },
+      },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: unknown) => {
+        if (String(url).includes("name=job_done")) {
+          return Promise.resolve(new Response("boom", { status: 502 }));
+        }
+        return Promise.resolve(
+          graphOk({
+            data: [
+              {
+                components: [{ text: "Olá {{1}}, REP {{2}}.", type: "BODY" }],
+                language: "pt_PT",
+                name: "job_ready",
+                status: "APPROVED",
+              },
+            ],
+          })
+        );
+      })
+    );
+
+    const res = await syncWhatsAppTemplates(prisma);
+    // O nome renomeado não entra no resultado — persistStatuses
+    // preserva o APPROVED anterior.
+    expect(res.templates.map((t) => t.name)).toEqual(["job_ready"]);
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          whatsappTemplatesJson: expect.objectContaining({
+            job_done: expect.objectContaining({ status: "APPROVED" }),
+          }),
+        }),
+      })
+    );
+  });
+
+  it("ready conta só os modelos atuais — lookups de rename ficam de fora", async () => {
+    mocks.getOrCreateShopSettings.mockResolvedValue(localSettings);
+    notificationTemplate.findMany.mockResolvedValue([
+      { body: "Olá {{customerName}}, REP {{jobCode}}.", name: "job_ready" },
+    ]);
+    notificationOutbox.findMany.mockResolvedValue([
+      { templateName: "job_done" },
+    ]);
+    shopSettingsFindUnique.mockResolvedValue(null);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: unknown) => {
+        const isJobDone = String(url).includes("name=job_done");
+        return Promise.resolve(
+          graphOk({
+            data: [
+              {
+                components: [
+                  {
+                    text: isJobDone ? "x" : "Olá {{1}}, REP {{2}}.",
+                    type: "BODY",
+                  },
+                ],
+                language: "pt_PT",
+                name: isJobDone ? "job_done" : "job_ready",
+                status: "APPROVED",
+              },
+            ],
+          })
+        );
+      })
+    );
+
+    const res = await syncWhatsAppTemplates(prisma);
+    // job_done aprovado na Meta serve a fila, mas o aviso de sync
+    // mede os modelos atuais — sem ele ficava «2 de 1 aprovados».
+    expect(res.ready).toBe(1);
+    expect(res.total).toBe(1);
+  });
+
   it("sem templates WHATSAPP não fala a lado nenhum", async () => {
     mocks.getOrCreateShopSettings.mockResolvedValue(localSettings);
     notificationTemplate.findMany.mockResolvedValue([]);

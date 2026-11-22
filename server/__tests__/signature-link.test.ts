@@ -250,6 +250,57 @@ describe("sendSignatureLink — remote URL resolution", () => {
     expect(prisma.notificationOutbox.create).not.toHaveBeenCalled();
   });
 
+  it("modelo signature_link movido para SMS numa loja só-WhatsApp → recusa", async () => {
+    // Regressão Devin r12: o gate olhava para "algum canal ligado" —
+    // WhatsApp ativo confirmava o envio mesmo sem modelo WhatsApp e
+    // sem transporte SMS, e nada entrava na fila.
+    prisma.signatureSession.findUnique.mockResolvedValue(
+      intakeSession({ relayed: true })
+    );
+    prisma.shopSettings.findUnique.mockResolvedValue(defaultSettings());
+    prisma.notificationTemplate.findMany.mockResolvedValue([
+      IN_APP_TEMPLATE,
+      { channel: "SMS", body: "Assine {{docLabel}}: {{signUrl}}" },
+    ]);
+
+    await expect(
+      sendSignatureLink(app, TOKEN, "staff-1")
+    ).rejects.toMatchObject({ code: "SIGNATURE_LINK_NO_CHANNEL" });
+    expect(prisma.notificationOutbox.create).not.toHaveBeenCalled();
+  });
+
+  it("sem modelo signature_link → recusa mesmo com WhatsApp ligado", async () => {
+    prisma.signatureSession.findUnique.mockResolvedValue(
+      intakeSession({ relayed: true })
+    );
+    prisma.shopSettings.findUnique.mockResolvedValue(defaultSettings());
+    prisma.notificationTemplate.findMany.mockResolvedValue([IN_APP_TEMPLATE]);
+
+    await expect(
+      sendSignatureLink(app, TOKEN, "staff-1")
+    ).rejects.toMatchObject({ code: "SIGNATURE_LINK_NO_CHANNEL" });
+    expect(prisma.notificationOutbox.create).not.toHaveBeenCalled();
+  });
+
+  it("modelo signature_link SMS + gateway LAN ligado → enfileira SMS", async () => {
+    prisma.signatureSession.findUnique.mockResolvedValue(
+      intakeSession({ relayed: true })
+    );
+    prisma.shopSettings.findUnique.mockResolvedValue(
+      defaultSettings({ smsEnabled: true, whatsappEnabled: false })
+    );
+    prisma.notificationTemplate.findMany.mockResolvedValue([
+      IN_APP_TEMPLATE,
+      { channel: "SMS", body: "Assine {{docLabel}}: {{signUrl}}" },
+    ]);
+
+    await sendSignatureLink(app, TOKEN, "staff-1");
+
+    const outbox = prisma.notificationOutbox.create.mock.calls[0][0];
+    expect(outbox.data.channel).toBe("SMS");
+    expect(outbox.data.renderedBody).toContain(`/sign/${TOKEN}`);
+  });
+
   it("SMS Pro sem device na Cloud → recusa em vez de confirmar envio falhado", async () => {
     // Regressão Devin r8: subscrição "sms" sem device enabled na Cloud —
     // o envio caía com DEVICE_MISSING depois do diálogo confirmar.

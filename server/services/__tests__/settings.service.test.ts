@@ -405,20 +405,41 @@ describe("updateNotificationTemplate", () => {
     (
       prisma.notificationTemplate.update as ReturnType<typeof vi.fn>
     ).mockResolvedValue({
-      body: "novo texto",
+      body: "novo texto {{signUrl}}",
       channel: "WHATSAPP",
       id: "template-sig",
       name: "signature_link",
     });
 
     const result = await updateNotificationTemplate(prisma, "template-sig", {
-      body: "novo texto",
+      body: "novo texto {{signUrl}}",
       channel: "WHATSAPP",
       isDefault: true,
       name: "signature_link",
     });
 
-    expect(result).toHaveProperty("body", "novo texto");
+    expect(result).toHaveProperty("body", "novo texto {{signUrl}}");
+  });
+
+  it("modelo signature_link sem {{signUrl}} no corpo é rejeitado", async () => {
+    (
+      prisma.notificationTemplate.findUnique as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      body: "texto antigo {{signUrl}}",
+      channel: "WHATSAPP",
+      id: "template-sig",
+      name: "signature_link",
+    });
+
+    await expect(
+      updateNotificationTemplate(prisma, "template-sig", {
+        body: "novo texto sem a ligação",
+        channel: "WHATSAPP",
+        isDefault: true,
+        name: "signature_link",
+      })
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    expect(prisma.notificationTemplate.update).not.toHaveBeenCalled();
   });
 
   it("rename + mudança de canal não migra a fila WHATSAPP", async () => {

@@ -30,6 +30,12 @@ import {
 } from "./notification-outbox.service.js";
 import { generateSmsWebhookToken } from "./sms.service.js";
 
+// Variáveis sem as quais o modelo staff-initiated sai inútil —
+// o pedido de assinatura sem {{signUrl}} não tem ligação para abrir.
+const REQUIRED_TEMPLATE_VARS: Record<string, string> = {
+  signature_link: "signUrl",
+};
+
 function endpointOrigin(endpoint: string) {
   try {
     return new URL(endpoint).origin;
@@ -292,6 +298,19 @@ export async function updateNotificationTemplate(
     ) {
       throw new AppError("VALIDATION_ERROR", {
         errors: { name: ["reserved_name"] },
+      });
+    }
+
+    // Variáveis obrigatórias por modelo staff-initiated: sem {{signUrl}}
+    // o pedido de assinatura sai sem a ligação que o cliente precisa
+    // para abrir o documento — a mensagem chega mas não serve.
+    const requiredVar = REQUIRED_TEMPLATE_VARS[input.name || existing.name];
+    if (
+      requiredVar &&
+      !(input.body ?? existing.body ?? "").includes(requiredVar)
+    ) {
+      throw new AppError("VALIDATION_ERROR", {
+        errors: { body: [`missing_${requiredVar}`] },
       });
     }
 

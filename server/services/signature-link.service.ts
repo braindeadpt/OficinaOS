@@ -40,21 +40,37 @@ const maskPhone = (phone: string) =>
   `•••${phone.replace(NON_DIGIT_RE, "").slice(-4)}`;
 
 /**
- * Canal utilizável para o link: WhatsApp ligado, gateway SMS LAN ligado,
- * ou módulo Pro "sms" com um device enabled na Cloud que possa servir a
- * loja — subscrição sem transporte devolvia DEVICE_MISSING depois de o
- * diálogo confirmar o envio.
+ * Canal utilizável para o link — do canal do PRÓPRIO template. O
+ * dispatch só enfileira pelos canais dos modelos `signature_link`:
+ * ter WhatsApp ligado não chega quando a loja moveu o modelo para
+ * SMS sem transporte SMS (e vice-versa) — a confirmação saía sem
+ * mensagem nenhuma na fila. O corpo WhatsApp serve também o fallback
+ * SMS do dispatch quando não há modelo SMS específico.
  */
-async function messagingChannelReady(
+async function signatureChannelReady(
   prisma: DbClient,
   settings: Awaited<ReturnType<typeof findShopSettingsUnique>>
 ): Promise<boolean> {
-  if (settings?.whatsappEnabled || settings?.smsEnabled) {
+  const templates = await prisma.notificationTemplate.findMany({
+    select: { channel: true },
+    where: { name: SIGNATURE_LINK_EVENT },
+  });
+  const hasWa = templates.some((t) => t.channel === "WHATSAPP");
+  if (hasWa && settings?.whatsappEnabled) {
+    return true;
+  }
+  const hasSms = templates.some((t) => t.channel === "SMS");
+  if (!(hasSms || hasWa)) {
+    return false;
+  }
+  if (settings?.smsEnabled) {
     return true;
   }
   if (!isModuleEnabled(settings, "sms")) {
     return false;
   }
+  // Subscrição Pro sem device enabled na Cloud devolvia DEVICE_MISSING
+  // depois de o diálogo confirmar o envio.
   return (await getSmsDeviceStatus(prisma)).sendable;
 }
 
@@ -143,7 +159,7 @@ export async function sendSignatureLink(
   }
 
   const settings = await findShopSettingsUnique(app.prisma);
-  if (!(await messagingChannelReady(app.prisma, settings))) {
+  if (!(await signatureChannelReady(app.prisma, settings))) {
     throw new AppError("SIGNATURE_LINK_NO_CHANNEL");
   }
 

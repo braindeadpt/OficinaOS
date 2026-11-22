@@ -373,16 +373,16 @@ async function lookupRenamedStatuses(
   const out: TemplateStatus[] = [];
   for (const name of names) {
     const existing = await graphList(wabaId, token, name);
+    // Falha de consulta ≠ ausência confirmada — sem entrada no
+    // resultado, o persistStatuses preserva o estado anterior em vez
+    // de gravar MISSING e adiar a fila 30min por causa de um timeout.
+    if (existing === "unreachable") {
+      continue;
+    }
     out.push({
       name,
-      reason:
-        existing === "unreachable"
-          ? "GRAPH_UNREACHABLE"
-          : (existing?.rejected_reason ?? undefined),
-      status:
-        existing === "unreachable" || existing === null
-          ? "MISSING"
-          : toStatus(existing),
+      reason: existing?.rejected_reason ?? undefined,
+      status: existing === null ? "MISSING" : toStatus(existing),
     });
   }
   return out;
@@ -435,6 +435,10 @@ export async function syncWhatsAppTemplates(
 ): Promise<TemplateSyncResult> {
   const settings = await getOrCreateShopSettings(prisma);
   const desired = await desiredTemplates(prisma, metaConditionalVars(settings));
+  // O total/ready mede os modelos ATUAIS — os lookups de nomes
+  // renomeados entram em `statuses` só para a fila drenar, e contá-los
+  // mostrava «3 de 2 modelos aprovados» no aviso de sync.
+  const desiredNames = new Set(desired.map((d) => d.name));
   if (desired.length === 0) {
     return { ready: 0, templates: [], total: 0 };
   }
@@ -473,7 +477,6 @@ export async function syncWhatsAppTemplates(
     // Nomes que já não existem localmente mas têm entradas em fila —
     // leitura-only à Meta para o estado preservado não congelar se a
     // Meta suspender/rejeitar o modelo antigo.
-    const desiredNames = new Set(desired.map((d) => d.name));
     const queued = await prisma.notificationOutbox.findMany({
       select: { templateName: true },
       where: { channel: "WHATSAPP", status: OutboxStatus.QUEUED },
@@ -492,7 +495,9 @@ export async function syncWhatsAppTemplates(
   await persistStatuses(prisma, statuses).catch((err) =>
     log?.warn({ err }, "whatsapp-templates: persistência do estado falhou")
   );
-  const ready = statuses.filter((s) => s.status === "APPROVED").length;
+  const ready = statuses.filter(
+    (s) => s.status === "APPROVED" && desiredNames.has(s.name)
+  ).length;
   return { ready, templates: statuses, total: desired.length };
 }
 
