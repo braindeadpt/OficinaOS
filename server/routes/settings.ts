@@ -62,11 +62,9 @@ import { pushCredentialsToCloud } from "../services/whatsapp-channel.js";
 // Campos de definições que mudam o corpo Meta dos templates WhatsApp
 // (blocos {{if}} expandidos por configuração) — um PUT que os toca tem de
 // re-sincronizar para o modelo aprovado acompanhar o novo corpo.
-const META_TEMPLATE_KEYS = new Set([
-  "reviewUrl",
-  "shopName",
-  "trackingBaseUrl",
-]);
+// shopName não entra: é parâmetro posicional {{N}} — o valor vai no envio,
+// não no corpo aprovado. trackingBaseUrl grava-se em PUT /whatsapp.
+const META_TEMPLATE_KEYS = new Set(["reviewUrl"]);
 
 import {
   getWhatsAppTemplateStatuses,
@@ -416,9 +414,9 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       // The widget CSP caches embedAllowedOrigins for 60s — drop it so a
       // save takes effect on the next request instead of up to a minute late.
       app.resetEmbedOriginsCache();
-      // reviewUrl/trackingBaseUrl/shopName mudam os blocos {{if}} dos
-      // templates WhatsApp — sem re-sync, o modelo aprovado na Meta
-      // diverge dos parâmetros enviados e as notificações falham.
+      // reviewUrl muda os blocos {{if}} dos templates WhatsApp — sem
+      // re-sync, o modelo aprovado na Meta diverge dos parâmetros
+      // enviados e as notificações falham.
       if (Object.keys(parsed.data).some((k) => META_TEMPLATE_KEYS.has(k))) {
         syncWhatsAppTemplates(app.prisma).catch((err) =>
           req.log.warn({ err }, "whatsapp template resync failed")
@@ -493,7 +491,10 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       const credentialsAtCloud = await pushCredentialsToCloud(app.prisma);
       // §5.6 C.2 — ao ligar/configurar o WhatsApp, corre o sync de
       // templates Meta em background (GET primeiro, cria o que falta).
-      if (parsed.data.enabled) {
+      // trackingBaseUrl controla um bloco {{if}} do corpo aprovado —
+      // mudá-lo aqui (o formulário grava nesta rota) exige re-sync mesmo
+      // sem tocar no `enabled`.
+      if (parsed.data.enabled || parsed.data.trackingBaseUrl !== undefined) {
         syncWhatsAppTemplates(app.prisma, app.log).catch((err) =>
           app.log.warn({ err }, "whatsapp-templates sync falhou")
         );

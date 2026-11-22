@@ -520,6 +520,9 @@ describe("composeReply — deterministic rules before AI", () => {
       data: { whatsappConsent: false },
       where: { id: "cust-1" },
     });
+    // A confirmação conta para o limite anti-ban — acima do teto a
+    // revogação grava-se mas a resposta não sai.
+    expect(send).not.toHaveBeenCalled();
     // Ordinary messages in the same window stay discarded.
     const dropped = await handleInboundMessage(ctx, msg("estado"), {
       channelLabel: "SMS",
@@ -536,6 +539,9 @@ describe("composeReply — deterministic rules before AI", () => {
     });
     expect(mocks.respondToQuote).not.toHaveBeenCalled();
     expect(out.escalate).toBe(true);
+    // Sem jobId — com várias reparações não se sabe a que orçamento o
+    // SIM se refere; ligar a mais recente abria a reparação errada.
+    expect(out.jobId).toBeNull();
     expect(out.text).toBe("");
   });
 

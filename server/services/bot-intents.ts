@@ -515,9 +515,11 @@ export async function composeReply(
         customerName,
         // A decisão não se aplica, mas a equipa tem de a ver — um SIM
         // fora da janela sem registo deixava o cliente à espera de uma
-        // resposta que nunca chega.
+        // resposta que nunca chega. Sem jobId: com várias reparações
+        // ativas não se sabe a que orçamento o SIM/NÃO se refere e
+        // ligar a mais recente abria a reparação errada.
         escalate: true,
-        jobId: targetJobId,
+        jobId: null,
         text: "",
       };
     }
@@ -652,14 +654,20 @@ export async function handleInboundMessage(
 ): Promise<{ reply: BotReply; sent: boolean } | null> {
   // Opt-out legal: PARAR/STOP nunca morre no rate limiter — a revogação
   // do consentimento tem de correr mesmo quando o número esgotou a
-  // janela horária (senão o cliente continua a receber avisos).
+  // janela horária (senão o cliente continua a receber avisos). A
+  // confirmação, porém, conta para o limite anti-ban: acima do teto
+  // horário a revogação fica gravada mas a resposta não sai.
   const isStop = STOP_WORDS.has((msg.text ?? "").trim().toLowerCase());
-  if (!(isStop || rateOk(msg.fromPhone, t.rateLimitPerHour))) {
+  const withinLimit = rateOk(msg.fromPhone, t.rateLimitPerHour);
+  if (!(isStop || withinLimit)) {
     return null;
   }
   const out = await composeReply(ctx, msg, t.plainText, {
     allowQuoteDecision: t.allowQuoteDecision,
   });
+  if (isStop && !withinLimit) {
+    out.text = "";
+  }
   let sent = true;
   if (out.text.length > 0) {
     try {
