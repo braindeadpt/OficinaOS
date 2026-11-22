@@ -63,7 +63,7 @@ Cloud, encaminhamento multi-loja e respostas com o PC desligado.)
 
 | | Grátis (infra da loja) | Pro (Cloud envia) |
 |---|---|---|
-| **SMS** | Android sms-gate na LAN — envio + respostas de regras | Android ligado à Cloud (`SmsDevice`/`SmsRoute`) — multi-loja, inbound/outbound com PC desligado, IA |
+| **SMS** | Android sms-gate na LAN — só envio (PARAR/STOP processados sempre, por lei) | Android ligado à Cloud (`SmsDevice`/`SmsRoute`) — multi-loja, inbound/outbound com PC desligado, respostas automáticas + IA |
 | **WhatsApp oficial** | — | Meta Cloud API: envio `POST /whatsapp/send`, templates auto-sincronizados, janela de 24 h, IA |
 | **WhatsApp Evolution** | Transporte local (não-oficial, disclaimer) — só envio | Bot inbound com termo próprio + proteções anti-ban (10/h por número, teto diário, dedupe, atraso 3–8 s) |
 

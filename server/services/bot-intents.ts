@@ -204,6 +204,7 @@ interface ActiveJob {
     version: number;
     amount: { toNumber(): number };
     note: string | null;
+    sentAt: Date | null;
     status: string;
   }[];
   status: string;
@@ -315,14 +316,20 @@ function repeatOrEmpty(
   return "Não tens orçamentos pendentes de resposta.";
 }
 
-/** Aplica SIM/NÃO via respondToQuote — o mesmo serviço do portal/LAN. */
+// Tolerância para desfasamento de relógio Cloud↔DB: uma resposta só é
+// "anterior ao orçamento" quando a diferença ultrapassa este intervalo.
+const STALE_DECISION_GRACE_MS = 60_000;
+
+/** Aplica SIM/NÃO via respondToQuote — o mesmo serviço do portal/LAN.
+ * `stale` = a resposta chegou antes deste orçamento sair (fila Cloud):
+ * refere-se a outro, nunca se aplica ao mais recente por engano. */
 async function answerQuote(
   ctx: BotReplyCtx,
   msg: InboundMessage,
   jobs: ActiveJob[],
   direct: ActiveJob | undefined,
   decision: "approve" | "reject"
-): Promise<string> {
+): Promise<{ stale: boolean; text: string }> {
   const pending = jobs.filter((j) => j.quotes[0]?.status === "SENT");
   let target: ActiveJob | undefined;
   if (direct?.quotes[0]?.status === "SENT") {
@@ -331,15 +338,26 @@ async function answerQuote(
     target = pending[0];
   }
   if (!target) {
-    return repeatOrEmpty(
-      ctx,
-      direct ?? (jobs.length === 1 ? jobs[0] : undefined),
-      decision
-    );
+    return {
+      stale: false,
+      text: repeatOrEmpty(
+        ctx,
+        direct ?? (jobs.length === 1 ? jobs[0] : undefined),
+        decision
+      ),
+    };
   }
   const quote = target.quotes[0];
   if (!quote) {
-    return "Não tens orçamentos pendentes de resposta.";
+    return { stale: false, text: "Não tens orçamentos pendentes de resposta." };
+  }
+  const replyAt = Date.parse(msg.createdAt);
+  if (
+    Number.isFinite(replyAt) &&
+    quote.sentAt &&
+    replyAt < quote.sentAt.getTime() - STALE_DECISION_GRACE_MS
+  ) {
+    return { stale: true, text: "" };
   }
   const result = await respondToQuote(
     ctx.prisma,
@@ -352,11 +370,18 @@ async function answerQuote(
     ctx.notifyCtx ?? { prisma: ctx.prisma }
   );
   if (result.error) {
-    return "Esse orçamento já foi respondido ou substituído — a loja confirma contigo.";
+    return {
+      stale: false,
+      text: "Esse orçamento já foi respondido ou substituído — a loja confirma contigo.",
+    };
   }
-  return decision === "approve"
-    ? `Orçamento de ${eur(ctx, quote.amount)} aceite ✅ Obrigado — a loja avança com a reparação ${target.jobCode}.`
-    : `Orçamento de ${eur(ctx, quote.amount)} recusado. A loja entra em contacto contigo sobre ${target.jobCode}.`;
+  return {
+    stale: false,
+    text:
+      decision === "approve"
+        ? `Orçamento de ${eur(ctx, quote.amount)} aceite ✅ Obrigado — a loja avança com a reparação ${target.jobCode}.`
+        : `Orçamento de ${eur(ctx, quote.amount)} recusado. A loja entra em contacto contigo sobre ${target.jobCode}.`,
+  };
 }
 
 export interface BotReply {
@@ -364,6 +389,44 @@ export interface BotReply {
   escalate: boolean;
   jobId: string | null;
   text: string;
+}
+
+/** SIM/NÃO — decisão vinculativa de orçamento, sempre determinístico. */
+async function decideQuoteIntent(
+  ctx: BotReplyCtx,
+  msg: InboundMessage,
+  jobs: ActiveJob[],
+  direct: ActiveJob | undefined,
+  customerName: string | null,
+  targetJobId: string | null,
+  decision: "approve" | "reject",
+  opts: { allowQuoteDecision?: boolean }
+): Promise<BotReply> {
+  if (opts.allowQuoteDecision === false) {
+    return {
+      customerName,
+      // A decisão não se aplica, mas a equipa tem de a ver — um SIM
+      // fora da janela sem registo deixava o cliente à espera de uma
+      // resposta que nunca chega. Sem jobId: com várias reparações
+      // ativas não se sabe a que orçamento o SIM/NÃO se refere e
+      // ligar a mais recente abria a reparação errada.
+      escalate: true,
+      jobId: null,
+      text: "",
+    };
+  }
+  const out = await answerQuote(ctx, msg, jobs, direct, decision);
+  if (out.stale) {
+    // Resposta mais antiga que o orçamento pendente — refere-se a
+    // outro. A equipa vê-a (escalada) mas a decisão não se aplica.
+    return { customerName, escalate: true, jobId: null, text: "" };
+  }
+  return {
+    customerName,
+    escalate: false,
+    jobId: targetJobId,
+    text: out.text,
+  };
 }
 
 interface CustomerMatch {
@@ -390,9 +453,9 @@ export async function findCustomersByPhone(
     .replace(DIGITS_RE, "")
     .replace(INTL_PREFIX_RE, "");
   const PT_CC = "351";
-  const isPtSender =
-    senderDigits.length === 9 ||
-    (senderDigits.startsWith(PT_CC) && senderDigits.length === 12);
+  const ptLike = (d: string) =>
+    d.length === 9 || (d.startsWith(PT_CC) && d.length === 12);
+  const isPtSender = ptLike(senderDigits);
   const last9 = senderDigits.slice(-9);
   const last4 = senderDigits.slice(-4);
   if ((isPtSender && last9.length < 9) || last4.length < 4) {
@@ -408,7 +471,9 @@ export async function findCustomersByPhone(
       if (cd === senderDigits) {
         return true;
       }
-      return isPtSender && cd.slice(-9) === last9;
+      // Sufixo só vale entre números PT — uma ficha estrangeira com os
+      // mesmos 9 dígitos finais não é o mesmo cliente.
+      return isPtSender && ptLike(cd) && cd.slice(-9) === last9;
     })
     .map(({ id, name }) => ({ id, name }));
 }
@@ -447,6 +512,7 @@ async function findCustomerJobs(
           version: true,
           amount: true,
           note: true,
+          sentAt: true,
           status: true,
         },
       },
@@ -516,27 +582,16 @@ export async function composeReply(
   // o cliente pode estar a responder a outro orçamento; nunca decidir
   // sem poder confirmar na hora.
   if (YES_WORDS.has(lower) || NO_WORDS.has(lower)) {
-    if (opts.allowQuoteDecision === false) {
-      return {
-        customerName,
-        // A decisão não se aplica, mas a equipa tem de a ver — um SIM
-        // fora da janela sem registo deixava o cliente à espera de uma
-        // resposta que nunca chega. Sem jobId: com várias reparações
-        // ativas não se sabe a que orçamento o SIM/NÃO se refere e
-        // ligar a mais recente abria a reparação errada.
-        escalate: true,
-        jobId: null,
-        text: "",
-      };
-    }
-    const reply = await answerQuote(
+    return decideQuoteIntent(
       ctx,
       msg,
       jobs,
       direct,
-      YES_WORDS.has(lower) ? "approve" : "reject"
+      customerName,
+      targetJobId,
+      YES_WORDS.has(lower) ? "approve" : "reject",
+      opts
     );
-    return { customerName, escalate: false, jobId: targetJobId, text: reply };
   }
 
   // IA (Pro, atrás de flag): só texto livre — mensagens com código REP ou

@@ -21,6 +21,7 @@ import {
   getNotificationTemplates,
   updateNotificationTemplate,
 } from "../services/settings.service.js";
+import { syncWhatsAppTemplates } from "../services/whatsapp-templates.service.js";
 import { getUserId } from "../utils/request.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
@@ -74,6 +75,14 @@ export const notificationsRoutes: FastifyPluginAsync = async (app) => {
       );
       if (!updated) {
         throw new AppError("TEMPLATE_NOT_FOUND");
+      }
+      // Corpo Meta editado: o "APPROVED" guardado pertence ao texto
+      // antigo — sem re-sync o outbox envia o modelo anterior. O sync
+      // deteta a divergência (remoteBody ≠ desejado) e resubmete.
+      if (updated.channel === "WHATSAPP") {
+        syncWhatsAppTemplates(app.prisma, req.log).catch((err) =>
+          req.log.warn({ err }, "whatsapp-templates sync pós-edição falhou")
+        );
       }
       return reply.send(updated);
     }

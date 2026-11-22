@@ -1,4 +1,5 @@
 import { OutboxStatus, type PrismaClient } from "@generated/client";
+import { toSmsText } from "@shared/utils/gsm7.js";
 import type { FastifyBaseLogger } from "fastify";
 import { decryptSecret } from "../lib/crypto.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
@@ -145,6 +146,7 @@ export async function syncSmsInbound(
   };
 
   const ackIds: string[] = [];
+  const processed: string[] = [];
   for (const item of items) {
     // Claim síncrono: entre o fetch e este ponto não há await, por isso
     // o segundo poller a ler a fila vê o id já marcado e salta-o.
@@ -152,27 +154,32 @@ export async function syncSmsInbound(
       continue;
     }
     inFlightIds.add(item.id);
-    try {
-      if (item.kind === "REPORT") {
-        if (await applyReport(prisma, log, item)) {
-          ackIds.push(item.id);
-        }
-        continue;
-      }
-      if (await processReceived(ctx, { apiUrl, token }, item)) {
+    processed.push(item.id);
+    if (item.kind === "REPORT") {
+      if (await applyReport(prisma, log, item)) {
         ackIds.push(item.id);
       }
-    } finally {
-      inFlightIds.delete(item.id);
+      continue;
+    }
+    if (await processReceived(ctx, { apiUrl, token }, item)) {
+      ackIds.push(item.id);
     }
   }
 
-  if (ackIds.length) {
-    await cloudFetch(apiUrl, "/sms/inbound/ack", {
-      body: { ids: ackIds },
-      method: "POST",
-      token,
-    });
+  try {
+    if (ackIds.length) {
+      await cloudFetch(apiUrl, "/sms/inbound/ack", {
+        body: { ids: ackIds },
+        method: "POST",
+        token,
+      });
+    }
+  } finally {
+    // Só liberta depois do ack — antes disso a fila devolve as mesmas
+    // mensagens ao segundo poller (resposta/decisão duplicada).
+    for (const id of processed) {
+      inFlightIds.delete(id);
+    }
   }
 }
 
@@ -196,7 +203,9 @@ async function processReceived(
       send: async (text) => {
         const r = await sendSmsViaCloud(c, {
           dedupeId: `bot-${item.id}`,
-          text,
+          // §E.11 — respostas automáticas transliteradas p/ GSM-7: sem
+          // isto um acento fora da tabela pagava UCS-2 (segmentos extra).
+          text: toSmsText(text),
           to: `+${item.fromPhone.replace(LEADING_PLUS_RE, "")}`,
         });
         if (!r.success) {

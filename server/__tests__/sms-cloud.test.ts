@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getSmsDeviceStatus,
+  isDefinitiveCloudError,
   sendSmsViaCloud,
   syncSmsInbound,
 } from "../services/sms-cloud.service.js";
@@ -80,7 +81,7 @@ describe("sendSmsViaCloud", () => {
     );
 
     mocks.cloudFetch.mockResolvedValueOnce({
-      body: { code: "NO_SMS_DEVICE" },
+      body: { code: "DEVICE_MISSING" },
       ok: false,
       status: 409,
     });
@@ -88,7 +89,10 @@ describe("sendSmsViaCloud", () => {
       { apiUrl: "https://c", token: "t" },
       { dedupeId: "d2", text: "x", to: "+3519" }
     );
-    expect(fail).toEqual({ error: "NO_SMS_DEVICE", success: false });
+    // O código é o que a Cloud devolve (409 DEVICE_MISSING) — e tem de
+    // ser definitivo para o envio cair no gateway LAN.
+    expect(fail).toEqual({ error: "DEVICE_MISSING", success: false });
+    expect(isDefinitiveCloudError(fail.error)).toBe(true);
   });
 });
 

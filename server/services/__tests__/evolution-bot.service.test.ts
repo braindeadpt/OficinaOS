@@ -217,6 +217,35 @@ describe("handleEvolutionInbound — proteções anti-ban", () => {
     expect(mocks.handleInboundMessage).toHaveBeenCalledTimes(2);
   });
 
+  it("PARAR acima do teto diário revoga na mesma — envio suprimido", async () => {
+    // Módulo fresco — dayCount/seenMessageIds limpos; cap=0 → teto já
+    // excedido na primeira mensagem.
+    vi.resetModules();
+    const fresh = await import("../evolution-bot.service.js");
+    mocks.getOrCreateShopSettings.mockResolvedValue({
+      ...SETTINGS,
+      whatsappBotDailyCap: 0,
+    });
+    await fresh.handleEvolutionInbound(
+      prisma,
+      log,
+      undefined,
+      envelope({ message: { conversation: "PARAR" } })
+    );
+    // O pipeline correu (a revogação é gravada dentro dele)…
+    expect(mocks.handleInboundMessage).toHaveBeenCalledTimes(1);
+    // …mas a confirmação não sai pela Evolution — send suprimido.
+    expect(mocks.sendEvolutionText).not.toHaveBeenCalled();
+    // Uma mensagem normal acima do teto nem chega ao pipeline.
+    await fresh.handleEvolutionInbound(
+      prisma,
+      log,
+      undefined,
+      envelope({ message: { conversation: "estado" } })
+    );
+    expect(mocks.handleInboundMessage).toHaveBeenCalledTimes(1);
+  });
+
   it("sessão fechada no envio → suspende o bot e avisa o staff", async () => {
     mocks.sendEvolutionText.mockResolvedValue({
       error: "Connection Closed",

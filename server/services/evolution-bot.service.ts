@@ -9,6 +9,7 @@ import {
   findCustomersByPhone,
   handleInboundMessage,
   type InboundMessage,
+  isStopText,
   rateOk,
 } from "./bot-intents.js";
 import {
@@ -338,6 +339,16 @@ async function processOne(
         null
       ).catch((err) => log.warn({ err }, "evolution-bot cap notify failed"));
     }
+    // PARAR/STOP é legal: a revogação corre mesmo acima do teto — só o
+    // envio da confirmação fica suprimido (anti-ban).
+    if (!(parsed.text && isStopText(parsed.text))) {
+      return;
+    }
+    await handleInboundMessage(ctx, msg, {
+      channelLabel: "WhatsApp",
+      rateLimitPerHour: RATE_LIMIT_PER_HOUR,
+      send: () => Promise.resolve(true),
+    });
     return;
   }
 

@@ -112,6 +112,63 @@ describe("composeReply — deterministic rules before AI", () => {
     expect(out.text).toBe("");
   });
 
+  it("sim mais antigo que o orçamento pendente não decide — escala ao staff", async () => {
+    // Fila Cloud: o SIM chegou à Cloud antes do orçamento sair (ficou
+    // horas à espera) — refere-se a outro, nunca ao mais recente.
+    const { ctx } = makeCtx({
+      ai: aiCfg,
+      customers: [cust],
+      jobs: [
+        job({
+          quotes: [
+            {
+              amount: { toNumber: () => 100 },
+              id: "q1",
+              note: null,
+              sentAt: new Date(),
+              status: "SENT",
+              version: 2,
+            },
+          ],
+        }),
+      ],
+    });
+    const out = await composeReply(ctx, {
+      createdAt: new Date(Date.now() - 10 * 60_000).toISOString(),
+      fromPhone: PHONE,
+      id: "m-stale",
+      messageType: "text",
+      text: "sim",
+    });
+    expect(mocks.respondToQuote).not.toHaveBeenCalled();
+    expect(out.text).toBe("");
+    expect(out.escalate).toBe(true);
+  });
+
+  it("sim depois do orçamento sair continua a decidir", async () => {
+    const { ctx } = makeCtx({
+      ai: aiCfg,
+      customers: [cust],
+      jobs: [
+        job({
+          quotes: [
+            {
+              amount: { toNumber: () => 100 },
+              id: "q1",
+              note: null,
+              sentAt: new Date(Date.now() - 60 * 60_000),
+              status: "SENT",
+              version: 1,
+            },
+          ],
+        }),
+      ],
+    });
+    const out = await composeReply(ctx, msg("sim"));
+    expect(mocks.respondToQuote).toHaveBeenCalledOnce();
+    expect(out.text).toContain("aceite");
+  });
+
   it("sim retry on an already-approved quote re-confirms (idempotent)", async () => {
     // A resposta à primeira decisão não saiu (falha de envio); o cliente
     // reenviou SIM. O orçamento está APPROVED — confirmar de novo em vez
@@ -234,6 +291,23 @@ describe("composeReply — deterministic rules before AI", () => {
       createdAt: new Date().toISOString(),
       fromPhone: "34912345678",
       id: "m2",
+      messageType: "text",
+      text: "estado da minha reparação",
+    });
+    expect(out.text).toContain("Não encontrei reparações");
+  });
+
+  it("remetente PT não casa ficha estrangeira com os mesmos 9 dígitos", async () => {
+    // Ficha guardada com indicativo espanhol; remetente PT com o mesmo
+    // sufixo — o fallback por últimos-9 só vale entre números PT.
+    const { ctx } = makeCtx({
+      customers: [{ ...cust, phone: "+34912345678" }],
+      jobs: [job()],
+    });
+    const out = await composeReply(ctx, {
+      createdAt: new Date().toISOString(),
+      fromPhone: "+351912345678",
+      id: "m2b",
       messageType: "text",
       text: "estado da minha reparação",
     });

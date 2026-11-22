@@ -10,6 +10,7 @@ import {
 import type { FastifyPluginAsync } from "fastify";
 import { decryptSecret } from "../lib/crypto.js";
 import { assertNotDemoMode } from "../lib/demo.js";
+import { primaryLanIpv4 } from "../lib/mdns.js";
 import { requirePermission } from "../middlewares/rbac.js";
 import {
   findShopSettingsUnique,
@@ -790,6 +791,7 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
 };
 
 const LOCALHOST_RE = /^(localhost|127\.|::1|\[::1\])/i;
+const PORT_SUFFIX_RE = /:(\d+)$/;
 
 /**
  * Regista o webhook inbound no telemóvel. O callback usa o Host do pedido
@@ -826,9 +828,21 @@ async function tryRegisterSmsWebhook(
  */
 async function tryRegisterEvolutionWebhook(
   prisma: Parameters<typeof getSmsSettings>[0],
-  host: string
+  requestHost: string
 ): Promise<boolean> {
-  if (!host || LOCALHOST_RE.test(host)) {
+  let host = requestHost;
+  // Setup de um só PC: o staff abre localhost e a Evolution (mesmo PC
+  // ou outra máquina da LAN) nunca alcança esse nome — o IPv4 real da
+  // máquina sim. Sem IPv4 LAN (ex.: namespace isolado) fica por registar.
+  if (host && LOCALHOST_RE.test(host)) {
+    const ip = primaryLanIpv4();
+    if (!ip) {
+      return false;
+    }
+    const port = PORT_SUFFIX_RE.exec(host)?.[1];
+    host = `${ip}${port ? `:${port}` : ""}`;
+  }
+  if (!host) {
     return false;
   }
   let row = await getOrCreateShopSettings(prisma);

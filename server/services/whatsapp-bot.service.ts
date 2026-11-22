@@ -121,6 +121,16 @@ export async function pollWhatsAppInbound(
   if (!channel) {
     return; // módulo ativo mas WhatsApp por configurar — fila fica a aguardar
   }
+  // Transporte Evolution: a fila oficial só pode ser respondida com os
+  // gates do §5.7 — termo do bot aceite e bot não suspenso. Sem isto,
+  // mensagens Meta pendentes respondiam pelo transporte não-oficial
+  // logo após a mudança, contornando a suspensão.
+  if (
+    channel.mode === "evolution" &&
+    !(settings.whatsappBotDisclaimerAt && !settings.whatsappBotSuspendedAt)
+  ) {
+    return;
+  }
 
   const res = await cloudFetch(apiUrl, "/whatsapp/inbound", { token });
   if (!res.ok) {
@@ -159,26 +169,32 @@ export async function pollWhatsAppInbound(
   };
 
   const ackIds: string[] = [];
+  const processed: string[] = [];
   for (const msg of messages) {
     if (inFlightIds.has(msg.id)) {
       continue;
     }
     inFlightIds.add(msg.id);
-    try {
-      if (await processInbound(ctx, msg)) {
-        ackIds.push(msg.id);
-      }
-    } finally {
-      inFlightIds.delete(msg.id);
+    processed.push(msg.id);
+    if (await processInbound(ctx, msg)) {
+      ackIds.push(msg.id);
     }
   }
 
-  if (ackIds.length) {
-    await cloudFetch(apiUrl, "/whatsapp/inbound/ack", {
-      body: { ids: ackIds },
-      method: "POST",
-      token,
-    });
+  try {
+    if (ackIds.length) {
+      await cloudFetch(apiUrl, "/whatsapp/inbound/ack", {
+        body: { ids: ackIds },
+        method: "POST",
+        token,
+      });
+    }
+  } finally {
+    // Só liberta depois do ack — antes disso a fila ainda devolve estas
+    // mensagens e o ciclo lento re-processava-as (resposta duplicada).
+    for (const id of processed) {
+      inFlightIds.delete(id);
+    }
   }
 }
 
