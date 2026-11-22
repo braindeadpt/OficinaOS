@@ -251,11 +251,17 @@ describe("composeReply — deterministic rules before AI", () => {
       msg("Qual é a previsão de chegada da peça?")
     );
     expect(mocks.askBotAi).not.toHaveBeenCalled();
-    expect(out.text).toContain("Ecrã iPhone 13");
-    expect(out.text).toContain("chegada prevista");
+    // A data registada tem de aparecer na linha da peça certa — não basta
+    // a frase genérica «chegada prevista».
+    const expected = new Date("2026-12-05T12:00:00Z").toLocaleDateString(
+      "pt-PT",
+      { timeZone: "Europe/Lisbon" }
+    );
+    expect(out.text).toContain(
+      `Ecrã iPhone 13 — chegada prevista: ${expected}`
+    );
     // A peça sem data também é nomeada — não fica escondida.
-    expect(out.text).toContain("Bateria");
-    expect(out.text).toContain("sem data prevista");
+    expect(out.text).toContain("Bateria — sem data prevista");
   });
 
   it("«quando chega a peça» sem data registada diz que ainda não há data", async () => {
@@ -320,7 +326,32 @@ describe("composeReply — deterministic rules before AI", () => {
     });
     const out = await composeReply(ctx, msg("REP-2024-000001-AAA"));
     expect(out.text).toContain("está:");
-    expect(out.text).toContain("Ecrã iPhone 13");
+    // A data registada da peça aparece — «Ecrã iPhone 13 — sem data
+    // prevista» não pode passar neste teste.
+    const expected = new Date("2026-12-05T12:00:00Z").toLocaleDateString(
+      "pt-PT",
+      { timeZone: "Europe/Lisbon" }
+    );
+    expect(out.text).toContain(
+      `Ecrã iPhone 13 — chegada prevista: ${expected}`
+    );
+  });
+
+  it("reparação pronta não repete peças em falta — o registo pode ficar por apagar", async () => {
+    const { ctx } = makeCtx({
+      customers: [cust],
+      jobs: [
+        job({
+          partsWaiting: [{ expectedAt: null, partName: "Ecrã iPhone 13" }],
+          quotes: [],
+          status: "DONE",
+        }),
+      ],
+    });
+    const out = await composeReply(ctx, msg("REP-2024-000001-AAA"));
+    expect(out.text).toContain("Pronto para levantar");
+    expect(out.text).not.toContain("Peças em falta");
+    expect(out.text).not.toContain("Ecrã iPhone 13");
   });
 
   it("«previsão para o preço» é pergunta de orçamento", async () => {

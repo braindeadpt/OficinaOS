@@ -1,6 +1,9 @@
 import type { PrismaClient } from "@generated/client";
 import { Role } from "@generated/client";
-import { ACTIVE_STATUSES } from "@shared/constants/job-statuses.js";
+import {
+  ACTIVE_STATUSES,
+  COMPLETED_STATUSES,
+} from "@shared/constants/job-statuses.js";
 import type { FastifyBaseLogger } from "fastify";
 import {
   createManyAndReturnInAppNotifications,
@@ -205,7 +208,14 @@ function statusText(ctx: BotReplyCtx, job: ActiveJob): string {
       timeZone: ctx.timezone ?? process.env.TZ ?? "Europe/Lisbon",
     })}.`;
   }
-  if ((job.partsWaiting?.length ?? 0) > 0) {
+  // Registos de peças podem sobreviver à conclusão da reparação (o fluxo
+  // não exige removê-los) — numa reparação pronta/entregue "Peças em
+  // falta" seria contraditório, por isso a lista só aparece em estados
+  // ativos.
+  if (
+    (job.partsWaiting?.length ?? 0) > 0 &&
+    !(COMPLETED_STATUSES as string[]).includes(job.status)
+  ) {
     text += ` Peças em falta: ${pendingPartsText(ctx, job)}.`;
   }
   const q = job.quotes[0];
