@@ -37,7 +37,7 @@ beforeEach(() => vi.clearAllMocks());
 describe("askBotAi", () => {
   it("returns a direct reply", async () => {
     mocks.cloudFetch.mockResolvedValueOnce(
-      ok({ escalate: false, reply: "Fechamos às 18h." })
+      ok({ escalate: false, reply: "Fechamos às 18h.", type: "reply" })
     );
     const res = await askBotAi(ctx, cloud, input);
     expect(res).toEqual({ escalate: false, reply: "Fechamos às 18h." });
@@ -47,10 +47,11 @@ describe("askBotAi", () => {
     mocks.cloudFetch
       .mockResolvedValueOnce(
         ok({
-          tool_calls: [{ args: {}, id: "c1", name: "info_loja" }],
+          calls: [{ args: {}, id: "c1", name: "info_loja" }],
+          type: "tool_calls",
         })
       )
-      .mockResolvedValueOnce(ok({ reply: "Fechamos às 18h." }));
+      .mockResolvedValueOnce(ok({ reply: "Fechamos às 18h.", type: "reply" }));
 
     const res = await askBotAi(ctx, cloud, input);
     expect(res?.reply).toBe("Fechamos às 18h.");
@@ -73,9 +74,14 @@ describe("askBotAi", () => {
     });
     mocks.cloudFetch
       .mockResolvedValueOnce(
-        ok({ tool_calls: [{ args: {}, id: "c1", name: "pedir_humano" }] })
+        ok({
+          calls: [{ args: {}, id: "c1", name: "pedir_humano" }],
+          type: "tool_calls",
+        })
       )
-      .mockResolvedValueOnce(ok({ reply: "Um humano responde já." }));
+      .mockResolvedValueOnce(
+        ok({ reply: "Um humano responde já.", type: "reply" })
+      );
     const res = await askBotAi(ctx, cloud, input);
     expect(res?.escalate).toBe(true);
   });
@@ -94,7 +100,7 @@ describe("askBotAi", () => {
 
   it("returns null when tool_calls are malformed", async () => {
     mocks.cloudFetch.mockResolvedValueOnce(
-      ok({ tool_calls: [{ name: "info_loja" }] })
+      ok({ calls: [{ name: "info_loja" }], type: "tool_calls" })
     );
     expect(await askBotAi(ctx, cloud, input)).toBeNull();
   });
@@ -107,7 +113,10 @@ describe("askBotAi", () => {
   it("gives up after the tool-round cap", async () => {
     for (let i = 0; i < 5; i += 1) {
       mocks.cloudFetch.mockResolvedValueOnce(
-        ok({ tool_calls: [{ args: {}, id: `c${i}`, name: "info_loja" }] })
+        ok({
+          calls: [{ args: {}, id: `c${i}`, name: "info_loja" }],
+          type: "tool_calls",
+        })
       );
     }
     expect(await askBotAi(ctx, cloud, input)).toBeNull();

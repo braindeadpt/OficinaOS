@@ -59,6 +59,57 @@ function parseCalls(raw: unknown): BotAiCall[] | null {
   return raw as BotAiCall[];
 }
 
+interface BotAiBody {
+  calls?: unknown;
+  escalate?: unknown;
+  reply?: unknown;
+  type?: unknown;
+}
+
+/** Corre as tool calls pedidas e regista as mensagens. Devolve escalate. */
+async function runToolCalls(
+  ctx: BotToolCtx,
+  calls: BotAiCall[],
+  messages: BotAiMessage[]
+): Promise<boolean> {
+  messages.push({
+    role: "assistant",
+    tool_calls: calls.map((c) => ({
+      args: (c.args ?? {}) as Record<string, unknown>,
+      id: c.id as string,
+      name: c.name as string,
+    })),
+  });
+  let escalate = false;
+  for (const call of calls) {
+    const out = await runBotTool(
+      ctx,
+      call.name as string,
+      call.args as Record<string, unknown> | undefined
+    );
+    escalate = escalate || out.escalate === true;
+    messages.push({
+      content: JSON.stringify(out.result),
+      name: call.name as string,
+      role: "tool",
+      tool_call_id: call.id as string,
+    });
+  }
+  return escalate;
+}
+
+function parseReply(body: BotAiBody, escalate: boolean): BotAiResult | null {
+  if (
+    body.type !== "reply" ||
+    typeof body.reply !== "string" ||
+    body.reply.trim().length === 0 ||
+    body.reply.length > MAX_REPLY_LEN
+  ) {
+    return null;
+  }
+  return { escalate: escalate || body.escalate === true, reply: body.reply };
+}
+
 export async function askBotAi(
   ctx: BotToolCtx,
   cloud: { apiUrl: string; token: string },
@@ -86,49 +137,18 @@ export async function askBotAi(
     if (!res?.ok || typeof res.body !== "object" || res.body === null) {
       return null;
     }
-    const body = res.body as {
-      escalate?: unknown;
-      reply?: unknown;
-      tool_calls?: unknown;
-    };
+    const body = res.body as BotAiBody;
 
-    if (typeof body.reply === "string" && body.reply.trim().length > 0) {
-      if (body.reply.length > MAX_REPLY_LEN) {
-        return null;
-      }
-      return {
-        escalate: escalate || body.escalate === true,
-        reply: body.reply,
-      };
+    const reply = parseReply(body, escalate);
+    if (reply) {
+      return reply;
     }
 
-    const calls = parseCalls(body.tool_calls);
+    const calls = body.type === "tool_calls" ? parseCalls(body.calls) : null;
     if (!calls || round === MAX_TOOL_ROUNDS) {
       return null;
     }
-
-    messages.push({
-      role: "assistant",
-      tool_calls: calls.map((c) => ({
-        args: (c.args ?? {}) as Record<string, unknown>,
-        id: c.id as string,
-        name: c.name as string,
-      })),
-    });
-    for (const call of calls) {
-      const out = await runBotTool(
-        ctx,
-        call.name as string,
-        call.args as Record<string, unknown> | undefined
-      );
-      escalate = escalate || out.escalate === true;
-      messages.push({
-        content: JSON.stringify(out.result),
-        name: call.name as string,
-        role: "tool",
-        tool_call_id: call.id as string,
-      });
-    }
+    escalate = (await runToolCalls(ctx, calls, messages)) || escalate;
   }
   return null;
 }
