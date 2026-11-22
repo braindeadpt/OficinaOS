@@ -50,7 +50,8 @@ interface JobsState {
   addWaitingPart: (
     jobId: string,
     partName: string,
-    supplier?: string
+    supplier?: string,
+    expectedAt?: string
   ) => Promise<JobPartsWaiting>;
   clearError: () => void;
   clearPaymentOnDelivery: (jobId: string) => Promise<void>;
@@ -305,12 +306,16 @@ export const useJobsStore = create<JobsState>((set) => ({
     }
   },
 
-  addWaitingPart: async (jobId, partName, supplier) => {
+  addWaitingPart: async (jobId, partName, supplier, expectedAt) => {
     set({ error: null });
     try {
       const res = await api.post(`/jobs/${jobId}/waiting-parts`, {
         partName,
         supplier,
+        // <input type="date"> yields YYYY-MM-DD; the schema wants ISO.
+        expectedAt: expectedAt
+          ? new Date(`${expectedAt}T00:00:00`).toISOString()
+          : undefined,
       });
       set((state) => ({
         jobs: state.jobs.map((j) =>

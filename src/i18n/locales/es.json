@@ -1016,6 +1016,7 @@
   "jobs_waiting_parts_empty_desc": "Realice un seguimiento de las piezas solicitadas para este trabajo",
   "jobs_waiting_parts_part_name": "Nombre de la pieza",
   "jobs_waiting_parts_supplier": "Proveedor (opcional)",
+  "jobs_waiting_parts_expected_at": "Llegada prevista (opcional)",
   "jobs_waiting_parts_remove": "Eliminar",
   "jobs_notes_title": "Notas",
   "jobs_notes_empty": "Aún no hay notas",
@@ -2806,5 +2807,15 @@
       "PART": "Pedido de piezas"
     },
     "open_record": "Abrir registro"
-  }
+  },
+  "bot_ai_enabled": "El robot de IA responde",
+  "bot_ai_enabled_help": "Requiere el módulo Pro del canal. ",
+  "bot_info_text_label": "Lo que puede decir el robot",
+  "bot_info_text_help": "La única información de la tienda que el bot puede compartir: horario de apertura, dirección, servicios, precios indicativos.",
+  "bot_info_text_placeholder": "Abierto de lunes a viernes de 09:00 a 18:00, sábados de 10:00 a 14:00. ",
+  "bot_avg_days_label": "Días promedio de reparación después de la llegada de la pieza",
+  "bot_avg_days_help": "Se utiliza para estimaciones de tiempo: el robot siempre las expresa como promedios, nunca como fechas garantizadas.",
+  "bot_fallback_text_label": "Mensaje de tienda cerrada",
+  "bot_fallback_text_help": "Enviado cuando la PC de la tienda está fuera de línea. ",
+  "bot_fallback_text_placeholder": "Recibimos tu mensaje. "
 }

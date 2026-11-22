@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Can } from "@/components/modules/can";
 import { Icon } from "@/components/ui/icon";
+import { Input } from "@/components/ui/input";
 import { useCan } from "@/hooks/use-can";
 import { useJobsStore } from "@/stores/jobs";
 
@@ -23,6 +24,7 @@ export default function JobWaitingPartsSection({
   const canEdit = useCan({ jobs: ["edit"] });
   const [partName, setPartName] = useState("");
   const [supplier, setSupplier] = useState("");
+  const [expectedAt, setExpectedAt] = useState("");
   const [adding, setAdding] = useState(false);
 
   const isTerminal = INACTIVE_STATUSES.includes(
@@ -38,17 +40,19 @@ export default function JobWaitingPartsSection({
       await addWaitingPart(
         job.id,
         partName.trim(),
-        supplier.trim() || undefined
+        supplier.trim() || undefined,
+        expectedAt || undefined
       );
       setPartName("");
       setSupplier("");
+      setExpectedAt("");
       onChanged?.();
     } catch {
       toast.error(t("errors.add_waiting_part"));
     } finally {
       setAdding(false);
     }
-  }, [addWaitingPart, job.id, partName, supplier, onChanged, t]);
+  }, [addWaitingPart, job.id, partName, supplier, expectedAt, onChanged, t]);
 
   const handleRemove = useCallback(
     async (waitingId: string) => {
@@ -100,6 +104,15 @@ export default function JobWaitingPartsSection({
             type="text"
             value={supplier}
           />
+          <div className="flex-1">
+            <Input
+              aria-label={t("jobs_waiting_parts_expected_at")}
+              onChange={(e) => setExpectedAt(e.target.value)}
+              title={t("jobs_waiting_parts_expected_at")}
+              type="date"
+              value={expectedAt}
+            />
+          </div>
           <Can perm={{ jobs: ["edit"] }}>
             <button
               className="flex min-h-[44px] items-center gap-1 rounded-lg bg-primary px-4 font-bold font-label text-on-primary text-xs uppercase tracking-wider transition-colors hover:bg-primary-container hover:text-on-primary-container disabled:opacity-50"
@@ -141,6 +154,12 @@ export default function JobWaitingPartsSection({
                 {wp.supplier && (
                   <p className="font-label text-on-surface-variant text-xs">
                     {wp.supplier}
+                  </p>
+                )}
+                {wp.expectedAt && (
+                  <p className="font-label text-on-surface-variant text-xs">
+                    {t("jobs_waiting_parts_expected_at")}:{" "}
+                    {new Date(wp.expectedAt).toLocaleDateString()}
                   </p>
                 )}
               </div>

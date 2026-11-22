@@ -21,6 +21,7 @@ import {
   upsertShopSettings as upsertShopSettingsRepo,
 } from "../repositories/settings.repository.js";
 import { isModuleEnabled } from "../utils/modules.js";
+import { cloudFetch } from "./cloud.service.js";
 import { generateSmsWebhookToken } from "./sms.service.js";
 
 function endpointOrigin(endpoint: string) {
@@ -133,6 +134,26 @@ function normalizeOriginList(value: string | null | undefined): string | null {
   return origins.length > 0 ? Array.from(new Set(origins)).join("\n") : null;
 }
 
+const botCreate = (input: UpdateShopSettingsInput) => ({
+  botAiEnabled: input.botAiEnabled ?? false,
+  botAvgRepairDaysAfterPart: input.botAvgRepairDaysAfterPart ?? 1,
+  botClosedFallbackText: input.botClosedFallbackText?.trim() || null,
+  botInfoText: input.botInfoText?.trim() || null,
+});
+
+const botUpdate = (input: UpdateShopSettingsInput) => ({
+  botAiEnabled: input.botAiEnabled,
+  botAvgRepairDaysAfterPart: input.botAvgRepairDaysAfterPart,
+  botClosedFallbackText:
+    input.botClosedFallbackText === undefined
+      ? undefined
+      : input.botClosedFallbackText?.trim() || null,
+  botInfoText:
+    input.botInfoText === undefined
+      ? undefined
+      : input.botInfoText?.trim() || null,
+});
+
 const shopCreate = (input: UpdateShopSettingsInput) => ({
   address: input.address ?? null,
   countryCode: input.countryCode ?? "PT",
@@ -141,6 +162,7 @@ const shopCreate = (input: UpdateShopSettingsInput) => ({
   phone: input.phone ?? null,
   receiptFooter: input.receiptFooter ?? null,
   intakeTerms: input.intakeTerms?.trim() || null,
+  ...botCreate(input),
   receiptPaper: input.receiptPaper ?? "80mm",
   receiptShowImei: input.receiptShowImei ?? true,
   receiptShowProblem: input.receiptShowProblem ?? true,
@@ -168,6 +190,7 @@ const shopUpdate = (input: UpdateShopSettingsInput) => ({
     input.intakeTerms === undefined
       ? undefined
       : input.intakeTerms.trim() || null,
+  ...botUpdate(input),
   receiptPaper: input.receiptPaper,
   receiptShowImei: input.receiptShowImei,
   receiptShowProblem: input.receiptShowProblem,
@@ -196,10 +219,42 @@ export async function upsertShopSettings(
   prisma: PrismaClient,
   input: UpdateShopSettingsInput
 ) {
-  return await upsertShopSettingsRepo(prisma, {
+  const saved = await upsertShopSettingsRepo(prisma, {
     create: shopCreate(input),
     update: shopUpdate(input),
     where: { id: "default" },
+  });
+  // O texto "loja fechada" também vive na Cloud — o fallback do §E.10
+  // corre lá quando o PC está desligado. Fire-and-forget: uma falha de
+  // rede nunca bloqueia o save local (a Cloud fica com o último valor
+  // que chegou; o próximo save volta a empurrar).
+  if (input.botClosedFallbackText !== undefined) {
+    pushClosedTextToCloud(prisma, input.botClosedFallbackText).catch(
+      () => null
+    );
+  }
+  return saved;
+}
+
+async function pushClosedTextToCloud(
+  prisma: PrismaClient,
+  text: string | null
+): Promise<void> {
+  const settings = await prisma.shopSettings.findUnique({
+    select: { cloudApiUrl: true, cloudShopTokenEncrypted: true },
+    where: { id: "default" },
+  });
+  if (!(settings?.cloudApiUrl && settings.cloudShopTokenEncrypted)) {
+    return;
+  }
+  const token = decryptSecret(settings.cloudShopTokenEncrypted);
+  if (!token) {
+    return;
+  }
+  await cloudFetch(settings.cloudApiUrl, "/shops/bot-settings", {
+    body: { closedFallbackText: text?.trim() || null },
+    method: "PUT",
+    token,
   });
 }
 

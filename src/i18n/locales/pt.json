@@ -1016,6 +1016,7 @@
   "jobs_waiting_parts_empty_desc": "Acompanhe as peças encomendadas para esta reparação",
   "jobs_waiting_parts_part_name": "Nome da peça",
   "jobs_waiting_parts_supplier": "Fornecedor (opcional)",
+  "jobs_waiting_parts_expected_at": "Chegada prevista (opcional)",
   "jobs_waiting_parts_remove": "Remover",
   "jobs_notes_title": "Notas",
   "jobs_notes_empty": "Ainda não há notas",
@@ -2806,5 +2807,15 @@
       "PART": "Encomenda de peças"
     },
     "open_record": "Abrir registo"
-  }
+  },
+  "bot_ai_enabled": "Respostas do bot de IA",
+  "bot_ai_enabled_help": "Requer o módulo Pro do canal. As regras (códigos SIM/NO, STOP, REP) são sempre executadas em primeiro lugar; a IA responde apenas em texto livre.",
+  "bot_info_text_label": "O que o bot pode dizer",
+  "bot_info_text_help": "As únicas informações da loja que o bot pode partilhar: horário de funcionamento, morada, serviços, preços indicativos.",
+  "bot_info_text_placeholder": "Aberto de segunda a sexta-feira, das 09h00 às 18h00, e aos sábados, das 10h00 às 14h00. Morada: Rua Exemplo 12, Lisboa. Substituições de ecrã a partir de 80 euros.",
+  "bot_avg_days_label": "Média de dias de reparação após a chegada da peça",
+  "bot_avg_days_help": "Utilizado para estimativas de tempo – o bot expressa-as sempre como médias, nunca como datas garantidas.",
+  "bot_fallback_text_label": "Mensagem de loja fechada",
+  "bot_fallback_text_help": "Enviado quando o PC da loja está offline. Vazio = mensagem padrão.",
+  "bot_fallback_text_placeholder": "Recebemos a sua mensagem. A loja responderá assim que abrir."
 }

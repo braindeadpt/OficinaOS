@@ -720,6 +720,9 @@ model JobPartsWaiting {
   job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
   partName  String
   supplier  String?
+  // Expected arrival date — shown to the customer-facing bot as
+  // "chegada prevista" (never a guaranteed date).
+  expectedAt DateTime? @db.Timestamptz
   createdAt DateTime @default(now()) @db.Timestamptz
 
   @@index([jobId])
@@ -1223,6 +1226,19 @@ model ShopSettings {
   // Segredo no path do webhook inbound — o gateway não suporta headers
   // de auth, por isso a rota é /api/public/sms/inbound/<token>.
   smsWebhookToken             String?
+  // Bot com IA (Pro) — respostas automáticas a mensagens de clientes.
+  // botAiEnabled: flag de rollout — quando off, as mensagens respondem só
+  // com as regras determinísticas (estado, orçamento SIM/NÃO, PARAR).
+  // botInfoText: ficha "O que o bot pode dizer" — horário, morada, serviços
+  // e preços indicativos, editável pela loja (entra no system context).
+  // botAvgRepairDaysAfterPart: dias úteis médios de reparação depois de a
+  // peça chegar — a IA usa-o em vez de prometer datas finais.
+  // botClosedFallbackText: texto enviado quando o PC da loja está offline
+  // e a Cloud não consegue resposta (null → predefinição da app).
+  botAiEnabled                Boolean  @default(false)
+  botInfoText                 String?  @db.Text
+  botAvgRepairDaysAfterPart   Int      @default(1)
+  botClosedFallbackText       String?  @db.Text
   // Remarketing automático (Pro module "remarketing") — proactive WhatsApp
   // re-engagement for customers idle for remarketingDays, throttled by a
   // cooldown and sent as a Meta-approved template message.

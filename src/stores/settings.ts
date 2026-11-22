@@ -107,7 +107,7 @@ interface SettingsState {
     taxName?: string;
   }) => Promise<void>;
   saveShopSettings: (data: {
-    shopName: string;
+    shopName?: string;
     address?: string;
     phone?: string;
     countryCode?: string;
@@ -128,6 +128,10 @@ interface SettingsState {
     monthlyRevenueGoal?: number | null;
     reviewUrl?: string;
     embedAllowedOrigins?: string | null;
+    botAiEnabled?: boolean;
+    botInfoText?: string | null;
+    botAvgRepairDaysAfterPart?: number;
+    botClosedFallbackText?: string | null;
   }) => Promise<ShopSettings>;
   saveSmsSettings: (data: {
     enabled?: boolean;

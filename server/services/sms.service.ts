@@ -1,15 +1,11 @@
 import { randomBytes } from "node:crypto";
 import type { PrismaClient } from "@generated/client";
+import { toSmsText } from "@shared/utils/gsm7.js";
 import type { FastifyBaseLogger } from "fastify";
 import { decryptSecret, isEncrypted } from "../lib/crypto.js";
 import { assertNotDemoMode } from "../lib/demo.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
-import {
-  type BotReplyCtx,
-  composeReply,
-  escalateToStaff,
-  rateOk,
-} from "./bot-intents.js";
+import { type BotReplyCtx, handleInboundMessage } from "./bot-intents.js";
 import type { NotifyContext } from "./job.service.js";
 import { formatPhone } from "./notification-sender.js";
 
@@ -196,9 +192,10 @@ export function generateSmsWebhookToken(): string {
 }
 
 /**
- * Processa um SMS recebido: compõe a resposta via intents partilhados
- * (estado da reparação, orçamento SIM/NÃO) e responde pelo gateway.
- * plainText=true — SMS não renderiza os marcadores *bold* do WhatsApp.
+ * Processa um SMS recebido no gateway LAN: compõe a resposta via intents
+ * partilhados (regras determinísticas; IA só quando o módulo "sms" está
+ * ativo) e responde pelo gateway. A resposta sai transliterada para
+ * GSM-7 — respostas automáticas nunca devem pagar UCS-2 (§E.11).
  */
 export async function handleInboundSms(
   prisma: PrismaClient,
@@ -219,15 +216,37 @@ export async function handleInboundSms(
   if (!config) {
     return;
   }
-  if (!rateOk(fromPhone)) {
-    return;
-  }
+
+  const modules = Array.isArray(settings.cloudEntitlements)
+    ? (settings.cloudEntitlements as string[]).filter(
+        (m): m is string => typeof m === "string"
+      )
+    : [];
+  const cloudToken = settings.cloudShopTokenEncrypted
+    ? decryptSecret(settings.cloudShopTokenEncrypted)
+    : null;
 
   const ctx: BotReplyCtx = {
+    ai:
+      cloudToken && settings.cloudApiUrl
+        ? {
+            apiUrl: settings.cloudApiUrl,
+            avgRepairDaysAfterPart: settings.botAvgRepairDaysAfterPart,
+            botInfoText: settings.botInfoText,
+            channel: "sms",
+            enabled: settings.botAiEnabled,
+            module: "sms",
+            modules,
+            token: cloudToken,
+          }
+        : undefined,
     currency: settings.currency ?? "EUR",
     log,
     notifyCtx,
+    portalApiUrl: settings.cloudApiUrl,
+    portalEnabled: modules.includes("portal"),
     prisma,
+    timezone: settings.timezone ?? undefined,
     shopLabel:
       [settings.shopName, settings.phone].filter(Boolean).join(" · ") ||
       "a loja",
@@ -241,21 +260,22 @@ export async function handleInboundSms(
   };
 
   try {
-    const out = await composeReply(ctx, msg, true);
-    const res = await sendSms(
-      config,
-      fromPhone,
-      out.text,
-      settings.countryCode ?? undefined
-    );
-    if (!res.success) {
-      log.warn({ err: res.error, to: fromPhone }, "sms-bot reply failed");
-    }
-    if (out.escalate) {
-      await escalateToStaff(ctx, "SMS", msg, out.customerName, out.jobId).catch(
-        (err) => log.warn({ err }, "sms-bot escalate failed")
-      );
-    }
+    await handleInboundMessage(ctx, msg, {
+      channelLabel: "SMS",
+      plainText: true,
+      send: async (replyText) => {
+        const res = await sendSms(
+          config,
+          fromPhone,
+          toSmsText(replyText),
+          settings.countryCode ?? undefined
+        );
+        if (!res.success) {
+          log.warn({ err: res.error, to: fromPhone }, "sms-bot reply failed");
+        }
+        return res.success;
+      },
+    });
   } catch (err) {
     log.warn({ err, fromPhone }, "sms-bot inbound failed");
   }

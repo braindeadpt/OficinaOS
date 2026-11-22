@@ -17,7 +17,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: oven-sh/setup-bun@v2
 
@@ -127,7 +127,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "shim migrate deploy --help falhou" }
 
       - name: Probe G — bun run db:migrate-deploy (the real production path)
-        continue-on-error: true
         timeout-minutes: 5
         working-directory: ${{ runner.temp }}\oficinaos-portable\app
         env:
@@ -135,9 +134,13 @@ jobs:
         run: |
           Write-Host "MARKER-G-START"
           bun run db:migrate-deploy
-          Write-Host "MARKER-G-END EXIT=$LASTEXITCODE"
-          # Corre contra postgres inexistente — falha esperada com P1000,
-          # mas tem de imprimir o erro e sair, NÃO pendurar.
+          $code = $LASTEXITCODE
+          Write-Host "MARKER-G-END EXIT=$code"
+          # Corre contra postgres inexistente — falha esperada com P1001. O
+          # teste é sair dentro do timeout (não pendurar); o exit code é só
+          # informativo — zeroa-se para o step não falhar nem emitir anotação.
+          if ($code -eq 0) { Write-Host "AVISO: migrate deploy saiu com 0" }
+          $global:LASTEXITCODE = 0
 
       # Os probes A–F passam; nas 3 releases falhadas a única construção
       # diferente era a pipeline (| Out-Null / 2>&1 | Out-String) — se um
@@ -191,7 +194,6 @@ jobs:
           Write-Host "DOWNLOADS OK"
 
       - name: Probe K — réplica exata do Assemble bundle (com markers)
-        continue-on-error: true
         timeout-minutes: 15
         run: |
           $b = "$env:RUNNER_TEMP\oficinaos-portable-k"
@@ -247,6 +249,9 @@ jobs:
           Write-Host "K9 pg expanded"
           Copy-Item scripts\portable\* "$b\"
           Write-Host "K10 scripts copied"
+          # Marcador "pasta completa" — distingue falha de montagem (sem
+          # marcador → Probe M salta) de falha de compressão (Probe M corre).
+          New-Item -ItemType File -Force "$env:RUNNER_TEMP\oficinaos-portable-k.complete" | Out-Null
           # Espelha o fix no release.yml — Compress-Archive em vez de tar.
           Compress-Archive -Path "$env:RUNNER_TEMP\oficinaos-portable-k" `
             -DestinationPath oficinaos-portable.zip -CompressionLevel Optimal
@@ -269,8 +274,15 @@ jobs:
           (Get-Item "$env:RUNNER_TEMP\portable-ca.zip").Length
 
       - name: Probe M — 7z do bundle
+        # Corre mesmo se a sonda K falhar: testa um compressor alternativo
+        # sobre a pasta já montada — não depende do zip do Compress-Archive.
+        if: always()
         timeout-minutes: 10
         run: |
+          if (-not (Test-Path "$env:RUNNER_TEMP\oficinaos-portable-k.complete")) {
+            Write-Host "MARKER-M-SKIP: montagem do bundle incompleta"
+            exit 0
+          }
           Write-Host "MARKER-M-START"
           & "C:\Program Files\7-Zip\7z.exe" a -tzip "$env:RUNNER_TEMP\portable-7z.zip" "$env:RUNNER_TEMP\oficinaos-portable-k" | Select-Object -Last 5
           Write-Host "MARKER-M-END EXIT=$LASTEXITCODE"

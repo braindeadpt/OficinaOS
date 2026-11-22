@@ -6,7 +6,8 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import type { useSettingsStore } from "@/stores/settings";
+import { Textarea } from "@/components/ui/textarea";
+import { useSettingsStore } from "@/stores/settings";
 import { EvolutionSection } from "./evolution-section";
 
 type Store = ReturnType<typeof useSettingsStore.getState>;
@@ -463,6 +464,115 @@ interface WhatsAppFormState {
   transport: "meta" | "evolution";
 }
 
+/**
+ * "O que o bot pode dizer" — ficha da loja para o bot de IA (Pro).
+ * Feeds POST /ai/bot-reply's shopCard; kept in shop settings (not the
+ * WhatsApp settings object) because all channels share it.
+ */
+function BotCard() {
+  const { t } = useTranslation();
+  const shopSettings = useSettingsStore((s) => s.shopSettings);
+  const saveShopSettings = useSettingsStore((s) => s.saveShopSettings);
+  const [form, setForm] = useState({
+    avgDays: "1",
+    enabled: false,
+    fallback: "",
+    info: "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (shopSettings && !loaded) {
+      setForm({
+        avgDays: String(shopSettings.botAvgRepairDaysAfterPart ?? 1),
+        enabled: shopSettings.botAiEnabled ?? false,
+        fallback: shopSettings.botClosedFallbackText ?? "",
+        info: shopSettings.botInfoText ?? "",
+      });
+      setLoaded(true);
+    }
+  }, [shopSettings, loaded]);
+
+  const handleSave = useCallback(async () => {
+    setSaving(true);
+    try {
+      await saveShopSettings({
+        botAiEnabled: form.enabled,
+        botAvgRepairDaysAfterPart:
+          form.avgDays.trim() === ""
+            ? 1
+            : Math.max(0, Number.parseInt(form.avgDays, 10) || 0),
+        botClosedFallbackText: form.fallback || null,
+        botInfoText: form.info || null,
+      });
+    } finally {
+      setSaving(false);
+    }
+  }, [form, saveShopSettings]);
+
+  return (
+    <div className="mt-4 rounded-2xl bg-surface-container-low p-5">
+      <div className="flex select-none items-center gap-3">
+        <Switch
+          ariaLabel={t("bot_ai_enabled")}
+          checked={form.enabled}
+          onChange={(enabled) => setForm((f) => ({ ...f, enabled }))}
+        />
+        <span className="font-medium text-on-surface text-sm">
+          {t("bot_ai_enabled")}
+        </span>
+      </div>
+      <p className="mt-1 text-on-surface-variant text-xs">
+        {t("bot_ai_enabled_help")}
+      </p>
+
+      <div className="mt-4 space-y-4">
+        <Field hint={t("bot_info_text_help")} label={t("bot_info_text_label")}>
+          <Textarea
+            onChange={(e) => setForm((f) => ({ ...f, info: e.target.value }))}
+            placeholder={t("bot_info_text_placeholder")}
+            rows={4}
+            value={form.info}
+          />
+        </Field>
+        <Field hint={t("bot_avg_days_help")} label={t("bot_avg_days_label")}>
+          <Input
+            min={0}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, avgDays: e.target.value }))
+            }
+            type="number"
+            value={form.avgDays}
+          />
+        </Field>
+        <Field
+          hint={t("bot_fallback_text_help")}
+          label={t("bot_fallback_text_label")}
+        >
+          <Textarea
+            onChange={(e) =>
+              setForm((f) => ({ ...f, fallback: e.target.value }))
+            }
+            placeholder={t("bot_fallback_text_placeholder")}
+            rows={2}
+            value={form.fallback}
+          />
+        </Field>
+        <Button
+          className="flex min-h-11"
+          disabled={saving}
+          loading={saving}
+          onClick={handleSave}
+          size="sm"
+        >
+          {saving ? t("settings_saving") : t("save_changes")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function ChannelSettings({
   smsSettings,
   whatsAppSettings,
@@ -691,6 +801,7 @@ export default function ChannelSettings({
         onSendTest={onSendSmsTest}
         smsSettings={smsSettings}
       />
+      <BotCard />
     </div>
   );
 }

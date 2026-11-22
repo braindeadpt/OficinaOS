@@ -18,7 +18,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: update-apply.ps1 — ficheiro bloqueado + rollback (PS 5.1, como em producao)
         run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\update-apply.test.ps1

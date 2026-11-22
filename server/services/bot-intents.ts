@@ -1,11 +1,16 @@
 import type { PrismaClient } from "@generated/client";
 import { Role } from "@generated/client";
-import { ACTIVE_STATUSES } from "@shared/constants/job-statuses.js";
+import {
+  ACTIVE_STATUSES,
+  COMPLETED_STATUSES,
+} from "@shared/constants/job-statuses.js";
 import type { FastifyBaseLogger } from "fastify";
 import {
   createManyAndReturnInAppNotifications,
   findManyUsers,
 } from "../repositories/notification.repository.js";
+import { askBotAi } from "./bot-ai.js";
+import type { BotToolCtx } from "./bot-tools.js";
 import type { NotifyContext } from "./job.service.js";
 import { respondToQuote } from "./job-quote.service.js";
 
@@ -36,11 +41,31 @@ const QUOTE_STATUS_PT: Record<string, string> = {
 };
 
 const JOB_CODE_RE = /REP-\d{4}-\d{6}-[A-Z0-9]{3}/i;
-const QUOTE_RE = /or[çc]amento|pre[çc]o|quanto|custa/i;
+const INTL_PREFIX_RE = /^00/;
+const QUOTE_RE = /or[çc]amento|pre[çc]o|quanto(?!.{0,10}tempo)|custa/i;
+// "quanto tempo falta" / "quando fica pronto" — perguntas de prazo têm
+// resposta determinística própria, antes do ramo de orçamento ("quanto").
+// "previsão"/"prazo" só contam quando NÃO modificados por uma palavra de
+// preço ("previsão de preço" é orçamento, não prazo) — a exclusão exige o
+// conector de/do/da para não atravessar fronteiras de frase ("Qual é a
+// previsão? O preço já sei." é pergunta de prazo). "está"/"esta" soltos
+// ficam de fora: "Quando está aberta a loja?" não é prazo de reparação.
+const TIME_RE =
+  /quanto tempo|quando.{0,25}(pronto|fica|entrega)|demora|falta.{0,15}pront|previs[aã]o(?!\s+(?:de|do|da|dos|das|para)\s+(?:(?:o|a|os|as|um|uma)\s+)?pre[çc]o)|prazo(?!\s+(?:de|do|da|dos|das|para)\s+(?:(?:o|a|os|as|um|uma)\s+)?(?:pre[çc]o|custo|pagamento))/i;
+// A peça mencionada junto de chegada/previsão/entrega — pergunta pela peça
+// em falta ("quando chega a peça?", "previsão de chegada da peça"), não
+// pelo estado da reparação. Só a forma interrogada conta: uma menção à
+// peça noutra frase ("Já paguei a peça.") não desvia o prazo da reparação.
+const PART_ETA_RE =
+  /(pe[çc]a|encomenda|componente).{0,25}(chega|chegada|previs|pront|entrega|demora)|(chega|chegada|previs[aã]o).{0,20}(pe[çc]a|encomenda|componente)/i;
 // "ok" is deliberately absent — a bare "ok" in casual conversation
 // must not legally accept a quote.
 const YES_WORDS = new Set(["sim", "aceito", "confirmo", "aprovo"]);
 const NO_WORDS = new Set(["não", "nao", "recuso", "rejeito"]);
+// Opt-out transversal — desliga whatsappConsent no Customer e vale para
+// todos os canais automáticos. Exact-match como SIM/NÃO: frases com
+// "parar" embutido não tiram consentimento por acidente.
+const STOP_WORDS = new Set(["parar", "stop"]);
 const HUMAN_RE = /ajuda|humano|atendimento|operador|pessoa|urgente/i;
 const DIGITS_RE = /\D/g;
 const WA_BOLD_RE = /\*/g;
@@ -59,15 +84,37 @@ export interface InboundMessage {
   text: string | null;
 }
 
+export interface BotAiChannelConfig {
+  apiUrl: string;
+  avgRepairDaysAfterPart: number;
+  botInfoText: string | null;
+  channel: "evolution" | "sms" | "whatsapp";
+  /** settings.botAiEnabled — flag de rollout; off → só regras. */
+  enabled: boolean;
+  /** Módulo cujo entitlement é exigido p/ este canal ("sms", "whatsapp-bot"). */
+  module: string;
+  /** Módulos ativos conforme último sync de entitlements. */
+  modules: string[];
+  token: string;
+}
+
 export interface BotReplyCtx {
+  ai?: BotAiChannelConfig;
   currency: string;
   log: FastifyBaseLogger;
   notifyCtx: NotifyContext | undefined;
+  /** Cloud API base para o link do portal na vistaCliente (null → sem link). */
+  portalApiUrl?: string | null;
+  /** true quando o módulo "portal" está ativo nos entitlements. */
+  portalEnabled?: boolean;
   prisma: PrismaClient;
   shopLabel: string;
+  /** IANA timezone da loja — datas apresentadas ao cliente (previsões,
+   *  chegadas de peças) renderizam-se aqui, não no fuso do servidor. */
+  timezone?: string;
 }
 
-export function rateOk(phone: string): boolean {
+export function rateOk(phone: string, limit = MSG_LIMIT_PER_HOUR): boolean {
   const now = Date.now();
   // Normalize — WhatsApp delivers "351912…" while sms-gate may send
   // "+351912…" or "0912…"; the same sender must share one bucket.
@@ -77,7 +124,7 @@ export function rateOk(phone: string): boolean {
     b = { n: 0, resetAt: now + 3_600_000 };
     rateBuckets.set(key, b);
   }
-  return ++b.n <= MSG_LIMIT_PER_HOUR;
+  return ++b.n <= limit;
 }
 
 function eur(
@@ -140,6 +187,7 @@ interface ActiveJob {
   estimatedDate: Date | null;
   id: string;
   jobCode: string;
+  partsWaiting?: { expectedAt: Date | null; partName: string }[];
   quotes: {
     id: string;
     version: number;
@@ -156,7 +204,19 @@ function statusText(ctx: BotReplyCtx, job: ActiveJob): string {
     STATUS_PT[job.status] ?? job.status
   }*.`;
   if (job.estimatedDate) {
-    text += ` Previsão: ${job.estimatedDate.toLocaleDateString("pt-PT")}.`;
+    text += ` Previsão: ${job.estimatedDate.toLocaleDateString("pt-PT", {
+      timeZone: ctx.timezone ?? process.env.TZ ?? "Europe/Lisbon",
+    })}.`;
+  }
+  // Registos de peças podem sobreviver à conclusão da reparação (o fluxo
+  // não exige removê-los) — numa reparação pronta/entregue "Peças em
+  // falta" seria contraditório, por isso a lista só aparece em estados
+  // ativos.
+  if (
+    (job.partsWaiting?.length ?? 0) > 0 &&
+    !(COMPLETED_STATUSES as string[]).includes(job.status)
+  ) {
+    text += ` Peças em falta: ${pendingPartsText(ctx, job)}.`;
   }
   const q = job.quotes[0];
   if (q?.status === "SENT") {
@@ -166,6 +226,42 @@ function statusText(ctx: BotReplyCtx, job: ActiveJob): string {
     )}* por responder — responde SIM para aceitar ou NÃO para recusar.`;
   } else {
     text += " Responde ORÇAMENTO para detalhes ou AJUDA para falar connosco.";
+  }
+  return text;
+}
+
+/** Resposta a «quando chega a peça» — a data esperada da peça em falta,
+ *  não o estado da reparação. */
+/** Partes em falta formatadas — cada uma com a data esperada ou
+ *  "sem data prevista"; nunca esconde as que não têm data. */
+function pendingPartsText(ctx: BotReplyCtx, job: ActiveJob): string {
+  const tz = ctx.timezone ?? process.env.TZ ?? "Europe/Lisbon";
+  return (job.partsWaiting ?? [])
+    .map((p) =>
+      p.expectedAt
+        ? `${p.partName} — chegada prevista: ${p.expectedAt.toLocaleDateString(
+            "pt-PT",
+            { timeZone: tz }
+          )}`
+        : `${p.partName} — sem data prevista`
+    )
+    .join("; ");
+}
+
+/** Resposta a «quando chega a peça» — a data esperada da peça em falta,
+ *  não o estado da reparação. */
+function partEtaText(ctx: BotReplyCtx, job: ActiveJob): string {
+  const device = `${job.device.brand.name} ${job.device.model}`;
+  const tz = ctx.timezone ?? process.env.TZ ?? "Europe/Lisbon";
+  let text = `Peças em falta para a tua reparação ${job.jobCode} (${device}): ${pendingPartsText(
+    ctx,
+    job
+  )}.`;
+  if (job.estimatedDate) {
+    text += ` Previsão da reparação: ${job.estimatedDate.toLocaleDateString(
+      "pt-PT",
+      { timeZone: tz }
+    )}.`;
   }
   return text;
 }
@@ -238,23 +334,41 @@ interface CustomerMatch {
   jobs: ActiveJob[];
 }
 
-/** Casa o remetente com clientes (últimos 9 dígitos) e traz jobs ativos. */
+/** Casa o remetente com clientes e traz jobs ativos.
+ *
+ * Remetente com número nacional PT (9 dígitos) ou +351 casa pelo sufixo
+ * — a loja pode ter o número guardado sem indicativo. Remetente com
+ * outro indicativo só casa por número completo: os últimos 9 dígitos de
+ * um +34 são iguais aos de um cliente PT e o bot daria a ficha dele a um
+ * estranho (sec: a ficha leva histórico e dados da reparação).
+ */
 async function findCustomerJobs(
   ctx: BotReplyCtx,
   fromPhone: string
 ): Promise<CustomerMatch> {
-  const last9 = fromPhone.slice(-9);
-  const last4 = fromPhone.slice(-4);
-  if (last9.length < 9 || last4.length < 4) {
+  const senderDigits = fromPhone
+    .replace(DIGITS_RE, "")
+    .replace(INTL_PREFIX_RE, "");
+  const PT_CC = "351";
+  const isPtSender =
+    senderDigits.length === 9 ||
+    (senderDigits.startsWith(PT_CC) && senderDigits.length === 12);
+  const last9 = senderDigits.slice(-9);
+  const last4 = senderDigits.slice(-4);
+  if ((isPtSender && last9.length < 9) || last4.length < 4) {
     return { customers: [], jobs: [] };
   }
   const candidates = await ctx.prisma.customer.findMany({
     where: { phone: { endsWith: last4 } },
     select: { id: true, name: true, phone: true },
   });
-  const customers = candidates.filter(
-    (c) => c.phone.replace(DIGITS_RE, "").slice(-9) === last9
-  );
+  const customers = candidates.filter((c) => {
+    const cd = c.phone.replace(DIGITS_RE, "").replace(INTL_PREFIX_RE, "");
+    if (cd === senderDigits) {
+      return true;
+    }
+    return isPtSender && cd.slice(-9) === last9;
+  });
   if (customers.length === 0) {
     return { customers, jobs: [] };
   }
@@ -271,6 +385,10 @@ async function findCustomerJobs(
       estimatedDate: true,
       customer: { select: { name: true } },
       device: { select: { model: true, brand: { select: { name: true } } } },
+      partsWaiting: {
+        orderBy: { createdAt: "asc" as const },
+        select: { expectedAt: true, partName: true },
+      },
       quotes: {
         orderBy: { version: "desc" as const },
         take: 1,
@@ -319,15 +437,61 @@ export async function composeReply(
   const direct = codeMatch
     ? jobs.find((j) => j.jobCode.toUpperCase() === codeMatch[0].toUpperCase())
     : undefined;
+  const targetJobId = direct?.id ?? jobs[0]?.id ?? null;
 
   // Não-texto ou pedido explícito de humano → escala para staff.
   if (msg.messageType !== "text" || HUMAN_RE.test(lower)) {
     return {
       customerName,
       escalate: true,
-      jobId: direct?.id ?? jobs[0]?.id ?? null,
+      jobId: targetJobId,
       text: `Recebemos a tua mensagem, ${customerName ?? ""} — a loja responde-te já.`,
     };
+  }
+
+  // PARAR/STOP — opt-out transversal, sempre antes da IA (§E.9).
+  if (STOP_WORDS.has(lower)) {
+    await applyStopConsent(ctx, customers);
+    return {
+      customerName,
+      escalate: false,
+      jobId: null,
+      text: `Recebido — deixas de receber mensagens automáticas desta loja. Para voltar a receber, fala connosco — ${ctx.shopLabel}.`,
+    };
+  }
+
+  // SIM/NÃO — decisão vinculativa de orçamento: SEMPRE determinístico.
+  if (YES_WORDS.has(lower) || NO_WORDS.has(lower)) {
+    const reply = await answerQuote(
+      ctx,
+      msg,
+      jobs,
+      direct,
+      YES_WORDS.has(lower) ? "approve" : "reject"
+    );
+    return { customerName, escalate: false, jobId: targetJobId, text: reply };
+  }
+
+  // IA (Pro, atrás de flag): só texto livre — mensagens com código REP ou
+  // pedido de orçamento ficam nas regras determinísticas. Falha/sem módulo
+  // → cai nas regras em vez de ficar em silêncio.
+  const aiReply = await tryBotAiReply(ctx, msg, {
+    codeMatch: !!codeMatch,
+    customerIds: customers.map((c) => c.id),
+    lower,
+    text,
+  });
+  if (aiReply) {
+    const reply: BotReply = {
+      customerName,
+      escalate: aiReply.escalate,
+      jobId: targetJobId,
+      text: aiReply.text,
+    };
+    if (plainText) {
+      reply.text = reply.text.replace(WA_BOLD_RE, "");
+    }
+    return reply;
   }
 
   if (jobs.length === 0) {
@@ -339,35 +503,152 @@ export async function composeReply(
     };
   }
 
-  const reply = await routeIntent(ctx, msg, customerName, jobs, direct, lower);
+  const reply = routeIntent(ctx, customerName, jobs, direct, lower);
   if (plainText) {
     reply.text = reply.text.replace(WA_BOLD_RE, "");
   }
   return reply;
 }
 
-/** Decide o intent e compõe a resposta quando há ≥1 job ativo. */
-async function routeIntent(
+/** PARAR/STOP — desliga o consentimento em todos os clientes do número. */
+async function applyStopConsent(
+  ctx: BotReplyCtx,
+  customers: { id: string }[]
+): Promise<void> {
+  for (const c of customers) {
+    await ctx.prisma.customer.update({
+      data: { whatsappConsent: false },
+      where: { id: c.id },
+    });
+  }
+}
+
+/** Pergunta à IA quando a flag, o entitlement e o formato da mensagem deixam. */
+async function tryBotAiReply(
   ctx: BotReplyCtx,
   msg: InboundMessage,
+  input: {
+    codeMatch: boolean;
+    customerIds: string[];
+    lower: string;
+    text: string;
+  }
+): Promise<{ escalate: boolean; text: string } | null> {
+  const ai = ctx.ai;
+  if (
+    !ai?.enabled ||
+    input.text.length === 0 ||
+    QUOTE_RE.test(input.lower) ||
+    TIME_RE.test(input.lower) ||
+    // «quando chega a peça?» não tem «previsão»/«prazo» — sem este
+    // termo a pergunta ia para a IA em vez da resposta determinística
+    // com a data registada da peça.
+    PART_ETA_RE.test(input.lower) ||
+    input.codeMatch ||
+    !ai.modules.includes(ai.module)
+  ) {
+    return null;
+  }
+  const toolCtx: BotToolCtx = {
+    currency: ctx.currency,
+    customerIds: input.customerIds,
+    log: ctx.log,
+    portalApiUrl: ctx.portalApiUrl ?? null,
+    portalEnabled: ctx.portalEnabled ?? false,
+    prisma: ctx.prisma,
+    timezone: ctx.timezone,
+    shopCard: {
+      botAvgRepairDaysAfterPart: ai.avgRepairDaysAfterPart,
+      botInfoText: ai.botInfoText,
+    },
+  };
+  const res = await askBotAi(toolCtx, ai, {
+    channel: ai.channel,
+    phone: msg.fromPhone,
+    userText: input.text,
+  });
+  return res ? { escalate: res.escalate, text: res.reply } : null;
+}
+
+/**
+ * Pipeline de entrada partilhado pelos três canais (§2.1 do plano):
+ * rate-limit → composeReply (regras → IA) → envio → escalada.
+ * `sent=false` deixa o canal decidir o retry (a cloud só recebe ack
+ * depois de envio confirmado); null = flood descartada sem resposta.
+ */
+export interface InboundTransport {
+  channelLabel: string;
+  plainText?: boolean;
+  /** Evolution usa 10/h; oficial e SMS ficam no default de 20/h. */
+  rateLimitPerHour?: number;
+  send: (text: string) => Promise<boolean>;
+}
+
+export async function handleInboundMessage(
+  ctx: BotReplyCtx,
+  msg: InboundMessage,
+  t: InboundTransport
+): Promise<{ reply: BotReply; sent: boolean } | null> {
+  if (!rateOk(msg.fromPhone, t.rateLimitPerHour)) {
+    return null;
+  }
+  const out = await composeReply(ctx, msg, t.plainText);
+  const sent = out.text.length > 0 ? await t.send(out.text) : true;
+  if (out.escalate) {
+    await escalateToStaff(
+      ctx,
+      t.channelLabel,
+      msg,
+      out.customerName,
+      out.jobId
+    ).catch((err) =>
+      ctx.log.warn({ err }, `${t.channelLabel}-bot escalate failed`)
+    );
+  }
+  return { reply: out, sent };
+}
+
+/** Decide o intent e compõe a resposta quando há ≥1 job ativo. */
+function routeIntent(
+  ctx: BotReplyCtx,
   customerName: string | null,
   jobs: ActiveJob[],
   direct: ActiveJob | undefined,
   lower: string
-): Promise<BotReply> {
-  if (YES_WORDS.has(lower) || NO_WORDS.has(lower)) {
-    const reply = await answerQuote(
-      ctx,
-      msg,
-      jobs,
-      direct,
-      YES_WORDS.has(lower) ? "approve" : "reject"
-    );
+): BotReply {
+  if (TIME_RE.test(lower) || PART_ETA_RE.test(lower)) {
+    const target = direct ?? (jobs.length === 1 ? jobs[0] : undefined);
+    if (!target) {
+      return {
+        customerName,
+        escalate: false,
+        jobId: null,
+        text: `Tens ${jobs.length} reparações em curso: ${jobs
+          .map((j) => j.jobCode)
+          .join(", ")}. Responde com o código para veres a previsão.`,
+      };
+    }
+    // «Chegada da peça» pergunta pela peça em falta — se há peças
+    // registadas, responde com a data esperada da peça (não o estado).
+    // Em reparações concluídas os registos podem ficar por apagar —
+    // cai no estado («Pronto para levantar») como no statusText.
+    if (
+      PART_ETA_RE.test(lower) &&
+      (target.partsWaiting?.length ?? 0) > 0 &&
+      !(COMPLETED_STATUSES as string[]).includes(target.status)
+    ) {
+      return {
+        customerName,
+        escalate: false,
+        jobId: target.id,
+        text: partEtaText(ctx, target),
+      };
+    }
     return {
       customerName,
       escalate: false,
-      jobId: (direct ?? jobs[0])?.id ?? null,
-      text: reply,
+      jobId: target.id,
+      text: statusText(ctx, target),
     };
   }
 

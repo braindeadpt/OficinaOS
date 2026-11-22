@@ -219,6 +219,7 @@ export const addJobNoteSchema = z.object({
 });
 
 export const addWaitingPartSchema = z.object({
+  expectedAt: z.string().datetime({ offset: true }).optional(),
   partName: z.string().min(1).max(120),
   supplier: z.string().max(120).optional(),
 });
