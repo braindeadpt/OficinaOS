@@ -96,7 +96,7 @@ async function expediteApprovedDeferred(prisma: DbClient): Promise<void> {
 }
 
 /** Estado conhecido do template no último sync — null = sem registo. */
-function templateStatusOf(
+export function templateStatusOf(
   settings: ShopSettingsRow | null,
   name: string
 ): string | null {

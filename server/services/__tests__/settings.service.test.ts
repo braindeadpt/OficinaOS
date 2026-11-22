@@ -11,7 +11,8 @@ import {
 } from "../settings.service";
 
 function mockPrisma() {
-  return {
+  const prisma = {
+    $transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(prisma)),
     aiSettings: {
       findUnique: vi.fn(),
       upsert: vi.fn(),
@@ -29,7 +30,8 @@ function mockPrisma() {
       findUnique: vi.fn(),
       update: vi.fn(),
     },
-  } as unknown as PrismaClient;
+  };
+  return prisma as unknown as PrismaClient;
 }
 
 // Mock global fetch
@@ -269,7 +271,7 @@ describe("updateNotificationTemplate", () => {
     expect(result).toHaveProperty("body", "Updated body");
   });
 
-  it("rename migra entradas QUEUED para o nome novo", async () => {
+  it("rename migra entradas QUEUED quando o nome antigo não está aprovado", async () => {
     (
       prisma.notificationTemplate.findUnique as ReturnType<typeof vi.fn>
     ).mockResolvedValue({
@@ -283,6 +285,12 @@ describe("updateNotificationTemplate", () => {
       channel: "WHATSAPP",
       id: "template-1",
       name: "job_ready_v2",
+    });
+    // Nome antigo ainda em revisão — sem aprovação Meta registada.
+    (
+      prisma.shopSettings.findUnique as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      whatsappTemplatesJson: { job_ready: { status: "PENDING" } },
     });
     (
       prisma.notificationOutbox.findMany as ReturnType<typeof vi.fn>
@@ -314,14 +322,97 @@ describe("updateNotificationTemplate", () => {
       },
     });
     expect(prisma.notificationOutbox.update).toHaveBeenCalledTimes(2);
+    // Migradas com nextRetryAt/error limpos — um nome já aprovado não
+    // espera o ciclo de adiamento.
     expect(prisma.notificationOutbox.update).toHaveBeenCalledWith({
-      data: { templateName: "job_ready_v2" },
+      data: {
+        error: null,
+        nextRetryAt: null,
+        templateName: "job_ready_v2",
+      },
       where: { id: "o1" },
     });
     expect(prisma.notificationOutbox.update).toHaveBeenCalledWith({
-      data: { templateName: "job_ready_v2" },
+      data: {
+        error: null,
+        nextRetryAt: null,
+        templateName: "job_ready_v2",
+      },
       where: { id: "o3" },
     });
+  });
+
+  it("rename com nome antigo APPROVED não migra — a fila drena pela Meta", async () => {
+    (
+      prisma.notificationTemplate.findUnique as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      channel: "WHATSAPP",
+      id: "template-1",
+      name: "job_ready",
+    });
+    (
+      prisma.notificationTemplate.update as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      channel: "WHATSAPP",
+      id: "template-1",
+      name: "job_ready_v2",
+    });
+    (
+      prisma.shopSettings.findUnique as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      whatsappTemplatesJson: { job_ready: { status: "APPROVED" } },
+    });
+
+    await updateNotificationTemplate(prisma, "template-1", {
+      body: "B",
+      channel: "WHATSAPP",
+      isDefault: true,
+      name: "job_ready_v2",
+    });
+
+    expect(prisma.notificationOutbox.findMany).not.toHaveBeenCalled();
+    expect(prisma.notificationOutbox.update).not.toHaveBeenCalled();
+  });
+
+  it("rename para nome reservado (signature_link) é rejeitado", async () => {
+    await expect(
+      updateNotificationTemplate(prisma, "template-1", {
+        body: "B",
+        channel: "WHATSAPP",
+        isDefault: true,
+        name: "signature_link",
+      })
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    expect(prisma.notificationTemplate.update).not.toHaveBeenCalled();
+  });
+
+  it("rename + mudança de canal não migra a fila WHATSAPP", async () => {
+    (
+      prisma.notificationTemplate.findUnique as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      channel: "WHATSAPP",
+      id: "template-1",
+      name: "job_ready",
+    });
+    (
+      prisma.notificationTemplate.update as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      channel: "SMS",
+      id: "template-1",
+      name: "job_ready_sms",
+    });
+    (
+      prisma.shopSettings.findUnique as ReturnType<typeof vi.fn>
+    ).mockResolvedValue(null);
+
+    await updateNotificationTemplate(prisma, "template-1", {
+      body: "B",
+      channel: "SMS",
+      isDefault: true,
+      name: "job_ready_sms",
+    });
+
+    expect(prisma.notificationOutbox.findMany).not.toHaveBeenCalled();
   });
 });
 

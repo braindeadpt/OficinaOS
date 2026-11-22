@@ -1,6 +1,7 @@
 const TRAILING_SLASH = /\/$/;
 
 import { OutboxStatus, type PrismaClient } from "@generated/client";
+import { AppError } from "@shared/errors/app-error.js";
 import type {
   UpdateAiSettingsInput,
   UpdateInvoicingSettingsInput,
@@ -22,6 +23,10 @@ import {
 } from "../repositories/settings.repository.js";
 import { isModuleEnabled } from "../utils/modules.js";
 import { cloudFetch } from "./cloud.service.js";
+import {
+  STAFF_INITIATED_TEMPLATES,
+  templateStatusOf,
+} from "./notification-outbox.service.js";
 import { generateSmsWebhookToken } from "./sms.service.js";
 
 function endpointOrigin(endpoint: string) {
@@ -267,54 +272,77 @@ export async function updateNotificationTemplate(
   id: string,
   input: UpdateNotificationTemplateInput
 ) {
-  const existing = await findNotificationTemplateUnique(prisma, id);
-  if (!existing) {
-    return null;
+  // O nome reservado transporta semântica de envio manual — entradas
+  // com ele saltam o gate de consentimento no outbox. Renomear um
+  // modelo para ele apropriava-se desse privilégio.
+  if (input.name && STAFF_INITIATED_TEMPLATES.has(input.name)) {
+    throw new AppError("VALIDATION_ERROR", {
+      errors: { name: ["reserved_name"] },
+    });
   }
 
-  const updated = await updateNotificationTemplateRepo(prisma, id, {
-    body: input.body,
-    channel: input.channel,
-    isDefault: input.isDefault,
-    name: input.name,
-  });
+  // Update + migração na mesma transação — duas edições concorrentes
+  // não deixam metade da fila num nome que o editor já não mostra.
+  return await prisma.$transaction(async (tx) => {
+    const existing = await findNotificationTemplateUnique(tx, id);
+    if (!existing) {
+      return null;
+    }
 
-  // Rename: migra a fila para o nome novo. Sem isto o estado do nome
-  // antigo era só preservado do último sync — nunca reconsultado na
-  // Meta — e uma aprovação posterior não desbloqueava as entradas.
-  // No envio, templateParams com `vars` recomputa a ordem pelo corpo
-  // atual do modelo; entradas só-posicionais (formato antigo) ficam
-  // sob o nome antigo, que a Meta mantém aprovado.
-  if (
-    input.name &&
-    input.name !== existing.name &&
-    existing.channel === "WHATSAPP"
-  ) {
-    const queued = await prisma.notificationOutbox.findMany({
-      select: { id: true, templateParams: true },
-      where: {
-        channel: "WHATSAPP",
-        status: OutboxStatus.QUEUED,
-        templateName: existing.name,
-      },
+    const updated = await updateNotificationTemplateRepo(tx, id, {
+      body: input.body,
+      channel: input.channel,
+      isDefault: input.isDefault,
+      name: input.name,
     });
-    for (const q of queued) {
-      const p = q.templateParams;
-      const migratable =
-        p === null ||
-        (!Array.isArray(p) &&
-          typeof p === "object" &&
-          typeof (p as { vars?: unknown }).vars === "object");
-      if (migratable) {
-        await prisma.notificationOutbox.update({
-          data: { templateName: input.name },
-          where: { id: q.id },
+
+    // Rename dentro de WHATSAPP: a fila migra só quando o nome antigo
+    // NÃO está APPROVED — se está, a Meta mantém o modelo e as entradas
+    // drenam por ele, e migrar para um nome em revisão expirava avisos
+    // que iam a tempo. Um nome sem aprovação nunca é reconsultado pelo
+    // sync — migrar é a única via de a aprovação do nome novo chegar à
+    // fila. Entries só-posicionais (formato antigo) ficam sob o nome
+    // antigo. nextRetryAt/error limpos: um nome já aprovado não deve
+    // esperar o ciclo de adiamento.
+    if (
+      input.name &&
+      input.name !== existing.name &&
+      existing.channel === "WHATSAPP" &&
+      updated.channel === "WHATSAPP"
+    ) {
+      const settings = await findShopSettingsUnique(tx);
+      if (templateStatusOf(settings, existing.name) !== "APPROVED") {
+        const queued = await tx.notificationOutbox.findMany({
+          select: { id: true, templateParams: true },
+          where: {
+            channel: "WHATSAPP",
+            status: OutboxStatus.QUEUED,
+            templateName: existing.name,
+          },
         });
+        for (const q of queued) {
+          const p = q.templateParams;
+          const migratable =
+            p === null ||
+            (!Array.isArray(p) &&
+              typeof p === "object" &&
+              typeof (p as { vars?: unknown }).vars === "object");
+          if (migratable) {
+            await tx.notificationOutbox.update({
+              data: {
+                error: null,
+                nextRetryAt: null,
+                templateName: input.name,
+              },
+              where: { id: q.id },
+            });
+          }
+        }
       }
     }
-  }
 
-  return updated;
+    return updated;
+  });
 }
 
 export async function testAiConnection(prisma: PrismaClient) {
