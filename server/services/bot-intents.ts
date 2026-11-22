@@ -540,6 +540,10 @@ async function tryBotAiReply(
     input.text.length === 0 ||
     QUOTE_RE.test(input.lower) ||
     TIME_RE.test(input.lower) ||
+    // «quando chega a peça?» não tem «previsão»/«prazo» — sem este
+    // termo a pergunta ia para a IA em vez da resposta determinística
+    // com a data registada da peça.
+    PART_ETA_RE.test(input.lower) ||
     input.codeMatch ||
     !ai.modules.includes(ai.module)
   ) {

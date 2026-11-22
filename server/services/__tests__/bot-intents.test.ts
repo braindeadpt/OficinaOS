@@ -373,10 +373,9 @@ describe("composeReply — deterministic rules before AI", () => {
         }),
       ],
     });
-    const out = await composeReply(
-      ctx,
-      msg("Qual é a previsão de chegada da peça?")
-    );
+    // «quando chega a peça?» não contém «previsão» — a exclusão da IA
+    // vem do ramo determinístico, não do filtro de texto da IA.
+    const out = await composeReply(ctx, msg("quando chega a peça?"));
     expect(mocks.askBotAi).not.toHaveBeenCalled();
     expect(out.text).toContain("Pronto para levantar");
     expect(out.text).not.toContain("Peças em falta");
