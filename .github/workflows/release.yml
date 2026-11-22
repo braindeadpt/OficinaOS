@@ -12,7 +12,7 @@ jobs:
     name: Package installer & publish release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Guard — package.json version must match the tag
         # Sem isto a v1.0.10 saiu a reportar "1.0.9": o update-check via a
@@ -52,7 +52,7 @@ jobs:
     runs-on: windows-latest
     needs: release
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
 
       - name: Install deps + build app (frontend + prisma client)
@@ -216,7 +216,7 @@ jobs:
             update-apply.ps1 update-apply.ps1.sha256 --clobber
 
       - name: Share bundle with the installer job
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: portable-bundle
           path: ${{ runner.temp }}/oficinaos-portable
@@ -230,9 +230,9 @@ jobs:
     runs-on: windows-latest
     needs: portable
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: portable-bundle
           path: installer/stage-tmp

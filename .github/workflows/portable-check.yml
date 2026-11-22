@@ -17,7 +17,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: oven-sh/setup-bun@v2
 
@@ -127,7 +127,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "shim migrate deploy --help falhou" }
 
       - name: Probe G — bun run db:migrate-deploy (the real production path)
-        continue-on-error: true
         timeout-minutes: 5
         working-directory: ${{ runner.temp }}\oficinaos-portable\app
         env:
@@ -135,9 +134,12 @@ jobs:
         run: |
           Write-Host "MARKER-G-START"
           bun run db:migrate-deploy
-          Write-Host "MARKER-G-END EXIT=$LASTEXITCODE"
-          # Corre contra postgres inexistente — falha esperada com P1000,
-          # mas tem de imprimir o erro e sair, NÃO pendurar.
+          $code = $LASTEXITCODE
+          Write-Host "MARKER-G-END EXIT=$code"
+          # Corre contra postgres inexistente — falha esperada com P1000. O
+          # teste é sair dentro do timeout (não pendurar); o exit code é só
+          # informativo e engole-se para não emitir anotação de falha.
+          if ($code -eq 0) { Write-Host "AVISO: migrate deploy saiu com 0" }
 
       # Os probes A–F passam; nas 3 releases falhadas a única construção
       # diferente era a pipeline (| Out-Null / 2>&1 | Out-String) — se um
@@ -191,7 +193,6 @@ jobs:
           Write-Host "DOWNLOADS OK"
 
       - name: Probe K — réplica exata do Assemble bundle (com markers)
-        continue-on-error: true
         timeout-minutes: 15
         run: |
           $b = "$env:RUNNER_TEMP\oficinaos-portable-k"
