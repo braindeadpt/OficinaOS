@@ -305,11 +305,14 @@ async function persistStatuses(
 /**
  * Sync direto à Meta — grátis/local. Lê primeiro, cria o que falta.
  * Um WABA/token em falta devolve erro em vez de falhar silenciosamente.
+ * `lookupNames` = nomes só para LEITURA (templates renomeados mas ainda
+ * em fila) — refresh do estado real sem recriar/editar nada na Meta.
  */
 async function syncLocal(
   desired: MetaTemplateSpec[],
   wabaId: string,
-  token: string
+  token: string,
+  lookupNames: string[] = []
 ): Promise<TemplateStatus[]> {
   const out: TemplateStatus[] = [];
   for (const t of desired) {
@@ -351,6 +354,35 @@ async function syncLocal(
       name: t.name,
       reason: existing?.rejected_reason ?? undefined,
       status: existing === null ? "MISSING" : status,
+    });
+  }
+  out.push(...(await lookupRenamedStatuses(wabaId, token, lookupNames)));
+  return out;
+}
+
+/**
+ * Nomes renomeados mas ainda em fila: a Meta pode suspendê-los e o
+ * estado preservado ficava eternamente APPROVED — leitura só, nunca
+ * cria/edita.
+ */
+async function lookupRenamedStatuses(
+  wabaId: string,
+  token: string,
+  names: string[]
+): Promise<TemplateStatus[]> {
+  const out: TemplateStatus[] = [];
+  for (const name of names) {
+    const existing = await graphList(wabaId, token, name);
+    out.push({
+      name,
+      reason:
+        existing === "unreachable"
+          ? "GRAPH_UNREACHABLE"
+          : (existing?.rejected_reason ?? undefined),
+      status:
+        existing === "unreachable" || existing === null
+          ? "MISSING"
+          : toStatus(existing),
     });
   }
   return out;
@@ -438,7 +470,20 @@ export async function syncWhatsAppTemplates(
         total: desired.length,
       };
     }
-    statuses = await syncLocal(desired, wabaId, token);
+    // Nomes que já não existem localmente mas têm entradas em fila —
+    // leitura-only à Meta para o estado preservado não congelar se a
+    // Meta suspender/rejeitar o modelo antigo.
+    const desiredNames = new Set(desired.map((d) => d.name));
+    const queued = await prisma.notificationOutbox.findMany({
+      select: { templateName: true },
+      where: { channel: "WHATSAPP", status: OutboxStatus.QUEUED },
+    });
+    const lookupNames = [
+      ...new Set(
+        queued.map((q) => q.templateName).filter((n) => !desiredNames.has(n))
+      ),
+    ];
+    statuses = await syncLocal(desired, wabaId, token, lookupNames);
   } else {
     // Evolution ou WhatsApp desligado — não há templates Meta a sincronizar.
     return { ready: 0, templates: [], total: desired.length };

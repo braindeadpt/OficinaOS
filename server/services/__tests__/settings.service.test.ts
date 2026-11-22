@@ -375,6 +375,14 @@ describe("updateNotificationTemplate", () => {
   });
 
   it("rename para nome reservado (signature_link) é rejeitado", async () => {
+    (
+      prisma.notificationTemplate.findUnique as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      channel: "WHATSAPP",
+      id: "template-1",
+      name: "job_ready",
+    });
+
     await expect(
       updateNotificationTemplate(prisma, "template-1", {
         body: "B",
@@ -384,6 +392,33 @@ describe("updateNotificationTemplate", () => {
       })
     ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
     expect(prisma.notificationTemplate.update).not.toHaveBeenCalled();
+  });
+
+  it("modelo signature_link edita o corpo sem mudar o nome", async () => {
+    (
+      prisma.notificationTemplate.findUnique as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      channel: "WHATSAPP",
+      id: "template-sig",
+      name: "signature_link",
+    });
+    (
+      prisma.notificationTemplate.update as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      body: "novo texto",
+      channel: "WHATSAPP",
+      id: "template-sig",
+      name: "signature_link",
+    });
+
+    const result = await updateNotificationTemplate(prisma, "template-sig", {
+      body: "novo texto",
+      channel: "WHATSAPP",
+      isDefault: true,
+      name: "signature_link",
+    });
+
+    expect(result).toHaveProperty("body", "novo texto");
   });
 
   it("rename + mudança de canal não migra a fila WHATSAPP", async () => {
