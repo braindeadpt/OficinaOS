@@ -303,8 +303,12 @@ export async function updateNotificationTemplate(
 
     // Variáveis obrigatórias por modelo staff-initiated: sem {{signUrl}}
     // o pedido de assinatura sai sem a ligação que o cliente precisa
-    // para abrir o documento — a mensagem chega mas não serve.
-    const requiredVar = REQUIRED_TEMPLATE_VARS[input.name || existing.name];
+    // para abrir o documento — a mensagem chega mas não serve. O canal
+    // IN_APP é a confirmação para o staff e deliberadamente não leva link.
+    const requiredVar =
+      (input.channel ?? existing.channel) === "IN_APP"
+        ? undefined
+        : REQUIRED_TEMPLATE_VARS[input.name || existing.name];
     if (
       requiredVar &&
       !(input.body ?? existing.body ?? "").includes(requiredVar)

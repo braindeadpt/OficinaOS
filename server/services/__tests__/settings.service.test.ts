@@ -442,6 +442,40 @@ describe("updateNotificationTemplate", () => {
     expect(prisma.notificationTemplate.update).not.toHaveBeenCalled();
   });
 
+  it("confirmação IN_APP de signature_link não exige {{signUrl}}", async () => {
+    // O modelo IN_APP é a confirmação para o staff ("link enviado a…"),
+    // deliberadamente sem ligação — a variável só é obrigatória nos
+    // canais que entregam ao cliente.
+    (
+      prisma.notificationTemplate.findUnique as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      channel: "IN_APP",
+      id: "template-sig-inapp",
+      name: "signature_link",
+    });
+    (
+      prisma.notificationTemplate.update as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      body: "Link enviado a {{customerName}}",
+      channel: "IN_APP",
+      id: "template-sig-inapp",
+      name: "signature_link",
+    });
+
+    const result = await updateNotificationTemplate(
+      prisma,
+      "template-sig-inapp",
+      {
+        body: "Link enviado a {{customerName}}",
+        channel: "IN_APP",
+        isDefault: false,
+        name: "signature_link",
+      }
+    );
+
+    expect(result).toHaveProperty("body", "Link enviado a {{customerName}}");
+  });
+
   it("rename + mudança de canal não migra a fila WHATSAPP", async () => {
     (
       prisma.notificationTemplate.findUnique as ReturnType<typeof vi.fn>
