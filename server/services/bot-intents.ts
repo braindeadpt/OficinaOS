@@ -626,7 +626,13 @@ function routeIntent(
     }
     // «Chegada da peça» pergunta pela peça em falta — se há peças
     // registadas, responde com a data esperada da peça (não o estado).
-    if (PART_ETA_RE.test(lower) && (target.partsWaiting?.length ?? 0) > 0) {
+    // Em reparações concluídas os registos podem ficar por apagar —
+    // cai no estado («Pronto para levantar») como no statusText.
+    if (
+      PART_ETA_RE.test(lower) &&
+      (target.partsWaiting?.length ?? 0) > 0 &&
+      !(COMPLETED_STATUSES as string[]).includes(target.status)
+    ) {
       return {
         customerName,
         escalate: false,

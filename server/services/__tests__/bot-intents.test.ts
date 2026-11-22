@@ -354,6 +354,32 @@ describe("composeReply — deterministic rules before AI", () => {
     expect(out.text).not.toContain("Ecrã iPhone 13");
   });
 
+  it("«quando chega a peça» numa reparação pronta não repete peças stale", async () => {
+    const { ctx } = makeCtx({
+      customers: [cust],
+      jobs: [
+        job({
+          partsWaiting: [
+            {
+              expectedAt: new Date("2026-12-05T12:00:00Z"),
+              partName: "Ecrã iPhone 13",
+            },
+          ],
+          quotes: [],
+          status: "DONE",
+        }),
+      ],
+    });
+    const out = await composeReply(
+      ctx,
+      msg("Qual é a previsão de chegada da peça?")
+    );
+    expect(mocks.askBotAi).not.toHaveBeenCalled();
+    expect(out.text).toContain("Pronto para levantar");
+    expect(out.text).not.toContain("Peças em falta");
+    expect(out.text).not.toContain("Ecrã iPhone 13");
+  });
+
   it("«previsão para o preço» é pergunta de orçamento", async () => {
     const { ctx } = makeCtx({
       customers: [cust],
