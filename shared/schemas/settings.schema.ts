@@ -103,6 +103,10 @@ export const updateShopSettingsSchema = z
       data.currency !== undefined ||
       data.receiptFooter !== undefined ||
       data.intakeTerms !== undefined ||
+      data.botAiEnabled !== undefined ||
+      data.botInfoText !== undefined ||
+      data.botAvgRepairDaysAfterPart !== undefined ||
+      data.botClosedFallbackText !== undefined ||
       data.receiptPaper !== undefined ||
       data.receiptShowImei !== undefined ||
       data.receiptShowProblem !== undefined ||

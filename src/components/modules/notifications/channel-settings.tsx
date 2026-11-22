@@ -499,15 +499,17 @@ function BotCard() {
     try {
       await saveShopSettings({
         botAiEnabled: form.enabled,
-        botAvgRepairDaysAfterPart: Number.parseInt(form.avgDays, 10) || 1,
+        botAvgRepairDaysAfterPart:
+          form.avgDays.trim() === ""
+            ? 1
+            : Math.max(0, Number.parseInt(form.avgDays, 10) || 0),
         botClosedFallbackText: form.fallback || null,
         botInfoText: form.info || null,
-        shopName: shopSettings?.shopName ?? "",
       });
     } finally {
       setSaving(false);
     }
-  }, [form, saveShopSettings, shopSettings?.shopName]);
+  }, [form, saveShopSettings]);
 
   return (
     <div className="mt-4 rounded-2xl bg-surface-container-low p-5">

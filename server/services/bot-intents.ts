@@ -38,7 +38,12 @@ const QUOTE_STATUS_PT: Record<string, string> = {
 };
 
 const JOB_CODE_RE = /REP-\d{4}-\d{6}-[A-Z0-9]{3}/i;
-const QUOTE_RE = /or[çc]amento|pre[çc]o|quanto|custa/i;
+const INTL_PREFIX_RE = /^00/;
+const QUOTE_RE = /or[çc]amento|pre[çc]o|quanto(?!.{0,10}tempo)|custa/i;
+// "quanto tempo falta" / "quando fica pronto" — perguntas de prazo têm
+// resposta determinística própria, antes do ramo de orçamento ("quanto").
+const TIME_RE =
+  /quanto tempo|quando.{0,25}(pronto|fica|está|esta|entrega)|demora|falta.{0,15}pront|previs[aã]o|prazo/i;
 // "ok" is deliberately absent — a bare "ok" in casual conversation
 // must not legally accept a quote.
 const YES_WORDS = new Set(["sim", "aceito", "confirmo", "aprovo"]);
@@ -90,6 +95,9 @@ export interface BotReplyCtx {
   portalEnabled?: boolean;
   prisma: PrismaClient;
   shopLabel: string;
+  /** IANA timezone da loja — datas apresentadas ao cliente (previsões,
+   *  chegadas de peças) renderizam-se aqui, não no fuso do servidor. */
+  timezone?: string;
 }
 
 export function rateOk(phone: string, limit = MSG_LIMIT_PER_HOUR): boolean {
@@ -181,7 +189,9 @@ function statusText(ctx: BotReplyCtx, job: ActiveJob): string {
     STATUS_PT[job.status] ?? job.status
   }*.`;
   if (job.estimatedDate) {
-    text += ` Previsão: ${job.estimatedDate.toLocaleDateString("pt-PT")}.`;
+    text += ` Previsão: ${job.estimatedDate.toLocaleDateString("pt-PT", {
+      timeZone: ctx.timezone ?? "Europe/Lisbon",
+    })}.`;
   }
   const q = job.quotes[0];
   if (q?.status === "SENT") {
@@ -263,23 +273,41 @@ interface CustomerMatch {
   jobs: ActiveJob[];
 }
 
-/** Casa o remetente com clientes (últimos 9 dígitos) e traz jobs ativos. */
+/** Casa o remetente com clientes e traz jobs ativos.
+ *
+ * Remetente com número nacional PT (9 dígitos) ou +351 casa pelo sufixo
+ * — a loja pode ter o número guardado sem indicativo. Remetente com
+ * outro indicativo só casa por número completo: os últimos 9 dígitos de
+ * um +34 são iguais aos de um cliente PT e o bot daria a ficha dele a um
+ * estranho (sec: a ficha leva histórico e dados da reparação).
+ */
 async function findCustomerJobs(
   ctx: BotReplyCtx,
   fromPhone: string
 ): Promise<CustomerMatch> {
-  const last9 = fromPhone.slice(-9);
-  const last4 = fromPhone.slice(-4);
-  if (last9.length < 9 || last4.length < 4) {
+  const senderDigits = fromPhone
+    .replace(DIGITS_RE, "")
+    .replace(INTL_PREFIX_RE, "");
+  const PT_CC = "351";
+  const isPtSender =
+    senderDigits.length === 9 ||
+    (senderDigits.startsWith(PT_CC) && senderDigits.length === 12);
+  const last9 = senderDigits.slice(-9);
+  const last4 = senderDigits.slice(-4);
+  if ((isPtSender && last9.length < 9) || last4.length < 4) {
     return { customers: [], jobs: [] };
   }
   const candidates = await ctx.prisma.customer.findMany({
     where: { phone: { endsWith: last4 } },
     select: { id: true, name: true, phone: true },
   });
-  const customers = candidates.filter(
-    (c) => c.phone.replace(DIGITS_RE, "").slice(-9) === last9
-  );
+  const customers = candidates.filter((c) => {
+    const cd = c.phone.replace(DIGITS_RE, "").replace(INTL_PREFIX_RE, "");
+    if (cd === senderDigits) {
+      return true;
+    }
+    return isPtSender && cd.slice(-9) === last9;
+  });
   if (customers.length === 0) {
     return { customers, jobs: [] };
   }
@@ -458,6 +486,7 @@ async function tryBotAiReply(
     portalApiUrl: ctx.portalApiUrl ?? null,
     portalEnabled: ctx.portalEnabled ?? false,
     prisma: ctx.prisma,
+    timezone: ctx.timezone,
     shopCard: {
       botAvgRepairDaysAfterPart: ai.avgRepairDaysAfterPart,
       botInfoText: ai.botInfoText,
@@ -517,6 +546,26 @@ function routeIntent(
   direct: ActiveJob | undefined,
   lower: string
 ): BotReply {
+  if (TIME_RE.test(lower)) {
+    const target = direct ?? (jobs.length === 1 ? jobs[0] : undefined);
+    if (!target) {
+      return {
+        customerName,
+        escalate: false,
+        jobId: null,
+        text: `Tens ${jobs.length} reparações em curso: ${jobs
+          .map((j) => j.jobCode)
+          .join(", ")}. Responde com o código para veres a previsão.`,
+      };
+    }
+    return {
+      customerName,
+      escalate: false,
+      jobId: target.id,
+      text: statusText(ctx, target),
+    };
+  }
+
   if (QUOTE_RE.test(lower)) {
     const target = direct ?? (jobs.length === 1 ? jobs[0] : undefined);
     if (!target) {

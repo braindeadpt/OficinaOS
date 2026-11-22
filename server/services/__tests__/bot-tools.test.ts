@@ -23,10 +23,12 @@ const viewJob = {
   jobCode: OWN_CODE,
   loanerReturnedAt: null,
   notes: [],
+  partsUsed: [],
   partsWaiting: [],
   payments: [],
   portalPublishedAt: null,
   quotes: [],
+  repairs: [{ price: { toNumber: () => 100 } }],
   status: "IN_REPAIR",
   warrantyForJobId: null,
 };

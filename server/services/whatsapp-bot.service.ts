@@ -122,6 +122,7 @@ export async function syncWhatsAppBot(
     portalApiUrl: apiUrl,
     portalEnabled: modules.includes("portal"),
     prisma,
+    timezone: settings.timezone ?? undefined,
     settings,
     shopLabel:
       [settings.shopName, settings.phone].filter(Boolean).join(" · ") ||

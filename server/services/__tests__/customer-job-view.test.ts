@@ -26,6 +26,7 @@ const makeJob = () => ({
     { content: "Customer-facing note" },
     { content: "Another visible note" },
   ],
+  partsUsed: [{ totalCost: dec(40) }],
   partsWaiting: [
     {
       expectedAt: new Date(Date.now() + 2 * 86_400_000),
@@ -36,6 +37,7 @@ const makeJob = () => ({
   payments: [{ amount: dec(30) }],
   portalPublishedAt: new Date(),
   quotes: [{ amount: dec(200), status: "SENT", version: 1 }],
+  repairs: [{ price: dec(160) }],
   status: "WAITING_FOR_PARTS",
   warrantyForJobId: null,
   // Fields that exist on the model but were NOT selected — vistaCliente must
@@ -93,7 +95,8 @@ describe("vistaCliente", () => {
     const view = vistaCliente(makeJob() as never, ctx);
     expect(view.valores.pago).toContain("30");
     expect(view.valores.estimado).toContain("200");
-    expect(view.valores.emFalta).toContain("170");
+    // Saldo real: 40 peças + 160 serviços − 50 sinal − 30 pago = 120.
+    expect(view.valores.emFalta).toContain("120");
     expect(view.valores.sinal).toContain("50");
   });
 

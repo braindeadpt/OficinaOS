@@ -107,7 +107,7 @@ interface SettingsState {
     taxName?: string;
   }) => Promise<void>;
   saveShopSettings: (data: {
-    shopName: string;
+    shopName?: string;
     address?: string;
     phone?: string;
     countryCode?: string;

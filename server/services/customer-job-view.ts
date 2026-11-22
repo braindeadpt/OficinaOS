@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from "@generated/client";
+import { computeJobBalance } from "./payment.service.js";
 import { portalUrl } from "./portal.service.js";
 
 /**
@@ -12,7 +13,7 @@ import { portalUrl } from "./portal.service.js";
  * lista de chaves — qualquer campo novo passa por revisão explícita.
  */
 
-const JOB_STATUS_PT: Record<string, string> = {
+export const JOB_STATUS_PT: Record<string, string> = {
   INTAKE: "Recebido",
   WAITING_FOR_PARTS: "À espera de peças",
   IN_REPAIR: "Em reparação",
@@ -54,12 +55,14 @@ const VIEW_SELECT = {
     select: { content: true },
     where: { isCustomerVisible: true },
   },
+  partsUsed: { select: { totalCost: true } },
   partsWaiting: {
     orderBy: { createdAt: "asc" as const },
     select: { expectedAt: true, partName: true },
   },
   payments: { select: { amount: true } },
   portalPublishedAt: true,
+  repairs: { select: { price: true } },
   quotes: {
     orderBy: { version: "desc" as const },
     select: { amount: true, status: true, version: true },
@@ -99,6 +102,9 @@ export interface CustomerViewCtx {
   portalApiUrl: string | null;
   /** Active module ids — portal link only when "portal" is entitled. */
   portalEnabled: boolean;
+  /** IANA timezone da loja — datas "dia cheio" renderizam-se aqui, não em
+   *  UTC (meia-noite local vira o dia anterior em UTC no verão). */
+  timezone?: string;
 }
 
 function eur(ctx: CustomerViewCtx, n: number): string {
@@ -108,8 +114,12 @@ function eur(ctx: CustomerViewCtx, n: number): string {
   }).format(n);
 }
 
-function isoDate(d: Date | null): string | null {
-  return d ? d.toISOString().slice(0, 10) : null;
+/** YYYY-MM-DD no fuso da loja (não no fuso UTC do servidor). */
+function isoDate(d: Date | null, tz: string): string | null {
+  if (!d) {
+    return null;
+  }
+  return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(d);
 }
 
 /** Constrói a ficha do cliente a partir de um Job já carregado com VIEW_SELECT. */
@@ -132,17 +142,22 @@ export function vistaCliente(
       ? Math.floor((Date.now() - job.estimatedDate.getTime()) / MS_PER_DAY)
       : 0;
 
+  const tz = ctx.timezone ?? "Europe/Lisbon";
   const quote = job.quotes[0];
   const pago = job.payments.reduce((acc, p) => acc + p.amount.toNumber(), 0);
   const estimado = job.estimatedCost?.toNumber() ?? null;
-  const emFalta = estimado === null ? null : Math.max(0, estimado - pago);
+  // Em falta = o saldo real da reparação (peças+serviços − sinal − pagos),
+  // não "estimado − pago": cobranças reais e o sinal mudam o valor.
+  const { balanceDue } = computeJobBalance(job);
+  const emFalta =
+    job.partsUsed.length + job.repairs.length === 0 ? null : balanceDue;
 
   const openExternal = job.externalRepairs.find((r) => r.status === "SENT");
 
   return {
     aparelho,
     codigo: job.jobCode,
-    dataPrevista: isoDate(job.estimatedDate),
+    dataPrevista: isoDate(job.estimatedDate, tz),
     diasAtraso,
     emPausa,
     emprestimo: job.hasLoanerDevice && job.loanerReturnedAt === null,
@@ -161,11 +176,11 @@ export function vistaCliente(
         }
       : null,
     pecasEmEspera: job.partsWaiting.map((p) => ({
-      chegadaPrevista: isoDate(p.expectedAt),
+      chegadaPrevista: isoDate(p.expectedAt, tz),
       nome: p.partName,
     })),
     reparacaoExterna: openExternal
-      ? { regressoPrevisto: isoDate(openExternal.expectedReturnAt) }
+      ? { regressoPrevisto: isoDate(openExternal.expectedReturnAt, tz) }
       : null,
     valores: {
       emFalta: emFalta === null ? null : eur(ctx, emFalta),

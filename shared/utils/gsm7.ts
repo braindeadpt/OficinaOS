@@ -117,7 +117,7 @@ export function smsSegmentCount(text: string): number {
 /** Full transliteration into GSM-7 — every automatic/AI SMS reply uses this. */
 export function toSmsText(text: string): string {
   let out = "";
-  for (const ch of text) {
+  for (const ch of text.normalize("NFKC")) {
     if (isGsm7Char(ch)) {
       out += ch;
     } else {

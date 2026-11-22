@@ -60,3 +60,14 @@ describe("staffSmsText", () => {
     expect(smsSegmentCount(out)).toBe(1);
   });
 });
+
+describe("NBSP em preços", () => {
+  it("non-breaking space antes do € vira espaço normal, não '?'", () => {
+    // Intl.NumberFormat pt-PT usa U+00A0 — sem normalização saía "100,00?€".
+    const formatted = new Intl.NumberFormat("pt-PT", {
+      currency: "EUR",
+      style: "currency",
+    }).format(100);
+    expect(toSmsText(formatted)).toBe("100,00 €");
+  });
+});

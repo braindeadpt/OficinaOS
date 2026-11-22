@@ -138,6 +138,54 @@ describe("composeReply — deterministic rules before AI", () => {
     expect(out.text).toBe("Fechamos às 18h.");
   });
 
+  it("remetente +34 com os mesmos 9 dígitos não vê a ficha do cliente PT", async () => {
+    // Cliente guardado sem indicativo; remetente espanhol com o mesmo
+    // sufixo — antes casava por sufixo e expunha histórico/valores.
+    const { ctx } = makeCtx({
+      customers: [{ ...cust, phone: "912345678" }],
+      jobs: [job()],
+    });
+    const out = await composeReply(ctx, {
+      createdAt: new Date().toISOString(),
+      fromPhone: "34912345678",
+      id: "m2",
+      messageType: "text",
+      text: "estado da minha reparação",
+    });
+    expect(out.text).toContain("Não encontrei reparações");
+  });
+
+  it("remetente PT sem indicativo continua a casar pelo sufixo", async () => {
+    const { ctx } = makeCtx({
+      customers: [cust],
+      jobs: [job({ quotes: [] })],
+    });
+    const out = await composeReply(ctx, {
+      createdAt: new Date().toISOString(),
+      fromPhone: "912345678",
+      id: "m3",
+      messageType: "text",
+      text: "estado",
+    });
+    expect(out.text).toContain("REP-2024-000001-AAA");
+  });
+
+  it('"quanto tempo falta" recebe a previsão, não o orçamento', async () => {
+    const { ctx } = makeCtx({
+      customers: [cust],
+      jobs: [
+        job({
+          estimatedDate: new Date("2026-12-30T12:00:00Z"),
+          quotes: [],
+        }),
+      ],
+    });
+    const out = await composeReply(ctx, msg("quanto tempo falta?"));
+    expect(mocks.askBotAi).not.toHaveBeenCalled();
+    expect(out.text).toContain("Previsão");
+    expect(out.text).not.toContain("orçamento de");
+  });
+
   it("AI timeout/failure falls back to deterministic reply", async () => {
     mocks.askBotAi.mockResolvedValueOnce(null);
     const { ctx } = makeCtx({ ai: aiCfg, customers: [cust], jobs: [job()] });

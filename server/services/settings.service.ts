@@ -21,6 +21,7 @@ import {
   upsertShopSettings as upsertShopSettingsRepo,
 } from "../repositories/settings.repository.js";
 import { isModuleEnabled } from "../utils/modules.js";
+import { cloudFetch } from "./cloud.service.js";
 import { generateSmsWebhookToken } from "./sms.service.js";
 
 function endpointOrigin(endpoint: string) {
@@ -218,10 +219,42 @@ export async function upsertShopSettings(
   prisma: PrismaClient,
   input: UpdateShopSettingsInput
 ) {
-  return await upsertShopSettingsRepo(prisma, {
+  const saved = await upsertShopSettingsRepo(prisma, {
     create: shopCreate(input),
     update: shopUpdate(input),
     where: { id: "default" },
+  });
+  // O texto "loja fechada" também vive na Cloud — o fallback do §E.10
+  // corre lá quando o PC está desligado. Fire-and-forget: uma falha de
+  // rede nunca bloqueia o save local (a Cloud fica com o último valor
+  // que chegou; o próximo save volta a empurrar).
+  if (input.botClosedFallbackText !== undefined) {
+    pushClosedTextToCloud(prisma, input.botClosedFallbackText).catch(
+      () => null
+    );
+  }
+  return saved;
+}
+
+async function pushClosedTextToCloud(
+  prisma: PrismaClient,
+  text: string | null
+): Promise<void> {
+  const settings = await prisma.shopSettings.findUnique({
+    select: { cloudApiUrl: true, cloudShopTokenEncrypted: true },
+    where: { id: "default" },
+  });
+  if (!(settings?.cloudApiUrl && settings.cloudShopTokenEncrypted)) {
+    return;
+  }
+  const token = decryptSecret(settings.cloudShopTokenEncrypted);
+  if (!token) {
+    return;
+  }
+  await cloudFetch(settings.cloudApiUrl, "/shops/bot-settings", {
+    body: { closedFallbackText: text?.trim() || null },
+    method: "PUT",
+    token,
   });
 }
 

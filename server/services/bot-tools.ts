@@ -1,7 +1,35 @@
-import type { PrismaClient } from "@generated/client";
+import { AuditAction, type PrismaClient } from "@generated/client";
 import { ACTIVE_STATUSES } from "@shared/constants/job-statuses.js";
 import type { FastifyBaseLogger } from "fastify";
-import { type CustomerViewCtx, loadVistaCliente } from "./customer-job-view.js";
+import {
+  type CustomerViewCtx,
+  JOB_STATUS_PT,
+  loadVistaCliente,
+} from "./customer-job-view.js";
+
+/** Primeira transição para estado final (DELIVERED/RETURNED/CANCELLED ou
+ *  DONE) por job — a data de fecho real, imune a edições posteriores. */
+async function closedAtByJob(
+  prisma: PrismaClient,
+  jobIds: string[]
+): Promise<Map<string, Date>> {
+  const rows = await prisma.auditLog.findMany({
+    orderBy: { createdAt: "asc" },
+    select: { createdAt: true, jobId: true, toValue: true },
+    where: {
+      action: AuditAction.STATUS_CHANGED,
+      jobId: { in: jobIds },
+      toValue: { in: ["DONE", "DELIVERED", "RETURNED", "CANCELLED"] },
+    },
+  });
+  const map = new Map<string, Date>();
+  for (const r of rows) {
+    if (r.jobId && !map.has(r.jobId)) {
+      map.set(r.jobId, r.createdAt);
+    }
+  }
+  return map;
+}
 
 /**
  * Ferramentas fechadas que o bot de IA pode invocar (§E.4 do plano).
@@ -129,6 +157,7 @@ export async function runBotTool(
           device: {
             select: { brand: { select: { name: true } }, model: true },
           },
+          id: true,
           jobCode: true,
           status: true,
           updatedAt: true,
@@ -139,13 +168,22 @@ export async function runBotTool(
           status: { in: ["DONE", "DELIVERED", "RETURNED", "CANCELLED"] },
         },
       });
+      // A data de fecho real vem do audit trail (primeira transição para
+      // um estado final) — updatedAt muda com qualquer edição posterior,
+      // ex.: publicar o link de tracking.
+      const closedAt = await closedAtByJob(
+        ctx.prisma,
+        jobs.map((j) => j.id)
+      );
       return {
         result: {
           historico: jobs.map((j) => ({
             aparelho: `${j.device.brand.name} ${j.device.model}`,
             codigo: j.jobCode,
             estado: vistaClienteStatusPt(j.status),
-            fechadoEm: j.updatedAt.toISOString().slice(0, 10),
+            fechadoEm: (closedAt.get(j.id) ?? j.updatedAt)
+              .toISOString()
+              .slice(0, 10),
           })),
         },
       };
@@ -175,11 +213,5 @@ export async function runBotTool(
 }
 
 function vistaClienteStatusPt(status: string): string {
-  const map: Record<string, string> = {
-    CANCELLED: "Cancelado",
-    DELIVERED: "Entregue",
-    DONE: "Pronto para levantar",
-    RETURNED: "Devolvido",
-  };
-  return map[status] ?? status;
+  return JOB_STATUS_PT[status] ?? status;
 }
