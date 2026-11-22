@@ -239,6 +239,7 @@ describe("composeReply — deterministic rules before AI", () => {
               expectedAt: new Date("2026-12-05T12:00:00Z"),
               partName: "Ecrã iPhone 13",
             },
+            { expectedAt: null, partName: "Bateria" },
           ],
           quotes: [],
           status: "WAITING_FOR_PARTS",
@@ -252,6 +253,9 @@ describe("composeReply — deterministic rules before AI", () => {
     expect(mocks.askBotAi).not.toHaveBeenCalled();
     expect(out.text).toContain("Ecrã iPhone 13");
     expect(out.text).toContain("chegada prevista");
+    // A peça sem data também é nomeada — não fica escondida.
+    expect(out.text).toContain("Bateria");
+    expect(out.text).toContain("sem data prevista");
   });
 
   it("«quando chega a peça» sem data registada diz que ainda não há data", async () => {
@@ -268,7 +272,66 @@ describe("composeReply — deterministic rules before AI", () => {
     const out = await composeReply(ctx, msg("quando chega a peça?"));
     expect(mocks.askBotAi).not.toHaveBeenCalled();
     expect(out.text).toContain("Bateria");
-    expect(out.text).toContain("não indicou a data");
+    expect(out.text).toContain("sem data prevista");
+  });
+
+  it("«prazo da reparação? Já paguei a peça.» responde ao prazo — a peça é contexto", async () => {
+    const { ctx } = makeCtx({
+      customers: [cust],
+      jobs: [
+        job({
+          estimatedDate: new Date("2026-12-03T12:00:00Z"),
+          partsWaiting: [
+            {
+              expectedAt: new Date("2026-12-05T12:00:00Z"),
+              partName: "Ecrã iPhone 13",
+            },
+          ],
+          quotes: [],
+          status: "WAITING_FOR_PARTS",
+        }),
+      ],
+    });
+    const out = await composeReply(
+      ctx,
+      msg("Qual é o prazo da reparação? Já paguei a peça.")
+    );
+    expect(mocks.askBotAi).not.toHaveBeenCalled();
+    // Estado/previsão da reparação em primeiro — a peça vem como contexto.
+    expect(out.text).toContain("está:");
+    expect(out.text).toContain("Previsão");
+  });
+
+  it("responder só com o código mostra a reparação com a data da peça", async () => {
+    const { ctx } = makeCtx({
+      customers: [cust],
+      jobs: [
+        job({
+          partsWaiting: [
+            {
+              expectedAt: new Date("2026-12-05T12:00:00Z"),
+              partName: "Ecrã iPhone 13",
+            },
+          ],
+          quotes: [],
+          status: "WAITING_FOR_PARTS",
+        }),
+      ],
+    });
+    const out = await composeReply(ctx, msg("REP-2024-000001-AAA"));
+    expect(out.text).toContain("está:");
+    expect(out.text).toContain("Ecrã iPhone 13");
+  });
+
+  it("«previsão para o preço» é pergunta de orçamento", async () => {
+    const { ctx } = makeCtx({
+      customers: [cust],
+      jobs: [job({ quotes: [] })],
+    });
+    const out = await composeReply(ctx, msg("Qual é a previsão para o preço?"));
+    expect(mocks.askBotAi).not.toHaveBeenCalled();
+    expect(out.text).toContain("orçamento");
+    expect(out.text).not.toContain("está:");
   });
 
   it("«Qual é a previsão? O preço já sei.» devolve a previsão, não o orçamento", async () => {

@@ -48,13 +48,13 @@ const QUOTE_RE = /or[çc]amento|pre[çc]o|quanto(?!.{0,10}tempo)|custa/i;
 // previsão? O preço já sei." é pergunta de prazo). "está"/"esta" soltos
 // ficam de fora: "Quando está aberta a loja?" não é prazo de reparação.
 const TIME_RE =
-  /quanto tempo|quando.{0,25}(pronto|fica|entrega)|demora|falta.{0,15}pront|previs[aã]o(?!\s+(?:de|do|da|dos|das)\s+pre[çc]o)|prazo(?!\s+(?:de|do|da|dos|das)\s+(?:pre[çc]o|custo|pagamento))/i;
+  /quanto tempo|quando.{0,25}(pronto|fica|entrega)|demora|falta.{0,15}pront|previs[aã]o(?!\s+(?:de|do|da|dos|das|para)\s+(?:(?:o|a|os|as|um|uma)\s+)?pre[çc]o)|prazo(?!\s+(?:de|do|da|dos|das|para)\s+(?:(?:o|a|os|as|um|uma)\s+)?(?:pre[çc]o|custo|pagamento))/i;
 // A peça mencionada junto de chegada/previsão/entrega — pergunta pela peça
 // em falta ("quando chega a peça?", "previsão de chegada da peça"), não
-// pelo estado da reparação.
+// pelo estado da reparação. Só a forma interrogada conta: uma menção à
+// peça noutra frase ("Já paguei a peça.") não desvia o prazo da reparação.
 const PART_ETA_RE =
   /(pe[çc]a|encomenda|componente).{0,25}(chega|chegada|previs|pront|entrega|demora)|(chega|chegada|previs[aã]o).{0,20}(pe[çc]a|encomenda|componente)/i;
-const PART_ASK_RE = /pe[çc]a|encomenda|componente/i;
 // "ok" is deliberately absent — a bare "ok" in casual conversation
 // must not legally accept a quote.
 const YES_WORDS = new Set(["sim", "aceito", "confirmo", "aprovo"]);
@@ -205,6 +205,9 @@ function statusText(ctx: BotReplyCtx, job: ActiveJob): string {
       timeZone: ctx.timezone ?? process.env.TZ ?? "Europe/Lisbon",
     })}.`;
   }
+  if ((job.partsWaiting?.length ?? 0) > 0) {
+    text += ` Peças em falta: ${pendingPartsText(ctx, job)}.`;
+  }
   const q = job.quotes[0];
   if (q?.status === "SENT") {
     text += ` Tens um orçamento de *${eur(
@@ -219,29 +222,31 @@ function statusText(ctx: BotReplyCtx, job: ActiveJob): string {
 
 /** Resposta a «quando chega a peça» — a data esperada da peça em falta,
  *  não o estado da reparação. */
-function partEtaText(ctx: BotReplyCtx, job: ActiveJob): string {
-  const device = `${job.device.brand.name} ${job.device.model}`;
+/** Partes em falta formatadas — cada uma com a data esperada ou
+ *  "sem data prevista"; nunca esconde as que não têm data. */
+function pendingPartsText(ctx: BotReplyCtx, job: ActiveJob): string {
   const tz = ctx.timezone ?? process.env.TZ ?? "Europe/Lisbon";
-  const waiting = job.partsWaiting ?? [];
-  const dated = waiting.filter(
-    (p): p is { expectedAt: Date; partName: string } => p.expectedAt !== null
-  );
-  let text: string;
-  if (dated.length > 0) {
-    const parts = dated
-      .map(
-        (p) =>
-          `${p.partName} — chegada prevista: ${p.expectedAt.toLocaleDateString(
+  return (job.partsWaiting ?? [])
+    .map((p) =>
+      p.expectedAt
+        ? `${p.partName} — chegada prevista: ${p.expectedAt.toLocaleDateString(
             "pt-PT",
             { timeZone: tz }
           )}`
-      )
-      .join("; ");
-    text = `Peças em falta para a tua reparação ${job.jobCode} (${device}): ${parts}.`;
-  } else {
-    const names = waiting.map((p) => p.partName).join(", ");
-    text = `A tua reparação ${job.jobCode} (${device}) está à espera de ${names} — a loja ainda não indicou a data de chegada.`;
-  }
+        : `${p.partName} — sem data prevista`
+    )
+    .join("; ");
+}
+
+/** Resposta a «quando chega a peça» — a data esperada da peça em falta,
+ *  não o estado da reparação. */
+function partEtaText(ctx: BotReplyCtx, job: ActiveJob): string {
+  const device = `${job.device.brand.name} ${job.device.model}`;
+  const tz = ctx.timezone ?? process.env.TZ ?? "Europe/Lisbon";
+  let text = `Peças em falta para a tua reparação ${job.jobCode} (${device}): ${pendingPartsText(
+    ctx,
+    job
+  )}.`;
   if (job.estimatedDate) {
     text += ` Previsão da reparação: ${job.estimatedDate.toLocaleDateString(
       "pt-PT",
@@ -611,7 +616,7 @@ function routeIntent(
     }
     // «Chegada da peça» pergunta pela peça em falta — se há peças
     // registadas, responde com a data esperada da peça (não o estado).
-    if (PART_ASK_RE.test(lower) && (target.partsWaiting?.length ?? 0) > 0) {
+    if (PART_ETA_RE.test(lower) && (target.partsWaiting?.length ?? 0) > 0) {
       return {
         customerName,
         escalate: false,
