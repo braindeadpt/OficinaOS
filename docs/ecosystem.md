@@ -4,6 +4,12 @@
 > interligados. Este documento é o mapa canónico de como tudo se liga; os READMEs
 > de cada repo apontam para aqui.
 
+> **Documentação ao utilizador é parte da mudança.** Qualquer alteração a um
+> módulo Pro, fluxo Cloud, permissão ou comportamento visível ao utilizador
+> implica atualizar os docs no website (`oficinaos-website/src/i18n/{pt,en,es}.ts`
+> — `moduleDocs.<módulo>` e `docs.sections` do guia completo) — na mesma PR ou
+> numa PR geminada ao website. Docs desatualizados são bugs.
+
 ## Os 4 repositórios
 
 | Repo | Pasta local | GitHub | O que é | Stack |
