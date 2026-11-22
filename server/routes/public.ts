@@ -286,7 +286,13 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
         event?: string;
         payload?: { message?: string; phoneNumber?: string; sender?: string };
       };
-      if (body.event === "sms:received") {
+      // Grátis = só envio: inbound responde 200 sem processar (sem bot,
+      // sem gravar). Pro processa aqui quando o device posta à LAN —
+      // em modo servidor é a Cloud que fila e o poller da app trata.
+      const modules = Array.isArray(settings.cloudEntitlements)
+        ? (settings.cloudEntitlements as string[])
+        : [];
+      if (body.event === "sms:received" && modules.includes("sms")) {
         const from = body.payload?.sender ?? body.payload?.phoneNumber;
         const text = body.payload?.message;
         if (from && text) {

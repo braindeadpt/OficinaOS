@@ -63,6 +63,12 @@ function SmsCard({
   });
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const smsCloudDevice = useSettingsStore((s) => s.smsCloudDevice);
+  const fetchSmsCloudDevice = useSettingsStore((s) => s.fetchSmsCloudDevice);
+
+  useEffect(() => {
+    fetchSmsCloudDevice();
+  }, [fetchSmsCloudDevice]);
 
   useEffect(() => {
     if (smsSettings && !loaded) {
@@ -231,6 +237,37 @@ function SmsCard({
                 {t("sms_register_webhook")}
               </Button>
             </div>
+          </div>
+        )}
+
+        {smsCloudDevice?.entitled && (
+          <div className="mt-5 rounded-xl bg-surface-container px-3 py-2.5">
+            <p className="font-medium text-on-surface text-xs">
+              {t("sms_pro_title")}
+            </p>
+            {smsCloudDevice.configured && smsCloudDevice.device ? (
+              <div className="mt-1.5 space-y-1 text-on-surface-variant text-xs">
+                <p>
+                  {smsCloudDevice.device.label}
+                  {smsCloudDevice.device.phoneE164
+                    ? ` · ${smsCloudDevice.device.phoneE164}`
+                    : ""}
+                  {" — "}
+                  {smsCloudDevice.device.offline
+                    ? t("sms_pro_offline")
+                    : t("sms_pro_online")}
+                </p>
+                <p className="break-all">
+                  {t("sms_pro_webhook")}: {smsCloudDevice.device.webhookUrl}
+                </p>
+              </div>
+            ) : (
+              <p className="mt-1.5 text-on-surface-variant text-xs">
+                {smsCloudDevice.reachable
+                  ? t("sms_pro_not_configured")
+                  : t("sms_pro_unreachable")}
+              </p>
+            )}
           </div>
         )}
       </div>

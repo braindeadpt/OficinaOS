@@ -35,6 +35,21 @@ interface SmsSettings {
   moduleEnabled: boolean;
 }
 
+export interface SmsCloudDevice {
+  configured: boolean;
+  device: null | {
+    enabled: boolean;
+    gatewayDeviceId: string;
+    label: string;
+    lastSeenAt: string | null;
+    offline: boolean;
+    phoneE164: string | null;
+    webhookUrl: string;
+  };
+  entitled: boolean;
+  reachable: boolean;
+}
+
 interface WhatsAppSettings {
   businessId: string | null;
   credentialsAtCloud: boolean;
@@ -84,6 +99,7 @@ interface SettingsState {
   fetchOutboxLogs: () => Promise<void>;
   fetchSettings: () => Promise<void>;
   fetchShopSettings: () => Promise<void>;
+  fetchSmsCloudDevice: () => Promise<void>;
   fetchSmsSettings: () => Promise<void>;
   fetchWhatsAppLocalStatus: () => Promise<{ state: EvolutionStatus }>;
   fetchWhatsAppSettings: () => Promise<void>;
@@ -162,6 +178,7 @@ interface SettingsState {
     success: boolean;
   }>;
   shopSettings: ShopSettings | null;
+  smsCloudDevice: SmsCloudDevice | null;
   smsSettings: SmsSettings | null;
   testAiConnection: () => Promise<{ success: boolean; message: string }>;
   updateNotificationTemplate: (
@@ -182,6 +199,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   notificationTemplates: [],
   invoicingSettings: null,
   outboxLogs: [],
+  smsCloudDevice: null,
   smsSettings: null,
   whatsAppSettings: null,
   isLoading: false,
@@ -344,6 +362,16 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     } catch (err: unknown) {
       const message = getErrorMessage(err, i18n.t("errors.fetch_settings"));
       set({ error: message });
+    }
+  },
+
+  fetchSmsCloudDevice: async () => {
+    try {
+      const res = await api.get("/settings/sms-cloud-device");
+      set({ smsCloudDevice: res.data });
+    } catch {
+      // Sem ruído — a loja pode nem estar emparelhada.
+      set({ smsCloudDevice: null });
     }
   },
 

@@ -89,6 +89,23 @@ export async function syncWhatsAppBot(
   // oportunidade — não depende de o dono voltar a gravar as settings.
   await pushCredentialsToCloud(prisma);
 
+  await pollWhatsAppInbound(prisma, apiUrl, token, log, notifyCtx, modules);
+}
+
+/**
+ * Só a parte inbound do sync — o poller rápido (10–15 s) chama isto
+ * sem repetir o registo do phone_number_id nem o push de credenciais,
+ * que ficam no ciclo lento de entitlements.
+ */
+export async function pollWhatsAppInbound(
+  prisma: PrismaClient,
+  apiUrl: string,
+  token: string,
+  log: FastifyBaseLogger,
+  notifyCtx: NotifyContext | undefined,
+  modules: string[] = []
+): Promise<void> {
+  const settings = await getOrCreateShopSettings(prisma);
   const channel = resolveWhatsAppChannel(settings);
   if (!channel) {
     return; // módulo ativo mas WhatsApp por configurar — fila fica a aguardar

@@ -1,5 +1,6 @@
 import { OutboxStatus } from "@generated/client";
 import { AppError } from "@shared/errors/app-error.js";
+import { decryptSecret } from "../lib/crypto.js";
 import { findCustomerByPhone } from "../repositories/customer.repository.js";
 import {
   createOutboxEntry,
@@ -12,7 +13,9 @@ import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import { logger } from "../utils/logger.js";
 import { renderTemplate } from "./notification-renderer.js";
-import { decryptSmsConfig, sendSms } from "./sms.service.js";
+import { formatPhone } from "./notification-sender.js";
+import { decryptSmsConfig, type SendResult, sendSms } from "./sms.service.js";
+import { type CloudCredentials, sendSmsViaCloud } from "./sms-cloud.service.js";
 import {
   resolveWhatsAppChannel,
   sendWhatsAppText,
@@ -253,7 +256,7 @@ async function processWhatsAppEntry(
 async function processSmsEntry(
   prisma: DbClient,
   entry: OutboxEntry,
-  config: { password: string; url: string; user: string },
+  channels: SmsChannels,
   countryCode: string,
   shopPhone: string | null
 ): Promise<void> {
@@ -264,12 +267,39 @@ async function processSmsEntry(
   if (blocked) {
     return;
   }
-  const result = await sendSms(
-    config,
-    entry.recipientPhone,
-    entry.renderedBody,
-    countryCode
-  );
+  // Pro: envia pela Cloud (device da loja ou pool) — o id do outbox é o
+  // dedupeId para a Cloud não repetir um envio já aceite. Se a Cloud
+  // falhar, o gateway LAN (se configurado) é o fallback; relatórios de
+  // entrega voltam como REPORT na fila inbound.
+  let result: SendResult | null = null;
+  if (channels.cloud) {
+    const jobCode = entry.jobId
+      ? (
+          await prisma.job.findUnique({
+            select: { jobCode: true },
+            where: { id: entry.jobId },
+          })
+        )?.jobCode
+      : undefined;
+    result = await sendSmsViaCloud(channels.cloud, {
+      dedupeId: entry.id,
+      jobCode,
+      text: entry.renderedBody,
+      to: formatPhone(entry.recipientPhone, countryCode),
+    }).catch((err) => ({
+      error: err instanceof Error ? err.message : "CLOUD_UNREACHABLE",
+      success: false,
+    }));
+  }
+  if (!result?.success && channels.local) {
+    result = await sendSms(
+      channels.local,
+      entry.recipientPhone,
+      entry.renderedBody,
+      countryCode
+    );
+  }
+  result ??= { error: "SMS channel unavailable", success: false };
   if (result.success) {
     await markSent(prisma, entry.id);
     return;
@@ -289,8 +319,14 @@ async function processSmsEntry(
   }
 }
 
+interface SmsChannels {
+  /** Credenciais cloud — só preenchidas com o entitlement "sms" ativo. */
+  cloud: CloudCredentials | null;
+  local: { password: string; url: string; user: string } | null;
+}
+
 interface ChannelConfigs {
-  sms: { password: string; url: string; user: string } | null;
+  sms: SmsChannels | null;
   whatsapp: WhatsAppChannel | null;
 }
 
@@ -418,22 +454,30 @@ type ShopSettingsRow = NonNullable<
   Awaited<ReturnType<typeof findShopSettingsUnique>>
 >;
 
-function getSmsConfig(row: ShopSettingsRow | null): {
-  password: string;
-  url: string;
-  user: string;
-} | null {
-  // SMS local (gateway Android) é free; o entitlement "sms" gateia só
-  // transportes geridos — um provider cloud futuro resolve-se aqui à
-  // parte, com a sua própria verificação de entitlement.
-  if (!row?.smsEnabled) {
+function getSmsConfig(row: ShopSettingsRow | null): SmsChannels | null {
+  // Grátis = gateway LAN; Pro (entitlement "sms") = envio pela Cloud
+  // com fallback para o LAN quando este também está configurado.
+  const modules = Array.isArray(row?.cloudEntitlements)
+    ? (row?.cloudEntitlements as string[])
+    : [];
+  const cloud =
+    modules.includes("sms") && row?.cloudApiUrl && row?.cloudShopTokenEncrypted
+      ? {
+          apiUrl: row.cloudApiUrl,
+          token: decryptSecret(row.cloudShopTokenEncrypted),
+        }
+      : null;
+  const local = row?.smsEnabled
+    ? decryptSmsConfig({
+        gatewayPasswordEncrypted: row.smsGatewayPasswordEncrypted,
+        gatewayUrl: row.smsGatewayUrl,
+        gatewayUser: row.smsGatewayUser,
+      })
+    : null;
+  if (!(cloud || local)) {
     return null;
   }
-  return decryptSmsConfig({
-    gatewayPasswordEncrypted: row.smsGatewayPasswordEncrypted,
-    gatewayUrl: row.smsGatewayUrl,
-    gatewayUser: row.smsGatewayUser,
-  });
+  return { cloud, local };
 }
 
 export async function getOutboxLogs(

@@ -53,6 +53,7 @@ import {
   registerSmsWebhook,
   sendSms,
 } from "../services/sms.service.js";
+import { getSmsDeviceStatus } from "../services/sms-cloud.service.js";
 import { getUpdateState, startUpdate } from "../services/update.service.js";
 import { pushCredentialsToCloud } from "../services/whatsapp-channel.js";
 import { isModuleEnabled } from "../utils/modules.js";
@@ -223,6 +224,17 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
     },
     async (_req, reply) =>
       reply.send(await syncCloudEntitlements(app.prisma, app.log))
+  );
+
+  app.get(
+    "/sms-cloud-device",
+    {
+      schema: {
+        tags: ["settings"],
+        summary: "SMS Pro cloud gateway device status",
+      },
+    },
+    async (_req, reply) => reply.send(await getSmsDeviceStatus(app.prisma))
   );
 
   app.delete(
