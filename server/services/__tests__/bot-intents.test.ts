@@ -101,6 +101,17 @@ describe("composeReply — deterministic rules before AI", () => {
     expect(out.text).toContain("aceite");
   });
 
+  it("stale sim (allowQuoteDecision=false) never decides a quote", async () => {
+    // Mensagem >23h na Meta oficial: o orçamento pendente pode ser mais
+    // recente que a mensagem — decidir registava a resposta no errado.
+    const { ctx } = makeCtx({ ai: aiCfg, customers: [cust], jobs: [job()] });
+    const out = await composeReply(ctx, msg("sim"), false, {
+      allowQuoteDecision: false,
+    });
+    expect(mocks.respondToQuote).not.toHaveBeenCalled();
+    expect(out.text).toBe("");
+  });
+
   it("sim retry on an already-approved quote re-confirms (idempotent)", async () => {
     // A resposta à primeira decisão não saiu (falha de envio); o cliente
     // reenviou SIM. O orçamento está APPROVED — confirmar de novo em vez

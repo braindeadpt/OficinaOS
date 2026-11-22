@@ -345,9 +345,15 @@ async function processOne(
   // escrever…") — contar só depois do envio deixava duas mensagens
   // segundos apartadas passarem as duas pelo último slot.
   dayCount += 1;
-  await handleInboundMessage(ctx, msg, {
+  const out = await handleInboundMessage(ctx, msg, {
     channelLabel: "WhatsApp",
     rateLimitPerHour: RATE_LIMIT_PER_HOUR,
     send: makeSend(prisma, ctx, config, msg, log),
   });
+  // Descartada pelo limite horário por número — a vaga diária não foi
+  // realmente usada: devolve-a para um cliente abusivo não esgotar o
+  // teto dos outros.
+  if (out === null) {
+    dayCount -= 1;
+  }
 }

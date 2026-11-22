@@ -27,7 +27,9 @@ import {
   type WhatsAppChannel,
 } from "./whatsapp-channel.js";
 import {
+  metaConditionalVars,
   orderedTemplateParams,
+  syncWhatsAppTemplates,
   TEMPLATE_LANG,
 } from "./whatsapp-templates.service.js";
 
@@ -48,6 +50,23 @@ export const STAFF_INITIATED_TEMPLATES: ReadonlySet<string> = new Set([
 // re-tenta de meia em meia hora até a revisão resolver ou o deliverBy
 // cortar (cancelIfExpired).
 const TEMPLATE_DEFER_MS = 30 * 60 * 1000;
+
+// Re-sync de estados Meta despoletado por entradas deferidas — no máximo
+// uma vez por TEMPLATE_RESYNC_MIN_MS para não martelar a Graph a cada
+// ciclo do poller.
+const TEMPLATE_RESYNC_MIN_MS = 10 * 60 * 1000;
+let lastTemplateResyncAt = 0;
+
+function maybeResyncTemplates(prisma: DbClient): void {
+  const now = Date.now();
+  if (now - lastTemplateResyncAt < TEMPLATE_RESYNC_MIN_MS) {
+    return;
+  }
+  lastTemplateResyncAt = now;
+  syncWhatsAppTemplates(prisma).catch((err) =>
+    logger.warn({ err }, "outbox: template re-sync failed")
+  );
+}
 
 /** Estado conhecido do template no último sync — null = sem registo. */
 function templateStatusOf(
@@ -117,6 +136,8 @@ export async function queueNotification(
   data: {
     deliverBy?: Date;
     jobId?: string;
+    /** Vars de {{if}} garantidas pela config — mesmas usadas no sync Meta. */
+    metaKeep?: Record<string, boolean>;
     templateName: string;
     channel: "WHATSAPP" | "SMS";
     recipientPhone: string;
@@ -138,7 +159,11 @@ export async function queueNotification(
     // criar o template na conta da loja).
     templateParams:
       data.channel === "WHATSAPP"
-        ? orderedTemplateParams(data.templateBody, data.templateVars)
+        ? orderedTemplateParams(
+            data.templateBody,
+            data.templateVars,
+            data.metaKeep
+          )
         : undefined,
   });
 }
@@ -282,6 +307,10 @@ async function processWhatsAppEntry(
         nextRetryAt: new Date(Date.now() + TEMPLATE_DEFER_MS),
         status: OutboxStatus.QUEUED,
       });
+      // O estado guardado pode estar velho — a Meta aprova templates sem
+      // avisar. Re-sincroniza em background (throttled) para desbloquear
+      // a fila sem precisar de ação manual nas Definições.
+      maybeResyncTemplates(prisma);
       return;
     }
   }
@@ -619,6 +648,7 @@ export async function testNotification(prisma: DbClient, templateId: string) {
   }
   await queueNotification(prisma, {
     channel: template.channel,
+    metaKeep: metaConditionalVars(shop ?? {}),
     recipientPhone: phone,
     templateBody: template.body,
     templateName: template.name,

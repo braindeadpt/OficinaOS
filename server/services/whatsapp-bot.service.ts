@@ -197,6 +197,10 @@ async function processInbound(
   }
   try {
     const out = await handleInboundMessage(ctx, msg, {
+      // Fora da janela: SIM/NÃO não decide — o orçamento pendente pode
+      // ter sido enviado depois desta mensagem e a decisão ficaria
+      // registada no errado sem confirmação ao cliente.
+      allowQuoteDecision: !stale,
       channelLabel: "WhatsApp",
       // Fora da janela: Meta rejeita texto livre — corre o pipeline
       // (PARAR/SIM/NÃO/escalada) com envio suprimido.

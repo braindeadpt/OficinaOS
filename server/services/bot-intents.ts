@@ -66,6 +66,11 @@ const NO_WORDS = new Set(["não", "nao", "recuso", "rejeito"]);
 // todos os canais automáticos. Exact-match como SIM/NÃO: frases com
 // "parar" embutido não tiram consentimento por acidente.
 const STOP_WORDS = new Set(["parar", "stop"]);
+
+/** Opt-out transversal — true para PARAR/STOP exatos (case-insensitive). */
+export function isStopText(text: string): boolean {
+  return STOP_WORDS.has(text.trim().toLowerCase());
+}
 const HUMAN_RE = /ajuda|humano|atendimento|operador|pessoa|urgente/i;
 const DIGITS_RE = /\D/g;
 const WA_BOLD_RE = /\*/g;
@@ -457,7 +462,8 @@ function listJobsText(customerName: string | null, jobs: ActiveJob[]): string {
 export async function composeReply(
   ctx: BotReplyCtx,
   msg: InboundMessage,
-  plainText = false
+  plainText = false,
+  opts: { allowQuoteDecision?: boolean } = {}
 ): Promise<BotReply> {
   const { customers, jobs } = await findCustomerJobs(ctx, msg.fromPhone);
   if (customers.length === 0) {
@@ -500,7 +506,18 @@ export async function composeReply(
   }
 
   // SIM/NÃO — decisão vinculativa de orçamento: SEMPRE determinístico.
+  // Em mensagens velhas (>23h na Meta oficial) a decisão não se aplica —
+  // o cliente pode estar a responder a outro orçamento; nunca decidir
+  // sem poder confirmar na hora.
   if (YES_WORDS.has(lower) || NO_WORDS.has(lower)) {
+    if (opts.allowQuoteDecision === false) {
+      return {
+        customerName,
+        escalate: false,
+        jobId: targetJobId,
+        text: "",
+      };
+    }
     const reply = await answerQuote(
       ctx,
       msg,
@@ -616,6 +633,8 @@ async function tryBotAiReply(
  * depois de envio confirmado); null = flood descartada sem resposta.
  */
 export interface InboundTransport {
+  /** Meta oficial fora da janela de 24h: SIM/NÃO não decide orçamentos. */
+  allowQuoteDecision?: boolean;
   channelLabel: string;
   plainText?: boolean;
   /** Evolution usa 10/h; oficial e SMS ficam no default de 20/h. */
@@ -631,7 +650,9 @@ export async function handleInboundMessage(
   if (!rateOk(msg.fromPhone, t.rateLimitPerHour)) {
     return null;
   }
-  const out = await composeReply(ctx, msg, t.plainText);
+  const out = await composeReply(ctx, msg, t.plainText, {
+    allowQuoteDecision: t.allowQuoteDecision,
+  });
   let sent = true;
   if (out.text.length > 0) {
     try {

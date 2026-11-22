@@ -29,7 +29,7 @@ export const TEMPLATE_LANG = "pt_PT";
 const TEMPLATE_CATEGORY = "UTILITY";
 const META_NAME_RE = /^[a-z0-9_]+$/;
 const VAR_RE = /\{\{(\w+)\}\}/g;
-const CONDITIONAL_BLOCK_RE = /\{\{if \w+\}\}[\s\S]*?\{\{endif\}\}/g;
+const CONDITIONAL_BLOCK_RE = /\{\{if (\w+)\}\}([\s\S]*?)\{\{endif\}\}/g;
 const LEFTOVER_MARKER_RE = /\{\{\/?(?:if|endif|else)(?: \w+)?\}\}/g;
 
 /**
@@ -39,10 +39,11 @@ const LEFTOVER_MARKER_RE = /\{\{\/?(?:if|endif|else)(?: \w+)?\}\}/g;
  */
 export function orderedTemplateParams(
   body: string,
-  vars: Record<string, string>
+  vars: Record<string, string>,
+  keep?: Record<string, boolean>
 ): string[] {
   const order: string[] = [];
-  const spec = deriveMetaTemplate("_", stripConditionals(body));
+  const spec = deriveMetaTemplate("_", expandConditionals(body, keep ?? {}));
   for (const v of spec.vars) {
     order.push(vars[v] ?? "");
   }
@@ -88,13 +89,34 @@ export function deriveMetaTemplate(
   return { body: meta, name, vars };
 }
 
-/** Remove blocos {{if var}}…{{endif}} INTEIROS — a Meta não tem
- * condicionais e rejeita parâmetros vazios: manter o conteúdo do bloco
- * obrigaria a enviar valores que podem não existir (ex.: trackingUrl sem
- * portal). O template Meta é a versão mínima; Evolution/texto livre
- * continua a renderizar o corpo completo com os blocos opcionais. */
-function stripConditionals(body: string): string {
-  return body.replace(CONDITIONAL_BLOCK_RE, "").replace(LEFTOVER_MARKER_RE, "");
+/** Variáveis de bloco {{if var}} garantidas pela config da loja —
+ * shopName existe sempre; trackingUrl/reviewUrl existem quando a loja
+ * configurou o portal/reviews. Só estas podem ficar no template Meta. */
+export function metaConditionalVars(settings: {
+  reviewUrl?: string | null;
+  trackingBaseUrl?: string | null;
+}): Record<string, boolean> {
+  return {
+    reviewUrl: Boolean(settings.reviewUrl),
+    shopName: true,
+    trackingUrl: Boolean(settings.trackingBaseUrl),
+  };
+}
+
+/** Expande blocos {{if var}}…{{endif}} consoante a config da loja: vars
+ * garantidas mantêm o conteúdo (o link de aprovação do orçamento não se
+ * perde quando a loja tem tracking público), vars opcionais saem — a
+ * Meta não tem condicionais e rejeita parâmetros vazios. Evolution/
+ * texto livre continua a renderizar o corpo completo. */
+function expandConditionals(
+  body: string,
+  keep: Record<string, boolean>
+): string {
+  return body
+    .replace(CONDITIONAL_BLOCK_RE, (_m, v: string, inner: string) =>
+      keep[v] ? inner : ""
+    )
+    .replace(LEFTOVER_MARKER_RE, "");
 }
 
 interface GraphTemplate {
@@ -223,12 +245,17 @@ function toStatus(t: GraphTemplate | null): TemplateStatus["status"] {
 }
 
 /** Lista desejada: todas as WHATSAPP NotificationTemplate da loja. */
-async function desiredTemplates(prisma: DbClient): Promise<MetaTemplateSpec[]> {
+async function desiredTemplates(
+  prisma: DbClient,
+  keep: Record<string, boolean>
+): Promise<MetaTemplateSpec[]> {
   const rows = await prisma.notificationTemplate.findMany({
     orderBy: { name: "asc" },
     where: { channel: "WHATSAPP" },
   });
-  return rows.map((r) => deriveMetaTemplate(r.name, stripConditionals(r.body)));
+  return rows.map((r) =>
+    deriveMetaTemplate(r.name, expandConditionals(r.body, keep))
+  );
 }
 
 async function persistStatuses(
@@ -349,7 +376,7 @@ export async function syncWhatsAppTemplates(
   log?: FastifyBaseLogger
 ): Promise<TemplateSyncResult> {
   const settings = await getOrCreateShopSettings(prisma);
-  const desired = await desiredTemplates(prisma);
+  const desired = await desiredTemplates(prisma, metaConditionalVars(settings));
   if (desired.length === 0) {
     return { ready: 0, templates: [], total: 0 };
   }

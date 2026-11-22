@@ -15,6 +15,7 @@ import {
   STAFF_INITIATED_TEMPLATES,
 } from "./notification-outbox.service.js";
 import { renderTemplate } from "./notification-renderer.js";
+import { metaConditionalVars } from "./whatsapp-templates.service.js";
 
 interface NotifyEvent {
   context: {
@@ -40,6 +41,8 @@ interface NotifyEvent {
 
 interface ChannelHandlerContext {
   jobId?: string;
+  /** Vars de {{if}} garantidas pela config — mantêm-se no template Meta. */
+  metaKeep?: Record<string, boolean>;
   smsEnabled: boolean;
   templateBody: string;
   templateVars: Record<string, string>;
@@ -154,6 +157,7 @@ const whatsAppHandler: ChannelHandler = {
       channel: "WHATSAPP",
       deliverBy: event.deliverBy,
       jobId: event.jobId,
+      metaKeep: context.metaKeep,
       recipientPhone: phone,
       templateBody: context.templateBody,
       templateName: event.eventName,
@@ -366,6 +370,7 @@ export async function notify(
     }
     await handler.handle(app.prisma, app, event, {
       jobId: event.jobId,
+      metaKeep: metaConditionalVars(shop),
       smsEnabled: shop.smsEnabled,
       templateBody: template.body,
       templateVars,
