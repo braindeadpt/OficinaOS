@@ -282,6 +282,28 @@ function quoteText(ctx: BotReplyCtx, job: ActiveJob): string {
   return text;
 }
 
+/** Retry de um SIM/NÃO já aplicado (a resposta anterior não chegou a
+ * sair): o orçamento está decidido — devolve a confirmação da mesma
+ * decisão em vez de "não tens orçamentos", que leria como se a decisão
+ * se tivesse perdido. Decisão contrária → já respondido. */
+function repeatOrEmpty(
+  ctx: BotReplyCtx,
+  decidedJob: ActiveJob | undefined,
+  decision: "approve" | "reject"
+): string {
+  const last = decidedJob?.quotes[0];
+  if (decision === "approve" && last?.status === "APPROVED") {
+    return `Orçamento de ${eur(ctx, last.amount)} aceite ✅ Obrigado — a loja avança com a reparação ${decidedJob?.jobCode ?? ""}.`;
+  }
+  if (decision === "reject" && last?.status === "REJECTED") {
+    return `Orçamento de ${eur(ctx, last.amount)} recusado. A loja entra em contacto contigo sobre ${decidedJob?.jobCode ?? ""}.`;
+  }
+  if (last?.status === "APPROVED" || last?.status === "REJECTED") {
+    return "Esse orçamento já foi respondido ou substituído — a loja confirma contigo.";
+  }
+  return "Não tens orçamentos pendentes de resposta.";
+}
+
 /** Aplica SIM/NÃO via respondToQuote — o mesmo serviço do portal/LAN. */
 async function answerQuote(
   ctx: BotReplyCtx,
@@ -298,7 +320,11 @@ async function answerQuote(
     target = pending[0];
   }
   if (!target) {
-    return "Não tens orçamentos pendentes de resposta.";
+    return repeatOrEmpty(
+      ctx,
+      direct ?? (jobs.length === 1 ? jobs[0] : undefined),
+      decision
+    );
   }
   const quote = target.quotes[0];
   if (!quote) {
@@ -334,18 +360,21 @@ interface CustomerMatch {
   jobs: ActiveJob[];
 }
 
-/** Casa o remetente com clientes e traz jobs ativos.
+/** Casa um telefone com clientes.
  *
  * Remetente com número nacional PT (9 dígitos) ou +351 casa pelo sufixo
  * — a loja pode ter o número guardado sem indicativo. Remetente com
  * outro indicativo só casa por número completo: os últimos 9 dígitos de
  * um +34 são iguais aos de um cliente PT e o bot daria a ficha dele a um
  * estranho (sec: a ficha leva histórico e dados da reparação).
+ *
+ * Partilhado pelo pipeline (findCustomerJobs) e pelo gate "só clientes"
+ * do bot Evolution — as duas superfícies têm de casar da mesma forma.
  */
-async function findCustomerJobs(
-  ctx: BotReplyCtx,
+export async function findCustomersByPhone(
+  prisma: BotReplyCtx["prisma"],
   fromPhone: string
-): Promise<CustomerMatch> {
+): Promise<{ id: string; name: string }[]> {
   const senderDigits = fromPhone
     .replace(DIGITS_RE, "")
     .replace(INTL_PREFIX_RE, "");
@@ -356,21 +385,31 @@ async function findCustomerJobs(
   const last9 = senderDigits.slice(-9);
   const last4 = senderDigits.slice(-4);
   if ((isPtSender && last9.length < 9) || last4.length < 4) {
-    return { customers: [], jobs: [] };
+    return [];
   }
-  const candidates = await ctx.prisma.customer.findMany({
+  const candidates = await prisma.customer.findMany({
     where: { phone: { endsWith: last4 } },
     select: { id: true, name: true, phone: true },
   });
-  const customers = candidates.filter((c) => {
-    const cd = c.phone.replace(DIGITS_RE, "").replace(INTL_PREFIX_RE, "");
-    if (cd === senderDigits) {
-      return true;
-    }
-    return isPtSender && cd.slice(-9) === last9;
-  });
+  return candidates
+    .filter((c) => {
+      const cd = c.phone.replace(DIGITS_RE, "").replace(INTL_PREFIX_RE, "");
+      if (cd === senderDigits) {
+        return true;
+      }
+      return isPtSender && cd.slice(-9) === last9;
+    })
+    .map(({ id, name }) => ({ id, name }));
+}
+
+/** Casa o remetente com clientes e traz jobs ativos. */
+async function findCustomerJobs(
+  ctx: BotReplyCtx,
+  fromPhone: string
+): Promise<CustomerMatch> {
+  const customers = await findCustomersByPhone(ctx.prisma, fromPhone);
   if (customers.length === 0) {
-    return { customers, jobs: [] };
+    return { customers: [], jobs: [] };
   }
   const jobs = (await ctx.prisma.job.findMany({
     where: {
@@ -593,7 +632,18 @@ export async function handleInboundMessage(
     return null;
   }
   const out = await composeReply(ctx, msg, t.plainText);
-  const sent = out.text.length > 0 ? await t.send(out.text) : true;
+  let sent = true;
+  if (out.text.length > 0) {
+    try {
+      sent = await t.send(out.text);
+    } catch (err) {
+      // Falha de transporte: sent=false deixa o poller re-tentar — e a
+      // escalada ao staff em baixo tem de correr na mesma (um pedido de
+      // ajuda que falha a enviar continua a ser um pedido de ajuda).
+      sent = false;
+      ctx.log.warn({ err }, `${t.channelLabel}-bot send threw`);
+    }
+  }
   if (out.escalate) {
     await escalateToStaff(
       ctx,

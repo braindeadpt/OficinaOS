@@ -30,14 +30,21 @@ const LEADING_PLUS_RE = /^\+/;
 // In-memory send-attempt counter — same trade-off as whatsapp-bot.
 const sendAttempts = new Map<string, number>();
 
+// Ids em processamento — o poller rápido (12 s) e o ciclo lento (2 min)
+// leem a mesma fila antes do ack; sem esta guarda ambos processavam a
+// mesma mensagem e duplicavam respostas e alertas ao staff.
+const inFlightIds = new Set<string>();
+
+// Contrato do GET /sms/inbound na Cloud: `messages` com `kind` +
+// `statusType` (modelo SmsInbound) — não `items`/`type`/`status`.
 interface CloudSmsItem {
   createdAt: string;
   fromPhone: string;
   id: string;
+  kind: "RECEIVED" | "REPORT";
   refId?: string | null;
-  status?: string | null;
+  statusType?: string | null;
   text?: string | null;
-  type: "RECEIVED" | "REPORT";
 }
 
 export interface CloudCredentials {
@@ -74,9 +81,21 @@ export async function sendSmsViaCloud(
   return { success: true };
 }
 
-/** true quando o erro da Cloud indica "sem device" → cair p/ gateway LAN. */
-export function isNoDeviceError(error?: string): boolean {
-  return error === "NO_SMS_DEVICE";
+// Erros definitivos da Cloud — não se resolvem com retry e o envio
+// nunca foi aceite: seguro cair para o gateway LAN. Erros de rede/5xx/
+// provider são ambíguos (a Cloud pode ter aceite e a confirmação
+// perdeu-se) → não cair, o dedupeId protege o retry pela Cloud.
+const DEFINITIVE_CLOUD_ERRORS = new Set([
+  "DEVICE_MISSING",
+  "INVALID_BODY",
+  "MODULE_NOT_ENTITLED",
+  "SHOP_NOT_FOUND",
+  "UNAUTHORIZED",
+]);
+
+/** true quando o erro da Cloud é definitivo → cair p/ gateway LAN. */
+export function isDefinitiveCloudError(error?: string): boolean {
+  return error !== undefined && DEFINITIVE_CLOUD_ERRORS.has(error);
 }
 
 /**
@@ -95,7 +114,9 @@ export async function syncSmsInbound(
   if (!res.ok) {
     return;
   }
-  const items = (res.body as { items?: CloudSmsItem[] }).items ?? [];
+  const items =
+    (res.body as { messages?: CloudSmsItem[] } | null | undefined)?.messages ??
+    [];
   if (items.length === 0) {
     return;
   }
@@ -125,14 +146,24 @@ export async function syncSmsInbound(
 
   const ackIds: string[] = [];
   for (const item of items) {
-    if (item.type === "REPORT") {
-      if (await applyReport(prisma, log, item)) {
-        ackIds.push(item.id);
-      }
+    // Claim síncrono: entre o fetch e este ponto não há await, por isso
+    // o segundo poller a ler a fila vê o id já marcado e salta-o.
+    if (inFlightIds.has(item.id)) {
       continue;
     }
-    if (await processReceived(ctx, { apiUrl, token }, item)) {
-      ackIds.push(item.id);
+    inFlightIds.add(item.id);
+    try {
+      if (item.kind === "REPORT") {
+        if (await applyReport(prisma, log, item)) {
+          ackIds.push(item.id);
+        }
+        continue;
+      }
+      if (await processReceived(ctx, { apiUrl, token }, item)) {
+        ackIds.push(item.id);
+      }
+    } finally {
+      inFlightIds.delete(item.id);
     }
   }
 
@@ -191,8 +222,18 @@ async function processReceived(
     }
     return false;
   } catch (err) {
+    // Exceção a meio (DB, rede no send, etc.): tenta de novo no próximo
+    // poll em vez de confirmar — um pedido de ajuda não pode desaparecer
+    // nem a equipa ficar sem o alerta. Passado o teto desiste: uma
+    // mensagem permanentemente envenenada não pode bloquear a fila.
     ctx.log.warn({ err, msgId: item.id }, "sms-cloud message failed");
-    return true; // poisoned — don't loop forever
+    const attempts = (sendAttempts.get(item.id) ?? 0) + 1;
+    sendAttempts.set(item.id, attempts);
+    if (attempts >= MAX_SEND_ATTEMPTS) {
+      ctx.log.error({ msgId: item.id }, "sms-cloud giving up on message");
+      return true;
+    }
+    return false;
   }
 }
 
@@ -202,7 +243,7 @@ async function applyReport(
   log: FastifyBaseLogger,
   item: CloudSmsItem
 ): Promise<boolean> {
-  const status = (item.status ?? "").toUpperCase();
+  const status = (item.statusType ?? "").toUpperCase();
   if (!(item.refId && REPORT_STATUS_RE.test(status))) {
     return true; // malformed — ack e seguir
   }

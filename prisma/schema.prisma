@@ -1243,6 +1243,10 @@ model ShopSettings {
   // Segredo no path do webhook inbound — o gateway não suporta headers
   // de auth, por isso a rota é /api/public/sms/inbound/<token>.
   smsWebhookToken             String?
+  // Segredo próprio do webhook Evolution
+  // (/api/public/whatsapp/evolution/inbound/<token>) — separado do SMS:
+  // quem tiver um não consegue chamar o outro (sec: impersonação).
+  evolutionWebhookToken       String?
   // Bot com IA (Pro) — respostas automáticas a mensagens de clientes.
   // botAiEnabled: flag de rollout — quando off, as mensagens respondem só
   // com as regras determinísticas (estado, orçamento SIM/NÃO, PARAR).

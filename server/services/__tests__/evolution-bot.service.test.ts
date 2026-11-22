@@ -3,8 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   decryptSecret: vi.fn((v: string) => (v.startsWith("enc:") ? v.slice(4) : v)),
   escalateToStaff: vi.fn(() => Promise.resolve()),
-  findCustomerByPhone: vi.fn(
-    async (): Promise<{ id: string } | null> => ({ id: "c1" })
+  findCustomersByPhone: vi.fn(
+    async (): Promise<{ id: string; name: string }[]> => [
+      { id: "c1", name: "Cliente" },
+    ]
   ),
   getEvolutionState: vi.fn(async () => "open"),
   getOrCreateShopSettings: vi.fn(),
@@ -25,10 +27,6 @@ vi.mock("../../lib/crypto.js", () => ({
   decryptSecret: mocks.decryptSecret,
 }));
 
-vi.mock("../../repositories/customer.repository.js", () => ({
-  findCustomerByPhone: mocks.findCustomerByPhone,
-}));
-
 vi.mock("../../repositories/settings.repository.js", () => ({
   getOrCreateShopSettings: mocks.getOrCreateShopSettings,
 }));
@@ -36,6 +34,7 @@ vi.mock("../../repositories/settings.repository.js", () => ({
 vi.mock("../bot-intents.js", async (importOriginal) => ({
   ...(await importOriginal()),
   escalateToStaff: mocks.escalateToStaff,
+  findCustomersByPhone: mocks.findCustomersByPhone,
   handleInboundMessage: mocks.handleInboundMessage,
 }));
 
@@ -52,6 +51,8 @@ const log = { warn: vi.fn(), error: vi.fn(), info: vi.fn() } as never;
 
 const SETTINGS = {
   cloudEntitlements: ["whatsapp-bot"],
+  // isModuleEnabled exige cache fresco (<24 h) — sem isto o gate fecha.
+  cloudSyncedAt: new Date(),
   cloudShopTokenEncrypted: "enc:shop-token",
   evolutionApiKeyEncrypted: "enc:evo-key",
   evolutionInstance: "oficinaos",
@@ -86,7 +87,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   mocks.getOrCreateShopSettings.mockResolvedValue({ ...SETTINGS });
   // mockResolvedValue persiste entre testes — repõe os defaults.
-  mocks.findCustomerByPhone.mockResolvedValue({ id: "c1" });
+  mocks.findCustomersByPhone.mockResolvedValue([{ id: "c1", name: "Cliente" }]);
   mocks.sendEvolutionText.mockResolvedValue({ success: true });
   mocks.getEvolutionState.mockResolvedValue("open");
 });
@@ -109,6 +110,15 @@ describe("handleEvolutionInbound — gates", () => {
     mocks.getOrCreateShopSettings.mockResolvedValue({
       ...SETTINGS,
       cloudEntitlements: [],
+    });
+    await handleEvolutionInbound(prisma, log, undefined, envelope());
+    expect(mocks.handleInboundMessage).not.toHaveBeenCalled();
+  });
+
+  it("entitlement em cache expirado (>24 h) → não processa", async () => {
+    mocks.getOrCreateShopSettings.mockResolvedValue({
+      ...SETTINGS,
+      cloudSyncedAt: new Date(Date.now() - 25 * 3600 * 1000),
     });
     await handleEvolutionInbound(prisma, log, undefined, envelope());
     expect(mocks.handleInboundMessage).not.toHaveBeenCalled();
@@ -150,7 +160,7 @@ describe("handleEvolutionInbound — proteções anti-ban", () => {
   });
 
   it("número desconhecido → notifica staff, sem resposta", async () => {
-    mocks.findCustomerByPhone.mockResolvedValue(null);
+    mocks.findCustomersByPhone.mockResolvedValue([]);
     await handleEvolutionInbound(prisma, log, undefined, envelope());
     expect(mocks.handleInboundMessage).not.toHaveBeenCalled();
     expect(mocks.sendEvolutionText).not.toHaveBeenCalled();

@@ -31,13 +31,19 @@ import {
 const MAX_SEND_ATTEMPTS = 3;
 
 // Regra Meta das 24 h (§5.6): resposta livre (incl. IA) só cabe na
-// janela — mensagem mais velha recebe ack sem resposta, porque a API
-// rejeitaria texto livre e uma resposta "tarde" é pior que nenhuma.
+// janela — mensagem mais velha não pode receber texto livre. Os
+// COMANDOS continuam a executar fora da janela (PARAR revoga
+// consentimento, SIM/NÃO decide orçamento, escalada avisa a equipa);
+// só o envio da resposta é suprimido com um send que não envia.
 const REPLY_WINDOW_MS = 23 * 60 * 60 * 1000; // 23 h — margem antes do corte
 
 // In-memory send-attempt counter — reset on restart, which is fine:
 // worst case a message gets one extra retry window.
 const sendAttempts = new Map<string, number>();
+
+// Ids em processamento — o poller rápido e o ciclo lento de entitlements
+// leem a mesma fila antes do ack; a guarda evita respostas duplicadas.
+const inFlightIds = new Set<string>();
 
 interface BotCtx extends BotReplyCtx {
   apiUrl: string;
@@ -154,8 +160,16 @@ export async function pollWhatsAppInbound(
 
   const ackIds: string[] = [];
   for (const msg of messages) {
-    if (await processInbound(ctx, msg)) {
-      ackIds.push(msg.id);
+    if (inFlightIds.has(msg.id)) {
+      continue;
+    }
+    inFlightIds.add(msg.id);
+    try {
+      if (await processInbound(ctx, msg)) {
+        ackIds.push(msg.id);
+      }
+    } finally {
+      inFlightIds.delete(msg.id);
     }
   }
 
@@ -174,17 +188,21 @@ async function processInbound(
   msg: InboundMessage
 ): Promise<boolean> {
   const age = Date.now() - Date.parse(msg.createdAt);
-  if (Number.isFinite(age) && age > REPLY_WINDOW_MS) {
+  const stale = Number.isFinite(age) && age > REPLY_WINDOW_MS;
+  if (stale) {
     ctx.log.warn(
       { msgId: msg.id, ageMinutes: Math.round(age / 60_000) },
-      "whatsapp-bot: mensagem fora da janela de 24 h — ack sem resposta"
+      "whatsapp-bot: fora da janela de 24 h — comandos executados, resposta suprimida"
     );
-    return true;
   }
   try {
     const out = await handleInboundMessage(ctx, msg, {
       channelLabel: "WhatsApp",
-      send: (text) => send(ctx, msg.fromPhone, text),
+      // Fora da janela: Meta rejeita texto livre — corre o pipeline
+      // (PARAR/SIM/NÃO/escalada) com envio suprimido.
+      send: stale
+        ? () => Promise.resolve(true)
+        : (text) => send(ctx, msg.fromPhone, text),
     });
     if (!out) {
       return true; // flood — descarta sem responder

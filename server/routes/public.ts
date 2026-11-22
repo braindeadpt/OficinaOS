@@ -324,8 +324,10 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
 
   /**
    * Webhook inbound da Evolution API (LAN) — MESSAGES_UPSERT. O segredo é
-   * o path (o webhook não manda auth), como no SMS. A app regista este
-   * callback na instância ao ligar o bot (§5.7).
+   * o path (o webhook não manda auth) — `evolutionWebhookToken`, próprio e
+   * separado do SMS: quem lê a config do webhook na Evolution não pode
+   * usar a credencial para chamar a rota SMS (decisões de orçamento).
+   * A app regista este callback na instância ao ligar o bot (§5.7).
    */
   app.post("/whatsapp/evolution/inbound/:token", {
     handler: async (req, reply) => {
@@ -335,8 +337,8 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
         !(
           settings.whatsappEnabled &&
           settings.whatsappTransport === "evolution" &&
-          settings.smsWebhookToken &&
-          tokenMatches(settings.smsWebhookToken, token)
+          settings.evolutionWebhookToken &&
+          tokenMatches(settings.evolutionWebhookToken, token)
         )
       ) {
         throw new AppError("NOT_FOUND");

@@ -112,7 +112,21 @@ describe("syncWhatsAppTemplates", () => {
         }
         if (u.includes("name=job_ready")) {
           return Promise.resolve(
-            graphOk({ data: [{ name: "job_ready", status: "APPROVED" }] })
+            graphOk({
+              data: [
+                {
+                  components: [
+                    {
+                      text: "Olá {{1}}, REP {{2}}.",
+                      type: "BODY",
+                    },
+                  ],
+                  language: "pt_PT",
+                  name: "job_ready",
+                  status: "APPROVED",
+                },
+              ],
+            })
           );
         }
         return Promise.resolve(graphOk({ data: [] }));

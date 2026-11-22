@@ -29,6 +29,8 @@ export const TEMPLATE_LANG = "pt_PT";
 const TEMPLATE_CATEGORY = "UTILITY";
 const META_NAME_RE = /^[a-z0-9_]+$/;
 const VAR_RE = /\{\{(\w+)\}\}/g;
+const CONDITIONAL_BLOCK_RE = /\{\{if \w+\}\}[\s\S]*?\{\{endif\}\}/g;
+const LEFTOVER_MARKER_RE = /\{\{\/?(?:if|endif|else)(?: \w+)?\}\}/g;
 
 /**
  * Vars do corpo por ordem de aparecimento → valores posicionais.
@@ -86,27 +88,33 @@ export function deriveMetaTemplate(
   return { body: meta, name, vars };
 }
 
-/** Remove a marcação {{if var}}…{{/if}} que a Meta não entende — condicionais ficam literalmente vazias. */
+/** Remove blocos {{if var}}…{{endif}} INTEIROS — a Meta não tem
+ * condicionais e rejeita parâmetros vazios: manter o conteúdo do bloco
+ * obrigaria a enviar valores que podem não existir (ex.: trackingUrl sem
+ * portal). O template Meta é a versão mínima; Evolution/texto livre
+ * continua a renderizar o corpo completo com os blocos opcionais. */
 function stripConditionals(body: string): string {
-  return body
-    .replace(/\{\{if \w+\}\}/g, "")
-    .replace(/\{\{\/if\}\}/g, "")
-    .replace(/\{\{#if \w+\}\}/g, "");
+  return body.replace(CONDITIONAL_BLOCK_RE, "").replace(LEFTOVER_MARKER_RE, "");
 }
 
 interface GraphTemplate {
+  components?: { text?: string; type?: string }[];
+  id?: string;
+  language?: string;
   name?: string;
   rejected_reason?: string;
   status?: string;
 }
 
+/** Devolve a entrada na língua alvo — um template com o mesmo nome
+ * noutro idioma não conta (existir em `en` não satisfaz `pt_PT`). */
 async function graphList(
   wabaId: string,
   token: string,
   name: string
 ): Promise<GraphTemplate | null | "unreachable"> {
   const res = await fetch(
-    `${GRAPH}/${wabaId}/message_templates?name=${encodeURIComponent(name)}&fields=name,status,rejected_reason`,
+    `${GRAPH}/${wabaId}/message_templates?name=${encodeURIComponent(name)}&fields=id,name,status,rejected_reason,language,components`,
     {
       headers: { authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(GRAPH_TIMEOUT_MS),
@@ -118,22 +126,57 @@ async function graphList(
   const body = (await res.json().catch(() => null)) as {
     data?: GraphTemplate[];
   } | null;
-  return body?.data?.[0] ?? null;
+  return body?.data?.find((t) => (t.language ?? "") === TEMPLATE_LANG) ?? null;
+}
+
+/** Valores de exemplo exigidos pela Meta para templates com variáveis. */
+const EXAMPLE_VALUES: Record<string, string> = {
+  currency: "EUR",
+  customerName: "Maria Silva",
+  deviceLabel: "iPhone 12",
+  docLabel: "o termo de reparação",
+  jobCode: "REP-2025-000123-AB",
+  partName: "ecrã iPhone 12",
+  partQuantity: "2",
+  partReorderLevel: "3",
+  quoteAmount: "45,00",
+  requestCode: "PRE-2025-000042",
+  reviewUrl: "https://oficinaos.app/r/exemplo",
+  shopName: "Oficina Exemplo",
+  signUrl: "https://oficinaos.app/s/AbCdEfGh",
+  trackingUrl: "https://oficinaos.app/t/AbCdEfGh",
+  ttlMinutes: "30",
+};
+
+function metaComponents(spec: MetaTemplateSpec) {
+  return [
+    {
+      example:
+        spec.vars.length > 0
+          ? {
+              body_text: [
+                spec.vars.map((v) => EXAMPLE_VALUES[v] ?? `exemplo ${v}`),
+              ],
+            }
+          : undefined,
+      text: spec.body,
+      type: "BODY",
+    },
+  ];
 }
 
 async function graphCreate(
   wabaId: string,
   token: string,
-  name: string,
-  body: string
+  spec: MetaTemplateSpec
 ): Promise<boolean> {
   const res = await fetch(`${GRAPH}/${wabaId}/message_templates`, {
     body: JSON.stringify({
       allow_category_change: true,
       category: TEMPLATE_CATEGORY,
-      components: [{ text: body, type: "BODY" }],
+      components: metaComponents(spec),
       language: TEMPLATE_LANG,
-      name,
+      name: spec.name,
     }),
     headers: {
       authorization: `Bearer ${token}`,
@@ -143,6 +186,32 @@ async function graphCreate(
     signal: AbortSignal.timeout(GRAPH_TIMEOUT_MS),
   }).catch(() => null);
   return res?.ok === true;
+}
+
+/** Edita um template existente (POST /{id}) — volta a revisão. */
+async function graphEdit(
+  token: string,
+  templateId: string,
+  spec: MetaTemplateSpec
+): Promise<boolean> {
+  const res = await fetch(`${GRAPH}/${templateId}`, {
+    body: JSON.stringify({
+      category: TEMPLATE_CATEGORY,
+      components: metaComponents(spec),
+    }),
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    method: "POST",
+    signal: AbortSignal.timeout(GRAPH_TIMEOUT_MS),
+  }).catch(() => null);
+  return res?.ok === true;
+}
+
+/** Texto do componente BODY remoto, para comparar com o corpo desejado. */
+function remoteBody(t: GraphTemplate | null): string | null {
+  return t?.components?.find((c) => c.type === "BODY")?.text?.trim() ?? null;
 }
 
 function toStatus(t: GraphTemplate | null): TemplateStatus["status"] {
@@ -201,7 +270,17 @@ async function syncLocal(
     }
     let existing = await graphList(wabaId, token, t.name);
     if (existing === null) {
-      await graphCreate(wabaId, token, t.name, t.body);
+      await graphCreate(wabaId, token, t);
+      existing = await graphList(wabaId, token, t.name);
+    } else if (
+      existing !== "unreachable" &&
+      remoteBody(existing) !== null &&
+      remoteBody(existing) !== t.body.trim()
+    ) {
+      // Corpo local editado (editor de templates) → submete a nova
+      // versão para revisão; manter a antiga enviava params na ordem
+      // nova contra texto velho.
+      await graphEdit(token, existing.id ?? "", t);
       existing = await graphList(wabaId, token, t.name);
     }
     if (existing === "unreachable") {

@@ -501,13 +501,15 @@ export async function upsertWhatsAppSettings(
   }
   applyEvolutionFields(data, input, userId);
 
-  // O webhook inbound da Evolution usa o mesmo segredo de path do SMS;
-  // garante a existência quando o termo do bot é aceite (sem rodar um
-  // token já emitido — a URL registada mudaria).
+  // O webhook inbound da Evolution tem segredo próprio, separado do
+  // SMS — partilhá-lo dava a quem lê a config do webhook na Evolution a
+  // credencial que autentica envios SMS (decisões de orçamento), e a
+  // rotação do token SMS ao gravar o gateway partia o callback do bot.
+  // Gera-se ao aceitar o termo, sem rodar um token já emitido.
   if (input.botDisclaimerAccepted === true) {
     await prisma.shopSettings.updateMany({
-      data: { smsWebhookToken: generateSmsWebhookToken() },
-      where: { id: "default", smsWebhookToken: null },
+      data: { evolutionWebhookToken: generateSmsWebhookToken() },
+      where: { id: "default", evolutionWebhookToken: null },
     });
   }
 

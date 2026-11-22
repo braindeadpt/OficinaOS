@@ -101,6 +101,79 @@ describe("composeReply — deterministic rules before AI", () => {
     expect(out.text).toContain("aceite");
   });
 
+  it("sim retry on an already-approved quote re-confirms (idempotent)", async () => {
+    // A resposta à primeira decisão não saiu (falha de envio); o cliente
+    // reenviou SIM. O orçamento está APPROVED — confirmar de novo em vez
+    // de "não tens orçamentos" nem chamar respondToQuote outra vez.
+    const { ctx } = makeCtx({
+      ai: aiCfg,
+      customers: [cust],
+      jobs: [
+        job({
+          quotes: [
+            {
+              amount: { toNumber: () => 100 },
+              id: "q1",
+              note: null,
+              status: "APPROVED",
+              version: 1,
+            },
+          ],
+        }),
+      ],
+    });
+    const out = await composeReply(ctx, msg("sim"));
+    expect(mocks.respondToQuote).not.toHaveBeenCalled();
+    expect(out.text).toContain("aceite");
+    expect(out.text).toContain("100");
+  });
+
+  it("não retry on a rejected quote re-confirms the rejection", async () => {
+    const { ctx } = makeCtx({
+      ai: aiCfg,
+      customers: [cust],
+      jobs: [
+        job({
+          quotes: [
+            {
+              amount: { toNumber: () => 100 },
+              id: "q1",
+              note: null,
+              status: "REJECTED",
+              version: 1,
+            },
+          ],
+        }),
+      ],
+    });
+    const out = await composeReply(ctx, msg("não"));
+    expect(mocks.respondToQuote).not.toHaveBeenCalled();
+    expect(out.text).toContain("recusado");
+  });
+
+  it("não on an already-approved quote reports it was answered", async () => {
+    const { ctx } = makeCtx({
+      ai: aiCfg,
+      customers: [cust],
+      jobs: [
+        job({
+          quotes: [
+            {
+              amount: { toNumber: () => 100 },
+              id: "q1",
+              note: null,
+              status: "APPROVED",
+              version: 1,
+            },
+          ],
+        }),
+      ],
+    });
+    const out = await composeReply(ctx, msg("não"));
+    expect(mocks.respondToQuote).not.toHaveBeenCalled();
+    expect(out.text).toContain("já foi respondido");
+  });
+
   it("PARAR disables consent and replies without AI", async () => {
     const { ctx, prisma } = makeCtx({
       ai: aiCfg,

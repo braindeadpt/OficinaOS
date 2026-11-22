@@ -1,11 +1,12 @@
 import type { PrismaClient } from "@generated/client";
 import type { FastifyBaseLogger } from "fastify";
 import { decryptSecret } from "../lib/crypto.js";
-import { findCustomerByPhone } from "../repositories/customer.repository.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
+import { isModuleEnabled } from "../utils/modules.js";
 import {
   type BotReplyCtx,
   escalateToStaff,
+  findCustomersByPhone,
   handleInboundMessage,
   type InboundMessage,
   rateOk,
@@ -158,15 +159,17 @@ function entitlementsOf(settings: Settings): string[] {
 }
 
 /** Gates do §5.7: transporte Evolution + WhatsApp ligado + termo do bot
- * aceite + não suspenso + entitlement "whatsapp-bot". Sem isso a rota
- * devolve 200 sem processar — grátis não tem bot. */
-function botGateOpen(settings: Settings, modules: string[]): boolean {
+ * aceite + não suspenso + entitlement "whatsapp-bot" FRESCO. Sem isso a
+ * rota devolve 200 sem processar — grátis não tem bot. O entitlement é
+ * validado com isModuleEnabled (cache de 24 h): uma loja desligada da
+ * Cloud não fica a responder para sempre numa lista de módulos velha. */
+function botGateOpen(settings: Settings): boolean {
   return Boolean(
     settings.whatsappEnabled &&
       settings.whatsappTransport === "evolution" &&
       settings.whatsappBotDisclaimerAt &&
       !settings.whatsappBotSuspendedAt &&
-      modules.includes("whatsapp-bot")
+      isModuleEnabled(settings, "whatsapp-bot")
   );
 }
 
@@ -266,15 +269,20 @@ export async function handleEvolutionInbound(
   envelope: EvolutionEnvelope
 ): Promise<void> {
   const settings = await getOrCreateShopSettings(prisma);
-  const modules = entitlementsOf(settings);
-  if (!botGateOpen(settings, modules)) {
+  if (!botGateOpen(settings)) {
     return;
   }
   const config = evolutionConfigOf(settings);
   if (!config) {
     return;
   }
-  const ctx = buildCtx(prisma, settings, log, notifyCtx, modules);
+  const ctx = buildCtx(
+    prisma,
+    settings,
+    log,
+    notifyCtx,
+    entitlementsOf(settings)
+  );
   const cap = settings.whatsappBotDailyCap ?? DEFAULT_DAILY_CAP;
   for (const parsed of parseUpserts(envelope)) {
     const msg: InboundMessage = {
@@ -283,7 +291,9 @@ export async function handleEvolutionInbound(
         : new Date().toISOString(),
       fromPhone: parsed.fromPhone,
       id: `evo-${parsed.id}`,
-      messageType: parsed.data.messageType ?? "conversation",
+      // A Evolution etiqueta texto como "conversation"/"extendedTextMessage"
+      // — o pipeline partilhado só reconhece "text"; o resto escala ao staff.
+      messageType: parsed.text === null ? "other" : "text",
       text: parsed.text,
     };
     await processOne(prisma, ctx, config, msg, parsed, cap, log);
@@ -300,12 +310,15 @@ async function processOne(
   log: FastifyBaseLogger
 ): Promise<void> {
   // Não-texto escala ao staff sem resposta automática; número que não é
-  // cliente igual — as duas regras são linha dura do plano anti-ban.
+  // cliente igual — as duas regras são linha dura do plano anti-ban. O
+  // matching é o mesmo do pipeline partilhado (dígitos normalizados +
+  // sufixo só para remetente PT): clientes guardados como "912345678"
+  // ou "+351912345678" têm de casar o JID internacional do remetente.
   const isText = parsed.text !== null && parsed.text.trim() !== "";
-  const customer = isText
-    ? await findCustomerByPhone(prisma, parsed.fromPhone)
-    : null;
-  if (!(isText && customer)) {
+  const customers = isText
+    ? await findCustomersByPhone(prisma, parsed.fromPhone)
+    : [];
+  if (!(isText && customers.length > 0)) {
     if (rateOk(`esc:${parsed.fromPhone}`, STAFF_NOTIFY_LIMIT_PER_HOUR)) {
       await escalateToStaff(ctx, "WhatsApp", msg, null, null).catch((err) =>
         log.warn({ err }, "evolution-bot escalate failed")
@@ -328,12 +341,13 @@ async function processOne(
     return;
   }
 
-  const out = await handleInboundMessage(ctx, msg, {
+  // Reserva o slot diário ANTES da resposta (inclui o atraso "a
+  // escrever…") — contar só depois do envio deixava duas mensagens
+  // segundos apartadas passarem as duas pelo último slot.
+  dayCount += 1;
+  await handleInboundMessage(ctx, msg, {
     channelLabel: "WhatsApp",
     rateLimitPerHour: RATE_LIMIT_PER_HOUR,
     send: makeSend(prisma, ctx, config, msg, log),
   });
-  if (out?.sent) {
-    dayCount += 1;
-  }
 }

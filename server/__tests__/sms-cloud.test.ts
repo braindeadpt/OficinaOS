@@ -108,13 +108,13 @@ describe("syncSmsInbound", () => {
     mocks.cloudFetch
       .mockResolvedValueOnce({
         body: {
-          items: [
+          messages: [
             {
               createdAt: "2026-01-01",
               fromPhone: "351912345678",
               id: "in-1",
               text: "REP-1234",
-              type: "RECEIVED",
+              kind: "RECEIVED",
             },
           ],
         },
@@ -143,30 +143,30 @@ describe("syncSmsInbound", () => {
     mocks.cloudFetch
       .mockResolvedValueOnce({
         body: {
-          items: [
+          messages: [
             {
               createdAt: "t",
               fromPhone: "",
               id: "r1",
               refId: "ob-1",
-              status: "DELIVERED",
-              type: "REPORT",
+              statusType: "DELIVERED",
+              kind: "REPORT",
             },
             {
               createdAt: "t",
               fromPhone: "",
               id: "r2",
               refId: "ob-1",
-              status: "FAILED",
-              type: "REPORT",
+              statusType: "FAILED",
+              kind: "REPORT",
             },
             {
               createdAt: "t",
               fromPhone: "",
               id: "r3",
               refId: "nope",
-              status: "SENT",
-              type: "REPORT",
+              statusType: "SENT",
+              kind: "REPORT",
             },
           ],
         },

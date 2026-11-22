@@ -15,7 +15,11 @@ import { logger } from "../utils/logger.js";
 import { renderTemplate } from "./notification-renderer.js";
 import { formatPhone } from "./notification-sender.js";
 import { decryptSmsConfig, type SendResult, sendSms } from "./sms.service.js";
-import { type CloudCredentials, sendSmsViaCloud } from "./sms-cloud.service.js";
+import {
+  type CloudCredentials,
+  isDefinitiveCloudError,
+  sendSmsViaCloud,
+} from "./sms-cloud.service.js";
 import {
   resolveWhatsAppChannel,
   sendWhatsAppTemplateVia,
@@ -39,6 +43,25 @@ import {
 export const STAFF_INITIATED_TEMPLATES: ReadonlySet<string> = new Set([
   "signature_link",
 ]);
+
+// Adiamento de entries cujo template Meta ainda não está APPROVED —
+// re-tenta de meia em meia hora até a revisão resolver ou o deliverBy
+// cortar (cancelIfExpired).
+const TEMPLATE_DEFER_MS = 30 * 60 * 1000;
+
+/** Estado conhecido do template no último sync — null = sem registo. */
+function templateStatusOf(
+  settings: ShopSettingsRow | null,
+  name: string
+): string | null {
+  const raw = settings?.whatsappTemplatesJson;
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const entry = (raw as Record<string, { status?: unknown }>)[name];
+  const s = typeof entry?.status === "string" ? entry.status : null;
+  return s ? s.toUpperCase() : null;
+}
 
 /**
  * WhatsApp consent gate. Only customers who opted in may receive messages;
@@ -246,6 +269,22 @@ async function processWhatsAppEntry(
   const metaParams = Array.isArray(entry.templateParams)
     ? (entry.templateParams as string[])
     : null;
+  // Template registado como pendente/em revisão/rejeitado → adiar sem
+  // gastar tentativas: enviar agora falharia na Meta e a aprovação
+  // posterior não recupera mensagens já marcadas FAILED. Sem registo,
+  // envia na mesma — a Meta decide. cancelIfExpired (deliverBy) limita
+  // a espera por cima.
+  if (channel.mode !== "evolution" && metaParams !== null) {
+    const st = templateStatusOf(settings, entry.templateName);
+    if (st !== null && st !== "APPROVED") {
+      await transitionOutboxEntry(prisma, entry.id, OutboxStatus.QUEUED, {
+        error: `Template ${entry.templateName}: ${st.toLowerCase()}`,
+        nextRetryAt: new Date(Date.now() + TEMPLATE_DEFER_MS),
+        status: OutboxStatus.QUEUED,
+      });
+      return;
+    }
+  }
   const result =
     channel.mode !== "evolution" && metaParams !== null
       ? await sendWhatsAppTemplateVia(
@@ -300,9 +339,12 @@ async function processSmsEntry(
     return;
   }
   // Pro: envia pela Cloud (device da loja ou pool) — o id do outbox é o
-  // dedupeId para a Cloud não repetir um envio já aceite. Se a Cloud
-  // falhar, o gateway LAN (se configurado) é o fallback; relatórios de
-  // entrega voltam como REPORT na fila inbound.
+  // dedupeId para a Cloud não repetir um envio já aceite. O gateway LAN
+  // (se configurado) é fallback SÓ em erro definitivo (sem device, sem
+  // entitlement): erro de rede/5xx pode significar envio aceite cuja
+  // confirmação se perdeu — cair para LAN duplicava o SMS, porque o
+  // dedupeId só protege o caminho Cloud. Relatórios de entrega voltam
+  // como REPORT na fila inbound.
   let result: SendResult | null = null;
   if (channels.cloud) {
     const jobCode = entry.jobId
@@ -323,7 +365,11 @@ async function processSmsEntry(
       success: false,
     }));
   }
-  if (!result?.success && channels.local) {
+  if (
+    !result?.success &&
+    channels.local &&
+    (result === null || isDefinitiveCloudError(result.error))
+  ) {
     result = await sendSms(
       channels.local,
       entry.recipientPhone,

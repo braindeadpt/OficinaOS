@@ -311,6 +311,19 @@ export const routeSecurity: [string, RouteSecurityOverride][] = [
       },
     },
   ],
+  // Evolution inbound webhook — como o SMS: a Evolution não tem sessão
+  // nem CSRF token; o segredo é o path. Budget por IP idêntico.
+  [
+    "/api/public/whatsapp/evolution/inbound",
+    {
+      csrf: false,
+      rateLimit: {
+        keyGenerator: lookupKeyGenerator,
+        max: 60,
+        timeWindow: "1 minute",
+      },
+    },
+  ],
   // Staff screens poll and refetch jobs constantly (lists, detail, status
   // changes, notes). Keyed per signed-in user, 300/min stays far above normal
   // use even for a busy counter, while still capping a runaway client.

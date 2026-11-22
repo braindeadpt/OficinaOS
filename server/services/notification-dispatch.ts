@@ -9,6 +9,7 @@ import {
 import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import { logger } from "../utils/logger.js";
+import { isModuleEnabled } from "../utils/modules.js";
 import {
   queueNotification,
   STAFF_INITIATED_TEMPLATES,
@@ -233,10 +234,11 @@ async function resolveShopNotificationConfig(prisma: DbClient): Promise<{
       currency: shop?.currency ?? "EUR",
       reviewUrl: shop?.reviewUrl ?? null,
       shopName: shop?.shopName ?? "",
-      // SMS local (gateway Android na LAN) é free — o módulo Pro "sms"
-      // gateia apenas transportes geridos (provider via cloud), que se
-      // resolvem pela configuração, não pelo toggle do gateway.
-      smsEnabled: Boolean(shop?.smsEnabled),
+      // SMS local (gateway Android na LAN) é free — mas uma loja com o
+      // módulo Pro "sms" envia pela Cloud/device mesmo sem gateway
+      // ligado; sem este OR o dispatch nem sequer criava os entries que
+      // o transporte Pro enviaria.
+      smsEnabled: Boolean(shop?.smsEnabled) || isModuleEnabled(shop, "sms"),
       trackingBaseUrl: shop?.trackingBaseUrl ?? null,
       whatsappEnabled: shop?.whatsappEnabled ?? false,
     };

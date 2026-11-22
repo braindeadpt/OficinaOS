@@ -51,6 +51,7 @@ import {
 } from "../services/settings.service.js";
 import {
   decryptSmsConfig,
+  generateSmsWebhookToken,
   registerSmsWebhook,
   sendSms,
 } from "../services/sms.service.js";
@@ -556,7 +557,7 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
         summary: "Create/fetch QR + pairing code for the local session",
       },
     },
-    async (_req, reply) => {
+    async (req, reply) => {
       assertNotDemoMode();
       // Pairing é free — corre na LAN da loja. O disclaimer continua a
       // ser exigido ao ativar o transporte (assertEvolutionGates) e o
@@ -571,6 +572,14 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       if ("error" in pairing) {
         return reply.send({ ok: false, error: pairing.error });
       }
+      // Termo já aceite numa gravação anterior → a instância (re)criada
+      // fica sem webhook até ao próximo save; regista já no pair.
+      await tryRegisterEvolutionWebhook(
+        app.prisma,
+        req.headers.host ?? ""
+      ).catch((err) =>
+        req.log.warn({ err }, "evolution webhook register failed")
+      );
       return reply.send({ ok: true, ...pairing });
     }
   );
@@ -793,8 +802,8 @@ async function tryRegisterSmsWebhook(
 /**
  * §5.7 — regista o webhook MESSAGES_UPSERT na instância Evolution. Só
  * com o termo do bot aceite (a rota inbound nem existe sem ele); o
- * callback usa o mesmo segredo de path do SMS e o Host do pedido, como
- * no tryRegisterSmsWebhook.
+ * callback usa `evolutionWebhookToken` — segredo próprio, separado do
+ * SMS — e o Host do pedido, como no tryRegisterSmsWebhook.
  */
 async function tryRegisterEvolutionWebhook(
   prisma: Parameters<typeof getSmsSettings>[0],
@@ -803,12 +812,25 @@ async function tryRegisterEvolutionWebhook(
   if (!host || LOCALHOST_RE.test(host)) {
     return false;
   }
-  const row = await getOrCreateShopSettings(prisma);
+  let row = await getOrCreateShopSettings(prisma);
+  // Instalações que aceitaram o termo antes do token próprio existir:
+  // gera-o aqui — o token SMS não é reutilizado (§5.7, ver rota pública).
+  if (
+    row.whatsappTransport === "evolution" &&
+    row.whatsappBotDisclaimerAt &&
+    !row.evolutionWebhookToken
+  ) {
+    await prisma.shopSettings.updateMany({
+      data: { evolutionWebhookToken: generateSmsWebhookToken() },
+      where: { id: "default", evolutionWebhookToken: null },
+    });
+    row = await getOrCreateShopSettings(prisma);
+  }
   if (
     !(
       row.whatsappTransport === "evolution" &&
       row.whatsappBotDisclaimerAt &&
-      row.smsWebhookToken &&
+      row.evolutionWebhookToken &&
       row.evolutionUrl &&
       row.evolutionApiKeyEncrypted
     )
@@ -819,7 +841,7 @@ async function tryRegisterEvolutionWebhook(
   if (!apiKey) {
     return false;
   }
-  const callbackUrl = `http://${host}/api/public/whatsapp/evolution/inbound/${row.smsWebhookToken}`;
+  const callbackUrl = `http://${host}/api/public/whatsapp/evolution/inbound/${row.evolutionWebhookToken}`;
   const result = await setEvolutionWebhook(
     {
       apiKey,
