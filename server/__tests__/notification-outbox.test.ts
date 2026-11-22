@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   findShopSettingsUnique: vi.fn(),
   transitionOutboxEntry: vi.fn(),
   sendWhatsApp: vi.fn(),
+  sendWhatsAppTemplate: vi.fn(),
   decryptWhatsAppConfig: vi.fn(),
   sendSms: vi.fn(),
   decryptSmsConfig: vi.fn(),
@@ -22,6 +23,7 @@ vi.mock("../services/notification-renderer.js", () => ({
 
 vi.mock("../services/notification-sender.js", () => ({
   sendWhatsApp: mocks.sendWhatsApp,
+  sendWhatsAppTemplate: mocks.sendWhatsAppTemplate,
   decryptWhatsAppConfig: mocks.decryptWhatsAppConfig,
 }));
 
@@ -77,6 +79,14 @@ describe("queueNotification", () => {
       renderedBody: "Hello Ahmed, job RPR-001 is ready.",
       status: OutboxStatus.QUEUED,
       templateName: "job-ready",
+      // Params posicionais {{1}}… na ordem dos {{var}} do corpo (o
+      // template Meta aprovado consome esta ordem, §5.6) + os valores
+      // por variável — uma edição aprovada entre o enqueue e o envio
+      // reordena os params contra o corpo novo.
+      templateParams: {
+        params: ["Ahmed", "RPR-001"],
+        vars: { jobCode: "RPR-001", name: "Ahmed" },
+      },
     });
   });
 
@@ -468,6 +478,113 @@ describe("processOutbox", () => {
       "out-8",
       OutboxStatus.QUEUED,
       expect.objectContaining({ status: OutboxStatus.CANCELLED })
+    );
+  });
+
+  it("reordena os params pelos {{var}} do corpo atual após edição aprovada", async () => {
+    // Regressão Devin r8: a mensagem foi enfileirada com o corpo
+    // «Cliente {{customerName}}, oficina {{shopName}}»; a loja editou
+    // para «Oficina {{shopName}}, cliente {{customerName}}» e a Meta
+    // aprovou a nova versão. Enviar os params na ordem antiga trocava
+    // os valores («Oficina Maria, cliente Oficina Central»).
+    const tplFindFirst = vi.fn(async () => ({
+      body: "Oficina {{shopName}}, cliente {{customerName}}.",
+    }));
+    const p = {
+      notificationTemplate: { findFirst: tplFindFirst },
+    } as never;
+    mocks.findManyOutboxEntries.mockResolvedValue([
+      {
+        id: "out-reorder",
+        channel: "WHATSAPP",
+        createdAt: new Date(),
+        recipientPhone: "05551234567",
+        renderedBody: "Oficina Oficina Central, cliente Maria.",
+        retryCount: 0,
+        status: OutboxStatus.QUEUED,
+        templateName: "job_ready",
+        templateParams: {
+          params: ["Maria", "Oficina Central"], // ordem antiga
+          vars: { customerName: "Maria", shopName: "Oficina Central" },
+        },
+      },
+    ]);
+    mocks.findShopSettingsUnique.mockResolvedValue({
+      countryCode: "PT",
+      whatsappApiTokenEncrypted: "enc-token",
+      whatsappBusinessId: "biz-1",
+      whatsappEnabled: true,
+      whatsappPhoneNumberId: "phone-1",
+      whatsappTemplatesJson: { job_ready: { status: "APPROVED" } },
+    });
+    mocks.decryptWhatsAppConfig.mockReturnValue({
+      apiToken: "decrypted-token",
+      businessId: "biz-1",
+      phoneNumberId: "phone-1",
+    });
+    mocks.sendWhatsAppTemplate.mockResolvedValue({ success: true });
+    mocks.findCustomerByPhone.mockResolvedValue({
+      phone: "05551234567",
+      whatsappConsent: true,
+    });
+    mocks.transitionOutboxEntry.mockResolvedValue(1);
+
+    await processOutbox(p);
+
+    // Params reordenados para a versão aprovada — shopName primeiro.
+    expect(mocks.sendWhatsAppTemplate).toHaveBeenCalledWith(
+      expect.objectContaining({ phoneNumberId: "phone-1" }),
+      "05551234567",
+      "job_ready",
+      "pt_PT",
+      ["Oficina Central", "Maria"],
+      "PT"
+    );
+  });
+
+  it("params posicionais em formato antigo enviam-se tal como gravados", async () => {
+    mocks.findManyOutboxEntries.mockResolvedValue([
+      {
+        id: "out-legacy",
+        channel: "WHATSAPP",
+        createdAt: new Date(),
+        recipientPhone: "05551234567",
+        renderedBody: "Hello",
+        retryCount: 0,
+        status: OutboxStatus.QUEUED,
+        templateName: "job_ready",
+        templateParams: ["A", "B"],
+      },
+    ]);
+    mocks.findShopSettingsUnique.mockResolvedValue({
+      countryCode: "PT",
+      whatsappApiTokenEncrypted: "enc-token",
+      whatsappBusinessId: "biz-1",
+      whatsappEnabled: true,
+      whatsappPhoneNumberId: "phone-1",
+      whatsappTemplatesJson: { job_ready: { status: "APPROVED" } },
+    });
+    mocks.decryptWhatsAppConfig.mockReturnValue({
+      apiToken: "decrypted-token",
+      businessId: "biz-1",
+      phoneNumberId: "phone-1",
+    });
+    mocks.sendWhatsAppTemplate.mockResolvedValue({ success: true });
+    mocks.findCustomerByPhone.mockResolvedValue({
+      phone: "05551234567",
+      whatsappConsent: true,
+    });
+    mocks.transitionOutboxEntry.mockResolvedValue(1);
+
+    await processOutbox(prisma);
+
+    expect(mocks.sendWhatsAppTemplate).toHaveBeenCalledWith(
+      expect.anything(),
+      "05551234567",
+      "job_ready",
+      "pt_PT",
+      ["A", "B"],
+      "PT"
     );
   });
 

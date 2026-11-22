@@ -1,6 +1,7 @@
 const TRAILING_SLASH = /\/$/;
 
-import type { PrismaClient } from "@generated/client";
+import { OutboxStatus, type PrismaClient } from "@generated/client";
+import { AppError } from "@shared/errors/app-error.js";
 import type {
   UpdateAiSettingsInput,
   UpdateInvoicingSettingsInput,
@@ -20,9 +21,20 @@ import {
   upsertAiSettings as upsertAiSettingsRepo,
   upsertShopSettings as upsertShopSettingsRepo,
 } from "../repositories/settings.repository.js";
+import type { DbClient } from "../repositories/types.js";
 import { isModuleEnabled } from "../utils/modules.js";
 import { cloudFetch } from "./cloud.service.js";
+import {
+  STAFF_INITIATED_TEMPLATES,
+  templateStatusOf,
+} from "./notification-outbox.service.js";
 import { generateSmsWebhookToken } from "./sms.service.js";
+
+// Variáveis sem as quais o modelo staff-initiated sai inútil —
+// o pedido de assinatura sem {{signUrl}} não tem ligação para abrir.
+const REQUIRED_TEMPLATE_VARS: Record<string, string> = {
+  signature_link: "signUrl",
+};
 
 function endpointOrigin(endpoint: string) {
   try {
@@ -267,17 +279,107 @@ export async function updateNotificationTemplate(
   id: string,
   input: UpdateNotificationTemplateInput
 ) {
-  const existing = await findNotificationTemplateUnique(prisma, id);
-  if (!existing) {
-    return null;
-  }
+  // Update + migração na mesma transação — duas edições concorrentes
+  // não deixam metade da fila num nome que o editor já não mostra.
+  return await prisma.$transaction(async (tx) => {
+    const existing = await findNotificationTemplateUnique(tx, id);
+    if (!existing) {
+      return null;
+    }
 
-  return await updateNotificationTemplateRepo(prisma, id, {
-    body: input.body,
-    channel: input.channel,
-    isDefault: input.isDefault,
-    name: input.name,
+    // O nome reservado transporta semântica de envio manual — entradas
+    // com ele saltam o gate de consentimento no outbox. Renomear um
+    // modelo PARA ele apropriava-se desse privilégio; editar o modelo
+    // signature_link em si (nome inalterado) continua a funcionar.
+    if (
+      input.name &&
+      input.name !== existing.name &&
+      STAFF_INITIATED_TEMPLATES.has(input.name)
+    ) {
+      throw new AppError("VALIDATION_ERROR", {
+        errors: { name: ["reserved_name"] },
+      });
+    }
+
+    // Variáveis obrigatórias por modelo staff-initiated: sem {{signUrl}}
+    // o pedido de assinatura sai sem a ligação que o cliente precisa
+    // para abrir o documento — a mensagem chega mas não serve. O canal
+    // IN_APP é a confirmação para o staff e deliberadamente não leva link.
+    const requiredVar =
+      (input.channel ?? existing.channel) === "IN_APP"
+        ? undefined
+        : REQUIRED_TEMPLATE_VARS[input.name || existing.name];
+    if (
+      requiredVar &&
+      !(input.body ?? existing.body ?? "").includes(requiredVar)
+    ) {
+      throw new AppError("VALIDATION_ERROR", {
+        errors: { body: [`missing_${requiredVar}`] },
+      });
+    }
+
+    const updated = await updateNotificationTemplateRepo(tx, id, {
+      body: input.body,
+      channel: input.channel,
+      isDefault: input.isDefault,
+      name: input.name,
+    });
+
+    // Rename dentro de WHATSAPP: a fila migra só quando o nome antigo
+    // NÃO está APPROVED — se está, a Meta mantém o modelo e as entradas
+    // drenam por ele, e migrar para um nome em revisão expirava avisos
+    // que iam a tempo. Um nome sem aprovação nunca é reconsultado pelo
+    // sync — migrar é a única via de a aprovação do nome novo chegar à
+    // fila.
+    const renamedInWhatsapp =
+      input.name &&
+      input.name !== existing.name &&
+      existing.channel === "WHATSAPP" &&
+      updated.channel === "WHATSAPP";
+    if (renamedInWhatsapp) {
+      const settings = await findShopSettingsUnique(tx);
+      if (templateStatusOf(settings, existing.name) !== "APPROVED") {
+        await migrateQueuedToRenamed(tx, existing.name, input.name);
+      }
+    }
+
+    return updated;
   });
+}
+
+/**
+ * Move entradas QUEUED para o nome novo — vars recomputam a ordem pelo
+ * corpo atual no envio; entries só-posicionais (formato antigo) ficam
+ * sob o nome antigo, que a Meta mantém. nextRetryAt/error limpos: um
+ * nome já aprovado não deve esperar o ciclo de adiamento.
+ */
+async function migrateQueuedToRenamed(
+  tx: DbClient,
+  oldName: string,
+  newName: string
+): Promise<void> {
+  const queued = await tx.notificationOutbox.findMany({
+    select: { id: true, templateParams: true },
+    where: {
+      channel: "WHATSAPP",
+      status: OutboxStatus.QUEUED,
+      templateName: oldName,
+    },
+  });
+  for (const q of queued) {
+    const p = q.templateParams;
+    const migratable =
+      p === null ||
+      (!Array.isArray(p) &&
+        typeof p === "object" &&
+        typeof (p as { vars?: unknown }).vars === "object");
+    if (migratable) {
+      await tx.notificationOutbox.update({
+        data: { error: null, nextRetryAt: null, templateName: newName },
+        where: { id: q.id },
+      });
+    }
+  }
 }
 
 export async function testAiConnection(prisma: PrismaClient) {
@@ -359,6 +461,9 @@ export async function getWhatsAppSettings(prisma: PrismaClient) {
   const row = await findShopSettingsUnique(prisma);
   if (!row) {
     return {
+      botDailyCap: 200,
+      botDisclaimerAccepted: false,
+      botSuspendedAt: null,
       businessId: null,
       credentialsAtCloud: false,
       disclaimerAccepted: false,
@@ -380,6 +485,9 @@ export async function getWhatsAppSettings(prisma: PrismaClient) {
     };
   }
   return {
+    botDailyCap: row.whatsappBotDailyCap,
+    botDisclaimerAccepted: Boolean(row.whatsappBotDisclaimerAt),
+    botSuspendedAt: row.whatsappBotSuspendedAt,
     businessId: row.whatsappBusinessId,
     credentialsAtCloud: row.whatsappCredentialsAtCloud,
     disclaimerAccepted: Boolean(row.whatsappLocalDisclaimerAt),
@@ -412,6 +520,10 @@ interface WhatsAppUpsertData {
   remarketingTemplate?: string | null;
   trackingBaseUrl?: string | null;
   whatsappApiTokenEncrypted?: string;
+  whatsappBotDailyCap?: number;
+  whatsappBotDisclaimerAt?: Date;
+  whatsappBotDisclaimerUserId?: string | null;
+  whatsappBotSuspendedAt?: Date | null;
   whatsappBusinessId?: string;
   whatsappEnabled?: boolean;
   whatsappLocalDisclaimerAt?: Date;
@@ -422,7 +534,8 @@ interface WhatsAppUpsertData {
 /** Campos do transporte local (Evolution) — separados para baixar a complexidade do upsert. */
 function applyEvolutionFields(
   data: WhatsAppUpsertData,
-  input: UpdateWhatsAppSettingsInput
+  input: UpdateWhatsAppSettingsInput,
+  userId?: string
 ): void {
   if (input.transport !== undefined) {
     data.whatsappTransport = input.transport;
@@ -440,11 +553,22 @@ function applyEvolutionFields(
     // Timestamp do aceite — o transporte local só resolve com ele.
     data.whatsappLocalDisclaimerAt = new Date();
   }
+  if (input.botDisclaimerAccepted === true) {
+    // Termo do bot (§5.7) — separado do disclaimer do transporte.
+    // Re-aceitar também desfaz a suspensão automática por erro de sessão.
+    data.whatsappBotDisclaimerAt = new Date();
+    data.whatsappBotDisclaimerUserId = userId ?? null;
+    data.whatsappBotSuspendedAt = null;
+  }
+  if (input.botDailyCap !== undefined) {
+    data.whatsappBotDailyCap = input.botDailyCap;
+  }
 }
 
 export async function upsertWhatsAppSettings(
   prisma: PrismaClient,
-  input: UpdateWhatsAppSettingsInput
+  input: UpdateWhatsAppSettingsInput,
+  userId?: string
 ) {
   const data: WhatsAppUpsertData = {};
   if (input.enabled !== undefined) {
@@ -477,7 +601,19 @@ export async function upsertWhatsAppSettings(
   if (input.apiToken !== undefined && input.apiToken !== "") {
     data.whatsappApiTokenEncrypted = encryptSecret(input.apiToken);
   }
-  applyEvolutionFields(data, input);
+  applyEvolutionFields(data, input, userId);
+
+  // O webhook inbound da Evolution tem segredo próprio, separado do
+  // SMS — partilhá-lo dava a quem lê a config do webhook na Evolution a
+  // credencial que autentica envios SMS (decisões de orçamento), e a
+  // rotação do token SMS ao gravar o gateway partia o callback do bot.
+  // Gera-se ao aceitar o termo, sem rodar um token já emitido.
+  if (input.botDisclaimerAccepted === true) {
+    await prisma.shopSettings.updateMany({
+      data: { evolutionWebhookToken: generateSmsWebhookToken() },
+      where: { id: "default", evolutionWebhookToken: null },
+    });
+  }
 
   return await upsertShopSettingsRepo(prisma, {
     create: whatsAppCreateData(data),

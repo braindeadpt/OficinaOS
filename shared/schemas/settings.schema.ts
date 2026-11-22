@@ -214,6 +214,12 @@ export const updateWhatsAppSettingsSchema = z
     // Checkbox obrigatória antes de ativar o modo local — grava
     // whatsappLocalDisclaimerAt no servidor.
     disclaimerAccepted: z.boolean().optional(),
+    // Termo do BOT no transporte Evolution (§5.7) — separado do
+    // disclaimer do transporte: respostas automáticas aumentam o risco
+    // de ban. Re-aceitar reativa o bot após uma suspensão por sessão.
+    botDisclaimerAccepted: z.boolean().optional(),
+    // Teto de respostas automáticas por dia na instância (anti-ban).
+    botDailyCap: z.number().int().min(10).max(2000).optional(),
   })
   .refine((data) => Object.values(data).some((v) => v !== undefined), {
     message: "validations.at_least_one_field",

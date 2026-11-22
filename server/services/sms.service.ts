@@ -28,7 +28,7 @@ export interface SmsConfig {
   user: string;
 }
 
-interface SendResult {
+export interface SendResult {
   error?: string;
   success: boolean;
 }

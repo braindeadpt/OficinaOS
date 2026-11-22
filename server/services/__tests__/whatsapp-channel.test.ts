@@ -241,8 +241,11 @@ describe("sendWhatsAppTemplateVia", () => {
 describe("pushCredentialsToCloud", () => {
   beforeEach(() => vi.clearAllMocks());
 
+  // §5.6 — a migração só corre com o entitlement whatsapp-bot; grátis
+  // fica em modo local e nunca envia credenciais à cloud.
   const settings = {
     cloudApiUrl: "https://cloud.example",
+    cloudEntitlements: ["whatsapp-bot"],
     cloudShopTokenEncrypted: "enc:shop-token",
     whatsappApiTokenEncrypted: "enc:meta-token",
     whatsappCredentialsAtCloud: false,
@@ -275,6 +278,16 @@ describe("pushCredentialsToCloud", () => {
     mocks.getOrCreateShopSettings.mockResolvedValue(settings);
     mocks.cloudFetch.mockResolvedValue({ body: null, ok: false, status: 402 });
     expect(await pushCredentialsToCloud(prisma)).toBe(false);
+    expect(updateSettings).not.toHaveBeenCalled();
+  });
+
+  it("never uploads without the whatsapp-bot entitlement — free stays local", async () => {
+    mocks.getOrCreateShopSettings.mockResolvedValue({
+      ...settings,
+      cloudEntitlements: [],
+    });
+    expect(await pushCredentialsToCloud(prisma)).toBe(false);
+    expect(mocks.cloudFetch).not.toHaveBeenCalled();
     expect(updateSettings).not.toHaveBeenCalled();
   });
 

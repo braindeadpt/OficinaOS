@@ -35,7 +35,25 @@ interface SmsSettings {
   moduleEnabled: boolean;
 }
 
+export interface SmsCloudDevice {
+  configured: boolean;
+  device: null | {
+    enabled: boolean;
+    gatewayDeviceId: string;
+    label: string;
+    lastSeenAt: string | null;
+    offline: boolean;
+    phoneE164: string | null;
+    webhookUrl: string;
+  };
+  entitled: boolean;
+  reachable: boolean;
+}
+
 interface WhatsAppSettings {
+  botDailyCap: number;
+  botDisclaimerAccepted: boolean;
+  botSuspendedAt: string | null;
   businessId: string | null;
   credentialsAtCloud: boolean;
   disclaimerAccepted: boolean;
@@ -70,6 +88,13 @@ type EvolutionStatus =
   | "unreachable"
   | "unconfigured";
 
+export interface WaTemplateStatus {
+  name: string;
+  reason?: string;
+  status: "APPROVED" | "IN_REVIEW" | "REJECTED" | "PENDING" | "MISSING";
+  syncedAt?: string;
+}
+
 interface SettingsState {
   aiSettings: AiSettings | null;
   cancelOutboxEntry: (
@@ -84,7 +109,9 @@ interface SettingsState {
   fetchOutboxLogs: () => Promise<void>;
   fetchSettings: () => Promise<void>;
   fetchShopSettings: () => Promise<void>;
+  fetchSmsCloudDevice: () => Promise<void>;
   fetchSmsSettings: () => Promise<void>;
+  fetchWaTemplates: () => Promise<void>;
   fetchWhatsAppLocalStatus: () => Promise<{ state: EvolutionStatus }>;
   fetchWhatsAppSettings: () => Promise<void>;
   invoicingSettings: InvoicingSettings | null;
@@ -155,6 +182,8 @@ interface SettingsState {
     evolutionInstance?: string;
     evolutionApiKey?: string;
     disclaimerAccepted?: boolean;
+    botDisclaimerAccepted?: boolean;
+    botDailyCap?: number;
   }) => Promise<void>;
   sendSmsTest: (phone?: string) => Promise<{ ok: boolean; message?: string }>;
   sendTestNotification: (templateId: string) => Promise<{
@@ -162,7 +191,13 @@ interface SettingsState {
     success: boolean;
   }>;
   shopSettings: ShopSettings | null;
+  smsCloudDevice: SmsCloudDevice | null;
   smsSettings: SmsSettings | null;
+  syncWaTemplates: () => Promise<{
+    error?: string;
+    ready: number;
+    total: number;
+  }>;
   testAiConnection: () => Promise<{ success: boolean; message: string }>;
   updateNotificationTemplate: (
     id: string,
@@ -173,6 +208,7 @@ interface SettingsState {
       isDefault?: boolean;
     }
   ) => Promise<NotificationTemplate>;
+  waTemplates: WaTemplateStatus[];
   whatsAppSettings: WhatsAppSettings | null;
 }
 
@@ -182,7 +218,9 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   notificationTemplates: [],
   invoicingSettings: null,
   outboxLogs: [],
+  smsCloudDevice: null,
   smsSettings: null,
+  waTemplates: [],
   whatsAppSettings: null,
   isLoading: false,
   error: null,
@@ -344,6 +382,42 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     } catch (err: unknown) {
       const message = getErrorMessage(err, i18n.t("errors.fetch_settings"));
       set({ error: message });
+    }
+  },
+
+  fetchSmsCloudDevice: async () => {
+    try {
+      const res = await api.get("/settings/sms-cloud-device");
+      set({ smsCloudDevice: res.data });
+    } catch {
+      // Sem ruído — a loja pode nem estar emparelhada.
+      set({ smsCloudDevice: null });
+    }
+  },
+
+  fetchWaTemplates: async () => {
+    try {
+      const res = await api.get("/settings/whatsapp/templates");
+      set({ waTemplates: res.data.templates ?? [] });
+    } catch {
+      set({ waTemplates: [] });
+    }
+  },
+
+  syncWaTemplates: async () => {
+    try {
+      const res = await api.post("/settings/whatsapp/templates/sync");
+      const data = res.data as {
+        error?: string;
+        ready: number;
+        templates?: WaTemplateStatus[];
+        total: number;
+      };
+      set({ waTemplates: data.templates ?? [] });
+      return data;
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, i18n.t("errors.save_shop_settings"));
+      return { error: message, ready: 0, total: 0 };
     }
   },
 

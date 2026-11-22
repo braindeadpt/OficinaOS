@@ -94,6 +94,58 @@ export async function sendEvolutionText(
   return { success: true };
 }
 
+/** Presença "a escrever…" antes da resposta do bot (§5.7) — best-effort. */
+export async function sendEvolutionPresence(
+  config: EvolutionConfig,
+  to: string,
+  delayMs: number
+): Promise<void> {
+  await evoFetch(
+    config.baseUrl,
+    config.apiKey,
+    `/chat/sendPresence/${config.instance}`,
+    {
+      body: {
+        number: toDigits(to),
+        options: { delay: delayMs, presence: "composing" },
+      },
+      method: "POST",
+    }
+  );
+}
+
+/**
+ * Regista o webhook inbound na instância — a Evolution passa a POSTar
+ * MESSAGES_UPSERT ao callback (§5.7). webhookByEvents: false porque a
+ * rota recebe o envelope completo e filtra o evento.
+ */
+export async function setEvolutionWebhook(
+  config: EvolutionConfig,
+  callbackUrl: string
+): Promise<{ error?: string; success: boolean }> {
+  const res = await evoFetch(
+    config.baseUrl,
+    config.apiKey,
+    `/webhook/set/${config.instance}`,
+    {
+      body: {
+        webhook: {
+          enabled: true,
+          events: ["MESSAGES_UPSERT"],
+          url: callbackUrl,
+          webhookBase64: false,
+          webhookByEvents: false,
+        },
+      },
+      method: "POST",
+    }
+  );
+  if (!res?.ok) {
+    return { error: "Evolution recusou o webhook", success: false };
+  }
+  return { success: true };
+}
+
 export async function getEvolutionState(
   baseUrl: string,
   apiKey: string,

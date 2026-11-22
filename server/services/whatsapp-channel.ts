@@ -212,6 +212,17 @@ export async function pushCredentialsToCloud(
   prisma: DbClient
 ): Promise<boolean> {
   const settings = await getOrCreateShopSettings(prisma);
+  // §5.6 — só lojas Pro migram para o relay cloud: grátis fica em
+  // modo `local` (envio direto app→Meta) e nunca envia credenciais.
+  // O retorno reflete se a Cloud TEM credenciais (flag gravada), não o
+  // entitlement atual — perder o módulo não apaga as credenciais lá e
+  // devolver false divergiria do GET das definições.
+  const modules = Array.isArray(settings.cloudEntitlements)
+    ? (settings.cloudEntitlements as string[])
+    : [];
+  if (!modules.includes("whatsapp-bot")) {
+    return Boolean(settings.whatsappCredentialsAtCloud);
+  }
   if (
     !(
       settings.cloudApiUrl &&

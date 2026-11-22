@@ -313,8 +313,11 @@ export const useJobsStore = create<JobsState>((set) => ({
         partName,
         supplier,
         // <input type="date"> yields YYYY-MM-DD; the schema wants ISO.
+        // Noon UTC keeps a date-only value on the same calendar day in
+        // every timezone — midnight in the browser tz shifted a day
+        // when the bot formatted it in the shop tz.
         expectedAt: expectedAt
-          ? new Date(`${expectedAt}T00:00:00`).toISOString()
+          ? new Date(`${expectedAt}T12:00:00Z`).toISOString()
           : undefined,
       });
       set((state) => ({

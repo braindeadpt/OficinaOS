@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
     qrBase64: "data:image/png;base64,AAA",
   })),
   pushCredentialsToCloud: vi.fn(async () => false),
+  syncWhatsAppTemplates: vi.fn(async () => ({})),
   upsertWhatsAppSettings: vi.fn(async (p: unknown) => p),
 }));
 
@@ -35,6 +36,11 @@ vi.mock("../services/whatsapp-channel.js", async () => {
   const actual = await vi.importActual("../services/whatsapp-channel.js");
   return { ...actual, pushCredentialsToCloud: mocks.pushCredentialsToCloud };
 });
+
+vi.mock("../services/whatsapp-templates.service.js", () => ({
+  getWhatsAppTemplateStatuses: vi.fn(async () => ({})),
+  syncWhatsAppTemplates: mocks.syncWhatsAppTemplates,
+}));
 
 vi.mock("../services/settings.service.js", () => ({
   getAiSettings: vi.fn(async () => ({})),
@@ -263,6 +269,40 @@ describe("PUT /api/settings/whatsapp — gates evolution", () => {
     });
     expect(res.statusCode).toBe(400);
     expect(mocks.upsertWhatsAppSettings).not.toHaveBeenCalled();
+  });
+
+  it("trackingBaseUrl sozinho (gravação parcial) re-sincroniza os templates", async () => {
+    // O formulário grava enabled+URL juntos, mas a condicional {{if}} do
+    // corpo Meta depende do URL — uma gravação parcial só com o URL (ou
+    // a string vazia que o remove) tem de disparar o re-sync na mesma.
+    const app = buildApp(fakePrisma());
+    const res = await app.inject({
+      method: "PUT",
+      payload: { trackingBaseUrl: "https://loja.example.com" },
+      url: "/api/settings/whatsapp",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mocks.syncWhatsAppTemplates).toHaveBeenCalledOnce();
+
+    mocks.syncWhatsAppTemplates.mockClear();
+    const res2 = await app.inject({
+      method: "PUT",
+      payload: { trackingBaseUrl: "" },
+      url: "/api/settings/whatsapp",
+    });
+    expect(res2.statusCode).toBe(200);
+    expect(mocks.syncWhatsAppTemplates).toHaveBeenCalledOnce();
+  });
+
+  it("gravação sem URL nem enabled não re-sincroniza templates", async () => {
+    const app = buildApp(fakePrisma());
+    const res = await app.inject({
+      method: "PUT",
+      payload: { pickupReminderTemplate: "default" },
+      url: "/api/settings/whatsapp",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mocks.syncWhatsAppTemplates).not.toHaveBeenCalled();
   });
 
   it("does not gate the meta transport", async () => {

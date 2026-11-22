@@ -159,7 +159,11 @@ export default function JobWaitingPartsSection({
                 {wp.expectedAt && (
                   <p className="font-label text-on-surface-variant text-xs">
                     {t("jobs_waiting_parts_expected_at")}:{" "}
-                    {new Date(wp.expectedAt).toLocaleDateString()}
+                    {/* dia de calendário em UTC — o fuso do browser
+                        adiantava/atrasava a data nos extremos */}
+                    {new Date(wp.expectedAt).toLocaleDateString(undefined, {
+                      timeZone: "UTC",
+                    })}
                   </p>
                 )}
               </div>

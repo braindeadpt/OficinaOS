@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import { useSettingsStore } from "@/stores/settings";
 
 export interface EvolutionFormState {
+  botDailyCap: string;
+  botDisclaimerAccepted: boolean;
   disclaimerAccepted: boolean;
   evolutionApiKey: string;
   evolutionInstance: string;
@@ -15,12 +17,15 @@ export interface EvolutionFormState {
 }
 
 interface EvolutionSectionProps {
+  botDisclaimerStored: boolean;
+  botSuspended: boolean;
   disclaimerStored: boolean;
   form: EvolutionFormState;
   hasApiKey: boolean;
   onChange: (patch: Partial<EvolutionFormState>) => void;
   savedInstance: string | null;
   savedUrl: string | null;
+  whatsappModule: boolean;
 }
 
 const STATUS_LABEL_KEYS: Record<string, string> = {
@@ -46,12 +51,15 @@ const STATUS_COLORS: Record<string, string> = {
  * no PUT das settings e no outbox antes de cada envio.
  */
 export function EvolutionSection({
+  botDisclaimerStored,
+  botSuspended,
   disclaimerStored,
   form,
   hasApiKey,
   onChange,
   savedInstance,
   savedUrl,
+  whatsappModule,
 }: EvolutionSectionProps) {
   const { t } = useTranslation();
   const pairWhatsAppLocal = useSettingsStore((s) => s.pairWhatsAppLocal);
@@ -115,6 +123,10 @@ export function EvolutionSection({
   };
 
   const disclaimerAccepted = disclaimerStored || form.disclaimerAccepted;
+  // Termo aceite vale enquanto não houver suspensão — quando suspenso a
+  // checkbox fica livre para o re-aceite que reativa o bot.
+  const botTermDone = botDisclaimerStored && !botSuspended;
+  const botDisclaimerAccepted = botTermDone || form.botDisclaimerAccepted;
   const statusKey = state ? STATUS_LABEL_KEYS[state] : null;
 
   return (
@@ -138,6 +150,50 @@ export function EvolutionSection({
           </Label>
         </div>
       </div>
+
+      {whatsappModule && (
+        <div className="rounded-xl border border-warning/40 bg-warning/5 p-4">
+          <p className="text-on-surface text-xs leading-relaxed">
+            {t("whatsapp_bot_disclaimer")}
+          </p>
+          <div className="mt-3 flex items-center gap-1">
+            <Checkbox
+              checked={botDisclaimerAccepted}
+              disabled={botTermDone}
+              id="wa-bot-disclaimer"
+              onChange={(e) =>
+                onChange({ botDisclaimerAccepted: e.target.checked })
+              }
+            />
+            <Label
+              className="cursor-pointer select-none font-medium text-sm"
+              htmlFor="wa-bot-disclaimer"
+            >
+              {t("whatsapp_bot_disclaimer_accept")}
+            </Label>
+          </div>
+          {botSuspended && (
+            <p className="mt-2 font-medium text-error text-xs">
+              {t("whatsapp_bot_suspended")}
+            </p>
+          )}
+          {botDisclaimerAccepted && (
+            <Field
+              hint={t("whatsapp_bot_daily_cap_hint")}
+              label={t("whatsapp_bot_daily_cap")}
+            >
+              <Input
+                inputMode="numeric"
+                max={2000}
+                min={10}
+                onChange={(e) => onChange({ botDailyCap: e.target.value })}
+                type="number"
+                value={form.botDailyCap}
+              />
+            </Field>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label={t("whatsapp_local_url")}>

@@ -5,6 +5,7 @@ import {
   type BotReplyCtx,
   handleInboundMessage,
   type InboundMessage,
+  isStopText,
 } from "./bot-intents.js";
 import { cloudFetch } from "./cloud.service.js";
 import type { NotifyContext } from "./job.service.js";
@@ -30,9 +31,20 @@ import {
 
 const MAX_SEND_ATTEMPTS = 3;
 
+// Regra Meta das 24 h (§5.6): resposta livre (incl. IA) só cabe na
+// janela — mensagem mais velha não pode receber texto livre. Os
+// COMANDOS continuam a executar fora da janela (PARAR revoga
+// consentimento, SIM/NÃO decide orçamento, escalada avisa a equipa);
+// só o envio da resposta é suprimido com um send que não envia.
+const REPLY_WINDOW_MS = 23 * 60 * 60 * 1000; // 23 h — margem antes do corte
+
 // In-memory send-attempt counter — reset on restart, which is fine:
 // worst case a message gets one extra retry window.
 const sendAttempts = new Map<string, number>();
+
+// Ids em processamento — o poller rápido e o ciclo lento de entitlements
+// leem a mesma fila antes do ack; a guarda evita respostas duplicadas.
+const inFlightIds = new Set<string>();
 
 interface BotCtx extends BotReplyCtx {
   apiUrl: string;
@@ -89,10 +101,36 @@ export async function syncWhatsAppBot(
   // oportunidade — não depende de o dono voltar a gravar as settings.
   await pushCredentialsToCloud(prisma);
 
+  await pollWhatsAppInbound(prisma, apiUrl, token, log, notifyCtx, modules);
+}
+
+/**
+ * Só a parte inbound do sync — o poller rápido (10–15 s) chama isto
+ * sem repetir o registo do phone_number_id nem o push de credenciais,
+ * que ficam no ciclo lento de entitlements.
+ */
+export async function pollWhatsAppInbound(
+  prisma: PrismaClient,
+  apiUrl: string,
+  token: string,
+  log: FastifyBaseLogger,
+  notifyCtx: NotifyContext | undefined,
+  modules: string[] = []
+): Promise<void> {
+  const settings = await getOrCreateShopSettings(prisma);
   const channel = resolveWhatsAppChannel(settings);
   if (!channel) {
     return; // módulo ativo mas WhatsApp por configurar — fila fica a aguardar
   }
+  // Transporte Evolution: a fila oficial só pode ser respondida com os
+  // gates do §5.7 — termo do bot aceite e bot não suspenso. Sem isto,
+  // mensagens Meta pendentes respondiam pelo transporte não-oficial
+  // logo após a mudança, contornando a suspensão. Mesmo bloqueado, os
+  // PARAR/STOP têm de ser consumidos: a revogação de consentimento é
+  // legal e não pode esperar pelo bot (o outbox continuava a notificar).
+  const blockedEvolution =
+    channel.mode === "evolution" &&
+    !(settings.whatsappBotDisclaimerAt && !settings.whatsappBotSuspendedAt);
 
   const res = await cloudFetch(apiUrl, "/whatsapp/inbound", { token });
   if (!res.ok) {
@@ -130,31 +168,82 @@ export async function syncWhatsAppBot(
     token,
   };
 
+  await drainInbound(ctx, messages, blockedEvolution);
+}
+
+/**
+ * Consome a fila com dedupe in-flight (só liberta após o ack — antes
+ * disso a fila devolve as mensagens e o ciclo lento re-processava-as).
+ * `silent` = bot Evolution bloqueado: só PARAR/STOP são processados
+ * (revogação legal sem confirmação); o resto fica na fila.
+ */
+async function drainInbound(
+  ctx: BotCtx,
+  messages: InboundMessage[],
+  silent: boolean
+): Promise<void> {
   const ackIds: string[] = [];
+  const processed: string[] = [];
   for (const msg of messages) {
-    if (await processInbound(ctx, msg)) {
+    if (inFlightIds.has(msg.id)) {
+      continue;
+    }
+    if (silent && !isStopText(msg.text ?? "")) {
+      continue;
+    }
+    inFlightIds.add(msg.id);
+    processed.push(msg.id);
+    if (await processInbound(ctx, msg, silent)) {
       ackIds.push(msg.id);
     }
   }
 
-  if (ackIds.length) {
-    await cloudFetch(apiUrl, "/whatsapp/inbound/ack", {
-      body: { ids: ackIds },
-      method: "POST",
-      token,
-    });
+  try {
+    if (ackIds.length) {
+      await cloudFetch(ctx.apiUrl, "/whatsapp/inbound/ack", {
+        body: { ids: ackIds },
+        method: "POST",
+        token: ctx.token,
+      });
+    }
+  } finally {
+    for (const id of processed) {
+      inFlightIds.delete(id);
+    }
   }
 }
 
-/** Processa uma mensagem inbound. Devolve true se pode ser confirmada. */
+/**
+ * Processa uma mensagem inbound. Devolve true se pode ser confirmada.
+ * `silent` = bot Evolution bloqueado: nunca envia nem decide orçamento —
+ * só os PARAR/STOP lá chegam e só precisam da revogação aplicada.
+ */
 async function processInbound(
   ctx: BotCtx,
-  msg: InboundMessage
+  msg: InboundMessage,
+  silent = false
 ): Promise<boolean> {
+  const age = Date.now() - Date.parse(msg.createdAt);
+  const stale = Number.isFinite(age) && age > REPLY_WINDOW_MS;
+  if (stale) {
+    ctx.log.warn(
+      { msgId: msg.id, ageMinutes: Math.round(age / 60_000) },
+      "whatsapp-bot: fora da janela de 24 h — comandos executados, resposta suprimida"
+    );
+  }
   try {
     const out = await handleInboundMessage(ctx, msg, {
+      // Fora da janela: SIM/NÃO não decide — o orçamento pendente pode
+      // ter sido enviado depois desta mensagem e a decisão ficaria
+      // registada no errado sem confirmação ao cliente.
+      allowQuoteDecision: !(stale || silent),
       channelLabel: "WhatsApp",
-      send: (text) => send(ctx, msg.fromPhone, text),
+      // Fora da janela ou bot bloqueado: nunca envia — corre o pipeline
+      // (PARAR/SIM/NÃO/escalada) com envio suprimido.
+      send:
+        stale || silent
+          ? () => Promise.resolve(true)
+          : (text) => send(ctx, msg.fromPhone, text),
     });
     if (!out) {
       return true; // flood — descarta sem responder

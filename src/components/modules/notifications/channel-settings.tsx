@@ -63,6 +63,12 @@ function SmsCard({
   });
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const smsCloudDevice = useSettingsStore((s) => s.smsCloudDevice);
+  const fetchSmsCloudDevice = useSettingsStore((s) => s.fetchSmsCloudDevice);
+
+  useEffect(() => {
+    fetchSmsCloudDevice();
+  }, [fetchSmsCloudDevice]);
 
   useEffect(() => {
     if (smsSettings && !loaded) {
@@ -231,6 +237,37 @@ function SmsCard({
                 {t("sms_register_webhook")}
               </Button>
             </div>
+          </div>
+        )}
+
+        {smsCloudDevice?.entitled && (
+          <div className="mt-5 rounded-xl bg-surface-container px-3 py-2.5">
+            <p className="font-medium text-on-surface text-xs">
+              {t("sms_pro_title")}
+            </p>
+            {smsCloudDevice.configured && smsCloudDevice.device ? (
+              <div className="mt-1.5 space-y-1 text-on-surface-variant text-xs">
+                <p>
+                  {smsCloudDevice.device.label}
+                  {smsCloudDevice.device.phoneE164
+                    ? ` · ${smsCloudDevice.device.phoneE164}`
+                    : ""}
+                  {" — "}
+                  {smsCloudDevice.device.offline
+                    ? t("sms_pro_offline")
+                    : t("sms_pro_online")}
+                </p>
+                <p className="break-all">
+                  {t("sms_pro_webhook")}: {smsCloudDevice.device.webhookUrl}
+                </p>
+              </div>
+            ) : (
+              <p className="mt-1.5 text-on-surface-variant text-xs">
+                {smsCloudDevice.reachable
+                  ? t("sms_pro_not_configured")
+                  : t("sms_pro_unreachable")}
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -442,12 +479,119 @@ function MetaWhatsAppFields({
           value={form.pickupReminderTemplate}
         />
       </Field>
+      <WaTemplatesBlock />
     </>
+  );
+}
+
+const WA_TPL_STATUS_KEYS: Record<string, string> = {
+  APPROVED: "wa_tpl_status_approved",
+  IN_REVIEW: "wa_tpl_status_in_review",
+  MISSING: "wa_tpl_status_missing",
+  PENDING: "wa_tpl_status_pending",
+  REJECTED: "wa_tpl_status_rejected",
+};
+
+const WA_TPL_CHIP_CLASS: Record<string, string> = {
+  APPROVED: "bg-success-container text-on-success-container",
+  MISSING: "bg-error-container text-on-error-container",
+  REJECTED: "bg-error-container text-on-error-container",
+};
+
+// Razões geradas pela app/Cloud chegam como códigos estáveis → chave
+// i18n. Razões da Meta (rejected_reason, erros 132xxx) vêm verbatim e
+// mostram-se cruas — não há tradução para diagnósticos da Meta.
+const WA_TPL_REASON_KEYS: Record<string, string> = {
+  GRAPH_UNREACHABLE: "wa_tpl_reason_graph_unreachable",
+  INVALID_NAME: "wa_tpl_reason_invalid_name",
+};
+
+/**
+ * Estado do sync de templates Meta (§5.6): um chip por template com o
+ * estado que a Meta/Cloud devolveu e um botão "Voltar a submeter" que
+ * corre o sync outra vez — para os rejeitados/em falta depois de
+ * corrigir o texto.
+ */
+function WaTemplatesBlock() {
+  const { t } = useTranslation();
+  const waTemplates = useSettingsStore((s) => s.waTemplates);
+  const fetchWaTemplates = useSettingsStore((s) => s.fetchWaTemplates);
+  const syncWaTemplates = useSettingsStore((s) => s.syncWaTemplates);
+  const [syncing, setSyncing] = useState(false);
+
+  const tplReasonTitle = (reason: string | null | undefined) => {
+    if (!reason) {
+      return;
+    }
+    const key = WA_TPL_REASON_KEYS[reason];
+    return key ? t(key) : reason;
+  };
+
+  useEffect(() => {
+    fetchWaTemplates();
+  }, [fetchWaTemplates]);
+
+  const handleResync = async () => {
+    setSyncing(true);
+    try {
+      const res = await syncWaTemplates();
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success(
+          t("wa_tpl_sync_done", {
+            ready: res.ready,
+            total: res.total,
+          })
+        );
+      }
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl bg-surface-container p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-medium text-on-surface text-sm">
+          {t("wa_tpl_title")}
+        </p>
+        <Button loading={syncing} onClick={handleResync} size="sm">
+          {t("wa_tpl_resubmit")}
+        </Button>
+      </div>
+      <p className="mt-1 text-on-surface-variant text-xs">{t("wa_tpl_desc")}</p>
+      {waTemplates.length > 0 && (
+        <ul className="mt-3 space-y-1.5">
+          {waTemplates.map((tpl) => (
+            <li
+              className="flex items-center justify-between gap-2 text-xs"
+              key={tpl.name}
+            >
+              <span className="truncate font-mono text-on-surface">
+                {tpl.name}
+              </span>
+              <span
+                className={`shrink-0 rounded-full px-2 py-0.5 ${
+                  WA_TPL_CHIP_CLASS[tpl.status] ??
+                  "bg-surface-container-high text-on-surface-variant"
+                }`}
+                title={tplReasonTitle(tpl.reason)}
+              >
+                {t(WA_TPL_STATUS_KEYS[tpl.status] ?? "wa_tpl_status_pending")}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
 interface WhatsAppFormState {
   apiToken: string;
+  botDailyCap: string;
+  botDisclaimerAccepted: boolean;
   businessId: string;
   disclaimerAccepted: boolean;
   enabled: boolean;
@@ -599,6 +743,8 @@ export default function ChannelSettings({
     evolutionInstance: "",
     evolutionApiKey: "",
     disclaimerAccepted: false,
+    botDisclaimerAccepted: false,
+    botDailyCap: "200",
   });
   const [whatsAppSaving, setWhatsAppSaving] = useState(false);
   const [whatsAppLoaded, setWhatsAppLoaded] = useState(false);
@@ -637,6 +783,8 @@ export default function ChannelSettings({
         evolutionInstance: whatsAppSettings.evolutionInstance ?? "",
         evolutionApiKey: prev.evolutionApiKey || "",
         disclaimerAccepted: false,
+        botDisclaimerAccepted: false,
+        botDailyCap: String(whatsAppSettings.botDailyCap ?? 200),
       }));
     }
   }, [whatsAppSettings, whatsAppSaving]);
@@ -669,6 +817,11 @@ export default function ChannelSettings({
               evolutionInstance: whatsAppForm.evolutionInstance,
               evolutionApiKey: whatsAppForm.evolutionApiKey || undefined,
               disclaimerAccepted: whatsAppForm.disclaimerAccepted,
+              ...(whatsAppForm.botDisclaimerAccepted
+                ? { botDisclaimerAccepted: true }
+                : {}),
+              botDailyCap:
+                Number.parseInt(whatsAppForm.botDailyCap, 10) || undefined,
             }
           : {}),
       });
@@ -758,6 +911,10 @@ export default function ChannelSettings({
             </Field>
             {whatsAppForm.transport === "evolution" ? (
               <EvolutionSection
+                botDisclaimerStored={
+                  whatsAppSettings?.botDisclaimerAccepted ?? false
+                }
+                botSuspended={Boolean(whatsAppSettings?.botSuspendedAt)}
                 disclaimerStored={whatsAppSettings?.disclaimerAccepted ?? false}
                 form={whatsAppForm}
                 hasApiKey={whatsAppSettings?.hasEvolutionApiKey ?? false}
@@ -766,6 +923,7 @@ export default function ChannelSettings({
                 }
                 savedInstance={whatsAppSettings?.evolutionInstance ?? null}
                 savedUrl={whatsAppSettings?.evolutionUrl ?? null}
+                whatsappModule={whatsAppSettings?.whatsappModule ?? false}
               />
             ) : (
               <MetaWhatsAppFields

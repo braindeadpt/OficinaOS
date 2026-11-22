@@ -66,6 +66,11 @@ const NO_WORDS = new Set(["não", "nao", "recuso", "rejeito"]);
 // todos os canais automáticos. Exact-match como SIM/NÃO: frases com
 // "parar" embutido não tiram consentimento por acidente.
 const STOP_WORDS = new Set(["parar", "stop"]);
+
+/** Opt-out transversal — true para PARAR/STOP exatos (case-insensitive). */
+export function isStopText(text: string): boolean {
+  return STOP_WORDS.has(text.trim().toLowerCase());
+}
 const HUMAN_RE = /ajuda|humano|atendimento|operador|pessoa|urgente/i;
 const DIGITS_RE = /\D/g;
 const WA_BOLD_RE = /\*/g;
@@ -154,7 +159,13 @@ export async function escalateToStaff(
   if (staff.length === 0) {
     return;
   }
-  const who = customerName ?? `+${msg.fromPhone}`;
+  // O número acompanha sempre o nome — clientes homónimos e respostas
+  // sem reparação associada (SIM/NÃO fora da janela) ficam seguiveis.
+  // O gateway SMS já manda o «+» — normaliza para não duplicar.
+  const phone = msg.fromPhone.startsWith("+")
+    ? msg.fromPhone
+    : `+${msg.fromPhone}`;
+  const who = customerName ? `${customerName} (${phone})` : phone;
   const snippet = (msg.text ?? `[${msg.messageType}]`).slice(0, 200);
   const created = await createManyAndReturnInAppNotifications(
     ctx.prisma,
@@ -193,6 +204,7 @@ interface ActiveJob {
     version: number;
     amount: { toNumber(): number };
     note: string | null;
+    sentAt: Date | null;
     status: string;
   }[];
   status: string;
@@ -216,7 +228,7 @@ function statusText(ctx: BotReplyCtx, job: ActiveJob): string {
     (job.partsWaiting?.length ?? 0) > 0 &&
     !(COMPLETED_STATUSES as string[]).includes(job.status)
   ) {
-    text += ` Peças em falta: ${pendingPartsText(ctx, job)}.`;
+    text += ` Peças em falta: ${pendingPartsText(job)}.`;
   }
   const q = job.quotes[0];
   if (q?.status === "SENT") {
@@ -234,14 +246,16 @@ function statusText(ctx: BotReplyCtx, job: ActiveJob): string {
  *  não o estado da reparação. */
 /** Partes em falta formatadas — cada uma com a data esperada ou
  *  "sem data prevista"; nunca esconde as que não têm data. */
-function pendingPartsText(ctx: BotReplyCtx, job: ActiveJob): string {
-  const tz = ctx.timezone ?? process.env.TZ ?? "Europe/Lisbon";
+function pendingPartsText(job: ActiveJob): string {
+  // A previsão é um dia de calendário (meio-dia UTC no armazenamento) —
+  // formatar em UTC mostra o mesmo dia em todos os fusos; formatar no
+  // fuso da loja adiantava/atrasava um dia nos extremos (-12/+14).
   return (job.partsWaiting ?? [])
     .map((p) =>
       p.expectedAt
         ? `${p.partName} — chegada prevista: ${p.expectedAt.toLocaleDateString(
             "pt-PT",
-            { timeZone: tz }
+            { timeZone: "UTC" }
           )}`
         : `${p.partName} — sem data prevista`
     )
@@ -254,7 +268,6 @@ function partEtaText(ctx: BotReplyCtx, job: ActiveJob): string {
   const device = `${job.device.brand.name} ${job.device.model}`;
   const tz = ctx.timezone ?? process.env.TZ ?? "Europe/Lisbon";
   let text = `Peças em falta para a tua reparação ${job.jobCode} (${device}): ${pendingPartsText(
-    ctx,
     job
   )}.`;
   if (job.estimatedDate) {
@@ -282,14 +295,42 @@ function quoteText(ctx: BotReplyCtx, job: ActiveJob): string {
   return text;
 }
 
-/** Aplica SIM/NÃO via respondToQuote — o mesmo serviço do portal/LAN. */
+/** Retry de um SIM/NÃO já aplicado (a resposta anterior não chegou a
+ * sair): o orçamento está decidido — devolve a confirmação da mesma
+ * decisão em vez de "não tens orçamentos", que leria como se a decisão
+ * se tivesse perdido. Decisão contrária → já respondido. */
+function repeatOrEmpty(
+  ctx: BotReplyCtx,
+  decidedJob: ActiveJob | undefined,
+  decision: "approve" | "reject"
+): string {
+  const last = decidedJob?.quotes[0];
+  if (decision === "approve" && last?.status === "APPROVED") {
+    return `Orçamento de ${eur(ctx, last.amount)} aceite ✅ Obrigado — a loja avança com a reparação ${decidedJob?.jobCode ?? ""}.`;
+  }
+  if (decision === "reject" && last?.status === "REJECTED") {
+    return `Orçamento de ${eur(ctx, last.amount)} recusado. A loja entra em contacto contigo sobre ${decidedJob?.jobCode ?? ""}.`;
+  }
+  if (last?.status === "APPROVED" || last?.status === "REJECTED") {
+    return "Esse orçamento já foi respondido ou substituído — a loja confirma contigo.";
+  }
+  return "Não tens orçamentos pendentes de resposta.";
+}
+
+// Tolerância para desfasamento de relógio Cloud↔DB: uma resposta só é
+// "anterior ao orçamento" quando a diferença ultrapassa este intervalo.
+const STALE_DECISION_GRACE_MS = 60_000;
+
+/** Aplica SIM/NÃO via respondToQuote — o mesmo serviço do portal/LAN.
+ * `stale` = a resposta chegou antes deste orçamento sair (fila Cloud):
+ * refere-se a outro, nunca se aplica ao mais recente por engano. */
 async function answerQuote(
   ctx: BotReplyCtx,
   msg: InboundMessage,
   jobs: ActiveJob[],
   direct: ActiveJob | undefined,
   decision: "approve" | "reject"
-): Promise<string> {
+): Promise<{ stale: boolean; text: string }> {
   const pending = jobs.filter((j) => j.quotes[0]?.status === "SENT");
   let target: ActiveJob | undefined;
   if (direct?.quotes[0]?.status === "SENT") {
@@ -298,11 +339,26 @@ async function answerQuote(
     target = pending[0];
   }
   if (!target) {
-    return "Não tens orçamentos pendentes de resposta.";
+    return {
+      stale: false,
+      text: repeatOrEmpty(
+        ctx,
+        direct ?? (jobs.length === 1 ? jobs[0] : undefined),
+        decision
+      ),
+    };
   }
   const quote = target.quotes[0];
   if (!quote) {
-    return "Não tens orçamentos pendentes de resposta.";
+    return { stale: false, text: "Não tens orçamentos pendentes de resposta." };
+  }
+  const replyAt = Date.parse(msg.createdAt);
+  if (
+    Number.isFinite(replyAt) &&
+    quote.sentAt &&
+    replyAt < quote.sentAt.getTime() - STALE_DECISION_GRACE_MS
+  ) {
+    return { stale: true, text: "" };
   }
   const result = await respondToQuote(
     ctx.prisma,
@@ -315,11 +371,18 @@ async function answerQuote(
     ctx.notifyCtx ?? { prisma: ctx.prisma }
   );
   if (result.error) {
-    return "Esse orçamento já foi respondido ou substituído — a loja confirma contigo.";
+    return {
+      stale: false,
+      text: "Esse orçamento já foi respondido ou substituído — a loja confirma contigo.",
+    };
   }
-  return decision === "approve"
-    ? `Orçamento de ${eur(ctx, quote.amount)} aceite ✅ Obrigado — a loja avança com a reparação ${target.jobCode}.`
-    : `Orçamento de ${eur(ctx, quote.amount)} recusado. A loja entra em contacto contigo sobre ${target.jobCode}.`;
+  return {
+    stale: false,
+    text:
+      decision === "approve"
+        ? `Orçamento de ${eur(ctx, quote.amount)} aceite ✅ Obrigado — a loja avança com a reparação ${target.jobCode}.`
+        : `Orçamento de ${eur(ctx, quote.amount)} recusado. A loja entra em contacto contigo sobre ${target.jobCode}.`,
+  };
 }
 
 export interface BotReply {
@@ -329,48 +392,101 @@ export interface BotReply {
   text: string;
 }
 
+/** SIM/NÃO — decisão vinculativa de orçamento, sempre determinístico. */
+async function decideQuoteIntent(
+  ctx: BotReplyCtx,
+  msg: InboundMessage,
+  jobs: ActiveJob[],
+  direct: ActiveJob | undefined,
+  customerName: string | null,
+  targetJobId: string | null,
+  decision: "approve" | "reject",
+  opts: { allowQuoteDecision?: boolean }
+): Promise<BotReply> {
+  if (opts.allowQuoteDecision === false) {
+    return {
+      customerName,
+      // A decisão não se aplica, mas a equipa tem de a ver — um SIM
+      // fora da janela sem registo deixava o cliente à espera de uma
+      // resposta que nunca chega. Sem jobId: com várias reparações
+      // ativas não se sabe a que orçamento o SIM/NÃO se refere e
+      // ligar a mais recente abria a reparação errada.
+      escalate: true,
+      jobId: null,
+      text: "",
+    };
+  }
+  const out = await answerQuote(ctx, msg, jobs, direct, decision);
+  if (out.stale) {
+    // Resposta mais antiga que o orçamento pendente — refere-se a
+    // outro. A equipa vê-a (escalada) mas a decisão não se aplica.
+    return { customerName, escalate: true, jobId: null, text: "" };
+  }
+  return {
+    customerName,
+    escalate: false,
+    jobId: targetJobId,
+    text: out.text,
+  };
+}
+
 interface CustomerMatch {
   customers: { id: string; name: string }[];
   jobs: ActiveJob[];
 }
 
-/** Casa o remetente com clientes e traz jobs ativos.
+/** Casa um telefone com clientes.
  *
  * Remetente com número nacional PT (9 dígitos) ou +351 casa pelo sufixo
  * — a loja pode ter o número guardado sem indicativo. Remetente com
  * outro indicativo só casa por número completo: os últimos 9 dígitos de
  * um +34 são iguais aos de um cliente PT e o bot daria a ficha dele a um
  * estranho (sec: a ficha leva histórico e dados da reparação).
+ *
+ * Partilhado pelo pipeline (findCustomerJobs) e pelo gate "só clientes"
+ * do bot Evolution — as duas superfícies têm de casar da mesma forma.
  */
-async function findCustomerJobs(
-  ctx: BotReplyCtx,
+export async function findCustomersByPhone(
+  prisma: BotReplyCtx["prisma"],
   fromPhone: string
-): Promise<CustomerMatch> {
+): Promise<{ id: string; name: string }[]> {
   const senderDigits = fromPhone
     .replace(DIGITS_RE, "")
     .replace(INTL_PREFIX_RE, "");
   const PT_CC = "351";
-  const isPtSender =
-    senderDigits.length === 9 ||
-    (senderDigits.startsWith(PT_CC) && senderDigits.length === 12);
+  const ptLike = (d: string) =>
+    d.length === 9 || (d.startsWith(PT_CC) && d.length === 12);
+  const isPtSender = ptLike(senderDigits);
   const last9 = senderDigits.slice(-9);
   const last4 = senderDigits.slice(-4);
   if ((isPtSender && last9.length < 9) || last4.length < 4) {
-    return { customers: [], jobs: [] };
+    return [];
   }
-  const candidates = await ctx.prisma.customer.findMany({
+  const candidates = await prisma.customer.findMany({
     where: { phone: { endsWith: last4 } },
     select: { id: true, name: true, phone: true },
   });
-  const customers = candidates.filter((c) => {
-    const cd = c.phone.replace(DIGITS_RE, "").replace(INTL_PREFIX_RE, "");
-    if (cd === senderDigits) {
-      return true;
-    }
-    return isPtSender && cd.slice(-9) === last9;
-  });
+  return candidates
+    .filter((c) => {
+      const cd = c.phone.replace(DIGITS_RE, "").replace(INTL_PREFIX_RE, "");
+      if (cd === senderDigits) {
+        return true;
+      }
+      // Sufixo só vale entre números PT — uma ficha estrangeira com os
+      // mesmos 9 dígitos finais não é o mesmo cliente.
+      return isPtSender && ptLike(cd) && cd.slice(-9) === last9;
+    })
+    .map(({ id, name }) => ({ id, name }));
+}
+
+/** Casa o remetente com clientes e traz jobs ativos. */
+async function findCustomerJobs(
+  ctx: BotReplyCtx,
+  fromPhone: string
+): Promise<CustomerMatch> {
+  const customers = await findCustomersByPhone(ctx.prisma, fromPhone);
   if (customers.length === 0) {
-    return { customers, jobs: [] };
+    return { customers: [], jobs: [] };
   }
   const jobs = (await ctx.prisma.job.findMany({
     where: {
@@ -397,6 +513,7 @@ async function findCustomerJobs(
           version: true,
           amount: true,
           note: true,
+          sentAt: true,
           status: true,
         },
       },
@@ -418,7 +535,8 @@ function listJobsText(customerName: string | null, jobs: ActiveJob[]): string {
 export async function composeReply(
   ctx: BotReplyCtx,
   msg: InboundMessage,
-  plainText = false
+  plainText = false,
+  opts: { allowQuoteDecision?: boolean } = {}
 ): Promise<BotReply> {
   const { customers, jobs } = await findCustomerJobs(ctx, msg.fromPhone);
   if (customers.length === 0) {
@@ -461,15 +579,20 @@ export async function composeReply(
   }
 
   // SIM/NÃO — decisão vinculativa de orçamento: SEMPRE determinístico.
+  // Em mensagens velhas (>23h na Meta oficial) a decisão não se aplica —
+  // o cliente pode estar a responder a outro orçamento; nunca decidir
+  // sem poder confirmar na hora.
   if (YES_WORDS.has(lower) || NO_WORDS.has(lower)) {
-    const reply = await answerQuote(
+    return decideQuoteIntent(
       ctx,
       msg,
       jobs,
       direct,
-      YES_WORDS.has(lower) ? "approve" : "reject"
+      customerName,
+      targetJobId,
+      YES_WORDS.has(lower) ? "approve" : "reject",
+      opts
     );
-    return { customerName, escalate: false, jobId: targetJobId, text: reply };
   }
 
   // IA (Pro, atrás de flag): só texto livre — mensagens com código REP ou
@@ -577,6 +700,8 @@ async function tryBotAiReply(
  * depois de envio confirmado); null = flood descartada sem resposta.
  */
 export interface InboundTransport {
+  /** Meta oficial fora da janela de 24h: SIM/NÃO não decide orçamentos. */
+  allowQuoteDecision?: boolean;
   channelLabel: string;
   plainText?: boolean;
   /** Evolution usa 10/h; oficial e SMS ficam no default de 20/h. */
@@ -589,11 +714,34 @@ export async function handleInboundMessage(
   msg: InboundMessage,
   t: InboundTransport
 ): Promise<{ reply: BotReply; sent: boolean } | null> {
-  if (!rateOk(msg.fromPhone, t.rateLimitPerHour)) {
+  // Opt-out legal: PARAR/STOP nunca morre no rate limiter — a revogação
+  // do consentimento tem de correr mesmo quando o número esgotou a
+  // janela horária (senão o cliente continua a receber avisos). A
+  // confirmação, porém, conta para o limite anti-ban: acima do teto
+  // horário a revogação fica gravada mas a resposta não sai.
+  const isStop = STOP_WORDS.has((msg.text ?? "").trim().toLowerCase());
+  const withinLimit = rateOk(msg.fromPhone, t.rateLimitPerHour);
+  if (!(isStop || withinLimit)) {
     return null;
   }
-  const out = await composeReply(ctx, msg, t.plainText);
-  const sent = out.text.length > 0 ? await t.send(out.text) : true;
+  const out = await composeReply(ctx, msg, t.plainText, {
+    allowQuoteDecision: t.allowQuoteDecision,
+  });
+  if (isStop && !withinLimit) {
+    out.text = "";
+  }
+  let sent = true;
+  if (out.text.length > 0) {
+    try {
+      sent = await t.send(out.text);
+    } catch (err) {
+      // Falha de transporte: sent=false deixa o poller re-tentar — e a
+      // escalada ao staff em baixo tem de correr na mesma (um pedido de
+      // ajuda que falha a enviar continua a ser um pedido de ajuda).
+      sent = false;
+      ctx.log.warn({ err }, `${t.channelLabel}-bot send threw`);
+    }
+  }
   if (out.escalate) {
     await escalateToStaff(
       ctx,

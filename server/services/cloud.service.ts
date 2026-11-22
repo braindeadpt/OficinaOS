@@ -400,6 +400,23 @@ export async function syncCloudEntitlements(
     );
   }
 
+  // SMS Pro: esvazia a fila inbound — o poller rápido (12 s) é o
+  // caminho principal; isto é a rede de segurança no ciclo lento.
+  if (modules.includes("sms")) {
+    launch("sms", () =>
+      import("./sms-cloud.service.js").then(({ syncSmsInbound }) =>
+        syncSmsInbound(
+          prisma,
+          settings.cloudApiUrl ?? "",
+          token,
+          log,
+          notifyCtx,
+          modules
+        )
+      )
+    );
+  }
+
   const status = toStatus(updated);
   status.reachable = true;
   return status;

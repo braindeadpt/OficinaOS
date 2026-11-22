@@ -10,6 +10,7 @@ import {
 import type { FastifyPluginAsync } from "fastify";
 import { decryptSecret } from "../lib/crypto.js";
 import { assertNotDemoMode } from "../lib/demo.js";
+import { primaryLanIpv4 } from "../lib/mdns.js";
 import { requirePermission } from "../middlewares/rbac.js";
 import {
   findShopSettingsUnique,
@@ -34,6 +35,7 @@ import {
   type EvolutionConfig,
   getEvolutionState,
   pairEvolutionInstance,
+  setEvolutionWebhook,
 } from "../services/evolution.service.js";
 import {
   getAiSettings,
@@ -50,11 +52,25 @@ import {
 } from "../services/settings.service.js";
 import {
   decryptSmsConfig,
+  generateSmsWebhookToken,
   registerSmsWebhook,
   sendSms,
 } from "../services/sms.service.js";
+import { getSmsDeviceStatus } from "../services/sms-cloud.service.js";
 import { getUpdateState, startUpdate } from "../services/update.service.js";
 import { pushCredentialsToCloud } from "../services/whatsapp-channel.js";
+
+// Campos de definições que mudam o corpo Meta dos templates WhatsApp
+// (blocos {{if}} expandidos por configuração) — um PUT que os toca tem de
+// re-sincronizar para o modelo aprovado acompanhar o novo corpo.
+// shopName não entra: é parâmetro posicional {{N}} — o valor vai no envio,
+// não no corpo aprovado. trackingBaseUrl grava-se em PUT /whatsapp.
+const META_TEMPLATE_KEYS = new Set(["reviewUrl"]);
+
+import {
+  getWhatsAppTemplateStatuses,
+  syncWhatsAppTemplates,
+} from "../services/whatsapp-templates.service.js";
 import { isModuleEnabled } from "../utils/modules.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
@@ -65,6 +81,8 @@ import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
  */
 function assertEvolutionGates(
   data: {
+    botDailyCap?: number;
+    botDisclaimerAccepted?: boolean;
     disclaimerAccepted?: boolean;
     enabled?: boolean;
     remarketingEnabled?: boolean;
@@ -77,6 +95,15 @@ function assertEvolutionGates(
 ): void {
   const wantsEvolution =
     (data.transport ?? settings.whatsappTransport) === "evolution";
+  // O termo do bot e o teto diário só fazem sentido no transporte local.
+  if (
+    !wantsEvolution &&
+    (data.botDisclaimerAccepted !== undefined || data.botDailyCap !== undefined)
+  ) {
+    throw new AppError("VALIDATION_ERROR", {
+      errors: { transport: ["validations.invalid_option"] },
+    });
+  }
   if (!wantsEvolution) {
     return;
   }
@@ -223,6 +250,17 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
     },
     async (_req, reply) =>
       reply.send(await syncCloudEntitlements(app.prisma, app.log))
+  );
+
+  app.get(
+    "/sms-cloud-device",
+    {
+      schema: {
+        tags: ["settings"],
+        summary: "SMS Pro cloud gateway device status",
+      },
+    },
+    async (_req, reply) => reply.send(await getSmsDeviceStatus(app.prisma))
   );
 
   app.delete(
@@ -377,6 +415,14 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       // The widget CSP caches embedAllowedOrigins for 60s — drop it so a
       // save takes effect on the next request instead of up to a minute late.
       app.resetEmbedOriginsCache();
+      // reviewUrl muda os blocos {{if}} dos templates WhatsApp — sem
+      // re-sync, o modelo aprovado na Meta diverge dos parâmetros
+      // enviados e as notificações falham.
+      if (Object.keys(parsed.data).some((k) => META_TEMPLATE_KEYS.has(k))) {
+        syncWhatsAppTemplates(app.prisma).catch((err) =>
+          req.log.warn({ err }, "whatsapp template resync failed")
+        );
+      }
       return reply.send(updated);
     }
   );
@@ -421,13 +467,69 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
         throw new AppError("CLOUD_MODULE_REQUIRED");
       }
       assertEvolutionGates(parsed.data, s);
-      const updated = await upsertWhatsAppSettings(app.prisma, parsed.data);
+      const updated = await upsertWhatsAppSettings(
+        app.prisma,
+        parsed.data,
+        req.user?.id
+      );
+      // §5.7 — com o bot Evolution habilitado pelo termo, regista o
+      // webhook inbound na instância (mesmo truque do SMS: o Host que o
+      // browser do staff usou é o endereço que a Evolution alcança).
+      if (
+        parsed.data.botDisclaimerAccepted === true ||
+        parsed.data.transport === "evolution"
+      ) {
+        await tryRegisterEvolutionWebhook(
+          app.prisma,
+          req.headers.host ?? ""
+        ).catch((err) =>
+          app.log.warn({ err }, "evolution webhook register failed")
+        );
+      }
       // Migração silenciosa: envia as credenciais Meta para o relay da
       // cloud. Se falhar (cloud em baixo / sem entitlement) fica para a
       // próxima gravação — o envio local continua a funcionar entretanto.
       const credentialsAtCloud = await pushCredentialsToCloud(app.prisma);
+      // §5.6 C.2 — ao ligar/configurar o WhatsApp, corre o sync de
+      // templates Meta em background (GET primeiro, cria o que falta).
+      // trackingBaseUrl controla um bloco {{if}} do corpo aprovado —
+      // mudá-lo aqui (o formulário grava nesta rota) exige re-sync mesmo
+      // sem tocar no `enabled`.
+      if (parsed.data.enabled || parsed.data.trackingBaseUrl !== undefined) {
+        syncWhatsAppTemplates(app.prisma, app.log).catch((err) =>
+          app.log.warn({ err }, "whatsapp-templates sync falhou")
+        );
+      }
       return reply.send({ ...updated, credentialsAtCloud });
     }
+  );
+
+  // Estado do sync de templates Meta — leitura do último resultado
+  // persistido (não chama a Meta/Cloud em cada GET).
+  app.get(
+    "/whatsapp/templates",
+    {
+      schema: {
+        tags: ["settings"],
+        summary: "Meta template sync status per template",
+      },
+    },
+    async (_req, reply) =>
+      reply.send({ templates: await getWhatsAppTemplateStatuses(app.prisma) })
+  );
+
+  // "Voltar a submeter" — corre o sync contra a Meta (local) ou a Cloud (Pro).
+  app.post(
+    "/whatsapp/templates/sync",
+    {
+      preHandler: [requirePermission({ settings: ["edit"] })],
+      schema: {
+        tags: ["settings"],
+        summary: "Re-run the Meta template sync",
+      },
+    },
+    async (_req, reply) =>
+      reply.send(await syncWhatsAppTemplates(app.prisma, app.log))
   );
 
   // Evolution API (WhatsApp local, free) — o serviço corre na LAN da
@@ -475,7 +577,7 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
         summary: "Create/fetch QR + pairing code for the local session",
       },
     },
-    async (_req, reply) => {
+    async (req, reply) => {
       assertNotDemoMode();
       // Pairing é free — corre na LAN da loja. O disclaimer continua a
       // ser exigido ao ativar o transporte (assertEvolutionGates) e o
@@ -490,6 +592,14 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       if ("error" in pairing) {
         return reply.send({ ok: false, error: pairing.error });
       }
+      // Termo já aceite numa gravação anterior → a instância (re)criada
+      // fica sem webhook até ao próximo save; regista já no pair.
+      await tryRegisterEvolutionWebhook(
+        app.prisma,
+        req.headers.host ?? ""
+      ).catch((err) =>
+        req.log.warn({ err }, "evolution webhook register failed")
+      );
       return reply.send({ ok: true, ...pairing });
     }
   );
@@ -681,6 +791,7 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
 };
 
 const LOCALHOST_RE = /^(localhost|127\.|::1|\[::1\])/i;
+const PORT_SUFFIX_RE = /:(\d+)$/;
 
 /**
  * Regista o webhook inbound no telemóvel. O callback usa o Host do pedido
@@ -706,5 +817,71 @@ async function tryRegisterSmsWebhook(
   }
   const callbackUrl = `http://${host}/api/public/sms/inbound/${row.smsWebhookToken}`;
   const result = await registerSmsWebhook(config, callbackUrl);
+  return result.success;
+}
+
+/**
+ * §5.7 — regista o webhook MESSAGES_UPSERT na instância Evolution. Só
+ * com o termo do bot aceite (a rota inbound nem existe sem ele); o
+ * callback usa `evolutionWebhookToken` — segredo próprio, separado do
+ * SMS — e o Host do pedido, como no tryRegisterSmsWebhook.
+ */
+async function tryRegisterEvolutionWebhook(
+  prisma: Parameters<typeof getSmsSettings>[0],
+  requestHost: string
+): Promise<boolean> {
+  let host = requestHost;
+  // Setup de um só PC: o staff abre localhost e a Evolution (mesmo PC
+  // ou outra máquina da LAN) nunca alcança esse nome — o IPv4 real da
+  // máquina sim. Sem IPv4 LAN (ex.: namespace isolado) fica por registar.
+  if (host && LOCALHOST_RE.test(host)) {
+    const ip = primaryLanIpv4();
+    if (!ip) {
+      return false;
+    }
+    const port = PORT_SUFFIX_RE.exec(host)?.[1];
+    host = `${ip}${port ? `:${port}` : ""}`;
+  }
+  if (!host) {
+    return false;
+  }
+  let row = await getOrCreateShopSettings(prisma);
+  // Instalações que aceitaram o termo antes do token próprio existir:
+  // gera-o aqui — o token SMS não é reutilizado (§5.7, ver rota pública).
+  if (
+    row.whatsappTransport === "evolution" &&
+    row.whatsappBotDisclaimerAt &&
+    !row.evolutionWebhookToken
+  ) {
+    await prisma.shopSettings.updateMany({
+      data: { evolutionWebhookToken: generateSmsWebhookToken() },
+      where: { id: "default", evolutionWebhookToken: null },
+    });
+    row = await getOrCreateShopSettings(prisma);
+  }
+  if (
+    !(
+      row.whatsappTransport === "evolution" &&
+      row.whatsappBotDisclaimerAt &&
+      row.evolutionWebhookToken &&
+      row.evolutionUrl &&
+      row.evolutionApiKeyEncrypted
+    )
+  ) {
+    return false;
+  }
+  const apiKey = decryptSecret(row.evolutionApiKeyEncrypted);
+  if (!apiKey) {
+    return false;
+  }
+  const callbackUrl = `http://${host}/api/public/whatsapp/evolution/inbound/${row.evolutionWebhookToken}`;
+  const result = await setEvolutionWebhook(
+    {
+      apiKey,
+      baseUrl: row.evolutionUrl,
+      instance: row.evolutionInstance ?? "oficinaos",
+    },
+    callbackUrl
+  );
   return result.success;
 }

@@ -9,11 +9,13 @@ import {
 import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import { logger } from "../utils/logger.js";
+import { isModuleEnabled } from "../utils/modules.js";
 import {
   queueNotification,
   STAFF_INITIATED_TEMPLATES,
 } from "./notification-outbox.service.js";
 import { renderTemplate } from "./notification-renderer.js";
+import { metaConditionalVars } from "./whatsapp-templates.service.js";
 
 interface NotifyEvent {
   context: {
@@ -39,6 +41,8 @@ interface NotifyEvent {
 
 interface ChannelHandlerContext {
   jobId?: string;
+  /** Vars de {{if}} garantidas pela config — mantêm-se no template Meta. */
+  metaKeep?: Record<string, boolean>;
   smsEnabled: boolean;
   templateBody: string;
   templateVars: Record<string, string>;
@@ -153,6 +157,7 @@ const whatsAppHandler: ChannelHandler = {
       channel: "WHATSAPP",
       deliverBy: event.deliverBy,
       jobId: event.jobId,
+      metaKeep: context.metaKeep,
       recipientPhone: phone,
       templateBody: context.templateBody,
       templateName: event.eventName,
@@ -233,10 +238,11 @@ async function resolveShopNotificationConfig(prisma: DbClient): Promise<{
       currency: shop?.currency ?? "EUR",
       reviewUrl: shop?.reviewUrl ?? null,
       shopName: shop?.shopName ?? "",
-      // SMS local (gateway Android na LAN) é free — o módulo Pro "sms"
-      // gateia apenas transportes geridos (provider via cloud), que se
-      // resolvem pela configuração, não pelo toggle do gateway.
-      smsEnabled: Boolean(shop?.smsEnabled),
+      // SMS local (gateway Android na LAN) é free — mas uma loja com o
+      // módulo Pro "sms" envia pela Cloud/device mesmo sem gateway
+      // ligado; sem este OR o dispatch nem sequer criava os entries que
+      // o transporte Pro enviaria.
+      smsEnabled: Boolean(shop?.smsEnabled) || isModuleEnabled(shop, "sms"),
       trackingBaseUrl: shop?.trackingBaseUrl ?? null,
       whatsappEnabled: shop?.whatsappEnabled ?? false,
     };
@@ -364,6 +370,7 @@ export async function notify(
     }
     await handler.handle(app.prisma, app, event, {
       jobId: event.jobId,
+      metaKeep: metaConditionalVars(shop),
       smsEnabled: shop.smsEnabled,
       templateBody: template.body,
       templateVars,
