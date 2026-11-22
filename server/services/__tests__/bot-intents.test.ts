@@ -355,7 +355,10 @@ describe("composeReply — deterministic rules before AI", () => {
   });
 
   it("«quando chega a peça» numa reparação pronta não repete peças stale", async () => {
+    // IA ativa de propósito: a exclusão determinística só é real se a
+    // pergunta não chegar à IA mesmo com ela disponível.
     const { ctx } = makeCtx({
+      ai: aiCfg,
       customers: [cust],
       jobs: [
         job({
