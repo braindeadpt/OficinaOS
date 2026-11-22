@@ -7,25 +7,41 @@ import {
   loadVistaCliente,
 } from "./customer-job-view.js";
 
-/** Primeira transição para estado final (DELIVERED/RETURNED/CANCELLED ou
- *  DONE) por job — a data de fecho real, imune a edições posteriores. */
+/** Data de fecho por job — a transição para o estado ATUAL (última
+ *  ocorrência desse toValue no audit trail). «Entregue» mostra a data da
+ *  entrega, não a do «Pronto para levantar» que lhe antecedeu; se o
+ *  audit não tiver essa transição, cai na primeira data terminal. */
 async function closedAtByJob(
   prisma: PrismaClient,
-  jobIds: string[]
+  jobs: { id: string; status: string }[]
 ): Promise<Map<string, Date>> {
   const rows = await prisma.auditLog.findMany({
     orderBy: { createdAt: "asc" },
     select: { createdAt: true, jobId: true, toValue: true },
     where: {
       action: AuditAction.STATUS_CHANGED,
-      jobId: { in: jobIds },
+      jobId: { in: jobs.map((j) => j.id) },
       toValue: { in: ["DONE", "DELIVERED", "RETURNED", "CANCELLED"] },
     },
   });
-  const map = new Map<string, Date>();
+  const firstTerminal = new Map<string, Date>();
+  const currentStatus = new Map<string, Date>();
   for (const r of rows) {
-    if (r.jobId && !map.has(r.jobId)) {
-      map.set(r.jobId, r.createdAt);
+    if (!r.jobId) {
+      continue;
+    }
+    if (!firstTerminal.has(r.jobId)) {
+      firstTerminal.set(r.jobId, r.createdAt);
+    }
+    if (r.toValue === jobs.find((j) => j.id === r.jobId)?.status) {
+      currentStatus.set(r.jobId, r.createdAt);
+    }
+  }
+  const map = new Map<string, Date>();
+  for (const j of jobs) {
+    const at = currentStatus.get(j.id) ?? firstTerminal.get(j.id);
+    if (at) {
+      map.set(j.id, at);
     }
   }
   return map;
@@ -173,7 +189,7 @@ export async function runBotTool(
       // ex.: publicar o link de tracking.
       const closedAt = await closedAtByJob(
         ctx.prisma,
-        jobs.map((j) => j.id)
+        jobs.map((j) => ({ id: j.id, status: j.status }))
       );
       return {
         result: {

@@ -42,8 +42,10 @@ const INTL_PREFIX_RE = /^00/;
 const QUOTE_RE = /or[çc]amento|pre[çc]o|quanto(?!.{0,10}tempo)|custa/i;
 // "quanto tempo falta" / "quando fica pronto" — perguntas de prazo têm
 // resposta determinística própria, antes do ramo de orçamento ("quanto").
+// "previsão"/"prazo" só contam quando NÃO seguidos de contexto de preço
+// ("previsão de preço" é orçamento, não prazo).
 const TIME_RE =
-  /quanto tempo|quando.{0,25}(pronto|fica|está|esta|entrega)|demora|falta.{0,15}pront|previs[aã]o|prazo/i;
+  /quanto tempo|quando.{0,25}(pronto|fica|está|esta|entrega)|demora|falta.{0,15}pront|previs[aã]o(?!.{0,15}pre[çc]o)|prazo(?!.{0,15}(pre[çc]o|custo|pagamento))/i;
 // "ok" is deliberately absent — a bare "ok" in casual conversation
 // must not legally accept a quote.
 const YES_WORDS = new Set(["sim", "aceito", "confirmo", "aprovo"]);
@@ -190,7 +192,7 @@ function statusText(ctx: BotReplyCtx, job: ActiveJob): string {
   }*.`;
   if (job.estimatedDate) {
     text += ` Previsão: ${job.estimatedDate.toLocaleDateString("pt-PT", {
-      timeZone: ctx.timezone ?? "Europe/Lisbon",
+      timeZone: ctx.timezone ?? process.env.TZ ?? "Europe/Lisbon",
     })}.`;
   }
   const q = job.quotes[0];
@@ -474,6 +476,7 @@ async function tryBotAiReply(
     !ai?.enabled ||
     input.text.length === 0 ||
     QUOTE_RE.test(input.lower) ||
+    TIME_RE.test(input.lower) ||
     input.codeMatch ||
     !ai.modules.includes(ai.module)
   ) {

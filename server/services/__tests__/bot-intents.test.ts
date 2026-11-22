@@ -189,7 +189,8 @@ describe("composeReply — deterministic rules before AI", () => {
   it("AI timeout/failure falls back to deterministic reply", async () => {
     mocks.askBotAi.mockResolvedValueOnce(null);
     const { ctx } = makeCtx({ ai: aiCfg, customers: [cust], jobs: [job()] });
-    const out = await composeReply(ctx, msg("quando fica pronto?"));
+    // Mensagem neutra que chega à IA (não casa TIME_RE/QUOTE_RE/código).
+    const out = await composeReply(ctx, msg("obrigado pelo contacto"));
     expect(mocks.askBotAi).toHaveBeenCalledOnce();
     // fallback = statusText of the single active job
     expect(out.text).toContain("REP-2024-000001-AAA");
