@@ -36,7 +36,9 @@ import {
 } from "../whatsapp-templates.service.js";
 
 const updateSettings = vi.fn(async () => ({}));
-const notificationTemplate = { findMany: vi.fn(async () => []) };
+const notificationTemplate = {
+  findMany: vi.fn(async (): Promise<{ body: string; name: string }[]> => []),
+};
 const prisma = {
   notificationTemplate,
   shopSettings: { update: updateSettings },

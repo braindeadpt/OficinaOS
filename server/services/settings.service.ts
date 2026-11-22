@@ -359,6 +359,9 @@ export async function getWhatsAppSettings(prisma: PrismaClient) {
   const row = await findShopSettingsUnique(prisma);
   if (!row) {
     return {
+      botDailyCap: 200,
+      botDisclaimerAccepted: false,
+      botSuspendedAt: null,
       businessId: null,
       credentialsAtCloud: false,
       disclaimerAccepted: false,
@@ -380,6 +383,9 @@ export async function getWhatsAppSettings(prisma: PrismaClient) {
     };
   }
   return {
+    botDailyCap: row.whatsappBotDailyCap,
+    botDisclaimerAccepted: Boolean(row.whatsappBotDisclaimerAt),
+    botSuspendedAt: row.whatsappBotSuspendedAt,
     businessId: row.whatsappBusinessId,
     credentialsAtCloud: row.whatsappCredentialsAtCloud,
     disclaimerAccepted: Boolean(row.whatsappLocalDisclaimerAt),
@@ -412,6 +418,10 @@ interface WhatsAppUpsertData {
   remarketingTemplate?: string | null;
   trackingBaseUrl?: string | null;
   whatsappApiTokenEncrypted?: string;
+  whatsappBotDailyCap?: number;
+  whatsappBotDisclaimerAt?: Date;
+  whatsappBotDisclaimerUserId?: string | null;
+  whatsappBotSuspendedAt?: Date | null;
   whatsappBusinessId?: string;
   whatsappEnabled?: boolean;
   whatsappLocalDisclaimerAt?: Date;
@@ -422,7 +432,8 @@ interface WhatsAppUpsertData {
 /** Campos do transporte local (Evolution) — separados para baixar a complexidade do upsert. */
 function applyEvolutionFields(
   data: WhatsAppUpsertData,
-  input: UpdateWhatsAppSettingsInput
+  input: UpdateWhatsAppSettingsInput,
+  userId?: string
 ): void {
   if (input.transport !== undefined) {
     data.whatsappTransport = input.transport;
@@ -440,11 +451,22 @@ function applyEvolutionFields(
     // Timestamp do aceite — o transporte local só resolve com ele.
     data.whatsappLocalDisclaimerAt = new Date();
   }
+  if (input.botDisclaimerAccepted === true) {
+    // Termo do bot (§5.7) — separado do disclaimer do transporte.
+    // Re-aceitar também desfaz a suspensão automática por erro de sessão.
+    data.whatsappBotDisclaimerAt = new Date();
+    data.whatsappBotDisclaimerUserId = userId ?? null;
+    data.whatsappBotSuspendedAt = null;
+  }
+  if (input.botDailyCap !== undefined) {
+    data.whatsappBotDailyCap = input.botDailyCap;
+  }
 }
 
 export async function upsertWhatsAppSettings(
   prisma: PrismaClient,
-  input: UpdateWhatsAppSettingsInput
+  input: UpdateWhatsAppSettingsInput,
+  userId?: string
 ) {
   const data: WhatsAppUpsertData = {};
   if (input.enabled !== undefined) {
@@ -477,7 +499,17 @@ export async function upsertWhatsAppSettings(
   if (input.apiToken !== undefined && input.apiToken !== "") {
     data.whatsappApiTokenEncrypted = encryptSecret(input.apiToken);
   }
-  applyEvolutionFields(data, input);
+  applyEvolutionFields(data, input, userId);
+
+  // O webhook inbound da Evolution usa o mesmo segredo de path do SMS;
+  // garante a existência quando o termo do bot é aceite (sem rodar um
+  // token já emitido — a URL registada mudaria).
+  if (input.botDisclaimerAccepted === true) {
+    await prisma.shopSettings.updateMany({
+      data: { smsWebhookToken: generateSmsWebhookToken() },
+      where: { id: "default", smsWebhookToken: null },
+    });
+  }
 
   return await upsertShopSettingsRepo(prisma, {
     create: whatsAppCreateData(data),

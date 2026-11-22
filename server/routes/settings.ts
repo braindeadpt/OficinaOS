@@ -34,6 +34,7 @@ import {
   type EvolutionConfig,
   getEvolutionState,
   pairEvolutionInstance,
+  setEvolutionWebhook,
 } from "../services/evolution.service.js";
 import {
   getAiSettings,
@@ -70,6 +71,8 @@ import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
  */
 function assertEvolutionGates(
   data: {
+    botDailyCap?: number;
+    botDisclaimerAccepted?: boolean;
     disclaimerAccepted?: boolean;
     enabled?: boolean;
     remarketingEnabled?: boolean;
@@ -82,6 +85,15 @@ function assertEvolutionGates(
 ): void {
   const wantsEvolution =
     (data.transport ?? settings.whatsappTransport) === "evolution";
+  // O termo do bot e o teto diário só fazem sentido no transporte local.
+  if (
+    !wantsEvolution &&
+    (data.botDisclaimerAccepted !== undefined || data.botDailyCap !== undefined)
+  ) {
+    throw new AppError("VALIDATION_ERROR", {
+      errors: { transport: ["validations.invalid_option"] },
+    });
+  }
   if (!wantsEvolution) {
     return;
   }
@@ -437,7 +449,25 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
         throw new AppError("CLOUD_MODULE_REQUIRED");
       }
       assertEvolutionGates(parsed.data, s);
-      const updated = await upsertWhatsAppSettings(app.prisma, parsed.data);
+      const updated = await upsertWhatsAppSettings(
+        app.prisma,
+        parsed.data,
+        req.user?.id
+      );
+      // §5.7 — com o bot Evolution habilitado pelo termo, regista o
+      // webhook inbound na instância (mesmo truque do SMS: o Host que o
+      // browser do staff usou é o endereço que a Evolution alcança).
+      if (
+        parsed.data.botDisclaimerAccepted === true ||
+        parsed.data.transport === "evolution"
+      ) {
+        await tryRegisterEvolutionWebhook(
+          app.prisma,
+          req.headers.host ?? ""
+        ).catch((err) =>
+          app.log.warn({ err }, "evolution webhook register failed")
+        );
+      }
       // Migração silenciosa: envia as credenciais Meta para o relay da
       // cloud. Se falhar (cloud em baixo / sem entitlement) fica para a
       // próxima gravação — o envio local continua a funcionar entretanto.
@@ -757,5 +787,46 @@ async function tryRegisterSmsWebhook(
   }
   const callbackUrl = `http://${host}/api/public/sms/inbound/${row.smsWebhookToken}`;
   const result = await registerSmsWebhook(config, callbackUrl);
+  return result.success;
+}
+
+/**
+ * §5.7 — regista o webhook MESSAGES_UPSERT na instância Evolution. Só
+ * com o termo do bot aceite (a rota inbound nem existe sem ele); o
+ * callback usa o mesmo segredo de path do SMS e o Host do pedido, como
+ * no tryRegisterSmsWebhook.
+ */
+async function tryRegisterEvolutionWebhook(
+  prisma: Parameters<typeof getSmsSettings>[0],
+  host: string
+): Promise<boolean> {
+  if (!host || LOCALHOST_RE.test(host)) {
+    return false;
+  }
+  const row = await getOrCreateShopSettings(prisma);
+  if (
+    !(
+      row.whatsappTransport === "evolution" &&
+      row.whatsappBotDisclaimerAt &&
+      row.smsWebhookToken &&
+      row.evolutionUrl &&
+      row.evolutionApiKeyEncrypted
+    )
+  ) {
+    return false;
+  }
+  const apiKey = decryptSecret(row.evolutionApiKeyEncrypted);
+  if (!apiKey) {
+    return false;
+  }
+  const callbackUrl = `http://${host}/api/public/whatsapp/evolution/inbound/${row.smsWebhookToken}`;
+  const result = await setEvolutionWebhook(
+    {
+      apiKey,
+      baseUrl: row.evolutionUrl,
+      instance: row.evolutionInstance ?? "oficinaos",
+    },
+    callbackUrl
+  );
   return result.success;
 }

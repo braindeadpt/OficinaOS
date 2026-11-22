@@ -574,6 +574,8 @@ function WaTemplatesBlock() {
 
 interface WhatsAppFormState {
   apiToken: string;
+  botDailyCap: string;
+  botDisclaimerAccepted: boolean;
   businessId: string;
   disclaimerAccepted: boolean;
   enabled: boolean;
@@ -725,6 +727,8 @@ export default function ChannelSettings({
     evolutionInstance: "",
     evolutionApiKey: "",
     disclaimerAccepted: false,
+    botDisclaimerAccepted: false,
+    botDailyCap: "200",
   });
   const [whatsAppSaving, setWhatsAppSaving] = useState(false);
   const [whatsAppLoaded, setWhatsAppLoaded] = useState(false);
@@ -763,6 +767,8 @@ export default function ChannelSettings({
         evolutionInstance: whatsAppSettings.evolutionInstance ?? "",
         evolutionApiKey: prev.evolutionApiKey || "",
         disclaimerAccepted: false,
+        botDisclaimerAccepted: false,
+        botDailyCap: String(whatsAppSettings.botDailyCap ?? 200),
       }));
     }
   }, [whatsAppSettings, whatsAppSaving]);
@@ -795,6 +801,11 @@ export default function ChannelSettings({
               evolutionInstance: whatsAppForm.evolutionInstance,
               evolutionApiKey: whatsAppForm.evolutionApiKey || undefined,
               disclaimerAccepted: whatsAppForm.disclaimerAccepted,
+              ...(whatsAppForm.botDisclaimerAccepted
+                ? { botDisclaimerAccepted: true }
+                : {}),
+              botDailyCap:
+                Number.parseInt(whatsAppForm.botDailyCap, 10) || undefined,
             }
           : {}),
       });
@@ -884,6 +895,10 @@ export default function ChannelSettings({
             </Field>
             {whatsAppForm.transport === "evolution" ? (
               <EvolutionSection
+                botDisclaimerStored={
+                  whatsAppSettings?.botDisclaimerAccepted ?? false
+                }
+                botSuspended={Boolean(whatsAppSettings?.botSuspendedAt)}
                 disclaimerStored={whatsAppSettings?.disclaimerAccepted ?? false}
                 form={whatsAppForm}
                 hasApiKey={whatsAppSettings?.hasEvolutionApiKey ?? false}
@@ -892,6 +907,7 @@ export default function ChannelSettings({
                 }
                 savedInstance={whatsAppSettings?.evolutionInstance ?? null}
                 savedUrl={whatsAppSettings?.evolutionUrl ?? null}
+                whatsappModule={whatsAppSettings?.whatsappModule ?? false}
               />
             ) : (
               <MetaWhatsAppFields

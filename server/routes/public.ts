@@ -6,6 +6,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { loadEnv } from "../config/env.js";
 import { accessUrls } from "../lib/mdns.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
+import { handleEvolutionInbound } from "../services/evolution-bot.service.js";
 import { submitPreCheckRequest } from "../services/intake-request.service.js";
 import { respondToQuote } from "../services/job-quote.service.js";
 import {
@@ -317,6 +318,46 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
         type: "object",
       },
       summary: "Inbound SMS webhook from the local sms-gate device",
+      tags: ["public"],
+    },
+  });
+
+  /**
+   * Webhook inbound da Evolution API (LAN) — MESSAGES_UPSERT. O segredo é
+   * o path (o webhook não manda auth), como no SMS. A app regista este
+   * callback na instância ao ligar o bot (§5.7).
+   */
+  app.post("/whatsapp/evolution/inbound/:token", {
+    handler: async (req, reply) => {
+      const { token } = req.params as { token: string };
+      const settings = await getOrCreateShopSettings(app.prisma);
+      if (
+        !(
+          settings.whatsappEnabled &&
+          settings.whatsappTransport === "evolution" &&
+          settings.smsWebhookToken &&
+          tokenMatches(settings.smsWebhookToken, token)
+        )
+      ) {
+        throw new AppError("NOT_FOUND");
+      }
+      await handleEvolutionInbound(
+        app.prisma,
+        app.log,
+        { prisma: app.prisma, wsBroadcast: app.wsBroadcast },
+        (req.body ?? {}) as Parameters<typeof handleEvolutionInbound>[3]
+      );
+      // Idem SMS: 200 sempre — não revelar parsing/auth a quem chama.
+      return reply.send({ ok: true });
+    },
+    schema: {
+      body: { type: "object", additionalProperties: true },
+      params: {
+        properties: { token: { type: "string" } },
+        required: ["token"],
+        type: "object",
+      },
+      summary: "Inbound WhatsApp webhook from the local Evolution instance",
       tags: ["public"],
     },
   });

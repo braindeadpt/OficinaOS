@@ -1223,6 +1223,16 @@ model ShopSettings {
   evolutionInstance           String?
   evolutionApiKeyEncrypted    String?
   whatsappLocalDisclaimerAt   DateTime? @db.Timestamptz
+  // Termo do BOT no transporte não-oficial (Evolution) — separado do
+  // disclaimer do transporte: respostas automáticas aumentam o risco de
+  // ban. Sem ele o bot inbound não processa mensagens (§5.7).
+  // whatsappBotSuspendedAt: a app suspende o bot sozinha quando a sessão
+  // da Evolution cai/é bloqueada; aceitar o termo de novo reativa.
+  // whatsappBotDailyCap: teto de respostas automáticas/dia por instância.
+  whatsappBotDisclaimerAt     DateTime? @db.Timestamptz
+  whatsappBotDisclaimerUserId String?
+  whatsappBotDailyCap         Int       @default(200)
+  whatsappBotSuspendedAt      DateTime? @db.Timestamptz
   // SMS via gateway local (core, grátis) — um Android na LAN com
   // sms-gate.app em modo Local Server. O envio é HTTP direto ao telemóvel;
   // o inbound chega por webhook registado no próprio aparelho.

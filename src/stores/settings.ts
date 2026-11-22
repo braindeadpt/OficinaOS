@@ -51,6 +51,9 @@ export interface SmsCloudDevice {
 }
 
 interface WhatsAppSettings {
+  botDailyCap: number;
+  botDisclaimerAccepted: boolean;
+  botSuspendedAt: string | null;
   businessId: string | null;
   credentialsAtCloud: boolean;
   disclaimerAccepted: boolean;
@@ -179,6 +182,8 @@ interface SettingsState {
     evolutionInstance?: string;
     evolutionApiKey?: string;
     disclaimerAccepted?: boolean;
+    botDisclaimerAccepted?: boolean;
+    botDailyCap?: number;
   }) => Promise<void>;
   sendSmsTest: (phone?: string) => Promise<{ ok: boolean; message?: string }>;
   sendTestNotification: (templateId: string) => Promise<{

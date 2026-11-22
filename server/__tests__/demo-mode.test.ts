@@ -584,6 +584,7 @@ describe("route classification — every /api route is decided", () => {
     "POST /api/public/quote-respond",
     "POST /api/public/sign/:token",
     "POST /api/public/sms/inbound/:token",
+    "POST /api/public/whatsapp/evolution/inbound/:token",
     "POST /api/purchase-orders",
     "POST /api/receipts/:id/print",
     "POST /api/repairs",
