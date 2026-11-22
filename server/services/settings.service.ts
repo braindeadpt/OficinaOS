@@ -1,6 +1,6 @@
 const TRAILING_SLASH = /\/$/;
 
-import type { PrismaClient } from "@generated/client";
+import { OutboxStatus, type PrismaClient } from "@generated/client";
 import type {
   UpdateAiSettingsInput,
   UpdateInvoicingSettingsInput,
@@ -272,12 +272,49 @@ export async function updateNotificationTemplate(
     return null;
   }
 
-  return await updateNotificationTemplateRepo(prisma, id, {
+  const updated = await updateNotificationTemplateRepo(prisma, id, {
     body: input.body,
     channel: input.channel,
     isDefault: input.isDefault,
     name: input.name,
   });
+
+  // Rename: migra a fila para o nome novo. Sem isto o estado do nome
+  // antigo era só preservado do último sync — nunca reconsultado na
+  // Meta — e uma aprovação posterior não desbloqueava as entradas.
+  // No envio, templateParams com `vars` recomputa a ordem pelo corpo
+  // atual do modelo; entradas só-posicionais (formato antigo) ficam
+  // sob o nome antigo, que a Meta mantém aprovado.
+  if (
+    input.name &&
+    input.name !== existing.name &&
+    existing.channel === "WHATSAPP"
+  ) {
+    const queued = await prisma.notificationOutbox.findMany({
+      select: { id: true, templateParams: true },
+      where: {
+        channel: "WHATSAPP",
+        status: OutboxStatus.QUEUED,
+        templateName: existing.name,
+      },
+    });
+    for (const q of queued) {
+      const p = q.templateParams;
+      const migratable =
+        p === null ||
+        (!Array.isArray(p) &&
+          typeof p === "object" &&
+          typeof (p as { vars?: unknown }).vars === "object");
+      if (migratable) {
+        await prisma.notificationOutbox.update({
+          data: { templateName: input.name },
+          where: { id: q.id },
+        });
+      }
+    }
+  }
+
+  return updated;
 }
 
 export async function testAiConnection(prisma: PrismaClient) {

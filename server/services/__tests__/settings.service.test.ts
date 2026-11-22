@@ -20,6 +20,10 @@ function mockPrisma() {
       findUnique: vi.fn(),
       upsert: vi.fn(),
     },
+    notificationOutbox: {
+      findMany: vi.fn(),
+      update: vi.fn(),
+    },
     notificationTemplate: {
       findMany: vi.fn(),
       findUnique: vi.fn(),
@@ -263,6 +267,61 @@ describe("updateNotificationTemplate", () => {
 
     expect(result).toHaveProperty("name", "Updated Name");
     expect(result).toHaveProperty("body", "Updated body");
+  });
+
+  it("rename migra entradas QUEUED para o nome novo", async () => {
+    (
+      prisma.notificationTemplate.findUnique as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      channel: "WHATSAPP",
+      id: "template-1",
+      name: "job_ready",
+    });
+    (
+      prisma.notificationTemplate.update as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      channel: "WHATSAPP",
+      id: "template-1",
+      name: "job_ready_v2",
+    });
+    (
+      prisma.notificationOutbox.findMany as ReturnType<typeof vi.fn>
+    ).mockResolvedValue([
+      // vars → migra (o envio recomputa a ordem pelo corpo atual)
+      {
+        id: "o1",
+        templateParams: { params: ["Ana"], vars: { customer: "Ana" } },
+      },
+      // legado só-posicional → fica sob o nome antigo (Meta mantém)
+      { id: "o2", templateParams: ["Ana", "RPR-1"] },
+      // texto livre → migra — o nome tem de existir na Meta
+      { id: "o3", templateParams: null },
+    ]);
+
+    await updateNotificationTemplate(prisma, "template-1", {
+      body: "B",
+      channel: "WHATSAPP",
+      isDefault: true,
+      name: "job_ready_v2",
+    });
+
+    expect(prisma.notificationOutbox.findMany).toHaveBeenCalledWith({
+      select: { id: true, templateParams: true },
+      where: {
+        channel: "WHATSAPP",
+        status: "QUEUED",
+        templateName: "job_ready",
+      },
+    });
+    expect(prisma.notificationOutbox.update).toHaveBeenCalledTimes(2);
+    expect(prisma.notificationOutbox.update).toHaveBeenCalledWith({
+      data: { templateName: "job_ready_v2" },
+      where: { id: "o1" },
+    });
+    expect(prisma.notificationOutbox.update).toHaveBeenCalledWith({
+      data: { templateName: "job_ready_v2" },
+      where: { id: "o3" },
+    });
   });
 });
 

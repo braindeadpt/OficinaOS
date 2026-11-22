@@ -55,6 +55,12 @@ const EVOLUTION_CHANNEL = {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.cloudFetch.mockResolvedValue({ body: { messages: [] }, ok: true });
+  mocks.handleInboundMessage.mockImplementation(
+    async (): Promise<{ reply: { text: string }; sent: boolean }> => ({
+      reply: { text: "resposta" },
+      sent: true,
+    })
+  );
 });
 
 describe("pollWhatsAppInbound — fila Meta com transporte Evolution", () => {
@@ -93,6 +99,61 @@ describe("pollWhatsAppInbound — fila Meta com transporte Evolution", () => {
       "/whatsapp/inbound/ack",
       expect.objectContaining({ body: { ids: ["m-stop"] } })
     );
+  });
+
+  it("PARAR em modo bloqueado revoga o consentimento no pipeline real", async () => {
+    mocks.getOrCreateShopSettings.mockResolvedValue({
+      whatsappBotDisclaimerAt: null,
+      whatsappBotSuspendedAt: null,
+      whatsappEnabled: true,
+      whatsappTransport: "evolution",
+    });
+    mocks.resolveWhatsAppChannel.mockReturnValue(EVOLUTION_CHANNEL);
+    // Pipeline real — o mock do handleInboundMessage provava routing,
+    // não a revogação. O STOP tem de gravar whatsappConsent=false.
+    const real =
+      await vi.importActual<typeof import("../bot-intents.js")>(
+        "../bot-intents.js"
+      );
+    mocks.handleInboundMessage.mockImplementation(
+      real.handleInboundMessage as never
+    );
+    const customerUpdate = vi.fn(async () => ({}));
+    const prismaReal = {
+      customer: {
+        findMany: vi.fn(async () => [
+          { id: "c1", name: "Ana", phone: "900000001" },
+        ]),
+        update: customerUpdate,
+      },
+      job: { findMany: vi.fn(async () => []) },
+    } as never;
+    mocks.cloudFetch
+      .mockResolvedValueOnce({
+        body: {
+          messages: [
+            {
+              fromPhone: "351900000001",
+              id: "m-stop",
+              messageType: "text",
+              text: "PARAR",
+            },
+          ],
+        },
+        ok: true,
+      })
+      .mockResolvedValueOnce({ body: {}, ok: true });
+    await pollWhatsAppInbound(
+      prismaReal,
+      "https://cloud",
+      "tok",
+      log,
+      undefined
+    );
+    expect(customerUpdate).toHaveBeenCalledWith({
+      data: { whatsappConsent: false },
+      where: { id: "c1" },
+    });
   });
 
   it("transporte Evolution com bot suspenso → só consome PARAR/STOP", async () => {
