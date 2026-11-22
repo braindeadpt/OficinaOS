@@ -136,10 +136,11 @@ jobs:
           bun run db:migrate-deploy
           $code = $LASTEXITCODE
           Write-Host "MARKER-G-END EXIT=$code"
-          # Corre contra postgres inexistente — falha esperada com P1000. O
+          # Corre contra postgres inexistente — falha esperada com P1001. O
           # teste é sair dentro do timeout (não pendurar); o exit code é só
-          # informativo e engole-se para não emitir anotação de falha.
+          # informativo — zeroa-se para o step não falhar nem emitir anotação.
           if ($code -eq 0) { Write-Host "AVISO: migrate deploy saiu com 0" }
+          $global:LASTEXITCODE = 0
 
       # Os probes A–F passam; nas 3 releases falhadas a única construção
       # diferente era a pipeline (| Out-Null / 2>&1 | Out-String) — se um
