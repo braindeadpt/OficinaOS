@@ -7,8 +7,10 @@
 > **Documentação ao utilizador é parte da mudança.** Qualquer alteração a um
 > módulo Pro, fluxo Cloud, permissão ou comportamento visível ao utilizador
 > implica atualizar os docs no website (`oficinaos-website/src/i18n/{pt,en,es}.ts`
-> — `moduleDocs.<módulo>` e `docs.sections` do guia completo) — na mesma PR ou
-> numa PR geminada ao website. Docs desatualizados são bugs.
+> — `moduleDocs.<módulo>` quando existe um módulo afetado; mudanças
+> transversais como permissões atualizam só `docs.sections` do guia
+> completo) — na mesma PR ou numa PR geminada ao website. Docs
+> desatualizados são bugs.
 
 ## Os 4 repositórios
 
