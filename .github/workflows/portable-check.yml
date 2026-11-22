@@ -271,8 +271,15 @@ jobs:
           (Get-Item "$env:RUNNER_TEMP\portable-ca.zip").Length
 
       - name: Probe M — 7z do bundle
+        # Corre mesmo se a sonda K falhar: testa um compressor alternativo
+        # sobre a pasta já montada — não depende do zip do Compress-Archive.
+        if: always()
         timeout-minutes: 10
         run: |
+          if (-not (Test-Path "$env:RUNNER_TEMP\oficinaos-portable-k")) {
+            Write-Host "MARKER-M-SKIP: pasta do bundle não existe"
+            exit 0
+          }
           Write-Host "MARKER-M-START"
           & "C:\Program Files\7-Zip\7z.exe" a -tzip "$env:RUNNER_TEMP\portable-7z.zip" "$env:RUNNER_TEMP\oficinaos-portable-k" | Select-Object -Last 5
           Write-Host "MARKER-M-END EXIT=$LASTEXITCODE"
