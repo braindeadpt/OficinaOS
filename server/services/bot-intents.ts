@@ -159,7 +159,11 @@ export async function escalateToStaff(
   if (staff.length === 0) {
     return;
   }
-  const who = customerName ?? `+${msg.fromPhone}`;
+  // O número acompanha sempre o nome — clientes homónimos e respostas
+  // sem reparação associada (SIM/NÃO fora da janela) ficam seguiveis.
+  const who = customerName
+    ? `${customerName} (+${msg.fromPhone})`
+    : `+${msg.fromPhone}`;
   const snippet = (msg.text ?? `[${msg.messageType}]`).slice(0, 200);
   const created = await createManyAndReturnInAppNotifications(
     ctx.prisma,

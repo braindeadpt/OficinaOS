@@ -350,10 +350,11 @@ async function processOne(
     rateLimitPerHour: RATE_LIMIT_PER_HOUR,
     send: makeSend(prisma, ctx, config, msg, log),
   });
-  // Descartada pelo limite horário por número — a vaga diária não foi
-  // realmente usada: devolve-a para um cliente abusivo não esgotar o
-  // teto dos outros.
-  if (out === null) {
+  // Descartada pelo limite horário ou processada sem resposta ao
+  // cliente (PARAR acima do teto, SIM/NÃO fora da janela) — a vaga
+  // diária não foi realmente usada: devolve-a para um cliente abusivo
+  // não esgotar o teto dos outros.
+  if (out === null || out.reply.text.length === 0) {
     dayCount -= 1;
   }
 }
