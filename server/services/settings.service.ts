@@ -133,6 +133,26 @@ function normalizeOriginList(value: string | null | undefined): string | null {
   return origins.length > 0 ? Array.from(new Set(origins)).join("\n") : null;
 }
 
+const botCreate = (input: UpdateShopSettingsInput) => ({
+  botAiEnabled: input.botAiEnabled ?? false,
+  botAvgRepairDaysAfterPart: input.botAvgRepairDaysAfterPart ?? 1,
+  botClosedFallbackText: input.botClosedFallbackText?.trim() || null,
+  botInfoText: input.botInfoText?.trim() || null,
+});
+
+const botUpdate = (input: UpdateShopSettingsInput) => ({
+  botAiEnabled: input.botAiEnabled,
+  botAvgRepairDaysAfterPart: input.botAvgRepairDaysAfterPart,
+  botClosedFallbackText:
+    input.botClosedFallbackText === undefined
+      ? undefined
+      : input.botClosedFallbackText?.trim() || null,
+  botInfoText:
+    input.botInfoText === undefined
+      ? undefined
+      : input.botInfoText?.trim() || null,
+});
+
 const shopCreate = (input: UpdateShopSettingsInput) => ({
   address: input.address ?? null,
   countryCode: input.countryCode ?? "PT",
@@ -141,6 +161,7 @@ const shopCreate = (input: UpdateShopSettingsInput) => ({
   phone: input.phone ?? null,
   receiptFooter: input.receiptFooter ?? null,
   intakeTerms: input.intakeTerms?.trim() || null,
+  ...botCreate(input),
   receiptPaper: input.receiptPaper ?? "80mm",
   receiptShowImei: input.receiptShowImei ?? true,
   receiptShowProblem: input.receiptShowProblem ?? true,
@@ -168,6 +189,7 @@ const shopUpdate = (input: UpdateShopSettingsInput) => ({
     input.intakeTerms === undefined
       ? undefined
       : input.intakeTerms.trim() || null,
+  ...botUpdate(input),
   receiptPaper: input.receiptPaper,
   receiptShowImei: input.receiptShowImei,
   receiptShowProblem: input.receiptShowProblem,

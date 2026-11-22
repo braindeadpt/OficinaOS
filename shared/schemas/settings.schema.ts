@@ -52,6 +52,11 @@ export const updateShopSettingsSchema = z
     receiptFooter: z.string().max(2000).optional(),
     // Claúsulas da ficha de entrada — null/vazio = predefinição da app.
     intakeTerms: z.string().max(4000).optional(),
+    // Bot com IA (Pro): flag de rollout + ficha "O que o bot pode dizer".
+    botAiEnabled: z.boolean().optional(),
+    botInfoText: z.string().max(4000).nullable().optional(),
+    botAvgRepairDaysAfterPart: z.number().int().min(0).max(60).optional(),
+    botClosedFallbackText: z.string().max(500).nullable().optional(),
     // Printing presets — applied by the server-rendered receipt/label HTML.
     receiptPaper: z.enum(["58mm", "80mm", "a4"]).optional(),
     receiptShowImei: z.boolean().optional(),

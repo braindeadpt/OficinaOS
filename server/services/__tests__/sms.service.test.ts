@@ -258,7 +258,8 @@ describe("handleInboundSms", () => {
     expect(url).toBe("http://192.168.1.50:8080/message");
     const body = JSON.parse(init.body as string);
     expect(body.phoneNumbers).toEqual(["+351999888777"]);
-    expect(body.textMessage.text).toContain("Não encontrei reparações");
+    // Auto replies are transliterated to GSM-7 (no accents).
+    expect(body.textMessage.text).toContain("Nao encontrei reparacoes");
     // Escalated: staff was looked up
     expect(mocks.findManyUsers).toHaveBeenCalled();
   });

@@ -1016,6 +1016,7 @@
   "jobs_waiting_parts_empty_desc": "Track parts that are on order for this job",
   "jobs_waiting_parts_part_name": "Part name",
   "jobs_waiting_parts_supplier": "Supplier (optional)",
+  "jobs_waiting_parts_expected_at": "Expected arrival (optional)",
   "jobs_waiting_parts_remove": "Remove",
   "jobs_notes_title": "Notes",
   "jobs_notes_empty": "No notes yet",
@@ -2806,5 +2807,15 @@
       "PART": "Parts order"
     },
     "open_record": "Open record"
-  }
+  },
+  "bot_ai_enabled": "AI bot replies",
+  "bot_ai_enabled_help": "Requires the channel's Pro module. Rules (SIM/NO, PARAR, REP codes) always run first; the AI only answers free text.",
+  "bot_info_text_label": "What the bot may say",
+  "bot_info_text_help": "The only shop info the bot is allowed to share: opening hours, address, services, indicative prices.",
+  "bot_info_text_placeholder": "Open Mon-Fri 09:00-18:00, Sat 10:00-14:00. Address: Rua Example 12, Lisboa. Screen replacements from 80 EUR.",
+  "bot_avg_days_label": "Average repair days after part arrival",
+  "bot_avg_days_help": "Used for time estimates — the bot always phrases them as averages, never guaranteed dates.",
+  "bot_fallback_text_label": "Shop closed message",
+  "bot_fallback_text_help": "Sent when the shop PC is offline. Empty = default message.",
+  "bot_fallback_text_placeholder": "We received your message. The shop will reply as soon as it opens."
 }

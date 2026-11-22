@@ -23,6 +23,7 @@ export default function JobWaitingPartsSection({
   const canEdit = useCan({ jobs: ["edit"] });
   const [partName, setPartName] = useState("");
   const [supplier, setSupplier] = useState("");
+  const [expectedAt, setExpectedAt] = useState("");
   const [adding, setAdding] = useState(false);
 
   const isTerminal = INACTIVE_STATUSES.includes(
@@ -38,17 +39,19 @@ export default function JobWaitingPartsSection({
       await addWaitingPart(
         job.id,
         partName.trim(),
-        supplier.trim() || undefined
+        supplier.trim() || undefined,
+        expectedAt || undefined
       );
       setPartName("");
       setSupplier("");
+      setExpectedAt("");
       onChanged?.();
     } catch {
       toast.error(t("errors.add_waiting_part"));
     } finally {
       setAdding(false);
     }
-  }, [addWaitingPart, job.id, partName, supplier, onChanged, t]);
+  }, [addWaitingPart, job.id, partName, supplier, expectedAt, onChanged, t]);
 
   const handleRemove = useCallback(
     async (waitingId: string) => {
@@ -100,6 +103,14 @@ export default function JobWaitingPartsSection({
             type="text"
             value={supplier}
           />
+          <input
+            aria-label={t("jobs_waiting_parts_expected_at")}
+            className="flex-1 rounded-lg bg-surface-container-highest px-3 py-2 text-on-surface text-sm placeholder:text-on-surface-variant/50"
+            onChange={(e) => setExpectedAt(e.target.value)}
+            title={t("jobs_waiting_parts_expected_at")}
+            type="date"
+            value={expectedAt}
+          />
           <Can perm={{ jobs: ["edit"] }}>
             <button
               className="flex min-h-[44px] items-center gap-1 rounded-lg bg-primary px-4 font-bold font-label text-on-primary text-xs uppercase tracking-wider transition-colors hover:bg-primary-container hover:text-on-primary-container disabled:opacity-50"
@@ -141,6 +152,12 @@ export default function JobWaitingPartsSection({
                 {wp.supplier && (
                   <p className="font-label text-on-surface-variant text-xs">
                     {wp.supplier}
+                  </p>
+                )}
+                {wp.expectedAt && (
+                  <p className="font-label text-on-surface-variant text-xs">
+                    {t("jobs_waiting_parts_expected_at")}:{" "}
+                    {new Date(wp.expectedAt).toLocaleDateString()}
                   </p>
                 )}
               </div>

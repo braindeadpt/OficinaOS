@@ -393,7 +393,8 @@ export async function syncCloudEntitlements(
           settings.cloudApiUrl ?? "",
           token,
           log,
-          notifyCtx
+          notifyCtx,
+          modules
         )
       )
     );

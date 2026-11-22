@@ -3,10 +3,8 @@ import type { FastifyBaseLogger } from "fastify";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import {
   type BotReplyCtx,
-  composeReply,
-  escalateToStaff,
+  handleInboundMessage,
   type InboundMessage,
-  rateOk,
 } from "./bot-intents.js";
 import { cloudFetch } from "./cloud.service.js";
 import type { NotifyContext } from "./job.service.js";
@@ -72,7 +70,8 @@ export async function syncWhatsAppBot(
   apiUrl: string,
   token: string,
   log: FastifyBaseLogger,
-  notifyCtx?: NotifyContext
+  notifyCtx?: NotifyContext,
+  modules: string[] = []
 ): Promise<void> {
   const settings = await getOrCreateShopSettings(prisma);
 
@@ -105,11 +104,23 @@ export async function syncWhatsAppBot(
   }
 
   const ctx: BotCtx = {
+    ai: {
+      apiUrl,
+      avgRepairDaysAfterPart: settings.botAvgRepairDaysAfterPart,
+      botInfoText: settings.botInfoText,
+      channel: channel.mode === "evolution" ? "evolution" : "whatsapp",
+      enabled: settings.botAiEnabled,
+      module: "whatsapp-bot",
+      modules,
+      token,
+    },
     apiUrl,
     channel,
     currency: settings.currency ?? "EUR",
     log,
     notifyCtx,
+    portalApiUrl: apiUrl,
+    portalEnabled: modules.includes("portal"),
     prisma,
     settings,
     shopLabel:
@@ -139,22 +150,15 @@ async function processInbound(
   ctx: BotCtx,
   msg: InboundMessage
 ): Promise<boolean> {
-  if (!rateOk(msg.fromPhone)) {
-    return true; // flood — descarta sem responder
-  }
   try {
-    const out = await composeReply(ctx, msg);
-    const sent = await send(ctx, msg.fromPhone, out.text);
-    if (out.escalate) {
-      await escalateToStaff(
-        ctx,
-        "WhatsApp",
-        msg,
-        out.customerName,
-        out.jobId
-      ).catch((err) => ctx.log.warn({ err }, "whatsapp-bot escalate failed"));
+    const out = await handleInboundMessage(ctx, msg, {
+      channelLabel: "WhatsApp",
+      send: (text) => send(ctx, msg.fromPhone, text),
+    });
+    if (!out) {
+      return true; // flood — descarta sem responder
     }
-    if (sent) {
+    if (out.sent) {
       return true;
     }
     const attempts = (sendAttempts.get(msg.id) ?? 0) + 1;

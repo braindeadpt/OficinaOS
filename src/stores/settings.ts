@@ -128,6 +128,10 @@ interface SettingsState {
     monthlyRevenueGoal?: number | null;
     reviewUrl?: string;
     embedAllowedOrigins?: string | null;
+    botAiEnabled?: boolean;
+    botInfoText?: string | null;
+    botAvgRepairDaysAfterPart?: number;
+    botClosedFallbackText?: string | null;
   }) => Promise<ShopSettings>;
   saveSmsSettings: (data: {
     enabled?: boolean;

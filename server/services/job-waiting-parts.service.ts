@@ -27,6 +27,7 @@ export async function add(
 
   const waitingPart = await prisma.$transaction(async (tx) => {
     const created = await createWaitingPartRepo(tx, {
+      expectedAt: input.expectedAt ? new Date(input.expectedAt) : null,
       job: { connect: { id: jobId } },
       partName: input.partName,
       supplier: input.supplier ?? null,

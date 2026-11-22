@@ -90,9 +90,34 @@ describe("job-waiting-parts service", () => {
       expect(result).toEqual(waitingPart);
       expect(mocks.jobPartsWaitingCreate).toHaveBeenCalledWith({
         data: {
+          expectedAt: null,
           job: { connect: { id: "job-1" } },
           partName: "Battery",
           supplier: "Acme",
+        },
+      });
+    });
+
+    it("passes expectedAt through as a Date", async () => {
+      mocks.jobFindUnique.mockResolvedValue({
+        id: "job-1",
+        status: "WAITING_FOR_PARTS",
+      });
+      mocks.jobPartsWaitingCreate.mockResolvedValue({ id: "wp-3" });
+
+      await add(
+        prisma,
+        "job-1",
+        { expectedAt: "2026-01-10T00:00:00.000Z", partName: "Screen" },
+        "user-1"
+      );
+
+      expect(mocks.jobPartsWaitingCreate).toHaveBeenCalledWith({
+        data: {
+          expectedAt: new Date("2026-01-10T00:00:00.000Z"),
+          job: { connect: { id: "job-1" } },
+          partName: "Screen",
+          supplier: null,
         },
       });
     });
@@ -124,6 +149,7 @@ describe("job-waiting-parts service", () => {
       });
       expect(mocks.jobPartsWaitingCreate).toHaveBeenCalledWith({
         data: {
+          expectedAt: null,
           job: { connect: { id: "job-1" } },
           partName: "Screen",
           supplier: null,
