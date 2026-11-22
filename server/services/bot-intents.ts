@@ -228,7 +228,7 @@ function statusText(ctx: BotReplyCtx, job: ActiveJob): string {
     (job.partsWaiting?.length ?? 0) > 0 &&
     !(COMPLETED_STATUSES as string[]).includes(job.status)
   ) {
-    text += ` Peças em falta: ${pendingPartsText(ctx, job)}.`;
+    text += ` Peças em falta: ${pendingPartsText(job)}.`;
   }
   const q = job.quotes[0];
   if (q?.status === "SENT") {
@@ -246,14 +246,16 @@ function statusText(ctx: BotReplyCtx, job: ActiveJob): string {
  *  não o estado da reparação. */
 /** Partes em falta formatadas — cada uma com a data esperada ou
  *  "sem data prevista"; nunca esconde as que não têm data. */
-function pendingPartsText(ctx: BotReplyCtx, job: ActiveJob): string {
-  const tz = ctx.timezone ?? process.env.TZ ?? "Europe/Lisbon";
+function pendingPartsText(job: ActiveJob): string {
+  // A previsão é um dia de calendário (meio-dia UTC no armazenamento) —
+  // formatar em UTC mostra o mesmo dia em todos os fusos; formatar no
+  // fuso da loja adiantava/atrasava um dia nos extremos (-12/+14).
   return (job.partsWaiting ?? [])
     .map((p) =>
       p.expectedAt
         ? `${p.partName} — chegada prevista: ${p.expectedAt.toLocaleDateString(
             "pt-PT",
-            { timeZone: tz }
+            { timeZone: "UTC" }
           )}`
         : `${p.partName} — sem data prevista`
     )
@@ -266,7 +268,6 @@ function partEtaText(ctx: BotReplyCtx, job: ActiveJob): string {
   const device = `${job.device.brand.name} ${job.device.model}`;
   const tz = ctx.timezone ?? process.env.TZ ?? "Europe/Lisbon";
   let text = `Peças em falta para a tua reparação ${job.jobCode} (${device}): ${pendingPartsText(
-    ctx,
     job
   )}.`;
   if (job.estimatedDate) {

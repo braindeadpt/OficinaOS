@@ -170,9 +170,9 @@ free** — o gateway Android da loja em modo LAN nunca exige entitlement.
 O **inbound** (respostas do bot a SMS do cliente) é Pro: a rota pública
 só chama `handleInboundSms` com `isModuleEnabled(settings, "sms")`
 (entitlement + `cloudSyncedAt` < 24 h); sem Pro o webhook devolve 200 e
-não processa nada — nem bot, nem gravação.
-A responsabilidade é da loja: o SIM é dela, a fatura da operadora e os
-limites anti-spam também.
+não processa nada — nem bot, nem gravação — **exceto PARAR/STOP**, que
+corre sempre (`isStopText`): revogar consentimento é obrigação legal e
+não pode depender de licença em cache.
 A responsabilidade é da loja: o SIM é dela, a fatura da operadora e os
 limites anti-spam também.
 Consentimento partilhado (`whatsappConsent` = opt-in de mensagens

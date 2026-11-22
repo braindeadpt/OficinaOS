@@ -183,14 +183,21 @@ export async function queueNotification(
     templateName: data.templateName,
     // Meta exige template fora da janela de 24h — grava os params na
     // ordem dos {{var}} do corpo (a mesma ordem que o sync usa para
-    // criar o template na conta da loja).
+    // criar o template na conta da loja) E os valores por variável: se
+    // o corpo for editado (reordenou {{vars}}) antes da entrega, o
+    // processamento recalcula a ordem contra o corpo atual; `params`
+    // fica para entradas cujo modelo foi renomeado — o remoto ainda
+    // aprovado corresponde ao corpo antigo.
     templateParams:
       data.channel === "WHATSAPP"
-        ? orderedTemplateParams(
-            data.templateBody,
-            data.templateVars,
-            data.metaKeep
-          )
+        ? {
+            params: orderedTemplateParams(
+              data.templateBody,
+              data.templateVars,
+              data.metaKeep
+            ),
+            vars: data.templateVars,
+          }
         : undefined,
   });
 }
@@ -318,9 +325,35 @@ async function processWhatsAppEntry(
   // texto livre fora da janela de 24h é rejeitado. Evolution não tem
   // templates e SMS não passa por aqui; nesses casos o corpo renderizado
   // continua a ser o transporte.
-  const metaParams = Array.isArray(entry.templateParams)
-    ? (entry.templateParams as string[])
-    : null;
+  const storedParams = entry.templateParams as
+    | string[] // formato antigo — só posicional
+    | { params?: string[]; vars?: Record<string, string> }
+    | null;
+  let metaParams: string[] | null = Array.isArray(storedParams)
+    ? storedParams
+    : (storedParams?.params ?? null);
+  // Reordena pelos {{var}} do corpo ATUAL do modelo quando há vars
+  // gravadas — uma edição aprovada entre o enqueue e o envio muda a
+  // ordem posicional na Meta; reenviar a ordem antiga trocava os
+  // valores. Sem modelo local (renomeado) ficam os params gravados.
+  if (
+    metaParams !== null &&
+    channel.mode !== "evolution" &&
+    !Array.isArray(storedParams) &&
+    storedParams?.vars
+  ) {
+    const tpl = await prisma.notificationTemplate.findFirst({
+      select: { body: true },
+      where: { channel: "WHATSAPP", name: entry.templateName },
+    });
+    if (tpl) {
+      metaParams = orderedTemplateParams(
+        tpl.body,
+        storedParams.vars,
+        metaConditionalVars(settings ?? {})
+      );
+    }
+  }
   // Template registado como pendente/em revisão/rejeitado → adiar sem
   // gastar tentativas: enviar agora falharia na Meta e a aprovação
   // posterior não recupera mensagens já marcadas FAILED. Sem registo

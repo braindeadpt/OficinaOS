@@ -1,4 +1,4 @@
-import type { Prisma } from "@generated/client";
+import { OutboxStatus, type Prisma } from "@generated/client";
 import type { FastifyBaseLogger } from "fastify";
 import { decryptSecret } from "../lib/crypto.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
@@ -269,6 +269,32 @@ async function persistStatuses(
       status: s.status,
       syncedAt: s.syncedAt ?? new Date().toISOString(),
     };
+  }
+  // Um rename não apaga o modelo antigo na Meta — continua APPROVED lá.
+  // As entradas em fila com o nome antigo precisam do seu estado até
+  // drenar; sem isto ficavam "unsynced" para sempre e expiravam.
+  const pending = await prisma.notificationOutbox.findMany({
+    select: { templateName: true },
+    where: { channel: "WHATSAPP", status: OutboxStatus.QUEUED },
+  });
+  const stillNeeded = [
+    ...new Set(pending.map((p) => p.templateName).filter((n) => !(n in json))),
+  ];
+  if (stillNeeded.length > 0) {
+    const prev = (
+      await prisma.shopSettings.findUnique({
+        select: { whatsappTemplatesJson: true },
+        where: { id: "default" },
+      })
+    )?.whatsappTemplatesJson;
+    if (prev && typeof prev === "object") {
+      for (const name of stillNeeded) {
+        const kept = (prev as Record<string, Prisma.InputJsonValue>)[name];
+        if (kept) {
+          json[name] = kept;
+        }
+      }
+    }
   }
   await prisma.shopSettings.update({
     data: { whatsappTemplatesJson: json },

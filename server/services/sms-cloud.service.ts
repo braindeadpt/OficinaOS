@@ -3,6 +3,7 @@ import { toSmsText } from "@shared/utils/gsm7.js";
 import type { FastifyBaseLogger } from "fastify";
 import { decryptSecret } from "../lib/crypto.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
+import type { DbClient } from "../repositories/types.js";
 import {
   type BotReplyCtx,
   handleInboundMessage,
@@ -300,11 +301,13 @@ export interface SmsDeviceStatus {
   };
   entitled: boolean;
   reachable: boolean;
+  /** Um device enabled pode servir a loja (mesma noção do /sms/send). */
+  sendable: boolean;
 }
 
 /** Estado do device SMS Pro para as Definições — proxy de GET /shops/sms-device. */
 export async function getSmsDeviceStatus(
-  prisma: PrismaClient
+  prisma: DbClient
 ): Promise<SmsDeviceStatus> {
   const settings = await getOrCreateShopSettings(prisma);
   const modules = Array.isArray(settings.cloudEntitlements)
@@ -315,6 +318,7 @@ export async function getSmsDeviceStatus(
     device: null,
     entitled: modules.includes("sms"),
     reachable: false,
+    sendable: false,
   };
   if (
     !(base.entitled && settings.cloudApiUrl && settings.cloudShopTokenEncrypted)
@@ -330,11 +334,17 @@ export async function getSmsDeviceStatus(
   const body = res.body as {
     configured?: boolean;
     device?: SmsDeviceStatus["device"];
+    sendable?: boolean;
   };
   return {
     configured: Boolean(body.configured),
     device: body.device ?? null,
     entitled: true,
     reachable: true,
+    // Cloud antiga sem `sendable`: o device default enabled serve de
+    // aproximação — cobre o caso comum (loja com o seu próprio telemóvel).
+    sendable:
+      body.sendable ??
+      (body.configured === true && body.device?.enabled === true),
   };
 }

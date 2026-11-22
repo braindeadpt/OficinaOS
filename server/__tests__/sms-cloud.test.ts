@@ -8,6 +8,16 @@ import {
 
 const mocks = vi.hoisted(() => ({
   cloudFetch: vi.fn(),
+  getOrCreateShopSettings: vi.fn(
+    async (): Promise<Record<string, unknown>> => ({
+      botAiEnabled: false,
+      botAvgRepairDaysAfterPart: 1,
+      botInfoText: null,
+      currency: "EUR",
+      phone: "210000000",
+      shopName: "Loja X",
+    })
+  ),
   handleInboundMessage: vi.fn(),
 }));
 
@@ -20,14 +30,7 @@ vi.mock("../services/bot-intents.js", () => ({
 }));
 
 vi.mock("../repositories/settings.repository.js", () => ({
-  getOrCreateShopSettings: vi.fn(async () => ({
-    botAiEnabled: false,
-    botAvgRepairDaysAfterPart: 1,
-    botInfoText: null,
-    currency: "EUR",
-    phone: "210000000",
-    shopName: "Loja X",
-  })),
+  getOrCreateShopSettings: mocks.getOrCreateShopSettings,
 }));
 
 vi.mock("../lib/crypto.js", () => ({
@@ -212,7 +215,48 @@ describe("getSmsDeviceStatus", () => {
       device: null,
       entitled: false,
       reachable: false,
+      sendable: false,
     });
     expect(mocks.cloudFetch).not.toHaveBeenCalled();
+  });
+
+  it("sendable vem da Cloud; sem o campo cai em configured+enabled", async () => {
+    mocks.getOrCreateShopSettings.mockResolvedValueOnce({
+      cloudApiUrl: "https://c",
+      cloudEntitlements: ["sms"],
+      cloudShopTokenEncrypted: "enc:tok",
+    });
+    mocks.cloudFetch.mockResolvedValueOnce({
+      body: { configured: true, device: { enabled: true }, sendable: true },
+      ok: true,
+    });
+    const prisma = {} as never;
+    const fresh = await getSmsDeviceStatus(prisma);
+    expect(fresh.sendable).toBe(true); // campo novo da Cloud
+
+    mocks.getOrCreateShopSettings.mockResolvedValueOnce({
+      cloudApiUrl: "https://c",
+      cloudEntitlements: ["sms"],
+      cloudShopTokenEncrypted: "enc:tok",
+    });
+    // Cloud antiga (antes do campo): aproximação pelo device default.
+    mocks.cloudFetch.mockResolvedValueOnce({
+      body: { configured: true, device: { enabled: true } },
+      ok: true,
+    });
+    const legacy = await getSmsDeviceStatus(prisma);
+    expect(legacy.sendable).toBe(true);
+
+    mocks.getOrCreateShopSettings.mockResolvedValueOnce({
+      cloudApiUrl: "https://c",
+      cloudEntitlements: ["sms"],
+      cloudShopTokenEncrypted: "enc:tok",
+    });
+    mocks.cloudFetch.mockResolvedValueOnce({
+      body: { configured: true, device: { enabled: false } },
+      ok: true,
+    });
+    const disabled = await getSmsDeviceStatus(prisma);
+    expect(disabled.sendable).toBe(false); // default disabled não serve
   });
 });

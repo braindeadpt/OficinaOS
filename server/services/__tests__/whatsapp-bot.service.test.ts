@@ -1,12 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  cloudFetch: vi.fn(async () => ({ body: { messages: [] }, ok: true })),
+  cloudFetch: vi.fn(
+    async (): Promise<{ body: unknown; ok: boolean; status?: number }> => ({
+      body: { messages: [] },
+      ok: true,
+    })
+  ),
   getOrCreateShopSettings: vi.fn(),
-  handleInboundMessage: vi.fn(async () => ({
-    reply: { text: "resposta" },
-    sent: true,
-  })),
+  handleInboundMessage: vi.fn(
+    async (
+      _ctx: unknown,
+      _msg: { id?: string },
+      _t: {
+        allowQuoteDecision?: boolean;
+        send: (text: string) => Promise<boolean>;
+      }
+    ) => ({ reply: { text: "resposta" }, sent: true })
+  ),
   resolveWhatsAppChannel: vi.fn(),
   sendWhatsAppText: vi.fn(async () => ({ success: true })),
 }));
@@ -49,7 +60,7 @@ beforeEach(() => {
 describe("pollWhatsAppInbound — fila Meta com transporte Evolution", () => {
   // §5.7: a fila oficial só responde via Evolution com termo do bot
   // aceite e sem suspensão — os mesmos gates do webhook Evolution.
-  it("transporte Evolution sem termo do bot → não lê a fila", async () => {
+  it("transporte Evolution sem termo do bot → só consome PARAR/STOP", async () => {
     mocks.getOrCreateShopSettings.mockResolvedValue({
       whatsappBotDisclaimerAt: null,
       whatsappBotSuspendedAt: null,
@@ -57,11 +68,34 @@ describe("pollWhatsAppInbound — fila Meta com transporte Evolution", () => {
       whatsappTransport: "evolution",
     });
     mocks.resolveWhatsAppChannel.mockReturnValue(EVOLUTION_CHANNEL);
+    mocks.cloudFetch
+      .mockResolvedValueOnce({
+        body: {
+          messages: [
+            { fromPhone: "351900000001", id: "m-stop", text: "PARAR" },
+            { fromPhone: "351900000002", id: "m-ask", text: "está pronto?" },
+          ],
+        },
+        ok: true,
+      })
+      .mockResolvedValueOnce({ body: {}, ok: true }); // ack
     await pollWhatsAppInbound(prisma, "https://cloud", "tok", log, undefined);
-    expect(mocks.cloudFetch).not.toHaveBeenCalled();
+    // O PARAR entra no pipeline com envio suprimido (revogação legal);
+    // a pergunta fica na fila até o bot ser ativado — sem ack.
+    expect(mocks.handleInboundMessage).toHaveBeenCalledTimes(1);
+    const call = mocks.handleInboundMessage.mock.calls[0];
+    expect(call?.[1]).toMatchObject({ id: "m-stop" });
+    expect(await call?.[2]?.send("x")).toBe(true); // send suprimido
+    expect(call?.[2]?.allowQuoteDecision).toBe(false);
+    expect(mocks.sendWhatsAppText).not.toHaveBeenCalled();
+    expect(mocks.cloudFetch).toHaveBeenCalledWith(
+      "https://cloud",
+      "/whatsapp/inbound/ack",
+      expect.objectContaining({ body: { ids: ["m-stop"] } })
+    );
   });
 
-  it("transporte Evolution com bot suspenso → não lê a fila", async () => {
+  it("transporte Evolution com bot suspenso → só consome PARAR/STOP", async () => {
     mocks.getOrCreateShopSettings.mockResolvedValue({
       whatsappBotDisclaimerAt: new Date(),
       whatsappBotSuspendedAt: new Date(),
@@ -69,8 +103,20 @@ describe("pollWhatsAppInbound — fila Meta com transporte Evolution", () => {
       whatsappTransport: "evolution",
     });
     mocks.resolveWhatsAppChannel.mockReturnValue(EVOLUTION_CHANNEL);
+    mocks.cloudFetch.mockResolvedValueOnce({
+      body: {
+        messages: [
+          { fromPhone: "351900000001", id: "m-stop", text: "stop" },
+          { fromPhone: "351900000002", id: "m-sim", text: "SIM" },
+        ],
+      },
+      ok: true,
+    });
     await pollWhatsAppInbound(prisma, "https://cloud", "tok", log, undefined);
-    expect(mocks.cloudFetch).not.toHaveBeenCalled();
+    expect(mocks.handleInboundMessage).toHaveBeenCalledTimes(1);
+    expect(mocks.handleInboundMessage.mock.calls[0]?.[1]).toMatchObject({
+      id: "m-stop",
+    });
   });
 
   it("transporte Evolution com termo aceite e sem suspensão → lê a fila", async () => {

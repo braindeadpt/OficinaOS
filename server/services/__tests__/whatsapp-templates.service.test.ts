@@ -36,12 +36,17 @@ import {
 } from "../whatsapp-templates.service.js";
 
 const updateSettings = vi.fn(async () => ({}));
+const shopSettingsFindUnique = vi.fn(async (): Promise<unknown> => null);
 const notificationTemplate = {
   findMany: vi.fn(async (): Promise<{ body: string; name: string }[]> => []),
 };
+const notificationOutbox = {
+  findMany: vi.fn(async (): Promise<{ templateName: string }[]> => []),
+};
 const prisma = {
+  notificationOutbox,
   notificationTemplate,
-  shopSettings: { update: updateSettings },
+  shopSettings: { findUnique: shopSettingsFindUnique, update: updateSettings },
 } as never;
 
 const graphOk = (data: unknown) =>
@@ -187,6 +192,53 @@ describe("syncWhatsAppTemplates", () => {
     );
     expect(res.ready).toBe(1);
     expect(res.templates[1]?.status).toBe("REJECTED");
+  });
+
+  it("mantém o estado de nomes com mensagens em fila após rename", async () => {
+    // Regressão Devin r8: renomear job_done→job_ready não apaga o modelo
+    // antigo na Meta — entradas em fila para job_done ficavam "unsynced"
+    // até expirar. O sync preserva o estado de nomes referenciados.
+    mocks.getOrCreateShopSettings.mockResolvedValue(localSettings);
+    notificationTemplate.findMany.mockResolvedValue([
+      { body: "Olá {{customerName}}, REP {{jobCode}}.", name: "job_ready" },
+    ]);
+    notificationOutbox.findMany.mockResolvedValue([
+      { templateName: "job_done" },
+    ]);
+    shopSettingsFindUnique.mockResolvedValue({
+      whatsappTemplatesJson: {
+        job_done: { status: "APPROVED", syncedAt: "2026-11-01T00:00:00Z" },
+      },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.resolve(
+          graphOk({
+            data: [
+              {
+                components: [{ text: "Olá {{1}}, REP {{2}}.", type: "BODY" }],
+                language: "pt_PT",
+                name: "job_ready",
+                status: "APPROVED",
+              },
+            ],
+          })
+        )
+      )
+    );
+
+    await syncWhatsAppTemplates(prisma);
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          whatsappTemplatesJson: expect.objectContaining({
+            job_done: expect.objectContaining({ status: "APPROVED" }),
+            job_ready: expect.objectContaining({ status: "APPROVED" }),
+          }),
+        }),
+      })
+    );
   });
 
   it("sem templates WHATSAPP não fala a lado nenhum", async () => {

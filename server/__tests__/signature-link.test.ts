@@ -6,6 +6,33 @@ import {
   sendSignatureLink,
 } from "../services/signature-link.service.js";
 
+const mocks = vi.hoisted(() => ({
+  getSmsDeviceStatus: vi.fn(
+    async (): Promise<{
+      configured: boolean;
+      device: null;
+      entitled: boolean;
+      reachable: boolean;
+      sendable: boolean;
+    }> => ({
+      configured: false,
+      device: null,
+      entitled: false,
+      reachable: false,
+      sendable: false,
+    })
+  ),
+}));
+
+// Só o device-status é mockado — o resto do pipeline (notify → outbox)
+// corre contra o prisma stub, como nos outros testes deste ficheiro.
+vi.mock("../services/sms-cloud.service.js", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("../services/sms-cloud.service.js")
+  >()),
+  getSmsDeviceStatus: mocks.getSmsDeviceStatus,
+}));
+
 // The staff-initiated send dispatches through the REAL notify() pipeline —
 // the prisma stub below exercises the whole chain (templates → consent
 // bypass → outbox enqueue → audit), not a mocked notification service.
@@ -221,6 +248,60 @@ describe("sendSignatureLink — remote URL resolution", () => {
       sendSignatureLink(app, TOKEN, "staff-1")
     ).rejects.toMatchObject({ code: "SIGNATURE_LINK_NO_CHANNEL" });
     expect(prisma.notificationOutbox.create).not.toHaveBeenCalled();
+  });
+
+  it("SMS Pro sem device na Cloud → recusa em vez de confirmar envio falhado", async () => {
+    // Regressão Devin r8: subscrição "sms" sem device enabled na Cloud —
+    // o envio caía com DEVICE_MISSING depois do diálogo confirmar.
+    prisma.signatureSession.findUnique.mockResolvedValue(
+      intakeSession({ relayed: true })
+    );
+    prisma.shopSettings.findUnique.mockResolvedValue(
+      defaultSettings({
+        cloudEntitlements: ["sms"],
+        cloudShopTokenEncrypted: "enc:x",
+        cloudSyncedAt: new Date(),
+        smsEnabled: false,
+        whatsappEnabled: false,
+      })
+    );
+    mocks.getSmsDeviceStatus.mockResolvedValue({
+      configured: false,
+      device: null,
+      entitled: true,
+      reachable: true,
+      sendable: false,
+    });
+
+    await expect(
+      sendSignatureLink(app, TOKEN, "staff-1")
+    ).rejects.toMatchObject({ code: "SIGNATURE_LINK_NO_CHANNEL" });
+    expect(prisma.notificationOutbox.create).not.toHaveBeenCalled();
+  });
+
+  it("SMS Pro com device na Cloud → o gate deixa enviar", async () => {
+    prisma.signatureSession.findUnique.mockResolvedValue(
+      intakeSession({ relayed: true })
+    );
+    prisma.shopSettings.findUnique.mockResolvedValue(
+      defaultSettings({
+        cloudEntitlements: ["sms"],
+        cloudShopTokenEncrypted: "enc:x",
+        cloudSyncedAt: new Date(),
+        smsEnabled: false,
+        whatsappEnabled: false,
+      })
+    );
+    mocks.getSmsDeviceStatus.mockResolvedValue({
+      configured: true,
+      device: null,
+      entitled: true,
+      reachable: true,
+      sendable: true,
+    });
+
+    await sendSignatureLink(app, TOKEN, "staff-1");
+    expect(prisma.notificationOutbox.create).toHaveBeenCalled();
   });
 });
 

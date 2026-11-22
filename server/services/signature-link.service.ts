@@ -12,6 +12,7 @@ import type { DbClient } from "../repositories/types.js";
 import { isModuleEnabled } from "../utils/modules.js";
 import { createAuditLog } from "./audit.service.js";
 import { notify } from "./notification-dispatch.js";
+import { getSmsDeviceStatus } from "./sms-cloud.service.js";
 
 // Sending a signing link is a staff-initiated action: the employee at the
 // counter would otherwise copy the URL into the shop's own WhatsApp or an
@@ -37,6 +38,25 @@ const NON_DIGIT_RE = /\D/g;
 
 const maskPhone = (phone: string) =>
   `•••${phone.replace(NON_DIGIT_RE, "").slice(-4)}`;
+
+/**
+ * Canal utilizável para o link: WhatsApp ligado, gateway SMS LAN ligado,
+ * ou módulo Pro "sms" com um device enabled na Cloud que possa servir a
+ * loja — subscrição sem transporte devolvia DEVICE_MISSING depois de o
+ * diálogo confirmar o envio.
+ */
+async function messagingChannelReady(
+  prisma: DbClient,
+  settings: Awaited<ReturnType<typeof findShopSettingsUnique>>
+): Promise<boolean> {
+  if (settings?.whatsappEnabled || settings?.smsEnabled) {
+    return true;
+  }
+  if (!isModuleEnabled(settings, "sms")) {
+    return false;
+  }
+  return (await getSmsDeviceStatus(prisma)).sendable;
+}
 
 /**
  * Staff clicks "send the link": the live session's frozen document carries
@@ -123,11 +143,7 @@ export async function sendSignatureLink(
   }
 
   const settings = await findShopSettingsUnique(app.prisma);
-  // SMS local (gateway Android) é free — uma loja com o módulo Pro "sms"
-  // envia pela Cloud/device mesmo sem gateway ligado.
-  const smsReady =
-    Boolean(settings?.smsEnabled) || isModuleEnabled(settings, "sms");
-  if (!(settings?.whatsappEnabled || smsReady)) {
+  if (!(await messagingChannelReady(app.prisma, settings))) {
     throw new AppError("SIGNATURE_LINK_NO_CHANNEL");
   }
 
