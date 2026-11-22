@@ -18,7 +18,7 @@ vi.mock("../job-quote.service.js", () => ({
 }));
 
 import type { BotReplyCtx } from "../bot-intents.js";
-import { composeReply } from "../bot-intents.js";
+import { composeReply, handleInboundMessage } from "../bot-intents.js";
 
 const PHONE = "351912345678";
 
@@ -504,6 +504,39 @@ describe("composeReply — deterministic rules before AI", () => {
     const out = await composeReply(ctx, msg("tens previsão de preço?"));
     expect(mocks.askBotAi).not.toHaveBeenCalled();
     expect(out.text).toContain("orçamento");
+  });
+
+  it("PARAR bypasses the hourly flood limit — opt-out is compliance", async () => {
+    const { ctx, prisma } = makeCtx({ customers: [cust], jobs: [job()] });
+    const send = vi.fn(async () => true);
+    // rateLimitPerHour=0 → bucket rejects everything; PARAR must bypass.
+    const out = await handleInboundMessage(ctx, msg("PARAR"), {
+      channelLabel: "SMS",
+      rateLimitPerHour: 0,
+      send,
+    });
+    expect(out).not.toBeNull();
+    expect(prisma.customer.update).toHaveBeenCalledWith({
+      data: { whatsappConsent: false },
+      where: { id: "cust-1" },
+    });
+    // Ordinary messages in the same window stay discarded.
+    const dropped = await handleInboundMessage(ctx, msg("estado"), {
+      channelLabel: "SMS",
+      rateLimitPerHour: 0,
+      send,
+    });
+    expect(dropped).toBeNull();
+  });
+
+  it("stale SIM does not decide but escalates to staff", async () => {
+    const { ctx } = makeCtx({ customers: [cust], jobs: [job()] });
+    const out = await composeReply(ctx, msg("sim"), false, {
+      allowQuoteDecision: false,
+    });
+    expect(mocks.respondToQuote).not.toHaveBeenCalled();
+    expect(out.escalate).toBe(true);
+    expect(out.text).toBe("");
   });
 
   it("«quando está aberta a loja» não é prazo — chega à IA", async () => {

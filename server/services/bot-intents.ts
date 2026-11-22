@@ -513,7 +513,10 @@ export async function composeReply(
     if (opts.allowQuoteDecision === false) {
       return {
         customerName,
-        escalate: false,
+        // A decisão não se aplica, mas a equipa tem de a ver — um SIM
+        // fora da janela sem registo deixava o cliente à espera de uma
+        // resposta que nunca chega.
+        escalate: true,
         jobId: targetJobId,
         text: "",
       };
@@ -647,7 +650,11 @@ export async function handleInboundMessage(
   msg: InboundMessage,
   t: InboundTransport
 ): Promise<{ reply: BotReply; sent: boolean } | null> {
-  if (!rateOk(msg.fromPhone, t.rateLimitPerHour)) {
+  // Opt-out legal: PARAR/STOP nunca morre no rate limiter — a revogação
+  // do consentimento tem de correr mesmo quando o número esgotou a
+  // janela horária (senão o cliente continua a receber avisos).
+  const isStop = STOP_WORDS.has((msg.text ?? "").trim().toLowerCase());
+  if (!(isStop || rateOk(msg.fromPhone, t.rateLimitPerHour))) {
     return null;
   }
   const out = await composeReply(ctx, msg, t.plainText, {

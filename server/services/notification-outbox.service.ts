@@ -56,6 +56,9 @@ const TEMPLATE_DEFER_MS = 30 * 60 * 1000;
 // ciclo do poller.
 const TEMPLATE_RESYNC_MIN_MS = 10 * 60 * 1000;
 let lastTemplateResyncAt = 0;
+const TRAILING_SLASHES_RE = /\/+$/;
+const TEMPLATE_VAR_RE = /\{\{(\w+)\}\}/g;
+const URLISH_VAR_RE = /url$/i;
 
 function maybeResyncTemplates(prisma: DbClient): void {
   const now = Date.now();
@@ -63,9 +66,33 @@ function maybeResyncTemplates(prisma: DbClient): void {
     return;
   }
   lastTemplateResyncAt = now;
-  syncWhatsAppTemplates(prisma).catch((err) =>
-    logger.warn({ err }, "outbox: template re-sync failed")
+  syncWhatsAppTemplates(prisma)
+    .then(() => expediteApprovedDeferred(prisma))
+    .catch((err) => logger.warn({ err }, "outbox: template re-sync failed"));
+}
+
+/** Depois de um re-sync: entradas adiadas cujo template ficou APPROVED
+ *  voltam já à fila — o deliverBy (ex.: sessão de assinatura) pode não
+ *  esperar os 30 min do re-agendamento normal. */
+async function expediteApprovedDeferred(prisma: DbClient): Promise<void> {
+  const settings = await findShopSettingsUnique(prisma);
+  const deferred = await prisma.notificationOutbox.findMany({
+    select: { id: true, templateName: true },
+    where: {
+      channel: "WHATSAPP",
+      error: { startsWith: "Template " },
+      status: OutboxStatus.QUEUED,
+    },
+  });
+  const ready = deferred.filter(
+    (e) => templateStatusOf(settings, e.templateName) === "APPROVED"
   );
+  if (ready.length > 0) {
+    await prisma.notificationOutbox.updateMany({
+      data: { nextRetryAt: new Date() },
+      where: { id: { in: ready.map((e) => e.id) } },
+    });
+  }
 }
 
 /** Estado conhecido do template no último sync — null = sem registo. */
@@ -646,16 +673,38 @@ export async function testNotification(prisma: DbClient, templateId: string) {
   if (!phone) {
     throw new AppError("NO_SHOP_PHONE");
   }
+  const templateVars: Record<string, string> = {
+    customerName: "Test",
+    jobCode: "TEST-001",
+    shopName: shop?.shopName ?? "OficinaOS",
+  };
+  // O modelo aprovado na Meta inclui os links {{if}} configurados — um
+  // parâmetro vazio é rejeitado, por isso cada var do corpo precisa de
+  // um valor (reais os links configurados, placeholder o resto).
+  if (shop?.trackingBaseUrl) {
+    templateVars.trackingUrl = `${shop.trackingBaseUrl.replace(
+      TRAILING_SLASHES_RE,
+      ""
+    )}/tracking/TEST-001`;
+  }
+  if (shop?.reviewUrl) {
+    templateVars.reviewUrl = shop.reviewUrl;
+  }
+  for (const m of template.body.matchAll(TEMPLATE_VAR_RE)) {
+    const name = m[1];
+    if (name === "if" || name === "else" || name === "endif") {
+      continue;
+    }
+    templateVars[name] ??= URLISH_VAR_RE.test(name)
+      ? "https://oficinaos.app"
+      : "demo";
+  }
   await queueNotification(prisma, {
     channel: template.channel,
     metaKeep: metaConditionalVars(shop ?? {}),
     recipientPhone: phone,
     templateBody: template.body,
     templateName: template.name,
-    templateVars: {
-      customerName: "Test",
-      jobCode: "TEST-001",
-      shopName: shop?.shopName ?? "OficinaOS",
-    },
+    templateVars,
   });
 }

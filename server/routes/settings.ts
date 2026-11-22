@@ -58,6 +58,16 @@ import {
 import { getSmsDeviceStatus } from "../services/sms-cloud.service.js";
 import { getUpdateState, startUpdate } from "../services/update.service.js";
 import { pushCredentialsToCloud } from "../services/whatsapp-channel.js";
+
+// Campos de definições que mudam o corpo Meta dos templates WhatsApp
+// (blocos {{if}} expandidos por configuração) — um PUT que os toca tem de
+// re-sincronizar para o modelo aprovado acompanhar o novo corpo.
+const META_TEMPLATE_KEYS = new Set([
+  "reviewUrl",
+  "shopName",
+  "trackingBaseUrl",
+]);
+
 import {
   getWhatsAppTemplateStatuses,
   syncWhatsAppTemplates,
@@ -406,6 +416,14 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       // The widget CSP caches embedAllowedOrigins for 60s — drop it so a
       // save takes effect on the next request instead of up to a minute late.
       app.resetEmbedOriginsCache();
+      // reviewUrl/trackingBaseUrl/shopName mudam os blocos {{if}} dos
+      // templates WhatsApp — sem re-sync, o modelo aprovado na Meta
+      // diverge dos parâmetros enviados e as notificações falham.
+      if (Object.keys(parsed.data).some((k) => META_TEMPLATE_KEYS.has(k))) {
+        syncWhatsAppTemplates(app.prisma).catch((err) =>
+          req.log.warn({ err }, "whatsapp template resync failed")
+        );
+      }
       return reply.send(updated);
     }
   );
