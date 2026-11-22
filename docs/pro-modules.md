@@ -53,9 +53,19 @@ falar com ela. Nunca código pago compilado na app pública.
 | `diag-intake` | Recebe diagnósticos do `oficinaos-diag` enviados por clientes | Fila de intake na app |
 | `ai-reports` | Relatórios de diagnóstico gerados por IA | Anexado a trabalhos/diag |
 | `remarketing` | Recontacto automático de clientes inativos via template WhatsApp aprovado | Notificações → Setup → WhatsApp |
+| `sms` | SMS pelo Android da loja **via Cloud** — o telemóvel liga-se ao sms-gate em modo servidor e serve várias lojas; funciona com o PC da loja desligado | Notificações → Setup → SMS |
 
-(O `sms` já não é módulo — o canal SMS via gateway Android local é grátis no
-core, porque não depende da Cloud para nada.)
+(O SMS via gateway Android **na LAN** continua grátis no core — não depende
+da Cloud para nada. O módulo `sms` paga o modo servidor: device ligado à
+Cloud, encaminhamento multi-loja e respostas com o PC desligado.)
+
+## Tabela grátis/Pro — canais de mensagens
+
+| | Grátis (infra da loja) | Pro (Cloud envia) |
+|---|---|---|
+| **SMS** | Android sms-gate na LAN — envio + respostas de regras | Android ligado à Cloud (`SmsDevice`/`SmsRoute`) — multi-loja, inbound/outbound com PC desligado, IA |
+| **WhatsApp oficial** | — | Meta Cloud API: envio `POST /whatsapp/send`, templates auto-sincronizados, janela de 24 h, IA |
+| **WhatsApp Evolution** | Transporte local (não-oficial, disclaimer) — só envio | Bot inbound com termo próprio + proteções anti-ban (10/h por número, teto diário, dedupe, atraso 3–8 s) |
 
 ## Portal do cliente (`portal`)
 
@@ -126,10 +136,16 @@ Feito na Meta App "OficinaOS" (developers.facebook.com):
 
 ### Limites conhecidos
 
-- Resposta do bot demora até ~2 min (ciclo de polling)
+- Resposta do bot chega em ~10–15 s (poller rápido de mensagens); o resto
+  da sincronização mantém o ciclo de ~2 min
 - Notificações proativas ("está pronta") fora da janela de 24h do cliente
-  precisam de **templates aprovados** na Meta (e custam cêntimos)
+  saem como **templates** — a app submete-os automaticamente à Meta e a UI
+  mostra o estado (aprovado/em revisão/rejeitado + "Voltar a submeter");
+  mensagens de template têm custo Meta por conversa
 - Número de teste: máx. 5 destinatários verificados — chega para demos
+- "Loja fechada": inbound não consumido há >5 min recebe a resposta de
+  fallback da Cloud ("Recebemos a sua mensagem. A loja responde assim que
+  abrir."), máx. 1 por número/12 h
 
 ## Emparelhamento com a Cloud
 
