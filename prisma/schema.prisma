@@ -205,34 +205,34 @@ model User {
   createdAt           DateTime          @default(now()) @db.Timestamptz
   updatedAt           DateTime          @updatedAt @db.Timestamptz
 
-  assignedJobs          Job[]               @relation("AssignedTechnician")
-  createdJobs           Job[]               @relation("CreatedBy")
-  updatedJobs           Job[]               @relation("UpdatedBy")
-  notes                 JobNote[]
-  jobParts              JobPart[]
-  jobRepairs            JobRepair[]
-  paymentsCreated       Payment[]           @relation("PaymentCreatedBy")
-  stockMovementsCreated StockMovement[]     @relation("StockMovementCreatedBy")
-  salesCreated          Sale[]              @relation("SaleCreatedBy")
-  tradeInsCreated       TradeIn[]           @relation("TradeInCreatedBy")
-  auditLogs             AuditLog[]
-  cashSessionsOpened    CashSession[]       @relation("CashSessionOpenedBy")
-  cashSessionsClosed    CashSession[]       @relation("CashSessionClosedBy")
-  conversations         AiConversation[]
-  sessions              Session[]
-  accounts              Account[]
-  verifications         Verification[]
-  twoFactor             TwoFactor?
-  inAppNotifications    InAppNotification[]
-  returnClaimsOpened    ReturnClaim[]       @relation("ReturnClaimOpenedBy")
-  returnClaimsResolved  ReturnClaim[]       @relation("ReturnClaimResolvedBy")
-  supplierRmas          SupplierRma[]
+  assignedJobs           Job[]               @relation("AssignedTechnician")
+  createdJobs            Job[]               @relation("CreatedBy")
+  updatedJobs            Job[]               @relation("UpdatedBy")
+  notes                  JobNote[]
+  jobParts               JobPart[]
+  jobRepairs             JobRepair[]
+  paymentsCreated        Payment[]           @relation("PaymentCreatedBy")
+  stockMovementsCreated  StockMovement[]     @relation("StockMovementCreatedBy")
+  salesCreated           Sale[]              @relation("SaleCreatedBy")
+  tradeInsCreated        TradeIn[]           @relation("TradeInCreatedBy")
+  auditLogs              AuditLog[]
+  cashSessionsOpened     CashSession[]       @relation("CashSessionOpenedBy")
+  cashSessionsClosed     CashSession[]       @relation("CashSessionClosedBy")
+  conversations          AiConversation[]
+  sessions               Session[]
+  accounts               Account[]
+  verifications          Verification[]
+  twoFactor              TwoFactor?
+  inAppNotifications     InAppNotification[]
+  returnClaimsOpened     ReturnClaim[]       @relation("ReturnClaimOpenedBy")
+  returnClaimsResolved   ReturnClaim[]       @relation("ReturnClaimResolvedBy")
+  supplierRmas           SupplierRma[]
   externalRepairsCreated ExternalRepair[]
-  jobReferrals          JobReferral[]
-  tasksAssigned         WorkshopTask[]      @relation("TaskAssignee")
-  tasksCreated          WorkshopTask[]      @relation("TaskCreator")
-  taskRules             TaskRule[]
-  taskRulesAssigned     TaskRule[]          @relation("TaskRuleAssignee")
+  jobReferrals           JobReferral[]
+  tasksAssigned          WorkshopTask[]      @relation("TaskAssignee")
+  tasksCreated           WorkshopTask[]      @relation("TaskCreator")
+  taskRules              TaskRule[]
+  taskRulesAssigned      TaskRule[]          @relation("TaskRuleAssignee")
 
   @@map("users")
 }
@@ -499,11 +499,11 @@ model Job {
   // optional loanerDevice link points at the shop fleet unit and
   // loanerReturnedAt stamps when it physically came back (null = still
   // with the customer).
-  hasLoanerDevice  Boolean        @default(false)
-  loanerNote       String?        @db.Text
+  hasLoanerDevice  Boolean       @default(false)
+  loanerNote       String?       @db.Text
   loanerDeviceId   String?
-  loanerDevice     LoanerDevice?  @relation(fields: [loanerDeviceId], references: [id], onDelete: SetNull)
-  loanerReturnedAt DateTime?      @db.Timestamptz
+  loanerDevice     LoanerDevice? @relation(fields: [loanerDeviceId], references: [id], onDelete: SetNull)
+  loanerReturnedAt DateTime?     @db.Timestamptz
 
   // Digital signature of the loaner responsibility agreement — a document
   // separate from the intake ficha. The snapshot freezes the canonical
@@ -715,15 +715,15 @@ model JobNote {
 // ─────────────────────────────────────────────
 
 model JobPartsWaiting {
-  id        String   @id @default(cuid())
-  jobId     String
-  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  partName  String
-  supplier  String?
+  id         String    @id @default(cuid())
+  jobId      String
+  job        Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  partName   String
+  supplier   String?
   // Expected arrival date — shown to the customer-facing bot as
   // "chegada prevista" (never a guaranteed date).
   expectedAt DateTime? @db.Timestamptz
-  createdAt DateTime @default(now()) @db.Timestamptz
+  createdAt  DateTime  @default(now()) @db.Timestamptz
 
   @@index([jobId])
   @@map("job_parts_waiting")
@@ -1011,6 +1011,10 @@ model NotificationOutbox {
   channel        NotifyChannel
   recipientPhone String
   renderedBody   String        @db.Text
+  // Parâmetros posicionais ({{1}}…{{n}}) para envio Meta `type:"template"`
+  // — ordem = ordem de aparecimento dos {{var}} no corpo do template.
+  // Null quando a mensagem sai como texto livre (Evolution/sem vars).
+  templateParams Json?
   status         OutboxStatus  @default(QUEUED)
   error          String?       @db.Text
   retryCount     Int           @default(0)
@@ -1206,6 +1210,9 @@ model ShopSettings {
   // outbound passa a ir por POST /whatsapp/send e o token local é
   // apagado após o primeiro envio bem-sucedido.
   whatsappCredentialsAtCloud  Boolean   @default(false)
+  // Estado por template Meta após o último sync automático:
+  // { [name]: { status, reason?, syncedAt } } — lido pela UI.
+  whatsappTemplatesJson       Json?
   // Transporte WhatsApp: "meta" = Cloud API oficial (relay na cloud ou
   // credenciais locais legadas — o módulo "whatsapp-bot" é enforced
   // server-side pela cloud); "evolution" = Evolution API self-hosted na
@@ -1235,10 +1242,10 @@ model ShopSettings {
   // peça chegar — a IA usa-o em vez de prometer datas finais.
   // botClosedFallbackText: texto enviado quando o PC da loja está offline
   // e a Cloud não consegue resposta (null → predefinição da app).
-  botAiEnabled                Boolean  @default(false)
-  botInfoText                 String?  @db.Text
-  botAvgRepairDaysAfterPart   Int      @default(1)
-  botClosedFallbackText       String?  @db.Text
+  botAiEnabled                Boolean   @default(false)
+  botInfoText                 String?   @db.Text
+  botAvgRepairDaysAfterPart   Int       @default(1)
+  botClosedFallbackText       String?   @db.Text
   // Remarketing automático (Pro module "remarketing") — proactive WhatsApp
   // re-engagement for customers idle for remarketingDays, throttled by a
   // cooldown and sent as a Meta-approved template message.
@@ -1432,14 +1439,14 @@ model TradeIn {
 // ─────────────────────────────────────────────
 
 model LoanerDevice {
-  id    String  @id @default(cuid())
+  id        String   @id @default(cuid())
   // How staff recognise the unit ("iPhone 8 — loja #2") — required, and
   // what falls back into Job.loanerNote when the picker sets no text.
-  label String  @db.VarChar(120)
-  brand String? @db.VarChar(60)
-  model String? @db.VarChar(120)
-  imei  String? @db.VarChar(32)
-  notes String? @db.Text
+  label     String   @db.VarChar(120)
+  brand     String?  @db.VarChar(60)
+  model     String?  @db.VarChar(120)
+  imei      String?  @db.VarChar(32)
+  notes     String?  @db.Text
   // Retired units keep their loan history but can no longer be assigned.
   active    Boolean  @default(true)
   createdAt DateTime @default(now()) @db.Timestamptz
@@ -1548,9 +1555,9 @@ model Supplier {
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 
-  rmas             SupplierRma[]
-  externalRepairs  ExternalRepair[]
-  parts            PartsCatalog[]
+  rmas            SupplierRma[]
+  externalRepairs ExternalRepair[]
+  parts           PartsCatalog[]
 
   @@index([name])
   @@map("suppliers")
@@ -1637,11 +1644,11 @@ enum ExternalRepairStatus {
 }
 
 model ExternalRepair {
-  id         String               @id @default(cuid())
+  id         String   @id @default(cuid())
   jobId      String
-  job        Job                  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  job        Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
   supplierId String
-  supplier   Supplier             @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
 
   kind             ExternalRepairKind   @default(REPAIRER)
   status           ExternalRepairStatus @default(SENT)

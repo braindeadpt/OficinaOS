@@ -18,9 +18,14 @@ import { decryptSmsConfig, type SendResult, sendSms } from "./sms.service.js";
 import { type CloudCredentials, sendSmsViaCloud } from "./sms-cloud.service.js";
 import {
   resolveWhatsAppChannel,
+  sendWhatsAppTemplateVia,
   sendWhatsAppText,
   type WhatsAppChannel,
 } from "./whatsapp-channel.js";
+import {
+  orderedTemplateParams,
+  TEMPLATE_LANG,
+} from "./whatsapp-templates.service.js";
 
 /**
  * Events a staff member fires by hand for a specific customer — not
@@ -71,6 +76,7 @@ interface OutboxEntry {
   retryCount: number | null;
   status: OutboxStatus;
   templateName: string;
+  templateParams: unknown;
 }
 
 const POLL_INTERVAL_MS = 5000;
@@ -104,6 +110,13 @@ export async function queueNotification(
     renderedBody,
     status: OutboxStatus.QUEUED,
     templateName: data.templateName,
+    // Meta exige template fora da janela de 24h — grava os params na
+    // ordem dos {{var}} do corpo (a mesma ordem que o sync usa para
+    // criar o template na conta da loja).
+    templateParams:
+      data.channel === "WHATSAPP"
+        ? orderedTemplateParams(data.templateBody, data.templateVars)
+        : undefined,
   });
 }
 
@@ -226,14 +239,33 @@ async function processWhatsAppEntry(
   if (blocked) {
     return;
   }
-  const result = await sendWhatsAppText(
-    prisma,
-    channel,
-    entry.recipientPhone,
-    entry.renderedBody,
-    countryCode,
-    settings
-  );
+  // Meta: mensagens iniciadas pela loja saem sempre como template —
+  // texto livre fora da janela de 24h é rejeitado. Evolution não tem
+  // templates e SMS não passa por aqui; nesses casos o corpo renderizado
+  // continua a ser o transporte.
+  const metaParams = Array.isArray(entry.templateParams)
+    ? (entry.templateParams as string[])
+    : null;
+  const result =
+    channel.mode !== "evolution" && metaParams !== null
+      ? await sendWhatsAppTemplateVia(
+          prisma,
+          channel,
+          entry.recipientPhone,
+          entry.templateName,
+          TEMPLATE_LANG,
+          metaParams,
+          countryCode,
+          settings
+        )
+      : await sendWhatsAppText(
+          prisma,
+          channel,
+          entry.recipientPhone,
+          entry.renderedBody,
+          countryCode,
+          settings
+        );
   if (result.success) {
     await markSent(prisma, entry.id);
     return;
@@ -503,6 +535,7 @@ export async function getOutboxLogs(
     retryCount: e.retryCount,
     status: e.status,
     templateName: e.templateName,
+    templateParams: e.templateParams,
   }));
 }
 

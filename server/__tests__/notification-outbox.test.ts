@@ -77,6 +77,9 @@ describe("queueNotification", () => {
       renderedBody: "Hello Ahmed, job RPR-001 is ready.",
       status: OutboxStatus.QUEUED,
       templateName: "job-ready",
+      // Params posicionais {{1}}… na ordem dos {{var}} do corpo — o
+      // template Meta aprovado consome esta mesma ordem (§5.6).
+      templateParams: ["Ahmed", "RPR-001"],
     });
   });
 

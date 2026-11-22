@@ -56,6 +56,10 @@ import {
 import { getSmsDeviceStatus } from "../services/sms-cloud.service.js";
 import { getUpdateState, startUpdate } from "../services/update.service.js";
 import { pushCredentialsToCloud } from "../services/whatsapp-channel.js";
+import {
+  getWhatsAppTemplateStatuses,
+  syncWhatsAppTemplates,
+} from "../services/whatsapp-templates.service.js";
 import { isModuleEnabled } from "../utils/modules.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
@@ -438,8 +442,43 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       // cloud. Se falhar (cloud em baixo / sem entitlement) fica para a
       // próxima gravação — o envio local continua a funcionar entretanto.
       const credentialsAtCloud = await pushCredentialsToCloud(app.prisma);
+      // §5.6 C.2 — ao ligar/configurar o WhatsApp, corre o sync de
+      // templates Meta em background (GET primeiro, cria o que falta).
+      if (parsed.data.enabled) {
+        syncWhatsAppTemplates(app.prisma, app.log).catch((err) =>
+          app.log.warn({ err }, "whatsapp-templates sync falhou")
+        );
+      }
       return reply.send({ ...updated, credentialsAtCloud });
     }
+  );
+
+  // Estado do sync de templates Meta — leitura do último resultado
+  // persistido (não chama a Meta/Cloud em cada GET).
+  app.get(
+    "/whatsapp/templates",
+    {
+      schema: {
+        tags: ["settings"],
+        summary: "Meta template sync status per template",
+      },
+    },
+    async (_req, reply) =>
+      reply.send({ templates: await getWhatsAppTemplateStatuses(app.prisma) })
+  );
+
+  // "Voltar a submeter" — corre o sync contra a Meta (local) ou a Cloud (Pro).
+  app.post(
+    "/whatsapp/templates/sync",
+    {
+      preHandler: [requirePermission({ settings: ["edit"] })],
+      schema: {
+        tags: ["settings"],
+        summary: "Re-run the Meta template sync",
+      },
+    },
+    async (_req, reply) =>
+      reply.send(await syncWhatsAppTemplates(app.prisma, app.log))
   );
 
   // Evolution API (WhatsApp local, free) — o serviço corre na LAN da

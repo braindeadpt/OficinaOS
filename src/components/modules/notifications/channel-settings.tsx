@@ -479,7 +479,96 @@ function MetaWhatsAppFields({
           value={form.pickupReminderTemplate}
         />
       </Field>
+      <WaTemplatesBlock />
     </>
+  );
+}
+
+const WA_TPL_STATUS_KEYS: Record<string, string> = {
+  APPROVED: "wa_tpl_status_approved",
+  IN_REVIEW: "wa_tpl_status_in_review",
+  MISSING: "wa_tpl_status_missing",
+  PENDING: "wa_tpl_status_pending",
+  REJECTED: "wa_tpl_status_rejected",
+};
+
+const WA_TPL_CHIP_CLASS: Record<string, string> = {
+  APPROVED: "bg-success-container text-on-success-container",
+  MISSING: "bg-error-container text-on-error-container",
+  REJECTED: "bg-error-container text-on-error-container",
+};
+
+/**
+ * Estado do sync de templates Meta (§5.6): um chip por template com o
+ * estado que a Meta/Cloud devolveu e um botão "Voltar a submeter" que
+ * corre o sync outra vez — para os rejeitados/em falta depois de
+ * corrigir o texto.
+ */
+function WaTemplatesBlock() {
+  const { t } = useTranslation();
+  const waTemplates = useSettingsStore((s) => s.waTemplates);
+  const fetchWaTemplates = useSettingsStore((s) => s.fetchWaTemplates);
+  const syncWaTemplates = useSettingsStore((s) => s.syncWaTemplates);
+  const [syncing, setSyncing] = useState(false);
+
+  useEffect(() => {
+    fetchWaTemplates();
+  }, [fetchWaTemplates]);
+
+  const handleResync = async () => {
+    setSyncing(true);
+    try {
+      const res = await syncWaTemplates();
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success(
+          t("wa_tpl_sync_done", {
+            ready: res.ready,
+            total: res.total,
+          })
+        );
+      }
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl bg-surface-container p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-medium text-on-surface text-sm">
+          {t("wa_tpl_title")}
+        </p>
+        <Button loading={syncing} onClick={handleResync} size="sm">
+          {t("wa_tpl_resubmit")}
+        </Button>
+      </div>
+      <p className="mt-1 text-on-surface-variant text-xs">{t("wa_tpl_desc")}</p>
+      {waTemplates.length > 0 && (
+        <ul className="mt-3 space-y-1.5">
+          {waTemplates.map((tpl) => (
+            <li
+              className="flex items-center justify-between gap-2 text-xs"
+              key={tpl.name}
+            >
+              <span className="truncate font-mono text-on-surface">
+                {tpl.name}
+              </span>
+              <span
+                className={`shrink-0 rounded-full px-2 py-0.5 ${
+                  WA_TPL_CHIP_CLASS[tpl.status] ??
+                  "bg-surface-container-high text-on-surface-variant"
+                }`}
+                title={tpl.reason}
+              >
+                {t(WA_TPL_STATUS_KEYS[tpl.status] ?? "wa_tpl_status_pending")}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
