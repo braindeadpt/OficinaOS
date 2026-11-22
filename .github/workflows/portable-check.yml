@@ -249,6 +249,9 @@ jobs:
           Write-Host "K9 pg expanded"
           Copy-Item scripts\portable\* "$b\"
           Write-Host "K10 scripts copied"
+          # Marcador "pasta completa" — distingue falha de montagem (sem
+          # marcador → Probe M salta) de falha de compressão (Probe M corre).
+          New-Item -ItemType File -Force "$env:RUNNER_TEMP\oficinaos-portable-k.complete" | Out-Null
           # Espelha o fix no release.yml — Compress-Archive em vez de tar.
           Compress-Archive -Path "$env:RUNNER_TEMP\oficinaos-portable-k" `
             -DestinationPath oficinaos-portable.zip -CompressionLevel Optimal
@@ -276,8 +279,8 @@ jobs:
         if: always()
         timeout-minutes: 10
         run: |
-          if (-not (Test-Path "$env:RUNNER_TEMP\oficinaos-portable-k")) {
-            Write-Host "MARKER-M-SKIP: pasta do bundle não existe"
+          if (-not (Test-Path "$env:RUNNER_TEMP\oficinaos-portable-k.complete")) {
+            Write-Host "MARKER-M-SKIP: montagem do bundle incompleta"
             exit 0
           }
           Write-Host "MARKER-M-START"
