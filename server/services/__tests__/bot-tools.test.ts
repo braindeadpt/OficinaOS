@@ -38,6 +38,9 @@ function makeCtx(jobs: { id: string; jobCode: string }[] = []): {
   prisma: Record<string, unknown>;
 } {
   const prisma = {
+    auditLog: {
+      findMany: vi.fn(() => Promise.resolve([])),
+    },
     job: {
       findFirst: vi.fn(({ where }: { where: { jobCode: string } }) => {
         const hit = jobs.find((j) => j.jobCode === where.jobCode);
@@ -115,5 +118,69 @@ describe("bot tools scoping", () => {
     const { ctx } = makeCtx();
     const res = await runBotTool(ctx, "drop_all_tables", {});
     expect(res.result).toEqual({ erro: "ferramenta_desconhecida" });
+  });
+
+  it("ver_historico distingue conclusão de entrega — mostra a transição para o estado atual", async () => {
+    const { ctx, prisma } = makeCtx();
+    (
+      prisma.job as { findMany: ReturnType<typeof vi.fn> }
+    ).findMany.mockResolvedValue([
+      {
+        device: { brand: { name: "Apple" }, model: "iPhone 11" },
+        id: "j-del",
+        jobCode: "REP-2024-000002-DEL",
+        status: "DELIVERED",
+        updatedAt: new Date("2026-01-20T10:00:00Z"),
+      },
+    ]);
+    (
+      prisma.auditLog as { findMany: ReturnType<typeof vi.fn> }
+    ).findMany.mockResolvedValue([
+      {
+        createdAt: new Date("2026-01-10T10:00:00Z"),
+        jobId: "j-del",
+        toValue: "DONE",
+      },
+      {
+        createdAt: new Date("2026-01-15T10:00:00Z"),
+        jobId: "j-del",
+        toValue: "DELIVERED",
+      },
+    ]);
+    const res = await runBotTool(ctx, "ver_historico", {});
+    const hist = (
+      res.result as { historico: { fechadoEm: string; codigo: string }[] }
+    ).historico;
+    // A entrega é o estado atual — não a conclusão de dia 10.
+    expect(hist[0].fechadoEm).toBe("2026-01-15");
+  });
+
+  it("ver_historico sem transição para o estado atual cai na primeira data terminal", async () => {
+    const { ctx, prisma } = makeCtx();
+    (
+      prisma.job as { findMany: ReturnType<typeof vi.fn> }
+    ).findMany.mockResolvedValue([
+      {
+        device: { brand: { name: "Apple" }, model: "iPhone 11" },
+        id: "j-done",
+        jobCode: "REP-2024-000003-DON",
+        status: "DELIVERED",
+        updatedAt: new Date("2026-01-20T10:00:00Z"),
+      },
+    ]);
+    // O audit só regista a conclusão — nenhuma linha DELIVERED.
+    (
+      prisma.auditLog as { findMany: ReturnType<typeof vi.fn> }
+    ).findMany.mockResolvedValue([
+      {
+        createdAt: new Date("2026-01-10T10:00:00Z"),
+        jobId: "j-done",
+        toValue: "DONE",
+      },
+    ]);
+    const res = await runBotTool(ctx, "ver_historico", {});
+    const hist = (res.result as { historico: { fechadoEm: string }[] })
+      .historico;
+    expect(hist[0].fechadoEm).toBe("2026-01-10");
   });
 });

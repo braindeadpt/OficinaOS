@@ -29,6 +29,7 @@ function job(over: Record<string, unknown> = {}) {
     estimatedDate: null,
     id: "job-1",
     jobCode: "REP-2024-000001-AAA",
+    partsWaiting: [],
     quotes: [
       {
         amount: { toNumber: () => 100 },
@@ -226,5 +227,87 @@ describe("composeReply — deterministic rules before AI", () => {
     const { ctx } = makeCtx({ ai: aiCfg, customers: [cust], jobs: [job()] });
     const out = await composeReply(ctx, msg("isto está muito complicado"));
     expect(out.escalate).toBe(true);
+  });
+
+  it("«previsão de chegada da peça» responde com a data da peça, não o estado", async () => {
+    const { ctx } = makeCtx({
+      customers: [cust],
+      jobs: [
+        job({
+          partsWaiting: [
+            {
+              expectedAt: new Date("2026-12-05T12:00:00Z"),
+              partName: "Ecrã iPhone 13",
+            },
+          ],
+          quotes: [],
+          status: "WAITING_FOR_PARTS",
+        }),
+      ],
+    });
+    const out = await composeReply(
+      ctx,
+      msg("Qual é a previsão de chegada da peça?")
+    );
+    expect(mocks.askBotAi).not.toHaveBeenCalled();
+    expect(out.text).toContain("Ecrã iPhone 13");
+    expect(out.text).toContain("chegada prevista");
+  });
+
+  it("«quando chega a peça» sem data registada diz que ainda não há data", async () => {
+    const { ctx } = makeCtx({
+      customers: [cust],
+      jobs: [
+        job({
+          partsWaiting: [{ expectedAt: null, partName: "Bateria" }],
+          quotes: [],
+          status: "WAITING_FOR_PARTS",
+        }),
+      ],
+    });
+    const out = await composeReply(ctx, msg("quando chega a peça?"));
+    expect(mocks.askBotAi).not.toHaveBeenCalled();
+    expect(out.text).toContain("Bateria");
+    expect(out.text).toContain("não indicou a data");
+  });
+
+  it("«Qual é a previsão? O preço já sei.» devolve a previsão, não o orçamento", async () => {
+    const { ctx } = makeCtx({
+      customers: [cust],
+      jobs: [
+        job({
+          estimatedDate: new Date("2026-12-03T12:00:00Z"),
+          quotes: [],
+        }),
+      ],
+    });
+    const out = await composeReply(
+      ctx,
+      msg("Qual é a previsão? O preço já sei.")
+    );
+    expect(mocks.askBotAi).not.toHaveBeenCalled();
+    expect(out.text).toContain("Previsão");
+    expect(out.text).not.toContain("Orçamento");
+  });
+
+  it("«previsão de preço» continua a ser pergunta de orçamento", async () => {
+    const { ctx } = makeCtx({
+      customers: [cust],
+      jobs: [job({ quotes: [] })],
+    });
+    const out = await composeReply(ctx, msg("tens previsão de preço?"));
+    expect(mocks.askBotAi).not.toHaveBeenCalled();
+    expect(out.text).toContain("orçamento");
+  });
+
+  it("«quando está aberta a loja» não é prazo — chega à IA", async () => {
+    mocks.askBotAi.mockResolvedValueOnce({
+      escalate: false,
+      reply: "Aberto das 9h às 18h.",
+    });
+    const { ctx } = makeCtx({ ai: aiCfg, customers: [cust], jobs: [job()] });
+    const out = await composeReply(ctx, msg("Quando está aberta a loja?"));
+    expect(mocks.askBotAi).toHaveBeenCalledOnce();
+    expect(out.text).toBe("Aberto das 9h às 18h.");
   });
 });

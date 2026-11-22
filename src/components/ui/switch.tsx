@@ -40,11 +40,6 @@ export function Switch({
             onChange(!checked);
           }
         }}
-        onKeyDown={(e) => {
-          if (e.key === " ") {
-            e.preventDefault();
-          }
-        }}
         role="switch"
         title={title}
         type="button"

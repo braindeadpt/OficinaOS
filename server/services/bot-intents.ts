@@ -42,10 +42,19 @@ const INTL_PREFIX_RE = /^00/;
 const QUOTE_RE = /or[çc]amento|pre[çc]o|quanto(?!.{0,10}tempo)|custa/i;
 // "quanto tempo falta" / "quando fica pronto" — perguntas de prazo têm
 // resposta determinística própria, antes do ramo de orçamento ("quanto").
-// "previsão"/"prazo" só contam quando NÃO seguidos de contexto de preço
-// ("previsão de preço" é orçamento, não prazo).
+// "previsão"/"prazo" só contam quando NÃO modificados por uma palavra de
+// preço ("previsão de preço" é orçamento, não prazo) — a exclusão exige o
+// conector de/do/da para não atravessar fronteiras de frase ("Qual é a
+// previsão? O preço já sei." é pergunta de prazo). "está"/"esta" soltos
+// ficam de fora: "Quando está aberta a loja?" não é prazo de reparação.
 const TIME_RE =
-  /quanto tempo|quando.{0,25}(pronto|fica|está|esta|entrega)|demora|falta.{0,15}pront|previs[aã]o(?!.{0,15}pre[çc]o)|prazo(?!.{0,15}(pre[çc]o|custo|pagamento))/i;
+  /quanto tempo|quando.{0,25}(pronto|fica|entrega)|demora|falta.{0,15}pront|previs[aã]o(?!\s+(?:de|do|da|dos|das)\s+pre[çc]o)|prazo(?!\s+(?:de|do|da|dos|das)\s+(?:pre[çc]o|custo|pagamento))/i;
+// A peça mencionada junto de chegada/previsão/entrega — pergunta pela peça
+// em falta ("quando chega a peça?", "previsão de chegada da peça"), não
+// pelo estado da reparação.
+const PART_ETA_RE =
+  /(pe[çc]a|encomenda|componente).{0,25}(chega|chegada|previs|pront|entrega|demora)|(chega|chegada|previs[aã]o).{0,20}(pe[çc]a|encomenda|componente)/i;
+const PART_ASK_RE = /pe[çc]a|encomenda|componente/i;
 // "ok" is deliberately absent — a bare "ok" in casual conversation
 // must not legally accept a quote.
 const YES_WORDS = new Set(["sim", "aceito", "confirmo", "aprovo"]);
@@ -175,6 +184,7 @@ interface ActiveJob {
   estimatedDate: Date | null;
   id: string;
   jobCode: string;
+  partsWaiting?: { expectedAt: Date | null; partName: string }[];
   quotes: {
     id: string;
     version: number;
@@ -203,6 +213,40 @@ function statusText(ctx: BotReplyCtx, job: ActiveJob): string {
     )}* por responder — responde SIM para aceitar ou NÃO para recusar.`;
   } else {
     text += " Responde ORÇAMENTO para detalhes ou AJUDA para falar connosco.";
+  }
+  return text;
+}
+
+/** Resposta a «quando chega a peça» — a data esperada da peça em falta,
+ *  não o estado da reparação. */
+function partEtaText(ctx: BotReplyCtx, job: ActiveJob): string {
+  const device = `${job.device.brand.name} ${job.device.model}`;
+  const tz = ctx.timezone ?? process.env.TZ ?? "Europe/Lisbon";
+  const waiting = job.partsWaiting ?? [];
+  const dated = waiting.filter(
+    (p): p is { expectedAt: Date; partName: string } => p.expectedAt !== null
+  );
+  let text: string;
+  if (dated.length > 0) {
+    const parts = dated
+      .map(
+        (p) =>
+          `${p.partName} — chegada prevista: ${p.expectedAt.toLocaleDateString(
+            "pt-PT",
+            { timeZone: tz }
+          )}`
+      )
+      .join("; ");
+    text = `Peças em falta para a tua reparação ${job.jobCode} (${device}): ${parts}.`;
+  } else {
+    const names = waiting.map((p) => p.partName).join(", ");
+    text = `A tua reparação ${job.jobCode} (${device}) está à espera de ${names} — a loja ainda não indicou a data de chegada.`;
+  }
+  if (job.estimatedDate) {
+    text += ` Previsão da reparação: ${job.estimatedDate.toLocaleDateString(
+      "pt-PT",
+      { timeZone: tz }
+    )}.`;
   }
   return text;
 }
@@ -326,6 +370,10 @@ async function findCustomerJobs(
       estimatedDate: true,
       customer: { select: { name: true } },
       device: { select: { model: true, brand: { select: { name: true } } } },
+      partsWaiting: {
+        orderBy: { createdAt: "asc" as const },
+        select: { expectedAt: true, partName: true },
+      },
       quotes: {
         orderBy: { version: "desc" as const },
         take: 1,
@@ -549,7 +597,7 @@ function routeIntent(
   direct: ActiveJob | undefined,
   lower: string
 ): BotReply {
-  if (TIME_RE.test(lower)) {
+  if (TIME_RE.test(lower) || PART_ETA_RE.test(lower)) {
     const target = direct ?? (jobs.length === 1 ? jobs[0] : undefined);
     if (!target) {
       return {
@@ -559,6 +607,16 @@ function routeIntent(
         text: `Tens ${jobs.length} reparações em curso: ${jobs
           .map((j) => j.jobCode)
           .join(", ")}. Responde com o código para veres a previsão.`,
+      };
+    }
+    // «Chegada da peça» pergunta pela peça em falta — se há peças
+    // registadas, responde com a data esperada da peça (não o estado).
+    if (PART_ASK_RE.test(lower) && (target.partsWaiting?.length ?? 0) > 0) {
+      return {
+        customerName,
+        escalate: false,
+        jobId: target.id,
+        text: partEtaText(ctx, target),
       };
     }
     return {
