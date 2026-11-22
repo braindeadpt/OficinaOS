@@ -191,6 +191,32 @@ describe("handleEvolutionInbound — proteções anti-ban", () => {
     expect(mocks.sendEvolutionText).toHaveBeenCalled();
   });
 
+  it("PARAR sem confirmação (acima do limite horário) devolve a vaga diária", async () => {
+    // Módulo fresco — o dayCount de testes anteriores não interfere
+    // num teto de 1 mensagem.
+    vi.resetModules();
+    const fresh = await import("../evolution-bot.service.js");
+    mocks.getOrCreateShopSettings.mockResolvedValue({
+      ...SETTINGS,
+      whatsappBotDailyCap: 1,
+    });
+    // O pipeline gravou o opt-out mas suprimiu a confirmação —
+    // texto vazio = nenhum envio ao cliente, vaga devolvida.
+    mocks.handleInboundMessage.mockResolvedValueOnce({
+      reply: { text: "" },
+      sent: true,
+    });
+    const p1 = fresh.handleEvolutionInbound(prisma, log, undefined, envelope());
+    await vi.runAllTimersAsync();
+    await p1;
+    // Com cap=1, uma segunda mensagem só processa se a vaga da
+    // primeira tiver sido devolvida.
+    const p2 = fresh.handleEvolutionInbound(prisma, log, undefined, envelope());
+    await vi.runAllTimersAsync();
+    await p2;
+    expect(mocks.handleInboundMessage).toHaveBeenCalledTimes(2);
+  });
+
   it("sessão fechada no envio → suspende o bot e avisa o staff", async () => {
     mocks.sendEvolutionText.mockResolvedValue({
       error: "Connection Closed",

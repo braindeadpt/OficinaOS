@@ -161,9 +161,11 @@ export async function escalateToStaff(
   }
   // O número acompanha sempre o nome — clientes homónimos e respostas
   // sem reparação associada (SIM/NÃO fora da janela) ficam seguiveis.
-  const who = customerName
-    ? `${customerName} (+${msg.fromPhone})`
+  // O gateway SMS já manda o «+» — normaliza para não duplicar.
+  const phone = msg.fromPhone.startsWith("+")
+    ? msg.fromPhone
     : `+${msg.fromPhone}`;
+  const who = customerName ? `${customerName} (${phone})` : phone;
   const snippet = (msg.text ?? `[${msg.messageType}]`).slice(0, 200);
   const created = await createManyAndReturnInAppNotifications(
     ctx.prisma,
