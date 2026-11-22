@@ -96,7 +96,11 @@ describe("syncSmsInbound", () => {
   it("RECEIVED → pipeline do bot com envio pela Cloud + ack", async () => {
     let sent: ((text: string) => Promise<boolean>) | undefined;
     mocks.handleInboundMessage.mockImplementationOnce(
-      async (_ctx: unknown, _msg: unknown, t: { send: typeof sent }) => {
+      async (
+        _ctx: unknown,
+        _msg: unknown,
+        t: { send: (text: string) => Promise<boolean> }
+      ) => {
         sent = t.send;
         return { sent: await t.send("resposta") };
       }

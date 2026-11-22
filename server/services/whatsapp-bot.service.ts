@@ -30,6 +30,11 @@ import {
 
 const MAX_SEND_ATTEMPTS = 3;
 
+// Regra Meta das 24 h (§5.6): resposta livre (incl. IA) só cabe na
+// janela — mensagem mais velha recebe ack sem resposta, porque a API
+// rejeitaria texto livre e uma resposta "tarde" é pior que nenhuma.
+const REPLY_WINDOW_MS = 23 * 60 * 60 * 1000; // 23 h — margem antes do corte
+
 // In-memory send-attempt counter — reset on restart, which is fine:
 // worst case a message gets one extra retry window.
 const sendAttempts = new Map<string, number>();
@@ -168,6 +173,14 @@ async function processInbound(
   ctx: BotCtx,
   msg: InboundMessage
 ): Promise<boolean> {
+  const age = Date.now() - Date.parse(msg.createdAt);
+  if (Number.isFinite(age) && age > REPLY_WINDOW_MS) {
+    ctx.log.warn(
+      { msgId: msg.id, ageMinutes: Math.round(age / 60_000) },
+      "whatsapp-bot: mensagem fora da janela de 24 h — ack sem resposta"
+    );
+    return true;
+  }
   try {
     const out = await handleInboundMessage(ctx, msg, {
       channelLabel: "WhatsApp",
