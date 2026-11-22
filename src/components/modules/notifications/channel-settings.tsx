@@ -513,32 +513,16 @@ function BotCard() {
 
   return (
     <div className="mt-4 rounded-2xl bg-surface-container-low p-5">
-      <label className="flex cursor-pointer select-none items-center gap-3">
-        <input
+      <div className="flex select-none items-center gap-3">
+        <Switch
+          ariaLabel={t("bot_ai_enabled")}
           checked={form.enabled}
-          className="sr-only"
-          onChange={(e) =>
-            setForm((f) => ({ ...f, enabled: e.target.checked }))
-          }
-          type="checkbox"
+          onChange={(enabled) => setForm((f) => ({ ...f, enabled }))}
         />
-        <span
-          className="relative inline-block h-6 w-11 rounded-full transition-colors"
-          style={{
-            backgroundColor: form.enabled
-              ? "var(--color-primary)"
-              : "var(--color-outline-variant)",
-          }}
-        >
-          <span
-            className="absolute top-0.5 h-5 w-5 rounded-full bg-on-primary shadow-sm transition-all"
-            style={{ insetInlineStart: form.enabled ? "22px" : "2px" }}
-          />
-        </span>
         <span className="font-medium text-on-surface text-sm">
           {t("bot_ai_enabled")}
         </span>
-      </label>
+      </div>
       <p className="mt-1 text-on-surface-variant text-xs">
         {t("bot_ai_enabled_help")}
       </p>

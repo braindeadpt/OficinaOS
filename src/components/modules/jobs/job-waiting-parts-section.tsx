@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Can } from "@/components/modules/can";
 import { Icon } from "@/components/ui/icon";
+import { Input } from "@/components/ui/input";
 import { useCan } from "@/hooks/use-can";
 import { useJobsStore } from "@/stores/jobs";
 
@@ -103,14 +104,15 @@ export default function JobWaitingPartsSection({
             type="text"
             value={supplier}
           />
-          <input
-            aria-label={t("jobs_waiting_parts_expected_at")}
-            className="flex-1 rounded-lg bg-surface-container-highest px-3 py-2 text-on-surface text-sm placeholder:text-on-surface-variant/50"
-            onChange={(e) => setExpectedAt(e.target.value)}
-            title={t("jobs_waiting_parts_expected_at")}
-            type="date"
-            value={expectedAt}
-          />
+          <div className="flex-1">
+            <Input
+              aria-label={t("jobs_waiting_parts_expected_at")}
+              onChange={(e) => setExpectedAt(e.target.value)}
+              title={t("jobs_waiting_parts_expected_at")}
+              type="date"
+              value={expectedAt}
+            />
+          </div>
           <Can perm={{ jobs: ["edit"] }}>
             <button
               className="flex min-h-[44px] items-center gap-1 rounded-lg bg-primary px-4 font-bold font-label text-on-primary text-xs uppercase tracking-wider transition-colors hover:bg-primary-container hover:text-on-primary-container disabled:opacity-50"
