@@ -15,6 +15,7 @@ import {
 } from "../services/signature-session.service.js";
 import { handleInboundSms } from "../services/sms.service.js";
 import { createCodeLockout } from "../utils/code-lockout.js";
+import { isModuleEnabled } from "../utils/modules.js";
 import { parseImageDataUrl, toPublicShop } from "../utils/public-shop.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
@@ -290,10 +291,9 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
       // Grátis = só envio: inbound responde 200 sem processar (sem bot,
       // sem gravar). Pro processa aqui quando o device posta à LAN —
       // em modo servidor é a Cloud que fila e o poller da app trata.
-      const modules = Array.isArray(settings.cloudEntitlements)
-        ? (settings.cloudEntitlements as string[])
-        : [];
-      if (body.event === "sms:received" && modules.includes("sms")) {
+      // isModuleEnabled exige cloudSyncedAt fresco (<24h): sem ele uma
+      // loja desligada da Cloud respondia para sempre com a lista velha.
+      if (body.event === "sms:received" && isModuleEnabled(settings, "sms")) {
         const from = body.payload?.sender ?? body.payload?.phoneNumber;
         const text = body.payload?.message;
         if (from && text) {

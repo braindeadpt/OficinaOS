@@ -2104,6 +2104,8 @@
   "wa_tpl_title": "Modelos de mensagens Meta",
   "wa_tpl_desc": "As notificações enviadas fora da janela de 24 horas do WhatsApp precisam de um modelo aprovado pela Meta. A app submete automaticamente os textos das notificações; a Meta costuma aprová-los em minutos.",
   "wa_tpl_resubmit": "Reenviar",
+  "wa_tpl_reason_graph_unreachable": "API Meta Graph inacessível",
+  "wa_tpl_reason_invalid_name": "Nome inválido para Meta (apenas letras minúsculas, dígitos e sublinhados)",
   "wa_tpl_sync_done": "{{ready}} de {{total}} modelos aprovados",
   "wa_tpl_status_approved": "Aprovado",
   "wa_tpl_status_in_review": "Em revisão",

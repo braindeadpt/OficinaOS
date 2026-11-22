@@ -149,16 +149,22 @@ Outbound: evento → notification-dispatch → outbox →
   POST http://<telemovel>:8080/message (Basic auth, LAN — sms-gate.app)
 Inbound:  cliente SMS → SMS Gateway for Android → webhook
   POST /api/public/sms/inbound/:token (route-security: CSRF off + rate limit)
-  → handleInboundSms → mesmos intents do bot (bot-intents.ts partilhado
-  com whatsapp-bot) → resposta automática por SMS
+  → só processa com entitlement `sms` fresco (isModuleEnabled — grátis
+    responde 200 sem ler) → handleInboundSms → mesmos intents do bot
+    (bot-intents.ts partilhado com whatsapp-bot) → resposta automática
 ```
 
 100% LAN: nada passa pela Cloud nem pela Meta — só sai o SMS pela rede móvel.
 É o canal "de arranque" da loja que ainda não tem WhatsApp Business aprovado.
 Sem template SMS dedicado, o dispatch usa o corpo WhatsApp com `*bold*`
-removido (SMS não renderiza markdown). Corre localmente e é **free**; o
-módulo Pro `sms` gateia o transporte gerido pela Cloud abaixo — o gateway
-Android da loja em modo LAN nunca exige entitlement.
+removido (SMS não renderiza markdown). Corre localmente e o **envio é
+free** — o gateway Android da loja em modo LAN nunca exige entitlement.
+O **inbound** (respostas do bot a SMS do cliente) é Pro: a rota pública
+só chama `handleInboundSms` com `isModuleEnabled(settings, "sms")`
+(entitlement + `cloudSyncedAt` < 24 h); sem Pro o webhook devolve 200 e
+não processa nada — nem bot, nem gravação.
+A responsabilidade é da loja: o SIM é dela, a fatura da operadora e os
+limites anti-spam também.
 A responsabilidade é da loja: o SIM é dela, a fatura da operadora e os
 limites anti-spam também.
 Consentimento partilhado (`whatsappConsent` = opt-in de mensagens

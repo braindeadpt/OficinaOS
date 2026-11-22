@@ -498,6 +498,14 @@ const WA_TPL_CHIP_CLASS: Record<string, string> = {
   REJECTED: "bg-error-container text-on-error-container",
 };
 
+// Razões geradas pela app/Cloud chegam como códigos estáveis → chave
+// i18n. Razões da Meta (rejected_reason, erros 132xxx) vêm verbatim e
+// mostram-se cruas — não há tradução para diagnósticos da Meta.
+const WA_TPL_REASON_KEYS: Record<string, string> = {
+  GRAPH_UNREACHABLE: "wa_tpl_reason_graph_unreachable",
+  INVALID_NAME: "wa_tpl_reason_invalid_name",
+};
+
 /**
  * Estado do sync de templates Meta (§5.6): um chip por template com o
  * estado que a Meta/Cloud devolveu e um botão "Voltar a submeter" que
@@ -510,6 +518,14 @@ function WaTemplatesBlock() {
   const fetchWaTemplates = useSettingsStore((s) => s.fetchWaTemplates);
   const syncWaTemplates = useSettingsStore((s) => s.syncWaTemplates);
   const [syncing, setSyncing] = useState(false);
+
+  const tplReasonTitle = (reason: string | null | undefined) => {
+    if (!reason) {
+      return;
+    }
+    const key = WA_TPL_REASON_KEYS[reason];
+    return key ? t(key) : reason;
+  };
 
   useEffect(() => {
     fetchWaTemplates();
@@ -560,7 +576,7 @@ function WaTemplatesBlock() {
                   WA_TPL_CHIP_CLASS[tpl.status] ??
                   "bg-surface-container-high text-on-surface-variant"
                 }`}
-                title={tpl.reason}
+                title={tplReasonTitle(tpl.reason)}
               >
                 {t(WA_TPL_STATUS_KEYS[tpl.status] ?? "wa_tpl_status_pending")}
               </span>

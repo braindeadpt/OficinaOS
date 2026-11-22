@@ -2104,6 +2104,8 @@
   "wa_tpl_title": "Meta message templates",
   "wa_tpl_desc": "Notifications sent outside the 24-hour WhatsApp window need a Meta-approved template. The app submits your notification texts automatically; Meta usually approves them in minutes.",
   "wa_tpl_resubmit": "Resubmit",
+  "wa_tpl_reason_graph_unreachable": "Meta Graph API unreachable",
+  "wa_tpl_reason_invalid_name": "Name invalid for Meta (lowercase letters, digits and underscores only)",
   "wa_tpl_sync_done": "{{ready}} of {{total}} templates approved",
   "wa_tpl_status_approved": "Approved",
   "wa_tpl_status_in_review": "Under review",

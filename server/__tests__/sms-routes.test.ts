@@ -67,6 +67,7 @@ vi.mock("../repositories/settings.repository.js", () => ({
 
 const SMS_ROW = {
   cloudEntitlements: ["sms"],
+  cloudSyncedAt: new Date(),
   smsEnabled: true,
   smsGatewayPasswordEncrypted: "v1:enc",
   smsGatewayUrl: "http://192.168.1.50:8080",

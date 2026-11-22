@@ -2104,6 +2104,8 @@
   "wa_tpl_title": "Modèles de méta-messages",
   "wa_tpl_desc": "Les notifications envoyées en dehors de la fenêtre WhatsApp de 24 heures nécessitent un modèle approuvé par Meta. ",
   "wa_tpl_resubmit": "Soumettre à nouveau",
+  "wa_tpl_reason_graph_unreachable": "API Meta Graph inaccessible",
+  "wa_tpl_reason_invalid_name": "Nom invalide pour Meta (lettres minuscules, chiffres et traits de soulignement uniquement)",
   "wa_tpl_sync_done": "{{ready}} modèles sur {{total}} approuvés",
   "wa_tpl_status_approved": "Approuvé",
   "wa_tpl_status_in_review": "En cours de révision",

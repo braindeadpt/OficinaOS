@@ -263,7 +263,9 @@ async function syncLocal(
     if (!META_NAME_RE.test(t.name)) {
       out.push({
         name: t.name,
-        reason: "nome inválido p/ Meta",
+        // Códigos estáveis — a UI traduz (i18n); a razão da Meta
+        // (rejected_reason) chega verbatim e exibe-se crua.
+        reason: "INVALID_NAME",
         status: "REJECTED",
       });
       continue;
@@ -286,7 +288,7 @@ async function syncLocal(
     if (existing === "unreachable") {
       out.push({
         name: t.name,
-        reason: "Graph API inacessível",
+        reason: "GRAPH_UNREACHABLE",
         status: "MISSING",
       });
       continue;
