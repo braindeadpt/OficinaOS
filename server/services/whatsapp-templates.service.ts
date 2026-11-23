@@ -49,7 +49,7 @@ export function isMetaBodySubmittable(body: string): boolean {
  */
 export function metaSafeConditionals(body: string): string {
   return body.replace(
-    /(\{\{\w+\}\})(\{\{endif\}\})(?=(\s*\{\{if[^{}]*\}\}[\s\S]*?\{\{endif\}\})*\s*$)/g,
+    /(\{\{\w+\}\})(\{\{endif\}\})(?=(\s*\{\{if[^{}]*\}\}(?:(?!\{\{endif\}\})[\s\S])*?\{\{endif\}\})*\s*$)/g,
     "$1.$2"
   );
 }

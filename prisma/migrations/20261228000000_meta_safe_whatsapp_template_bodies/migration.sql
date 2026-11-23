@@ -17,9 +17,9 @@
 UPDATE "notification_templates"
 SET body = regexp_replace(
   body,
-  '(\{\{\w+\}\})(\{\{endif\}\})(([[:space:]]*\{\{if[^{}]*\}\}.*?\{\{endif\}\})*[[:space:]]*$)',
+  '(\{\{\w+\}\})(\{\{endif\}\})(([[:space:]]*\{\{if[^{}]*\}\}((?!\{\{endif\}\}).)*?\{\{endif\}\})*[[:space:]]*$)',
   '\1.\2\3',
   'g'
 )
 WHERE channel = 'WHATSAPP'
-  AND body ~ '\{\{\w+\}\}\{\{endif\}\}([[:space:]]*\{\{if[^{}]*\}\}.*?\{\{endif\}\})*[[:space:]]*$';
+  AND body ~ '\{\{\w+\}\}\{\{endif\}\}([[:space:]]*\{\{if[^{}]*\}\}((?!\{\{endif\}\}).)*?\{\{endif\}\})*[[:space:]]*$';

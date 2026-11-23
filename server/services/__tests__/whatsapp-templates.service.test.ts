@@ -114,6 +114,16 @@ describe("metaSafeConditionals", () => {
     expect(metaSafeConditionals(body)).toBe(body);
   });
 
+  it("não engole texto literal entre blocos ao expandir o sufixo", () => {
+    // Regressão Devin r4: com texto fixo ENTRE blocos e outro bloco
+    // depois, o `.*?` do sufixo podia saltar o primeiro {{endif}} e
+    // tratar o texto literal como parte da cadeia — inserindo "." a
+    // seguir a {{trackingUrl}} e corrompendo `?phone4=NNNN&utm_…`.
+    const body =
+      "{{if shopName}}Oficina {{shopName}}{{endif}}{{if trackingUrl}} Consulte {{trackingUrl}}{{endif}}{{if trackingUrl}}&utm_source=whatsapp{{endif}}&utm_medium=mensagem{{if reviewUrl}} Avalie-nos em {{reviewUrl}}.{{endif}}";
+    expect(metaSafeConditionals(body)).toBe(body);
+  });
+
   it("pontua quando o sufixo é só blocos {{if}} completos até ao fim", () => {
     expect(
       metaSafeConditionals(
