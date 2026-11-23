@@ -203,8 +203,14 @@ describe("buildQuoteSuggestion — hardware checks", () => {
 
 describe("buildQuoteSuggestion — matching confidence", () => {
   it("marks contains-matches as low confidence", () => {
-    // "Bateria iPhone 15" only contains the "bateria" hint — never equals.
-    const s = build(diag({ "battery.health": { Status: "fail" } }));
+    // Device "iPhone 15 Pro" não aparece nos nomes das peças — os matches
+    // por hint continuam contains → low (sem boost de modelo).
+    const s = build(
+      diag(
+        { "battery.health": { Status: "fail" } },
+        { device: { brand: "Apple", model: "iPhone 15 Pro" } }
+      )
+    );
     expect(s.lines.every((l) => l.confidence === "low")).toBe(true);
   });
 
@@ -254,6 +260,79 @@ describe("buildQuoteSuggestion — matching confidence", () => {
     expect(s.candidates?.length).toBeLessThanOrEqual(5);
     // Low confidence still allows hardware lines — staff picks the model.
     expect(s.lines.length).toBeGreaterThan(0);
+  });
+
+  it("lets a marketingName match win over a later exact model code", () => {
+    // marketingName "iPhone" só corresponde de forma aproximada, mas tem
+    // prioridade sobre o model "iPhone 15" (que seria exact) — o catálogo
+    // da loja usa nomes comerciais, não códigos internos.
+    const s = build(
+      diag(
+        { "battery.health": { Status: "fail" } },
+        {
+          device: {
+            brand: "Apple",
+            marketingName: "iPhone",
+            model: "iPhone 15",
+          },
+        }
+      )
+    );
+    expect(s.deviceMatch?.confidence).toBe("low");
+    expect(s.candidates?.length).toBeGreaterThan(0);
+  });
+});
+
+describe("buildQuoteSuggestion — device-aware part priority", () => {
+  it("prefers parts named after the matched device over other models", () => {
+    // Sem relação peça↔modelo no catálogo, o nome do item é o sinal: a
+    // bateria "iPhone 15" ganha à "Samsung A54" mesmo com menos stock, e
+    // ganha à "Bateria" genérica porque menciona o modelo.
+    const parts: QuotePartInput[] = [
+      {
+        category: "BATTERY",
+        defaultPrice: 20,
+        id: "part-generic",
+        name: "Bateria",
+        stockQuantity: 5,
+      },
+      {
+        category: "BATTERY",
+        defaultPrice: 25,
+        id: "part-iphone",
+        name: "Bateria iPhone 15",
+        stockQuantity: 1,
+      },
+      {
+        category: "BATTERY",
+        defaultPrice: 22,
+        id: "part-samsung",
+        name: "Bateria Samsung A54",
+        stockQuantity: 9,
+      },
+    ];
+    const s = build(diag({ "battery.health": { Status: "fail" } }), { parts });
+    const part = s.lines.find((l) => l.kind === "part");
+    expect(part?.catalogId).toBe("part-iphone");
+    expect(part?.confidence).toBe("high");
+  });
+
+  it("still emits a generic part when no catalog item mentions the device", () => {
+    // O boost por nome não é penalização: sem peças com o modelo no nome,
+    // o match normal por hint decide como antes.
+    const parts: QuotePartInput[] = [
+      {
+        category: "BATTERY",
+        defaultPrice: 20,
+        id: "part-generic",
+        name: "Bateria",
+        stockQuantity: 5,
+      },
+    ];
+    const s = build(diag({ "battery.health": { Status: "fail" } }), { parts });
+    expect(s.lines.find((l) => l.kind === "part")?.catalogId).toBe(
+      "part-generic"
+    );
   });
 });
 
@@ -326,7 +405,99 @@ describe("buildQuoteSuggestion — unmatched and meta checks", () => {
   });
 });
 
+describe("buildQuoteSuggestion — check → category rules", () => {
+  it("matches the PT speaker synonym 'coluna' to SPEAKER parts", () => {
+    const parts: QuotePartInput[] = [
+      {
+        category: "SPEAKER",
+        defaultPrice: 35,
+        id: "part-coluna",
+        name: "Coluna Bluetooth",
+        stockQuantity: 2,
+      },
+    ];
+    const s = build(diag({ "checklist.speaker": { Status: "fail" } }), {
+      parts,
+    });
+    expect(s.lines.find((l) => l.kind === "part")?.catalogId).toBe(
+      "part-coluna"
+    );
+    expect(s.unmatchedChecks).toEqual([]);
+  });
+
+  it("maps checklist.earpiece to SPEAKER, not MICROPHONE", () => {
+    // O earpiece do checklist é o altifalante de chamadas (ouvir), não o
+    // microfone — a peça SPEAKER ganha mesmo existindo uma MICROPHONE.
+    const parts: QuotePartInput[] = [
+      {
+        category: "SPEAKER",
+        defaultPrice: 20,
+        id: "part-ear",
+        name: "Altifalante auricular",
+        stockQuantity: 1,
+      },
+      {
+        category: "MICROPHONE",
+        defaultPrice: 20,
+        id: "part-mic",
+        name: "Microfone",
+        stockQuantity: 1,
+      },
+    ];
+    const s = build(diag({ "checklist.earpiece": { Status: "fail" } }), {
+      parts,
+    });
+    const part = s.lines.find((l) => l.kind === "part");
+    expect(part?.catalogId).toBe("part-ear");
+    expect(s.unmatchedChecks).toEqual([]);
+  });
+});
+
 describe("buildQuoteSuggestion — service.template", () => {
+  it("merges service.template and same-rule check reasons into one line", () => {
+    // Sem a escolha em cache por regra, o template escolhia "Troca de
+    // bateria" (hint exato do template) e o check escolhia "Bateria
+    // substituída" (ambos contains "bateria", desempate por nome) — duas
+    // linhas de reparação para a mesma substituição.
+    const repairs: QuoteRepairInput[] = [
+      {
+        category: "HARDWARE",
+        defaultPrice: 25,
+        id: "rep-troca",
+        name: "Troca de bateria",
+      },
+      {
+        category: "HARDWARE",
+        defaultPrice: 30,
+        id: "rep-bat-new",
+        name: "Bateria substituída",
+      },
+    ];
+    const s = build(
+      diag({
+        "battery.health": { Status: "fail" },
+        "service.template": { Status: "info", Value: "battery" },
+      }),
+      { repairs }
+    );
+
+    const repairLines = s.lines.filter((l) => l.kind === "repair");
+    expect(repairLines).toHaveLength(1);
+    expect(repairLines[0]).toMatchObject({
+      catalogId: "rep-troca",
+      // pior estado entre info (template) e fail (check)
+      reasonStatus: "fail",
+    });
+    expect(repairLines[0].reasonCheck).toContain("service.template");
+    expect(repairLines[0].reasonCheck).toContain("battery.health");
+
+    const partLines = s.lines.filter((l) => l.kind === "part");
+    expect(partLines).toHaveLength(1);
+    expect(partLines[0].catalogId).toBe("part-battery");
+    expect(partLines[0].reasonCheck).toContain("service.template");
+    expect(partLines[0].reasonCheck).toContain("battery.health");
+  });
+
   it("battery template emits battery lines prioritising ~bateria repairs", () => {
     const s = build(
       diag({

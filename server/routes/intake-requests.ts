@@ -1,5 +1,7 @@
 import { IntakeRequestStatus } from "@generated/client";
+import type { RoleType } from "@shared/constants/roles";
 import { AppError } from "@shared/errors/app-error.js";
+import type { PermissionCheck } from "@shared/permissions";
 import { convertIntakeRequestSchema } from "@shared/schemas/intake-request.schema";
 import type { FastifyPluginAsync } from "fastify";
 import { requirePermission } from "../middlewares/rbac.js";
@@ -13,6 +15,15 @@ import {
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
 const STATUS_VALUES = new Set<string>(Object.values(IntakeRequestStatus));
+
+// O pré-orçamento lê nomes, preços e stock dos catálogos de peças e
+// reparações — exige a mesma permissão das rotas /parts e /repairs
+// (viewCatalog em ambos os recursos; requirePermission usa AND entre
+// recursos). FRONT_DESK cria Jobs mas não tem acesso a catálogos.
+const QUOTE_CATALOG_VIEW: PermissionCheck = {
+  parts: ["viewCatalog"],
+  repairs: ["viewCatalog"],
+};
 
 // Staff-facing queue for the public pre-check form. Convert links the request
 // to a job created through the normal intake modal — never creates jobs here.
@@ -40,7 +51,22 @@ export const intakeRequestsRoutes: FastifyPluginAsync = async (app) => {
         app.prisma,
         status as keyof typeof IntakeRequestStatus | undefined
       );
-      return reply.send(requests);
+      // quoteSuggestion contém dados de catálogo (nomes/preços/stock) —
+      // só sai na resposta para quem tem viewCatalog; sem isso o FRONT_DESK
+      // leria o snapshot mesmo sem poder gerá-lo.
+      const catalogAccess = req.user
+        ? await req.server.auth.api.userHasPermission({
+            body: {
+              permissions: QUOTE_CATALOG_VIEW,
+              role: req.user.role as RoleType,
+            },
+          })
+        : { success: false };
+      return reply.send(
+        catalogAccess.success
+          ? requests
+          : requests.map((r) => ({ ...r, quoteSuggestion: null }))
+      );
     }
   );
 
@@ -128,11 +154,13 @@ export const intakeRequestsRoutes: FastifyPluginAsync = async (app) => {
   );
 
   // Deterministic pre-quote from the diagnostic checks — advisory snapshot
-  // stored on the request, never pre-fills a Job.
+  // stored on the request, never pre-fills a Job. Reads catalog names,
+  // prices and stock, so it requires catalog view permission (not jobs:create
+  // — FRONT_DESK can create jobs but must not see catalog data).
   app.post(
     "/:id/quote-suggestion",
     {
-      preHandler: [requirePermission({ jobs: ["create"] })],
+      preHandler: [requirePermission(QUOTE_CATALOG_VIEW)],
       schema: {
         params: {
           properties: { id: { type: "string" } },

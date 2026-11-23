@@ -1,4 +1,5 @@
-import type { PartCategoryType, RepairCategoryType } from "@shared/constants";
+import type { PartCategoryType } from "@shared/constants/part-categories";
+import type { RepairCategoryType } from "@shared/constants/repair-categories";
 
 /**
  * Pré-orçamento determinístico do intake diag — puro e sem I/O para ser
@@ -171,13 +172,15 @@ const RULE_CAMERA: CheckRule = {
   requiresDeviceMatch: true,
 };
 const RULE_SPEAKER: CheckRule = {
-  hints: ["altifalante", "speaker"],
+  // "coluna" é o nome PT comum no catálogo demo; auricular/earpiece é o
+  // altifalante de chamadas (ouvir) — NÃO o microfone.
+  hints: ["altifalante", "speaker", "coluna", "auricular", "earpiece"],
   partCategory: "SPEAKER",
   repairCategories: HARDWARE,
   requiresDeviceMatch: true,
 };
 const RULE_MICROPHONE: CheckRule = {
-  hints: ["microfone", "microphone", "auricular", "earpiece"],
+  hints: ["microfone", "microphone"],
   partCategory: "MICROPHONE",
   repairCategories: HARDWARE,
   requiresDeviceMatch: true,
@@ -214,7 +217,7 @@ const EXACT_RULES: Record<string, CheckRule> = {
   "checklist.buttons": RULE_BUTTON,
   "checklist.cameras": RULE_CAMERA,
   "checklist.charge_port": RULE_CHARGING,
-  "checklist.earpiece": RULE_MICROPHONE,
+  "checklist.earpiece": RULE_SPEAKER,
   "checklist.liquid": RULE_LIQUID,
   "checklist.mic": RULE_MICROPHONE,
   "checklist.screen_visual": RULE_SCREEN,
@@ -301,6 +304,8 @@ function compareStr(a: string, b: string): number {
 
 interface ScoredCandidate<T> {
   confidence: QuoteConfidence;
+  /** Nome do item menciona o modelo/nome comercial do aparelho. */
+  deviceHit: boolean;
   item: T;
   norm: string;
   rank: number;
@@ -329,9 +334,17 @@ function matchConfidence(
 }
 
 /**
+ * Contains por palavra inteira sobre strings normalizadas (separadas por
+ * espaços): evita falsos positivos tipo "pro" dentro de "protetor".
+ */
+function termContained(haystack: string, needle: string): boolean {
+  return ` ${haystack} `.includes(` ${needle} `);
+}
+
+/**
  * Ordem de preferência entre dois candidatos: rank (equals > contains),
- * depois stock>0 (peças), depois nome normalizado, depois id — sempre
- * determinístico.
+ * depois compatibilidade com o modelo do aparelho, depois stock>0 (peças),
+ * depois nome normalizado, depois id — sempre determinístico.
  */
 function isPreferred<T extends { id: string; name: string }>(
   next: ScoredCandidate<T>,
@@ -339,6 +352,9 @@ function isPreferred<T extends { id: string; name: string }>(
 ): boolean {
   if (next.rank !== best.rank) {
     return next.rank > best.rank;
+  }
+  if (next.deviceHit !== best.deviceHit) {
+    return next.deviceHit;
   }
   if (next.stock !== best.stock) {
     return next.stock > best.stock;
@@ -353,15 +369,25 @@ function isPreferred<T extends { id: string; name: string }>(
 /**
  * Melhor candidato de um pool para os hints dados. Empates desempatados por
  * isPreferred — determinístico.
+ *
+ * deviceHints (nomes normalizados do modelo/nome comercial do aparelho
+ * matched) não são gate de match — são boost: um item que passa nos hints
+ * de categoria E menciona o modelo ganha confidence "high". O catálogo não
+ * tem campo peça↔modelo, por isso a heurística é por nome; itens sem o
+ * nome do modelo não são penalizados — só perdem o desempate para os que
+ * o mencionam (limitação documentada: compatibilidade real pode divergir
+ * do nome).
  */
 function pickBest<T extends { id: string; name: string }>(
   pool: T[],
   hints: string[],
-  stockOf?: (item: T) => number
+  stockOf?: (item: T) => number,
+  deviceHints: string[] = []
 ): ScoredCandidate<T> | null {
   const normalizedHints = hints
     .map((h) => normalizeKey(h))
     .filter((h) => h.length > 0);
+  const normalizedDeviceHints = deviceHints.filter((h) => h.length > 0);
   let best: ScoredCandidate<T> | null = null;
 
   for (const item of pool) {
@@ -369,12 +395,19 @@ function pickBest<T extends { id: string; name: string }>(
     if (!norm) {
       continue;
     }
-    const confidence = matchConfidence(norm, normalizedHints);
+    let confidence = matchConfidence(norm, normalizedHints);
     if (!confidence) {
       continue;
     }
+    const deviceHit = normalizedDeviceHints.some(
+      (h) => termContained(norm, h) || termContained(h, norm)
+    );
+    if (deviceHit) {
+      confidence = "high";
+    }
     const candidate: ScoredCandidate<T> = {
       confidence,
+      deviceHit,
       item,
       norm,
       rank: confidence === "high" ? 2 : 1,
@@ -385,6 +418,28 @@ function pickBest<T extends { id: string; name: string }>(
     }
   }
   return best;
+}
+
+/**
+ * Escolha em cache por CheckRule: a primeira emit de uma regra (tipicamente
+ * o service.template, que corre primeiro) decide a linha; emits seguintes
+ * de checks da mesma regra reutilizam-na — addLine funde as razões na
+ * mesma linha em vez de criar uma segunda linha com outro candidato.
+ */
+function pickCached<T extends { id: string; name: string }>(
+  cache: Map<CheckRule, ScoredCandidate<T>>,
+  rule: CheckRule,
+  pick: () => ScoredCandidate<T> | null
+): ScoredCandidate<T> | null {
+  const cached = cache.get(rule);
+  if (cached) {
+    return cached;
+  }
+  const picked = pick();
+  if (picked) {
+    cache.set(rule, picked);
+  }
+  return picked;
 }
 
 // ── Device match ────────────────────────────────────────────────────
@@ -470,28 +525,26 @@ function matchDevice(
     return { candidates: [], deviceMatch: null };
   }
 
-  let firstLowMatches: QuoteDeviceInput[] | null = null;
-
+  // marketingName (nome comercial) tem prioridade sobre model (código
+  // interno): o primeiro nome que produzir qualquer match ganha — mesmo
+  // aproximado — porque o catálogo da loja usa nomes comerciais, não códigos.
   for (const norm of diagnosticNames(device)) {
     const { highs, lows } = scanBrandDevices(brandDevices, norm);
     if (highs.length > 0) {
       highs.sort(byModelThenId);
       return { candidates: [], deviceMatch: toDeviceMatch(highs[0], "high") };
     }
-    if (lows.length > 0 && firstLowMatches === null) {
-      firstLowMatches = lows;
+    if (lows.length > 0) {
+      lows.sort(byModelThenId);
+      const top = lows.slice(0, DEVICE_CANDIDATE_LIMIT);
+      return {
+        candidates: top.map(toDeviceCandidate),
+        deviceMatch: toDeviceMatch(top[0], "low"),
+      };
     }
   }
 
-  if (!firstLowMatches || firstLowMatches.length === 0) {
-    return { candidates: [], deviceMatch: null };
-  }
-  firstLowMatches.sort(byModelThenId);
-  const top = firstLowMatches.slice(0, DEVICE_CANDIDATE_LIMIT);
-  return {
-    candidates: top.map(toDeviceCandidate),
-    deviceMatch: toDeviceMatch(top[0], "low"),
-  };
+  return { candidates: [], deviceMatch: null };
 }
 
 // ── Main ────────────────────────────────────────────────────────────
@@ -545,6 +598,87 @@ function addLine(
 }
 
 const STATUS_RANK: Record<string, number> = { fail: 3, warn: 2, info: 1 };
+
+interface EmitContext {
+  deviceHints: string[];
+  deviceMatch: QuoteSuggestionDeviceMatch | null;
+  lines: Map<string, LineAccumulator>;
+  matchedChecks: Set<string>;
+  partChoice: Map<CheckRule, ScoredCandidate<QuotePartInput>>;
+  parts: QuotePartInput[];
+  repairChoice: Map<CheckRule, ScoredCandidate<QuoteRepairInput>>;
+  repairs: QuoteRepairInput[];
+}
+
+/**
+ * Emite as linhas (peça + reparação) de uma CheckRule para um checkKey.
+ * partExtra alimenta só a escolha da peça (suggest.parts são "peças
+ * prováveis" do Grader); repairExtra alimenta só a escolha do serviço
+ * (hints do service.template). Misturar os dois criava sugestões
+ * cruzadas — ex.: check de bateria a sugerir "troca de ecrã".
+ */
+function emitRuleLines(
+  ctx: EmitContext,
+  rule: CheckRule,
+  checkKey: string,
+  status: "fail" | "info" | "warn",
+  partExtra: string[],
+  repairExtra: string[]
+): void {
+  let emitted = false;
+
+  if (rule.partCategory && ctx.deviceMatch) {
+    const best = pickCached(ctx.partChoice, rule, () =>
+      pickBest(
+        ctx.parts.filter((p) => p.category === rule.partCategory),
+        [...rule.hints, ...partExtra],
+        (p) => (p.stockQuantity > 0 ? 1 : 0),
+        ctx.deviceHints
+      )
+    );
+    if (best) {
+      addLine(ctx.lines, {
+        catalogId: best.item.id,
+        checkKey,
+        confidence: best.confidence,
+        inStock: best.item.stockQuantity > 0,
+        kind: "part",
+        name: best.item.name,
+        price: best.item.defaultPrice,
+        status,
+      });
+      emitted = true;
+    }
+  }
+
+  if (ctx.deviceMatch || !rule.requiresDeviceMatch) {
+    const best = pickCached(ctx.repairChoice, rule, () =>
+      pickBest(
+        ctx.repairs.filter((r) => rule.repairCategories.includes(r.category)),
+        [...rule.hints, ...repairExtra],
+        undefined,
+        ctx.deviceHints
+      )
+    );
+    if (best) {
+      addLine(ctx.lines, {
+        catalogId: best.item.id,
+        checkKey,
+        confidence: best.confidence,
+        inStock: true,
+        kind: "repair",
+        name: best.item.name,
+        price: best.item.defaultPrice,
+        status,
+      });
+      emitted = true;
+    }
+  }
+
+  if (emitted) {
+    ctx.matchedChecks.add(checkKey);
+  }
+}
 
 /**
  * Constrói o snapshot de pré-orçamento. Determinístico: mesmas entradas →
@@ -613,63 +747,46 @@ export function buildQuoteSuggestion(input: {
   const lines = new Map<string, LineAccumulator>();
   const matchedChecks = new Set<string>();
 
-  // partExtra alimenta só a escolha da peça (suggest.parts são "peças
-  // prováveis" do Grader); repairExtra alimenta só a escolha do serviço
-  // (hints do service.template). Misturar os dois criava sugestões
-  // cruzadas — ex.: check de bateria a sugerir "troca de ecrã".
-  const emit = (
-    rule: CheckRule,
-    checkKey: string,
-    status: "fail" | "info" | "warn",
-    partExtra: string[],
-    repairExtra: string[]
-  ) => {
-    let emitted = false;
-
-    if (rule.partCategory && deviceMatch) {
-      const pool = parts.filter((p) => p.category === rule.partCategory);
-      const best = pickBest(pool, [...rule.hints, ...partExtra], (p) =>
-        p.stockQuantity > 0 ? 1 : 0
-      );
-      if (best) {
-        addLine(lines, {
-          catalogId: best.item.id,
-          checkKey,
-          confidence: best.confidence,
-          inStock: best.item.stockQuantity > 0,
-          kind: "part",
-          name: best.item.name,
-          price: best.item.defaultPrice,
-          status,
-        });
-        emitted = true;
-      }
-    }
-
-    if (deviceMatch || !rule.requiresDeviceMatch) {
-      const pool = repairs.filter((r) =>
-        rule.repairCategories.includes(r.category)
-      );
-      const best = pickBest(pool, [...rule.hints, ...repairExtra]);
-      if (best) {
-        addLine(lines, {
-          catalogId: best.item.id,
-          checkKey,
-          confidence: best.confidence,
-          inStock: true,
-          kind: "repair",
-          name: best.item.name,
-          price: best.item.defaultPrice,
-          status,
-        });
-        emitted = true;
-      }
-    }
-
-    if (emitted) {
-      matchedChecks.add(checkKey);
-    }
+  // Um atendimento = uma substituição = uma linha: a primeira escolha por
+  // CheckRule fica em cache (pickCached) e emits seguintes — outros checks
+  // da mesma regra, ou o service.template — reutilizam-na; addLine funde
+  // as razões na mesma linha em vez de criar uma segunda com outro
+  // candidato.
+  const ctx: EmitContext = {
+    deviceHints: deviceMatch
+      ? [
+          ...new Set(
+            [deviceMatch.model, ...diagnosticNames(diagnostic.device)]
+              .map((n) => normalizeKey(n))
+              .filter((n) => n.length >= 3)
+          ),
+        ]
+      : [],
+    deviceMatch,
+    lines,
+    matchedChecks,
+    partChoice: new Map(),
+    parts,
+    repairChoice: new Map(),
+    repairs,
   };
+
+  // service.template battery/screen corre PRIMEIRO: o serviço aplicado no
+  // diag é o sinal mais forte — os seus hints de repair ("troca de
+  // bateria"/"troca de ecrã") escolhem a linha e os checks da mesma regra
+  // fundem razões nela (repairChoice/partChoice) em vez de gerar uma
+  // segunda linha para a mesma substituição. used/maintenance/whatsapp
+  // não chegam aqui (TEMPLATE_RULES só tem battery/screen).
+  if (template) {
+    emitRuleLines(
+      ctx,
+      template.rule,
+      "service.template",
+      "info",
+      suggestLabels,
+      template.hints
+    );
+  }
 
   // Ordem estável: checks ordenados por chave — o JSON preserva a ordem de
   // inserção mas não garantimos que seja a mesma entre envios.
@@ -679,21 +796,7 @@ export function buildQuoteSuggestion(input: {
     if (!rule) {
       continue;
     }
-    emit(rule, key, status, suggestLabels, []);
-  }
-
-  // service.template battery/screen: o serviço aplicado é ele próprio uma
-  // razão para orçamentar — emite as linhas da regra com os hints do
-  // template (prioriza RepairCatalog ~"bateria"/"ecrã"). Só corre quando o
-  // gate fail/warn passou; used/maintenance/whatsapp não chegam aqui.
-  if (template) {
-    emit(
-      template.rule,
-      "service.template",
-      "info",
-      suggestLabels,
-      template.hints
-    );
+    emitRuleLines(ctx, rule, key, status, suggestLabels, []);
   }
 
   const suggestion: QuoteSuggestion = {

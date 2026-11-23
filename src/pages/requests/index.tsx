@@ -96,6 +96,13 @@ const RESULT_STATUS_STYLE: Record<string, string> = {
   warn: "bg-tertiary-container/30 text-on-tertiary-container",
 };
 
+// reasonStatus vem do backend como "fail" | "warn" | "info" — "info" não é
+// mostrado; fail/warn passam por i18n (nunca raw English).
+const REASON_STATUS_LABEL: Record<"fail" | "warn", string> = {
+  fail: "requests_quote_status_fail",
+  warn: "requests_quote_status_warn",
+};
+
 function QuoteLineRow({ line }: { line: QuoteSuggestionLine }) {
   const { t } = useTranslation();
   const fmt = useFormatCurrency();
@@ -134,7 +141,8 @@ function QuoteLineRow({ line }: { line: QuoteSuggestionLine }) {
       )}
       <span className="text-on-surface-variant">
         {line.reasonCheck}
-        {line.reasonStatus !== "info" && ` · ${line.reasonStatus}`}
+        {line.reasonStatus !== "info" &&
+          ` · ${t(REASON_STATUS_LABEL[line.reasonStatus])}`}
       </span>
     </div>
   );
@@ -208,11 +216,20 @@ function JobLinkPicker({
  * Never creates or edits a Job; staff reviews the candidates.
  */
 function QuoteSuggestionCard({ suggestion }: { suggestion: QuoteSuggestion }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const generatedLabel = new Intl.DateTimeFormat(i18n.language, {
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "short",
+  }).format(new Date(suggestion.generatedAt));
   return (
     <div className="mt-3 rounded-xl bg-surface-container-lowest p-3">
       <p className="mb-2 font-bold text-on-surface-variant text-xs uppercase tracking-wide">
         {t("requests_quote_title")}
+        <span className="ms-2 font-normal normal-case tracking-normal">
+          {t("requests_quote_generated", { date: generatedLabel })}
+        </span>
       </p>
       {suggestion.skippedReason ? (
         <p className="text-on-surface-variant text-xs">
@@ -289,6 +306,12 @@ export default function RequestsPage() {
   const [filter, setFilter] = useState<Filter>("PENDING");
   const [actingId, setActingId] = useState<string | null>(null);
   const canCreateJob = useCan({ jobs: ["create"] });
+  // O pré-orçamento expõe nomes/preços/stock dos catálogos — o endpoint
+  // exige parts+repairs viewCatalog, por isso o botão segue a mesma regra.
+  const canViewCatalogs = useCan({
+    parts: ["viewCatalog"],
+    repairs: ["viewCatalog"],
+  });
   const openIntakeModal = useUiStore((s) => s.openIntakeModal);
   const intakeModalOpen = useUiStore((s) => s.intakeModalOpen);
   const modalOpenedForRequest = useRef(false);
@@ -599,8 +622,10 @@ export default function RequestsPage() {
                 )}
               </div>
 
+              {/* w-full + flex-wrap: em ecrãs estreitos os botões passam
+                  para a linha seguinte em vez de cortar o "Ignorar". */}
               {r.status === "PENDING" && (
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto">
                   {canCreateJob && (
                     <button
                       className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 font-bold text-on-primary text-sm transition-all active:scale-[0.98]"
@@ -643,22 +668,24 @@ export default function RequestsPage() {
                       {t("requests_ai_report")}
                     </button>
                   )}
-                  {r.diagnostic && r.diagnostic.purpose !== "sale" && (
-                    <button
-                      className="flex items-center gap-2 rounded-xl bg-surface-container-high px-4 py-2.5 font-bold text-on-surface text-sm transition-all hover:bg-surface-container-highest active:scale-[0.98] disabled:opacity-50"
-                      disabled={actingId === r.id}
-                      onClick={() => generateQuoteSuggestion(r.id)}
-                      title={t("requests_quote_hint")}
-                      type="button"
-                    >
-                      <span className="material-symbols-outlined text-lg">
-                        request_quote
-                      </span>
-                      {r.quoteSuggestion
-                        ? t("requests_quote_update")
-                        : t("requests_quote_generate")}
-                    </button>
-                  )}
+                  {r.diagnostic &&
+                    r.diagnostic.purpose !== "sale" &&
+                    canViewCatalogs && (
+                      <button
+                        className="flex items-center gap-2 rounded-xl bg-surface-container-high px-4 py-2.5 font-bold text-on-surface text-sm transition-all hover:bg-surface-container-highest active:scale-[0.98] disabled:opacity-50"
+                        disabled={actingId === r.id}
+                        onClick={() => generateQuoteSuggestion(r.id)}
+                        title={t("requests_quote_hint")}
+                        type="button"
+                      >
+                        <span className="material-symbols-outlined text-lg">
+                          request_quote
+                        </span>
+                        {r.quoteSuggestion
+                          ? t("requests_quote_update")
+                          : t("requests_quote_generate")}
+                      </button>
+                    )}
                   <button
                     className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-container-highest text-on-surface-variant transition-colors hover:text-error disabled:opacity-50"
                     disabled={actingId === r.id}
