@@ -648,14 +648,10 @@ export async function getSmsSettings(prisma: PrismaClient) {
     gatewayUrl: row?.smsGatewayUrl ?? null,
     gatewayUser: row?.smsGatewayUser ?? null,
     hasPassword: Boolean(row?.smsGatewayPasswordEncrypted),
-    // O gateway Android local é free — moduleEnabled só reflete o
-    // entitlement "sms" (transportes geridos futuros); não bloqueia a UI.
+    // Todo o SMS é Pro (decisão 2026-11-23) — moduleEnabled reflete o
+    // módulo "sms" fresco e a UI mostra o card locked sem ele; o
+    // gateway LAN é apenas o fallback do caminho Cloud.
     moduleEnabled: isModuleEnabled(row, "sms"),
-    // Path do webhook inbound — o host depende de como o staff acede à
-    // app; a UI compõe o URL completo com window.location.origin.
-    inboundPath: row?.smsWebhookToken
-      ? `/api/public/sms/inbound/${row.smsWebhookToken}`
-      : null,
   };
 }
 

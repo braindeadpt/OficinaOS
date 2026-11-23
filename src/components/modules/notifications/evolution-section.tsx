@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
@@ -46,9 +47,10 @@ const STATUS_COLORS: Record<string, string> = {
 
 /**
  * WhatsApp local (Evolution API) — config + pairing + health do
- * transporte self-hosted não-oficial. É free: sem entitlement — mas o
- * disclaimer de responsabilidade é gate de UI e o servidor revalida-o
- * no PUT das settings e no outbox antes de cada envio.
+ * transporte self-hosted não-oficial. É Pro (decisão 2026-11-23):
+ * sem o módulo "whatsapp-bot" o pairing devolve 402 no servidor e o
+ * botão informa que a opção só existe no Pro; o disclaimer de
+ * responsabilidade continua a ser gate de UI e revalidado no PUT.
  */
 export function EvolutionSection({
   botDisclaimerStored,
@@ -105,6 +107,10 @@ export function EvolutionSection({
   }, [refresh]);
 
   const handlePair = async () => {
+    if (!whatsappModule) {
+      toast.info(t("pro_only_upsell"));
+      return;
+    }
     setPairLoading(true);
     setPairingError(null);
     const res = await pairWhatsAppLocal();

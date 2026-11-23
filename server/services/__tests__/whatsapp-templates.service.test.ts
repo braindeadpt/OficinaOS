@@ -49,9 +49,6 @@ const prisma = {
   shopSettings: { findUnique: shopSettingsFindUnique, update: updateSettings },
 } as never;
 
-const graphOk = (data: unknown) =>
-  new Response(JSON.stringify(data), { status: 200 });
-
 beforeEach(() => {
   vi.clearAllMocks();
   vi.unstubAllGlobals();
@@ -95,6 +92,16 @@ describe("syncWhatsAppTemplates", () => {
     whatsappEnabled: true,
     whatsappTransport: "meta",
   };
+  const cloudSettings = {
+    ...localSettings,
+    cloudApiUrl: "https://cloud.example",
+    cloudShopTokenEncrypted: "enc:shop-token",
+    whatsappCredentialsAtCloud: true,
+    // Decisão 2026-11-23: o relay Cloud exige o módulo "whatsapp-bot"
+    // com cache fresco — sem ele resolveWhatsAppChannel devolve null.
+    cloudEntitlements: ["whatsapp-bot"],
+    cloudSyncedAt: new Date(),
+  };
 
   function seedTemplates() {
     notificationTemplate.findMany.mockResolvedValue([
@@ -103,72 +110,25 @@ describe("syncWhatsAppTemplates", () => {
     ]);
   }
 
-  it("modo local: GET primeiro, cria só os em falta, persiste estados", async () => {
+  it("modo local: zero chamadas à Graph API — grátis = só envio", async () => {
+    // A app não gere templates na Meta em modo grátis/local: nada de
+    // graphList/graphCreate/graphEdit — envia pelo nome e a Meta
+    // rejeita o que faltar como erro normal de envio.
     mocks.getOrCreateShopSettings.mockResolvedValue(localSettings);
     seedTemplates();
-    const calls: { method: string; url: string }[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((url: unknown, init?: { method?: string }) => {
-        const u = String(url);
-        calls.push({ method: init?.method ?? "GET", url: u });
-        if (init?.method === "POST") {
-          return Promise.resolve(graphOk({ id: "tpl2" }));
-        }
-        if (u.includes("name=job_ready")) {
-          return Promise.resolve(
-            graphOk({
-              data: [
-                {
-                  components: [
-                    {
-                      text: "Olá {{1}}, REP {{2}}.",
-                      type: "BODY",
-                    },
-                  ],
-                  language: "pt_PT",
-                  name: "job_ready",
-                  status: "APPROVED",
-                },
-              ],
-            })
-          );
-        }
-        return Promise.resolve(graphOk({ data: [] }));
-      })
-    );
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
 
     const res = await syncWhatsAppTemplates(prisma);
-    expect(res.total).toBe(2);
-    expect(res.templates.map((t) => t.status)).toEqual([
-      "APPROVED",
-      // Criado agora — o re-GET devolve lista vazia até a Meta indexar,
-      // e o status marca MISSING para a UI mostrar "Não enviado".
-      "MISSING",
-    ]);
-    // 1 POST (só o job_done em falta)
-    expect(calls.filter((c) => c.method === "POST")).toHaveLength(1);
-    const created = calls.find((c) => c.method === "POST");
-    expect(created?.url).toContain("waba-1/message_templates");
-    // Estado persistido em whatsappTemplatesJson
-    expect(updateSettings).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          whatsappTemplatesJson: expect.objectContaining({
-            job_ready: expect.objectContaining({ status: "APPROVED" }),
-          }),
-        }),
-      })
-    );
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(mocks.cloudFetch).not.toHaveBeenCalled();
+    expect(res).toEqual({ ready: 0, templates: [], total: 2 });
+    // Também não persiste estado — não há sync local a persistir.
+    expect(updateSettings).not.toHaveBeenCalled();
   });
 
   it("modo cloud: delega na Cloud e não chama a Graph API", async () => {
-    mocks.getOrCreateShopSettings.mockResolvedValue({
-      ...localSettings,
-      cloudApiUrl: "https://cloud.example",
-      cloudShopTokenEncrypted: "enc:shop-token",
-      whatsappCredentialsAtCloud: true,
-    });
+    mocks.getOrCreateShopSettings.mockResolvedValue(cloudSettings);
     seedTemplates();
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
@@ -194,11 +154,11 @@ describe("syncWhatsAppTemplates", () => {
     expect(res.templates[1]?.status).toBe("REJECTED");
   });
 
-  it("mantém o estado de nomes com mensagens em fila após rename", async () => {
+  it("cloud: mantém o estado de nomes com mensagens em fila após rename", async () => {
     // Regressão Devin r8: renomear job_done→job_ready não apaga o modelo
     // antigo na Meta — entradas em fila para job_done ficavam "unsynced"
     // até expirar. O sync preserva o estado de nomes referenciados.
-    mocks.getOrCreateShopSettings.mockResolvedValue(localSettings);
+    mocks.getOrCreateShopSettings.mockResolvedValue(cloudSettings);
     notificationTemplate.findMany.mockResolvedValue([
       { body: "Olá {{customerName}}, REP {{jobCode}}.", name: "job_ready" },
     ]);
@@ -210,23 +170,11 @@ describe("syncWhatsAppTemplates", () => {
         job_done: { status: "APPROVED", syncedAt: "2026-11-01T00:00:00Z" },
       },
     });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() =>
-        Promise.resolve(
-          graphOk({
-            data: [
-              {
-                components: [{ text: "Olá {{1}}, REP {{2}}.", type: "BODY" }],
-                language: "pt_PT",
-                name: "job_ready",
-                status: "APPROVED",
-              },
-            ],
-          })
-        )
-      )
-    );
+    mocks.cloudFetch.mockResolvedValue({
+      body: { templates: [{ name: "job_ready", status: "APPROVED" }] },
+      ok: true,
+      status: 200,
+    });
 
     await syncWhatsAppTemplates(prisma);
     expect(updateSettings).toHaveBeenCalledWith(
@@ -241,11 +189,11 @@ describe("syncWhatsAppTemplates", () => {
     );
   });
 
-  it("lookup inalcançável preserva o estado anterior em vez de gravar MISSING", async () => {
-    // Regressão Devin r12: um timeout na consulta de um nome renomeado
-    // gravava MISSING como se a Meta confirmasse a ausência — a fila
-    // adiava 30min com o modelo ainda aprovado.
-    mocks.getOrCreateShopSettings.mockResolvedValue(localSettings);
+  it("cloud: nome renomeado fora da resposta preserva o estado anterior", async () => {
+    // Um rename não devolvido pela Cloud não entra no resultado —
+    // persistStatuses preserva o APPROVED anterior em vez de gravar
+    // MISSING e adiar a fila 30min.
+    mocks.getOrCreateShopSettings.mockResolvedValue(cloudSettings);
     notificationTemplate.findMany.mockResolvedValue([
       { body: "Olá {{customerName}}, REP {{jobCode}}.", name: "job_ready" },
     ]);
@@ -257,30 +205,13 @@ describe("syncWhatsAppTemplates", () => {
         job_done: { status: "APPROVED", syncedAt: "2026-11-01T00:00:00Z" },
       },
     });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((url: unknown) => {
-        if (String(url).includes("name=job_done")) {
-          return Promise.resolve(new Response("boom", { status: 502 }));
-        }
-        return Promise.resolve(
-          graphOk({
-            data: [
-              {
-                components: [{ text: "Olá {{1}}, REP {{2}}.", type: "BODY" }],
-                language: "pt_PT",
-                name: "job_ready",
-                status: "APPROVED",
-              },
-            ],
-          })
-        );
-      })
-    );
+    mocks.cloudFetch.mockResolvedValue({
+      body: { templates: [{ name: "job_ready", status: "APPROVED" }] },
+      ok: true,
+      status: 200,
+    });
 
     const res = await syncWhatsAppTemplates(prisma);
-    // O nome renomeado não entra no resultado — persistStatuses
-    // preserva o APPROVED anterior.
     expect(res.templates.map((t) => t.name)).toEqual(["job_ready"]);
     expect(updateSettings).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -293,8 +224,8 @@ describe("syncWhatsAppTemplates", () => {
     );
   });
 
-  it("ready conta só os modelos atuais — lookups de rename ficam de fora", async () => {
-    mocks.getOrCreateShopSettings.mockResolvedValue(localSettings);
+  it("cloud: ready conta só os modelos atuais — nomes de fila ficam de fora", async () => {
+    mocks.getOrCreateShopSettings.mockResolvedValue(cloudSettings);
     notificationTemplate.findMany.mockResolvedValue([
       { body: "Olá {{customerName}}, REP {{jobCode}}.", name: "job_ready" },
     ]);
@@ -302,29 +233,18 @@ describe("syncWhatsAppTemplates", () => {
       { templateName: "job_done" },
     ]);
     shopSettingsFindUnique.mockResolvedValue(null);
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((url: unknown) => {
-        const isJobDone = String(url).includes("name=job_done");
-        return Promise.resolve(
-          graphOk({
-            data: [
-              {
-                components: [
-                  {
-                    text: isJobDone ? "x" : "Olá {{1}}, REP {{2}}.",
-                    type: "BODY",
-                  },
-                ],
-                language: "pt_PT",
-                name: isJobDone ? "job_done" : "job_ready",
-                status: "APPROVED",
-              },
-            ],
-          })
-        );
-      })
-    );
+    mocks.cloudFetch.mockResolvedValue({
+      body: {
+        templates: [
+          { name: "job_ready", status: "APPROVED" },
+          // A Cloud pode devolver nomes extra (ex.: modelo antigo ainda
+          // aprovado) — não entram no resultado nem no ready.
+          { name: "job_done", status: "APPROVED" },
+        ],
+      },
+      ok: true,
+      status: 200,
+    });
 
     const res = await syncWhatsAppTemplates(prisma);
     // job_done aprovado na Meta serve a fila, mas o aviso de sync

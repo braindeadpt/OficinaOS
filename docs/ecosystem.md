@@ -132,9 +132,10 @@ via `server/services/evolution.service.ts`; pairing por QR/pairingCode em
 
 Gates (app-side): `whatsappLocalDisclaimerAt` obrigatório no PUT das
 settings e revalidado em `resolveWhatsAppChannel` antes de cada envio;
-sem ele o canal resolve null e o outbox cancela. **É free** — não exige
-nenhum entitlement (o `whatsapp-bot` gateia só as funções oficiais:
-relay Meta na cloud + bot inbound). `syncFullHistory=false` — nada do
+sem ele o canal resolve null e o outbox cancela. Desde a decisão do
+dono de 2026-11-23 é **Pro** — exige o entitlement `whatsapp-bot`
+fresco como os restantes transportes (grátis não envia nada).
+`syncFullHistory=false` — nada do
 histórico do cliente é importado. Remarketing exige templates Meta →
 recusado no modo local. A sessão/chaves nunca saem da loja (RGPD limpo);
 risco de ban do número fica documentado no disclaimer do UI.
@@ -150,7 +151,7 @@ cliente escalam ao staff, dedupe por id, presença "a escrever…" + atraso
 (`whatsappBotDailyCap`, default 200), e erro de sessão suspende o bot
 (`whatsappBotSuspendedAt`) até novo aceite.
 
-### Canal SMS (free — gateway Android local)
+### Canal SMS (Pro — gateway Android local ou Cloud)
 
 ```
 Outbound: evento → notification-dispatch → outbox →
@@ -163,20 +164,21 @@ Inbound:  cliente SMS → SMS Gateway for Android → webhook
 ```
 
 100% LAN: nada passa pela Cloud nem pela Meta — só sai o SMS pela rede móvel.
-É o canal "de arranque" da loja que ainda não tem WhatsApp Business aprovado.
 Sem template SMS dedicado, o dispatch usa o corpo WhatsApp com `*bold*`
-removido (SMS não renderiza markdown). Corre localmente e o **envio é
-free** — o gateway Android da loja em modo LAN nunca exige entitlement.
-O **inbound** (respostas do bot a SMS do cliente) é Pro: a rota pública
-só chama `handleInboundSms` com `isModuleEnabled(settings, "sms")`
-(entitlement + `cloudSyncedAt` < 24 h); sem Pro o webhook devolve 200 e
-não processa nada — nem bot, nem gravação — **exceto PARAR/STOP**, que
-corre sempre (`isStopText`): revogar consentimento é obrigação legal e
-não pode depender de licença em cache.
+removido (SMS não renderiza markdown). Desde a decisão do dono de
+2026-11-23 **todo o SMS é Pro — inclusive o envio pela LAN**: o
+`getSmsConfig` do outbox só resolve o gateway com
+`isModuleEnabled(settings, "sms")` (entitlement + `cloudSyncedAt` < 24 h)
+e o `PUT /settings/sms` + `POST /settings/sms/test` devolvem 402 sem ele.
+O **inbound** também é Pro: a rota pública só chama `handleInboundSms`
+com o mesmo check fresco; sem Pro o webhook devolve 200 e não processa
+nada — nem bot, nem gravação, nem PARAR/STOP (o opt-out manual fica a
+cargo do staff na ficha do cliente).
 A responsabilidade é da loja: o SIM é dela, a fatura da operadora e os
 limites anti-spam também.
 Consentimento partilhado (`whatsappConsent` = opt-in de mensagens
-automáticas, qualquer canal). Password do gateway encriptada
+automáticas, qualquer canal) — gravado mesmo sem Pro, fica pronto para
+quando a loja ativar o módulo. Password do gateway encriptada
 (AES-256-GCM); token do webhook gerado por `generateSmsWebhookToken`.
 Respostas automáticas saem transliteradas para GSM-7 (`toSmsText`) —
 acentos fora pagam UCS-2 e partem a mensagem.
@@ -222,8 +224,8 @@ Inbound mais velho que a janela recebe ack sem resposta.
 
 Templates automáticos (§5.6 C.2): os textos das `NotificationTemplate`
 WHATSAPP são submetidos à Meta como templates `UTILITY`/`pt_PT` com
-parâmetros posicionais `{{1}}…` na ordem das `{{var}}` — grátis a app
-fala directo à Graph API, Pro delega em
+parâmetros posicionais `{{1}}…` na ordem das `{{var}}` — só em modo
+Pro/cloud, delegando em
 `POST /whatsapp/templates/sync` + `GET /whatsapp/templates` na Cloud.
 Estado por template em `ShopSettings.whatsappTemplatesJson` → chip na
 UI + "Voltar a submeter". O outbox grava `templateParams` na mesma
@@ -231,28 +233,38 @@ ordem e envia `type:"template"` quando o transporte é Meta/Cloud.
 
 ### Canais de mensagens — matriz free/Pro (regra canónica)
 
-**Free = transportes self-hosted e não-oficiais — custo e responsabilidade
-ficam do lado da loja (disclaimer aceite, ban/ToS são problema dela).
-Pro = apenas APIs oficiais, enviadas e enforçadas pela Cloud — a oferta
-premium é "nós tratamos".**
+**Decisão do dono (2026-11-23): o grátis não envia NADA — toda a
+mensagem (SMS + WhatsApp, todos os transportes, envio e receção) é
+Pro.** Os transportes self-hosted (Evolution, gateway Android LAN)
+continuam a existir, mas são transportes Pro: o disclaimer Evolution e
+a responsabilidade da loja (SIM, operadora, ban/ToS) mantêm-se.
 
-| Canal | Free (infra da loja) | Pro (Cloud envia) |
+| Canal | Grátis | Pro |
 |---|---|---|
-| WhatsApp | Evolution/Baileys (`whatsappTransport:"evolution"`) — não-oficial, risco de ban, disclaimer obrigatório; bot com termo próprio + anti-ban | Meta Business API — credenciais em `shops.whatsappAccessToken`, envio via `POST /whatsapp/send` (402 sem entitlement); templates auto-sincronizados |
-| SMS | SMS Gateway for Android na LAN — SIM/tarifário e limites da operadora da loja | O mesmo Android ligado à Cloud (sms-gate modo servidor) — `SmsDevice`/`SmsRoute` na Cloud, envio via `POST /sms/send` (402 sem entitlement), multi-loja por device |
+| WhatsApp | nada — canal resolve `null`, rotas 402, UI locked | `whatsapp-bot`: Meta Business API relay (`POST /whatsapp/send`), envio direto Meta local ou Evolution (não-oficial, disclaimer); templates auto-sincronizados na Cloud |
+| SMS | nada — config resolve `null`, rotas 402, UI locked | `sms`: Android ligado à Cloud (`SmsDevice`/`SmsRoute`, multi-loja) ou gateway LAN como fallback |
 
 Regras:
 
-- Tudo o que é Pro sai pela Cloud → gate server-side por envio; tudo o que
-  é free sai da infra da loja → nada a enforçar. Nunca Baileys/scraping na
-  Cloud — "Pro" é só APIs com contrato.
-- **Estado: migrado.** Evolution e SMS-Android são free desde o flip
-  (disclaimer Evolution mantido); os entitlements `whatsapp-bot`/`sms`
-  passaram a gatear apenas os transportes oficiais/geridos.
-- Meta direct local (`whatsappApiTokenEncrypted`) é legacy — existe só
-  para a migração e apaga-se no primeiro envio Cloud bem-sucedido.
+- O gate é sempre o entitlement fresco (`isModuleEnabled`, cache <24h)
+  verificado no resolve do canal, no dispatch, no outbox e nas rotas —
+  nunca a remoção do transporte. Nunca Baileys/scraping na Cloud.
+- **Estado: migrado 2026-11-23.** Evolution e SMS-Android deixaram de
+  ser free; `PUT /settings/sms`, `PUT /settings/whatsapp`,
+  `POST /settings/sms/test`, `POST /settings/whatsapp/evolution/pair` e
+  o test de notificação devolvem 402 `CLOUD_MODULE_REQUIRED` sem módulo.
+  Na UI os cards/botões ficam visíveis mas locked — clicar mostra
+  "Esta opção existe apenas no OficinaOS Pro.".
+- Meta direct local (`whatsappApiTokenEncrypted`) é transporte Pro
+  alternativo ao relay — o token local apaga-se no primeiro envio Cloud
+  bem-sucedido.
 - `customer.whatsappConsent` é o opt-in único para toda a mensagem
-  automática, qualquer canal (WA, SMS ou provider futuro).
+  automática — gravado mesmo sem Pro (fica pronto para quando ativar).
+- Opt-out ("PARAR") 100% manual no grátis — sem receção não há
+  processamento; o staff desliga o consentimento na ficha do cliente.
+- `POST /api/public/quote-respond` continua grátis — página pública de
+  resposta a orçamento, não um canal de mensagens.
+- Inbound grátis: webhooks SMS/Evolution respondem 200 sem processar.
 
 ### Notificações ao cliente — quando disparam e onde vivem
 
@@ -318,7 +330,7 @@ linguagem simples gerado na Cloud.
 |---|---|---|---|
 | `portal` | Portal do cliente | app: `server/services/portal.service.ts`; cloud: `src/routes/portal.ts`, `public/portal.html` | Live, E2E testado |
 | `signature-remote` | Assinatura remota | app: `server/services/signature-relay.service.ts`; cloud: `src/routes/signature.ts`, `public/sign.html`, `SignatureRelaySession` | Implementado |
-| `whatsapp-bot` | WhatsApp oficial (bot + relay Meta) | app: `whatsapp-bot.service.ts` + `whatsapp-channel.ts`; cloud: webhook + `WhatsAppInbound` + relay `POST /whatsapp/send`. NÃO gateia o transporte Evolution (free) | Live, E2E provado (SIM → APPROVED real) |
+| `whatsapp-bot` | WhatsApp oficial (bot + relay Meta) | app: `whatsapp-bot.service.ts` + `whatsapp-channel.ts`; cloud: webhook + `WhatsAppInbound` + relay `POST /whatsapp/send`. Desde 2026-11-23 gateia TODOS os transportes WhatsApp: relay cloud, Meta local e Evolution | Live, E2E provado (SIM → APPROVED real) |
 | `diag-intake` | Receção de diagnósticos | app: `intake-request.service.ts` (fila em Pedidos); cloud: `src/routes/intake.ts` | Implementado |
 | `ai-reports` | Relatórios IA | cloud: `src/routes/reports.ts`, `src/ai-report.ts` | Implementado |
 | `market` | Procuro-peça B2B | app: `part-requests.service.ts`; cloud: `src/routes/part-requests.ts` | Live |
@@ -329,7 +341,8 @@ linguagem simples gerado na Cloud.
 | `invoicing` | Faturação InvoiceXpress | app: `invoicing.service.ts` (FR/FS, IVA incluído→líquido) | Live, validado conta demo |
 | `multi-shop` | Dashboard multi-loja | app: `shop-metrics.service.ts` (snapshot diário); cloud: `src/routes/metrics.ts` + `ShopMetric`, UI no dashboard do dono | Live |
 
-(O canal `sms` saiu dos módulos Pro — é core grátis, ver secção acima.)
+(O canal `sms` voltou a ser módulo Pro em 2026-11-23 — inclusive o
+gateway LAN, que fica como fallback do caminho Cloud. Ver secção acima.)
 
 Ativar/desativar: lado da Cloud (`scripts/grant.ts` / dashboard). A app esconde
 a funcionalidade se o módulo não constar nos entitlements — mas a cache local

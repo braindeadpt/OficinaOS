@@ -42,7 +42,15 @@ import {
   sendWhatsAppText,
 } from "../whatsapp-channel.js";
 
+// Decisão 2026-11-23: todo o WhatsApp é Pro — qualquer stub "enviável"
+// precisa do entitlement "whatsapp-bot" com cache fresco (<24h).
+const entitled = {
+  cloudEntitlements: ["whatsapp-bot"],
+  cloudSyncedAt: new Date(),
+};
+
 const pairedCloud = {
+  ...entitled,
   cloudApiUrl: "https://cloud.example",
   cloudShopTokenEncrypted: "enc:shop-token",
   whatsappCredentialsAtCloud: true,
@@ -53,7 +61,40 @@ describe("resolveWhatsAppChannel", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("returns null when WhatsApp is disabled", () => {
-    expect(resolveWhatsAppChannel({ whatsappEnabled: false })).toBeNull();
+    expect(
+      resolveWhatsAppChannel({ ...entitled, whatsappEnabled: false })
+    ).toBeNull();
+  });
+
+  it("returns null without the whatsapp-bot module — every mode blocked", () => {
+    // Meta local
+    expect(resolveWhatsAppChannel({ whatsappEnabled: true })).toBeNull();
+    // Cloud relay — credenciais completas mas sem módulo
+    expect(
+      resolveWhatsAppChannel({
+        cloudApiUrl: "https://cloud.example",
+        cloudShopTokenEncrypted: "enc:shop-token",
+        whatsappCredentialsAtCloud: true,
+        whatsappEnabled: true,
+      })
+    ).toBeNull();
+    // Evolution — disclaimer aceite mas sem módulo
+    expect(
+      resolveWhatsAppChannel({
+        evolutionApiKeyEncrypted: "enc:evo",
+        evolutionUrl: "http://evo:8080",
+        whatsappEnabled: true,
+        whatsappLocalDisclaimerAt: new Date(),
+        whatsappTransport: "evolution",
+      })
+    ).toBeNull();
+    // Cache velha (>24h) também conta como sem módulo
+    expect(
+      resolveWhatsAppChannel({
+        ...pairedCloud,
+        cloudSyncedAt: new Date(Date.now() - 25 * 3600 * 1000),
+      })
+    ).toBeNull();
   });
 
   it("prefers the cloud relay once credentials migrated", () => {
@@ -75,7 +116,10 @@ describe("resolveWhatsAppChannel", () => {
       businessId: "b",
       phoneNumberId: "p",
     });
-    const channel = resolveWhatsAppChannel({ whatsappEnabled: true });
+    const channel = resolveWhatsAppChannel({
+      ...entitled,
+      whatsappEnabled: true,
+    });
     expect(channel?.mode).toBe("local");
   });
 });
@@ -101,7 +145,7 @@ describe("sendWhatsAppText", () => {
       "912345678",
       "olá",
       "PT",
-      { whatsappApiTokenEncrypted: null }
+      { ...entitled, whatsappApiTokenEncrypted: null }
     );
     expect(res.success).toBe(true);
     expect(mocks.cloudFetch).toHaveBeenCalledWith(
@@ -122,6 +166,7 @@ describe("sendWhatsAppText", () => {
       status: 200,
     });
     await sendWhatsAppText(prisma, channel, "+351912345678", "olá", "PT", {
+      ...entitled,
       whatsappApiTokenEncrypted: "enc:meta",
     });
     expect(updateSettings).toHaveBeenCalledWith({
@@ -142,7 +187,7 @@ describe("sendWhatsAppText", () => {
       "+351912345678",
       "olá",
       "PT",
-      { whatsappApiTokenEncrypted: "enc:meta" }
+      { ...entitled, whatsappApiTokenEncrypted: "enc:meta" }
     );
     expect(res.success).toBe(false);
     expect(updateSettings).not.toHaveBeenCalled();
@@ -156,12 +201,31 @@ describe("sendWhatsAppText", () => {
       "+351912345678",
       "olá",
       "PT",
-      { whatsappApiTokenEncrypted: "enc:meta" }
+      { ...entitled, whatsappApiTokenEncrypted: "enc:meta" }
     );
     expect(res).toEqual({
       error: "a aguardar ligação à cloud",
       success: false,
     });
+  });
+
+  it("fails closed when the module was revoked after resolve (defense)", async () => {
+    mocks.cloudFetch.mockResolvedValue({
+      body: { ok: true },
+      ok: true,
+      status: 200,
+    });
+    const res = await sendWhatsAppText(
+      prisma,
+      channel,
+      "+351912345678",
+      "olá",
+      "PT",
+      { cloudSyncedAt: new Date(Date.now() - 25 * 3600 * 1000) }
+    );
+    expect(res.success).toBe(false);
+    expect(res.error).toContain("whatsapp-bot");
+    expect(mocks.cloudFetch).not.toHaveBeenCalled();
   });
 
   it("normalizes entitlement refusal", async () => {
@@ -172,7 +236,7 @@ describe("sendWhatsAppText", () => {
       "+351912345678",
       "olá",
       "PT",
-      null
+      entitled
     );
     expect(res.error).toContain("subscrição");
   });
@@ -195,7 +259,7 @@ describe("sendWhatsAppTemplateVia", () => {
       "pt_PT",
       ["Ana", "Loja"],
       "PT",
-      null
+      entitled
     );
     expect(mocks.cloudFetch).toHaveBeenCalledWith(
       "https://c",
@@ -224,7 +288,7 @@ describe("sendWhatsAppTemplateVia", () => {
       "pt_PT",
       [],
       "PT",
-      null
+      entitled
     );
     expect(mocks.sendWhatsAppTemplate).toHaveBeenCalledWith(
       config,
@@ -241,12 +305,13 @@ describe("sendWhatsAppTemplateVia", () => {
 describe("pushCredentialsToCloud", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  // §5.6 — a migração só corre com o entitlement whatsapp-bot; grátis
-  // fica em modo local e nunca envia credenciais à cloud.
+  // §5.6 — a migração só corre com o entitlement whatsapp-bot FRESCO
+  // (isModuleEnabled <24h); sem módulo a loja nunca envia credenciais.
   const settings = {
     cloudApiUrl: "https://cloud.example",
     cloudEntitlements: ["whatsapp-bot"],
     cloudShopTokenEncrypted: "enc:shop-token",
+    cloudSyncedAt: new Date(),
     whatsappApiTokenEncrypted: "enc:meta-token",
     whatsappCredentialsAtCloud: false,
     whatsappPhoneNumberId: "1234",

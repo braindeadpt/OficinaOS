@@ -9,7 +9,6 @@ const mocks = vi.hoisted(() => ({
   decryptSmsConfig: vi.fn(),
   getSmsSettings: vi.fn(),
   handleInboundSms: vi.fn(),
-  registerSmsWebhook: vi.fn(),
   sendSms: vi.fn(),
   upsertSmsSettings: vi.fn(),
 }));
@@ -18,7 +17,6 @@ vi.mock("../services/sms.service.js", () => ({
   checkSmsGateway: mocks.checkSmsGateway,
   decryptSmsConfig: mocks.decryptSmsConfig,
   handleInboundSms: mocks.handleInboundSms,
-  registerSmsWebhook: mocks.registerSmsWebhook,
   sendSms: mocks.sendSms,
 }));
 
@@ -131,7 +129,7 @@ beforeEach(() => {
 });
 
 describe("PUT /api/settings/sms", () => {
-  it("enables the local gateway (free — no entitlement needed)", async () => {
+  it("enables the local gateway (Pro — módulo sms)", async () => {
     mocks.getSmsSettings.mockResolvedValue({ enabled: true });
     mocks.decryptSmsConfig.mockReturnValue(null);
     const app = buildApp(fakePrisma());
@@ -149,7 +147,7 @@ describe("PUT /api/settings/sms", () => {
     expect(mocks.upsertSmsSettings).toHaveBeenCalled();
   });
 
-  it("enables without the sms entitlement — the module only gates managed transports", async () => {
+  it("rejects without the sms entitlement → 402 (decisão 2026-11-23)", async () => {
     mocks.getSmsSettings.mockResolvedValue({ enabled: true });
     const app = buildApp(fakePrisma({ ...SMS_ROW, cloudEntitlements: [] }));
     const res = await app.inject({
@@ -162,11 +160,14 @@ describe("PUT /api/settings/sms", () => {
       },
       url: "/api/settings/sms",
     });
-    expect(res.statusCode).toBe(200);
-    expect(mocks.upsertSmsSettings).toHaveBeenCalled();
+    expect(res.statusCode).toBe(402);
+    expect(res.json().code).toBe("CLOUD_MODULE_REQUIRED");
+    expect(mocks.upsertSmsSettings).not.toHaveBeenCalled();
   });
 
-  it("accepts disabling even without the entitlement", async () => {
+  it("rejects even disabling without the entitlement → 402", async () => {
+    // O endpoint é todo Pro — a flag fica inerte sem módulo (o outbox
+    // já não envia), por isso nem a gravação passa.
     mocks.getSmsSettings.mockResolvedValue({ enabled: false });
     const app = buildApp(fakePrisma({ ...SMS_ROW, cloudEntitlements: [] }));
     const res = await app.inject({
@@ -174,18 +175,38 @@ describe("PUT /api/settings/sms", () => {
       payload: { enabled: false },
       url: "/api/settings/sms",
     });
-    expect(res.statusCode).toBe(200);
-    expect(mocks.upsertSmsSettings).toHaveBeenCalled();
+    expect(res.statusCode).toBe(402);
+    expect(res.json().code).toBe("CLOUD_MODULE_REQUIRED");
+    expect(mocks.upsertSmsSettings).not.toHaveBeenCalled();
   });
 
-  it("registers the gateway webhook when saving config", async () => {
+  it("rejects when the entitlement cache is stale (>24h) → 402", async () => {
+    mocks.getSmsSettings.mockResolvedValue({ enabled: true });
+    const app = buildApp(
+      fakePrisma({
+        ...SMS_ROW,
+        cloudSyncedAt: new Date(Date.now() - 25 * 3600 * 1000),
+      })
+    );
+    const res = await app.inject({
+      method: "PUT",
+      payload: {
+        enabled: true,
+        gatewayUrl: "http://192.168.1.50:8080",
+      },
+      url: "/api/settings/sms",
+    });
+    expect(res.statusCode).toBe(402);
+    expect(res.json().code).toBe("CLOUD_MODULE_REQUIRED");
+  });
+
+  it("does not register any inbound webhook when saving", async () => {
     mocks.getSmsSettings.mockResolvedValue({ enabled: true });
     mocks.decryptSmsConfig.mockReturnValue({
       password: "p",
       url: "http://192.168.1.50:8080",
       user: "sms",
     });
-    mocks.registerSmsWebhook.mockResolvedValue({ success: true });
     const app = buildApp(fakePrisma());
     const res = await app.inject({
       headers: { host: "192.168.1.10:4000" },
@@ -198,29 +219,13 @@ describe("PUT /api/settings/sms", () => {
       url: "/api/settings/sms",
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json().webhookRegistered).toBe(true);
-    const hookArgs = mocks.registerSmsWebhook.mock.calls[0];
-    expect(hookArgs?.[1]).toBe(
-      "http://192.168.1.10:4000/api/public/sms/inbound/tok-abc"
-    );
-  });
-
-  it("keeps saved settings when the gateway is unreachable", async () => {
-    mocks.getSmsSettings.mockResolvedValue({ enabled: true });
-    mocks.decryptSmsConfig.mockReturnValue(null);
-    const app = buildApp(fakePrisma());
-    const res = await app.inject({
-      method: "PUT",
-      payload: { enabled: true },
-      url: "/api/settings/sms",
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().webhookRegistered).toBe(false);
+    expect(res.json().webhookRegistered).toBeUndefined();
   });
 });
 
 describe("POST /api/settings/sms/test", () => {
-  it("sends the test without the sms entitlement (local gateway is free)", async () => {
+  it("rejects the test without the sms entitlement → 402", async () => {
+    // O teste envia uma mensagem real — todo o SMS é Pro.
     mocks.decryptSmsConfig.mockReturnValue({
       password: "p",
       url: "http://192.168.1.50:8080",
@@ -233,8 +238,9 @@ describe("POST /api/settings/sms/test", () => {
       payload: { phone: "912345678" },
       url: "/api/settings/sms/test",
     });
-    expect(res.statusCode).toBe(200);
-    expect(mocks.sendSms).toHaveBeenCalled();
+    expect(res.statusCode).toBe(402);
+    expect(res.json().code).toBe("CLOUD_MODULE_REQUIRED");
+    expect(mocks.sendSms).not.toHaveBeenCalled();
   });
 
   it("fails cleanly when the gateway is not configured", async () => {
@@ -308,7 +314,7 @@ describe("POST /api/public/sms/inbound/:token", () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it("dispatches sms:received payloads to the inbound handler", async () => {
+  it("dispatches sms:received payloads to the inbound handler (Pro)", async () => {
     const app = buildApp(fakePrisma());
     const res = await app.inject({
       method: "POST",
@@ -323,6 +329,38 @@ describe("POST /api/public/sms/inbound/:token", () => {
       "+351912345678",
       "estado?"
     );
+  });
+
+  it("free mode: sms:received returns 200 without processing anything", async () => {
+    // Grátis = só envio — sem entitlement "sms" o inbound não toca em
+    // consentimento, não grava mensagens e não responde.
+    const prisma = fakePrisma({ ...SMS_ROW, cloudEntitlements: [] });
+    const app = buildApp(prisma);
+    const res = await app.inject({
+      method: "POST",
+      payload: inboundPayload,
+      url: "/api/public/sms/inbound/tok-abc",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mocks.handleInboundSms).not.toHaveBeenCalled();
+    expect(prisma.shopSettings.upsert).not.toHaveBeenCalled();
+  });
+
+  it("free mode: PARAR/STOP also returns 200 without processing", async () => {
+    // Revogar consentimento já não é exceção — inbound grátis é inerte.
+    const app = buildApp(fakePrisma({ ...SMS_ROW, cloudEntitlements: [] }));
+    for (const text of ["PARAR", "STOP", "parar"]) {
+      const res = await app.inject({
+        method: "POST",
+        payload: {
+          ...inboundPayload,
+          payload: { ...inboundPayload.payload, message: text },
+        },
+        url: "/api/public/sms/inbound/tok-abc",
+      });
+      expect(res.statusCode).toBe(200);
+    }
+    expect(mocks.handleInboundSms).not.toHaveBeenCalled();
   });
 
   it("ignores non-received events", async () => {

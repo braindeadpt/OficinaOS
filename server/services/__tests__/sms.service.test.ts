@@ -21,7 +21,6 @@ import {
   checkSmsGateway,
   decryptSmsConfig,
   handleInboundSms,
-  registerSmsWebhook,
   sendSms,
 } from "../sms.service.js";
 
@@ -55,6 +54,7 @@ function fakePrisma(row: Record<string, unknown>) {
 
 const ENABLED_ROW = {
   cloudEntitlements: ["sms"],
+  cloudSyncedAt: new Date(),
   countryCode: "PT",
   currency: "EUR",
   phone: "912345678",
@@ -178,51 +178,18 @@ describe("checkSmsGateway", () => {
   });
 });
 
-describe("registerSmsWebhook", () => {
-  it("re-registers idempotently: deletes the old hook, POSTs the new one", async () => {
-    const calls: { init: RequestInit; url: string }[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((url: string, init: RequestInit = {}) => {
-        calls.push({ init, url });
-        if (init.method === "DELETE") {
-          return Promise.resolve({ ok: true });
-        }
-        return Promise.resolve({
-          json: async () => [{ id: "oficinaos-inbound" }],
-          ok: true,
-          status: 200,
-          text: async () => "",
-        });
-      })
-    );
-
-    const res = await registerSmsWebhook(
-      config,
-      "http://192.168.1.10:4000/api/public/sms/inbound/tok123"
-    );
-
-    expect(res.success).toBe(true);
-    expect(calls[0]?.url).toBe("http://192.168.1.50:8080/webhooks");
-    expect(calls[1]?.init.method).toBe("DELETE");
-    const reg = calls.find((c) => c.init.method === "POST");
-    expect(JSON.parse(reg?.init.body as string)).toEqual({
-      event: "sms:received",
-      id: "oficinaos-inbound",
-      url: "http://192.168.1.10:4000/api/public/sms/inbound/tok123",
-    });
-  });
-});
-
 describe("handleInboundSms", () => {
-  it("replies even without cloud entitlements — SMS is core", async () => {
+  // Grátis não envia nada (decisão 2026-11-23): a resposta do bot é um
+  // envio — a função recusa sem o módulo "sms" fresco, como defesa
+  // extra ao gate da rota inbound.
+  it("does nothing without the sms entitlement", async () => {
     const fetchMock = fetchOk();
     vi.stubGlobal("fetch", fetchMock);
     const prisma = fakePrisma({ ...ENABLED_ROW, cloudEntitlements: [] });
 
     await handleInboundSms(prisma, log, undefined, "351912345678", "estado?");
 
-    expect(fetchMock).toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("does nothing when smsEnabled is false", async () => {

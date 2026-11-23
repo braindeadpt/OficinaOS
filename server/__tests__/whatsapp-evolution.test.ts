@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
     qrBase64: "data:image/png;base64,AAA",
   })),
   pushCredentialsToCloud: vi.fn(async () => false),
+  setEvolutionWebhook: vi.fn(async () => ({ success: true })),
   syncWhatsAppTemplates: vi.fn(async () => ({})),
   upsertWhatsAppSettings: vi.fn(async (p: unknown) => p),
 }));
@@ -30,6 +31,7 @@ vi.mock("../services/evolution.service.js", () => ({
   getEvolutionState: mocks.getEvolutionState,
   pairEvolutionInstance: mocks.pairEvolutionInstance,
   sendEvolutionText: vi.fn(async () => ({ success: true })),
+  setEvolutionWebhook: mocks.setEvolutionWebhook,
 }));
 
 vi.mock("../services/whatsapp-channel.js", async () => {
@@ -84,8 +86,8 @@ vi.mock("../services/update.service.js", () => ({
 import { resolveWhatsAppChannel } from "../services/whatsapp-channel.js";
 
 const EVO_ROW = {
-  // No entitlements on purpose — the local transport is free; tests that
-  // need Pro modules set cloudEntitlements explicitly.
+  // No entitlements on purpose — desde 2026-11-23 todo o WhatsApp é Pro;
+  // testes que exercitam o caminho Pro usam PRO_EVO_ROW.
   cloudEntitlements: [],
   evolutionApiKeyEncrypted: "enc:key",
   evolutionInstance: "oficinaos",
@@ -109,6 +111,12 @@ function fakePrisma(row: Record<string, unknown> = EVO_ROW) {
     },
   };
 }
+
+const PRO_EVO_ROW = {
+  ...EVO_ROW,
+  cloudEntitlements: ["whatsapp-bot"],
+  cloudSyncedAt: new Date(),
+};
 
 vi.mock("../repositories/settings.repository.js", () => ({
   findShopSettingsUnique: vi.fn(async () => null),
@@ -156,8 +164,12 @@ beforeEach(() => {
 });
 
 describe("resolveWhatsAppChannel — transporte evolution", () => {
-  it("resolves the local channel with the disclaimer accepted — free, no entitlement needed", () => {
-    const channel = resolveWhatsAppChannel(EVO_ROW);
+  it("returns null without the whatsapp-bot module (Pro since 2026-11-23)", () => {
+    expect(resolveWhatsAppChannel(EVO_ROW)).toBeNull();
+  });
+
+  it("resolves the local channel with module + disclaimer accepted", () => {
+    const channel = resolveWhatsAppChannel(PRO_EVO_ROW);
     expect(channel).toEqual({
       config: {
         apiKey: "evo-key",
@@ -170,7 +182,7 @@ describe("resolveWhatsAppChannel — transporte evolution", () => {
 
   it("returns null without the disclaimer acceptance", () => {
     const channel = resolveWhatsAppChannel({
-      ...EVO_ROW,
+      ...PRO_EVO_ROW,
       whatsappLocalDisclaimerAt: null,
     });
     expect(channel).toBeNull();
@@ -178,20 +190,20 @@ describe("resolveWhatsAppChannel — transporte evolution", () => {
 
   it("returns null when disabled or transport is meta", () => {
     expect(
-      resolveWhatsAppChannel({ ...EVO_ROW, whatsappEnabled: false })
+      resolveWhatsAppChannel({ ...PRO_EVO_ROW, whatsappEnabled: false })
     ).toBeNull();
     expect(
-      resolveWhatsAppChannel({ ...EVO_ROW, whatsappTransport: "meta" })
+      resolveWhatsAppChannel({ ...PRO_EVO_ROW, whatsappTransport: "meta" })
     ).toBeNull();
   });
 
   it("returns null without URL or undecryptable key", () => {
     expect(
-      resolveWhatsAppChannel({ ...EVO_ROW, evolutionUrl: null })
+      resolveWhatsAppChannel({ ...PRO_EVO_ROW, evolutionUrl: null })
     ).toBeNull();
     expect(
       resolveWhatsAppChannel({
-        ...EVO_ROW,
+        ...PRO_EVO_ROW,
         evolutionApiKeyEncrypted: "bad",
       })
     ).toBeNull();
@@ -208,20 +220,22 @@ describe("PUT /api/settings/whatsapp — gates evolution", () => {
     transport: "evolution",
   };
 
-  it("enables local transport without the whatsapp-bot module (free)", async () => {
+  it("rejects enabling without the whatsapp-bot module → 402", async () => {
+    // Decisão 2026-11-23: grátis não envia nada — nem pela Evolution.
     const app = buildApp(fakePrisma({ ...EVO_ROW, cloudEntitlements: [] }));
     const res = await app.inject({
       method: "PUT",
       payload,
       url: "/api/settings/whatsapp",
     });
-    expect(res.statusCode).toBe(200);
-    expect(mocks.upsertWhatsAppSettings).toHaveBeenCalled();
+    expect(res.statusCode).toBe(402);
+    expect(res.json().code).toBe("CLOUD_MODULE_REQUIRED");
+    expect(mocks.upsertWhatsAppSettings).not.toHaveBeenCalled();
   });
 
   it("requires the disclaimer when enabling local transport", async () => {
     const app = buildApp(
-      fakePrisma({ ...EVO_ROW, whatsappLocalDisclaimerAt: null })
+      fakePrisma({ ...PRO_EVO_ROW, whatsappLocalDisclaimerAt: null })
     );
     const res = await app.inject({
       method: "PUT",
@@ -233,8 +247,8 @@ describe("PUT /api/settings/whatsapp — gates evolution", () => {
     expect(mocks.upsertWhatsAppSettings).not.toHaveBeenCalled();
   });
 
-  it("enables local transport with the disclaimer accepted", async () => {
-    const app = buildApp(fakePrisma());
+  it("enables local transport with module + disclaimer accepted", async () => {
+    const app = buildApp(fakePrisma(PRO_EVO_ROW));
     const res = await app.inject({
       method: "PUT",
       payload,
@@ -245,7 +259,7 @@ describe("PUT /api/settings/whatsapp — gates evolution", () => {
   });
 
   it("accepts the stored disclaimer on later saves", async () => {
-    const app = buildApp(fakePrisma());
+    const app = buildApp(fakePrisma(PRO_EVO_ROW));
     const res = await app.inject({
       method: "PUT",
       payload: { ...payload, disclaimerAccepted: undefined },
@@ -271,11 +285,19 @@ describe("PUT /api/settings/whatsapp — gates evolution", () => {
     expect(mocks.upsertWhatsAppSettings).not.toHaveBeenCalled();
   });
 
-  it("trackingBaseUrl sozinho (gravação parcial) re-sincroniza os templates", async () => {
+  it("trackingBaseUrl sozinho (gravação parcial) re-sincroniza os templates — só em cloud", async () => {
     // O formulário grava enabled+URL juntos, mas a condicional {{if}} do
     // corpo Meta depende do URL — uma gravação parcial só com o URL (ou
     // a string vazia que o remove) tem de disparar o re-sync na mesma.
-    const app = buildApp(fakePrisma());
+    // O re-sync só corre quando o canal resolve para cloud (Pro).
+    const cloudRow = {
+      ...PRO_EVO_ROW,
+      cloudApiUrl: "https://cloud.example",
+      cloudShopTokenEncrypted: "enc:key",
+      whatsappCredentialsAtCloud: true,
+      whatsappTransport: "meta",
+    };
+    const app = buildApp(fakePrisma(cloudRow));
     const res = await app.inject({
       method: "PUT",
       payload: { trackingBaseUrl: "https://loja.example.com" },
@@ -294,8 +316,25 @@ describe("PUT /api/settings/whatsapp — gates evolution", () => {
     expect(mocks.syncWhatsAppTemplates).toHaveBeenCalledOnce();
   });
 
+  it("não re-sincroniza templates fora do modo cloud (evolution/local)", async () => {
+    // enabled ou trackingBaseUrl não disparam sync fora do modo cloud.
+    const app = buildApp(fakePrisma(PRO_EVO_ROW));
+    for (const payload of [
+      { enabled: true, transport: "evolution", disclaimerAccepted: true },
+      { trackingBaseUrl: "https://loja.example.com" },
+    ]) {
+      const res = await app.inject({
+        method: "PUT",
+        payload,
+        url: "/api/settings/whatsapp",
+      });
+      expect(res.statusCode).toBe(200);
+    }
+    expect(mocks.syncWhatsAppTemplates).not.toHaveBeenCalled();
+  });
+
   it("gravação sem URL nem enabled não re-sincroniza templates", async () => {
-    const app = buildApp(fakePrisma());
+    const app = buildApp(fakePrisma(PRO_EVO_ROW));
     const res = await app.inject({
       method: "PUT",
       payload: { pickupReminderTemplate: "default" },
@@ -305,13 +344,26 @@ describe("PUT /api/settings/whatsapp — gates evolution", () => {
     expect(mocks.syncWhatsAppTemplates).not.toHaveBeenCalled();
   });
 
-  it("does not gate the meta transport", async () => {
+  it("meta transport is also Pro — enabling without module → 402", async () => {
     const app = buildApp(
       fakePrisma({
         ...EVO_ROW,
         cloudEntitlements: [],
         whatsappTransport: "meta",
       })
+    );
+    const res = await app.inject({
+      method: "PUT",
+      payload: { enabled: true, transport: "meta" },
+      url: "/api/settings/whatsapp",
+    });
+    expect(res.statusCode).toBe(402);
+    expect(res.json().code).toBe("CLOUD_MODULE_REQUIRED");
+  });
+
+  it("meta transport enables with the whatsapp-bot module", async () => {
+    const app = buildApp(
+      fakePrisma({ ...PRO_EVO_ROW, whatsappTransport: "meta" })
     );
     const res = await app.inject({
       method: "PUT",
@@ -343,17 +395,19 @@ describe("Evolution pairing/status routes", () => {
     expect(res.json().state).toBe("connecting");
   });
 
-  it("pair works without the whatsapp-bot entitlement (free transport)", async () => {
+  it("pair without the whatsapp-bot entitlement → 402 (Pro transport)", async () => {
     const app = buildApp(fakePrisma({ ...EVO_ROW, cloudEntitlements: [] }));
     const res = await app.inject({
       method: "POST",
       url: "/api/settings/whatsapp/evolution/pair",
     });
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(402);
+    expect(res.json().code).toBe("CLOUD_MODULE_REQUIRED");
+    expect(mocks.pairEvolutionInstance).not.toHaveBeenCalled();
   });
 
   it("pair returns QR + pairing code", async () => {
-    const app = buildApp(fakePrisma());
+    const app = buildApp(fakePrisma(PRO_EVO_ROW));
     const res = await app.inject({
       method: "POST",
       url: "/api/settings/whatsapp/evolution/pair",
@@ -365,7 +419,7 @@ describe("Evolution pairing/status routes", () => {
     expect(body.pairingCode).toBe("1234-5678");
   });
 
-  it("disconnect calls logout on the instance", async () => {
+  it("disconnect calls logout on the instance — teardown stays free", async () => {
     const app = buildApp(fakePrisma());
     const res = await app.inject({
       method: "POST",
@@ -377,5 +431,95 @@ describe("Evolution pairing/status routes", () => {
       baseUrl: "http://evolution:8080",
       instance: "oficinaos",
     });
+  });
+});
+
+describe("Evolution inbound webhook registration (MESSAGES_UPSERT)", () => {
+  const BOT_ROW = {
+    ...EVO_ROW,
+    evolutionWebhookToken: "evo-tok",
+    whatsappBotDisclaimerAt: new Date("2026-01-01"),
+  };
+
+  it("registers the webhook when whatsapp-bot is entitled", async () => {
+    const app = buildApp(
+      fakePrisma({
+        ...BOT_ROW,
+        cloudEntitlements: ["whatsapp-bot"],
+        cloudSyncedAt: new Date(),
+      })
+    );
+    const res = await app.inject({
+      headers: { host: "192.168.1.10:4000" },
+      method: "PUT",
+      payload: { botDisclaimerAccepted: true, transport: "evolution" },
+      url: "/api/settings/whatsapp",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mocks.setEvolutionWebhook).toHaveBeenCalledWith(
+      {
+        apiKey: "evo-key",
+        baseUrl: "http://evolution:8080",
+        instance: "oficinaos",
+      },
+      "http://192.168.1.10:4000/api/public/whatsapp/evolution/inbound/evo-tok"
+    );
+  });
+
+  it("skips registration without the whatsapp-bot entitlement — a stale disclaimer does not keep it alive", async () => {
+    const app = buildApp(
+      fakePrisma({
+        ...BOT_ROW,
+        cloudEntitlements: [],
+        cloudSyncedAt: new Date(),
+      })
+    );
+    // Sem botDisclaimerAccepted: a gravação passa (não ativa o bot) e o
+    // registo interno do webhook salta por falta de entitlement.
+    const res = await app.inject({
+      headers: { host: "192.168.1.10:4000" },
+      method: "PUT",
+      payload: { transport: "evolution" },
+      url: "/api/settings/whatsapp",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mocks.setEvolutionWebhook).not.toHaveBeenCalled();
+  });
+
+  it("rejects accepting the bot term without the module → 402", async () => {
+    const app = buildApp(
+      fakePrisma({
+        ...BOT_ROW,
+        cloudEntitlements: [],
+        cloudSyncedAt: new Date(),
+      })
+    );
+    const res = await app.inject({
+      headers: { host: "192.168.1.10:4000" },
+      method: "PUT",
+      payload: { botDisclaimerAccepted: true, transport: "evolution" },
+      url: "/api/settings/whatsapp",
+    });
+    expect(res.statusCode).toBe(402);
+    expect(res.json().code).toBe("CLOUD_MODULE_REQUIRED");
+    expect(mocks.setEvolutionWebhook).not.toHaveBeenCalled();
+  });
+
+  it("skips registration when the entitlement cache is stale (>24h)", async () => {
+    const app = buildApp(
+      fakePrisma({
+        ...BOT_ROW,
+        cloudEntitlements: ["whatsapp-bot"],
+        cloudSyncedAt: new Date(Date.now() - 25 * 3600 * 1000),
+      })
+    );
+    const res = await app.inject({
+      headers: { host: "192.168.1.10:4000" },
+      method: "PUT",
+      payload: { transport: "evolution" },
+      url: "/api/settings/whatsapp",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mocks.setEvolutionWebhook).not.toHaveBeenCalled();
   });
 });

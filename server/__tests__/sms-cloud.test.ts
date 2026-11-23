@@ -221,10 +221,13 @@ describe("getSmsDeviceStatus", () => {
   });
 
   it("sendable vem da Cloud; sem o campo cai em configured+enabled", async () => {
+    // O entitled local exige o módulo "sms" com cache fresco
+    // (isModuleEnabled <24h — decisão 2026-11-23).
     mocks.getOrCreateShopSettings.mockResolvedValueOnce({
       cloudApiUrl: "https://c",
       cloudEntitlements: ["sms"],
       cloudShopTokenEncrypted: "enc:tok",
+      cloudSyncedAt: new Date(),
     });
     mocks.cloudFetch.mockResolvedValueOnce({
       body: { configured: true, device: { enabled: true }, sendable: true },
@@ -238,6 +241,7 @@ describe("getSmsDeviceStatus", () => {
       cloudApiUrl: "https://c",
       cloudEntitlements: ["sms"],
       cloudShopTokenEncrypted: "enc:tok",
+      cloudSyncedAt: new Date(),
     });
     // Cloud antiga (antes do campo): aproximação pelo device default.
     mocks.cloudFetch.mockResolvedValueOnce({
@@ -251,6 +255,7 @@ describe("getSmsDeviceStatus", () => {
       cloudApiUrl: "https://c",
       cloudEntitlements: ["sms"],
       cloudShopTokenEncrypted: "enc:tok",
+      cloudSyncedAt: new Date(),
     });
     mocks.cloudFetch.mockResolvedValueOnce({
       body: { configured: true, device: { enabled: false } },

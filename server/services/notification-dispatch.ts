@@ -234,17 +234,30 @@ async function resolveShopNotificationConfig(prisma: DbClient): Promise<{
 }> {
   try {
     const shop = await findShopSettingsUnique(prisma);
+    // Decisão 2026-11-23: toda a mensagem é Pro — sem o módulo fresco
+    // ("whatsapp-bot"/"sms") o handler não cria outbox entries, mesmo
+    // com o toggle e o transporte configurados.
+    const waModule = isModuleEnabled(shop, "whatsapp-bot");
+    const smsModule = isModuleEnabled(shop, "sms");
+    if (shop?.whatsappEnabled && !waModule) {
+      logger.info(
+        '[notify] WHATSAPP channel unavailable — module "whatsapp-bot" not entitled; outbound suppressed'
+      );
+    }
+    if (shop?.smsEnabled && !smsModule) {
+      logger.info(
+        '[notify] SMS channel unavailable — module "sms" not entitled; outbound suppressed'
+      );
+    }
     return {
       currency: shop?.currency ?? "EUR",
       reviewUrl: shop?.reviewUrl ?? null,
       shopName: shop?.shopName ?? "",
-      // SMS local (gateway Android na LAN) é free — mas uma loja com o
-      // módulo Pro "sms" envia pela Cloud/device mesmo sem gateway
-      // ligado; sem este OR o dispatch nem sequer criava os entries que
-      // o transporte Pro enviaria.
-      smsEnabled: Boolean(shop?.smsEnabled) || isModuleEnabled(shop, "sms"),
+      // Com o módulo "sms" a loja envia pela Cloud/device mesmo sem
+      // gateway LAN ligado; sem módulo não há SMS em modo nenhum.
+      smsEnabled: smsModule,
       trackingBaseUrl: shop?.trackingBaseUrl ?? null,
-      whatsappEnabled: shop?.whatsappEnabled ?? false,
+      whatsappEnabled: Boolean(shop?.whatsappEnabled) && waModule,
     };
   } catch (err) {
     // Notifications are best-effort: never block dispatch on a

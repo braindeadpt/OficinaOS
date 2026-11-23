@@ -109,7 +109,10 @@ function defaultSettings(overrides: Record<string, unknown> = {}) {
     trackingBaseUrl: null,
     whatsappEnabled: true,
     smsEnabled: false,
-    cloudEntitlements: {},
+    // Decisão 2026-11-23: signature_link é Pro — a loja default dos
+    // testes tem ambos os módulos de mensagens com cache fresco.
+    cloudEntitlements: ["whatsapp-bot", "sms"],
+    cloudSyncedAt: new Date(),
     shopName: "Oficina XPTO",
     currency: "EUR",
     ...overrides,
@@ -250,6 +253,22 @@ describe("sendSignatureLink — remote URL resolution", () => {
     expect(prisma.notificationOutbox.create).not.toHaveBeenCalled();
   });
 
+  it("sem módulo Pro → recusa mesmo com WhatsApp ligado", async () => {
+    // Grátis não envia nada: canal ligado + modelo presente mas sem
+    // entitlement fresco → SIGNATURE_LINK_NO_CHANNEL, nada na fila.
+    prisma.signatureSession.findUnique.mockResolvedValue(
+      intakeSession({ relayed: true })
+    );
+    prisma.shopSettings.findUnique.mockResolvedValue(
+      defaultSettings({ cloudEntitlements: [] })
+    );
+
+    await expect(
+      sendSignatureLink(app, TOKEN, "staff-1")
+    ).rejects.toMatchObject({ code: "SIGNATURE_LINK_NO_CHANNEL" });
+    expect(prisma.notificationOutbox.create).not.toHaveBeenCalled();
+  });
+
   it("modelo signature_link movido para SMS numa loja só-WhatsApp → recusa", async () => {
     // Regressão Devin r12: o gate olhava para "algum canal ligado" —
     // WhatsApp ativo confirmava o envio mesmo sem modelo WhatsApp e
@@ -366,7 +385,13 @@ describe("sendSignatureLink — staff-initiated consent bypass", () => {
 
     await sendSignatureLink(app, TOKEN, "staff-1");
 
-    expect(prisma.notificationOutbox.create).toHaveBeenCalledOnce();
+    // WHATSAPP + fallback SMS (o módulo "sms" está ativo na loja
+    // default e não há modelo SMS próprio — o corpo WA serve o SMS).
+    expect(prisma.notificationOutbox.create).toHaveBeenCalledTimes(2);
+    const channels = prisma.notificationOutbox.create.mock.calls.map(
+      (c) => c[0].data.channel
+    );
+    expect(channels).toEqual(["WHATSAPP", "SMS"]);
   });
 
   it("enqueues even when the customer has not opted in", async () => {
@@ -381,7 +406,11 @@ describe("sendSignatureLink — staff-initiated consent bypass", () => {
 
     await sendSignatureLink(app, TOKEN, "staff-1");
 
-    expect(prisma.notificationOutbox.create).toHaveBeenCalledOnce();
+    expect(prisma.notificationOutbox.create).toHaveBeenCalledTimes(2);
+    const channels = prisma.notificationOutbox.create.mock.calls.map(
+      (c) => c[0].data.channel
+    );
+    expect(channels).toEqual(["WHATSAPP", "SMS"]);
   });
 });
 

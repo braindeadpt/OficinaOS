@@ -2,6 +2,7 @@ import { decryptSecret, isEncrypted } from "../lib/crypto.js";
 import { assertNotDemoMode } from "../lib/demo.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
+import { isModuleEnabled } from "../utils/modules.js";
 import { cloudFetch } from "./cloud.service.js";
 import {
   type EvolutionConfig,
@@ -31,6 +32,7 @@ interface SettingsLike {
   cloudApiUrl?: string | null;
   cloudEntitlements?: unknown;
   cloudShopTokenEncrypted?: string | null;
+  cloudSyncedAt?: Date | null;
   evolutionApiKeyEncrypted?: string | null;
   evolutionInstance?: string | null;
   evolutionUrl?: string | null;
@@ -49,11 +51,11 @@ export interface SendResult {
 }
 
 /**
- * Transporte "evolution" (WhatsApp local, free): corre na LAN da loja e é
+ * Transporte "evolution" (WhatsApp local, Pro): corre na LAN da loja e é
  * não-oficial — por isso exige o disclaimer de responsabilidade aceite,
- * mas não o entitlement "whatsapp-bot" (esse fica para as funções
- * oficiais: relay cloud Meta + bot inbound). Sem disclaimer resolve para
- * null e o outbox cancela os envios.
+ * além do entitlement "whatsapp-bot" (decisão 2026-11-23: toda a
+ * mensagem WhatsApp é Pro). Sem disclaimer resolve para null e o outbox
+ * cancela os envios.
  */
 function resolveEvolutionChannel(
   settings: SettingsLike
@@ -85,6 +87,12 @@ function resolveEvolutionChannel(
 export function resolveWhatsAppChannel(
   settings: SettingsLike
 ): WhatsAppChannel | null {
+  // Decisão 2026-11-23: grátis não envia NADA — todo o WhatsApp (Meta
+  // local, Evolution, relay cloud/oficial) exige o módulo Pro
+  // "whatsapp-bot" com cache fresco (isModuleEnabled <24h).
+  if (!isModuleEnabled(settings, "whatsapp-bot")) {
+    return null;
+  }
   if (!settings.whatsappEnabled) {
     return null;
   }
@@ -173,6 +181,15 @@ export async function sendWhatsAppText(
   settings: SettingsLike | null
 ): Promise<SendResult> {
   assertNotDemoMode();
+  // Defesa em profundidade: a revogação entre o resolve e o envio não
+  // passa — o cache de entitlements expira ou perde o módulo e o envio
+  // falha aqui mesmo que o channel ainda exista.
+  if (!isModuleEnabled(settings, "whatsapp-bot")) {
+    return {
+      error: "Módulo whatsapp-bot não está ativo (OficinaOS Pro)",
+      success: false,
+    };
+  }
   if (channel.mode === "local") {
     return sendWhatsApp(channel.config, to, message, countryCode);
   }
@@ -180,7 +197,8 @@ export async function sendWhatsAppText(
     return sendEvolutionText(
       channel.config,
       formatPhone(to, countryCode),
-      message
+      message,
+      settings
     );
   }
   const res = await sendViaCloud(channel, {
@@ -212,15 +230,12 @@ export async function pushCredentialsToCloud(
   prisma: DbClient
 ): Promise<boolean> {
   const settings = await getOrCreateShopSettings(prisma);
-  // §5.6 — só lojas Pro migram para o relay cloud: grátis fica em
-  // modo `local` (envio direto app→Meta) e nunca envia credenciais.
+  // §5.6 — só lojas Pro migram para o relay cloud: sem o módulo
+  // "whatsapp-bot" fresco a loja nunca envia credenciais.
   // O retorno reflete se a Cloud TEM credenciais (flag gravada), não o
   // entitlement atual — perder o módulo não apaga as credenciais lá e
   // devolver false divergiria do GET das definições.
-  const modules = Array.isArray(settings.cloudEntitlements)
-    ? (settings.cloudEntitlements as string[])
-    : [];
-  if (!modules.includes("whatsapp-bot")) {
+  if (!isModuleEnabled(settings, "whatsapp-bot")) {
     return Boolean(settings.whatsappCredentialsAtCloud);
   }
   if (
@@ -277,6 +292,12 @@ export async function sendWhatsAppTemplateVia(
   settings: SettingsLike | null
 ): Promise<SendResult> {
   assertNotDemoMode();
+  if (!isModuleEnabled(settings, "whatsapp-bot")) {
+    return {
+      error: "Módulo whatsapp-bot não está ativo (OficinaOS Pro)",
+      success: false,
+    };
+  }
   if (channel.mode === "local") {
     return sendWhatsAppTemplate(
       channel.config,
