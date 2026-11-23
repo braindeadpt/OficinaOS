@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Icon } from "@/components/ui/icon";
+import { Select } from "@/components/ui/select";
 import { useCan } from "@/hooks/use-can";
 import api, { getErrorMessage } from "@/lib/api";
 import { useAiInboxStore } from "@/stores/ai-inbox";
@@ -373,17 +374,18 @@ export default function InboxPage() {
           {t("inbox.title")}
         </h1>
         <div className="ms-auto flex flex-wrap items-center gap-2">
-          <select
-            aria-label={t("inbox.channel_filter")}
-            className="rounded-xl border border-outline-variant bg-surface-container px-3 py-2 text-sm"
-            onChange={(e) => setChannel(e.target.value)}
-            value={channel}
-          >
-            <option value="">{t("inbox.channel_all")}</option>
-            <option value="whatsapp">WhatsApp</option>
-            <option value="evolution">Evolution</option>
-            <option value="sms">SMS</option>
-          </select>
+          <div className="w-44">
+            <Select
+              aria-label={t("inbox.channel_filter")}
+              onChange={(e) => setChannel(e.target.value)}
+              value={channel}
+            >
+              <option value="">{t("inbox.channel_all")}</option>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="evolution">Evolution</option>
+              <option value="sms">SMS</option>
+            </Select>
+          </div>
         </div>
       </div>
       <div className="mb-3 flex flex-wrap gap-2">
@@ -483,49 +485,56 @@ export default function InboxPage() {
                   </p>
                 </div>
                 {canManage && (
-                  <select
-                    aria-label={t("inbox.assign")}
-                    className="rounded-xl border border-outline-variant bg-surface-container px-3 py-2 text-sm"
+                  <div className="w-44">
+                    <Select
+                      aria-label={t("inbox.assign")}
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          act(
+                            api.post(
+                              `/inbox/conversations/${selected.id}/assign`,
+                              {
+                                utilizadorId: e.target.value,
+                              }
+                            )
+                          );
+                        }
+                      }}
+                      value={selected.assignedTo?.id ?? ""}
+                    >
+                      <option value="">{t("inbox.unassigned")}</option>
+                      {users.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                )}
+                <div className="w-40">
+                  <Select
+                    aria-label={t("inbox.status")}
                     onChange={(e) => {
                       if (e.target.value) {
                         act(
                           api.post(
-                            `/inbox/conversations/${selected.id}/assign`,
+                            `/inbox/conversations/${selected.id}/status`,
                             {
-                              utilizadorId: e.target.value,
+                              estado: e.target.value,
                             }
                           )
                         );
                       }
                     }}
-                    value={selected.assignedTo?.id ?? ""}
+                    value={STATUS_ESTADO[selected.status] ?? "fechada"}
                   >
-                    <option value="">{t("inbox.unassigned")}</option>
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <select
-                  aria-label={t("inbox.status")}
-                  className="rounded-xl border border-outline-variant bg-surface-container px-3 py-2 text-sm"
-                  onChange={(e) => {
-                    if (e.target.value) {
-                      act(
-                        api.post(`/inbox/conversations/${selected.id}/status`, {
-                          estado: e.target.value,
-                        })
-                      );
-                    }
-                  }}
-                  value={STATUS_ESTADO[selected.status] ?? "fechada"}
-                >
-                  <option value="aberta">{t("inbox.status_open")}</option>
-                  <option value="pendente">{t("inbox.status_pending")}</option>
-                  <option value="fechada">{t("inbox.status_closed")}</option>
-                </select>
+                    <option value="aberta">{t("inbox.status_open")}</option>
+                    <option value="pendente">
+                      {t("inbox.status_pending")}
+                    </option>
+                    <option value="fechada">{t("inbox.status_closed")}</option>
+                  </Select>
+                </div>
               </div>
               <div
                 className="oos-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto p-4"
