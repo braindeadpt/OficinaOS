@@ -2496,6 +2496,7 @@
   "sms_setup_5": "Utilice «Enviar SMS de prueba» para confirmar. Requiere el módulo SMS Pro (OficinaOS Cloud) — el gateway por sí solo no puede enviar.",
   "sms_setup_tip": "Consejo: en el router de la tienda reserva la IP del teléfono (reserva DHCP) para que nunca cambie.",
   "sms_setup_title": "Configuración: 5 minutos",
+  "sms_sim_terms": "La tarjeta SIM y su plan móvil pertenecen a la tienda: los costes de SMS del operador y los límites de uso legítimo (anti-spam) del operador son responsabilidad de la tienda. ",
   "sms_test_sent": "SMS de prueba enviado",
   "deliver_dialog": {
     "title": "Entregar al cliente",

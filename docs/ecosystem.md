@@ -231,6 +231,50 @@ Estado por template em `ShopSettings.whatsappTemplatesJson` → chip na
 UI + "Voltar a submeter". O outbox grava `templateParams` na mesma
 ordem e envia `type:"template"` quando o transporte é Meta/Cloud.
 
+### Módulo `ai-inbox` (caixa de entrada unificada + IA de staff)
+
+A caixa de entrada do staff e o assistente de IA para a equipa —
+módulo próprio, contratável sozinho (nome comercial e preço por
+decidir — `{{AI_INBOX_NOME}}`/`{{AI_INBOX_PRECO}}`).
+
+- **Caixa de entrada:** todas as mensagens recebidas/enviadas de
+  WhatsApp (oficial + Evolution) e SMS — incluindo as do bot — ficam
+  em `BusinessMessage` (`channel`, `direction`, `customerId`,
+  `externalId`, `conversationKey`, `conversationStatus`,
+  `assignedToId`, `handledBy`). UI "Mensagens": conversas, filtros,
+  atribuição e resposta manual.
+- **Ferramentas na app:** um único conjunto `staffInboxTools`
+  (listar/ler/procurar conversas, resumo do cliente, atribuir,
+  rascunhar, `enviar_rascunho` só após aprovação humana) corre na BD
+  local com as permissões do utilizador — nunca na Cloud.
+- **Ligação permanente app → Cloud** (`/ai-inbox/link`, WebSocket/SSE
+  iniciada pela app, token da loja, reconexão com backoff): a Cloud
+  envia `{callId, tool, args, userId}` e a app devolve o resultado.
+  Sem portas abertas na loja; app offline → "A loja está offline".
+- **`POST /ai/staff-reply`** (Cloud): mesmo padrão sem estado do
+  `/ai/bot-reply` — a app envia a conversa do staff + resultados das
+  ferramentas, a Cloud devolve `tool_calls` ou a resposta final.
+  System prompt e esquemas das ferramentas existem só na Cloud.
+  Modelo: qualquer API compatível com OpenAI, com a chave da própria
+  loja cifrada na Cloud (nunca devolvida) ou o modelo incluído com
+  medição de uso.
+- **`/mcp` na Cloud** (`cloud.oficinaos.app/mcp`, Streamable HTTP):
+  servidor MCP alojado — Claude, ChatGPT, Cursor, Gemini CLI,
+  LM Studio/Open WebUI e outros clientes ligam-se com um **token
+  pessoal por utilizador** (a Cloud guarda só o hash; permissões do
+  perfil desse utilizador; criado/revogado em Definições → IA →
+  "Ligar a outra IA"). Cada chamada é encaminhada pela ligação
+  `/ai-inbox/link` para a app certa. Não existe `/mcp` na app nem na
+  LAN.
+- **Segurança:** envio sempre em dois passos (rascunho → aprovação
+  humana na app); texto de clientes marcado como não-confiável; cada
+  chamada vai para `AuditLog`; `deviceUnlockCode`/`imei`/assinaturas
+  nunca saem.
+- **Precisa de um canal que receba:** Evolution na LAN (funciona só
+  com este módulo — grava na caixa de entrada mas o bot não responde)
+  ou `whatsapp-bot`/`sms`. Sem entitlement → 402 em
+  `/ai/staff-reply`, `/mcp` e na ligação.
+
 ### Canais de mensagens — matriz free/Pro (regra canónica)
 
 **Decisão do dono (2026-11-23): o grátis não envia NADA — toda a
@@ -340,6 +384,7 @@ linguagem simples gerado na Cloud.
 | `market-prices` | Preços de mercado agregados | app: `market-prices.service.ts`; cloud: `src/routes/prices.ts` (≥3 lojas por benchmark) | Live |
 | `invoicing` | Faturação InvoiceXpress | app: `invoicing.service.ts` (FR/FS, IVA incluído→líquido) | Live, validado conta demo |
 | `multi-shop` | Dashboard multi-loja | app: `shop-metrics.service.ts` (snapshot diário); cloud: `src/routes/metrics.ts` + `ShopMetric`, UI no dashboard do dono | Live |
+| `ai-inbox` | Caixa de entrada + IA de staff | app: `staffInboxTools` + ligação permanente; cloud: `/ai/staff-reply`, `/ai-inbox/link`, `/mcp` (tokens pessoais, só hash) | Em desenvolvimento — nome/preço por decidir |
 
 (O canal `sms` voltou a ser módulo Pro em 2026-11-23 — inclusive o
 gateway LAN, que fica como fallback do caminho Cloud. Ver secção acima.)
