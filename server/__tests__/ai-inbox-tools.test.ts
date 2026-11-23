@@ -76,6 +76,7 @@ vi.mock("../lib/crypto.js", () => ({
 const log = { error: vi.fn(), warn: vi.fn() } as never;
 
 const OWNER = {
+  active: true,
   id: "u-owner",
   mcpDirectSend: false,
   name: "Dona",
@@ -83,6 +84,7 @@ const OWNER = {
 };
 
 const TECH = {
+  active: true,
   id: "u-tech",
   mcpDirectSend: false,
   name: "Tec",
@@ -218,6 +220,44 @@ describe("rascunhar_resposta / enviar_rascunho — §G.5", () => {
     expect(mocks.sendWhatsAppText).not.toHaveBeenCalled();
     expect(mocks.sendSms).not.toHaveBeenCalled();
     expect(mocks.sendViaEvolutionAntiBan).not.toHaveBeenCalled();
+  });
+
+  it("conta desativada perde acesso mesmo com role válido (token MCP antigo)", async () => {
+    const prisma = fakePrisma({
+      user: {
+        findUnique: vi.fn(async () => ({ ...TECH, active: false })),
+      },
+    });
+    const out = await runStaffInboxTool(prisma, log, {
+      args: {},
+      tool: "listar_conversas",
+      userId: "u-tech",
+    });
+    expect(out.error).toBe("conta desativada");
+  });
+
+  it("envio concorrente perde a claim — não há segundo transporte", async () => {
+    const prisma = fakePrisma({
+      inboxDraft: {
+        findUnique: vi.fn(async () => ({
+          approvedAt: new Date(),
+          conversation: {
+            channel: "whatsapp",
+            id: "conv-1",
+            phone: "351912345678",
+          },
+          id: "draft-1",
+          status: "PENDING",
+          text: "x",
+        })),
+        update: vi.fn(async () => ({})),
+        // Outro pedido ganhou a transição DRAFT/PENDING→SENDING.
+        updateMany: vi.fn(async () => ({ count: 0 })),
+      },
+    });
+    const out = await sendApprovedDraft(prisma, log, "draft-1", "u-owner");
+    expect(out.error).toBe("rascunho já está a ser enviado");
+    expect(mocks.sendWhatsAppText).not.toHaveBeenCalled();
   });
 
   it("enviar_rascunho sem aprovação e sem mcpDirectSend → aguarda aprovação", async () => {

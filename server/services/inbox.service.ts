@@ -1,3 +1,7 @@
+import {
+  COUNTRY_DIAL_CODES,
+  NATIONAL_NUMBER_LENGTHS,
+} from "@shared/constants/countries.js";
 import { normalizePhone } from "@shared/utils/phone.js";
 import type { DbClient } from "../repositories/types.js";
 import { findCustomersByPhone } from "./bot-intents.js";
@@ -42,11 +46,37 @@ const CHANNEL_SUBJECT: Record<string, string> = {
   whatsapp: "WhatsApp",
 };
 
-export function inboxConversationKey(channel: string, phone: string): string {
-  // Canais entregam o remetente em formato internacional ("351912…",
-  // "+351912…", JID Evolution): a key vai a dígitos para o mesmo número
-  // físico convergir sempre na mesma conversa.
-  return `${channel}:${normalizePhone(phone).replace(/\D/g, "")}`;
+export function inboxConversationKey(
+  channel: string,
+  phone: string,
+  countryCode = "PT"
+): string {
+  // Canais entregam o remetente em formatos mistos ("912345678" local,
+  // "351912…", "+351912…", "00351…", JID Evolution): a key vai para o
+  // formato internacional com o indicativo do país da loja — formatos
+  // equivalentes do mesmo número físico convergem na mesma conversa.
+  const trimmed = phone.trim();
+  let digits = trimmed.replace(/\D/g, "");
+  const international = trimmed.startsWith("+") || digits.startsWith("00");
+  if (digits.startsWith("00")) {
+    digits = digits.slice(2);
+  }
+  if (!international) {
+    const nationalLen = NATIONAL_NUMBER_LENGTHS[countryCode] ?? 15;
+    if (digits.length <= nationalLen) {
+      digits = `${COUNTRY_DIAL_CODES[countryCode] ?? COUNTRY_DIAL_CODES.PT}${digits}`;
+    }
+  }
+  return `${channel}:${digits}`;
+}
+
+/** Indicativo do país da loja para a chave de conversa (uma query). */
+async function shopCountryCode(prisma: DbClient): Promise<string> {
+  const row = await prisma.shopSettings.findUnique({
+    select: { countryCode: true },
+    where: { id: "default" },
+  });
+  return row?.countryCode ?? "PT";
 }
 
 interface RecordBase {
@@ -90,7 +120,11 @@ export async function recordInboundMessage(
   opts: RecordBase
 ): Promise<RecordedMessage | null> {
   const at = opts.at ?? new Date();
-  const key = inboxConversationKey(opts.channel, opts.phone);
+  const key = inboxConversationKey(
+    opts.channel,
+    opts.phone,
+    await shopCountryCode(prisma)
+  );
   if (opts.externalId) {
     const existing = await prisma.businessMessage.findFirst({
       where: { channel: opts.channel, externalId: opts.externalId },
@@ -183,7 +217,11 @@ export async function recordOutboundMessage(
   }
 ): Promise<RecordedMessage | null> {
   const at = opts.at ?? new Date();
-  const key = inboxConversationKey(opts.channel, opts.phone);
+  const key = inboxConversationKey(
+    opts.channel,
+    opts.phone,
+    await shopCountryCode(prisma)
+  );
   if (opts.externalId) {
     const existing = await prisma.businessMessage.findFirst({
       where: { channel: opts.channel, externalId: opts.externalId },
@@ -337,18 +375,30 @@ export async function cleanupInboxRetention(
   });
   const days = settings?.inboxRetentionDays ?? 365;
   const cutoff = new Date(Date.now() - days * 24 * 3600 * 1000);
-  const stale = await prisma.inboxConversation.findMany({
-    select: { id: true },
-    where: { lastMessageAt: { lt: cutoff } },
+  // Uma só transação: SELECT FOR UPDATE (ordenado por id — ordem
+  // determinista, mesma ordem em que as escritas tocam a conversa pelo
+  // upsert) seguido do delete. Fora da tx uma mensagem nova podia entrar
+  // entre a seleção e o delete e ficar órfã/ser apagada a meio.
+  const removed = await prisma.$transaction(async (tx) => {
+    const stale = await tx.$queryRaw<{ id: string }[]>`
+      SELECT "id" FROM "inbox_conversations"
+      WHERE "lastMessageAt" < ${cutoff}
+      ORDER BY "id"
+      FOR UPDATE`;
+    if (stale.length === 0) {
+      return 0;
+    }
+    const ids = stale.map((s) => s.id);
+    // Filhos primeiro — mesma ordem de lock das escritas (mensagem
+    // referencia a conversa), evita deadlock com o record*.
+    await tx.businessMessage.deleteMany({
+      where: { conversationId: { in: ids } },
+    });
+    await tx.inboxConversation.deleteMany({ where: { id: { in: ids } } });
+    return stale.length;
   });
-  if (stale.length === 0) {
-    return 0;
+  if (removed > 0) {
+    log.info({ days, removed }, "inbox: retenção aplicada");
   }
-  const ids = stale.map((s) => s.id);
-  await prisma.businessMessage.deleteMany({
-    where: { conversationId: { in: ids } },
-  });
-  await prisma.inboxConversation.deleteMany({ where: { id: { in: ids } } });
-  log.info({ days, removed: stale.length }, "inbox: retenção aplicada");
-  return stale.length;
+  return removed;
 }

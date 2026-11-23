@@ -444,13 +444,37 @@ export const inboxRoutes: FastifyPluginAsync = async (app) => {
       }
       const userId = getUserId(req);
       if (!draft.approvedAt) {
-        await app.prisma.inboxDraft.update({
+        // Aprovação atómica: dois cliques concorrentes — só quem ganha o
+        // updateMany aprova; quem perde cai no sendApprovedDraft que por
+        // sua vez reclama o envio de forma exclusiva (SENDING).
+        const won = await app.prisma.inboxDraft.updateMany({
           data: { approvedAt: new Date(), approvedById: userId },
-          where: { id },
+          where: { approvedAt: null, id, status: { in: ["DRAFT", "PENDING"] } },
         });
+        if (won.count === 0) {
+          const now = await app.prisma.inboxDraft.findUnique({
+            select: { approvedAt: true },
+            where: { id },
+          });
+          if (!now?.approvedAt) {
+            throw new AppError("CONFLICT");
+          }
+        }
       }
       const out = await sendApprovedDraft(app.prisma, app.log, id, userId);
       if (out.error) {
+        // Idempotente: um segundo «Aprovar e enviar» durante o envio do
+        // primeiro não é erro — a mensagem já está reservada (SENDING)
+        // ou enviada; devolver ok evita retry duplicado do cliente.
+        const st = (
+          await app.prisma.inboxDraft.findUnique({
+            select: { status: true },
+            where: { id },
+          })
+        )?.status;
+        if (st === "SENDING" || st === "SENT") {
+          return reply.send({ ok: true });
+        }
         throw new AppError("VALIDATION_ERROR", { message: out.error });
       }
       return reply.send({ ok: true });

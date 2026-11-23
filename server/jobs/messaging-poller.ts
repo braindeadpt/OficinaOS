@@ -25,18 +25,23 @@ export function startMessagingPoller(app: FastifyInstance): () => void {
       const modules = Array.isArray(settings.cloudEntitlements)
         ? (settings.cloudEntitlements as string[])
         : [];
+      // "ai-inbox" também consome a fila oficial WhatsApp — a caixa de
+      // entrada precisa das mensagens mesmo sem "whatsapp-bot" (envios
+      // continuam suprimidos: resolveWhatsAppChannel devolve null).
       if (
         !(
           settings.cloudApiUrl &&
           settings.cloudShopTokenEncrypted &&
-          (modules.includes("sms") || modules.includes("whatsapp-bot"))
+          (modules.includes("sms") ||
+            modules.includes("whatsapp-bot") ||
+            modules.includes("ai-inbox"))
         )
       ) {
         return;
       }
       const token = decryptSecret(settings.cloudShopTokenEncrypted);
       const notifyCtx = { prisma: app.prisma, wsBroadcast: app.wsBroadcast };
-      if (modules.includes("whatsapp-bot")) {
+      if (modules.includes("whatsapp-bot") || modules.includes("ai-inbox")) {
         await pollWhatsAppInbound(
           app.prisma,
           settings.cloudApiUrl,

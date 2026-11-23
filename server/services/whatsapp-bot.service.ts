@@ -121,7 +121,15 @@ export async function pollWhatsAppInbound(
   const settings = await getOrCreateShopSettings(prisma);
   const channel = resolveWhatsAppChannel(settings);
   if (!channel) {
-    return; // módulo ativo mas WhatsApp por configurar — fila fica a aguardar
+    // ai-inbox sem "whatsapp-bot": a fila oficial continua a ser
+    // consumida — a caixa de entrada precisa de TODAS as mensagens e
+    // PARAR revoga o consentimento (legal). Respostas automáticas ficam
+    // suprimidas: o envio é todo Pro e o resolve devolveu null por isso.
+    if (!isModuleEnabled(settings, "ai-inbox")) {
+      return;
+    }
+    await drainInboxOnly(prisma, apiUrl, token, log, notifyCtx, settings);
+    return;
   }
   // Transporte Evolution: a fila oficial só pode ser respondida com os
   // gates do §5.7 — termo do bot aceite e bot não suspenso. Sem isto,
@@ -174,6 +182,77 @@ export async function pollWhatsAppInbound(
   };
 
   await drainInbound(ctx, messages, blockedEvolution);
+}
+
+/**
+ * Consumo record-only da fila oficial — modo ai-inbox sem
+ * "whatsapp-bot". Cada mensagem entra na caixa de entrada e o pipeline
+ * corre com envio suprimido (PARAR revoga consentimento; pedidos de
+ * ajuda escalam ao staff). Sem transporte resolvido nada é enviado —
+ * a resposta automática é funcionalidade do bot, não da inbox.
+ */
+async function drainInboxOnly(
+  prisma: PrismaClient,
+  apiUrl: string,
+  token: string,
+  log: FastifyBaseLogger,
+  notifyCtx: NotifyContext | undefined,
+  settings: Awaited<ReturnType<typeof getOrCreateShopSettings>>
+): Promise<void> {
+  const res = await cloudFetch(apiUrl, "/whatsapp/inbound", { token });
+  if (!res.ok) {
+    return;
+  }
+  const messages = (res.body as { messages?: InboundMessage[] }).messages ?? [];
+  if (messages.length === 0) {
+    return;
+  }
+  const ctx: BotReplyCtx = {
+    currency: settings.currency ?? "EUR",
+    inbox: { channel: "whatsapp", enabled: true },
+    log,
+    notifyCtx,
+    prisma,
+    shopLabel:
+      [settings.shopName, settings.phone].filter(Boolean).join(" · ") ||
+      "a loja",
+    timezone: settings.timezone ?? undefined,
+  };
+  const ackIds: string[] = [];
+  const processed: string[] = [];
+  for (const msg of messages) {
+    if (inFlightIds.has(msg.id)) {
+      continue;
+    }
+    inFlightIds.add(msg.id);
+    processed.push(msg.id);
+    // silentSend: o pipeline corre (registo + PARAR + escalada) mas o
+    // envio é no-op — sem canal resolvido nada sai para o cliente.
+    await handleInboundMessage(ctx, msg, {
+      channelLabel: "WhatsApp",
+      send: () => Promise.resolve(true),
+      silentSend: true,
+    })
+      .then(() => ackIds.push(msg.id))
+      .catch((err) => {
+        // Poisoned — regista e confirma na mesma para não bloquear a fila.
+        log.warn({ err, msgId: msg.id }, "whatsapp inbox record falhou");
+        ackIds.push(msg.id);
+      });
+  }
+  try {
+    if (ackIds.length) {
+      await cloudFetch(apiUrl, "/whatsapp/inbound/ack", {
+        body: { ids: ackIds },
+        method: "POST",
+        token,
+      });
+    }
+  } finally {
+    for (const id of processed) {
+      inFlightIds.delete(id);
+    }
+  }
 }
 
 /**

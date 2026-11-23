@@ -19,6 +19,9 @@ function fakePrisma() {
   let convSeq = 0;
   let msgSeq = 0;
   const tx: Record<string, unknown> = {};
+  tx.shopSettings = {
+    findUnique: vi.fn(async () => ({ countryCode: "PT" })),
+  };
   tx.inboxConversation = {
     findUnique: vi.fn(
       ({ where }: { where: { id?: string; conversationKey?: string } }) => {
@@ -241,6 +244,13 @@ describe("recordInboundMessage", () => {
   it("conversationKey normaliza o telefone para dígitos", () => {
     expect(inboxConversationKey("sms", "+351912345678")).toBe(
       inboxConversationKey("sms", "351912345678")
+    );
+    // Local ↔ internacional convergem na mesma conversa (país da loja).
+    expect(inboxConversationKey("sms", "912345678")).toBe(
+      inboxConversationKey("sms", "+351912345678")
+    );
+    expect(inboxConversationKey("sms", "00351912345678")).toBe(
+      inboxConversationKey("sms", "+351912345678")
     );
     expect(inboxConversationKey("sms", "351912345678")).not.toBe(
       inboxConversationKey("whatsapp", "351912345678")

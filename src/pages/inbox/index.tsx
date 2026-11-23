@@ -193,6 +193,9 @@ export default function InboxPage() {
   const [filter, setFilter] = useState<Filter | null>(null);
   const [channel, setChannel] = useState("");
   const [replyText, setReplyText] = useState("");
+  // Um rascunho por conversa — sem isto o texto escrito na conversa A
+  // aparecia no compositor da conversa B ao trocar de seleção.
+  const [draftsByConv, setDraftsByConv] = useState<Record<string, string>>({});
   const [sending, setSending] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [notEnabled, setNotEnabled] = useState(false);
@@ -267,6 +270,20 @@ export default function InboxPage() {
   }, [canManage]);
 
   async function openConversation(id: string) {
+    if (id !== selectedId) {
+      // Persiste o rascunho da conversa anterior e restaura o desta —
+      // cada conversa tem o seu, nunca o texto de outra.
+      const next = { ...draftsByConv };
+      if (selectedId) {
+        if (replyText.trim()) {
+          next[selectedId] = replyText;
+        } else {
+          delete next[selectedId];
+        }
+      }
+      setDraftsByConv(next);
+      setReplyText(next[id] ?? "");
+    }
     setSelectedId(id);
     setLoadingDetail(true);
     try {
@@ -314,6 +331,11 @@ export default function InboxPage() {
         texto: replyText.trim(),
       });
       setReplyText("");
+      setDraftsByConv((prev) => {
+        const next = { ...prev };
+        delete next[selectedId];
+        return next;
+      });
       await loadMessages(selectedId);
     } catch (err) {
       toast.error(getErrorMessage(err, t("inbox.send_error")));

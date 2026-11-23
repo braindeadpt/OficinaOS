@@ -69,6 +69,7 @@ export const STAFF_INBOX_TOOLS = [
 export type StaffInboxTool = (typeof STAFF_INBOX_TOOLS)[number];
 
 interface ToolUser {
+  active: boolean;
   id: string;
   mcpDirectSend: boolean;
   name: string;
@@ -158,11 +159,21 @@ export async function runStaffInboxTool(
   let outcome: ToolOutcome;
   if (STAFF_INBOX_TOOLS.includes(tool)) {
     const user = await prisma.user.findUnique({
-      select: { id: true, mcpDirectSend: true, name: true, role: true },
+      select: {
+        active: true,
+        id: true,
+        mcpDirectSend: true,
+        name: true,
+        role: true,
+      },
       where: { id: input.userId },
     });
+    // Conta desativada ≠ permissões revogadas: um token MCP ainda válido
+    // de um ex-funcionário tem de falhar aqui, não só no RBAC do role.
     if (!user) {
       outcome = err("utilizador não encontrado");
+    } else if (!user.active) {
+      outcome = err("conta desativada");
     } else if (can(user, permFor(tool))) {
       try {
         outcome = await TOOL_RUNNERS[tool](prisma, log, user, args);
@@ -686,11 +697,14 @@ export async function sendApprovedDraft(
   if (!(draft.approvedAt || direct)) {
     return err("aguarda aprovação humana na aplicação");
   }
+  // Transição atómica para o estado reservado SENDING — dois cliques
+  // concorrentes em «Aprovar e enviar» não podem enviar duas vezes: o
+  // segundo perde a corrida no updateMany e nunca chega ao transporte.
   const claimed = await prisma.inboxDraft.updateMany({
     data: {
       approvedAt: draft.approvedAt ?? new Date(),
       approvedById: draft.approvedById ?? approvedById,
-      status: "PENDING",
+      status: "SENDING",
     },
     where: {
       id: draftId,
