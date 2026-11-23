@@ -744,6 +744,7 @@ export async function sendApprovedDraft(
   }
   const recorded = await recordOutboundMessage(prisma, log, {
     channel: conv.channel,
+    conversationId: conv.id,
     createdById: approvedById,
     deliveryStatus: "SENT",
     externalId: `draft:${draftId}`,

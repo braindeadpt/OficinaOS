@@ -504,7 +504,21 @@ export const inboxRoutes: FastifyPluginAsync = async (app) => {
       const { id } = req.params as Params;
       const updated = await app.prisma.inboxDraft.updateMany({
         data: { status: "CANCELLED" },
-        where: { id, status: { in: ["DRAFT", "PENDING"] } },
+        where: {
+          id,
+          OR: [
+            { status: { in: ["DRAFT", "PENDING"] } },
+            // SENDING stale (restart a meio do envio) reaparece na lista
+            // como recuperável — sem este ramo o «Rejeitar» devolvia 404
+            // e o rascunho ficava elegível para retry eternamente. O
+            // corte de idade é o mesmo do claim: um SENDING recente pode
+            // já ter sido entregue e não se cancela um envio em curso.
+            {
+              status: "SENDING",
+              updatedAt: { lt: new Date(Date.now() - STALE_SENDING_MS) },
+            },
+          ],
+        },
       });
       if (updated.count === 0) {
         throw new AppError("NOT_FOUND");

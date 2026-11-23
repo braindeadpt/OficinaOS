@@ -225,15 +225,34 @@ export async function recordOutboundMessage(
   prisma: DbClient,
   log: InboxLogger,
   opts: RecordBase & {
+    conversationId?: string | null;
     createdById?: string | null;
     deliveryStatus?: string;
     handledBy: string;
   }
 ): Promise<RecordedMessage | null> {
   const at = opts.at ?? new Date();
-  const countryCode = await shopCountryCode(prisma);
-  const key = inboxConversationKey(opts.channel, opts.phone, countryCode);
-  const intlPhone = internationalPhoneDigits(opts.phone, countryCode);
+  // Com conversationId conhecido (rascunho aprovado, reply staff) usa-se
+  // a key/phone JÁ guardados — renormalizar o phone guardado (dígitos
+  // internacionais sem "+") podia voltar a meter o indicativo da loja e
+  // arquivar a resposta noutra conversa (ex.: "3547712345" numa loja US
+  // → "13547712345"). A conversa certa é a que o staff abriu.
+  let intlPhone: string;
+  let key: string;
+  const conv = opts.conversationId
+    ? await prisma.inboxConversation.findUnique({
+        select: { conversationKey: true, phone: true },
+        where: { id: opts.conversationId },
+      })
+    : null;
+  if (conv) {
+    intlPhone = conv.phone;
+    key = conv.conversationKey;
+  } else {
+    const countryCode = await shopCountryCode(prisma);
+    intlPhone = internationalPhoneDigits(opts.phone, countryCode);
+    key = inboxConversationKey(opts.channel, opts.phone, countryCode);
+  }
   if (opts.externalId) {
     const existing = await prisma.businessMessage.findFirst({
       where: { channel: opts.channel, externalId: opts.externalId },
