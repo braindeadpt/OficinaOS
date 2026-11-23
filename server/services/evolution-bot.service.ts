@@ -236,7 +236,10 @@ function makeSend(
     const delay = REPLY_DELAY_MIN_MS + Math.random() * REPLY_DELAY_SPREAD_MS;
     await sendEvolutionPresence(config, msg.fromPhone, delay).catch(() => null);
     await new Promise((r) => setTimeout(r, delay));
-    const res = await sendEvolutionText(config, msg.fromPhone, text);
+    // Leitura fresca por envio: uma revogação do módulo "whatsapp-bot"
+    // entre o gate do envelope e esta resposta bloqueia aqui o texto.
+    const settings = await getOrCreateShopSettings(prisma);
+    const res = await sendEvolutionText(config, msg.fromPhone, text, settings);
     if (!res.success) {
       log.warn(
         { err: res.error, to: msg.fromPhone },

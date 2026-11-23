@@ -49,6 +49,13 @@ vi.mock("../repositories/customer.repository.js", () => ({
 
 const prisma = {} as any;
 
+// Decisao 2026-11-23: todo o envio e Pro — os fixtures de envio
+// precisam do entitlement "whatsapp-bot" com cache de sync fresco.
+const WA_PRO = {
+  cloudEntitlements: ["whatsapp-bot"],
+  cloudSyncedAt: new Date(),
+};
+
 import {
   getOutboxLogs,
   processOutbox,
@@ -146,6 +153,7 @@ describe("processOutbox", () => {
       },
     ]);
     mocks.findShopSettingsUnique.mockResolvedValue({
+      ...WA_PRO,
       countryCode: "PT",
       whatsappApiTokenEncrypted: "enc-token",
       whatsappBusinessId: "biz-1",
@@ -212,6 +220,7 @@ describe("processOutbox", () => {
       },
     ]);
     mocks.findShopSettingsUnique.mockResolvedValue({
+      ...WA_PRO,
       countryCode: "PT",
       whatsappApiTokenEncrypted: "enc-token",
       whatsappBusinessId: "biz-1",
@@ -257,7 +266,7 @@ describe("processOutbox", () => {
     expect(mocks.transitionOutboxEntry).not.toHaveBeenCalled();
   });
 
-  it("does nothing when WhatsApp config is missing", async () => {
+  it("cancels WhatsApp entries when shop settings are missing", async () => {
     mocks.findManyOutboxEntries.mockResolvedValue([
       {
         id: "out-4",
@@ -272,10 +281,20 @@ describe("processOutbox", () => {
     await processOutbox(prisma);
 
     expect(mocks.sendWhatsApp).not.toHaveBeenCalled();
-    expect(mocks.transitionOutboxEntry).not.toHaveBeenCalled();
+    // Sem canal resolvido o entry e cancelado — deixa-lo QUEUED
+    // re-selecionava-o a cada poll de 5s para sempre.
+    expect(mocks.transitionOutboxEntry).toHaveBeenCalledWith(
+      prisma,
+      "out-4",
+      OutboxStatus.QUEUED,
+      expect.objectContaining({
+        error: expect.stringContaining("unavailable"),
+        status: OutboxStatus.CANCELLED,
+      })
+    );
   });
 
-  it("does nothing when decryptWhatsAppConfig returns null", async () => {
+  it("cancels the entry when WhatsApp credentials fail to decrypt", async () => {
     mocks.findManyOutboxEntries.mockResolvedValue([
       {
         id: "out-5",
@@ -286,6 +305,7 @@ describe("processOutbox", () => {
       },
     ]);
     mocks.findShopSettingsUnique.mockResolvedValue({
+      ...WA_PRO,
       whatsappApiTokenEncrypted: "enc-token",
       whatsappBusinessId: "biz-1",
       whatsappEnabled: true,
@@ -296,10 +316,18 @@ describe("processOutbox", () => {
     await processOutbox(prisma);
 
     expect(mocks.sendWhatsApp).not.toHaveBeenCalled();
-    expect(mocks.transitionOutboxEntry).not.toHaveBeenCalled();
+    expect(mocks.transitionOutboxEntry).toHaveBeenCalledWith(
+      prisma,
+      "out-5",
+      OutboxStatus.QUEUED,
+      expect.objectContaining({
+        error: expect.stringContaining("unavailable"),
+        status: OutboxStatus.CANCELLED,
+      })
+    );
   });
 
-  it("does not send when WhatsApp is disabled even with credentials", async () => {
+  it("cancels the entry when WhatsApp is disabled even with credentials", async () => {
     mocks.findManyOutboxEntries.mockResolvedValue([
       {
         id: "out-6",
@@ -310,6 +338,7 @@ describe("processOutbox", () => {
       },
     ]);
     mocks.findShopSettingsUnique.mockResolvedValue({
+      ...WA_PRO,
       whatsappApiTokenEncrypted: "enc-token",
       whatsappBusinessId: "biz-1",
       whatsappEnabled: false,
@@ -320,7 +349,54 @@ describe("processOutbox", () => {
 
     expect(mocks.decryptWhatsAppConfig).not.toHaveBeenCalled();
     expect(mocks.sendWhatsApp).not.toHaveBeenCalled();
-    expect(mocks.transitionOutboxEntry).not.toHaveBeenCalled();
+    expect(mocks.transitionOutboxEntry).toHaveBeenCalledWith(
+      prisma,
+      "out-6",
+      OutboxStatus.QUEUED,
+      expect.objectContaining({
+        error: expect.stringContaining("unavailable"),
+        status: OutboxStatus.CANCELLED,
+      })
+    );
+  });
+
+  it("cancels a queued WHATSAPP entry when whatsapp-bot was revoked", async () => {
+    // Credenciais validas e canal ligado, mas o entitlement expirou —
+    // a entrada morre CANCELLED em vez de retentar ate a revogacao
+    // voltar atras (comportamento definitivo, nao starvation).
+    mocks.findManyOutboxEntries.mockResolvedValue([
+      {
+        id: "out-revoked",
+        channel: "WHATSAPP",
+        createdAt: new Date(),
+        recipientPhone: "05551234567",
+        renderedBody: "Hello",
+        retryCount: 0,
+      },
+    ]);
+    mocks.findShopSettingsUnique.mockResolvedValue({
+      cloudEntitlements: [],
+      cloudSyncedAt: new Date(),
+      countryCode: "PT",
+      whatsappApiTokenEncrypted: "enc-token",
+      whatsappBusinessId: "biz-1",
+      whatsappEnabled: true,
+      whatsappPhoneNumberId: "phone-1",
+    });
+
+    await processOutbox(prisma);
+
+    expect(mocks.decryptWhatsAppConfig).not.toHaveBeenCalled();
+    expect(mocks.sendWhatsApp).not.toHaveBeenCalled();
+    expect(mocks.transitionOutboxEntry).toHaveBeenCalledWith(
+      prisma,
+      "out-revoked",
+      OutboxStatus.QUEUED,
+      expect.objectContaining({
+        error: expect.stringContaining("unavailable"),
+        status: OutboxStatus.CANCELLED,
+      })
+    );
   });
 
   it("sends pending SMS entries through the gateway when entitled", async () => {
@@ -335,6 +411,7 @@ describe("processOutbox", () => {
     ]);
     mocks.findShopSettingsUnique.mockResolvedValue({
       cloudEntitlements: ["sms"],
+      cloudSyncedAt: new Date(),
       countryCode: "PT",
       smsEnabled: true,
       smsGatewayPasswordEncrypted: "v1:enc",
@@ -369,7 +446,7 @@ describe("processOutbox", () => {
     );
   });
 
-  it("sends SMS entries without the sms entitlement (local gateway is free)", async () => {
+  it("cancels SMS entries without the sms module (LAN is also Pro)", async () => {
     mocks.findManyOutboxEntries.mockResolvedValue([
       {
         id: "out-sms2",
@@ -381,6 +458,7 @@ describe("processOutbox", () => {
     ]);
     mocks.findShopSettingsUnique.mockResolvedValue({
       cloudEntitlements: [],
+      cloudSyncedAt: new Date(),
       smsEnabled: true,
       smsGatewayPasswordEncrypted: "v1:enc",
       smsGatewayUrl: "http://192.168.1.50:8080",
@@ -399,12 +477,50 @@ describe("processOutbox", () => {
 
     await processOutbox(prisma);
 
-    expect(mocks.sendSms).toHaveBeenCalled();
+    expect(mocks.decryptSmsConfig).not.toHaveBeenCalled();
+    expect(mocks.sendSms).not.toHaveBeenCalled();
     expect(mocks.transitionOutboxEntry).toHaveBeenCalledWith(
       prisma,
       "out-sms2",
       OutboxStatus.QUEUED,
-      expect.objectContaining({ status: OutboxStatus.SENT })
+      expect.objectContaining({
+        error: expect.stringContaining("unavailable"),
+        status: OutboxStatus.CANCELLED,
+      })
+    );
+  });
+
+  it("cancels SMS entries when the module cache is stale (>24h)", async () => {
+    mocks.findManyOutboxEntries.mockResolvedValue([
+      {
+        id: "out-sms-stale",
+        channel: "SMS",
+        recipientPhone: "0912345678",
+        renderedBody: "hi",
+        retryCount: 0,
+      },
+    ]);
+    mocks.findShopSettingsUnique.mockResolvedValue({
+      cloudEntitlements: ["sms"],
+      cloudSyncedAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
+      smsEnabled: true,
+      smsGatewayPasswordEncrypted: "v1:enc",
+      smsGatewayUrl: "http://192.168.1.50:8080",
+      smsGatewayUser: "sms",
+    });
+
+    await processOutbox(prisma);
+
+    expect(mocks.decryptSmsConfig).not.toHaveBeenCalled();
+    expect(mocks.sendSms).not.toHaveBeenCalled();
+    expect(mocks.transitionOutboxEntry).toHaveBeenCalledWith(
+      prisma,
+      "out-sms-stale",
+      OutboxStatus.QUEUED,
+      expect.objectContaining({
+        error: expect.stringContaining("unavailable"),
+        status: OutboxStatus.CANCELLED,
+      })
     );
   });
 
@@ -420,6 +536,7 @@ describe("processOutbox", () => {
       },
     ]);
     mocks.findShopSettingsUnique.mockResolvedValue({
+      ...WA_PRO,
       countryCode: "PT",
       whatsappApiTokenEncrypted: "enc-token",
       whatsappBusinessId: "biz-1",
@@ -462,6 +579,7 @@ describe("processOutbox", () => {
       },
     ]);
     mocks.findShopSettingsUnique.mockResolvedValue({
+      ...WA_PRO,
       countryCode: "PT",
       whatsappApiTokenEncrypted: "enc-token",
       whatsappBusinessId: "biz-1",
@@ -510,6 +628,7 @@ describe("processOutbox", () => {
       },
     ]);
     mocks.findShopSettingsUnique.mockResolvedValue({
+      ...WA_PRO,
       countryCode: "PT",
       whatsappApiTokenEncrypted: "enc-token",
       whatsappBusinessId: "biz-1",
@@ -557,6 +676,7 @@ describe("processOutbox", () => {
       },
     ]);
     mocks.findShopSettingsUnique.mockResolvedValue({
+      ...WA_PRO,
       countryCode: "PT",
       whatsappApiTokenEncrypted: "enc-token",
       whatsappBusinessId: "biz-1",
@@ -588,7 +708,7 @@ describe("processOutbox", () => {
     );
   });
 
-  it("modo local envia o template pelo nome sem exigir APPROVED (grátis = só envio)", async () => {
+  it("modo local envia o template pelo nome sem exigir APPROVED (Pro local)", async () => {
     // Sem sync local, o estado persistido não existe — a app manda o
     // template na mesma e a Meta rejeita o que faltar como erro normal.
     mocks.findManyOutboxEntries.mockResolvedValue([
@@ -605,6 +725,7 @@ describe("processOutbox", () => {
       },
     ]);
     mocks.findShopSettingsUnique.mockResolvedValue({
+      ...WA_PRO,
       countryCode: "PT",
       whatsappApiTokenEncrypted: "enc-token",
       whatsappBusinessId: "biz-1",
@@ -657,6 +778,7 @@ describe("processOutbox", () => {
       },
     ]);
     mocks.findShopSettingsUnique.mockResolvedValue({
+      ...WA_PRO,
       countryCode: "PT",
       whatsappApiTokenEncrypted: "enc-token",
       whatsappBusinessId: "biz-1",

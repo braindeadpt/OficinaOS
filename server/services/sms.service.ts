@@ -5,18 +5,20 @@ import type { FastifyBaseLogger } from "fastify";
 import { decryptSecret, isEncrypted } from "../lib/crypto.js";
 import { assertNotDemoMode } from "../lib/demo.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
+import { isModuleEnabled } from "../utils/modules.js";
 import { type BotReplyCtx, handleInboundMessage } from "./bot-intents.js";
 import type { NotifyContext } from "./job.service.js";
 import { formatPhone } from "./notification-sender.js";
 
 /**
- * Canal SMS local (free) via SMS Gateway for Android em modo Local
- * Server (sms-gate.app / capcom6). O telemóvel da loja expõe uma API HTTP
- * na LAN: a app envia com POST /message (Basic auth) e recebe inbound
- * através de um webhook que regista no próprio aparelho. Nada passa pela
- * cloud — o único "sair da loja" é o SMS na rede móvel. O módulo Pro
- * "sms" gateia apenas transportes geridos (provider comercial via
- * cloud), nunca este gateway.
+ * Canal SMS local via SMS Gateway for Android em modo Local Server
+ * (sms-gate.app / capcom6). O telemóvel da loja expõe uma API HTTP na
+ * LAN: a app envia com POST /message (Basic auth) e recebe inbound
+ * através de um webhook que regista no próprio aparelho. Nada passa
+ * pela cloud — o único "sair da loja" é o SMS na rede móvel.
+ * Decisão 2026-11-23: todo o SMS é Pro — este gateway fica como
+ * fallback LAN do caminho Cloud e exige o módulo "sms" fresco, na
+ * resolução da config (outbox) e nas rotas.
  */
 
 const TRAILING_SLASH_RE = /\/+$/;
@@ -147,7 +149,9 @@ export async function handleInboundSms(
   text: string
 ): Promise<void> {
   const settings = await getOrCreateShopSettings(prisma);
-  if (!settings.smsEnabled) {
+  // Defesa em profundidade: a rota já gateia, mas uma resposta do bot
+  // é um envio — grátis não envia nada (decisão 2026-11-23).
+  if (!(settings.smsEnabled && isModuleEnabled(settings, "sms"))) {
     return;
   }
   const config = decryptSmsConfig({

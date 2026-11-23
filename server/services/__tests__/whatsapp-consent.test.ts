@@ -93,6 +93,10 @@ describe("processOutbox consent enforcement", () => {
       phoneNumberId: "pnid",
     });
     mocks.findShopSettingsUnique.mockResolvedValue({
+      // Envio é Pro — o fixture precisa do módulo fresco para o canal
+      // resolver e o consentimento ser sequer avaliado.
+      cloudEntitlements: ["whatsapp-bot"],
+      cloudSyncedAt: new Date(),
       countryCode: "PT",
       phone: "+351910000000",
       whatsappApiTokenEncrypted: "tok",

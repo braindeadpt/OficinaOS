@@ -12,6 +12,7 @@ import {
 import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import { logger } from "../utils/logger.js";
+import { isModuleEnabled } from "../utils/modules.js";
 import { renderTemplate } from "./notification-renderer.js";
 import { formatPhone } from "./notification-sender.js";
 import { decryptSmsConfig, type SendResult, sendSms } from "./sms.service.js";
@@ -359,9 +360,9 @@ async function processWhatsAppEntry(
   // Meta e a aprovação posterior não recupera mensagens já marcadas
   // FAILED. Sem registo (modelo novo ainda não submetido) adia na mesma
   // e o re-sync cria-o. cancelIfExpired (deliverBy) limita a espera.
-  // No modo grátis/local a app não consulta nem confia em estado de
-  // templates — envia pelo nome e a Meta rejeita o que faltar ou não
-  // estiver aprovado, como erro de envio normal (retry/FAILED).
+  // No modo local (Meta direto, Pro) a app não consulta nem confia em
+  // estado de templates — envia pelo nome e a Meta rejeita o que faltar
+  // ou não estiver aprovado, como erro de envio normal (retry/FAILED).
   if (channel.mode === "cloud" && metaParams !== null) {
     const st = templateStatusOf(settings, entry.templateName);
     if (st !== "APPROVED") {
@@ -521,10 +522,13 @@ async function processEntry(
     } else if (entry.channel === "SMS" && configs.sms) {
       await processSmsEntry(prisma, entry, configs.sms, countryCode, shopPhone);
     } else if (entry.channel === "WHATSAPP" || entry.channel === "SMS") {
-      // Channel not configured — cancel now. Leaving it QUEUED would
-      // re-select it on every 5s poll and starve the batch of 10.
+      // Channel unavailable — not configured, or the Pro module was
+      // revoked since the entry was queued (resolve/getSmsConfig
+      // re-check the entitlement on every poll). Cancel now: leaving it
+      // QUEUED would re-select it on every 5s poll and starve the
+      // batch of 10.
       await transitionOutboxEntry(prisma, entry.id, OutboxStatus.QUEUED, {
-        error: `Channel ${entry.channel} is not configured`,
+        error: `Channel ${entry.channel} unavailable (not configured or module not entitled)`,
         status: OutboxStatus.CANCELLED,
       });
       return;
@@ -583,9 +587,10 @@ export async function processOutbox(prisma: DbClient): Promise<void> {
       sms: getSmsConfig(shopSettings),
       whatsapp: shopSettings ? resolveWhatsAppChannel(shopSettings) : null,
     };
-    if (!(configs.whatsapp || configs.sms)) {
-      return;
-    }
+    // Sem canal disponível (não configurado OU sem entitlement) não há
+    // early return: as entradas passam pelo processEntry e são
+    // canceladas definitivamente — re-selecioná-las QUEUED a cada poll
+    // mantinha-as vivas para sempre após uma revogação do módulo.
     const countryCode = shopSettings?.countryCode ?? "PT";
 
     for (const entry of pending) {
@@ -625,25 +630,25 @@ type ShopSettingsRow = NonNullable<
 >;
 
 function getSmsConfig(row: ShopSettingsRow | null): SmsChannels | null {
-  // Grátis = gateway LAN; Pro (entitlement "sms") = envio pela Cloud
-  // com fallback para o LAN quando este também está configurado.
-  const modules = Array.isArray(row?.cloudEntitlements)
-    ? (row?.cloudEntitlements as string[])
-    : [];
+  // Decisão 2026-11-23: todo o SMS é Pro — ambos os transportes
+  // (Cloud/pool e gateway LAN como fallback) exigem o módulo "sms" com
+  // cache fresco. Sem ele resolvem null e os entries são cancelados.
+  const smsModule = isModuleEnabled(row, "sms");
   const cloud =
-    modules.includes("sms") && row?.cloudApiUrl && row?.cloudShopTokenEncrypted
+    smsModule && row?.cloudApiUrl && row?.cloudShopTokenEncrypted
       ? {
           apiUrl: row.cloudApiUrl,
           token: decryptSecret(row.cloudShopTokenEncrypted),
         }
       : null;
-  const local = row?.smsEnabled
-    ? decryptSmsConfig({
-        gatewayPasswordEncrypted: row.smsGatewayPasswordEncrypted,
-        gatewayUrl: row.smsGatewayUrl,
-        gatewayUser: row.smsGatewayUser,
-      })
-    : null;
+  const local =
+    smsModule && row?.smsEnabled
+      ? decryptSmsConfig({
+          gatewayPasswordEncrypted: row.smsGatewayPasswordEncrypted,
+          gatewayUrl: row.smsGatewayUrl,
+          gatewayUser: row.smsGatewayUser,
+        })
+      : null;
   if (!(cloud || local)) {
     return null;
   }
@@ -705,6 +710,13 @@ export async function testNotification(prisma: DbClient, templateId: string) {
     throw new AppError("TEMPLATE_NOT_FOUND");
   }
   const shop = await findShopSettingsUnique(prisma);
+  // Mensagens de teste são mensagens reais — mesmo gate Pro do envio
+  // normal (WHATSAPP → "whatsapp-bot", SMS → "sms").
+  const requiredModule =
+    template.channel === "WHATSAPP" ? "whatsapp-bot" : "sms";
+  if (!isModuleEnabled(shop, requiredModule)) {
+    throw new AppError("CLOUD_MODULE_REQUIRED");
+  }
   const phone = shop?.phone;
   if (!phone) {
     throw new AppError("NO_SHOP_PHONE");

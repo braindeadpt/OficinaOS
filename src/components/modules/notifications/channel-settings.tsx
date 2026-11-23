@@ -79,7 +79,13 @@ function SmsCard({
     }
   }, [smsSettings, loaded]);
 
+  const locked = !smsSettings?.moduleEnabled;
+
   const handleSave = useCallback(async () => {
+    if (locked) {
+      toast.info(t("pro_only_upsell"));
+      return;
+    }
     setSaving(true);
     try {
       await onSave({
@@ -94,20 +100,24 @@ function SmsCard({
     } finally {
       setSaving(false);
     }
-  }, [form, onSave]);
+  }, [form, locked, onSave, t]);
 
   const handleTest = useCallback(async () => {
+    if (locked) {
+      toast.info(t("pro_only_upsell"));
+      return;
+    }
     const res = await onSendTest();
     if (res.ok) {
       toast.success(t("sms_test_sent"));
     } else if (res.message) {
       toast.error(res.message);
     }
-  }, [onSendTest, t]);
+  }, [locked, onSendTest, t]);
 
-  // O gateway Android local é free — o módulo "sms" gateia apenas os
-  // transportes geridos futuros, por isso nunca bloqueia este card.
-  // Grátis = só envio: sem webhook inbound a registar nem URL a mostrar.
+  // Todo o SMS é Pro (decisão 2026-11-23): o card fica visível mas
+  // locked — o switch, a gravação e o teste só informam que a opção
+  // existe no Pro em vez de agir.
   return (
     <div className="mt-6">
       <h3 className="font-extrabold font-headline text-lg text-on-surface tracking-tight">
@@ -118,7 +128,13 @@ function SmsCard({
           <Switch
             ariaLabelledBy="sms-enabled-label"
             checked={form.enabled}
-            onChange={(checked) => setForm((f) => ({ ...f, enabled: checked }))}
+            onChange={(checked) => {
+              if (checked && locked) {
+                toast.info(t("pro_only_upsell"));
+                return;
+              }
+              setForm((f) => ({ ...f, enabled: checked }));
+            }}
           />
           <span
             className="font-medium text-on-surface text-sm"
@@ -128,6 +144,11 @@ function SmsCard({
           </span>
         </div>
         <p className="mt-2 text-on-surface-variant text-xs">{t("sms_desc")}</p>
+        {locked && (
+          <p className="mt-2 rounded-xl bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
+            {t("pro_only_upsell")}
+          </p>
+        )}
 
         <div className="mt-3 rounded-xl bg-surface-container px-3 py-2.5">
           <p className="font-medium text-on-surface text-xs">
@@ -445,7 +466,10 @@ function MetaWhatsAppFields({
           value={form.pickupReminderTemplate}
         />
       </Field>
-      <WaTemplatesBlock isCloud={Boolean(settings?.credentialsAtCloud)} />
+      <WaTemplatesBlock
+        isCloud={Boolean(settings?.credentialsAtCloud)}
+        locked={!settings?.whatsappModule}
+      />
     </>
   );
 }
@@ -472,14 +496,31 @@ const WA_TPL_REASON_KEYS: Record<string, string> = {
   INVALID_NAME: "wa_tpl_reason_invalid_name",
 };
 
+function waTplDesc(
+  isCloud: boolean,
+  locked: boolean,
+  t: (key: string) => string
+): string {
+  if (locked) {
+    return t("pro_only_upsell");
+  }
+  return isCloud ? t("wa_tpl_desc") : t("wa_tpl_free_desc");
+}
+
 /**
  * Templates Meta (§5.6). Pro/cloud: um chip por template com o estado
  * que a Cloud devolveu e o botão "Voltar a submeter" que corre o sync.
- * Grátis = só envio: a app não fala à Meta — mostra-se a especificação
- * (nome, categoria, língua e texto) para a loja criar o template à mão
- * no Meta Business Manager.
+ * Sem o módulo "whatsapp-bot" (decisão 2026-11-23 — grátis não envia
+ * nada) o bloco fica locked: a lista de cópia manual deixou de fazer
+ * sentido e mostra-se só o aviso Pro.
  */
-function WaTemplatesBlock({ isCloud }: { isCloud: boolean }) {
+function WaTemplatesBlock({
+  isCloud,
+  locked,
+}: {
+  isCloud: boolean;
+  locked: boolean;
+}) {
   const { t } = useTranslation();
   const waTemplates = useSettingsStore((s) => s.waTemplates);
   const fetchWaTemplates = useSettingsStore((s) => s.fetchWaTemplates);
@@ -523,16 +564,16 @@ function WaTemplatesBlock({ isCloud }: { isCloud: boolean }) {
         <p className="font-medium text-on-surface text-sm">
           {t("wa_tpl_title")}
         </p>
-        {isCloud && (
+        {isCloud && !locked && (
           <Button loading={syncing} onClick={handleResync} size="sm">
             {t("wa_tpl_resubmit")}
           </Button>
         )}
       </div>
       <p className="mt-1 text-on-surface-variant text-xs">
-        {isCloud ? t("wa_tpl_desc") : t("wa_tpl_free_desc")}
+        {waTplDesc(isCloud, locked, t)}
       </p>
-      {waTemplates.length > 0 && (
+      {!locked && waTemplates.length > 0 && (
         <ul className="mt-3 space-y-3">
           {waTemplates.map((tpl) =>
             isCloud ? (
@@ -601,9 +642,9 @@ interface WhatsAppFormState {
  * "O que o bot pode dizer" — ficha da loja para o bot de IA (Pro).
  * Feeds POST /ai/bot-reply's shopCard; kept in shop settings (not the
  * WhatsApp settings object) because all channels share it.
- * Escondido sem qualquer módulo que use o bot (sms / whatsapp-bot /
- * ai-inbox) — numa instalação grátis não se promete funcionalidade
- * que não existe.
+ * Sem qualquer módulo que use o bot (sms / whatsapp-bot / ai-inbox) o
+ * card fica visível mas locked — o switch e a gravação só informam que
+ * a opção existe no Pro.
  */
 function BotCard() {
   const { t } = useTranslation();
@@ -637,7 +678,13 @@ function BotCard() {
     }
   }, [shopSettings, loaded]);
 
+  const locked = !anyBotModule;
+
   const handleSave = useCallback(async () => {
+    if (locked) {
+      toast.info(t("pro_only_upsell"));
+      return;
+    }
     setSaving(true);
     try {
       await saveShopSettings({
@@ -652,18 +699,21 @@ function BotCard() {
     } finally {
       setSaving(false);
     }
-  }, [form, saveShopSettings]);
+  }, [form, locked, saveShopSettings, t]);
 
-  if (!anyBotModule) {
-    return null;
-  }
   return (
     <div className="mt-4 rounded-2xl bg-surface-container-low p-5">
       <div className="flex select-none items-center gap-3">
         <Switch
           ariaLabel={t("bot_ai_enabled")}
           checked={form.enabled}
-          onChange={(enabled) => setForm((f) => ({ ...f, enabled }))}
+          onChange={(enabled) => {
+            if (enabled && locked) {
+              toast.info(t("pro_only_upsell"));
+              return;
+            }
+            setForm((f) => ({ ...f, enabled }));
+          }}
         />
         <span className="font-medium text-on-surface text-sm">
           {t("bot_ai_enabled")}
@@ -672,49 +722,59 @@ function BotCard() {
       <p className="mt-1 text-on-surface-variant text-xs">
         {t("bot_ai_enabled_help")}
       </p>
+      {locked && (
+        <p className="mt-2 rounded-xl bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
+          {t("pro_only_upsell")}
+        </p>
+      )}
 
-      <div className="mt-4 space-y-4">
-        <Field hint={t("bot_info_text_help")} label={t("bot_info_text_label")}>
-          <Textarea
-            onChange={(e) => setForm((f) => ({ ...f, info: e.target.value }))}
-            placeholder={t("bot_info_text_placeholder")}
-            rows={4}
-            value={form.info}
-          />
-        </Field>
-        <Field hint={t("bot_avg_days_help")} label={t("bot_avg_days_label")}>
-          <Input
-            min={0}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, avgDays: e.target.value }))
-            }
-            type="number"
-            value={form.avgDays}
-          />
-        </Field>
-        <Field
-          hint={t("bot_fallback_text_help")}
-          label={t("bot_fallback_text_label")}
-        >
-          <Textarea
-            onChange={(e) =>
-              setForm((f) => ({ ...f, fallback: e.target.value }))
-            }
-            placeholder={t("bot_fallback_text_placeholder")}
-            rows={2}
-            value={form.fallback}
-          />
-        </Field>
-        <Button
-          className="flex min-h-11"
-          disabled={saving}
-          loading={saving}
-          onClick={handleSave}
-          size="sm"
-        >
-          {saving ? t("settings_saving") : t("save_changes")}
-        </Button>
-      </div>
+      {!locked && (
+        <div className="mt-4 space-y-4">
+          <Field
+            hint={t("bot_info_text_help")}
+            label={t("bot_info_text_label")}
+          >
+            <Textarea
+              onChange={(e) => setForm((f) => ({ ...f, info: e.target.value }))}
+              placeholder={t("bot_info_text_placeholder")}
+              rows={4}
+              value={form.info}
+            />
+          </Field>
+          <Field hint={t("bot_avg_days_help")} label={t("bot_avg_days_label")}>
+            <Input
+              min={0}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, avgDays: e.target.value }))
+              }
+              type="number"
+              value={form.avgDays}
+            />
+          </Field>
+          <Field
+            hint={t("bot_fallback_text_help")}
+            label={t("bot_fallback_text_label")}
+          >
+            <Textarea
+              onChange={(e) =>
+                setForm((f) => ({ ...f, fallback: e.target.value }))
+              }
+              placeholder={t("bot_fallback_text_placeholder")}
+              rows={2}
+              value={form.fallback}
+            />
+          </Field>
+          <Button
+            className="flex min-h-11"
+            disabled={saving}
+            loading={saving}
+            onClick={handleSave}
+            size="sm"
+          >
+            {saving ? t("settings_saving") : t("save_changes")}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -750,6 +810,9 @@ export default function ChannelSettings({
   const [whatsAppSaving, setWhatsAppSaving] = useState(false);
   const [whatsAppLoaded, setWhatsAppLoaded] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  // Decisão 2026-11-23: todo o WhatsApp é Pro — sem o módulo o card
+  // fica visível mas locked; clicar nas ações informa que é Pro-only.
+  const waLocked = !whatsAppSettings?.whatsappModule;
 
   useEffect(() => {
     if (!whatsAppLoaded) {
@@ -791,6 +854,10 @@ export default function ChannelSettings({
   }, [whatsAppSettings, whatsAppSaving]);
 
   const handleWhatsAppSave = useCallback(async () => {
+    if (waLocked && whatsAppForm.enabled) {
+      toast.info(t("pro_only_upsell"));
+      return;
+    }
     setWhatsAppSaving(true);
     try {
       await onSaveWhatsAppSettings({
@@ -835,6 +902,8 @@ export default function ChannelSettings({
     whatsAppForm,
     onSaveWhatsAppSettings,
     whatsAppSettings?.remarketingModule,
+    waLocked,
+    t,
   ]);
 
   return (
@@ -848,9 +917,13 @@ export default function ChannelSettings({
           <input
             checked={whatsAppForm.enabled}
             className="sr-only"
-            onChange={(e) =>
-              setWhatsAppForm((f) => ({ ...f, enabled: e.target.checked }))
-            }
+            onChange={(e) => {
+              if (e.target.checked && waLocked) {
+                toast.info(t("pro_only_upsell"));
+                return;
+              }
+              setWhatsAppForm((f) => ({ ...f, enabled: e.target.checked }));
+            }}
             type="checkbox"
           />
           <span
@@ -872,6 +945,11 @@ export default function ChannelSettings({
             {t("whatsapp_enabled")}
           </span>
         </label>
+        {waLocked && (
+          <p className="mt-2 rounded-xl bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
+            {t("pro_only_upsell")}
+          </p>
+        )}
 
         {whatsAppForm.enabled && (
           <div className="mt-5 space-y-4">

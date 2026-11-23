@@ -129,7 +129,7 @@ beforeEach(() => {
 });
 
 describe("PUT /api/settings/sms", () => {
-  it("enables the local gateway (free — no entitlement needed)", async () => {
+  it("enables the local gateway (Pro — módulo sms)", async () => {
     mocks.getSmsSettings.mockResolvedValue({ enabled: true });
     mocks.decryptSmsConfig.mockReturnValue(null);
     const app = buildApp(fakePrisma());
@@ -147,7 +147,7 @@ describe("PUT /api/settings/sms", () => {
     expect(mocks.upsertSmsSettings).toHaveBeenCalled();
   });
 
-  it("enables without the sms entitlement — the module only gates managed transports", async () => {
+  it("rejects without the sms entitlement → 402 (decisão 2026-11-23)", async () => {
     mocks.getSmsSettings.mockResolvedValue({ enabled: true });
     const app = buildApp(fakePrisma({ ...SMS_ROW, cloudEntitlements: [] }));
     const res = await app.inject({
@@ -160,11 +160,14 @@ describe("PUT /api/settings/sms", () => {
       },
       url: "/api/settings/sms",
     });
-    expect(res.statusCode).toBe(200);
-    expect(mocks.upsertSmsSettings).toHaveBeenCalled();
+    expect(res.statusCode).toBe(402);
+    expect(res.json().code).toBe("CLOUD_MODULE_REQUIRED");
+    expect(mocks.upsertSmsSettings).not.toHaveBeenCalled();
   });
 
-  it("accepts disabling even without the entitlement", async () => {
+  it("rejects even disabling without the entitlement → 402", async () => {
+    // O endpoint é todo Pro — a flag fica inerte sem módulo (o outbox
+    // já não envia), por isso nem a gravação passa.
     mocks.getSmsSettings.mockResolvedValue({ enabled: false });
     const app = buildApp(fakePrisma({ ...SMS_ROW, cloudEntitlements: [] }));
     const res = await app.inject({
@@ -172,11 +175,32 @@ describe("PUT /api/settings/sms", () => {
       payload: { enabled: false },
       url: "/api/settings/sms",
     });
-    expect(res.statusCode).toBe(200);
-    expect(mocks.upsertSmsSettings).toHaveBeenCalled();
+    expect(res.statusCode).toBe(402);
+    expect(res.json().code).toBe("CLOUD_MODULE_REQUIRED");
+    expect(mocks.upsertSmsSettings).not.toHaveBeenCalled();
   });
 
-  it("does not register any inbound webhook when saving (free = send only)", async () => {
+  it("rejects when the entitlement cache is stale (>24h) → 402", async () => {
+    mocks.getSmsSettings.mockResolvedValue({ enabled: true });
+    const app = buildApp(
+      fakePrisma({
+        ...SMS_ROW,
+        cloudSyncedAt: new Date(Date.now() - 25 * 3600 * 1000),
+      })
+    );
+    const res = await app.inject({
+      method: "PUT",
+      payload: {
+        enabled: true,
+        gatewayUrl: "http://192.168.1.50:8080",
+      },
+      url: "/api/settings/sms",
+    });
+    expect(res.statusCode).toBe(402);
+    expect(res.json().code).toBe("CLOUD_MODULE_REQUIRED");
+  });
+
+  it("does not register any inbound webhook when saving", async () => {
     mocks.getSmsSettings.mockResolvedValue({ enabled: true });
     mocks.decryptSmsConfig.mockReturnValue({
       password: "p",
@@ -200,7 +224,8 @@ describe("PUT /api/settings/sms", () => {
 });
 
 describe("POST /api/settings/sms/test", () => {
-  it("sends the test without the sms entitlement (local gateway is free)", async () => {
+  it("rejects the test without the sms entitlement → 402", async () => {
+    // O teste envia uma mensagem real — todo o SMS é Pro.
     mocks.decryptSmsConfig.mockReturnValue({
       password: "p",
       url: "http://192.168.1.50:8080",
@@ -213,8 +238,9 @@ describe("POST /api/settings/sms/test", () => {
       payload: { phone: "912345678" },
       url: "/api/settings/sms/test",
     });
-    expect(res.statusCode).toBe(200);
-    expect(mocks.sendSms).toHaveBeenCalled();
+    expect(res.statusCode).toBe(402);
+    expect(res.json().code).toBe("CLOUD_MODULE_REQUIRED");
+    expect(mocks.sendSms).not.toHaveBeenCalled();
   });
 
   it("fails cleanly when the gateway is not configured", async () => {

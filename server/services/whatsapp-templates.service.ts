@@ -213,8 +213,10 @@ async function syncCloud(
 
 /**
  * Ponto de entrada — corre ao ligar o WhatsApp e pelo botão de resubmit.
- * Só faz alguma coisa em modo Pro/cloud; grátis/local e Evolution são
- * no-op (grátis = só envio — nenhuma gestão de templates na Meta).
+ * Só faz alguma coisa em modo Pro/cloud (decisão 2026-11-23: sem o
+ * módulo "whatsapp-bot" o resolve devolve null — e no modo local/Evolution
+ * a gestão Meta continua fora da app: envia pelo nome e a Meta rejeita
+ * o que faltar como erro de envio normal).
  */
 export async function syncWhatsAppTemplates(
   prisma: DbClient,
@@ -261,8 +263,9 @@ export async function syncWhatsAppTemplates(
 }
 
 /** Template para a UI: spec Meta (nome/corpo/categoria/língua — serve
- * a criação manual no modo grátis) + estado persistido do último sync
- * cloud quando existir. Sem chamadas à Meta/Cloud. */
+ * a criação manual no modo local Pro, que não gere templates na Meta) +
+ * estado persistido do último sync cloud quando existir. Sem chamadas
+ * à Meta/Cloud. */
 export interface WhatsAppTemplateInfo extends TemplateStatus {
   body: string;
   category: string;

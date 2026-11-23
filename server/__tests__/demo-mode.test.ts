@@ -969,7 +969,8 @@ describe("outbound choke points — no fetch is ever reached", () => {
         (await import("../services/evolution.service.js")).sendEvolutionText(
           { apiKey: "k", baseUrl: "http://x", instance: "i" },
           "910000001",
-          "hi"
+          "hi",
+          null
         ),
     ],
     [

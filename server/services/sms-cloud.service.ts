@@ -4,6 +4,7 @@ import type { FastifyBaseLogger } from "fastify";
 import { decryptSecret } from "../lib/crypto.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
+import { isModuleEnabled } from "../utils/modules.js";
 import {
   type BotReplyCtx,
   handleInboundMessage,
@@ -21,8 +22,8 @@ import { maskPhone } from "./whatsapp-channel.js";
  * confirma com ack. Envio: POST /sms/send com o id do outbox como
  * dedupeId — relatórios sms:sent/delivered/failed voltam como REPORT.
  *
- * Grátis = só envio (gateway LAN): inbound não é processado — nem
- * aqui nem na rota pública /sms/inbound/:token.
+ * Grátis = não envia nada (decisão 2026-11-23): inbound não é
+ * processado — nem aqui nem na rota pública /sms/inbound/:token.
  */
 
 const MAX_SEND_ATTEMPTS = 3;
@@ -310,13 +311,12 @@ export async function getSmsDeviceStatus(
   prisma: DbClient
 ): Promise<SmsDeviceStatus> {
   const settings = await getOrCreateShopSettings(prisma);
-  const modules = Array.isArray(settings.cloudEntitlements)
-    ? (settings.cloudEntitlements as string[])
-    : [];
   const base: SmsDeviceStatus = {
     configured: false,
     device: null,
-    entitled: modules.includes("sms"),
+    // Mesmo gate do envio: módulo "sms" com cache fresco — uma lista
+    // velha de entitlements não pode apresentar o device como usável.
+    entitled: isModuleEnabled(settings, "sms"),
     reachable: false,
     sendable: false,
   };

@@ -80,8 +80,8 @@ export const notificationsRoutes: FastifyPluginAsync = async (app) => {
       }
       // Corpo Meta editado: o "APPROVED" guardado pertence ao texto
       // antigo — sem re-sync o outbox envia o modelo anterior. O sync
-      // deteta a divergência e resubmete. Só em modo Pro/cloud: no
-      // grátis a app não gere templates na Meta (só envio).
+      // deteta a divergência e resubmete. Só em modo Pro/cloud: sem o
+      // módulo "whatsapp-bot" o resolve devolve null e nada corre.
       if (updated.channel === "WHATSAPP") {
         const settings = await getOrCreateShopSettings(app.prisma);
         if (resolveWhatsAppChannel(settings)?.mode === "cloud") {

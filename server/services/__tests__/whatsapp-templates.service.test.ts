@@ -97,6 +97,10 @@ describe("syncWhatsAppTemplates", () => {
     cloudApiUrl: "https://cloud.example",
     cloudShopTokenEncrypted: "enc:shop-token",
     whatsappCredentialsAtCloud: true,
+    // Decisão 2026-11-23: o relay Cloud exige o módulo "whatsapp-bot"
+    // com cache fresco — sem ele resolveWhatsAppChannel devolve null.
+    cloudEntitlements: ["whatsapp-bot"],
+    cloudSyncedAt: new Date(),
   };
 
   function seedTemplates() {
@@ -124,12 +128,7 @@ describe("syncWhatsAppTemplates", () => {
   });
 
   it("modo cloud: delega na Cloud e não chama a Graph API", async () => {
-    mocks.getOrCreateShopSettings.mockResolvedValue({
-      ...localSettings,
-      cloudApiUrl: "https://cloud.example",
-      cloudShopTokenEncrypted: "enc:shop-token",
-      whatsappCredentialsAtCloud: true,
-    });
+    mocks.getOrCreateShopSettings.mockResolvedValue(cloudSettings);
     seedTemplates();
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);

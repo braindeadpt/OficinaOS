@@ -12,9 +12,11 @@ vi.useFakeTimers();
 
 const mockQueryRaw = vi.fn();
 const mockExecuteRaw = vi.fn().mockResolvedValue(1);
-const mockFindShopSettings = vi
-  .fn()
-  .mockResolvedValue({ whatsappEnabled: true });
+const mockFindShopSettings = vi.fn().mockResolvedValue({
+  cloudEntitlements: ["whatsapp-bot"],
+  cloudSyncedAt: new Date(),
+  whatsappEnabled: true,
+});
 const mockLog = { error: vi.fn(), warn: vi.fn() };
 
 const mockApp = {
@@ -35,7 +37,11 @@ describe("startPickupReminderScheduler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockExecuteRaw.mockResolvedValue(1);
-    mockFindShopSettings.mockResolvedValue({ whatsappEnabled: true });
+    mockFindShopSettings.mockResolvedValue({
+      cloudEntitlements: ["whatsapp-bot"],
+      cloudSyncedAt: new Date(),
+      whatsappEnabled: true,
+    });
   });
 
   it("selects only jobs still in DONE status (delivered/returned/cancelled are excluded by the status predicate)", async () => {

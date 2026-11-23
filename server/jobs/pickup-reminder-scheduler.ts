@@ -6,6 +6,7 @@ import {
   resolveWhatsAppChannel,
   sendWhatsAppTemplateVia,
 } from "../services/whatsapp-channel.js";
+import { isModuleEnabled } from "../utils/modules.js";
 
 const INTERVAL_MS = 15 * 60 * 1000;
 // Business rule: nudge the customer once the repair has been sitting DONE
@@ -72,11 +73,14 @@ async function processPickupReminders(app: FastifyInstance): Promise<void> {
   // Skip the whole tick when no customer channel can deliver: otherwise
   // the in-app "reminder sent" record fires while nothing is queued.
   const shop = await findShopSettingsUnique(app.prisma);
-  // Ambos os transportes SMS/WhatsApp locais são free — o entitlement
-  // "sms" saiu dos módulos Pro e nunca deve gatear o gateway Android.
-  const messagingEnabled =
-    Boolean(shop?.whatsappEnabled) || Boolean(shop?.smsEnabled);
-  if (!messagingEnabled) {
+  // Decisão 2026-11-23: todo o envio é Pro — um canal só conta como
+  // entregável com o módulo fresco ("whatsapp-bot" com o toggle; "sms"
+  // cobre Cloud/device e o gateway LAN). Sem módulo o notify() suprimia
+  // o outbound mas o registo in-app disparava na mesma.
+  const waReady =
+    Boolean(shop?.whatsappEnabled) && isModuleEnabled(shop, "whatsapp-bot");
+  const smsReady = isModuleEnabled(shop, "sms");
+  if (!(waReady || smsReady)) {
     return;
   }
 

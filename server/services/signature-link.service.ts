@@ -56,18 +56,26 @@ async function signatureChannelReady(
     where: { name: SIGNATURE_LINK_EVENT },
   });
   const hasWa = templates.some((t) => t.channel === "WHATSAPP");
-  if (hasWa && settings?.whatsappEnabled) {
+  // Decisão 2026-11-23: toda a mensagem é Pro — o canal só conta como
+  // utilizável com o módulo correspondente ativo (cache <24h). Sem ele
+  // o diálogo falha com SIGNATURE_LINK_NO_CHANNEL em vez de confirmar
+  // um envio que ficaria para sempre na fila.
+  if (
+    hasWa &&
+    settings?.whatsappEnabled &&
+    isModuleEnabled(settings, "whatsapp-bot")
+  ) {
     return true;
   }
   const hasSms = templates.some((t) => t.channel === "SMS");
   if (!(hasSms || hasWa)) {
     return false;
   }
-  if (settings?.smsEnabled) {
-    return true;
-  }
   if (!isModuleEnabled(settings, "sms")) {
     return false;
+  }
+  if (settings?.smsEnabled) {
+    return true;
   }
   // Subscrição Pro sem device enabled na Cloud devolvia DEVICE_MISSING
   // depois de o diálogo confirmar o envio.

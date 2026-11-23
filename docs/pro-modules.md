@@ -53,19 +53,26 @@ falar com ela. Nunca código pago compilado na app pública.
 | `diag-intake` | Recebe diagnósticos do `oficinaos-diag` enviados por clientes | Fila de intake na app |
 | `ai-reports` | Relatórios de diagnóstico gerados por IA | Anexado a trabalhos/diag |
 | `remarketing` | Recontacto automático de clientes inativos via template WhatsApp aprovado | Notificações → Setup → WhatsApp |
-| `sms` | SMS pelo Android da loja **via Cloud** — o telemóvel liga-se ao sms-gate em modo servidor e serve várias lojas; funciona com o PC da loja desligado | Notificações → Setup → SMS |
+| `sms` | SMS pelo Android da loja — ligado **à Cloud** (sms-gate modo servidor, multi-loja, funciona com o PC desligado) **ou na LAN** como fallback | Notificações → Setup → SMS |
 
-(O SMS via gateway Android **na LAN** continua grátis no core — não depende
-da Cloud para nada. O módulo `sms` paga o modo servidor: device ligado à
-Cloud, encaminhamento multi-loja e respostas com o PC desligado.)
+(Desde 2026-11-23 **todo o SMS é Pro** — inclusive o gateway Android na
+LAN, que passou de "core grátis" a transporte Pro/fallback. O grátis
+não envia nem recebe mensagem nenhuma.)
 
 ## Tabela grátis/Pro — canais de mensagens
 
-| | Grátis (infra da loja) | Pro (Cloud envia) |
+> **Decisão do dono (2026-11-23): o grátis não envia NADA.** Toda a
+> mensagem — SMS e WhatsApp, todos os transportes e direções — é Pro.
+> Na app os cards/botões ficam visíveis mas locked ("Esta opção existe
+> apenas no OficinaOS Pro."); opt-out "PARAR" fica 100% manual;
+> `POST /api/public/quote-respond` continua grátis por ser a página
+> pública de resposta a orçamento, não um canal de mensagens.
+
+| | Grátis | Pro |
 |---|---|---|
-| **SMS** | Android sms-gate na LAN — só envio (PARAR/STOP processados sempre, por lei) | Android ligado à Cloud (`SmsDevice`/`SmsRoute`) — multi-loja, inbound/outbound com PC desligado, respostas automáticas + IA |
-| **WhatsApp oficial** | — | Meta Cloud API: envio `POST /whatsapp/send`, templates auto-sincronizados, janela de 24 h, IA |
-| **WhatsApp Evolution** | Transporte local (não-oficial, disclaimer) — só envio | Bot inbound com termo próprio + proteções anti-ban (10/h por número, teto diário, dedupe, atraso 3–8 s) |
+| **SMS** | nada | `sms`: Android ligado à Cloud (`SmsDevice`/`SmsRoute`) — multi-loja, inbound/outbound com PC desligado, respostas automáticas + IA — ou gateway LAN como fallback |
+| **WhatsApp oficial** | nada | `whatsapp-bot`: Meta Cloud API — envio `POST /whatsapp/send` ou direto app→Meta, templates auto-sincronizados, janela de 24 h, IA |
+| **WhatsApp Evolution** | nada | `whatsapp-bot`: transporte local (não-oficial, disclaimer) + bot inbound com termo próprio + proteções anti-ban (10/h por número, teto diário, dedupe, atraso 3–8 s) |
 
 ## Portal do cliente (`portal`)
 

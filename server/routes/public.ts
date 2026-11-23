@@ -288,8 +288,9 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
         event?: string;
         payload?: { message?: string; phoneNumber?: string; sender?: string };
       };
-      // Grátis = só envio: inbound responde sempre 200 sem processar
-      // (sem bot, sem consentimento, sem gravar) — incluindo PARAR/STOP.
+      // Grátis não envia nada (decisão 2026-11-23): inbound responde
+      // sempre 200 sem processar (sem bot, sem gravar) — incluindo
+      // PARAR/STOP.
       // Pro processa aqui quando o device posta à LAN — em modo servidor
       // é a Cloud que fila e o poller da app trata. isModuleEnabled
       // exige cloudSyncedAt fresco (<24h): sem ele uma loja desligada da

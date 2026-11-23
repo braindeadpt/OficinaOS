@@ -54,6 +54,7 @@ function fakePrisma(row: Record<string, unknown>) {
 
 const ENABLED_ROW = {
   cloudEntitlements: ["sms"],
+  cloudSyncedAt: new Date(),
   countryCode: "PT",
   currency: "EUR",
   phone: "912345678",
@@ -178,16 +179,17 @@ describe("checkSmsGateway", () => {
 });
 
 describe("handleInboundSms", () => {
-  // Grátis = só envio: a rota inbound só chama este handler com o
-  // entitlement "sms" ativo; a função em si responde quando invocada.
-  it("replies even without cloud entitlements — gating lives in the route", async () => {
+  // Grátis não envia nada (decisão 2026-11-23): a resposta do bot é um
+  // envio — a função recusa sem o módulo "sms" fresco, como defesa
+  // extra ao gate da rota inbound.
+  it("does nothing without the sms entitlement", async () => {
     const fetchMock = fetchOk();
     vi.stubGlobal("fetch", fetchMock);
     const prisma = fakePrisma({ ...ENABLED_ROW, cloudEntitlements: [] });
 
     await handleInboundSms(prisma, log, undefined, "351912345678", "estado?");
 
-    expect(fetchMock).toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("does nothing when smsEnabled is false", async () => {

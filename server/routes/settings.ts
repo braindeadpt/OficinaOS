@@ -77,9 +77,10 @@ import { isModuleEnabled } from "../utils/modules.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
 /**
- * Transporte local (Evolution): free, mas exige o disclaimer de
- * responsabilidade aceite — o resolve no outbox revalida-o antes de cada
- * envio. Remarketing usa templates Meta, que não existem no modo local.
+ * Transporte local (Evolution): exige o módulo "whatsapp-bot" (gateado
+ * acima) + o disclaimer de responsabilidade aceite — o resolve no
+ * outbox revalida ambos antes de cada envio. Remarketing usa templates
+ * Meta, que não existem no modo local.
  */
 function assertEvolutionGates(
   data: {
@@ -419,8 +420,8 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       app.resetEmbedOriginsCache();
       // reviewUrl muda os blocos {{if}} dos templates WhatsApp — sem
       // re-sync, o modelo aprovado na Meta diverge dos parâmetros
-      // enviados e as notificações falham. Só em modo Pro/cloud: no
-      // grátis a app não gere templates na Meta (só envio).
+      // enviados e as notificações falham. Só em modo Pro/cloud: sem o
+      // módulo "whatsapp-bot" o resolve devolve null e nada corre.
       if (
         Object.keys(parsed.data).some((k) => META_TEMPLATE_KEYS.has(k)) &&
         resolveWhatsAppChannel(updated)?.mode === "cloud"
@@ -463,9 +464,18 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
           ),
         });
       }
+      // Toda a mensagem WhatsApp é Pro (decisão 2026-11-23): ativar o
+      // transporte — Meta local, Evolution ou relay cloud — e aceitar o
+      // termo do bot exigem o módulo "whatsapp-bot" fresco.
+      const s = await getOrCreateShopSettings(app.prisma);
+      if (
+        (parsed.data.enabled || parsed.data.botDisclaimerAccepted) &&
+        !isModuleEnabled(s, "whatsapp-bot")
+      ) {
+        throw new AppError("CLOUD_MODULE_REQUIRED");
+      }
       // Enabling remarketing requires the Pro module — enforced again by
       // the sweep on the cached entitlements.
-      const s = await getOrCreateShopSettings(app.prisma);
       if (
         parsed.data.remarketingEnabled &&
         !isModuleEnabled(s, "remarketing")
@@ -500,8 +510,8 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       // templates Meta em background (GET primeiro, cria o que falta).
       // trackingBaseUrl controla um bloco {{if}} do corpo aprovado —
       // mudá-lo aqui (o formulário grava nesta rota) exige re-sync mesmo
-      // sem tocar no `enabled`. Só em modo Pro/cloud — no grátis a app
-      // não gere templates na Meta (só envio).
+      // sem tocar no `enabled`. Só em modo Pro/cloud — sem o módulo
+      // "whatsapp-bot" o resolve devolve null e nada corre.
       if (parsed.data.enabled || parsed.data.trackingBaseUrl !== undefined) {
         const fresh = await getOrCreateShopSettings(app.prisma);
         if (resolveWhatsAppChannel(fresh)?.mode === "cloud") {
@@ -542,7 +552,7 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       reply.send(await syncWhatsAppTemplates(app.prisma, app.log))
   );
 
-  // Evolution API (WhatsApp local, free) — o serviço corre na LAN da
+  // Evolution API (WhatsApp local, Pro) — o serviço corre na LAN da
   // loja; estes endpoints fazem pairing (QR/código), health check e
   // disconnect. O envio em si passa pelo resolveWhatsAppChannel.
   async function evolutionConfigOrNull(): Promise<EvolutionConfig | null> {
@@ -589,9 +599,14 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
     },
     async (req, reply) => {
       assertNotDemoMode();
-      // Pairing é free — corre na LAN da loja. O disclaimer continua a
-      // ser exigido ao ativar o transporte (assertEvolutionGates) e o
-      // outbox revalida-o antes de cada envio.
+      // Pairing corre na LAN da loja mas é Pro (decisão 2026-11-23):
+      // exige "whatsapp-bot" fresco. O disclaimer continua a ser exigido
+      // ao ativar o transporte (assertEvolutionGates) e o outbox
+      // revalida o módulo antes de cada envio.
+      const s = await getOrCreateShopSettings(app.prisma);
+      if (!isModuleEnabled(s, "whatsapp-bot")) {
+        throw new AppError("CLOUD_MODULE_REQUIRED");
+      }
       const config = await evolutionConfigOrNull();
       if (!config) {
         throw new AppError("VALIDATION_ERROR", {
@@ -669,11 +684,14 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
           ),
         });
       }
-      // O gateway Android na LAN é free — o módulo Pro "sms" gateia
-      // apenas transportes geridos (provider via cloud), que terão o
-      // seu próprio caminho de configuração e de entitlement.
-      // Grátis = só envio: sem inbound, não há webhook a registar no
-      // telemóvel; em modo servidor é a Cloud que recebe os replies.
+      // Todo o SMS é Pro (decisão 2026-11-23) — inclusive o gateway
+      // Android na LAN, que fica como fallback do caminho Cloud.
+      // Grátis = não envia nada: sem o módulo "sms" fresco esta rota
+      // devolve 402 e nem a configuração muda.
+      const s = await getOrCreateShopSettings(app.prisma);
+      if (!isModuleEnabled(s, "sms")) {
+        throw new AppError("CLOUD_MODULE_REQUIRED");
+      }
       await upsertSmsSettings(app.prisma, parsed.data);
       const settings = await getSmsSettings(app.prisma);
       return reply.send(settings);
@@ -694,8 +712,11 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       assertNotDemoMode();
       const body = (req.body ?? {}) as { phone?: string };
       const row = await getOrCreateShopSettings(app.prisma);
-      // Free: o teste sai pelo gateway Android local — só exige o
-      // gateway configurado, não o módulo Pro.
+      // O teste envia uma mensagem real — todo o SMS é Pro (decisão
+      // 2026-11-23), por isso exige o módulo "sms" fresco.
+      if (!isModuleEnabled(row, "sms")) {
+        throw new AppError("CLOUD_MODULE_REQUIRED");
+      }
       const config = decryptSmsConfig({
         gatewayPasswordEncrypted: row.smsGatewayPasswordEncrypted,
         gatewayUrl: row.smsGatewayUrl,

@@ -33,7 +33,9 @@ const SETTINGS = {
   whatsappApiTokenEncrypted: "enc",
   whatsappBusinessId: "biz",
   whatsappPhoneNumberId: "pnid",
-  cloudEntitlements: ["remarketing"],
+  // Envio exige whatsapp-bot (resolveWhatsAppChannel) + remarketing
+  // (gate do sweep) — ambos os módulos na loja Pro de teste.
+  cloudEntitlements: ["remarketing", "whatsapp-bot"],
   cloudSyncedAt: new Date(),
   shopName: "Loja Fix",
   countryCode: "PT",
