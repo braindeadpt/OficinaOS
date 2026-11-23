@@ -323,6 +323,85 @@ describe("syncWhatsAppTemplates", () => {
     );
   });
 
+  it("cloud: edição inválida durante IN_REVIEW preserva o corpo submetido até à aprovação", async () => {
+    // Regressão Devin r10: um corpo inválido persistido durante
+    // IN_REVIEW apagava o corpo remoto; quando a Meta aprovava o
+    // ORIGINAL, a aprovação herdava o corpo local novo (ordem de
+    // variáveis invertida) e a fila enviava valores trocados.
+    const remoteBody = "Olá {{customerName}}, a REP {{jobCode}}.";
+    mocks.getOrCreateShopSettings.mockResolvedValue(cloudSettings);
+    // 1.º sync: edição local inválida (acaba em variável, ordem trocada)
+    // sobre um nome com submissão ainda IN_REVIEW.
+    notificationTemplate.findMany.mockResolvedValue([
+      { body: "{{jobCode}} pronta, {{customerName}}", name: "job_done" },
+    ]);
+    shopSettingsFindUnique.mockResolvedValue({
+      whatsappTemplatesJson: {
+        job_done: {
+          body: remoteBody,
+          status: "IN_REVIEW",
+          syncedAt: "2026-11-01T00:00:00Z",
+        },
+      },
+    });
+    mocks.cloudFetch.mockResolvedValue({
+      body: { templates: [] },
+      ok: true,
+      status: 200,
+    });
+
+    await syncWhatsAppTemplates(prisma);
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          whatsappTemplatesJson: expect.objectContaining({
+            job_done: expect.objectContaining({
+              body: remoteBody,
+              reason: "INVALID_BODY_EDGES",
+              status: "IN_REVIEW",
+            }),
+          }),
+        }),
+      })
+    );
+
+    // 2.º sync: a Meta aprovou o ORIGINAL. O corpo local corrigido tem
+    // a ordem invertida — a aprovação tem de ficar ligada ao remoto.
+    updateSettings.mockClear();
+    notificationTemplate.findMany.mockResolvedValue([
+      { body: "A REP {{jobCode}} — olá {{customerName}}.", name: "job_done" },
+    ]);
+    shopSettingsFindUnique.mockResolvedValue({
+      whatsappTemplatesJson: {
+        job_done: {
+          body: remoteBody,
+          reason: "INVALID_BODY_EDGES",
+          status: "IN_REVIEW",
+          syncedAt: "2026-11-01T00:00:00Z",
+        },
+      },
+    });
+    mocks.cloudFetch.mockResolvedValue({
+      body: { templates: [{ name: "job_done", status: "APPROVED" }] },
+      ok: true,
+      status: 200,
+    });
+
+    await syncWhatsAppTemplates(prisma);
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          whatsappTemplatesJson: expect.objectContaining({
+            job_done: expect.objectContaining({
+              body: remoteBody,
+              status: "APPROVED",
+            }),
+          }),
+        }),
+      })
+    );
+  });
+
   it("cloud: ready conta só os modelos atuais — nomes de fila ficam de fora", async () => {
     mocks.getOrCreateShopSettings.mockResolvedValue(cloudSettings);
     notificationTemplate.findMany.mockResolvedValue([

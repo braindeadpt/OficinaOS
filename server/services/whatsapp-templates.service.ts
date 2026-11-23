@@ -225,27 +225,28 @@ async function persistStatuses(
     const prevEntry = prevMap[s.name];
     // O corpo só se associa à versão remota quando o estado confirma
     // submissão — MISSING (não criado) e INVALID_BODY_EDGES (nunca
-    // enviado) não recebem o corpo local como "aprovado". Nesses casos
-    // conserva-se apenas o corpo de uma aprovação remota anterior.
+    // enviado) não recebem o corpo local como "remoto". Nesses casos
+    // conserva-se o corpo já registado (submetido, aprovado ou não):
+    // apagá-lo durante IN_REVIEW fazia a aprovação seguinte herdar o
+    // corpo da edição local e enviar parâmetros trocados.
     const submitted =
       s.status !== "MISSING" && s.reason !== "INVALID_BODY_EDGES";
     let approvedBody: string | null | undefined;
     if (submitted) {
       approvedBody = prevEntry?.body ?? namedBodyOf.get(s.name);
-    } else if (prevEntry?.status === "APPROVED") {
-      approvedBody = prevEntry.body;
     } else {
-      approvedBody = null;
+      approvedBody = prevEntry?.body ?? null;
     }
-    // Edição local inválida sobre um nome já aprovado na Meta: a versão
-    // remota continua válida e enviável — o estado não desce para
-    // REJECTED, senão a fila expirava mensagens autorizadas. O reason
-    // fica para a UI avisar que a edição local não foi submetida.
+    // Edição local inválida sobre um nome já submetido na Meta: a
+    // versão remota continua válida (aprovada ou em revisão) — o
+    // estado não desce para REJECTED, senão a fila expirava mensagens
+    // autorizadas ou perdia o corpo submetido. O reason fica para a
+    // UI avisar que a edição local não foi submetida.
     const effectiveStatus =
       s.status === "REJECTED" &&
       s.reason === "INVALID_BODY_EDGES" &&
-      prevEntry?.status === "APPROVED"
-        ? "APPROVED"
+      (prevEntry?.status === "APPROVED" || prevEntry?.status === "IN_REVIEW")
+        ? prevEntry.status
         : s.status;
     json[s.name] = {
       body: approvedBody ?? null,
