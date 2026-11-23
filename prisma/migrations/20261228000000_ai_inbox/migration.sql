@@ -68,9 +68,8 @@ CREATE INDEX "inbox_conversations_channel_lastMessageAt_idx" ON "inbox_conversat
 CREATE INDEX "inbox_drafts_conversationId_createdAt_idx" ON "inbox_drafts"("conversationId", "createdAt");
 CREATE INDEX "inbox_drafts_status_idx" ON "inbox_drafts"("status");
 CREATE INDEX "business_messages_conversationId_receivedAt_idx" ON "business_messages"("conversationId", "receivedAt");
--- Dedup idempotente por id estável do canal; NULLs não colidem
--- (mensagens manuais/antigas sem externalId continuam válidas).
-CREATE UNIQUE INDEX "business_messages_channel_externalId_key" ON "business_messages"("channel", "externalId");
+-- Dedup idempotente por id estável do canal: o índice único
+-- "business_messages_channel_externalId_key" já existe (migração base).
 
 -- AddForeignKey
 ALTER TABLE "inbox_conversations" ADD CONSTRAINT "inbox_conversations_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "customers"("id") ON DELETE SET NULL ON UPDATE CASCADE;
