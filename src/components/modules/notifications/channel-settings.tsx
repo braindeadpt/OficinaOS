@@ -164,6 +164,9 @@ function SmsCard({
           <p className="mt-2 text-on-surface-variant text-xs italic">
             {t("sms_setup_tip")}
           </p>
+          <p className="mt-2 text-on-surface-variant text-xs">
+            {t("sms_sim_terms")}
+          </p>
         </div>
 
         {form.enabled && (

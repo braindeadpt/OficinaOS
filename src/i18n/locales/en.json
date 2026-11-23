@@ -2449,6 +2449,7 @@
   "sms_setup_5": "Use «Send test SMS» to confirm. Requires the SMS Pro module (OficinaOS Cloud) — the gateway alone cannot send.",
   "sms_setup_tip": "Tip: in the shop router, reserve the phone's IP (DHCP reservation) so it never changes.",
   "sms_setup_title": "Setup — 5 minutes",
+  "sms_sim_terms": "The SIM card and its mobile plan belong to the shop: carrier SMS costs and the carrier's fair-use (anti-spam) limits are the shop's responsibility. This channel is for service notifications and replies — not bulk campaigns.",
   "sms_test_sent": "Test SMS sent",
   "deliver_dialog": {
     "title": "Hand over to customer",
