@@ -588,6 +588,62 @@ describe("processOutbox", () => {
     );
   });
 
+  it("modo local envia o template pelo nome sem exigir APPROVED (grátis = só envio)", async () => {
+    // Sem sync local, o estado persistido não existe — a app manda o
+    // template na mesma e a Meta rejeita o que faltar como erro normal.
+    mocks.findManyOutboxEntries.mockResolvedValue([
+      {
+        id: "out-local-tpl",
+        channel: "WHATSAPP",
+        createdAt: new Date(),
+        recipientPhone: "05551234567",
+        renderedBody: "Hello",
+        retryCount: 0,
+        status: OutboxStatus.QUEUED,
+        templateName: "job_ready",
+        templateParams: ["A"],
+      },
+    ]);
+    mocks.findShopSettingsUnique.mockResolvedValue({
+      countryCode: "PT",
+      whatsappApiTokenEncrypted: "enc-token",
+      whatsappBusinessId: "biz-1",
+      whatsappEnabled: true,
+      whatsappPhoneNumberId: "phone-1",
+      // Estado PENDING persistido — ignorado em modo local.
+      whatsappTemplatesJson: { job_ready: { status: "PENDING" } },
+    });
+    mocks.decryptWhatsAppConfig.mockReturnValue({
+      apiToken: "decrypted-token",
+      businessId: "biz-1",
+      phoneNumberId: "phone-1",
+    });
+    mocks.sendWhatsAppTemplate.mockResolvedValue({ success: true });
+    mocks.findCustomerByPhone.mockResolvedValue({
+      phone: "05551234567",
+      whatsappConsent: true,
+    });
+    mocks.transitionOutboxEntry.mockResolvedValue(1);
+
+    await processOutbox(prisma);
+
+    // Envia pelo nome — não adia por causa do estado persistido.
+    expect(mocks.sendWhatsAppTemplate).toHaveBeenCalledWith(
+      expect.anything(),
+      "05551234567",
+      "job_ready",
+      "pt_PT",
+      ["A"],
+      "PT"
+    );
+    expect(mocks.transitionOutboxEntry).toHaveBeenCalledWith(
+      prisma,
+      "out-local-tpl",
+      OutboxStatus.QUEUED,
+      expect.objectContaining({ status: OutboxStatus.SENT })
+    );
+  });
+
   it("still sends an entry whose deliverBy is in the future", async () => {
     mocks.findManyOutboxEntries.mockResolvedValue([
       {

@@ -6,7 +6,6 @@ import type { FastifyPluginAsync } from "fastify";
 import { loadEnv } from "../config/env.js";
 import { accessUrls } from "../lib/mdns.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
-import { isStopText } from "../services/bot-intents.js";
 import { handleEvolutionInbound } from "../services/evolution-bot.service.js";
 import { submitPreCheckRequest } from "../services/intake-request.service.js";
 import { respondToQuote } from "../services/job-quote.service.js";
@@ -289,21 +288,16 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
         event?: string;
         payload?: { message?: string; phoneNumber?: string; sender?: string };
       };
-      // Grátis = só envio: inbound responde 200 sem processar (sem bot,
-      // sem gravar). Pro processa aqui quando o device posta à LAN —
-      // em modo servidor é a Cloud que fila e o poller da app trata.
-      // isModuleEnabled exige cloudSyncedAt fresco (<24h): sem ele uma
-      // loja desligada da Cloud respondia para sempre com a lista velha.
-      // EXCEÇÃO: PARAR/STOP processa-se sempre — revogar consentimento
-      // não pode depender da licença em cache.
+      // Grátis = só envio: inbound responde sempre 200 sem processar
+      // (sem bot, sem consentimento, sem gravar) — incluindo PARAR/STOP.
+      // Pro processa aqui quando o device posta à LAN — em modo servidor
+      // é a Cloud que fila e o poller da app trata. isModuleEnabled
+      // exige cloudSyncedAt fresco (<24h): sem ele uma loja desligada da
+      // Cloud respondia para sempre com a lista velha.
       if (body.event === "sms:received") {
         const from = body.payload?.sender ?? body.payload?.phoneNumber;
         const text = body.payload?.message;
-        if (
-          from &&
-          text &&
-          (isModuleEnabled(settings, "sms") || isStopText(text))
-        ) {
+        if (from && text && isModuleEnabled(settings, "sms")) {
           await handleInboundSms(
             app.prisma,
             app.log,

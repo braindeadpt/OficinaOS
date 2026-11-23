@@ -648,12 +648,8 @@ export async function getSmsSettings(prisma: PrismaClient) {
     hasPassword: Boolean(row?.smsGatewayPasswordEncrypted),
     // O gateway Android local é free — moduleEnabled só reflete o
     // entitlement "sms" (transportes geridos futuros); não bloqueia a UI.
+    // Grátis = só envio: não se expõe o path inbound do webhook.
     moduleEnabled: isModuleEnabled(row, "sms"),
-    // Path do webhook inbound — o host depende de como o staff acede à
-    // app; a UI compõe o URL completo com window.location.origin.
-    inboundPath: row?.smsWebhookToken
-      ? `/api/public/sms/inbound/${row.smsWebhookToken}`
-      : null,
   };
 }
 

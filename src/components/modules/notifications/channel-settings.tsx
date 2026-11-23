@@ -14,13 +14,12 @@ type Store = ReturnType<typeof useSettingsStore.getState>;
 
 interface ChannelSettingsProps {
   onFetchWhatsAppSettings: () => Promise<void>;
-  onRegisterSmsWebhook: () => Promise<{ ok: boolean; message?: string }>;
   onSaveSmsSettings: (data: {
     enabled?: boolean;
     gatewayPassword?: string;
     gatewayUrl?: string;
     gatewayUser?: string;
-  }) => Promise<{ webhookRegistered: boolean }>;
+  }) => Promise<void>;
   onSaveWhatsAppSettings: (data: {
     apiToken?: string;
     businessId?: string;
@@ -47,9 +46,7 @@ function SmsCard({
   smsSettings,
   onSave,
   onSendTest,
-  onRegisterWebhook,
 }: {
-  onRegisterWebhook: () => Promise<{ ok: boolean; message?: string }>;
   onSave: ChannelSettingsProps["onSaveSmsSettings"];
   onSendTest: ChannelSettingsProps["onSendSmsTest"];
   smsSettings: Store["smsSettings"];
@@ -85,22 +82,19 @@ function SmsCard({
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
-      const { webhookRegistered } = await onSave({
+      await onSave({
         enabled: form.enabled,
         gatewayPassword: form.gatewayPassword || undefined,
         gatewayUrl: form.gatewayUrl,
         gatewayUser: form.gatewayUser,
       });
-      if (form.enabled && !webhookRegistered) {
-        toast.warning(t("sms_webhook_not_registered"));
-      }
       setForm((f) => ({ ...f, gatewayPassword: "" }));
     } catch {
       // Error is stored in Zustand state
     } finally {
       setSaving(false);
     }
-  }, [form, onSave, t]);
+  }, [form, onSave]);
 
   const handleTest = useCallback(async () => {
     const res = await onSendTest();
@@ -111,20 +105,9 @@ function SmsCard({
     }
   }, [onSendTest, t]);
 
-  const handleRegister = useCallback(async () => {
-    const res = await onRegisterWebhook();
-    if (res.ok) {
-      toast.success(t("sms_webhook_registered"));
-    } else {
-      toast.error(res.message ?? t("sms_webhook_not_registered"));
-    }
-  }, [onRegisterWebhook, t]);
-
-  const inboundUrl = smsSettings?.inboundPath
-    ? `${window.location.origin}${smsSettings.inboundPath}`
-    : null;
   // O gateway Android local é free — o módulo "sms" gateia apenas os
   // transportes geridos futuros, por isso nunca bloqueia este card.
+  // Grátis = só envio: sem webhook inbound a registar nem URL a mostrar.
   return (
     <div className="mt-6">
       <h3 className="font-extrabold font-headline text-lg text-on-surface tracking-tight">
@@ -201,15 +184,6 @@ function SmsCard({
               />
             </Field>
 
-            {inboundUrl && (
-              <Field
-                hint={t("sms_inbound_url_hint")}
-                label={t("sms_inbound_url")}
-              >
-                <Input readOnly value={inboundUrl} />
-              </Field>
-            )}
-
             <div className="flex flex-wrap gap-2">
               <Button
                 className="flex min-h-11"
@@ -227,14 +201,6 @@ function SmsCard({
                 variant="secondary"
               >
                 {t("sms_send_test")}
-              </Button>
-              <Button
-                className="flex min-h-11"
-                onClick={handleRegister}
-                size="sm"
-                variant="secondary"
-              >
-                {t("sms_register_webhook")}
               </Button>
             </div>
           </div>
@@ -479,7 +445,7 @@ function MetaWhatsAppFields({
           value={form.pickupReminderTemplate}
         />
       </Field>
-      <WaTemplatesBlock />
+      <WaTemplatesBlock isCloud={Boolean(settings?.credentialsAtCloud)} />
     </>
   );
 }
@@ -507,12 +473,13 @@ const WA_TPL_REASON_KEYS: Record<string, string> = {
 };
 
 /**
- * Estado do sync de templates Meta (§5.6): um chip por template com o
- * estado que a Meta/Cloud devolveu e um botão "Voltar a submeter" que
- * corre o sync outra vez — para os rejeitados/em falta depois de
- * corrigir o texto.
+ * Templates Meta (§5.6). Pro/cloud: um chip por template com o estado
+ * que a Cloud devolveu e o botão "Voltar a submeter" que corre o sync.
+ * Grátis = só envio: a app não fala à Meta — mostra-se a especificação
+ * (nome, categoria, língua e texto) para a loja criar o template à mão
+ * no Meta Business Manager.
  */
-function WaTemplatesBlock() {
+function WaTemplatesBlock({ isCloud }: { isCloud: boolean }) {
   const { t } = useTranslation();
   const waTemplates = useSettingsStore((s) => s.waTemplates);
   const fetchWaTemplates = useSettingsStore((s) => s.fetchWaTemplates);
@@ -556,32 +523,54 @@ function WaTemplatesBlock() {
         <p className="font-medium text-on-surface text-sm">
           {t("wa_tpl_title")}
         </p>
-        <Button loading={syncing} onClick={handleResync} size="sm">
-          {t("wa_tpl_resubmit")}
-        </Button>
+        {isCloud && (
+          <Button loading={syncing} onClick={handleResync} size="sm">
+            {t("wa_tpl_resubmit")}
+          </Button>
+        )}
       </div>
-      <p className="mt-1 text-on-surface-variant text-xs">{t("wa_tpl_desc")}</p>
+      <p className="mt-1 text-on-surface-variant text-xs">
+        {isCloud ? t("wa_tpl_desc") : t("wa_tpl_free_desc")}
+      </p>
       {waTemplates.length > 0 && (
-        <ul className="mt-3 space-y-1.5">
-          {waTemplates.map((tpl) => (
-            <li
-              className="flex items-center justify-between gap-2 text-xs"
-              key={tpl.name}
-            >
-              <span className="truncate font-mono text-on-surface">
-                {tpl.name}
-              </span>
-              <span
-                className={`shrink-0 rounded-full px-2 py-0.5 ${
-                  WA_TPL_CHIP_CLASS[tpl.status] ??
-                  "bg-surface-container-high text-on-surface-variant"
-                }`}
-                title={tplReasonTitle(tpl.reason)}
+        <ul className="mt-3 space-y-3">
+          {waTemplates.map((tpl) =>
+            isCloud ? (
+              <li
+                className="flex items-center justify-between gap-2 text-xs"
+                key={tpl.name}
               >
-                {t(WA_TPL_STATUS_KEYS[tpl.status] ?? "wa_tpl_status_pending")}
-              </span>
-            </li>
-          ))}
+                <span className="truncate font-mono text-on-surface">
+                  {tpl.name}
+                </span>
+                <span
+                  className={`shrink-0 rounded-full px-2 py-0.5 ${
+                    WA_TPL_CHIP_CLASS[tpl.status] ??
+                    "bg-surface-container-high text-on-surface-variant"
+                  }`}
+                  title={tplReasonTitle(tpl.reason)}
+                >
+                  {t(WA_TPL_STATUS_KEYS[tpl.status] ?? "wa_tpl_status_pending")}
+                </span>
+              </li>
+            ) : (
+              <li className="text-xs" key={tpl.name}>
+                <div className="flex items-center gap-2">
+                  <span className="truncate font-mono text-on-surface">
+                    {tpl.name}
+                  </span>
+                  <span className="shrink-0 text-on-surface-variant">
+                    {tpl.category ?? "UTILITY"} · {tpl.language ?? "pt_PT"}
+                  </span>
+                </div>
+                {tpl.body && (
+                  <p className="mt-0.5 whitespace-pre-wrap font-mono text-on-surface-variant">
+                    {tpl.body}
+                  </p>
+                )}
+              </li>
+            )
+          )}
         </ul>
       )}
     </div>
@@ -612,11 +601,21 @@ interface WhatsAppFormState {
  * "O que o bot pode dizer" — ficha da loja para o bot de IA (Pro).
  * Feeds POST /ai/bot-reply's shopCard; kept in shop settings (not the
  * WhatsApp settings object) because all channels share it.
+ * Escondido sem qualquer módulo que use o bot (sms / whatsapp-bot /
+ * ai-inbox) — numa instalação grátis não se promete funcionalidade
+ * que não existe.
  */
 function BotCard() {
   const { t } = useTranslation();
   const shopSettings = useSettingsStore((s) => s.shopSettings);
   const saveShopSettings = useSettingsStore((s) => s.saveShopSettings);
+  const whatsAppSettings = useSettingsStore((s) => s.whatsAppSettings);
+  const smsSettings = useSettingsStore((s) => s.smsSettings);
+  const smsCloudDevice = useSettingsStore((s) => s.smsCloudDevice);
+  const anyBotModule =
+    Boolean(whatsAppSettings?.whatsappModule) ||
+    Boolean(smsSettings?.moduleEnabled) ||
+    Boolean(smsCloudDevice?.entitled);
   const [form, setForm] = useState({
     avgDays: "1",
     enabled: false,
@@ -655,6 +654,9 @@ function BotCard() {
     }
   }, [form, saveShopSettings]);
 
+  if (!anyBotModule) {
+    return null;
+  }
   return (
     <div className="mt-4 rounded-2xl bg-surface-container-low p-5">
       <div className="flex select-none items-center gap-3">
@@ -721,7 +723,6 @@ export default function ChannelSettings({
   smsSettings,
   whatsAppSettings,
   onFetchWhatsAppSettings,
-  onRegisterSmsWebhook,
   onSaveSmsSettings,
   onSaveWhatsAppSettings,
   onSendSmsTest,
@@ -954,7 +955,6 @@ export default function ChannelSettings({
       </div>
 
       <SmsCard
-        onRegisterWebhook={onRegisterSmsWebhook}
         onSave={onSaveSmsSettings}
         onSendTest={onSendSmsTest}
         smsSettings={smsSettings}

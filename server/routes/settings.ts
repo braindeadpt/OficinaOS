@@ -53,12 +53,14 @@ import {
 import {
   decryptSmsConfig,
   generateSmsWebhookToken,
-  registerSmsWebhook,
   sendSms,
 } from "../services/sms.service.js";
 import { getSmsDeviceStatus } from "../services/sms-cloud.service.js";
 import { getUpdateState, startUpdate } from "../services/update.service.js";
-import { pushCredentialsToCloud } from "../services/whatsapp-channel.js";
+import {
+  pushCredentialsToCloud,
+  resolveWhatsAppChannel,
+} from "../services/whatsapp-channel.js";
 
 // Campos de definições que mudam o corpo Meta dos templates WhatsApp
 // (blocos {{if}} expandidos por configuração) — um PUT que os toca tem de
@@ -417,8 +419,12 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       app.resetEmbedOriginsCache();
       // reviewUrl muda os blocos {{if}} dos templates WhatsApp — sem
       // re-sync, o modelo aprovado na Meta diverge dos parâmetros
-      // enviados e as notificações falham.
-      if (Object.keys(parsed.data).some((k) => META_TEMPLATE_KEYS.has(k))) {
+      // enviados e as notificações falham. Só em modo Pro/cloud: no
+      // grátis a app não gere templates na Meta (só envio).
+      if (
+        Object.keys(parsed.data).some((k) => META_TEMPLATE_KEYS.has(k)) &&
+        resolveWhatsAppChannel(updated)?.mode === "cloud"
+      ) {
         syncWhatsAppTemplates(app.prisma).catch((err) =>
           req.log.warn({ err }, "whatsapp template resync failed")
         );
@@ -494,11 +500,15 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       // templates Meta em background (GET primeiro, cria o que falta).
       // trackingBaseUrl controla um bloco {{if}} do corpo aprovado —
       // mudá-lo aqui (o formulário grava nesta rota) exige re-sync mesmo
-      // sem tocar no `enabled`.
+      // sem tocar no `enabled`. Só em modo Pro/cloud — no grátis a app
+      // não gere templates na Meta (só envio).
       if (parsed.data.enabled || parsed.data.trackingBaseUrl !== undefined) {
-        syncWhatsAppTemplates(app.prisma, app.log).catch((err) =>
-          app.log.warn({ err }, "whatsapp-templates sync falhou")
-        );
+        const fresh = await getOrCreateShopSettings(app.prisma);
+        if (resolveWhatsAppChannel(fresh)?.mode === "cloud") {
+          syncWhatsAppTemplates(app.prisma, app.log).catch((err) =>
+            app.log.warn({ err }, "whatsapp-templates sync falhou")
+          );
+        }
       }
       return reply.send({ ...updated, credentialsAtCloud });
     }
@@ -662,19 +672,11 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       // O gateway Android na LAN é free — o módulo Pro "sms" gateia
       // apenas transportes geridos (provider via cloud), que terão o
       // seu próprio caminho de configuração e de entitlement.
+      // Grátis = só envio: sem inbound, não há webhook a registar no
+      // telemóvel; em modo servidor é a Cloud que recebe os replies.
       await upsertSmsSettings(app.prisma, parsed.data);
-
-      // Best-effort: regista o webhook inbound no telemóvel usando o
-      // Host do pedido — o endereço a que o browser chegou é também o
-      // que o telemóvel consegue alcançar na LAN. Em localhost não há
-      // como o telemóvel chegar — a UI avisa nesse caso.
-      let webhookRegistered = false;
       const settings = await getSmsSettings(app.prisma);
-      if (settings.enabled) {
-        const host = req.headers.host ?? "";
-        webhookRegistered = await tryRegisterSmsWebhook(app.prisma, host);
-      }
-      return reply.send({ ...settings, webhookRegistered });
+      return reply.send(settings);
     }
   );
 
@@ -714,28 +716,6 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       );
       if (!result.success) {
         throw new AppError("SMS_SEND_FAILED", { detail: result.error });
-      }
-      return reply.send({ ok: true });
-    }
-  );
-
-  app.post(
-    "/sms/webhook",
-    {
-      preHandler: [requirePermission({ settings: ["edit"] })],
-      schema: {
-        tags: ["settings"],
-        summary: "Register the inbound webhook on the sms-gate device",
-      },
-    },
-    async (req, reply) => {
-      assertNotDemoMode();
-      const ok = await tryRegisterSmsWebhook(
-        app.prisma,
-        req.headers.host ?? ""
-      );
-      if (!ok) {
-        throw new AppError("SMS_WEBHOOK_FAILED");
       }
       return reply.send({ ok: true });
     }
@@ -794,37 +774,12 @@ const LOCALHOST_RE = /^(localhost|127\.|::1|\[::1\])/i;
 const PORT_SUFFIX_RE = /:(\d+)$/;
 
 /**
- * Regista o webhook inbound no telemóvel. O callback usa o Host do pedido
- * — o endereço por que o browser do staff chegou à app é o mesmo que o
- * telemóvel alcança na LAN. Quando a sessão corre em localhost o telemóvel
- * nunca lá chega, por isso nem se tenta.
- */
-async function tryRegisterSmsWebhook(
-  prisma: Parameters<typeof getSmsSettings>[0],
-  host: string
-): Promise<boolean> {
-  if (!host || LOCALHOST_RE.test(host)) {
-    return false;
-  }
-  const row = await getOrCreateShopSettings(prisma);
-  const config = decryptSmsConfig({
-    gatewayPasswordEncrypted: row.smsGatewayPasswordEncrypted,
-    gatewayUrl: row.smsGatewayUrl,
-    gatewayUser: row.smsGatewayUser,
-  });
-  if (!(config && row.smsWebhookToken)) {
-    return false;
-  }
-  const callbackUrl = `http://${host}/api/public/sms/inbound/${row.smsWebhookToken}`;
-  const result = await registerSmsWebhook(config, callbackUrl);
-  return result.success;
-}
-
-/**
  * §5.7 — regista o webhook MESSAGES_UPSERT na instância Evolution. Só
- * com o termo do bot aceite (a rota inbound nem existe sem ele); o
- * callback usa `evolutionWebhookToken` — segredo próprio, separado do
- * SMS — e o Host do pedido, como no tryRegisterSmsWebhook.
+ * com o termo do bot aceite E o entitlement "whatsapp-bot" ativo (a
+ * rota inbound nem existe sem ele — um termo aceite em tempos não pode
+ * continuar a registar após o módulo expirar); o callback usa
+ * `evolutionWebhookToken` — segredo próprio, separado do SMS — e o
+ * Host do pedido.
  */
 async function tryRegisterEvolutionWebhook(
   prisma: Parameters<typeof getSmsSettings>[0],
@@ -865,7 +820,8 @@ async function tryRegisterEvolutionWebhook(
       row.whatsappBotDisclaimerAt &&
       row.evolutionWebhookToken &&
       row.evolutionUrl &&
-      row.evolutionApiKeyEncrypted
+      row.evolutionApiKeyEncrypted &&
+      isModuleEnabled(row, "whatsapp-bot")
     )
   ) {
     return false;

@@ -947,14 +947,6 @@ describe("outbound choke points — no fetch is ever reached", () => {
         ),
     ],
     [
-      "registerSmsWebhook",
-      async () =>
-        (await import("../services/sms.service.js")).registerSmsWebhook(
-          { url: "http://x", user: "u", password: "p" },
-          "http://cb"
-        ),
-    ],
-    [
       "checkSmsGateway",
       async () =>
         (await import("../services/sms.service.js")).checkSmsGateway({

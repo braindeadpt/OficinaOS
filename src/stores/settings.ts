@@ -31,7 +31,6 @@ interface SmsSettings {
   gatewayUrl: string | null;
   gatewayUser: string | null;
   hasPassword: boolean;
-  inboundPath: string | null;
   moduleEnabled: boolean;
 }
 
@@ -89,6 +88,9 @@ type EvolutionStatus =
   | "unconfigured";
 
 export interface WaTemplateStatus {
+  body?: string;
+  category?: string;
+  language?: string;
   name: string;
   reason?: string;
   status: "APPROVED" | "IN_REVIEW" | "REJECTED" | "PENDING" | "MISSING";
@@ -119,7 +121,7 @@ interface SettingsState {
   notificationTemplates: NotificationTemplate[];
   outboxLogs: OutboxLog[];
   pairWhatsAppLocal: () => Promise<EvolutionPairingResult>;
-  registerSmsWebhook: () => Promise<{ ok: boolean; message?: string }>;
+
   saveAiSettings: (data: {
     endpointUrl?: string;
     apiKey?: string;
@@ -165,7 +167,7 @@ interface SettingsState {
     gatewayPassword?: string;
     gatewayUrl?: string;
     gatewayUser?: string;
-  }) => Promise<{ webhookRegistered: boolean }>;
+  }) => Promise<void>;
   saveWhatsAppSettings: (data: {
     apiToken?: string;
     businessId?: string;
@@ -425,12 +427,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     set({ error: null });
     try {
       const res = await api.put("/settings/sms", data);
-      const { webhookRegistered: _wr, ...settings } =
-        res.data as SmsSettings & {
-          webhookRegistered: boolean;
-        };
-      set({ smsSettings: settings });
-      return { webhookRegistered: Boolean(_wr) };
+      set({ smsSettings: res.data });
     } catch (err: unknown) {
       const message = getErrorMessage(err, i18n.t("errors.save_shop_settings"));
       set({ error: message });
@@ -445,18 +442,6 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       return { ok: true };
     } catch (err: unknown) {
       const message = getErrorMessage(err, i18n.t("errors.sms_test_failed"));
-      set({ error: message });
-      return { message, ok: false };
-    }
-  },
-
-  registerSmsWebhook: async () => {
-    set({ error: null });
-    try {
-      await api.post("/settings/sms/webhook");
-      return { ok: true };
-    } catch (err: unknown) {
-      const message = getErrorMessage(err, i18n.t("errors.sms_webhook_failed"));
       set({ error: message });
       return { message, ok: false };
     }

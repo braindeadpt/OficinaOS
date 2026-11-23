@@ -20,7 +20,6 @@ import { formatPhone } from "./notification-sender.js";
  */
 
 const TRAILING_SLASH_RE = /\/+$/;
-const WEBHOOK_ID = "oficinaos-inbound";
 
 export interface SmsConfig {
   password: string;
@@ -126,63 +125,6 @@ export async function checkSmsGateway(config: SmsConfig): Promise<SendResult> {
     return {
       success: false,
       error: err instanceof Error ? err.message : "Gateway inalcançável",
-    };
-  }
-}
-
-/**
- * Regista o webhook sms:received no telemóvel para o callbackUrl indicado.
- * Remove primeiro um registo "oficinaos-inbound" anterior — o registo é
- * idempotente e sobrevive a re-saves das settings.
- */
-export async function registerSmsWebhook(
-  config: SmsConfig,
-  callbackUrl: string
-): Promise<SendResult> {
-  assertNotDemoMode();
-  try {
-    const listRes = await fetch(`${config.url}/webhooks`, {
-      headers: { Authorization: authHeader(config) },
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (listRes.ok) {
-      const hooks = (await listRes.json()) as { id: string }[];
-      for (const hook of Array.isArray(hooks) ? hooks : []) {
-        if (hook.id === WEBHOOK_ID) {
-          await fetch(`${config.url}/webhooks/${hook.id}`, {
-            headers: { Authorization: authHeader(config) },
-            method: "DELETE",
-            signal: AbortSignal.timeout(10_000),
-          }).catch(() => null);
-        }
-      }
-    }
-
-    const response = await fetch(`${config.url}/webhooks`, {
-      body: JSON.stringify({
-        event: "sms:received",
-        id: WEBHOOK_ID,
-        url: callbackUrl,
-      }),
-      headers: {
-        Authorization: authHeader(config),
-        "Content-Type": "application/json",
-      },
-      method: "POST",
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (response.ok) {
-      return { success: true };
-    }
-    const body = await response.text();
-    return {
-      success: false,
-      error: `SMS gateway ${response.status}: ${body.slice(0, 200)}`,
-    };
-  } catch (err) {
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : "Unknown error",
     };
   }
 }

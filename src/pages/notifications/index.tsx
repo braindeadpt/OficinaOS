@@ -29,7 +29,6 @@ export default function NotificationsPage() {
     fetchSmsSettings,
     fetchWhatsAppSettings,
     fetchNotificationTemplates,
-    registerSmsWebhook,
     saveSmsSettings,
     saveWhatsAppSettings,
     sendSmsTest,
@@ -170,7 +169,6 @@ export default function NotificationsPage() {
       {mode === "setup" && (
         <ChannelSettings
           onFetchWhatsAppSettings={fetchWhatsAppSettings}
-          onRegisterSmsWebhook={registerSmsWebhook}
           onSaveSmsSettings={saveSmsSettings}
           onSaveWhatsAppSettings={saveWhatsAppSettings}
           onSendSmsTest={sendSmsTest}

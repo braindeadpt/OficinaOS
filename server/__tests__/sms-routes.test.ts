@@ -9,7 +9,6 @@ const mocks = vi.hoisted(() => ({
   decryptSmsConfig: vi.fn(),
   getSmsSettings: vi.fn(),
   handleInboundSms: vi.fn(),
-  registerSmsWebhook: vi.fn(),
   sendSms: vi.fn(),
   upsertSmsSettings: vi.fn(),
 }));
@@ -18,7 +17,6 @@ vi.mock("../services/sms.service.js", () => ({
   checkSmsGateway: mocks.checkSmsGateway,
   decryptSmsConfig: mocks.decryptSmsConfig,
   handleInboundSms: mocks.handleInboundSms,
-  registerSmsWebhook: mocks.registerSmsWebhook,
   sendSms: mocks.sendSms,
 }));
 
@@ -178,14 +176,13 @@ describe("PUT /api/settings/sms", () => {
     expect(mocks.upsertSmsSettings).toHaveBeenCalled();
   });
 
-  it("registers the gateway webhook when saving config", async () => {
+  it("does not register any inbound webhook when saving (free = send only)", async () => {
     mocks.getSmsSettings.mockResolvedValue({ enabled: true });
     mocks.decryptSmsConfig.mockReturnValue({
       password: "p",
       url: "http://192.168.1.50:8080",
       user: "sms",
     });
-    mocks.registerSmsWebhook.mockResolvedValue({ success: true });
     const app = buildApp(fakePrisma());
     const res = await app.inject({
       headers: { host: "192.168.1.10:4000" },
@@ -198,24 +195,7 @@ describe("PUT /api/settings/sms", () => {
       url: "/api/settings/sms",
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json().webhookRegistered).toBe(true);
-    const hookArgs = mocks.registerSmsWebhook.mock.calls[0];
-    expect(hookArgs?.[1]).toBe(
-      "http://192.168.1.10:4000/api/public/sms/inbound/tok-abc"
-    );
-  });
-
-  it("keeps saved settings when the gateway is unreachable", async () => {
-    mocks.getSmsSettings.mockResolvedValue({ enabled: true });
-    mocks.decryptSmsConfig.mockReturnValue(null);
-    const app = buildApp(fakePrisma());
-    const res = await app.inject({
-      method: "PUT",
-      payload: { enabled: true },
-      url: "/api/settings/sms",
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().webhookRegistered).toBe(false);
+    expect(res.json().webhookRegistered).toBeUndefined();
   });
 });
 
@@ -308,7 +288,7 @@ describe("POST /api/public/sms/inbound/:token", () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it("dispatches sms:received payloads to the inbound handler", async () => {
+  it("dispatches sms:received payloads to the inbound handler (Pro)", async () => {
     const app = buildApp(fakePrisma());
     const res = await app.inject({
       method: "POST",
@@ -323,6 +303,38 @@ describe("POST /api/public/sms/inbound/:token", () => {
       "+351912345678",
       "estado?"
     );
+  });
+
+  it("free mode: sms:received returns 200 without processing anything", async () => {
+    // Grátis = só envio — sem entitlement "sms" o inbound não toca em
+    // consentimento, não grava mensagens e não responde.
+    const prisma = fakePrisma({ ...SMS_ROW, cloudEntitlements: [] });
+    const app = buildApp(prisma);
+    const res = await app.inject({
+      method: "POST",
+      payload: inboundPayload,
+      url: "/api/public/sms/inbound/tok-abc",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mocks.handleInboundSms).not.toHaveBeenCalled();
+    expect(prisma.shopSettings.upsert).not.toHaveBeenCalled();
+  });
+
+  it("free mode: PARAR/STOP also returns 200 without processing", async () => {
+    // Revogar consentimento já não é exceção — inbound grátis é inerte.
+    const app = buildApp(fakePrisma({ ...SMS_ROW, cloudEntitlements: [] }));
+    for (const text of ["PARAR", "STOP", "parar"]) {
+      const res = await app.inject({
+        method: "POST",
+        payload: {
+          ...inboundPayload,
+          payload: { ...inboundPayload.payload, message: text },
+        },
+        url: "/api/public/sms/inbound/tok-abc",
+      });
+      expect(res.statusCode).toBe(200);
+    }
+    expect(mocks.handleInboundSms).not.toHaveBeenCalled();
   });
 
   it("ignores non-received events", async () => {

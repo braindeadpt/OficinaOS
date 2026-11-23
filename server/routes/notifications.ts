@@ -6,6 +6,7 @@ import {
 import { updateNotificationTemplateSchema } from "@shared/schemas/settings.schema";
 import type { FastifyPluginAsync } from "fastify";
 import { requirePermission } from "../middlewares/rbac.js";
+import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import {
   getInAppNotifications,
   markAllNotificationsRead,
@@ -21,6 +22,7 @@ import {
   getNotificationTemplates,
   updateNotificationTemplate,
 } from "../services/settings.service.js";
+import { resolveWhatsAppChannel } from "../services/whatsapp-channel.js";
 import { syncWhatsAppTemplates } from "../services/whatsapp-templates.service.js";
 import { getUserId } from "../utils/request.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
@@ -78,11 +80,15 @@ export const notificationsRoutes: FastifyPluginAsync = async (app) => {
       }
       // Corpo Meta editado: o "APPROVED" guardado pertence ao texto
       // antigo — sem re-sync o outbox envia o modelo anterior. O sync
-      // deteta a divergência (remoteBody ≠ desejado) e resubmete.
+      // deteta a divergência e resubmete. Só em modo Pro/cloud: no
+      // grátis a app não gere templates na Meta (só envio).
       if (updated.channel === "WHATSAPP") {
-        syncWhatsAppTemplates(app.prisma, req.log).catch((err) =>
-          req.log.warn({ err }, "whatsapp-templates sync pós-edição falhou")
-        );
+        const settings = await getOrCreateShopSettings(app.prisma);
+        if (resolveWhatsAppChannel(settings)?.mode === "cloud") {
+          syncWhatsAppTemplates(app.prisma, req.log).catch((err) =>
+            req.log.warn({ err }, "whatsapp-templates sync pós-edição falhou")
+          );
+        }
       }
       return reply.send(updated);
     }

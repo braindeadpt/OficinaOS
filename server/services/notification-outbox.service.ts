@@ -354,14 +354,15 @@ async function processWhatsAppEntry(
       );
     }
   }
-  // Template registado como pendente/em revisão/rejeitado → adiar sem
-  // gastar tentativas: enviar agora falharia na Meta e a aprovação
-  // posterior não recupera mensagens já marcadas FAILED. Sem registo
-  // (modelo novo de um update ainda não submetido) adia na mesma e o
-  // re-sync cria-o — um template do outbox existe sempre nas
-  // NotificationTemplate, por isso entra na lista desejada do sync.
-  // cancelIfExpired (deliverBy) limita a espera por cima.
-  if (channel.mode !== "evolution" && metaParams !== null) {
+  // Pro/cloud apenas: template registado como pendente/em revisão/
+  // rejeitado → adiar sem gastar tentativas: enviar agora falharia na
+  // Meta e a aprovação posterior não recupera mensagens já marcadas
+  // FAILED. Sem registo (modelo novo ainda não submetido) adia na mesma
+  // e o re-sync cria-o. cancelIfExpired (deliverBy) limita a espera.
+  // No modo grátis/local a app não consulta nem confia em estado de
+  // templates — envia pelo nome e a Meta rejeita o que faltar ou não
+  // estiver aprovado, como erro de envio normal (retry/FAILED).
+  if (channel.mode === "cloud" && metaParams !== null) {
     const st = templateStatusOf(settings, entry.templateName);
     if (st !== "APPROVED") {
       await transitionOutboxEntry(prisma, entry.id, OutboxStatus.QUEUED, {
