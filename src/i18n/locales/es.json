@@ -2154,6 +2154,7 @@
   "wa_tpl_free_desc": "Las notificaciones fuera del período de 24 horas de WhatsApp necesitan una plantilla metaaprobada. ",
   "wa_tpl_resubmit": "Reenviar",
   "wa_tpl_reason_graph_unreachable": "API de Meta Graph inalcanzable",
+  "wa_tpl_reason_invalid_body_edges": "El cuerpo no puede empezar ni terminar en una variable — Meta lo rechaza",
   "wa_tpl_reason_invalid_name": "Nombre no válido para Meta (solo letras minúsculas, dígitos y guiones bajos)",
   "wa_tpl_sync_done": "{{ready}} de {{total}} plantillas aprobadas",
   "wa_tpl_status_approved": "Aprobado",

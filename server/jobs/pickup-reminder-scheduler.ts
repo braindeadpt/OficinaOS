@@ -2,6 +2,8 @@ import { Role } from "@shared/constants/roles";
 import type { FastifyInstance } from "fastify";
 import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import { notify } from "../services/notification-dispatch.js";
+import { decryptSmsConfig } from "../services/sms.service.js";
+import { getSmsDeviceStatus } from "../services/sms-cloud.service.js";
 import {
   resolveWhatsAppChannel,
   sendWhatsAppTemplateVia,
@@ -74,13 +76,29 @@ async function processPickupReminders(app: FastifyInstance): Promise<void> {
   // the in-app "reminder sent" record fires while nothing is queued.
   const shop = await findShopSettingsUnique(app.prisma);
   // Decisão 2026-11-23: todo o envio é Pro — um canal só conta como
-  // entregável com o módulo fresco ("whatsapp-bot" com o toggle; "sms"
-  // cobre Cloud/device e o gateway LAN). Sem módulo o notify() suprimia
-  // o outbound mas o registo in-app disparava na mesma.
-  const waReady =
-    Boolean(shop?.whatsappEnabled) && isModuleEnabled(shop, "whatsapp-bot");
-  const smsReady = isModuleEnabled(shop, "sms");
-  if (!(waReady || smsReady)) {
+  // entregável com o módulo fresco E um transporte resolvido: o resolve
+  // devolve null sem credenciais (toggle ligado ≠ canal usável) e o SMS
+  // precisa de gateway LAN configurado OU de um device Cloud sendable.
+  // Sem isto o claim marcava a reparação por 72 h sem entregar nada.
+  const waChannel = shop?.whatsappEnabled ? resolveWhatsAppChannel(shop) : null;
+  const smsModule = isModuleEnabled(shop, "sms");
+  const smsLocal =
+    smsModule && shop?.smsEnabled
+      ? decryptSmsConfig({
+          gatewayPasswordEncrypted: shop.smsGatewayPasswordEncrypted,
+          gatewayUrl: shop.smsGatewayUrl,
+          gatewayUser: shop.smsGatewayUser,
+        })
+      : null;
+  // Uma verificação por ciclo — não por reparação (o GET /shops/sms-device
+  // vai à Cloud). sendable = device enabled que serve a loja.
+  const smsCloudReady = Boolean(
+    smsModule &&
+      shop?.cloudApiUrl &&
+      shop?.cloudShopTokenEncrypted &&
+      (await getSmsDeviceStatus(app.prisma).catch(() => null))?.sendable
+  );
+  if (!(waChannel || smsLocal || smsCloudReady)) {
     return;
   }
 
@@ -92,7 +110,6 @@ async function processPickupReminders(app: FastifyInstance): Promise<void> {
   // the in-app record + SMS. Evolution (Baileys) has no window and keeps
   // the freeform outbox path; a missing template falls back to it too
   // (on Meta it fails and stays FAILED in the outbox — visible signal).
-  const waChannel = shop?.whatsappEnabled ? resolveWhatsAppChannel(shop) : null;
   const metaTemplate =
     waChannel && waChannel.mode !== "evolution" && shop?.pickupReminderTemplate
       ? shop.pickupReminderTemplate

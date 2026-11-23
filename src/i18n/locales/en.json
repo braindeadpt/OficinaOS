@@ -2154,6 +2154,7 @@
   "wa_tpl_free_desc": "Notifications outside the 24-hour WhatsApp window need a Meta-approved template. Create each template below in Meta Business Manager — the name, category and language must match exactly.",
   "wa_tpl_resubmit": "Resubmit",
   "wa_tpl_reason_graph_unreachable": "Meta Graph API unreachable",
+  "wa_tpl_reason_invalid_body_edges": "Body cannot start or end with a variable — Meta rejects it",
   "wa_tpl_reason_invalid_name": "Name invalid for Meta (lowercase letters, digits and underscores only)",
   "wa_tpl_sync_done": "{{ready}} of {{total}} templates approved",
   "wa_tpl_status_approved": "Approved",

@@ -324,11 +324,11 @@ export async function handleEvolutionInbound(
   // sem "whatsapp-bot" (ou com o bot suspenso/termo por aceitar): a
   // gravação acontece no topo do loop, antes do gate do bot, e o
   // dedupe por evo-<id> torna a re-gravação no pipeline uma no-op.
+  // Gate fechado sem inbox: o loop corre na mesma — processParsed só
+  // executa PARAR/STOP nesse modo, porque a revogação de consentimento
+  // é legal e não pode morrer com o bot.
   const inboxEnabled = isModuleEnabled(settings, "ai-inbox");
   const botOpen = botGateOpen(settings);
-  if (!(botOpen || inboxEnabled)) {
-    return;
-  }
   const config = botOpen ? evolutionConfigOf(settings) : null;
   if (botOpen && !config) {
     return;
@@ -422,7 +422,10 @@ async function processOne(
     ? await findCustomersByPhone(prisma, parsed.fromPhone)
     : [];
   if (!(isText && customers.length > 0)) {
-    if (rateOk(`esc:${parsed.fromPhone}`, STAFF_NOTIFY_LIMIT_PER_HOUR)) {
+    // Quota separada ("esc"): alertas de mídia/números sem cliente não
+    // partilham o contador das respostas — duas mensagens de texto não
+    // podem silenciar o alerta de uma foto a seguir.
+    if (rateOk(parsed.fromPhone, STAFF_NOTIFY_LIMIT_PER_HOUR, "esc")) {
       await escalateToStaff(ctx, "WhatsApp", msg, null, null).catch((err) =>
         log.warn({ err }, "evolution-bot escalate failed")
       );

@@ -3,6 +3,7 @@ import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { username } from "better-auth/plugins";
 import { PrismaClient } from "../generated/client";
+import { metaSafeConditionals } from "../server/services/whatsapp-templates.service.js";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -170,6 +171,45 @@ const LEGACY_EN_TEMPLATE_BODIES: Record<string, string> = {
     "Hello {{customerName}}, please review and sign {{docLabel}}{{if jobCode}} for repair {{jobCode}}{{endif}}: {{signUrl}} (valid for {{ttlMinutes}} min).{{if shopName}} — {{shopName}}{{endif}}",
 };
 
+/**
+ * PT-PT bodies seeded before the Meta-compatibility fix — the trailing
+ * conditional blocks closed in a bare variable, which the Meta rejects
+ * ("body can't end in a parameter"). Only WHATSAPP keys: IN_APP bodies
+ * were unchanged and the current PT body is the target. A row still
+ * holding one of these byte-for-byte is an untouched default — the seed
+ * upgrades it to the corrected body; shop edits never match.
+ */
+const LEGACY_PT_TEMPLATE_BODIES: Record<string, string> = {
+  "job_created:WHATSAPP":
+    "Olá {{customerName}}, a sua reparação {{jobCode}} foi registada. Vamos mantê-lo informado em cada passo.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nAcompanhe aqui: {{trackingUrl}}{{endif}}",
+  "job_done:WHATSAPP":
+    "Boas notícias, {{customerName}}! O seu aparelho {{jobCode}} está reparado e pronto a levantar.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nAcompanhe aqui: {{trackingUrl}}{{endif}}",
+  "job_in_repair:WHATSAPP":
+    "Olá {{customerName}}, o seu aparelho {{jobCode}} já está em reparação.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nAcompanhe aqui: {{trackingUrl}}{{endif}}",
+  "job_waiting_parts:WHATSAPP":
+    "Olá {{customerName}}, o seu aparelho {{jobCode}} está a aguardar peças. Avisamos assim que chegarem.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nAcompanhe aqui: {{trackingUrl}}{{endif}}",
+  "job_delivered:WHATSAPP":
+    "Olá {{customerName}}, o seu aparelho {{jobCode}} foi entregue. Obrigado pela confiança!{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nRecibo e garantia: {{trackingUrl}}{{endif}}{{if reviewUrl}}\nFicou satisfeito com a reparação? Uma avaliação rápida ajuda-nos muito: {{reviewUrl}}{{endif}}",
+  "job_on_hold:WHATSAPP":
+    "Olá {{customerName}}, a reparação do seu aparelho {{jobCode}} está em pausa. Por favor contacte-nos para mais detalhes.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nAcompanhe aqui: {{trackingUrl}}{{endif}}",
+  "job_returned:WHATSAPP":
+    "Olá {{customerName}}, o seu aparelho {{jobCode}} foi devolvido.{{if shopName}} — {{shopName}}{{endif}}",
+  "job_cancelled:WHATSAPP":
+    "Olá {{customerName}}, a sua reparação {{jobCode}} foi cancelada.{{if shopName}} — {{shopName}}{{endif}}",
+  "quote_sent:WHATSAPP":
+    "Olá {{customerName}}, o orçamento da sua reparação {{jobCode}} está pronto: {{quoteAmount}} {{currency}}.{{if trackingUrl}}\nConsulte e aprove aqui: {{trackingUrl}}{{endif}}{{if shopName}} — {{shopName}}{{endif}}",
+  "job_overdue:WHATSAPP":
+    "Olá {{customerName}}, a sua reparação {{jobCode}} está a demorar mais do que o previsto. A nossa equipa está a tratar do assunto e daremos notícias em breve.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nAcompanhe aqui: {{trackingUrl}}{{endif}}",
+  "job_done_reminder:WHATSAPP":
+    "Olá {{customerName}}, a sua reparação {{jobCode}} está pronta a levantar há alguns dias — passe na loja quando lhe for conveniente.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nAcompanhe aqui: {{trackingUrl}}{{endif}}",
+  "warranty_return_created:WHATSAPP":
+    "Olá {{customerName}}, registámos uma devolução em garantia para o seu aparelho {{jobCode}}. Vamos analisá-lo e manteremos o contacto.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nAcompanhe aqui: {{trackingUrl}}{{endif}}",
+  "part_low_stock:WHATSAPP":
+    "Alerta de stock baixo: {{partName}} tem apenas {{partQuantity}} unidades (nível de encomenda: {{partReorderLevel}}).{{if shopName}} — {{shopName}}{{endif}}",
+  "signature_link:WHATSAPP":
+    "Olá {{customerName}}, por favor reveja e assine {{docLabel}}{{if jobCode}} da reparação {{jobCode}}{{endif}}: {{signUrl}} (válido durante {{ttlMinutes}} min).{{if shopName}} — {{shopName}}{{endif}}",
+};
+
 // Default templates in PT-PT (the product's primary market). The SMS
 // channel falls back to the WhatsApp body when no SMS template exists.
 async function seedNotificationTemplates() {
@@ -241,7 +281,7 @@ async function seedNotificationTemplates() {
       // pipeline like every other automatic event.
       name: "job_done_reminder",
       channel: "WHATSAPP" as const,
-      body: "Olá {{customerName}}, a sua reparação {{jobCode}} está pronta a levantar há alguns dias — passe na loja quando lhe for conveniente.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nAcompanhe aqui: {{trackingUrl}}{{endif}}",
+      body: "Olá {{customerName}}, a sua reparação {{jobCode}} está pronta a levantar há alguns dias — passe na loja quando lhe for conveniente.{{if shopName}} — {{shopName}}.{{endif}}{{if trackingUrl}}\nAcompanhe aqui: {{trackingUrl}}.{{endif}}",
       isDefault: true,
     },
     {
@@ -283,49 +323,49 @@ async function seedNotificationTemplates() {
       // or render as an empty gap.
       name: "job_created",
       channel: "WHATSAPP" as const,
-      body: "Olá {{customerName}}, a sua reparação {{jobCode}} foi registada. Vamos mantê-lo informado em cada passo.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nAcompanhe aqui: {{trackingUrl}}{{endif}}",
+      body: "Olá {{customerName}}, a sua reparação {{jobCode}} foi registada. Vamos mantê-lo informado em cada passo.{{if shopName}} — {{shopName}}.{{endif}}{{if trackingUrl}}\nAcompanhe aqui: {{trackingUrl}}.{{endif}}",
       isDefault: true,
     },
     {
       name: "job_done",
       channel: "WHATSAPP" as const,
-      body: "Boas notícias, {{customerName}}! O seu aparelho {{jobCode}} está reparado e pronto a levantar.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nAcompanhe aqui: {{trackingUrl}}{{endif}}",
+      body: "Boas notícias, {{customerName}}! O seu aparelho {{jobCode}} está reparado e pronto a levantar.{{if shopName}} — {{shopName}}.{{endif}}{{if trackingUrl}}\nAcompanhe aqui: {{trackingUrl}}.{{endif}}",
       isDefault: true,
     },
     {
       name: "job_in_repair",
       channel: "WHATSAPP" as const,
-      body: "Olá {{customerName}}, o seu aparelho {{jobCode}} já está em reparação.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nAcompanhe aqui: {{trackingUrl}}{{endif}}",
+      body: "Olá {{customerName}}, o seu aparelho {{jobCode}} já está em reparação.{{if shopName}} — {{shopName}}.{{endif}}{{if trackingUrl}}\nAcompanhe aqui: {{trackingUrl}}.{{endif}}",
       isDefault: true,
     },
     {
       name: "job_waiting_parts",
       channel: "WHATSAPP" as const,
-      body: "Olá {{customerName}}, o seu aparelho {{jobCode}} está a aguardar peças. Avisamos assim que chegarem.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nAcompanhe aqui: {{trackingUrl}}{{endif}}",
+      body: "Olá {{customerName}}, o seu aparelho {{jobCode}} está a aguardar peças. Avisamos assim que chegarem.{{if shopName}} — {{shopName}}.{{endif}}{{if trackingUrl}}\nAcompanhe aqui: {{trackingUrl}}.{{endif}}",
       isDefault: true,
     },
     {
       name: "job_delivered",
       channel: "WHATSAPP" as const,
-      body: "Olá {{customerName}}, o seu aparelho {{jobCode}} foi entregue. Obrigado pela confiança!{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nRecibo e garantia: {{trackingUrl}}{{endif}}{{if reviewUrl}}\nFicou satisfeito com a reparação? Uma avaliação rápida ajuda-nos muito: {{reviewUrl}}{{endif}}",
+      body: "Olá {{customerName}}, o seu aparelho {{jobCode}} foi entregue. Obrigado pela confiança!{{if shopName}} — {{shopName}}.{{endif}}{{if trackingUrl}}\nRecibo e garantia: {{trackingUrl}}.{{endif}}{{if reviewUrl}}\nFicou satisfeito com a reparação? Uma avaliação rápida ajuda-nos muito: {{reviewUrl}}.{{endif}}",
       isDefault: true,
     },
     {
       name: "job_on_hold",
       channel: "WHATSAPP" as const,
-      body: "Olá {{customerName}}, a reparação do seu aparelho {{jobCode}} está em pausa. Por favor contacte-nos para mais detalhes.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nAcompanhe aqui: {{trackingUrl}}{{endif}}",
+      body: "Olá {{customerName}}, a reparação do seu aparelho {{jobCode}} está em pausa. Por favor contacte-nos para mais detalhes.{{if shopName}} — {{shopName}}.{{endif}}{{if trackingUrl}}\nAcompanhe aqui: {{trackingUrl}}.{{endif}}",
       isDefault: true,
     },
     {
       name: "job_returned",
       channel: "WHATSAPP" as const,
-      body: "Olá {{customerName}}, o seu aparelho {{jobCode}} foi devolvido.{{if shopName}} — {{shopName}}{{endif}}",
+      body: "Olá {{customerName}}, o seu aparelho {{jobCode}} foi devolvido.{{if shopName}} — {{shopName}}.{{endif}}",
       isDefault: true,
     },
     {
       name: "job_cancelled",
       channel: "WHATSAPP" as const,
-      body: "Olá {{customerName}}, a sua reparação {{jobCode}} foi cancelada.{{if shopName}} — {{shopName}}{{endif}}",
+      body: "Olá {{customerName}}, a sua reparação {{jobCode}} foi cancelada.{{if shopName}} — {{shopName}}.{{endif}}",
       isDefault: true,
     },
     {
@@ -334,7 +374,7 @@ async function seedNotificationTemplates() {
       // a public base URL; currency is injected centrally.
       name: "quote_sent",
       channel: "WHATSAPP" as const,
-      body: "Olá {{customerName}}, o orçamento da sua reparação {{jobCode}} está pronto: {{quoteAmount}} {{currency}}.{{if trackingUrl}}\nConsulte e aprove aqui: {{trackingUrl}}{{endif}}{{if shopName}} — {{shopName}}{{endif}}",
+      body: "Olá {{customerName}}, o orçamento da sua reparação {{jobCode}} está pronto: {{quoteAmount}} {{currency}}.{{if trackingUrl}}\nConsulte e aprove aqui: {{trackingUrl}}.{{endif}}{{if shopName}} — {{shopName}}.{{endif}}",
       isDefault: true,
     },
     {
@@ -343,7 +383,7 @@ async function seedNotificationTemplates() {
       // the dispatch pipeline.
       name: "job_overdue",
       channel: "WHATSAPP" as const,
-      body: "Olá {{customerName}}, a sua reparação {{jobCode}} está a demorar mais do que o previsto. A nossa equipa está a tratar do assunto e daremos notícias em breve.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nAcompanhe aqui: {{trackingUrl}}{{endif}}",
+      body: "Olá {{customerName}}, a sua reparação {{jobCode}} está a demorar mais do que o previsto. A nossa equipa está a tratar do assunto e daremos notícias em breve.{{if shopName}} — {{shopName}}.{{endif}}{{if trackingUrl}}\nAcompanhe aqui: {{trackingUrl}}.{{endif}}",
       isDefault: true,
     },
     {
@@ -353,7 +393,7 @@ async function seedNotificationTemplates() {
       // optional and rendered via {{if}} (see above).
       name: "warranty_return_created",
       channel: "WHATSAPP" as const,
-      body: "Olá {{customerName}}, registámos uma devolução em garantia para o seu aparelho {{jobCode}}. Vamos analisá-lo e manteremos o contacto.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}\nAcompanhe aqui: {{trackingUrl}}{{endif}}",
+      body: "Olá {{customerName}}, registámos uma devolução em garantia para o seu aparelho {{jobCode}}. Vamos analisá-lo e manteremos o contacto.{{if shopName}} — {{shopName}}.{{endif}}{{if trackingUrl}}\nAcompanhe aqui: {{trackingUrl}}.{{endif}}",
       isDefault: true,
     },
     {
@@ -364,7 +404,7 @@ async function seedNotificationTemplates() {
       // the notify context; the rendered vars stay consistent today.
       name: "part_low_stock",
       channel: "WHATSAPP" as const,
-      body: "Alerta de stock baixo: {{partName}} tem apenas {{partQuantity}} unidades (nível de encomenda: {{partReorderLevel}}).{{if shopName}} — {{shopName}}{{endif}}",
+      body: "Alerta de stock baixo: {{partName}} tem apenas {{partQuantity}} unidades (nível de encomenda: {{partReorderLevel}}).{{if shopName}} — {{shopName}}.{{endif}}",
       isDefault: true,
     },
     {
@@ -378,7 +418,7 @@ async function seedNotificationTemplates() {
     {
       name: "signature_link",
       channel: "WHATSAPP" as const,
-      body: "Olá {{customerName}}, por favor reveja e assine {{docLabel}}{{if jobCode}} da reparação {{jobCode}}{{endif}}: {{signUrl}} (válido durante {{ttlMinutes}} min).{{if shopName}} — {{shopName}}{{endif}}",
+      body: "Olá {{customerName}}, por favor reveja e assine {{docLabel}}{{if jobCode}} da reparação {{jobCode}}{{endif}}: {{signUrl}} (válido durante {{ttlMinutes}} min).{{if shopName}} — {{shopName}}.{{endif}}",
       isDefault: true,
     },
   ];
@@ -392,14 +432,24 @@ async function seedNotificationTemplates() {
       await prisma.notificationTemplate.create({ data: tmpl });
       continue;
     }
-    // Earlier releases seeded these defaults in English. Upgrade a row only
-    // while it still holds that untouched English body — a shop's own edits
-    // are never overwritten.
-    if (
-      existing.body !== tmpl.body &&
-      existing.body ===
-        LEGACY_EN_TEMPLATE_BODIES[`${tmpl.name}:${tmpl.channel}`]
-    ) {
+    // Earlier releases seeded these defaults in English, and the PT-PT
+    // WhatsApp bodies once closed their trailing conditional blocks in a
+    // bare variable — a shape Meta rejects ("body can't end in a
+    // parameter"). Upgrade a row only while it still holds an untouched
+    // default: an old EN/PT literal or its migration-fixed variant
+    // (metaSafeConditionals inserts "." inside the trailing endif — the
+    // DB migration produces exactly that for rows already installed).
+    // A shop's own edits never match and are never overwritten.
+    const key0 = `${tmpl.name}:${tmpl.channel}`;
+    const untouched = [
+      LEGACY_EN_TEMPLATE_BODIES[key0],
+      LEGACY_PT_TEMPLATE_BODIES[key0],
+    ].some(
+      (b) =>
+        b !== undefined &&
+        (existing.body === b || existing.body === metaSafeConditionals(b))
+    );
+    if (existing.body !== tmpl.body && untouched) {
       await prisma.notificationTemplate.update({
         where: { name_channel: key },
         data: { body: tmpl.body },
