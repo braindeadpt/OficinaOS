@@ -6,9 +6,9 @@ const mocks = vi.hoisted(() => ({
     async (): Promise<{ sendable: boolean } | null> => null
   ),
   notify: vi.fn().mockResolvedValue(undefined),
-  resolveWhatsAppChannel: vi.fn(
-    (): { mode: "meta" } | null => ({ mode: "meta" as const })
-  ),
+  resolveWhatsAppChannel: vi.fn((): { mode: "meta" } | null => ({
+    mode: "meta" as const,
+  })),
   sendWhatsAppTemplateVia: vi.fn(async () => ({ success: true })),
 }));
 

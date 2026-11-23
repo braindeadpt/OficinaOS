@@ -229,11 +229,14 @@ async function persistStatuses(
     // conserva-se apenas o corpo de uma aprovação remota anterior.
     const submitted =
       s.status !== "MISSING" && s.reason !== "INVALID_BODY_EDGES";
-    const approvedBody = submitted
-      ? (prevEntry?.body ?? namedBodyOf.get(s.name))
-      : prevEntry?.status === "APPROVED"
-        ? prevEntry.body
-        : null;
+    let approvedBody: string | null | undefined;
+    if (submitted) {
+      approvedBody = prevEntry?.body ?? namedBodyOf.get(s.name);
+    } else if (prevEntry?.status === "APPROVED") {
+      approvedBody = prevEntry.body;
+    } else {
+      approvedBody = null;
+    }
     // Edição local inválida sobre um nome já aprovado na Meta: a versão
     // remota continua válida e enviável — o estado não desce para
     // REJECTED, senão a fila expirava mensagens autorizadas. O reason
