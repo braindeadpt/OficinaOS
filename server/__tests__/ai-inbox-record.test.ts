@@ -167,6 +167,40 @@ describe("recordInboundMessage", () => {
     expect(messages).toHaveLength(2);
   });
 
+  it("guarda o phone em dígitos internacionais — reply com '+' entrega", async () => {
+    // Regressão Devin: a conversa guardava "912345678" local e o reply
+    // staff fazia prepend de "+" → "+912345678" falhava a entrega.
+    const { tx } = fakePrisma();
+    const txx = tx as unknown as {
+      inboxConversation: {
+        findUnique: (o: {
+          where: { conversationKey: string };
+        }) => Promise<{ phone?: string } | null>;
+      };
+    };
+    await recordInboundMessage(tx, log, {
+      channel: "whatsapp",
+      externalId: "wamid-local",
+      phone: "912345678",
+      text: "olá",
+    });
+    const conv = await txx.inboxConversation.findUnique({
+      where: { conversationKey: "whatsapp:351912345678" },
+    });
+    expect(conv?.phone).toBe("351912345678");
+    // Formato internacional explícito também fica igual.
+    await recordInboundMessage(tx, log, {
+      channel: "sms",
+      externalId: "sms-1",
+      phone: "00351912345678",
+      text: "oi",
+    });
+    const convSms = await txx.inboxConversation.findUnique({
+      where: { conversationKey: "sms:351912345678" },
+    });
+    expect(convSms?.phone).toBe("351912345678");
+  });
+
   it("dedup: externalId repetido não duplica nem soma não-lidas", async () => {
     const { tx, messages } = fakePrisma();
     const first = await recordInboundMessage(tx, log, {

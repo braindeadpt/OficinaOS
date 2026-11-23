@@ -260,6 +260,42 @@ describe("rascunhar_resposta / enviar_rascunho — §G.5", () => {
     expect(mocks.sendWhatsAppText).not.toHaveBeenCalled();
   });
 
+  it("SENDING preso por restart volta a ser reclamável e envia", async () => {
+    // Regressão Devin: crash entre o claim SENDING e o transporte deixava
+    // o rascunho invisível na lista e o retry reportava "a enviar" para
+    // sempre. O claim passa a aceitar SENDING stale (updatedAt velho).
+    const updateMany = vi.fn(async () => ({ count: 1 }));
+    const prisma = fakePrisma({
+      inboxDraft: {
+        findUnique: vi.fn(async () => ({
+          approvedAt: new Date(),
+          conversation: {
+            channel: "whatsapp",
+            id: "conv-1",
+            lastInboundAt: new Date(),
+            phone: "351912345678",
+          },
+          id: "draft-1",
+          status: "SENDING",
+          text: "x",
+        })),
+        update: vi.fn(async () => ({})),
+        updateMany,
+      },
+    });
+    const out = await sendApprovedDraft(prisma, log, "draft-1", "u-owner");
+    expect(out.error).toBeUndefined();
+    expect(updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: expect.arrayContaining([
+            expect.objectContaining({ status: "SENDING" }),
+          ]),
+        }),
+      })
+    );
+  });
+
   it("enviar_rascunho sem aprovação e sem mcpDirectSend → aguarda aprovação", async () => {
     const prisma = fakePrisma({
       inboxDraft: {

@@ -12,6 +12,7 @@ import {
 import { askStaffAi } from "../services/staff-ai.service.js";
 import {
   runStaffInboxTool,
+  STALE_SENDING_MS,
   sendApprovedDraft,
 } from "../services/staff-inbox-tools.js";
 import { isModuleEnabled } from "../utils/modules.js";
@@ -416,7 +417,18 @@ export const inboxRoutes: FastifyPluginAsync = async (app) => {
         },
         orderBy: { createdAt: "desc" },
         take: 50,
-        where: { status: "PENDING" },
+        // SENDING preso além do timeout (restart a meio do envio) volta
+        // à lista — o retry reclama-o e envia de vez; sem isto ficava
+        // invisível e impossível de recuperar pela UI.
+        where: {
+          OR: [
+            { status: "PENDING" },
+            {
+              status: "SENDING",
+              updatedAt: { lt: new Date(Date.now() - STALE_SENDING_MS) },
+            },
+          ],
+        },
       });
       return reply.send({ data: rows });
     }

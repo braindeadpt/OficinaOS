@@ -262,7 +262,10 @@ async function drainInboxOnly(
     processed.push(msg.id);
     // silentSend: o pipeline corre (registo + PARAR + escalada) mas o
     // envio é no-op — sem canal resolvido nada sai para o cliente.
+    // allowQuoteDecision=false: sem canal real de resposta, SIM/NÃO não
+    // pode aprovar/rejeitar orçamentos em silêncio.
     await handleInboundMessage(ctx, msg, {
+      allowQuoteDecision: false,
       channelLabel: "WhatsApp",
       send: () => Promise.resolve(true),
       silentSend: true,

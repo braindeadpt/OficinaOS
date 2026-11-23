@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
       _t: {
         allowQuoteDecision?: boolean;
         send: (text: string) => Promise<boolean>;
+        silentSend?: boolean;
       }
     ) => ({ reply: { text: "resposta" }, sent: true })
   ),
@@ -209,5 +210,46 @@ describe("pollWhatsAppInbound — fila Meta com transporte Evolution", () => {
     });
     await pollWhatsAppInbound(prisma, "https://cloud", "tok", log, undefined);
     expect(mocks.cloudFetch).toHaveBeenCalled();
+  });
+});
+
+describe("pollWhatsAppInbound — ai-inbox sem canal WhatsApp resolvido", () => {
+  it("regista inbound mas suprime envios E decisões de orçamento", async () => {
+    // Regressão Devin: em modo só-inbox o SIM/NÃO continuava a aprovar
+    // orçamentos em silêncio — sem canal de resposta real não pode
+    // haver decisão de quote.
+    mocks.getOrCreateShopSettings.mockResolvedValue({
+      cloudEntitlements: ["ai-inbox"],
+      cloudSyncedAt: new Date(),
+      whatsappBotDisclaimerAt: null,
+      whatsappBotSuspendedAt: null,
+      whatsappEnabled: true,
+      whatsappTransport: "meta",
+    });
+    mocks.resolveWhatsAppChannel.mockReturnValue(null);
+    mocks.cloudFetch
+      .mockResolvedValueOnce({
+        body: {
+          messages: [
+            { fromPhone: "351900000001", id: "m-sim", text: "SIM" },
+            { fromPhone: "351900000002", id: "m-ask", text: "está pronto?" },
+          ],
+        },
+        ok: true,
+      })
+      .mockResolvedValueOnce({ body: {}, ok: true }); // ack
+
+    await pollWhatsAppInbound(prisma, "https://cloud", "tok", log, undefined);
+    expect(mocks.handleInboundMessage).toHaveBeenCalledTimes(2);
+    for (const call of mocks.handleInboundMessage.mock.calls) {
+      expect(call?.[2]?.allowQuoteDecision).toBe(false);
+      expect(call?.[2]?.silentSend).toBe(true);
+    }
+    expect(mocks.sendWhatsAppText).not.toHaveBeenCalled();
+    expect(mocks.cloudFetch).toHaveBeenLastCalledWith(
+      "https://cloud",
+      "/whatsapp/inbound/ack",
+      expect.objectContaining({ body: { ids: ["m-sim", "m-ask"] } })
+    );
   });
 });

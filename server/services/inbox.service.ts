@@ -2,7 +2,6 @@ import {
   COUNTRY_DIAL_CODES,
   NATIONAL_NUMBER_LENGTHS,
 } from "@shared/constants/countries.js";
-import { normalizePhone } from "@shared/utils/phone.js";
 import type { DbClient } from "../repositories/types.js";
 import { findCustomersByPhone } from "./bot-intents.js";
 
@@ -46,15 +45,16 @@ const CHANNEL_SUBJECT: Record<string, string> = {
   whatsapp: "WhatsApp",
 };
 
-export function inboxConversationKey(
-  channel: string,
+/**
+ * Dígitos no formato internacional (sem "+" nem "00"), com o indicativo
+ * do país da loja quando o número chega local. Regra única partilhada
+ * pela chave de conversa e pelo phone guardado — assim o reply staff
+ * pode fazer prepend de "+" sem partir números locais.
+ */
+export function internationalPhoneDigits(
   phone: string,
   countryCode = "PT"
 ): string {
-  // Canais entregam o remetente em formatos mistos ("912345678" local,
-  // "351912…", "+351912…", "00351…", JID Evolution): a key vai para o
-  // formato internacional com o indicativo do país da loja — formatos
-  // equivalentes do mesmo número físico convergem na mesma conversa.
   const trimmed = phone.trim();
   let digits = trimmed.replace(/\D/g, "");
   const international = trimmed.startsWith("+") || digits.startsWith("00");
@@ -67,7 +67,19 @@ export function inboxConversationKey(
       digits = `${COUNTRY_DIAL_CODES[countryCode] ?? COUNTRY_DIAL_CODES.PT}${digits}`;
     }
   }
-  return `${channel}:${digits}`;
+  return digits;
+}
+
+export function inboxConversationKey(
+  channel: string,
+  phone: string,
+  countryCode = "PT"
+): string {
+  // Canais entregam o remetente em formatos mistos ("912345678" local,
+  // "351912…", "+351912…", "00351…", JID Evolution): a key vai para o
+  // formato internacional com o indicativo do país da loja — formatos
+  // equivalentes do mesmo número físico convergem na mesma conversa.
+  return `${channel}:${internationalPhoneDigits(phone, countryCode)}`;
 }
 
 /** Indicativo do país da loja para a chave de conversa (uma query). */
@@ -120,11 +132,12 @@ export async function recordInboundMessage(
   opts: RecordBase
 ): Promise<RecordedMessage | null> {
   const at = opts.at ?? new Date();
-  const key = inboxConversationKey(
-    opts.channel,
-    opts.phone,
-    await shopCountryCode(prisma)
-  );
+  const countryCode = await shopCountryCode(prisma);
+  const key = inboxConversationKey(opts.channel, opts.phone, countryCode);
+  // O phone guardado vai em dígitos internacionais (mesma regra da key)
+  // — um número local como "912345678" gravado cru fazia o reply staff
+  // enviar para "+912345678", entrega falhada.
+  const intlPhone = internationalPhoneDigits(opts.phone, countryCode);
   if (opts.externalId) {
     const existing = await prisma.businessMessage.findFirst({
       where: { channel: opts.channel, externalId: opts.externalId },
@@ -150,13 +163,14 @@ export async function recordInboundMessage(
           escalatedAt: null,
           lastInboundAt: at,
           lastMessageAt: at,
-          phone: normalizePhone(opts.phone),
+          phone: intlPhone,
           unreadCount: 1,
         },
         update: {
           ...(customerId ? { customerId } : {}),
           lastInboundAt: at,
           lastMessageAt: at,
+          phone: intlPhone,
           unreadCount: { increment: 1 },
         },
         where: { conversationKey: key },
@@ -167,7 +181,7 @@ export async function recordInboundMessage(
           channel: opts.channel,
           conversationId: conv.id,
           conversationKey: key,
-          correspondent: normalizePhone(opts.phone),
+          correspondent: intlPhone,
           customerId,
           deliveryStatus: "RECEIVED",
           direction: "INBOUND",
@@ -217,11 +231,9 @@ export async function recordOutboundMessage(
   }
 ): Promise<RecordedMessage | null> {
   const at = opts.at ?? new Date();
-  const key = inboxConversationKey(
-    opts.channel,
-    opts.phone,
-    await shopCountryCode(prisma)
-  );
+  const countryCode = await shopCountryCode(prisma);
+  const key = inboxConversationKey(opts.channel, opts.phone, countryCode);
+  const intlPhone = internationalPhoneDigits(opts.phone, countryCode);
   if (opts.externalId) {
     const existing = await prisma.businessMessage.findFirst({
       where: { channel: opts.channel, externalId: opts.externalId },
@@ -246,12 +258,13 @@ export async function recordOutboundMessage(
           customerId,
           lastMessageAt: at,
           lastOutboundAt: at,
-          phone: normalizePhone(opts.phone),
+          phone: intlPhone,
         },
         update: {
           ...(customerId ? { customerId } : {}),
           lastMessageAt: at,
           lastOutboundAt: at,
+          phone: intlPhone,
         },
         where: { conversationKey: key },
       });
@@ -261,7 +274,7 @@ export async function recordOutboundMessage(
           channel: opts.channel,
           conversationId: conv.id,
           conversationKey: key,
-          correspondent: normalizePhone(opts.phone),
+          correspondent: intlPhone,
           createdById: opts.createdById ?? null,
           customerId,
           deliveryStatus: opts.deliveryStatus ?? "SENT",

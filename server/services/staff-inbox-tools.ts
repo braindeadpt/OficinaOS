@@ -53,6 +53,8 @@ const MAX_RESULTS = 50;
 const MAX_SNIPPET = 200;
 const MAX_MESSAGE_LEN = 4000;
 const REPLY_WINDOW_MS = 23 * 60 * 60 * 1000; // janela Meta 24h (margem)
+/** SENDING mais velho que isto é resíduo de restart — volta a reclamável. */
+export const STALE_SENDING_MS = 10 * 60 * 1000;
 const LEADING_PLUS_RE = /^\+/;
 
 export const STAFF_INBOX_TOOLS = [
@@ -700,6 +702,11 @@ export async function sendApprovedDraft(
   // Transição atómica para o estado reservado SENDING — dois cliques
   // concorrentes em «Aprovar e enviar» não podem enviar duas vezes: o
   // segundo perde a corrida no updateMany e nunca chega ao transporte.
+  // Um SENDING mais velho que o timeout é resíduo de um restart a meio
+  // do envio — volta a ser reclamável, senão o rascunho ficava preso
+  // (invisível na lista de pendentes) e o retry reportava "a enviar"
+  // para sempre sem nunca enviar.
+  const staleBefore = new Date(Date.now() - STALE_SENDING_MS);
   const claimed = await prisma.inboxDraft.updateMany({
     data: {
       approvedAt: draft.approvedAt ?? new Date(),
@@ -708,7 +715,10 @@ export async function sendApprovedDraft(
     },
     where: {
       id: draftId,
-      status: { in: ["DRAFT", "PENDING", "FAILED"] },
+      OR: [
+        { status: { in: ["DRAFT", "PENDING", "FAILED"] } },
+        { status: "SENDING", updatedAt: { lt: staleBefore } },
+      ],
     },
   });
   if (claimed.count !== 1) {
