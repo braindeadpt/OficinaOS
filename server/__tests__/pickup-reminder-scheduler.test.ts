@@ -2,9 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   decryptSmsConfig: vi.fn(() => null),
-  getSmsDeviceStatus: vi.fn(async () => null),
+  getSmsDeviceStatus: vi.fn(
+    async (): Promise<{ sendable: boolean } | null> => null
+  ),
   notify: vi.fn().mockResolvedValue(undefined),
-  resolveWhatsAppChannel: vi.fn(() => ({ mode: "meta" as const })),
+  resolveWhatsAppChannel: vi.fn(
+    (): { mode: "meta" } | null => ({ mode: "meta" as const })
+  ),
   sendWhatsAppTemplateVia: vi.fn(async () => ({ success: true })),
 }));
 

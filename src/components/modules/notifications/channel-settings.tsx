@@ -496,6 +496,7 @@ const WA_TPL_CHIP_CLASS: Record<string, string> = {
 // mostram-se cruas — não há tradução para diagnósticos da Meta.
 const WA_TPL_REASON_KEYS: Record<string, string> = {
   GRAPH_UNREACHABLE: "wa_tpl_reason_graph_unreachable",
+  INVALID_BODY_EDGES: "wa_tpl_reason_invalid_body_edges",
   INVALID_NAME: "wa_tpl_reason_invalid_name",
 };
 

@@ -103,6 +103,26 @@ describe("metaSafeConditionals", () => {
     const body = "{{if jobCode}} rep {{jobCode}}{{endif}}: link {{u}}";
     expect(metaSafeConditionals(body)).toBe(body);
   });
+
+  it("não pontua uma variável quando texto literal segue blocos {{if}} seguintes", () => {
+    // Regressão Devin: o lookahead antigo só via o próximo {{if}} e
+    // inseria "." mesmo com texto literal depois do bloco seguinte —
+    // dentro de um URL de seguimento isso corrompia o link
+    // (`?phone4=1234.&utm_medium=…`).
+    const body =
+      "Consulte: {{if trackingUrl}}{{trackingUrl}}{{endif}}{{if shopName}}&utm_medium=mensagem{{endif}}&utm_source=oficina";
+    expect(metaSafeConditionals(body)).toBe(body);
+  });
+
+  it("pontua quando o sufixo é só blocos {{if}} completos até ao fim", () => {
+    expect(
+      metaSafeConditionals(
+        "{{if trackingUrl}}{{trackingUrl}}{{endif}}{{if shopName}} — {{shopName}}{{endif}}"
+      )
+    ).toBe(
+      "{{if trackingUrl}}{{trackingUrl}}.{{endif}}{{if shopName}} — {{shopName}}.{{endif}}"
+    );
+  });
 });
 
 describe("isMetaBodySubmittable", () => {
@@ -246,6 +266,57 @@ describe("syncWhatsAppTemplates", () => {
         data: expect.objectContaining({
           whatsappTemplatesJson: expect.objectContaining({
             job_done: expect.objectContaining({ status: "APPROVED" }),
+          }),
+        }),
+      })
+    );
+  });
+
+  it("cloud: edição local inválida não derruba aprovação remota nem congela corpo não submetido", async () => {
+    // Regressão Devin r9: um corpo inválido (a acabar em variável) era
+    // persistido como REJECTED — apagava a aprovação remota que ainda
+    // existe na Meta e congelava o corpo inválido como "versão remota",
+    // trocando a ordem dos parâmetros após a correção ser aprovada.
+    mocks.getOrCreateShopSettings.mockResolvedValue(cloudSettings);
+    notificationTemplate.findMany.mockResolvedValue([
+      { body: "Olá {{customerName}}", name: "job_done" }, // inválido, já aprovado remotamente
+      { body: "Fim {{customerName}}", name: "new_tpl" }, // inválido, nunca submetido
+    ]);
+    shopSettingsFindUnique.mockResolvedValue({
+      whatsappTemplatesJson: {
+        job_done: {
+          body: "Olá {{customerName}}, a REP {{jobCode}}.",
+          status: "APPROVED",
+          syncedAt: "2026-11-01T00:00:00Z",
+        },
+      },
+    });
+    mocks.cloudFetch.mockResolvedValue({
+      body: { templates: [] },
+      ok: true,
+      status: 200,
+    });
+
+    const res = await syncWhatsAppTemplates(prisma);
+    // O diagnóstico ao autor mantém-se REJECTED — o persistido não.
+    expect(
+      res.templates.every(
+        (t) => t.status === "REJECTED" && t.reason === "INVALID_BODY_EDGES"
+      )
+    ).toBe(true);
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          whatsappTemplatesJson: expect.objectContaining({
+            job_done: expect.objectContaining({
+              body: "Olá {{customerName}}, a REP {{jobCode}}.",
+              reason: "INVALID_BODY_EDGES",
+              status: "APPROVED",
+            }),
+            new_tpl: expect.objectContaining({
+              body: null,
+              status: "REJECTED",
+            }),
           }),
         }),
       })

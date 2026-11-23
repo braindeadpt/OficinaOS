@@ -672,7 +672,15 @@ export async function upsertSmsSettings(
     data.smsWebhookToken = generateSmsWebhookToken();
   } else if (input.enabled) {
     const current = await findShopSettingsUnique(prisma);
-    if (!current?.smsWebhookToken) {
+    // Instalações antigas partilhavam este segredo com o webhook da
+    // Evolution — tokens iguais significam que uma cópia continua a
+    // autenticar SMS de entrada. Ao reativar o gateway (off→on) roda-se
+    // o token para invalidar a cópia partilhada.
+    const reactivating = current != null && current.smsEnabled === false;
+    const sharedWithEvolution =
+      current?.smsWebhookToken != null &&
+      current.smsWebhookToken === current.evolutionWebhookToken;
+    if (!current?.smsWebhookToken || (reactivating && sharedWithEvolution)) {
       data.smsWebhookToken = generateSmsWebhookToken();
     }
   }

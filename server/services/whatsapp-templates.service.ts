@@ -39,14 +39,17 @@ export function isMetaBodySubmittable(body: string): boolean {
 
 /**
  * A Meta rejeita corpos que terminam num parâmetro. Um bloco condicional
- * cujo conteúdo fecha numa variável torna-se terminal quando é o último
- * ou é seguido apenas por outro bloco {{if}} (que pode expandir para
- * vazio) — por isso a variável recebe um "." literal, garantindo texto
- * depois do parâmetro. Espelha a migração 20261228000000 (Postgres).
+ * cujo conteúdo fecha numa variável torna-se terminal quando tudo o
+ * que segue o {{endif}} é espaço em branco ou outros blocos {{if}}
+ * completos (que podem expandir para vazio) — por isso a variável
+ * recebe um "." literal, garantindo texto depois do parâmetro. Texto
+ * literal depois do bloco impede a inserção: um "." dentro de um URL
+ * corrompia-o (ex.: `…{{trackingUrl}}{{endif}}&utm_source=…`).
+ * Espelha a migração 20261228000000 (Postgres).
  */
 export function metaSafeConditionals(body: string): string {
   return body.replace(
-    /(\{\{\w+\}\})(\{\{endif\}\})(?=\s*(?:\{\{if|$))/g,
+    /(\{\{\w+\}\})(\{\{endif\}\})(?=(\s*\{\{if[^{}]*\}\}[\s\S]*?\{\{endif\}\})*\s*$)/g,
     "$1.$2"
   );
 }
@@ -200,7 +203,7 @@ export function approvedTemplateBodyOf(
 async function persistStatuses(
   prisma: DbClient,
   statuses: TemplateStatus[],
-  desired: MetaTemplateSpec[]
+  submittable: MetaTemplateSpec[]
 ): Promise<void> {
   const prev = (
     await prisma.shopSettings.findUnique({
@@ -212,18 +215,39 @@ async function persistStatuses(
     prev && typeof prev === "object"
       ? (prev as Record<string, PersistedTemplateStatus>)
       : {};
-  const namedBodyOf = new Map(desired.map((d) => [d.name, d.namedBody]));
+  // Só os corpos realmente submetidos alimentam o mapa: um corpo
+  // inválido local (excluído do pedido à Cloud) gravado aqui ficava
+  // congelado como "versão remota" e trocava a ordem dos parâmetros
+  // quando a correção seguinte fosse aprovada.
+  const namedBodyOf = new Map(submittable.map((d) => [d.name, d.namedBody]));
   const json: Record<string, Prisma.InputJsonValue> = {};
   for (const s of statuses) {
-    // A aprovação fica ligada à versão do corpo: grava-se o corpo da
-    // primeira submissão e mantém-se — a Cloud nunca reescreve um modelo
-    // existente, por isso a versão que a Meta tem aprovada não muda com
-    // edições locais posteriores.
-    const approvedBody = prevMap[s.name]?.body ?? namedBodyOf.get(s.name);
+    const prevEntry = prevMap[s.name];
+    // O corpo só se associa à versão remota quando o estado confirma
+    // submissão — MISSING (não criado) e INVALID_BODY_EDGES (nunca
+    // enviado) não recebem o corpo local como "aprovado". Nesses casos
+    // conserva-se apenas o corpo de uma aprovação remota anterior.
+    const submitted =
+      s.status !== "MISSING" && s.reason !== "INVALID_BODY_EDGES";
+    const approvedBody = submitted
+      ? (prevEntry?.body ?? namedBodyOf.get(s.name))
+      : prevEntry?.status === "APPROVED"
+        ? prevEntry.body
+        : null;
+    // Edição local inválida sobre um nome já aprovado na Meta: a versão
+    // remota continua válida e enviável — o estado não desce para
+    // REJECTED, senão a fila expirava mensagens autorizadas. O reason
+    // fica para a UI avisar que a edição local não foi submetida.
+    const effectiveStatus =
+      s.status === "REJECTED" &&
+      s.reason === "INVALID_BODY_EDGES" &&
+      prevEntry?.status === "APPROVED"
+        ? "APPROVED"
+        : s.status;
     json[s.name] = {
       body: approvedBody ?? null,
       reason: s.reason ?? null,
-      status: s.status,
+      status: effectiveStatus,
       syncedAt: s.syncedAt ?? new Date().toISOString(),
     };
   }
@@ -386,7 +410,7 @@ export async function syncWhatsAppTemplates(
   }
   const statuses = [...res, ...invalidStatuses];
 
-  await persistStatuses(prisma, statuses, desired).catch((err) =>
+  await persistStatuses(prisma, statuses, submittable).catch((err) =>
     log?.warn({ err }, "whatsapp-templates: persistência do estado falhou")
   );
   // Toda a persistência de aprovações antecipa a fila (sync manual nas
