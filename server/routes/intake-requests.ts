@@ -7,6 +7,7 @@ import {
   convertIntakeRequest,
   dismissIntakeRequest,
   generateIntakeAiReport,
+  generateIntakeQuoteSuggestion,
   listIntakeRequests,
 } from "../services/intake-request.service.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
@@ -122,6 +123,29 @@ export const intakeRequestsRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       const { id } = req.params as { id: string };
       const request = await generateIntakeAiReport(app.prisma, id, req.locale);
+      return reply.send(request);
+    }
+  );
+
+  // Deterministic pre-quote from the diagnostic checks — advisory snapshot
+  // stored on the request, never pre-fills a Job.
+  app.post(
+    "/:id/quote-suggestion",
+    {
+      preHandler: [requirePermission({ jobs: ["create"] })],
+      schema: {
+        params: {
+          properties: { id: { type: "string" } },
+          required: ["id"],
+          type: "object",
+        },
+        summary: "Build the deterministic quote suggestion from the diagnostic",
+        tags: ["intake-requests"],
+      },
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const request = await generateIntakeQuoteSuggestion(app.prisma, id);
       return reply.send(request);
     }
   );

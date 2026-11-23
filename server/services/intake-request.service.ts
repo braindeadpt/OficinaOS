@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@generated/client";
+import type { Prisma, PrismaClient } from "@generated/client";
 import { IntakeRequestStatus } from "@generated/client";
 import { Role } from "@shared/constants/roles.js";
 import { AppError } from "@shared/errors/app-error.js";
@@ -19,6 +19,7 @@ import { logger } from "../utils/logger.js";
 import { cloudFetch } from "./cloud.service.js";
 import type { NotifyContext } from "./job.service.js";
 import { notify } from "./notification-dispatch.js";
+import { buildQuoteSuggestion } from "./quote-suggestion.service.js";
 
 const LIST_TAKE = 100;
 
@@ -151,6 +152,7 @@ const REPORT_LANGS = new Set(["pt", "en", "fr", "es"]);
 interface IntakeDiagnostic {
   device?: {
     brand?: string;
+    marketingName?: string;
     model?: string;
     os?: string;
     osVersion?: string;
@@ -216,4 +218,48 @@ export async function generateIntakeAiReport(
     throw new AppError("CLOUD_AI_FAILED");
   }
   return await update(prisma, id, { aiReport: report });
+}
+
+/**
+ * Deterministic pre-quote: runs the diagnostic checks against the active
+ * parts/repair catalogs and the device catalog, stores the advisory
+ * snapshot on the request. Never touches a Job — staff reviews the result.
+ */
+export async function generateIntakeQuoteSuggestion(
+  prisma: PrismaClient,
+  id: string
+) {
+  const request = await findUnique(prisma, id);
+  if (!request) {
+    throw new AppError("INTAKE_REQUEST_NOT_FOUND");
+  }
+  const diagnostic = request.diagnostic as IntakeDiagnostic | null;
+  if (!diagnostic?.results) {
+    throw new AppError("INTAKE_REQUEST_NO_DIAGNOSTIC");
+  }
+
+  const [parts, repairs, devices] = await Promise.all([
+    prisma.partsCatalog.findMany({ where: { isActive: true } }),
+    prisma.repairCatalog.findMany({ where: { isActive: true } }),
+    prisma.device.findMany({
+      include: { brand: { select: { name: true } } },
+    }),
+  ]);
+
+  const suggestion = buildQuoteSuggestion({
+    devices: devices.map((d) => ({
+      brandName: d.brand.name,
+      id: d.id,
+      model: d.model,
+    })),
+    diagnostic,
+    parts,
+    repairs,
+  });
+
+  // Interfaces lack the implicit index signature InputJsonValue requires —
+  // same cast pattern as job.service.ts intakeTermsSnapshot.
+  return await update(prisma, id, {
+    quoteSuggestion: suggestion as unknown as Prisma.InputJsonValue,
+  });
 }
