@@ -816,6 +816,7 @@ export default function ChannelSettings({
   // Decisão 2026-11-23: todo o WhatsApp é Pro — sem o módulo o card
   // fica visível mas locked; clicar nas ações informa que é Pro-only.
   const waLocked = !whatsAppSettings?.whatsappModule;
+  const fetchWaTemplates = useSettingsStore((s) => s.fetchWaTemplates);
 
   useEffect(() => {
     if (!whatsAppLoaded) {
@@ -896,6 +897,14 @@ export default function ChannelSettings({
             }
           : {}),
       });
+      // O trackingBaseUrl muda os blocos {{if}} dos corpos a submeter —
+      // sem refetch a lista continuava a mostrar os specs antigos como
+      // "prontos" enquanto o backend re-sincronizava em background. Um
+      // segundo fetch apanha o resultado persistido desse sync.
+      fetchWaTemplates().catch(() => null);
+      setTimeout(() => {
+        fetchWaTemplates().catch(() => null);
+      }, 4000);
     } catch {
       // Error is stored in Zustand state
     } finally {
@@ -906,6 +915,7 @@ export default function ChannelSettings({
     onSaveWhatsAppSettings,
     whatsAppSettings?.remarketingModule,
     waLocked,
+    fetchWaTemplates,
     t,
   ]);
 

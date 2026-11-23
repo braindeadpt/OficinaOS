@@ -274,6 +274,9 @@ export const updateSmsSettingsSchema = z
       .optional(),
     gatewayUser: z.string().trim().max(64).optional(),
     gatewayPassword: z.string().max(256).optional(),
+    // Rotação explícita do token do webhook inbound — gravações de
+    // rotina preservam-no para não partir a URL no Android.
+    rotateWebhookToken: z.boolean().optional(),
   })
   .refine((data) => Object.values(data).some((v) => v !== undefined), {
     message: "validations.at_least_one_field",

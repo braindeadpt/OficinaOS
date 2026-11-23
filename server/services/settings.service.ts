@@ -24,11 +24,9 @@ import {
 import type { DbClient } from "../repositories/types.js";
 import { isModuleEnabled } from "../utils/modules.js";
 import { cloudFetch } from "./cloud.service.js";
-import {
-  STAFF_INITIATED_TEMPLATES,
-  templateStatusOf,
-} from "./notification-outbox.service.js";
+import { STAFF_INITIATED_TEMPLATES } from "./notification-outbox.service.js";
 import { generateSmsWebhookToken } from "./sms.service.js";
+import { templateStatusOf } from "./whatsapp-templates.service.js";
 
 // Variáveis sem as quais o modelo staff-initiated sai inútil —
 // o pedido de assinatura sem {{signUrl}} não tem ligação para abrir.
@@ -666,9 +664,15 @@ export async function upsertSmsSettings(
   } = {};
   if (input.enabled !== undefined) {
     data.smsEnabled = input.enabled;
-    if (input.enabled) {
-      // Token novo no enable garante um path inbound inesperável mesmo
-      // que o anterior tenha sido exposto — gerado sempre que se ativa.
+  }
+  // O token só muda quando pedido (rotateWebhookToken) ou quando falta —
+  // um save de rotina (ativar, trocar a URL do gateway…) regenerava-o e
+  // a URL inbound no Android morria silenciosamente até ser regravada.
+  if (input.rotateWebhookToken) {
+    data.smsWebhookToken = generateSmsWebhookToken();
+  } else if (input.enabled) {
+    const current = await findShopSettingsUnique(prisma);
+    if (!current?.smsWebhookToken) {
       data.smsWebhookToken = generateSmsWebhookToken();
     }
   }

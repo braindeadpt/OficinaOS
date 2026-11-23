@@ -28,6 +28,28 @@ const TEMPLATE_CATEGORY = "UTILITY";
 const VAR_RE = /\{\{(\w+)\}\}/g;
 const CONDITIONAL_BLOCK_RE = /\{\{if (\w+)\}\}([\s\S]*?)\{\{endif\}\}/g;
 const LEFTOVER_MARKER_RE = /\{\{\/?(?:if|endif|else)(?: \w+)?\}\}/g;
+// Corpo submetido à Meta (posicional {{n}}): não pode começar nem acabar
+// num parâmetro — a Graph rejeita a submissão antes da revisão.
+const EDGE_POSITIONAL_RE = /^\s*\{\{\d+\}\}|\{\{\d+\}\}\s*$/;
+
+/** true quando o corpo posicional pode ser submetido à Meta. */
+export function isMetaBodySubmittable(body: string): boolean {
+  return !EDGE_POSITIONAL_RE.test(body);
+}
+
+/**
+ * A Meta rejeita corpos que terminam num parâmetro. Um bloco condicional
+ * cujo conteúdo fecha numa variável torna-se terminal quando é o último
+ * ou é seguido apenas por outro bloco {{if}} (que pode expandir para
+ * vazio) — por isso a variável recebe um "." literal, garantindo texto
+ * depois do parâmetro. Espelha a migração 20261228000000 (Postgres).
+ */
+export function metaSafeConditionals(body: string): string {
+  return body.replace(
+    /(\{\{\w+\}\})(\{\{endif\}\})(?=\s*(?:\{\{if|$))/g,
+    "$1.$2"
+  );
+}
 
 /**
  * Vars do corpo por ordem de aparecimento → valores posicionais.
@@ -48,9 +70,11 @@ export function orderedTemplateParams(
 }
 
 export interface MetaTemplateSpec {
-  /** Corpo com variáveis posicionais {{1}}…{{n}}. */
+  /** Corpo com variáveis posicionais {{1}}…{{n}} — o que se submete à Meta. */
   body: string;
   name: string;
+  /** Corpo expandido com {{var}} nomeadas — ordena os params do envio. */
+  namedBody: string;
   /** Variáveis na ordem de aparecimento — ordem dos params do envio. */
   vars: string[];
 }
@@ -83,7 +107,7 @@ export function deriveMetaTemplate(
     }
     return `{{${idx + 1}}}`;
   });
-  return { body: meta, name, vars };
+  return { body: meta, name, namedBody: body, vars };
 }
 
 /** Variáveis de bloco {{if var}} garantidas pela config da loja —
@@ -105,7 +129,7 @@ export function metaConditionalVars(settings: {
  * perde quando a loja tem tracking público), vars opcionais saem — a
  * Meta não tem condicionais e rejeita parâmetros vazios. Evolution/
  * texto livre continua a renderizar o corpo completo. */
-function expandConditionals(
+export function expandConditionals(
   body: string,
   keep: Record<string, boolean>
 ): string {
@@ -125,18 +149,79 @@ async function desiredTemplates(
     orderBy: { name: "asc" },
     where: { channel: "WHATSAPP" },
   });
-  return rows.map((r) =>
-    deriveMetaTemplate(r.name, expandConditionals(r.body, keep))
-  );
+  return rows.map((r) => {
+    const namedBody = expandConditionals(r.body, keep);
+    return { ...deriveMetaTemplate(r.name, namedBody), namedBody };
+  });
+}
+
+interface PersistedTemplateStatus {
+  /** Corpo nomeado ({{var}}) da versão que a aprovação cobre — ver nota. */
+  body?: string;
+  reason?: string;
+  status?: string;
+  syncedAt?: string;
+}
+
+/** Estado conhecido do template no último sync — null = sem registo. */
+export function templateStatusOf(
+  settings: { whatsappTemplatesJson?: unknown } | null,
+  name: string
+): string | null {
+  const raw = settings?.whatsappTemplatesJson;
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const entry = (raw as Record<string, PersistedTemplateStatus>)[name];
+  const s = typeof entry?.status === "string" ? entry.status : null;
+  return s ? s.toUpperCase() : null;
+}
+
+/**
+ * Corpo (vars nomeadas) que a aprovação Meta cobre. A Cloud só CRIA
+ * modelos — nunca edita um existente —, por isso a versão aprovada é
+ * sempre a da primeira submissão do nome, mesmo que a loja tenha
+ * editado o corpo local depois. O outbox ordena os parâmetros por esta
+ * versão; sem ela uma edição trocava a ordem posicional (campos trocados
+ * ou rejeição na entrega).
+ */
+export function approvedTemplateBodyOf(
+  settings: { whatsappTemplatesJson?: unknown } | null,
+  name: string
+): string | null {
+  const raw = settings?.whatsappTemplatesJson;
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const body = (raw as Record<string, PersistedTemplateStatus>)[name]?.body;
+  return typeof body === "string" && body.length > 0 ? body : null;
 }
 
 async function persistStatuses(
   prisma: DbClient,
-  statuses: TemplateStatus[]
+  statuses: TemplateStatus[],
+  desired: MetaTemplateSpec[]
 ): Promise<void> {
+  const prev = (
+    await prisma.shopSettings.findUnique({
+      select: { whatsappTemplatesJson: true },
+      where: { id: "default" },
+    })
+  )?.whatsappTemplatesJson;
+  const prevMap =
+    prev && typeof prev === "object"
+      ? (prev as Record<string, PersistedTemplateStatus>)
+      : {};
+  const namedBodyOf = new Map(desired.map((d) => [d.name, d.namedBody]));
   const json: Record<string, Prisma.InputJsonValue> = {};
   for (const s of statuses) {
+    // A aprovação fica ligada à versão do corpo: grava-se o corpo da
+    // primeira submissão e mantém-se — a Cloud nunca reescreve um modelo
+    // existente, por isso a versão que a Meta tem aprovada não muda com
+    // edições locais posteriores.
+    const approvedBody = prevMap[s.name]?.body ?? namedBodyOf.get(s.name);
     json[s.name] = {
+      body: approvedBody ?? null,
       reason: s.reason ?? null,
       status: s.status,
       syncedAt: s.syncedAt ?? new Date().toISOString(),
@@ -152,26 +237,53 @@ async function persistStatuses(
   const stillNeeded = [
     ...new Set(pending.map((p) => p.templateName).filter((n) => !(n in json))),
   ];
-  if (stillNeeded.length > 0) {
-    const prev = (
-      await prisma.shopSettings.findUnique({
-        select: { whatsappTemplatesJson: true },
-        where: { id: "default" },
-      })
-    )?.whatsappTemplatesJson;
-    if (prev && typeof prev === "object") {
-      for (const name of stillNeeded) {
-        const kept = (prev as Record<string, Prisma.InputJsonValue>)[name];
-        if (kept) {
-          json[name] = kept;
-        }
-      }
+  for (const name of stillNeeded) {
+    const kept = prevMap[name];
+    if (kept) {
+      json[name] = kept as unknown as Prisma.InputJsonValue;
     }
   }
   await prisma.shopSettings.update({
     data: { whatsappTemplatesJson: json },
     where: { id: "default" },
   });
+}
+
+/**
+ * Depois de um sync persistir estados: entradas adiadas à espera de
+ * aprovação voltam já à fila quando o seu template ficou APPROVED —
+ * o deliverBy (ex.: sessão de assinatura) não pode esperar os 30 min
+ * do re-agendamento normal. Corre em TODOS os caminhos que persistem
+ * uma aprovação (sync automático do outbox, re-sync das definições e o
+ * botão manual), porque é chamado dentro de syncWhatsAppTemplates.
+ */
+export async function expediteApprovedDeferred(
+  prisma: DbClient,
+  settings?: { whatsappTemplatesJson?: unknown } | null
+): Promise<void> {
+  const row =
+    settings ??
+    (await prisma.shopSettings.findUnique({
+      select: { whatsappTemplatesJson: true },
+      where: { id: "default" },
+    }));
+  const deferred = await prisma.notificationOutbox.findMany({
+    select: { id: true, templateName: true },
+    where: {
+      channel: "WHATSAPP",
+      error: { startsWith: "Template " },
+      status: OutboxStatus.QUEUED,
+    },
+  });
+  const ready = deferred.filter(
+    (e) => templateStatusOf(row, e.templateName) === "APPROVED"
+  );
+  if (ready.length > 0) {
+    await prisma.notificationOutbox.updateMany({
+      data: { nextRetryAt: new Date() },
+      where: { id: { in: ready.map((e) => e.id) } },
+    });
+  }
 }
 
 interface CloudSyncItem {
@@ -231,14 +343,35 @@ export async function syncWhatsAppTemplates(
   if (desired.length === 0) {
     return { ready: 0, templates: [], total: 0 };
   }
+  // Validação pré-submissão: a Meta rejeita corpos a começar/acabar num
+  // parâmetro. Um corpo inválido (ex.: edição da loja) não se submete —
+  // marca-se REJECTED com razão estável para a UI explicar, e a fila
+  // adia como qualquer modelo não-aprovado.
+  const submittable: MetaTemplateSpec[] = [];
+  const invalidStatuses: TemplateStatus[] = [];
+  for (const d of desired) {
+    if (isMetaBodySubmittable(d.body)) {
+      submittable.push(d);
+    } else {
+      invalidStatuses.push({
+        name: d.name,
+        reason: "INVALID_BODY_EDGES",
+        status: "REJECTED",
+      });
+    }
+  }
   const channel = resolveWhatsAppChannel(settings);
   if (channel?.mode !== "cloud") {
     // Grátis/local e Evolution: a app não gere templates na Meta —
     // envia pelo nome e a Meta rejeita o que faltar (erro de envio normal).
-    return { ready: 0, templates: [], total: desired.length };
+    return {
+      ready: 0,
+      templates: invalidStatuses,
+      total: desired.length,
+    };
   }
   const res = await syncCloud(
-    desired,
+    submittable,
     settings.whatsappBusinessId ?? "",
     channel.apiUrl,
     channel.shopToken
@@ -247,14 +380,22 @@ export async function syncWhatsAppTemplates(
     return {
       error: res.error,
       ready: 0,
-      templates: [],
+      templates: invalidStatuses,
       total: desired.length,
     };
   }
-  const statuses = res;
+  const statuses = [...res, ...invalidStatuses];
 
-  await persistStatuses(prisma, statuses).catch((err) =>
+  await persistStatuses(prisma, statuses, desired).catch((err) =>
     log?.warn({ err }, "whatsapp-templates: persistência do estado falhou")
+  );
+  // Toda a persistência de aprovações antecipa a fila (sync manual nas
+  // definições incluído): um link de assinatura que esperava revisão da
+  // Meta sai dentro do prazo em vez de expirar adiado 30 min. Lê o JSON
+  // fresco — o `settings` desta função é pré-sync e não tem os estados
+  // que persistStatuses acabou de gravar.
+  await expediteApprovedDeferred(prisma).catch((err) =>
+    log?.warn({ err }, "whatsapp-templates: expedite da fila falhou")
   );
   const ready = statuses.filter(
     (s) => s.status === "APPROVED" && desiredNames.has(s.name)
@@ -287,14 +428,19 @@ export async function getWhatsAppTemplateStatuses(
       : {};
   return desired.map((d) => {
     const v = persisted[d.name];
+    // Corpo local não-submissível (edição da loja a começar/acabar num
+    // parâmetro): mostra-se já como rejeitado — a Meta recusava-o com
+    // a mesma certeza, e o aviso aponta a causa sem esperar um sync.
+    const invalid = !isMetaBodySubmittable(d.body);
     return {
       body: d.body,
       category: TEMPLATE_CATEGORY,
       language: TEMPLATE_LANG,
       name: d.name,
-      reason: v?.reason ?? undefined,
-      status: (v?.status?.toUpperCase() ??
-        "MISSING") as TemplateStatus["status"],
+      reason: invalid ? "INVALID_BODY_EDGES" : (v?.reason ?? undefined),
+      status: (invalid
+        ? "REJECTED"
+        : (v?.status?.toUpperCase() ?? "MISSING")) as TemplateStatus["status"],
       syncedAt: v?.syncedAt,
     };
   });

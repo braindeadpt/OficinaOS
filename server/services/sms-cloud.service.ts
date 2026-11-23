@@ -101,11 +101,37 @@ export function isDefinitiveCloudError(error?: string): boolean {
   return error !== undefined && DEFINITIVE_CLOUD_ERRORS.has(error);
 }
 
+// Um ciclo de cada vez: o poller rápido (10 s) e a sync lenta (2 min)
+// chamam os dois esta função e GET→process→ACK não é atómico. Sem o
+// dono único o segundo ciclo lia a fila antes do primeiro chegar ao
+// claim in-flight e ambos processavam/respondiam a mesma mensagem.
+let smsCycleRunning = false;
+
 /**
  * Poll da fila SMS Pro + processamento. Chamado pelo poller rápido
- * (10–15 s) quando o entitlement "sms" está ativo.
+ * (10–15 s) e pelo ciclo lento de sync quando o entitlement "sms" está
+ * ativo — ciclos sobrepostos são ignorados (o dono corre até ao ack).
  */
 export async function syncSmsInbound(
+  prisma: PrismaClient,
+  apiUrl: string,
+  token: string,
+  log: FastifyBaseLogger,
+  notifyCtx: NotifyContext | undefined,
+  modules: string[] = []
+): Promise<void> {
+  if (smsCycleRunning) {
+    return;
+  }
+  smsCycleRunning = true;
+  try {
+    await syncSmsInboundCycle(prisma, apiUrl, token, log, notifyCtx, modules);
+  } finally {
+    smsCycleRunning = false;
+  }
+}
+
+async function syncSmsInboundCycle(
   prisma: PrismaClient,
   apiUrl: string,
   token: string,

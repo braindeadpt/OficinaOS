@@ -104,12 +104,46 @@ export async function syncWhatsAppBot(
   await pollWhatsAppInbound(prisma, apiUrl, token, log, notifyCtx, modules);
 }
 
+// Um ciclo de cada vez: o poller rápido (10–15 s) e a sync lenta de
+// entitlements (via syncWhatsAppBot) chamam os dois esta função e
+// GET→process→ACK não é atómico — sem o dono único, um ciclo
+// sobreposto lia a fila antes do outro chegar ao claim in-flight e
+// a mesma mensagem era respondida duas vezes.
+let waCycleRunning = false;
+
 /**
  * Só a parte inbound do sync — o poller rápido (10–15 s) chama isto
  * sem repetir o registo do phone_number_id nem o push de credenciais,
- * que ficam no ciclo lento de entitlements.
+ * que ficam no ciclo lento de entitlements. Ciclos sobrepostos são
+ * ignorados: o dono corre até ao ack.
  */
 export async function pollWhatsAppInbound(
+  prisma: PrismaClient,
+  apiUrl: string,
+  token: string,
+  log: FastifyBaseLogger,
+  notifyCtx: NotifyContext | undefined,
+  modules: string[] = []
+): Promise<void> {
+  if (waCycleRunning) {
+    return;
+  }
+  waCycleRunning = true;
+  try {
+    await pollWhatsAppInboundCycle(
+      prisma,
+      apiUrl,
+      token,
+      log,
+      notifyCtx,
+      modules
+    );
+  } finally {
+    waCycleRunning = false;
+  }
+}
+
+async function pollWhatsAppInboundCycle(
   prisma: PrismaClient,
   apiUrl: string,
   token: string,

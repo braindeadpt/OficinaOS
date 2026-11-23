@@ -1,11 +1,28 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  decryptSmsConfig: vi.fn(() => null),
+  getSmsDeviceStatus: vi.fn(async () => null),
   notify: vi.fn().mockResolvedValue(undefined),
+  resolveWhatsAppChannel: vi.fn(() => ({ mode: "meta" as const })),
+  sendWhatsAppTemplateVia: vi.fn(async () => ({ success: true })),
 }));
 
 vi.mock("../services/notification-dispatch.js", () => ({
   notify: mocks.notify,
+}));
+
+vi.mock("../services/whatsapp-channel.js", () => ({
+  resolveWhatsAppChannel: mocks.resolveWhatsAppChannel,
+  sendWhatsAppTemplateVia: mocks.sendWhatsAppTemplateVia,
+}));
+
+vi.mock("../services/sms.service.js", () => ({
+  decryptSmsConfig: mocks.decryptSmsConfig,
+}));
+
+vi.mock("../services/sms-cloud.service.js", () => ({
+  getSmsDeviceStatus: mocks.getSmsDeviceStatus,
 }));
 
 vi.useFakeTimers();
@@ -251,6 +268,29 @@ describe("startPickupReminderScheduler", () => {
       smsEnabled: false,
       whatsappEnabled: false,
     });
+
+    const stop = startPickupReminderScheduler(mockApp);
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(mockQueryRaw).not.toHaveBeenCalled();
+    expect(mocks.notify).not.toHaveBeenCalled();
+
+    stop();
+  });
+
+  it("skips the tick when the module is fresh but no transport resolves", async () => {
+    // "whatsapp-bot" ativo + toggle ligado ≠ canal usável: sem
+    // credenciais o resolve devolve null e o claim marcava a reparação
+    // 72 h sem entregar nada.
+    mockFindShopSettings.mockResolvedValue({
+      cloudApiUrl: "https://cloud",
+      cloudEntitlements: ["whatsapp-bot", "sms"],
+      cloudShopTokenEncrypted: "x",
+      cloudSyncedAt: new Date(),
+      whatsappEnabled: true,
+    });
+    mocks.resolveWhatsAppChannel.mockReturnValueOnce(null);
+    mocks.getSmsDeviceStatus.mockResolvedValueOnce({ sendable: false });
 
     const stop = startPickupReminderScheduler(mockApp);
     await vi.advanceTimersByTimeAsync(50);

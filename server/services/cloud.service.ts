@@ -156,6 +156,17 @@ export async function pairWithCloud(
     },
   });
 
+  // O texto "loja fechada" configurado na loja é publicado no pairing —
+  // sem isto a Cloud respondia com o default até o dono voltar a gravar
+  // as settings. Best-effort como o primeiro sync de entitlements.
+  await cloudFetch(input.apiUrl, "/shops/bot-settings", {
+    body: {
+      closedFallbackText: settings.botClosedFallbackText?.trim() || null,
+    },
+    method: "PUT",
+    token: payload.shopToken,
+  }).catch(() => null);
+
   // Best-effort first sync — pairing already succeeded even if this fails.
   await syncCloudEntitlements(prisma, log).catch(() => null);
 

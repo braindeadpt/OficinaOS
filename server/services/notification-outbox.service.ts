@@ -28,10 +28,12 @@ import {
   type WhatsAppChannel,
 } from "./whatsapp-channel.js";
 import {
+  approvedTemplateBodyOf,
   metaConditionalVars,
   orderedTemplateParams,
   syncWhatsAppTemplates,
   TEMPLATE_LANG,
+  templateStatusOf,
 } from "./whatsapp-templates.service.js";
 
 /**
@@ -67,47 +69,11 @@ function maybeResyncTemplates(prisma: DbClient): void {
     return;
   }
   lastTemplateResyncAt = now;
-  syncWhatsAppTemplates(prisma)
-    .then(() => expediteApprovedDeferred(prisma))
-    .catch((err) => logger.warn({ err }, "outbox: template re-sync failed"));
-}
-
-/** Depois de um re-sync: entradas adiadas cujo template ficou APPROVED
- *  voltam já à fila — o deliverBy (ex.: sessão de assinatura) pode não
- *  esperar os 30 min do re-agendamento normal. */
-async function expediteApprovedDeferred(prisma: DbClient): Promise<void> {
-  const settings = await findShopSettingsUnique(prisma);
-  const deferred = await prisma.notificationOutbox.findMany({
-    select: { id: true, templateName: true },
-    where: {
-      channel: "WHATSAPP",
-      error: { startsWith: "Template " },
-      status: OutboxStatus.QUEUED,
-    },
-  });
-  const ready = deferred.filter(
-    (e) => templateStatusOf(settings, e.templateName) === "APPROVED"
+  // O expedite de entradas adiadas corre dentro do próprio sync — todas
+  // as persistências de aprovação (incl. o botão manual) antecipam a fila.
+  syncWhatsAppTemplates(prisma).catch((err) =>
+    logger.warn({ err }, "outbox: template re-sync failed")
   );
-  if (ready.length > 0) {
-    await prisma.notificationOutbox.updateMany({
-      data: { nextRetryAt: new Date() },
-      where: { id: { in: ready.map((e) => e.id) } },
-    });
-  }
-}
-
-/** Estado conhecido do template no último sync — null = sem registo. */
-export function templateStatusOf(
-  settings: ShopSettingsRow | null,
-  name: string
-): string | null {
-  const raw = settings?.whatsappTemplatesJson;
-  if (!raw || typeof raw !== "object") {
-    return null;
-  }
-  const entry = (raw as Record<string, { status?: unknown }>)[name];
-  const s = typeof entry?.status === "string" ? entry.status : null;
-  return s ? s.toUpperCase() : null;
 }
 
 /**
@@ -305,6 +271,97 @@ async function cancelIfConsentMissing(
   return true;
 }
 
+/**
+ * Pro/cloud apenas: template registado como pendente/em revisão/
+ * rejeitado → adiar sem gastar tentativas: enviar agora falharia na
+ * Meta e a aprovação posterior não recupera mensagens já marcadas
+ * FAILED. Sem registo (modelo novo ainda não submetido) adia na mesma
+ * e o re-sync cria-o. O deliverBy limita a espera — adiar para lá do
+ * prazo cancela já com o motivo visível no balcão em vez de morrer em
+ * silêncio na fila.
+ * No modo local (Meta direto, Pro) a app não consulta nem confia em
+ * estado de templates — envia pelo nome e a Meta rejeita o que faltar
+ * ou não estiver aprovado, como erro de envio normal (retry/FAILED).
+ * Devolve true quando a entrada foi adiada/cancelada (nada mais a fazer).
+ */
+async function deferForTemplateStatus(
+  prisma: DbClient,
+  entry: OutboxEntry,
+  settings: ShopSettingsRow | null
+): Promise<boolean> {
+  const st = templateStatusOf(settings, entry.templateName);
+  if (st === "APPROVED") {
+    return false;
+  }
+  const nextRetry = new Date(Date.now() + TEMPLATE_DEFER_MS);
+  if (entry.deliverBy && nextRetry.getTime() >= entry.deliverBy.getTime()) {
+    await transitionOutboxEntry(prisma, entry.id, OutboxStatus.QUEUED, {
+      error: `Template ${entry.templateName}: ${st?.toLowerCase() ?? "unsynced"} — prazo de entrega esgotado`,
+      nextRetryAt: null,
+      status: OutboxStatus.CANCELLED,
+    });
+    return true;
+  }
+  await transitionOutboxEntry(prisma, entry.id, OutboxStatus.QUEUED, {
+    error: `Template ${entry.templateName}: ${st?.toLowerCase() ?? "unsynced"}`,
+    nextRetryAt: nextRetry,
+    status: OutboxStatus.QUEUED,
+  });
+  // O estado guardado pode estar velho — a Meta aprova templates sem
+  // avisar. Re-sincroniza em background (throttled) para desbloquear
+  // a fila sem precisar de ação manual nas Definições.
+  maybeResyncTemplates(prisma);
+  return true;
+}
+
+/**
+ * Params posicionais para a Meta. Reordena pelos {{var}} da versão
+ * APROVADA quando há vars gravadas — a aprovação está ligada ao corpo
+ * da primeira submissão (a Cloud nunca edita um modelo existente), por
+ * isso uma edição local posterior não pode trocar a ordem posicional:
+ * os params seguem o corpo que a Meta tem aprovado, não o corpo atual
+ * da loja. Sem registo (entrada antiga/modo local) cai no corpo atual —
+ * a loja é que gere o modelo à mão e vê-o nas definições.
+ */
+async function resolveMetaParams(
+  prisma: DbClient,
+  entry: OutboxEntry,
+  channel: WhatsAppChannel,
+  settings: ShopSettingsRow | null
+): Promise<string[] | null> {
+  const storedParams = entry.templateParams as
+    | string[] // formato antigo — só posicional
+    | { params?: string[]; vars?: Record<string, string> }
+    | null;
+  const metaParams: string[] | null = Array.isArray(storedParams)
+    ? storedParams
+    : (storedParams?.params ?? null);
+  if (
+    metaParams === null ||
+    channel.mode === "evolution" ||
+    Array.isArray(storedParams) ||
+    !storedParams?.vars
+  ) {
+    return metaParams;
+  }
+  const tpl = await prisma.notificationTemplate.findFirst({
+    select: { body: true },
+    where: { channel: "WHATSAPP", name: entry.templateName },
+  });
+  const orderBody =
+    (channel.mode === "cloud"
+      ? approvedTemplateBodyOf(settings, entry.templateName)
+      : null) ?? tpl?.body;
+  if (!orderBody) {
+    return metaParams;
+  }
+  return orderedTemplateParams(
+    orderBody,
+    storedParams.vars,
+    metaConditionalVars(settings ?? {})
+  );
+}
+
 async function processWhatsAppEntry(
   prisma: DbClient,
   entry: OutboxEntry,
@@ -326,35 +383,7 @@ async function processWhatsAppEntry(
   // texto livre fora da janela de 24h é rejeitado. Evolution não tem
   // templates e SMS não passa por aqui; nesses casos o corpo renderizado
   // continua a ser o transporte.
-  const storedParams = entry.templateParams as
-    | string[] // formato antigo — só posicional
-    | { params?: string[]; vars?: Record<string, string> }
-    | null;
-  let metaParams: string[] | null = Array.isArray(storedParams)
-    ? storedParams
-    : (storedParams?.params ?? null);
-  // Reordena pelos {{var}} do corpo ATUAL do modelo quando há vars
-  // gravadas — uma edição aprovada entre o enqueue e o envio muda a
-  // ordem posicional na Meta; reenviar a ordem antiga trocava os
-  // valores. Sem modelo local (renomeado) ficam os params gravados.
-  if (
-    metaParams !== null &&
-    channel.mode !== "evolution" &&
-    !Array.isArray(storedParams) &&
-    storedParams?.vars
-  ) {
-    const tpl = await prisma.notificationTemplate.findFirst({
-      select: { body: true },
-      where: { channel: "WHATSAPP", name: entry.templateName },
-    });
-    if (tpl) {
-      metaParams = orderedTemplateParams(
-        tpl.body,
-        storedParams.vars,
-        metaConditionalVars(settings ?? {})
-      );
-    }
-  }
+  const metaParams = await resolveMetaParams(prisma, entry, channel, settings);
   // Pro/cloud apenas: template registado como pendente/em revisão/
   // rejeitado → adiar sem gastar tentativas: enviar agora falharia na
   // Meta e a aprovação posterior não recupera mensagens já marcadas
@@ -364,17 +393,8 @@ async function processWhatsAppEntry(
   // estado de templates — envia pelo nome e a Meta rejeita o que faltar
   // ou não estiver aprovado, como erro de envio normal (retry/FAILED).
   if (channel.mode === "cloud" && metaParams !== null) {
-    const st = templateStatusOf(settings, entry.templateName);
-    if (st !== "APPROVED") {
-      await transitionOutboxEntry(prisma, entry.id, OutboxStatus.QUEUED, {
-        error: `Template ${entry.templateName}: ${st?.toLowerCase() ?? "unsynced"}`,
-        nextRetryAt: new Date(Date.now() + TEMPLATE_DEFER_MS),
-        status: OutboxStatus.QUEUED,
-      });
-      // O estado guardado pode estar velho — a Meta aprova templates sem
-      // avisar. Re-sincroniza em background (throttled) para desbloquear
-      // a fila sem precisar de ação manual nas Definições.
-      maybeResyncTemplates(prisma);
+    const deferred = await deferForTemplateStatus(prisma, entry, settings);
+    if (deferred) {
       return;
     }
   }

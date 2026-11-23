@@ -52,9 +52,9 @@ falar com ela. Nunca código pago compilado na app pública.
 | `whatsapp-bot` | Pergunta "está pronto?" no WhatsApp da loja e recebe resposta automática; aprova orçamento com SIM/NÃO | Notificações → Setup → WhatsApp |
 | `diag-intake` | Recebe diagnósticos do `oficinaos-diag` enviados por clientes | Fila de intake na app |
 | `ai-reports` | Relatórios de diagnóstico gerados por IA | Anexado a trabalhos/diag |
-| `remarketing` | Recontacto automático de clientes inativos via template WhatsApp aprovado | Notificações → Setup → WhatsApp |
+| `remarketing` | Recontacto automático de clientes inativos via template WhatsApp aprovado — **requer também `whatsapp-bot`** (o envio usa o canal WhatsApp da loja) | Notificações → Setup → WhatsApp |
 | `sms` | SMS pelo Android da loja — ligado **à Cloud** (sms-gate modo servidor, multi-loja, funciona com o PC desligado) **ou na LAN** como fallback | Notificações → Setup → SMS |
-| `ai-inbox` | Caixa de entrada unificada de WhatsApp/SMS + assistente de IA para a equipa (qualquer LLM, chat na app ou MCP) — **contratável sozinho** | Mensagens + Definições → IA |
+| `ai-inbox` ⚠️ *em desenvolvimento — ainda não vendido/ativável em produção* | Caixa de entrada unificada de WhatsApp/SMS + assistente de IA para a equipa (qualquer LLM, chat na app ou MCP) — **contratável sozinho** | Mensagens + Definições → IA |
 
 (Desde 2026-11-23 **todo o SMS é Pro** — inclusive o gateway Android na
 LAN, que passou de "core grátis" a transporte Pro/fallback. O grátis
@@ -74,7 +74,7 @@ não envia nem recebe mensagem nenhuma.)
 | **SMS** | nada | `sms`: Android ligado à Cloud (`SmsDevice`/`SmsRoute`) — multi-loja, inbound/outbound com PC desligado, respostas automáticas + IA — ou gateway LAN como fallback |
 | **WhatsApp oficial** | nada | `whatsapp-bot`: Meta Cloud API — envio `POST /whatsapp/send` ou direto app→Meta, templates auto-sincronizados, janela de 24 h, IA |
 | **WhatsApp Evolution** | nada | `whatsapp-bot`: transporte local (não-oficial, disclaimer) + bot inbound com termo próprio + proteções anti-ban (10/h por número, teto diário, dedupe, atraso 3–8 s) |
-| **Caixa de entrada + IA de staff** | nada | `ai-inbox`: caixa unificada WhatsApp/SMS, ferramentas na app, chat IA na app (`/ai/staff-reply`) e MCP na Cloud (`/mcp`) — envio sempre com aprovação humana |
+| **Caixa de entrada + IA de staff** | nada | `ai-inbox` *(em desenvolvimento)*: caixa unificada WhatsApp/SMS, ferramentas na app, chat IA na app (`/ai/staff-reply`) e MCP na Cloud (`/mcp`) — envio sempre com aprovação humana |
 
 ## Portal do cliente (`portal`)
 
@@ -158,6 +158,8 @@ Feito na Meta App "OficinaOS" (developers.facebook.com):
 
 ## Caixa de entrada + IA de staff (`ai-inbox`)
 
+> **Em desenvolvimento — ainda não está disponível em produção** (a app
+> que corre nas lojas ainda não tem a caixa de entrada nem o MCP).
 > **Pendente de decisão do dono:** o nome comercial e o preço ainda não
 > estão fechados — nos textos visíveis usa-se o marcador
 > `{{AI_INBOX_NOME}}` / `{{AI_INBOX_PRECO}}` até lá. No código fica só o

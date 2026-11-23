@@ -273,13 +273,22 @@ export async function handleEvolutionInbound(
   envelope: EvolutionEnvelope
 ): Promise<void> {
   const settings = await getOrCreateShopSettings(prisma);
-  if (!botGateOpen(settings)) {
+  // Auth/validação do remetente primeiro: dedupe, não-fromMe, não-grupo.
+  const inbounds = parseUpserts(envelope);
+  if (inbounds.length === 0) {
     return;
   }
-  const config = evolutionConfigOf(settings);
-  if (!config) {
-    return;
-  }
+  const toMsg = (parsed: ParsedInbound): InboundMessage => ({
+    createdAt: parsed.data.messageTimestamp
+      ? new Date(parsed.data.messageTimestamp * 1000).toISOString()
+      : new Date().toISOString(),
+    fromPhone: parsed.fromPhone,
+    id: `evo-${parsed.id}`,
+    // A Evolution etiqueta texto como "conversation"/"extendedTextMessage"
+    // — o pipeline partilhado só reconhece "text"; o resto escala ao staff.
+    messageType: parsed.text === null ? "other" : "text",
+    text: parsed.text,
+  });
   const ctx = buildCtx(
     prisma,
     settings,
@@ -287,20 +296,32 @@ export async function handleEvolutionInbound(
     notifyCtx,
     entitlementsOf(settings)
   );
+  // Gate fechado (bot suspenso/sem termo/sem módulo): só PARAR/STOP é
+  // processado — a revogação de consentimento é legal e não pode morrer
+  // com o bot; sem ela os avisos automáticos continuavam autorizados.
+  // O envio da confirmação fica suprimido (send no-op) — bot bloqueado
+  // não fala ao cliente mesmo havendo transporte configurado.
+  if (!botGateOpen(settings)) {
+    for (const p of inbounds) {
+      if (!(p.text && isStopText(p.text))) {
+        continue;
+      }
+      await handleInboundMessage(ctx, toMsg(p), {
+        channelLabel: "WhatsApp",
+        send: () => Promise.resolve(true),
+      }).catch((err) =>
+        log.warn({ err }, "evolution-bot stop handling failed")
+      );
+    }
+    return;
+  }
+  const config = evolutionConfigOf(settings);
+  if (!config) {
+    return;
+  }
   const cap = settings.whatsappBotDailyCap ?? DEFAULT_DAILY_CAP;
-  for (const parsed of parseUpserts(envelope)) {
-    const msg: InboundMessage = {
-      createdAt: parsed.data.messageTimestamp
-        ? new Date(parsed.data.messageTimestamp * 1000).toISOString()
-        : new Date().toISOString(),
-      fromPhone: parsed.fromPhone,
-      id: `evo-${parsed.id}`,
-      // A Evolution etiqueta texto como "conversation"/"extendedTextMessage"
-      // — o pipeline partilhado só reconhece "text"; o resto escala ao staff.
-      messageType: parsed.text === null ? "other" : "text",
-      text: parsed.text,
-    };
-    await processOne(prisma, ctx, config, msg, parsed, cap, log);
+  for (const parsed of inbounds) {
+    await processOne(prisma, ctx, config, toMsg(parsed), parsed, cap, log);
   }
 }
 
@@ -323,7 +344,10 @@ async function processOne(
     ? await findCustomersByPhone(prisma, parsed.fromPhone)
     : [];
   if (!(isText && customers.length > 0)) {
-    if (rateOk(`esc:${parsed.fromPhone}`, STAFF_NOTIFY_LIMIT_PER_HOUR)) {
+    // Quota separada ("esc"): alertas de mídia/números sem cliente não
+    // partilham o contador das respostas — duas mensagens de texto não
+    // podem silenciar o alerta de uma foto a seguir.
+    if (rateOk(parsed.fromPhone, STAFF_NOTIFY_LIMIT_PER_HOUR, "esc")) {
       await escalateToStaff(ctx, "WhatsApp", msg, null, null).catch((err) =>
         log.warn({ err }, "evolution-bot escalate failed")
       );

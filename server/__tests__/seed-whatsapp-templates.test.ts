@@ -28,6 +28,11 @@ import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { renderTemplate } from "../services/notification-renderer.js";
+import {
+  deriveMetaTemplate,
+  expandConditionals,
+  isMetaBodySubmittable,
+} from "../services/whatsapp-templates.service.js";
 
 // Dispatch context exactly as each emitter passes it to notify() — see
 // the call sites in server/services and server/routes.
@@ -318,6 +323,34 @@ describe.skipIf(!serverReachable)(
       expect(problems).toEqual([]);
     });
 
+    it("produces Meta-submittable bodies from every seeded WHATSAPP template", async () => {
+      // Meta rejects a BODY that starts or ends with a positional
+      // parameter — the seeded bodies once closed trailing {{if}} blocks
+      // in a bare variable, which expanded to a terminal {{n}} and was
+      // refused at submission. Assert the REAL seeded rows expand to a
+      // submittable shape under every conditional-kept combination.
+      const res = await getDb().query(
+        `SELECT name, body FROM notification_templates WHERE channel = 'WHATSAPP'`
+      );
+      const keepVariants = [
+        { reviewUrl: true, shopName: true, trackingUrl: true },
+        { reviewUrl: false, shopName: true, trackingUrl: false },
+      ];
+      const problems: string[] = [];
+      for (const row of res.rows) {
+        for (const keep of keepVariants) {
+          const spec = deriveMetaTemplate(
+            row.name,
+            expandConditionals(row.body, keep)
+          );
+          if (!isMetaBodySubmittable(spec.body)) {
+            problems.push(`[${row.name}] ${spec.body}`);
+          }
+        }
+      }
+      expect(problems).toEqual([]);
+    });
+
     it("renders IN_APP templates without leftover placeholders", async () => {
       const res = await getDb().query(
         `SELECT name, body FROM notification_templates WHERE channel = 'IN_APP'`
@@ -376,6 +409,39 @@ describe.skipIf(!serverReachable)(
       );
       expect(res.rows[0].body).toContain("foi cancelada");
       expect(res.rows[1].body).toBe("Texto da loja {{jobCode}}");
+    });
+
+    it("upgrades pre-Meta-fix PT bodies (param at end) to the safe version", async () => {
+      const db = getDb();
+      // The pre-fix PT default ended the trailing conditional in a bare
+      // variable — the shape Meta rejects. Installs that seeded it and
+      // never customized must be upgraded; a body already carrying the
+      // "." fix must also count as untouched (migration output).
+      await db.query(
+        `UPDATE notification_templates SET body = $1
+         WHERE name = 'job_returned' AND channel = 'WHATSAPP'`,
+        [
+          "Olá {{customerName}}, o seu aparelho {{jobCode}} foi devolvido.{{if shopName}} — {{shopName}}{{endif}}",
+        ]
+      );
+      await db.query(
+        `UPDATE notification_templates SET body = $1
+         WHERE name = 'job_cancelled' AND channel = 'WHATSAPP'`,
+        [
+          "Hello {{customerName}}, your repair {{jobCode}} has been cancelled.{{if shopName}} — {{shopName}}.{{endif}}",
+        ]
+      );
+
+      const rerun = await run("bun", ["run", "prisma/seed.ts"]);
+      expect(rerun.code).toBe(0);
+
+      const res = await db.query(
+        `SELECT name, body FROM notification_templates
+         WHERE channel = 'WHATSAPP' AND name IN ('job_cancelled', 'job_returned')
+         ORDER BY name`
+      );
+      expect(res.rows[0].body).toContain("foi cancelada");
+      expect(res.rows[1].body).toContain("foi devolvido");
     });
   }
 );
