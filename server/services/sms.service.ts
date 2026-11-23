@@ -5,7 +5,14 @@ import type { FastifyBaseLogger } from "fastify";
 import { decryptSecret, isEncrypted } from "../lib/crypto.js";
 import { assertNotDemoMode } from "../lib/demo.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
-import { type BotReplyCtx, handleInboundMessage } from "./bot-intents.js";
+import { isModuleEnabled } from "../utils/modules.js";
+import {
+  type BotReplyCtx,
+  handleInboundMessage,
+  isStopText,
+  revokeConsentForPhone,
+} from "./bot-intents.js";
+import { recordInboundMessage } from "./inbox.service.js";
 import type { NotifyContext } from "./job.service.js";
 import { formatPhone } from "./notification-sender.js";
 
@@ -208,6 +215,26 @@ export async function handleInboundSms(
   if (!settings.smsEnabled) {
     return;
   }
+  const modules = Array.isArray(settings.cloudEntitlements)
+    ? (settings.cloudEntitlements as string[]).filter(
+        (m): m is string => typeof m === "string"
+      )
+    : [];
+  const inboxEnabled = isModuleEnabled(settings, "ai-inbox");
+  // §G.7 (paralelo SMS): com "ai-inbox" mas sem o módulo "sms" o inbound
+  // grava-se na caixa de entrada — o bot não responde. PARAR/STOP é a
+  // exceção legal: revoga consentimento mesmo sem módulo.
+  if (inboxEnabled && !isModuleEnabled(settings, "sms")) {
+    await recordInboundMessage(prisma, log, {
+      channel: "sms",
+      phone: fromPhone,
+      text,
+    }).catch((err) => log.warn({ err }, "sms: inbox record falhou"));
+    if (isStopText(text)) {
+      await revokeConsentForPhone(prisma, fromPhone).catch(() => undefined);
+    }
+    return;
+  }
   const config = decryptSmsConfig({
     gatewayPasswordEncrypted: settings.smsGatewayPasswordEncrypted,
     gatewayUrl: settings.smsGatewayUrl,
@@ -217,11 +244,6 @@ export async function handleInboundSms(
     return;
   }
 
-  const modules = Array.isArray(settings.cloudEntitlements)
-    ? (settings.cloudEntitlements as string[]).filter(
-        (m): m is string => typeof m === "string"
-      )
-    : [];
   const cloudToken = settings.cloudShopTokenEncrypted
     ? decryptSecret(settings.cloudShopTokenEncrypted)
     : null;
@@ -241,6 +263,7 @@ export async function handleInboundSms(
           }
         : undefined,
     currency: settings.currency ?? "EUR",
+    inbox: { channel: "sms", enabled: inboxEnabled },
     log,
     notifyCtx,
     portalApiUrl: settings.cloudApiUrl,

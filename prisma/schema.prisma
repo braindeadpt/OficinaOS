@@ -156,6 +156,8 @@ enum AuditAction {
   DATA_EXPORTED
   DATA_IMPORTED
   LOANER_RETURNED
+  INBOX_TOOL_CALL
+  INBOX_MESSAGE_SENT
 }
 
 enum QuoteStatus {
@@ -197,6 +199,9 @@ model User {
   isActive            Boolean           @default(true)
   mustChangePassword  Boolean           @default(false)
   twoFactorEnabled    Boolean           @default(false)
+  // «Permitir envio direto pelo MCP» — desligado por defeito (§G.5):
+  // enviar_rascunho fica sempre a aguardar aprovação humana na app.
+  mcpDirectSend       Boolean           @default(false)
   failedLoginAttempts Int               @default(0)
   lockedUntil         DateTime?         @db.Timestamptz
   banned              Boolean           @default(false)
@@ -233,6 +238,9 @@ model User {
   tasksCreated          WorkshopTask[]      @relation("TaskCreator")
   taskRules             TaskRule[]
   taskRulesAssigned     TaskRule[]          @relation("TaskRuleAssignee")
+  inboxAssigned         InboxConversation[] @relation("InboxAssignee")
+  inboxDraftsCreated    InboxDraft[]        @relation("InboxDraftCreator")
+  inboxDraftsApproved   InboxDraft[]        @relation("InboxDraftApprover")
 
   @@map("users")
 }
@@ -270,6 +278,7 @@ model Customer {
   supplierRole         Supplier?
   tickets              SupportTicket[]
   businessMessages     BusinessMessage[]
+  inboxConversations   InboxConversation[]
   purchaseOrders       PurchaseOrder[]
   commercialAgreements CommercialAgreement[]
   id                   String                @id @default(cuid())
@@ -1310,6 +1319,9 @@ model ShopSettings {
   sharePrices                 Boolean   @default(false)
   // Push the price snapshot on the next entitlement sync when true.
   pricesDirty                 Boolean   @default(true)
+  // Caixa de entrada (Pro module "ai-inbox") — dias de retenção das
+  // conversas/mensagens gravadas localmente.
+  inboxRetentionDays          Int       @default(365)
   // Faturação (Pro module "invoicing") — InvoiceXpress account + key stay
   // local and encrypted; the app calls their API directly.
   invoicingEnabled            Boolean   @default(false)
@@ -1827,15 +1839,83 @@ model BusinessMessage {
   customer       Customer?             @relation(fields: [customerId], references: [id], onDelete: SetNull)
   supplierId     String?
   supplier       Supplier?             @relation(fields: [supplierId], references: [id], onDelete: SetNull)
-  createdById    String
-  createdBy      User                  @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdById    String?
+  createdBy      User?                 @relation(fields: [createdById], references: [id], onDelete: Restrict)
   receivedAt     DateTime              @default(now()) @db.Timestamptz
   links          BusinessMessageLink[]
+  // Caixa de entrada unificada (módulo Pro "ai-inbox"): mensagens dos
+  // canais WhatsApp/SMS/Evolution ligam-se a uma conversa por
+  // conversationKey = "<canal>:<telefone>". handledBy: BOT | STAFF |
+  // SYSTEM. readAt: leitura staff por mensagem inbound.
+  conversationKey String?
+  conversationId  String?
+  conversation    InboxConversation?   @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  handledBy       String?
+  readAt          DateTime?            @db.Timestamptz
+  inboxDrafts     InboxDraft[]
 
   @@unique([channel, externalId])
   @@index([customerId, receivedAt])
   @@index([supplierId, receivedAt])
+  @@index([conversationId, receivedAt])
   @@map("business_messages")
+}
+
+// Conversa da caixa de entrada — uma por (canal + telefone). O estado
+// mutável da conversa (status, atribuição, escalada, não-lidas) vive
+// aqui, não espalhado pelas mensagens.
+model InboxConversation {
+  id              String            @id @default(cuid())
+  conversationKey String            @unique
+  channel         String
+  phone           String
+  customerId      String?
+  customer        Customer?         @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  // OPEN | PENDING | CLOSED
+  status          String            @default("OPEN")
+  assignedToId    String?
+  assignedTo      User?             @relation("InboxAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  escalatedAt     DateTime?         @db.Timestamptz
+  unreadCount     Int               @default(0)
+  lastMessageAt   DateTime          @db.Timestamptz
+  lastInboundAt   DateTime?         @db.Timestamptz
+  lastOutboundAt  DateTime?         @db.Timestamptz
+  messages        BusinessMessage[]
+  drafts          InboxDraft[]
+  createdAt       DateTime          @default(now()) @db.Timestamptz
+  updatedAt       DateTime          @updatedAt @db.Timestamptz
+
+  @@index([status, lastMessageAt])
+  @@index([assignedToId])
+  @@index([channel, lastMessageAt])
+  @@map("inbox_conversations")
+}
+
+// Rascunho de resposta do staff (§G.5) — envio sempre em dois passos:
+// rascunho criado por ferramenta/UI, aprovação humana na app, envio uma
+// vez pelo canal da conversa.
+model InboxDraft {
+  id             String             @id @default(cuid())
+  conversationId String
+  conversation   InboxConversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  text           String             @db.Text
+  // DRAFT | PENDING (aguarda aprovação) | SENT | FAILED | CANCELLED
+  status         String             @default("DRAFT")
+  createdById    String
+  createdBy      User               @relation("InboxDraftCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  approvedById   String?
+  approvedBy     User?              @relation("InboxDraftApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedAt     DateTime?          @db.Timestamptz
+  sentAt         DateTime?          @db.Timestamptz
+  error          String?
+  messageId      String?
+  message        BusinessMessage?   @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  createdAt      DateTime           @default(now()) @db.Timestamptz
+  updatedAt      DateTime           @updatedAt @db.Timestamptz
+
+  @@index([conversationId, createdAt])
+  @@index([status])
+  @@map("inbox_drafts")
 }
 
 model BusinessMessageLink {

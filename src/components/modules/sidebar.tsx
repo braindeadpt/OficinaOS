@@ -7,6 +7,7 @@ import { Wordmark } from "@/components/ui/wordmark";
 import { can, useCan } from "@/hooks/use-can";
 import { NAV_ITEMS } from "@/lib/navigation";
 import { getInitials } from "@/lib/utils";
+import { useAiInboxStore } from "@/stores/ai-inbox";
 import { useAuthStore } from "@/stores/auth";
 import { useUiStore } from "@/stores/ui";
 
@@ -78,9 +79,22 @@ export default function Sidebar() {
   const { t } = useTranslation();
   const role = useAuthStore((s) => s.role);
   const userName = useAuthStore((s) => s.user?.name || s.user?.username || "");
+  // "ai-inbox" é um entitlement Cloud, não só uma permissão — a entrada
+  // só aparece quando o módulo está ativo (§G, UI invisível sem ele).
+  const aiInboxEnabled = useAiInboxStore((s) => s.enabled);
+  const fetchAiInbox = useAiInboxStore((s) => s.fetchStatus);
+  useEffect(() => {
+    if (aiInboxEnabled === null) {
+      fetchAiInbox().catch(() => undefined);
+    }
+  }, [aiInboxEnabled, fetchAiInbox]);
   const navItems = useMemo(
-    () => NAV_ITEMS.filter((item) => can(role, item.perm)),
-    [role]
+    () =>
+      NAV_ITEMS.filter(
+        (item) =>
+          can(role, item.perm) && (item.to !== "/inbox" || aiInboxEnabled)
+      ),
+    [role, aiInboxEnabled]
   );
   const navGroups = useMemo(() => {
     const groupedPaths = new Set(NAV_GROUPS.flatMap((group) => group.paths));

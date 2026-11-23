@@ -9,8 +9,16 @@ import {
   createManyAndReturnInAppNotifications,
   findManyUsers,
 } from "../repositories/notification.repository.js";
+import type { DbClient } from "../repositories/types.js";
 import { askBotAi } from "./bot-ai.js";
 import type { BotToolCtx } from "./bot-tools.js";
+import {
+  escalateConversation,
+  getConversationHistory,
+  INBOX_HANDLED_BOT,
+  recordInboundMessage,
+  recordOutboundMessage,
+} from "./inbox.service.js";
 import type { NotifyContext } from "./job.service.js";
 import { respondToQuote } from "./job-quote.service.js";
 
@@ -106,6 +114,11 @@ export interface BotAiChannelConfig {
 export interface BotReplyCtx {
   ai?: BotAiChannelConfig;
   currency: string;
+  /** Caixa de entrada (§G): quando o módulo "ai-inbox" está ativo,
+   *  inbound/outbound do bot gravam-se em BusinessMessage e a IA lê o
+   *  histórico da conversa persistida. Canal da conversa: whatsapp |
+   *  evolution | sms. */
+  inbox?: { channel: string; enabled: boolean };
   log: FastifyBaseLogger;
   notifyCtx: NotifyContext | undefined;
   /** Cloud API base para o link do portal na vistaCliente (null → sem link). */
@@ -447,7 +460,7 @@ interface CustomerMatch {
  * do bot Evolution — as duas superfícies têm de casar da mesma forma.
  */
 export async function findCustomersByPhone(
-  prisma: BotReplyCtx["prisma"],
+  prisma: DbClient,
   fromPhone: string
 ): Promise<{ id: string; name: string }[]> {
   const senderDigits = fromPhone
@@ -536,7 +549,12 @@ export async function composeReply(
   ctx: BotReplyCtx,
   msg: InboundMessage,
   plainText = false,
-  opts: { allowQuoteDecision?: boolean } = {}
+  opts: {
+    allowQuoteDecision?: boolean;
+    /** Mensagem inbound já gravada na inbox — a IA lê o histórico da
+     *  conversa excluindo-a (o userText vai à parte, §G.4). */
+    inboxRecord?: { conversationId: string; messageId: string };
+  } = {}
 ): Promise<BotReply> {
   const { customers, jobs } = await findCustomerJobs(ctx, msg.fromPhone);
   if (customers.length === 0) {
@@ -601,6 +619,7 @@ export async function composeReply(
   const aiReply = await tryBotAiReply(ctx, msg, {
     codeMatch: !!codeMatch,
     customerIds: customers.map((c) => c.id),
+    inboxRecord: opts.inboxRecord,
     lower,
     text,
   });
@@ -646,6 +665,24 @@ async function applyStopConsent(
   }
 }
 
+/**
+ * Revogação de consentimento fora do pipeline do bot — usada pelo
+ * caminho §G.7 (inbox sem bot): um PARAR revoga sempre, mesmo quando o
+ * módulo do canal está desligado e a mensagem só é gravada.
+ */
+export async function revokeConsentForPhone(
+  prisma: DbClient,
+  phone: string
+): Promise<void> {
+  const customers = await findCustomersByPhone(prisma, phone);
+  for (const c of customers) {
+    await prisma.customer.update({
+      data: { whatsappConsent: false },
+      where: { id: c.id },
+    });
+  }
+}
+
 /** Pergunta à IA quando a flag, o entitlement e o formato da mensagem deixam. */
 async function tryBotAiReply(
   ctx: BotReplyCtx,
@@ -653,6 +690,7 @@ async function tryBotAiReply(
   input: {
     codeMatch: boolean;
     customerIds: string[];
+    inboxRecord?: { conversationId: string; messageId: string };
     lower: string;
     text: string;
   }
@@ -685,8 +723,19 @@ async function tryBotAiReply(
       botInfoText: ai.botInfoText,
     },
   };
+  // §G.4 — com a inbox ativa, o contexto vem das últimas 6 mensagens
+  // gravadas (a atual excluída: vai como userText à parte).
+  const history = input.inboxRecord
+    ? await getConversationHistory(
+        ctx.prisma,
+        input.inboxRecord.conversationId,
+        6,
+        input.inboxRecord.messageId
+      ).catch(() => undefined)
+    : undefined;
   const res = await askBotAi(toolCtx, ai, {
     channel: ai.channel,
+    history,
     phone: msg.fromPhone,
     userText: input.text,
   });
@@ -707,6 +756,9 @@ export interface InboundTransport {
   /** Evolution usa 10/h; oficial e SMS ficam no default de 20/h. */
   rateLimitPerHour?: number;
   send: (text: string) => Promise<boolean>;
+  /** Envio suprimido (mensagem >23 h Meta, bot suspenso): o pipeline
+   *  corre mas nada sai — a inbox grava o inbound, não o "envio". */
+  silentSend?: boolean;
 }
 
 export async function handleInboundMessage(
@@ -720,12 +772,28 @@ export async function handleInboundMessage(
   // confirmação, porém, conta para o limite anti-ban: acima do teto
   // horário a revogação fica gravada mas a resposta não sai.
   const isStop = STOP_WORDS.has((msg.text ?? "").trim().toLowerCase());
+  // §G — caixa de entrada: grava TODAS as mensagens inbound antes de
+  // qualquer decisão. A mensagem floodada por rate-limit também fica
+  // registada — o limite é sobre respostas, não sobre o que a loja vê.
+  const inboxRecord = ctx.inbox?.enabled
+    ? await recordInboundMessage(ctx.prisma, ctx.log, {
+        at: new Date(msg.createdAt),
+        channel: ctx.inbox.channel,
+        externalId: msg.id,
+        phone: msg.fromPhone,
+        text: msg.text ?? `[${msg.messageType}]`,
+      }).catch((err) => {
+        ctx.log.warn({ err }, `${t.channelLabel}: inbox record falhou`);
+        return null;
+      })
+    : null;
   const withinLimit = rateOk(msg.fromPhone, t.rateLimitPerHour);
   if (!(isStop || withinLimit)) {
     return null;
   }
   const out = await composeReply(ctx, msg, t.plainText, {
     allowQuoteDecision: t.allowQuoteDecision,
+    inboxRecord: inboxRecord ?? undefined,
   });
   if (isStop && !withinLimit) {
     out.text = "";
@@ -741,8 +809,26 @@ export async function handleInboundMessage(
       sent = false;
       ctx.log.warn({ err }, `${t.channelLabel}-bot send threw`);
     }
+    // §G — a resposta do bot também vai para a conversa (SENT/FAILED).
+    // silentSend=true: envio suprimido, não há outbound a registar.
+    if (ctx.inbox?.enabled && !t.silentSend) {
+      await recordOutboundMessage(ctx.prisma, ctx.log, {
+        channel: ctx.inbox.channel,
+        deliveryStatus: sent ? "SENT" : "FAILED",
+        handledBy: INBOX_HANDLED_BOT,
+        phone: msg.fromPhone,
+        text: out.text,
+      }).catch((err) =>
+        ctx.log.warn({ err }, `${t.channelLabel}: inbox outbound falhou`)
+      );
+    }
   }
   if (out.escalate) {
+    if (inboxRecord) {
+      await escalateConversation(ctx.prisma, inboxRecord.conversationId).catch(
+        () => undefined
+      );
+    }
     await escalateToStaff(
       ctx,
       t.channelLabel,

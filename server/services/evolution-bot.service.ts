@@ -11,6 +11,7 @@ import {
   type InboundMessage,
   isStopText,
   rateOk,
+  revokeConsentForPhone,
 } from "./bot-intents.js";
 import {
   type EvolutionConfig,
@@ -18,6 +19,10 @@ import {
   sendEvolutionPresence,
   sendEvolutionText,
 } from "./evolution.service.js";
+import {
+  INBOX_CHANNEL_EVOLUTION,
+  recordInboundMessage,
+} from "./inbox.service.js";
 import type { NotifyContext } from "./job.service.js";
 
 /**
@@ -188,6 +193,43 @@ function evolutionConfigOf(settings: Settings): EvolutionConfig | null {
   };
 }
 
+/** Config Evolution pública — usada pelo envio staff da inbox (§G.5). */
+export function evolutionConfigFor(settings: Settings): EvolutionConfig | null {
+  return evolutionConfigOf(settings);
+}
+
+/**
+ * Envio staff via Evolution com as MESMAS proteções anti-ban do bot
+ * (§G.5): partilha o limiter horário e o teto diário da instância, faz
+ * presença "a escrever…" + atraso humano e só depois o texto.
+ */
+export async function sendViaEvolutionAntiBan(
+  _prisma: PrismaClient,
+  log: FastifyBaseLogger,
+  config: EvolutionConfig,
+  phone: string,
+  text: string,
+  cap: number
+): Promise<{ error?: string; success: boolean }> {
+  if (dailyCapExceeded(cap)) {
+    return { error: "teto_diario_evolution", success: false };
+  }
+  if (!rateOk(`staff:${phone}`, RATE_LIMIT_PER_HOUR)) {
+    return { error: "limite_horario_evolution", success: false };
+  }
+  dayCount += 1;
+  const delay = REPLY_DELAY_MIN_MS + Math.random() * REPLY_DELAY_SPREAD_MS;
+  await sendEvolutionPresence(config, phone, delay).catch(() => null);
+  await new Promise((r) => setTimeout(r, delay));
+  const res = await sendEvolutionText(config, phone, text);
+  if (!res.success) {
+    dayCount -= 1;
+    log.warn({ err: res.error }, "evolution staff send failed");
+    return { error: res.error, success: false };
+  }
+  return { success: true };
+}
+
 function buildCtx(
   prisma: PrismaClient,
   settings: Settings,
@@ -213,6 +255,10 @@ function buildCtx(
           }
         : undefined,
     currency: settings.currency ?? "EUR",
+    inbox: {
+      channel: INBOX_CHANNEL_EVOLUTION,
+      enabled: isModuleEnabled(settings, "ai-inbox"),
+    },
     log,
     notifyCtx,
     portalApiUrl: settings.cloudApiUrl,
@@ -270,35 +316,87 @@ export async function handleEvolutionInbound(
   envelope: EvolutionEnvelope
 ): Promise<void> {
   const settings = await getOrCreateShopSettings(prisma);
-  if (!botGateOpen(settings)) {
+  // §G.7 — com "ai-inbox" o inbound grava-se na caixa de entrada mesmo
+  // sem "whatsapp-bot" (ou com o bot suspenso/termo por aceitar): a
+  // gravação acontece no topo do loop, antes do gate do bot, e o
+  // dedupe por evo-<id> torna a re-gravação no pipeline uma no-op.
+  const inboxEnabled = isModuleEnabled(settings, "ai-inbox");
+  const botOpen = botGateOpen(settings);
+  if (!(botOpen || inboxEnabled)) {
     return;
   }
-  const config = evolutionConfigOf(settings);
-  if (!config) {
+  const config = botOpen ? evolutionConfigOf(settings) : null;
+  if (botOpen && !config) {
     return;
   }
-  const ctx = buildCtx(
-    prisma,
-    settings,
-    log,
-    notifyCtx,
-    entitlementsOf(settings)
-  );
+  const ctx = botOpen
+    ? buildCtx(prisma, settings, log, notifyCtx, entitlementsOf(settings))
+    : null;
   const cap = settings.whatsappBotDailyCap ?? DEFAULT_DAILY_CAP;
   for (const parsed of parseUpserts(envelope)) {
-    const msg: InboundMessage = {
-      createdAt: parsed.data.messageTimestamp
-        ? new Date(parsed.data.messageTimestamp * 1000).toISOString()
-        : new Date().toISOString(),
-      fromPhone: parsed.fromPhone,
-      id: `evo-${parsed.id}`,
-      // A Evolution etiqueta texto como "conversation"/"extendedTextMessage"
-      // — o pipeline partilhado só reconhece "text"; o resto escala ao staff.
-      messageType: parsed.text === null ? "other" : "text",
-      text: parsed.text,
-    };
-    await processOne(prisma, ctx, config, msg, parsed, cap, log);
+    await processParsed(
+      prisma,
+      log,
+      ctx,
+      config,
+      parsed,
+      inboxEnabled,
+      botOpen,
+      cap
+    );
   }
+}
+
+/** Inbox-record + gate do bot por mensagem (§G.7). */
+async function processParsed(
+  prisma: PrismaClient,
+  log: FastifyBaseLogger,
+  ctx: BotReplyCtx | null,
+  config: EvolutionConfig | null,
+  parsed: ParsedInbound,
+  inboxEnabled: boolean,
+  botOpen: boolean,
+  cap: number
+): Promise<void> {
+  const msg: InboundMessage = {
+    createdAt: parsed.data.messageTimestamp
+      ? new Date(parsed.data.messageTimestamp * 1000).toISOString()
+      : new Date().toISOString(),
+    fromPhone: parsed.fromPhone,
+    id: `evo-${parsed.id}`,
+    // A Evolution etiqueta texto como "conversation"/"extendedTextMessage"
+    // — o pipeline partilhado só reconhece "text"; o resto escala ao staff.
+    messageType: parsed.text === null ? "other" : "text",
+    text: parsed.text,
+  };
+  if (inboxEnabled) {
+    await recordInboundMessage(prisma, log, {
+      at: new Date(msg.createdAt),
+      channel: INBOX_CHANNEL_EVOLUTION,
+      externalId: msg.id,
+      phone: msg.fromPhone,
+      text: parsed.text ?? `[${parsed.data.messageType ?? "mensagem"}]`,
+    }).catch((err) => log.warn({ err }, "evolution: inbox record falhou"));
+  }
+  if (!botOpen) {
+    // Modo só-inbox: nada de respostas — mas PARAR/STOP é legal e
+    // revoga consentimento mesmo sem o módulo do bot.
+    if (parsed.text && isStopText(parsed.text)) {
+      await revokeConsentForPhone(prisma, parsed.fromPhone).catch(
+        () => undefined
+      );
+    }
+    return;
+  }
+  await processOne(
+    prisma,
+    ctx as BotReplyCtx,
+    config as EvolutionConfig,
+    msg,
+    parsed,
+    cap,
+    log
+  );
 }
 
 async function processOne(
@@ -348,6 +446,7 @@ async function processOne(
       channelLabel: "WhatsApp",
       rateLimitPerHour: RATE_LIMIT_PER_HOUR,
       send: () => Promise.resolve(true),
+      silentSend: true,
     });
     return;
   }

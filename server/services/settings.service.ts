@@ -173,6 +173,7 @@ const shopCreate = (input: UpdateShopSettingsInput) => ({
   id: "default",
   phone: input.phone ?? null,
   receiptFooter: input.receiptFooter ?? null,
+  inboxRetentionDays: input.inboxRetentionDays ?? 365,
   intakeTerms: input.intakeTerms?.trim() || null,
   ...botCreate(input),
   receiptPaper: input.receiptPaper ?? "80mm",
@@ -198,6 +199,7 @@ const shopUpdate = (input: UpdateShopSettingsInput) => ({
   currency: input.currency,
   phone: input.phone,
   receiptFooter: input.receiptFooter,
+  inboxRetentionDays: input.inboxRetentionDays,
   intakeTerms:
     input.intakeTerms === undefined
       ? undefined

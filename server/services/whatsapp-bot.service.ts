@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@generated/client";
 import type { FastifyBaseLogger } from "fastify";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
+import { isModuleEnabled } from "../utils/modules.js";
 import {
   type BotReplyCtx,
   handleInboundMessage,
@@ -155,6 +156,10 @@ export async function pollWhatsAppInbound(
     apiUrl,
     channel,
     currency: settings.currency ?? "EUR",
+    inbox: {
+      channel: channel.mode === "evolution" ? "evolution" : "whatsapp",
+      enabled: isModuleEnabled(settings, "ai-inbox"),
+    },
     log,
     notifyCtx,
     portalApiUrl: apiUrl,
@@ -244,6 +249,7 @@ async function processInbound(
         stale || silent
           ? () => Promise.resolve(true)
           : (text) => send(ctx, msg.fromPhone, text),
+      silentSend: stale || silent,
     });
     if (!out) {
       return true; // flood — descarta sem responder

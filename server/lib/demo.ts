@@ -36,6 +36,9 @@ export function assertNotDemoMode(): void {
 const BLOCKED_ALL_METHODS = [
   // AI assistant — the whole surface exists to call a model API.
   "/api/ai",
+  // ai-inbox Pro — Cloud-gated staff messaging surface (tools, AI
+  // reply, MCP proxies); a demo sem pairing nunca tem o entitlement.
+  "/api/inbox",
   // Proxies/boards that live on oficinaos-cloud or the Trade marketplace.
   "/api/part-requests",
   "/api/market-prices",

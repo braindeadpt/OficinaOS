@@ -4,6 +4,7 @@ import type { FastifyBaseLogger } from "fastify";
 import { decryptSecret } from "../lib/crypto.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
+import { isModuleEnabled } from "../utils/modules.js";
 import {
   type BotReplyCtx,
   handleInboundMessage,
@@ -136,6 +137,7 @@ export async function syncSmsInbound(
       token,
     },
     currency: settings.currency ?? "EUR",
+    inbox: { channel: "sms", enabled: isModuleEnabled(settings, "ai-inbox") },
     log,
     notifyCtx,
     portalApiUrl: apiUrl,

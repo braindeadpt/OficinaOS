@@ -42,6 +42,12 @@ export const NAV_ITEMS: NavItem[] = [
     perm: { settings: ["edit"] },
   },
   {
+    icon: "inbox",
+    labelKey: "inbox.nav",
+    to: "/inbox",
+    perm: { inbox: ["view"] },
+  },
+  {
     icon: "handshake",
     labelKey: "business.agreements",
     to: "/agreements",
