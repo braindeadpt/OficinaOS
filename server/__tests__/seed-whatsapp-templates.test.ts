@@ -351,6 +351,42 @@ describe.skipIf(!serverReachable)(
       expect(problems).toEqual([]);
     });
 
+    it("PostgreSQL: o repair meta-safe não engole texto literal entre blocos", async () => {
+      // Regressão Devin: o padrão da migração 20261228000000 podia tratar
+      // texto fixo entre blocos {{if}} como parte da cadeia terminal e
+      // inserir "." a seguir a {{trackingUrl}} — dentro de um URL de
+      // seguimento (?phone4=NNNN&utm_…) isso corrompia a ligação. O
+      // mesmo padrão corre na migração de convergência 20261230000000 —
+      // aqui replica-se o loop: duas passagens bastam para cadeias de
+      // dois blocos.
+      const pattern =
+        "(\\{\\{\\w+\\}\\})(\\{\\{endif\\}\\})(([[:space:]]*\\{\\{if[^{}]*\\}\\}((?!\\{\\{endif\\}\\}).)*?\\{\\{endif\\}\\})*[[:space:]]*$)";
+      const urlBody =
+        "{{if shopName}}Oficina {{shopName}}{{endif}}{{if trackingUrl}} Consulte {{trackingUrl}}{{endif}}{{if trackingUrl}}&utm_source=whatsapp{{endif}}&utm_medium=mensagem{{if reviewUrl}} Avalie-nos em {{reviewUrl}}.{{endif}}";
+      const res = await getDb().query(
+        "SELECT regexp_replace($1, $2, '\\1.\\2\\3', 'g') AS body",
+        [urlBody, pattern]
+      );
+      expect(res.rows[0].body).toBe(urlBody);
+
+      // Cadeia terminal legítima: cada passada pontua mais um bloco —
+      // duas passadas chegam para dois blocos.
+      const chain =
+        "Olá {{a}}.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}: {{trackingUrl}}{{endif}}";
+      let cur = chain;
+      for (let pass = 0; pass < 3; pass += 1) {
+        cur = (
+          await getDb().query(
+            "SELECT regexp_replace($1, $2, '\\1.\\2\\3', 'g') AS body",
+            [cur, pattern]
+          )
+        ).rows[0].body;
+      }
+      expect(cur).toBe(
+        "Olá {{a}}.{{if shopName}} — {{shopName}}.{{endif}}{{if trackingUrl}}: {{trackingUrl}}.{{endif}}"
+      );
+    });
+
     it("renders IN_APP templates without leftover placeholders", async () => {
       const res = await getDb().query(
         `SELECT name, body FROM notification_templates WHERE channel = 'IN_APP'`
