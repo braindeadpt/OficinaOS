@@ -311,7 +311,6 @@ function collectClause(
   for (const m of withoutRelatives.matchAll(BOUND_HOUR_RE)) {
     clauseBound.add(m[1]);
   }
-  const bareBefore = bare.size;
   const spelledInvalid = collectSpelledTimes(withoutRelatives, times);
   for (const hhmm of times) {
     explicit.add(hhmm);
@@ -320,8 +319,16 @@ function collectClause(
   // ("18 30") — as horas soltas só contam nas orações sem HH:MM e sem
   // qualificador impossível («às 18 horas da manhã» é ambígua, não
   // baixa para «18» solto).
+  let clauseHasHour = times.size > 0;
   if (times.size === 0 && !spelledInvalid) {
-    for (const h of bareHours(withoutRelatives)) {
+    // As horas da PRÓPRIA oração (não o delta no conjunto global):
+    // repetir «18» noutra oração não apaga a sua presença aqui —
+    // senão o limite desta caía para contexto e a ambiguidade
+    // perdia-se («Acho que foi às 18. Talvez às 18 ou depois das
+    // 19 horas» gravava 18:00).
+    const clauseBare = bareHours(withoutRelatives);
+    clauseHasHour = clauseBare.size > 0;
+    for (const h of clauseBare) {
       bare.add(h);
     }
   } else if (times.size > 0) {
@@ -340,9 +347,12 @@ function collectClause(
       }
     }
   }
-  const hasOwnHour = times.size > 0 || bare.size > bareBefore;
+  // Um limite sem hora na própria oração que começa por «ou» é uma
+  // alternativa à hora anterior («18:05, ou talvez depois das 19
+  // horas»), não contexto — conta como bound.
+  const startsWithOu = normalizedClause.split(" ")[0] === "ou";
   for (const b of clauseBound) {
-    if (hasOwnHour) {
+    if (clauseHasHour || startsWithOu) {
       bound.add(b);
     } else {
       looseBound.add(b);

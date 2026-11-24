@@ -385,5 +385,17 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
     expect(
       parsePontoExitAnswer("Saí às 18:05. O meu turno era até às 18 horas.")
     ).toEqual({ hhmm: "18:05", kind: "time" });
+    // …mas ligado por «ou» continua alternativa, mesmo depois de
+    // pontuação — duas possibilidades em aberto, repete-se.
+    expect(
+      parsePontoExitAnswer("Saí às 18:05, ou talvez depois das 19 horas")
+    ).toEqual({ kind: "ambiguous" });
+    // Repetir a hora noutra oração não apaga o conflito — a
+    // presença de hora conta na própria oração, não no conjunto.
+    expect(
+      parsePontoExitAnswer(
+        "Acho que foi às 18. Talvez às 18 ou depois das 19 horas"
+      )
+    ).toEqual({ kind: "ambiguous" });
   });
 });
