@@ -503,6 +503,37 @@ describe("buildQuoteSuggestion — device-aware part priority", () => {
     expect(part?.catalogId).toBe("part-maxmah");
   });
 
+  it("rejects a Max variant with a storage spec for a Pro device", () => {
+    // BUG #166 r12: «Pro Max 256GB» é variante a sério — a excepção de
+    // capacidade (mAh/Wh) não pode aceitá-la; a bateria Pro ganha à
+    // Pro Max mesmo esgotada (deviceHit > stock).
+    const parts: QuotePartInput[] = [
+      {
+        category: "BATTERY",
+        defaultPrice: 30,
+        id: "part-pro",
+        name: "Bateria iPhone 15 Pro",
+        stockQuantity: 0,
+      },
+      {
+        category: "BATTERY",
+        defaultPrice: 45,
+        id: "part-promax",
+        name: "Bateria iPhone 15 Pro Max 256GB",
+        stockQuantity: 2,
+      },
+    ];
+    const s = build(
+      diag(
+        { "battery.health": { Status: "fail" } },
+        { device: { brand: "Apple", model: "iPhone 15 Pro" } }
+      ),
+      { parts }
+    );
+    const part = s.lines.find((l) => l.kind === "part");
+    expect(part?.catalogId).toBe("part-pro");
+  });
+
   it("rejects a variant followed by a generic descriptor (Pro OEM)", () => {
     // BUG #166 r10: «iPhone 15 Pro OEM» é a variante Pro — a peça do
     // modelo certo esgotada ganha à Pro em stock.
