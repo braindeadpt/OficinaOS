@@ -619,5 +619,49 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
     expect(
       parsePontoExitAnswer("Saí às 06:30, ou seja antes das 6 horas da manhã")
     ).toEqual({ kind: "ambiguous" });
+    // Minutos e período no mesmo limite — «depois das 6 horas e
+    // meia da manhã» é depois das 06:30, não das 06:00 nem 18:30.
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 06:45, ou seja depois das 6 horas e meia da manhã"
+      )
+    ).toEqual({ hhmm: "06:45", kind: "time" });
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 06:20, ou seja depois das 6 horas e meia da manhã"
+      )
+    ).toEqual({ kind: "ambiguous" });
+    // A continuação de duração não é minutos do limite — «e meia
+    // hora antes de fechar» e «e 30 minutos antes» ficam de fora:
+    // o limite é 18:00 e contradiz 18:20.
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 18:20, ou seja antes das 18 horas e meia hora antes de fechar"
+      )
+    ).toEqual({ kind: "ambiguous" });
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 18:20, ou seja antes das 18 horas e 30 minutos antes de fechar"
+      )
+    ).toEqual({ kind: "ambiguous" });
+    // A 3.ª pessoa não afirma a saída do trabalhador — o colega ou
+    // a encomenda que «saiu depois das 19» são contexto.
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 18:05. O meu colega só saiu depois das 19 horas."
+      )
+    ).toEqual({ hhmm: "18:05", kind: "time" });
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 18:05. A encomenda só saiu depois das 19 horas."
+      )
+    ).toEqual({ hhmm: "18:05", kind: "time" });
+    // …mas com referência a si («a minha saída») afirma — e
+    // contradiz a hora declarada.
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 18:05. A minha saída só saiu registada depois das 19 horas."
+      )
+    ).toEqual({ kind: "ambiguous" });
   });
 });

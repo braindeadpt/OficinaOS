@@ -201,18 +201,27 @@ const WORKED_DURATION_RE =
 // unidade de duração não são minutos («depois das 18 horas e 1
 // hora depois»).
 const BOUND_HOUR_RE =
-  /\b(depois|apos|antes|ate)\s+(?:das?|as)\s+(\d{1,2})\s*horas?(?:\s+e\s+(?:(\d{1,2})\s*(?:minutos?|mins?)\b|(\d{1,2})(?!\s+(?:horas?|hrs?|minutos?|mins?|segundos?|segs?|depois|apos|antes|atras)\b)|(meia))\b)?(?:\s+da\s+(manha|tarde|noite)\b)?/gi;
+  /\b(depois|apos|antes|ate)\s+(?:das?|as)\s+(\d{1,2})\s*horas?(?:\s+e\s+(?:(\d{1,2})\s*(?:minutos?|mins?)\b(?!\s+(?:depois|apos|antes|atras|seguida|mais(?!\s+ou\s+menos)))|(\d{1,2})(?!\s+(?:horas?|hrs?|minutos?|mins?|segundos?|segs?|depois|apos|antes|atras|seguida|mais(?!\s+ou\s+menos))\b)|(meia)(?!\s+horas?\b))\b)?(?:\s+da\s+(manha|tarde|noite)\b)?/gi;
 // A oração volta a afirmar a saída — o limite descreve-a, não
 // outro acontecimento: «ou saí depois das 19» é alternativa mesmo
-// depois dum contexto de turno. Só formas afirmadas: o pretérito
-// («saí», «saiu», «saímos», «saído», «a saída foi», «saindo») e
-// o infinito com auxiliar aspectual («acabei/acabou por sair»,
-// «terminei por sair», «consegui sair», «voltei a sair», «fui
-// sair»). O infinito solto («autorização para sair depois das
-// 17», «podia sair») e o imperfeito «saía» são permissão ou
-// horário, não a saída de hoje.
-const CLAIMS_EXIT_RE =
-  /\bsai(?:d[ao]|mos|ndo|u)?\b|\b(?:acab(?:ei|ou)|termin(?:ei|ou)|cheg(?:uei|ou)|consegui|voltei|fui)\s+(?:por\s+|a\s+|de\s+)?sair\b/i;
+// depois dum contexto de turno. Só formas afirmadas. Na 1.ª
+// pessoa basta a forma: «saímos» e o auxiliar aspectual («acabei
+// por sair», «terminei por sair», «consegui sair», «voltei a
+// sair», «fui sair»). O infinito solto («autorização para sair
+// depois das 17», «podia sair») e o imperfeito «saía» são
+// permissão ou horário, não a saída de hoje.
+const CLAIMS_EXIT_1ST_RE =
+  /\bsaimos\b|\b(?:acabei|terminei|cheguei|consegui|voltei|fui)\s+(?:por\s+|a\s+|de\s+)?sair\b/i;
+// Formas ambíguas ou na 3.ª pessoa («sai», «saiu», «a saída foi»,
+// «saindo», «acabou por sair») só afirmam a saída do trabalhador
+// com referência a si («eu», «a minha saída») ou quando a oração
+// não nomeia outro sujeito — «o meu colega saiu depois das 19»
+// ou «a encomenda saiu depois das 19» são contexto, não correção.
+const CLAIMS_EXIT_3RD_RE =
+  /\bsai(?:u|d[ao]|ndo)?\b|\b(?:acabou|terminou|chegou)\s+(?:por\s+|a\s+|de\s+)?sair\b/i;
+const THIRD_PERSON_RE =
+  /\b(?:colegas?|ele|ela|eles|elas|encomendas?|pedidos?|clientes?|chefe|patrao|gerente|motorista|autocarro|comboio)\b/;
+const SELF_EXIT_RE = /\b(?:eu|minh[ao]s?)\b/;
 // Reformulação «ou seja …» no fim do texto antes do limite.
 const OU_SEJA_END_RE = /(?:^|\s)ou\s+seja$/;
 // «ou» a ligar o limite à hora, com advérbios comuns pelo meio —
@@ -478,6 +487,20 @@ function ouSejaVerdict(
  *  oração, herdando o papel da anterior (contexto continua
  *  contexto do turno), ou dentro dela ligado à hora ou a uma
  *  alternativa já encadeada. */
+/** A oração afirma a saída do trabalhador — na 1.ª pessoa sempre;
+ *  nas formas ambíguas ou na 3.ª pessoa só com referência a si ou
+ *  sem outro sujeito nomeado («o meu colega saiu», «a encomenda
+ *  saiu» são contexto doutro acontecimento, não correção). */
+function claimsExit(before: string): boolean {
+  if (CLAIMS_EXIT_1ST_RE.test(before)) {
+    return true;
+  }
+  return (
+    CLAIMS_EXIT_3RD_RE.test(before) &&
+    (SELF_EXIT_RE.test(before) || !THIRD_PERSON_RE.test(before))
+  );
+}
+
 function boundIsAlternative(
   before: string,
   isFirstBound: boolean,
@@ -486,7 +509,7 @@ function boundIsAlternative(
   prevRole: ClauseRole | null,
   chainedAlt: boolean
 ): boolean {
-  if (hourKind === "new" || CLAIMS_EXIT_RE.test(before)) {
+  if (hourKind === "new" || claimsExit(before)) {
     return true;
   }
   if (isFirstBound && startsWithOu) {
