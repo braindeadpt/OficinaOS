@@ -795,14 +795,16 @@ const LOCALHOST_RE = /^(localhost|127\.|::1|\[::1\])/i;
 const PORT_SUFFIX_RE = /:(\d+)$/;
 
 /**
- * §5.7 — regista o webhook MESSAGES_UPSERT na instância Evolution. Só
- * com o termo do bot aceite E o entitlement "whatsapp-bot" ativo (a
- * rota inbound nem existe sem ele — um termo aceite em tempos não pode
- * continuar a registar após o módulo expirar); o callback usa
- * `evolutionWebhookToken` — segredo próprio, separado do SMS — e o
- * Host do pedido.
+ * §5.7 — regista o webhook MESSAGES_UPSERT na instância Evolution.
+ * Regista quando há consumidor: ai-inbox, bot de clientes (termo
+ * aceite + entitlement "whatsapp-bot" — a rota inbound nem existe sem
+ * ele, um termo aceite em tempos não pode continuar a registar após o
+ * módulo expirar) ou livro de ponto (módulo "ponto" + o mesmo
+ * entitlement de transporte, sem exigir o termo do bot). O callback
+ * usa `evolutionWebhookToken` — segredo próprio, separado do SMS — e
+ * o Host do pedido.
  */
-async function tryRegisterEvolutionWebhook(
+export async function tryRegisterEvolutionWebhook(
   prisma: Parameters<typeof getSmsSettings>[0],
   requestHost: string
 ): Promise<boolean> {
@@ -822,12 +824,15 @@ async function tryRegisterEvolutionWebhook(
     return false;
   }
   let row = await getOrCreateShopSettings(prisma);
-  // ai-inbox-only também precisa do webhook — a caixa de entrada recebe
-  // mensagens Evolution sem o bot (o handler grava e só processa PARAR).
+  // Consumidores do webhook Evolution: ai-inbox (caixa de entrada sem
+  // bot), o bot de clientes (precisa do termo aceite) e o livro de
+  // ponto — este corre com o bot suspenso/fechado e não exige o termo,
+  // só o entitlement de transporte "whatsapp-bot" + o módulo "ponto"
+  // (processParsed corre o handler antes do gate de clientes).
   const evolutionConsumer =
     isModuleEnabled(row, "ai-inbox") ||
     (isModuleEnabled(row, "whatsapp-bot") &&
-      Boolean(row.whatsappBotDisclaimerAt));
+      (Boolean(row.whatsappBotDisclaimerAt) || isModuleEnabled(row, "ponto")));
   // Instalações que aceitaram o termo antes do token próprio existir:
   // gera-o aqui — o token SMS não é reutilizado (§5.7, ver rota pública).
   if (

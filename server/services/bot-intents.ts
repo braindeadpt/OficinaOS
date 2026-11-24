@@ -104,6 +104,10 @@ export interface InboundMessage {
    *  locationMessage da Evolution). Coordenadas WGS84. */
   location?: { accuracy?: number; lat: number; lng: number };
   messageType: string;
+  /** Hora de ENVIO segundo o canal (sentAt da Meta na fila oficial) —
+   *  o livro de ponto mede a validade do código e a frescura do
+   *  registo a partir daqui; ausente → createdAt (hora de receção). */
+  sentAt?: string;
   text: string | null;
 }
 
@@ -829,16 +833,40 @@ async function tryHandlePonto(
   }
 }
 
+/** O ponto reclamou a mensagem? Devolve a resposta "engolida" ou null
+ *  para o pipeline normal seguir. Número dual-role (funcionário que
+ *  também é cliente): o ponto engole PARAR/STOP como "comando
+ *  desconhecido" e a revogação do composeReply nunca corria — os
+ *  avisos automáticos continuavam autorizados. A revogação é
+ *  transversal (§E.9): corre na mesma, idempotente com o
+ *  applyStopConsent do pipeline normal. */
+async function pontoClaimedReply(
+  ctx: BotReplyCtx,
+  msg: InboundMessage,
+  t: InboundTransport
+): Promise<{ reply: BotReply; sent: boolean } | null> {
+  if (!(await tryHandlePonto(ctx, msg, t))) {
+    return null;
+  }
+  if (isStopText(msg.text ?? "")) {
+    await revokeConsentForPhone(ctx.prisma, msg.fromPhone).catch((err) =>
+      ctx.log.warn({ err }, `${t.channelLabel}: revogação PARAR falhou`)
+    );
+  }
+  return {
+    reply: { customerName: null, escalate: false, jobId: null, text: "" },
+    sent: true,
+  };
+}
+
 export async function handleInboundMessage(
   ctx: BotReplyCtx,
   msg: InboundMessage,
   t: InboundTransport
 ): Promise<{ reply: BotReply; sent: boolean } | null> {
-  if (await tryHandlePonto(ctx, msg, t)) {
-    return {
-      reply: { customerName: null, escalate: false, jobId: null, text: "" },
-      sent: true,
-    };
+  const pontoReply = await pontoClaimedReply(ctx, msg, t);
+  if (pontoReply) {
+    return pontoReply;
   }
   // Opt-out legal: PARAR/STOP nunca morre no rate limiter — a revogação
   // do consentimento tem de correr mesmo quando o número esgotou a
