@@ -2057,8 +2057,11 @@ model TimeEntry {
   corrects    TimeEntry?         @relation("TimeEntryCorrection", fields: [correctsId], references: [id], onDelete: SetNull)
   corrections TimeEntry[]        @relation("TimeEntryCorrection")
   // null = registo criado pelo sistema (bot); senão o utilizador staff.
+  // Restrict (não SetNull): o trigger de imutabilidade rejeita o UPDATE que
+  // o SET NULL dispararia ao apagar a conta — e a autoria de um registo
+  // legal não se remove. Contas desativam-se (isActive), nunca se eliminam.
   createdById String?
-  createdBy   User?              @relation("TimeEntryCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy   User?              @relation("TimeEntryCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   createdAt   DateTime           @default(now()) @db.Timestamptz
 
   validations TimeEntryValidation[]
