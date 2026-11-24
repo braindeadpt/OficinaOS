@@ -470,5 +470,37 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
         "Acho que saí às 18:05. Talvez às 18:05 ou só depois das 19 horas"
       )
     ).toEqual({ kind: "ambiguous" });
+    // «até às 18» é limite inclusivo — reformular a mesma hora aceita.
+    expect(
+      parsePontoExitAnswer("Saí às 18 horas, ou seja até às 18 horas")
+    ).toEqual({ hhmm: "18:00", kind: "time" });
+    // A hora solta compara-se já interpretada — «às 6» é 18:00 e
+    // «depois das 17» é coerente com ela.
+    expect(
+      parsePontoExitAnswer("Saí às 6, ou seja depois das 17 horas")
+    ).toEqual({ hhmm: "18:00", kind: "time" });
+    // «às 7» (19:00) não é «07:00» — a hora da segunda oração é nova
+    // e o limite contradiz-la: ambíguo.
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 7. Às 07:00 ainda estava a trabalhar até às 8 horas"
+      )
+    ).toEqual({ kind: "ambiguous" });
+    // Data reconhecida mas inválida — pergunta-se, não se grava a
+    // hora no dia errado.
+    expect(parsePontoExitAnswer("Saí às 18:05 em 2026-13-10")).toEqual({
+      kind: "ambiguous",
+    });
+    // A negação depois da data tem âmbito incerto — pergunta-se em
+    // vez de tratar a resposta como sem data.
+    expect(
+      parsePontoExitAnswer("A 09/01 não sei a hora ao certo, mas saí às 18:05")
+    ).toEqual({ kind: "ambiguous" });
+    // …mas a negação ANTES da data anula-a — fica a data afirmada.
+    expect(parsePontoExitAnswer("Não foi a 9/1, saí a 10/1 às 18:05")).toEqual({
+      date: { day: 10, month: 1, year: null },
+      hhmm: "18:05",
+      kind: "time",
+    });
   });
 });

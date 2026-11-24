@@ -203,6 +203,10 @@ const OU_SEJA_END_RE = /(?:^|\s)ou\s+seja$/;
 // «ou só depois das 19», «ou talvez mesmo depois das 19».
 const OU_LINK_END_RE =
   /(?:^|\s)ou(?:\s+(?:so|talvez|mesmo|ainda|apenas|logo|afinal|tambem|nem))*$/;
+// Negação no texto cru — a data antes dela («a 9/1 não sei a hora
+// ao certo») não está anulada, está incerta; a data depois dela
+// («não foi a 9/1») é a negada.
+const NEGATION_START_RE = /\b(?:n[aã]o|nunca|jamais)\b/i;
 
 /** Horas soltas distintas no texto normalizado — "6" ou "18" a sós
  *  (guarda o texto cru para distinguir "07" de "7"). Quantidades de
@@ -307,11 +311,12 @@ function collectClauseHours(
   const times = explicitTimes(clause);
   const spelledInvalid = collectSpelledTimes(withoutRelatives, times);
   // «18:00» e «18» declaram a mesma hora — a hora só é «nova» quando
-  // não foi declarada em nenhum dos dois formatos.
+  // não foi declarada em nenhum dos dois formatos. A comparação faz-se
+  // com a hora solta JÁ interpretada («7» é 19:00; só «07» é 07:00) —
+  // senão «às 7» e «07:00» fundiam-se na mesma declaração.
   const seenExplicit = (hhmm: string): boolean =>
     explicit.has(hhmm) ||
-    (hhmm.endsWith(":00") &&
-      [...bare].some((b) => Number(b) === Number(hhmm.slice(0, 2))));
+    [...bare].some((b) => hhmmOf(Number(b), 0, zeroPadded(b)) === hhmm);
   const seenBare = (h: string): boolean =>
     bare.has(h) || explicit.has(hhmmOf(Number(h), 0, zeroPadded(h)) ?? "\0");
   let clauseHasNewHour = false;
@@ -363,6 +368,10 @@ function boundConsistent(
   op: string,
   boundHour: number
 ): boolean {
+  // «até às 18 horas» é limite inclusivo — sair «às 18 horas» cumpre-o.
+  if (op === "ate") {
+    return declared.every((h) => h <= boundHour);
+  }
   const after = op === "depois" || op === "apos";
   return declared.every((h) => (after ? h > boundHour : h < boundHour));
 }
@@ -392,7 +401,11 @@ function classifyBoundHours(
       const [hh, mm] = h.split(":").map(Number);
       return hh + mm / 60;
     }),
-    ...[...bare].map(Number),
+    // A hora solta compara-se já interpretada — «às 6» é 18:00, não
+    // 06:00 («saí às 6, ou seja depois das 17 horas» é coerente).
+    ...[...bare].map((raw) =>
+      zeroPadded(raw) ? Number(raw) : (exitHour(Number(raw)) ?? Number.NaN)
+    ),
   ];
   for (const m of clauseBoundMatches) {
     const before = withoutRelatives.slice(0, m.index).trimEnd();
@@ -504,27 +517,41 @@ function dateMatchToParts(
  *  dígitos. `ambiguous` quando há datas distintas declaradas
  *  («23/11 ou 24/11») — tal como duas horas, nunca se escolhe uma.
  *  A negação aplica-se por oração como às horas: «não foi a 9/1,
- *  saí a 10/1» fica só com a data afirmada. */
+ *  saí a 10/1» fica só com a data afirmada — mas só quando a
+ *  negação vem ANTES da data; «a 9/1 não sei a hora ao certo» não
+ *  a anula nem a usa — é incerta e ambigúa. Uma forma de data
+ *  reconhecida mas inválida («2026-13-10») também ambigúa: não se
+ *  grava a hora noutro dia por engano. */
 function statedDate(text: string): {
   ambiguous: boolean;
   date?: { day: number; month: number; year: number | null };
 } {
   const keys = new Set<string>();
   let date: { day: number; month: number; year: number | null } | undefined;
+  let invalid = false;
   for (const clause of text.split(CLAUSE_SPLIT_RE)) {
-    if (negated(normalizePontoText(clause))) {
-      continue;
-    }
+    const clauseNegated = negated(normalizePontoText(clause));
+    const negIdx = clauseNegated
+      ? clause.toLowerCase().search(NEGATION_START_RE)
+      : -1;
     for (const m of clause.matchAll(DATE_SLASH_RE)) {
+      if (clauseNegated) {
+        if (negIdx >= 0 && negIdx < m.index) {
+          continue; // a negação antes da data anula-a
+        }
+        invalid = true; // âmbito da negação incerto — pergunta-se
+        continue;
+      }
       const parsed = dateMatchToParts(m);
       if (!parsed) {
+        invalid = true; // forma de data reconhecida mas inválida
         continue;
       }
       keys.add(`${parsed.year ?? "*"}/${parsed.month}/${parsed.day}`);
       date ??= parsed;
     }
   }
-  return { ambiguous: keys.size > 1, date };
+  return { ambiguous: keys.size > 1 || invalid, date };
 }
 
 export function parsePontoExitAnswer(
