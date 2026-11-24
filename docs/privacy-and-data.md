@@ -43,6 +43,52 @@ registo de atividades de tratamento (Art. 30):
 | Portal do cliente / montra online | OficinaOS Cloud | Snapshot redigido da reparação ou dos produtos que publicares (sem custos internos nem notas privadas) | Remove o link público / despublica a montra |
 | Analista IA | O fornecedor que configurares (ex.: OpenAI) | O conteúdo das perguntas que fizeres à IA | Definições → IA → desligar (vem desligado) |
 | Reviews Google | Google | Apenas o link de review — nenhum dado do cliente sai, o cliente abre a página dele | Definições → Reviews → desligar |
+| Livro de ponto (`ponto`, Pro) | OficinaOS Cloud → canais Pro (WhatsApp/SMS) | Os comandos e a **localização só no momento do registo** (nunca tracking) transitam pelos canais até à app; as fotos de prova viajam como media do próprio canal. O pedido de avaliação à Cloud (`POST /ponto/evaluate`) leva o telefone, a localização e um indicador de existe/não-existe foto — **nunca a imagem**. A Cloud **não guarda** registos — só `PontoToken` 24 h para auditoria | Não ativar o módulo `ponto`; sem ele nada é recolhido |
+
+## Livro de ponto (Pro `ponto`)
+
+Módulo que regista entradas, pausas e saídas dos **trabalhadores** por
+WhatsApp/SMS a partir de um QR fixo. O que sai da loja e o que fica:
+
+**Fica na loja (PC do servidor):**
+
+- `TimeEntry` — cada registo (tipo, hora do servidor, transporte, estado,
+  provas) é **append-only**: a app bloqueia UPDATE/DELETE e uma correção
+  é sempre uma linha nova (`correctsId`). Retenção de **5 anos**
+  (Código do Trabalho, art. 202.º — é guarda legal, não profiling).
+- Fotos de prova de trabalhadores externos: ficam em
+  `UPLOAD_DIR/ponto-photos` e são **apagadas aos 90 dias**; o respetivo
+  registo mantém-se com "foto expirada".
+
+**Sai da loja (só com o módulo ativo e um canal Pro de receção):**
+
+- O comando do trabalhador e a **localização no momento do registo**
+  transitam pela OficinaOS Cloud até `POST /ponto/evaluate`, que valida
+  código, raio e precisão — o pedido leva o telefone e um indicador da
+  existência de foto, **nunca a imagem** (a foto viaja como media do
+  próprio canal). A Cloud **não guarda** localização, fotos nem registos —
+  apenas os `PontoToken` de 4 dígitos por ~24 h, para auditoria de uso
+  único.
+- As correções gravadas pela própria app — a saída presumida pelo
+  lembrete de saída e a hora de saída declarada pelo trabalhador em
+  resposta a esse lembrete — ficam **só na loja**: não passam pela
+  avaliação da Cloud.
+- As respostas do bot e os lembretes seguem o canal Pro ativo
+  (WhatsApp oficial, Evolution ou SMS).
+
+**Direitos do trabalhador** (a informação escrita é obrigatória — o
+módulo gera a folha imprimível `/ponto/info` com o texto de
+`ShopSettings.pontoInfoText` ou o modelo RGPD base):
+
+- é informado por escrito do tratamento;
+- pode consultar os seus registos de ponto;
+- o tratamento não usa biometria nem localização contínua;
+- como trata de localização, a loja deve fazer (ou rever) uma
+  **avaliação de impacto (AIPD)** — recomendação interna, não garantia.
+
+Isto **não é uma promessa de «conformidade garantida»**: o módulo apoia
+a obrigação do Código do Trabalho, mas a responsabilidade do tratamento
+é sempre da loja.
 
 ## Chamadas técnicas (sempre ativas, sem dados de clientes)
 

@@ -214,6 +214,41 @@ describe("SettingsPontoSection — saída para a folha QR", () => {
   });
 });
 
+describe("SettingsPontoSection — saída para o aviso ao trabalhador", () => {
+  it("pede confirmação e descartar abre o aviso, não o QR", async () => {
+    renderSection({ hasUnsavedChanges: true });
+    await screen.findByLabelText("ponto.latitude");
+
+    fireEvent.click(screen.getByRole("link", { name: "ponto.info_open" }));
+    expect(await screen.findByRole("alertdialog")).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent("/");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "add_part_modal.discard" })
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("location")).toHaveTextContent("/ponto/info")
+    );
+  });
+
+  it("mantém o rascunho quando se escolhe continuar", async () => {
+    renderSection({ hasUnsavedChanges: true });
+    await screen.findByLabelText("ponto.latitude");
+
+    fireEvent.click(screen.getByRole("link", { name: "ponto.info_open" }));
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "add_part_modal.keep_editing",
+      })
+    );
+
+    await waitFor(() =>
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+    );
+    expect(screen.getByTestId("location")).toHaveTextContent("/");
+  });
+});
+
 describe("SettingsPontoSection — refreshNonce (Sincronize agora)", () => {
   it("recarrega a secção quando o nonce muda", async () => {
     const { rerender } = renderSection({ refreshNonce: 0 });
