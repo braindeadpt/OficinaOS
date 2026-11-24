@@ -36,6 +36,7 @@
 import { NEGATION_WORDS, normalizePontoText } from "./commands.js";
 
 export type PontoExitAnswer =
+  | { kind: "ambiguous" }
   | { kind: "confirmed" }
   | { hhmm: string; kind: "time" }
   | null;
@@ -84,21 +85,21 @@ const COMPOUND_DURATION_RE =
 // 8 horas e 30 minutos» é duração (COMPOUND_DURATION_RE), não 20:30.
 // O «à» com acento é reescrito para «ás» antes da normalização —
 // continua a marcar; o «a» conector de intervalo («de 1 a 2 horas
-// e meia») não é marcador. O marcador também não pode vir colado a
-// dígitos duma hora compacta: «18:05 horas» fica «18 05» depois de
-// normalizado e um «as»/«pelas» a seguir a dígitos não abre extenso
-// novo. Minutos — com ou sem unidade — não podem ser a cabeça de
-// outra duração: «às 18 horas e 1 hora depois», «às 18 horas e 1
-// hora atrás» e «às 18 horas e 15 minutos depois» não são
-// 18:01/18:15 — a leitura fica ambígua e a pergunta repete-se.
-// «mais» corta sempre («15 minutos mais cedo/tarde» é duração,
-// não a hora 18:15) — a única exceção é «mais ou menos»
+// e meia») não é marcador. Dígitos antes do marcador não o bloqueiam:
+// «dia 17 às 6 horas e meia» é uma data seguida da hora — as horas
+// compactas saem do texto normalizado, por isso um «as» a seguir a
+// «18:05» nunca aparece lá. Minutos — com ou sem unidade — não podem
+// ser a cabeça de outra duração: «às 18 horas e 1 hora depois»,
+// «às 18 horas e 1 hora atrás» e «às 18 horas e 15 minutos depois»
+// não são 18:01/18:15 — a leitura fica ambígua e a pergunta
+// repete-se. «mais» corta sempre («15 minutos mais cedo/tarde» é
+// duração, não a hora 18:15) — a única exceção é «mais ou menos»
 // (aproximado).
 const EXTENSO_TIME_RE =
-  /(?<!\d\s)\b(?:as|pelas?)\s+(\d{1,2})\s+horas?\s+e\s+(?:(\d{1,2})\s*(?:minutos?|mins?)\b|(\d{1,2})(?!\s+(?:horas?|hrs?|minutos?|mins?|segundos?|segs?|dias?|semanas?|meses?|anos?|depois|apos|antes|atras)\b)|meia)\b(?!\s+(?:depois|apos|antes|atras|seguida|mais(?!\s+ou\s+menos))\b)(?:\s+da\s+(manha|tarde|noite)\b)?/gi;
+  /\b(?:as|pelas?)\s+(\d{1,2})\s+horas?\s+e\s+(?:(\d{1,2})\s*(?:minutos?|mins?)\b|(\d{1,2})(?!\s+(?:horas?|hrs?|minutos?|mins?|segundos?|segs?|dias?|semanas?|meses?|anos?|depois|apos|antes|atras)\b)|meia)\b(?!\s+(?:depois|apos|antes|atras|seguida|mais(?!\s+ou\s+menos))\b)(?:\s+da\s+(manha|tarde|noite)\b)?/gi;
 // «pelas 8 horas da noite» = 20:00 — período sem «e N minutos».
 const QUALIFIED_HOUR_RE =
-  /(?<!\d\s)\b(?:as|pelas?)\s+(\d{1,2})\s+horas?\s+da\s+(manha|tarde|noite)\b/gi;
+  /\b(?:as|pelas?)\s+(\d{1,2})\s+horas?\s+da\s+(manha|tarde|noite)\b/gi;
 // Pontuação que fecha uma oração — o "." fica quando pode ser o
 // separador Horas.minutos de EXPLICIT_TIME_RE. Junto a dígitos a
 // notação compacta ganha sempre ("18.30", "18. 30", "18 . 30" —
@@ -155,16 +156,21 @@ function explicitTimes(raw: string): Set<string> {
 // pertence ao calendário, não é hora solta.
 const DATE_REF_RE =
   /\b(?:\d{1,2}\s+de\s+(?:janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)|(?:dias?|mes(?:es)?|anos?|semanas?)\s+\d{1,4})\b/gi;
+// Data com barras/hífens — «23/11», «23/11/2026», «23-11»: sai do
+// texto cru antes da normalização («/» e «-» viram espaços e os
+// números fingiam ser horas soltas). O «.» fica de fora de propósito
+// — colidiria com as horas compactas («18.30»).
+const DATE_SLASH_RE = /\b\d{1,2}\s*[/-]\s*\d{1,2}(?:\s*[/-]\s*\d{2,4})?\b/g;
 // Intervalo «de 7 a 8 horas» — os dois números são as pontas duma
 // duração ou faixa («de 1 a 2 horas e meia»), não horas soltas.
 const RANGE_QTY_RE = /\b\d{1,3}\s+a\s+\d{1,3}\b/gi;
 // Quantidade de horas com contexto de duração — «depois de
-// trabalhar 8 horas», «fiquei mais de 2 horas»: o número mede o
-// tempo passado, não a hora de saída. Sem verbo de duração à
-// frente, «às 8 horas» continua hora do relógio («ou às 19 horas»
-// fica ambíguo).
+// trabalhar 8 horas», «fiquei mais de 2 horas», «depois de 8
+// horas»: o verbo ou o marcador temporal à frente mede o tempo
+// passado, não a hora de saída. Sem esse contexto, «às 8 horas»
+// continua hora do relógio («ou às 19 horas» fica ambíguo).
 const WORKED_DURATION_RE =
-  /\b(?:depois|apos|antes|trabalhei|trabalhar|trabalhando|fiz|fiquei|aguardei|esperei|levei|demorei|completei|passei)\s+(?:(?:mais\s+de|de|das?|a|as|cerca\s+de|umas?)\s+)*\d{1,3}\s*horas?\b/gi;
+  /\b(?:depois|apos|antes|trabalhei|trabalhar|trabalhou|trabalhava|trabalhando|estive|esteve|fiz|fez|fiquei|ficou|aguardei|esperei|levei|levou|demorei|demorou|completei|passei|passou|durei|durou)\s+(?:(?:mais\s+de|de|das?|a|as|cerca\s+de|quase|perto\s+de|por|umas?|ao\s+todo|no\s+total)\s+)*\d{1,3}\s*horas?\b/gi;
 
 /** Horas soltas distintas no texto normalizado — "6" ou "18" a sós
  *  (guarda o texto cru para distinguir "07" de "7"). Quantidades de
@@ -221,12 +227,14 @@ function collectClause(
   // «a» conector de intervalo («de 1 a 2 horas e meia»), que não é
   // marcador de hora. O NFC primeiro garante que «à» serve nas duas
   // codificações (carácter único ou «a» + acento combinante). As
-  // horas compactas saem do texto a normalizar — os dígitos delas
-  // («18:05» → «18 05») não são horas soltas nem abrem extenso novo.
+  // horas compactas e as datas com «/»/«-» saem do texto a
+  // normalizar — os dígitos delas («18:05» → «18 05», «23/11» →
+  // «23 11») não são horas soltas nem abrem extenso novo.
   const normalizedClause = normalizePontoText(
     clause
       .normalize("NFC")
       .replace(/à(?=\s*\d)/gi, "ás")
+      .replace(DATE_SLASH_RE, " ")
       .replace(EXPLICIT_TIME_RE, " ")
   );
   // Sem texto restante (a oração era só a hora compacta, «18h30»)
@@ -318,7 +326,11 @@ export function parsePontoExitAnswer(
     return { hhmm: [...explicit][0], kind: "time" };
   }
   if (explicit.size > 1) {
-    return null; // ambíguo — repete a pergunta
+    // Ambíguo — duas ou mais horas declaradas. O handler repete a
+    // pergunta sem gravar; a distinção de «sem hora» (null) serve
+    // para a rota de comandos não engolir a resposta (SAÍDA com
+    // horas em conflito não pode gravar a hora de receção).
+    return { kind: "ambiguous" };
   }
 
   const normalized = normalizePontoText(text);
@@ -337,6 +349,9 @@ export function parsePontoExitAnswer(
     if (hhmm) {
       return { hhmm, kind: "time" };
     }
+  }
+  if (bare.size > 1) {
+    return { kind: "ambiguous" };
   }
   return null;
 }

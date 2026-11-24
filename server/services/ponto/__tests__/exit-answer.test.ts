@@ -61,8 +61,12 @@ describe("parsePontoExitAnswer — negações por oração", () => {
 
 describe("parsePontoExitAnswer — ambíguo", () => {
   it("duas horas distintas → null (repete a pergunta)", () => {
-    expect(parsePontoExitAnswer("saí às 18:05 ou às 19:10")).toBeNull();
-    expect(parsePontoExitAnswer("entre as 18 e as 19")).toBeNull();
+    expect(parsePontoExitAnswer("saí às 18:05 ou às 19:10")).toEqual({
+      kind: "ambiguous",
+    });
+    expect(parsePontoExitAnswer("entre as 18 e as 19")).toEqual({
+      kind: "ambiguous",
+    });
   });
 
   it("texto irreconhecível → null", () => {
@@ -226,8 +230,10 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
     // que fica fora da leitura «8 da noite» é outra hora candidata.
     expect(
       parsePontoExitAnswer("Saí entre as 7 e as 8 horas da noite")
-    ).toBeNull();
-    expect(parsePontoExitAnswer("saí às 8 horas da noite ou às 21")).toBeNull();
+    ).toEqual({ kind: "ambiguous" });
+    expect(parsePontoExitAnswer("saí às 8 horas da noite ou às 21")).toEqual({
+      kind: "ambiguous",
+    });
     // «N a N» é intervalo de duração, não alternativa de horas — a
     // hora compacta mantém-se única.
     expect(
@@ -281,7 +287,9 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
       parsePontoExitAnswer("Saí às 18:05 e trabalhei mais de 2 horas")
     ).toEqual({ hhmm: "18:05", kind: "time" });
     // Sem verbo de duração, «às 19 horas» é alternativa — ambíguo.
-    expect(parsePontoExitAnswer("saí às 18:05 ou às 19 horas")).toBeNull();
+    expect(parsePontoExitAnswer("saí às 18:05 ou às 19 horas")).toEqual({
+      kind: "ambiguous",
+    });
   });
 
   it("«à» marcador serve nas duas codificações Unicode", () => {
@@ -293,6 +301,58 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
     expect(parsePontoExitAnswer("Saí à 1 hora e 15 minutos da tarde")).toEqual({
       hhmm: "13:15",
       kind: "time",
+    });
+  });
+
+  it("data antes da hora não esconde o marcador nem vira hora", () => {
+    // «dia 17 às …» — o «às» a seguir ao número do dia continua a
+    // marcar e «dia 17» não é a hora 17:00.
+    expect(parsePontoExitAnswer("Saí dia 17 às 6 horas e meia")).toEqual({
+      hhmm: "18:30",
+      kind: "time",
+    });
+    expect(parsePontoExitAnswer("Saí dia 24 às 8 horas da noite")).toEqual({
+      hhmm: "20:00",
+      kind: "time",
+    });
+    // «23/11» — data com barras sai do texto; fica só a hora.
+    expect(parsePontoExitAnswer("Saí 23/11 18:05")).toEqual({
+      hhmm: "18:05",
+      kind: "time",
+    });
+    // Intervalo abreviado — duas horas candidatas: ambíguo.
+    expect(parsePontoExitAnswer("Saí 18:05-19")).toEqual({
+      kind: "ambiguous",
+    });
+  });
+
+  it("«mais cedo» é continuação temporal como «mais tarde»", () => {
+    // «15 minutos mais cedo do que o habitual» pode ser duração —
+    // ambíguo sem candidatos, repete-se a pergunta (nunca 18:15).
+    expect(
+      parsePontoExitAnswer(
+        "Saí pelas 18 horas e 15 minutos mais cedo do que o habitual"
+      )
+    ).toBeNull();
+    // A exceção mantém-se: «mais ou menos» grava 18:15.
+    expect(
+      parsePontoExitAnswer("Saí pelas 18 horas e 15 minutos mais ou menos")
+    ).toEqual({ hhmm: "18:15", kind: "time" });
+  });
+
+  it("duração do turno não é segunda hora de saída", () => {
+    // «depois de trabalhar 8 horas» — o verbo marca duração; a hora
+    // única grava-se.
+    expect(
+      parsePontoExitAnswer("Saí às 18:05 depois de trabalhar 8 horas")
+    ).toEqual({ hhmm: "18:05", kind: "time" });
+    expect(
+      parsePontoExitAnswer("saí às 18:30, fiquei 8 horas de serviço")
+    ).toEqual({ hhmm: "18:30", kind: "time" });
+    // …mas «N horas» sem contexto de duração continua candidato:
+    // «às 18:05 ou às 19 horas» fica ambíguo.
+    expect(parsePontoExitAnswer("Saí às 18:05 ou às 19 horas")).toEqual({
+      kind: "ambiguous",
     });
   });
 });

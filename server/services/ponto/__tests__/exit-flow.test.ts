@@ -435,6 +435,26 @@ describe("resposta ao lembrete de saída", () => {
     expect(getPendingPontoExit("user-1")).toBeNull();
   });
 
+  it("SAIDA com horas ambíguas (SMS) → repete a pergunta, pending vivo", async () => {
+    // «Saí 18:05-19» traz duas horas candidatas: é tentativa de
+    // resposta ao lembrete, não comando sem hora — sem o desvio o
+    // fluxo de comando gravava a hora de receção e limpava o pending.
+    const { ctx, message, sent, t } = setup({
+      smsAllowed: true,
+      transport: "sms",
+    });
+    armPending();
+
+    await tryHandlePontoStaff(ctx, message("Saí 18:05-19"), t);
+
+    expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
+    expect(getPendingPontoExit("user-1")).not.toBeNull();
+    expect(sent.at(-1)).toContain("escreva a hora de saída");
+    // SAÍDA sem hora continua comando normal — mata o pending.
+    await tryHandlePontoStaff(ctx, message("SAIDA"), t);
+    expect(getPendingPontoExit("user-1")).toBeNull();
+  });
+
   it("botão SAIDA com pending → comando ganha (pending morre, fluxo normal)", async () => {
     // Botões/IDs interativos são autoridade — nunca desviados para a
     // resposta do lembrete mesmo com hora no texto.
@@ -460,11 +480,11 @@ describe("resposta ao lembrete de saída", () => {
     expect(entry.reason).toBe("saída registada pelo trabalhador");
   });
 
-  it("«Saí 23/11 18:05» por SMS com pending → repete a pergunta, não grava a receção", async () => {
-    // Os números da data tornam a resposta ambígua. Sem o desvio, o
-    // comando SAÍDA gravava a hora de receção (18:30) como correção
-    // da presumida em vez de pedir uma hora única.
-    const { ctx, message, sent, t } = setup({
+  it("«Saí 23/11 18:05» por SMS com pending → a data sai do texto e grava 18:05", async () => {
+    // «23/11» é data com barras — sai do texto cru antes do parse e
+    // a hora única 18:05 grava-se como correção declarada. Sem o
+    // desvio, o comando SAÍDA gravava a hora de receção (18:30).
+    const { ctx, message, t } = setup({
       smsAllowed: true,
       transport: "sms",
     });
@@ -472,9 +492,19 @@ describe("resposta ao lembrete de saída", () => {
 
     await tryHandlePontoStaff(ctx, message("Saí 23/11 18:05"), t);
 
-    expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
-    expect(sent.at(-1)).toContain("Responda SIM");
-    expect(getPendingPontoExit("user-1")).not.toBeNull();
+    expect(mocks.recordPontoEntry).toHaveBeenCalledTimes(1);
+    const entry = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect(entry).toMatchObject({
+      correctsId: "presumed-1",
+      reason: "hora de saída indicada pelo trabalhador",
+      status: "POR_VALIDAR",
+      type: "SAIDA",
+    });
+    expect((entry.at as Date).toISOString()).toBe("2026-01-10T18:05:00.000Z");
+    expect(getPendingPontoExit("user-1")).toBeNull();
   });
 
   it("resposta depois da meia-noite → hora declarada fica no dia da resposta", async () => {
