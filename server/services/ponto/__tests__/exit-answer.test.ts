@@ -354,5 +354,21 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
     expect(parsePontoExitAnswer("Saí às 18:05 ou às 19 horas")).toEqual({
       kind: "ambiguous",
     });
+    // «depois das 19 horas» é um limite de hora, não duração — a
+    // alternativa fica e a resposta é ambígua.
+    expect(parsePontoExitAnswer("Saí às 18:05 ou depois das 19 horas")).toEqual(
+      { kind: "ambiguous" }
+    );
+    expect(parsePontoExitAnswer("Saí às 18:05 ou antes das 19 horas")).toEqual({
+      kind: "ambiguous",
+    });
+    // «trabalhar 8 horas e 15» é uma duração só — não sobra um «15»
+    // para ler como hora.
+    expect(
+      parsePontoExitAnswer("Saí depois de trabalhar 8 horas e 15")
+    ).toBeNull();
+    expect(
+      parsePontoExitAnswer("Saí às 18:05 depois de trabalhar 8 horas e 15")
+    ).toEqual({ hhmm: "18:05", kind: "time" });
   });
 });

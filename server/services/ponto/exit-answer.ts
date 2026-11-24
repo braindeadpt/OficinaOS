@@ -167,10 +167,13 @@ const RANGE_QTY_RE = /\b\d{1,3}\s+a\s+\d{1,3}\b/gi;
 // Quantidade de horas com contexto de duração — «depois de
 // trabalhar 8 horas», «fiquei mais de 2 horas», «depois de 8
 // horas»: o verbo ou o marcador temporal à frente mede o tempo
-// passado, não a hora de saída. Sem esse contexto, «às 8 horas»
-// continua hora do relógio («ou às 19 horas» fica ambíguo).
+// passado, não a hora de saída. As preposições admitidas são só
+// as de quantidade — «das»/«às»/«a» marcam hora do relógio:
+// «depois das 19 horas» é um limite de hora, não uma duração, e
+// não sai do texto. Sem esse contexto, «às 8 horas» continua hora
+// do relógio («ou às 19 horas» fica ambíguo).
 const WORKED_DURATION_RE =
-  /\b(?:depois|apos|antes|trabalhei|trabalhar|trabalhou|trabalhava|trabalhando|estive|esteve|fiz|fez|fiquei|ficou|aguardei|esperei|levei|levou|demorei|demorou|completei|passei|passou|durei|durou)\s+(?:(?:mais\s+de|de|das?|a|as|cerca\s+de|quase|perto\s+de|por|umas?|ao\s+todo|no\s+total)\s+)*\d{1,3}\s*horas?\b/gi;
+  /\b(?:depois|apos|antes|trabalhei|trabalhar|trabalhou|trabalhava|trabalhando|estive|esteve|fiz|fez|fiquei|ficou|aguardei|esperei|levei|levou|demorei|demorou|completei|passei|passou|durei|durou)\s+(?:(?:mais\s+de|de|cerca\s+de|quase|perto\s+de|por|umas?|ao\s+todo|no\s+total)\s+)*\d{1,3}\s*horas?\b/gi;
 
 /** Horas soltas distintas no texto normalizado — "6" ou "18" a sós
  *  (guarda o texto cru para distinguir "07" de "7"). Quantidades de
@@ -182,8 +185,10 @@ function bareHours(normalized: string): Set<string> {
   const hours = new Set<string>();
   const withoutDurations = normalized
     .replace(RANGE_QTY_RE, " ")
-    .replace(WORKED_DURATION_RE, " ")
+    // Compostas antes das simples — «trabalhar 8 horas e 15» é uma
+    // duração só: tirar «8 horas» primeiro deixava o «15» como hora.
     .replace(COMPOUND_DURATION_RE, " ")
+    .replace(WORKED_DURATION_RE, " ")
     .replace(DURATION_QTY_RE, " ")
     .replace(DATE_REF_RE, " ");
   for (const m of withoutDurations.matchAll(BARE_HOUR_RE)) {
