@@ -654,6 +654,27 @@ async function onExitReminderAnswer(
   env: FlowEnv,
   pending: PendingPontoExit
 ): Promise<void> {
+  // Presumida recusada pela gerência: a resposta do trabalhador NUNCA
+  // a pode substituir — um «SIM» gravava uma correção APROVADO sobre a
+  // linha recusada sem nova decisão do gestor, contornando a recusa.
+  // O fluxo fecha e o acerto passa a ser feito no painel.
+  const validation = await env.ctx.prisma.timeEntry
+    .findFirst({
+      select: {
+        validations: {
+          orderBy: { at: "desc" },
+          select: { decision: true },
+          take: 1,
+        },
+      },
+      where: { id: pending.presumedEntryId },
+    })
+    .catch(() => null);
+  if (validation?.validations[0]?.decision === "RECUSADO") {
+    clearPendingPontoExit(env.staff.user.id);
+    await env.say(PONTO_TEXT.exitReminderRejected);
+    return;
+  }
   // Citação de mensagem (reply-quote do WhatsApp): só aplica a
   // resposta quando a citação aponta para uma pergunta desta pendência
   // (o lembrete inicial ou qualquer repetição/clarificação — cada uma
@@ -1160,6 +1181,39 @@ async function onPhoto(env: FlowEnv, pending: PendingPonto): Promise<void> {
  * botões do passo seguinte. RECUSADO não regista; falha de rede/Cloud
  * também não — o funcionário tenta de novo.
  */
+/** Presumida aberta que esta SAIDA fecha — null quando não há ou
+ *  quando entretanto houve reentrada: a presumida pertence ao turno
+ *  que ficou por fechar e uma entrada depois dela abriu turno novo;
+ *  esta SAIDA fecha o turno NOVO e a presumida do anterior continua
+ *  por validar em vez de ser substituída (o apuramento separa os
+ *  dois turnos). */
+async function presumedCorrectionFor(
+  ctx: BotReplyCtx,
+  staff: PontoStaffMatch,
+  settings: Settings
+): Promise<string | null> {
+  const presumed = await findOpenPresumedExit(
+    ctx.prisma,
+    staff.user.id,
+    tzOf(settings)
+  ).catch(() => null);
+  if (!presumed) {
+    return null;
+  }
+  const reentry = await ctx.prisma.timeEntry
+    .findFirst({
+      select: { id: true },
+      where: {
+        at: { gt: presumed.at },
+        corrections: { none: {} },
+        type: "ENTRADA",
+        userId: staff.user.id,
+      },
+    })
+    .catch(() => null);
+  return reentry ? null : presumed.id;
+}
+
 async function finalizePonto(
   ctx: BotReplyCtx,
   say: Say,
@@ -1222,31 +1276,9 @@ async function finalizePonto(
   let correctsId: string | null = null;
   let entryReason = result.reason ?? null;
   if (args.command === "SAIDA") {
-    const presumed = await findOpenPresumedExit(
-      ctx.prisma,
-      staff.user.id,
-      tzOf(settings)
-    ).catch(() => null);
-    if (presumed) {
-      // A presumida pertence ao turno que ficou por fechar: uma
-      // entrada depois dela abriu turno novo e esta SAIDA fecha-o —
-      // a presumida do turno anterior continua por validar em vez
-      // de ser substituída (o apuramento separa os dois turnos).
-      const reentry = await ctx.prisma.timeEntry
-        .findFirst({
-          select: { id: true },
-          where: {
-            at: { gt: presumed.at },
-            corrections: { none: {} },
-            type: "ENTRADA",
-            userId: staff.user.id,
-          },
-        })
-        .catch(() => null);
-      if (!reentry) {
-        correctsId = presumed.id;
-        entryReason = "saída registada pelo trabalhador";
-      }
+    correctsId = await presumedCorrectionFor(ctx, staff, settings);
+    if (correctsId) {
+      entryReason = "saída registada pelo trabalhador";
     }
   }
   const proofs: Record<string, unknown> = {

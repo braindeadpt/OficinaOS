@@ -220,6 +220,26 @@ describe("resposta ao lembrete de saída", () => {
     expect(getPendingPontoExit("user-1")).toBeNull();
   });
 
+  it("SIM depois de recusa do gestor → não grava correção e fecha o fluxo", async () => {
+    // Segurança: a presumida foi recusada na validação — o «SIM» do
+    // trabalhador não a pode substituir por uma correção APROVADO sem
+    // nova decisão do gestor. O fluxo fecha e o acerto é no painel.
+    const { ctx, message, sent, t } = setup();
+    armPending();
+    mocks.timeEntryFindFirst.mockImplementation((() =>
+      Promise.resolve({
+        id: "presumed-1",
+        validations: [{ decision: "RECUSADO" }],
+      })) as never);
+
+    const handled = await tryHandlePontoStaff(ctx, message("SIM"), t);
+
+    expect(handled).toBe(true);
+    expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
+    expect(sent.at(-1)).toContain("recusada pela gerência");
+    expect(getPendingPontoExit("user-1")).toBeNull();
+  });
+
   it("hora indicada (18:05) → correção POR_VALIDAR na hora declarada", async () => {
     const { ctx, message, t } = setup();
     armPending();
@@ -1039,7 +1059,10 @@ describe("resposta ao lembrete de saída", () => {
   it("presumida já corrigida entretanto → pending morre sem duplicar", async () => {
     const { ctx, message, sent, t } = setup();
     armPending();
-    mocks.timeEntryFindFirst.mockResolvedValue({ id: "corr-1" });
+    mocks.timeEntryFindFirst.mockResolvedValue({
+      id: "corr-1",
+      validations: [],
+    } as never);
 
     await tryHandlePontoStaff(ctx, message("SIM"), t);
 

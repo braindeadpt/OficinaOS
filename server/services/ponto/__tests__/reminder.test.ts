@@ -912,6 +912,33 @@ describe("alerta ao gestor (>60 min sem correção)", () => {
     expect(mocks.notify).not.toHaveBeenCalled();
   });
 
+  it("presumida já validada pelo gestor → sem alerta", async () => {
+    // A aprovação no painel é uma validação — não cria correção. Sem
+    // este filtro o agendador continuava a pedir atenção do gestor
+    // para uma linha que ele próprio já tinha decidido.
+    const presumed = entry({
+      at: REMINDER_AT,
+      proofs: { exitReminderPresumed: true },
+      status: "POR_VALIDAR",
+      transport: "MANUAL",
+      type: "SAIDA",
+      validations: [{ decision: "APROVADO" }],
+    });
+    const prisma = makePrisma(
+      [entry({ type: "ENTRADA" }), presumed],
+      [presumed]
+    );
+
+    await processPontoReminders(
+      prisma,
+      log,
+      undefined,
+      new Date("2026-01-10T20:00:00.000Z")
+    );
+
+    expect(mocks.notify).not.toHaveBeenCalled();
+  });
+
   it("presumida já corrigida → sem alerta", async () => {
     const presumed = entry({
       at: REMINDER_AT,

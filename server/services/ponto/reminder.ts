@@ -658,6 +658,82 @@ async function processUserTick(a: UserTickArgs): Promise<void> {
   }
 }
 
+interface UserPassesArgs {
+  catchUpYesterday: boolean;
+  end: Date;
+  entriesByUser: Map<string, DayEntry[]>;
+  exitTime: string | null;
+  log: FastifyBaseLogger;
+  now: Date;
+  openPresumedByUser: Map<string, DayEntry>;
+  pauseReminderMs: number;
+  prevRange: { start: Date };
+  prevReminderInstant: Date | null;
+  prisma: DbClient;
+  reminderInstant: Date | null;
+  settings: ShopSettings;
+  shouldAskExit: boolean;
+  smsChannels: ReturnType<typeof getSmsConfig>;
+  start: Date;
+  tz: string;
+  user: StaffUser;
+  waChannel: ReturnType<typeof resolveWhatsAppChannel>;
+}
+
+/** Os passes de um utilizador num tick: primeiro a recuperação da
+ *  véspera (hora de lembrete caída entre o último ciclo do dia e a
+ *  meia-noite — processada com as marcações do dia civil dela) e
+ *  depois o passe normal do dia corrente. */
+async function processUserPasses(p: UserPassesArgs): Promise<void> {
+  const usableAll = effectiveEntries(p.entriesByUser.get(p.user.id) ?? []);
+  const startMs = p.start.getTime();
+  const usable = usableAll.filter((e) => e.at.getTime() >= startMs);
+  const last = usable.at(-1);
+  // Abertura do turno que a presumida fecha — última ENTRADA/VOLTEI
+  // efetiva (uma PAUSA a meio não fecha a abertura).
+  const shiftOpenAt = [...usable]
+    .reverse()
+    .find((e) => e.type === "ENTRADA" || e.type === "VOLTEI")?.at;
+  const base = {
+    exitTime: p.exitTime,
+    log: p.log,
+    now: p.now,
+    openPresumedByUser: p.openPresumedByUser,
+    pauseReminderMs: p.pauseReminderMs,
+    prisma: p.prisma,
+    settings: p.settings,
+    smsChannels: p.smsChannels,
+    tz: p.tz,
+    user: p.user,
+    waChannel: p.waChannel,
+  };
+  if (p.catchUpYesterday) {
+    const yestUsable = usableAll.filter((e) => e.at.getTime() < startMs);
+    const yLast = yestUsable.at(-1);
+    const yShiftOpenAt = [...yestUsable]
+      .reverse()
+      .find((e) => e.type === "ENTRADA" || e.type === "VOLTEI")?.at;
+    await processExitReminder({
+      ...base,
+      dayEnd: p.start,
+      dayStart: p.prevRange.start,
+      last: yLast,
+      reminderInstant: p.prevReminderInstant,
+      shiftOpenAt: yShiftOpenAt,
+      shouldAskExit: true,
+    });
+  }
+  await processUserTick({
+    ...base,
+    dayEnd: p.end,
+    dayStart: p.start,
+    last,
+    reminderInstant: p.reminderInstant,
+    shiftOpenAt,
+    shouldAskExit: p.shouldAskExit,
+  });
+}
+
 /**
  * Um tick do scheduler. `now` injetável para testes.
  */
@@ -800,60 +876,24 @@ export async function processPontoReminders(
   const pauseReminderMs = settings.pontoPauseReminderMinutes * 60 * 1000;
 
   for (const user of staff) {
-    const usableAll = effectiveEntries(entriesByUser.get(user.id) ?? []);
-    const usable = usableAll.filter(
-      (e) => e.at.getTime() >= start.getTime()
-    );
-    const last = usable.at(-1);
-    // Abertura do turno que a presumida fecha — última ENTRADA/VOLTEI
-    // efetiva (uma PAUSA a meio não fecha a abertura).
-    const shiftOpenAt = [...usable]
-      .reverse()
-      .find((e) => e.type === "ENTRADA" || e.type === "VOLTEI")?.at;
     try {
-      if (catchUpYesterday) {
-        const yestUsable = usableAll.filter(
-          (e) => e.at.getTime() < start.getTime()
-        );
-        const yLast = yestUsable.at(-1);
-        const yShiftOpenAt = [...yestUsable]
-          .reverse()
-          .find((e) => e.type === "ENTRADA" || e.type === "VOLTEI")?.at;
-        await processExitReminder({
-          dayEnd: start,
-          dayStart: prevRange.start,
-          exitTime,
-          last: yLast,
-          log,
-          now,
-          openPresumedByUser,
-          pauseReminderMs,
-          prisma,
-          reminderInstant: prevReminderInstant,
-          settings,
-          shiftOpenAt: yShiftOpenAt,
-          shouldAskExit: true,
-          smsChannels,
-          tz,
-          user,
-          waChannel,
-        });
-      }
-      await processUserTick({
-        dayEnd: end,
-        dayStart: start,
+      await processUserPasses({
+        catchUpYesterday,
+        end,
+        entriesByUser,
         exitTime,
-        last,
         log,
         now,
         openPresumedByUser,
         pauseReminderMs,
+        prevRange,
+        prevReminderInstant,
         prisma,
         reminderInstant,
         settings,
-        shiftOpenAt,
         shouldAskExit,
         smsChannels,
+        start,
         tz,
         user,
         waChannel,
@@ -867,10 +907,37 @@ export async function processPontoReminders(
   }
 
   // — Alerta ao gestor: presumida aberta e velha (>60 min) —
+  await alertOverduePresumed({
+    log,
+    now,
+    openPresumed,
+    prisma,
+    staffById,
+    tz,
+    wsBroadcast,
+  });
+}
+
+/** Varre as presumidas abertas e alerta os gestores das que têm mais
+ *  de 60 min sem correção — uma vez por linha (exitAlerted). Linha já
+ *  decidida na validação não alerta: a aprovação no painel não cria
+ *  correção, por isso fica em openPresumed e sem este filtro o
+ *  agendador pedia atenção para algo que o gestor já decidiu. */
+async function alertOverduePresumed(a: {
+  log: FastifyBaseLogger;
+  now: Date;
+  openPresumed: DayEntry[];
+  prisma: DbClient;
+  staffById: Map<string, StaffUser>;
+  tz: string;
+  wsBroadcast?: Parameters<typeof notify>[0]["wsBroadcast"];
+}): Promise<void> {
+  const { log, now, openPresumed, prisma, staffById, tz, wsBroadcast } = a;
   for (const presumed of openPresumed) {
     if (
       now.getTime() - presumed.at.getTime() <= EXIT_ALERT_AFTER_MS ||
-      exitAlerted.has(presumed.id)
+      exitAlerted.has(presumed.id) ||
+      presumed.validations.length > 0
     ) {
       continue;
     }

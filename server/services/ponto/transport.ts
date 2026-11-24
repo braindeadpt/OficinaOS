@@ -50,6 +50,10 @@ export const PONTO_TEXT = {
   // o pending de saída continua vivo até resposta clara ou TTL (~2 h).
   exitReminderReprompt:
     "Responda SIM se saiu à hora indicada ou escreva a hora de saída (ex.: 18:05).",
+  // Presumida recusada pela gerência — o trabalhador não a substitui
+  // por WhatsApp; o acerto faz-se no painel com o gestor.
+  exitReminderRejected:
+    "A saída presumida foi recusada pela gerência — fale com o responsável para acertar o ponto.",
   // Hora declarada ambígua entre dois dias (resposta depois da
   // meia-noite): pergunta-se o dia antes de gravar — nunca se assume.
   exitDateClarifyReprompt: `Responda ${PONTO_EXIT_DATE_TERMS.yesterday.toUpperCase()} ou ${PONTO_EXIT_DATE_TERMS.today.toUpperCase()}.`,
