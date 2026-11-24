@@ -214,8 +214,9 @@ ESTADO) pelo WhatsApp ou SMS do número da loja e partilha a
 - **Avaliação na Cloud:** cada marcação (ENTRADA/PAUSA/VOLTEI/SAIDA)
   recebida pelos canais passa por `POST /ponto/evaluate` (entitlement
   `ponto` → 402) — uma app alterada não consegue registar ponto. O
-  comando ESTADO não passa pela Cloud: responde com um resumo local das
-  horas e dos registos por validar. O pedido leva o telefone e um indicador
+  comando ESTADO dispensa essa avaliação: responde com um resumo local
+  das horas e dos registos por validar (o transporte da mensagem —
+  webhook WhatsApp/SMS — continua a chegar via Cloud). O pedido leva o telefone e um indicador
   de foto, nunca a imagem. Correções internas (saída presumida pelo
   lembrete, hora declarada pelo trabalhador) são gravadas só na app,
   sem chamada à Cloud. A Cloud **não guarda** localização, fotos nem
