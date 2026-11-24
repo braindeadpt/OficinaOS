@@ -411,5 +411,16 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
         "Acho que foi às 18. Talvez às 18 ou depois das 19 horas"
       )
     ).toEqual({ kind: "ambiguous" });
+    // …mas repetir a hora a explicar o horário da loja é contexto —
+    // sem «ou» a ligar o limite, a hora única grava-se.
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 18. Às 18 a loja ainda estava aberta e ficava aberta até às 19 horas."
+      )
+    ).toEqual({ hhmm: "18:00", kind: "time" });
+    // «ou seja» explica, não alterna — o limite é contexto.
+    expect(
+      parsePontoExitAnswer("Saí às 18:05, ou seja antes das 19 horas")
+    ).toEqual({ hhmm: "18:05", kind: "time" });
   });
 });

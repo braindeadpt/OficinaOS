@@ -282,6 +282,87 @@ function collectSpelledTimes(
   return spelledInvalid;
 }
 
+/** Junta à oração as horas declaradas — compactas (EXPLICIT), por
+ *  extenso com «às»/«pelas» (spelled) e soltas (bare) — e devolve
+ *  true quando a oração traz uma hora ainda não declarada: repetir
+ *  «18» noutra oração é mero contexto («às 18 a loja estava aberta
+ *  até às 19»), salvo se o «ou» ligar o limite como alternativa
+ *  («talvez às 18 ou depois das 19»). */
+function collectClauseHours(
+  clause: string,
+  withoutRelatives: string,
+  explicit: Set<string>,
+  bare: Set<string>
+): boolean {
+  const times = explicitTimes(clause);
+  const spelledInvalid = collectSpelledTimes(withoutRelatives, times);
+  let clauseHasNewHour = false;
+  for (const hhmm of times) {
+    if (!explicit.has(hhmm)) {
+      clauseHasNewHour = true;
+    }
+    explicit.add(hhmm);
+  }
+  // Numa oração com hora explícita os dígitos soltos são os minutos
+  // ("18 30") — as horas soltas só contam nas orações sem HH:MM e sem
+  // qualificador impossível («às 18 horas da manhã» é ambígua, não
+  // baixa para «18» solto).
+  if (times.size === 0 && !spelledInvalid) {
+    for (const h of bareHours(withoutRelatives)) {
+      if (!bare.has(h)) {
+        clauseHasNewHour = true;
+      }
+      bare.add(h);
+    }
+  } else if (times.size > 0) {
+    // ...mas uma oração com hora reconhecida pode trazer OUTRA hora
+    // numa alternativa ou intervalo — «entre as 7 e as 8 horas da
+    // noite», «às 8 horas da noite ou às 21». O que sobra depois de
+    // tirar as horas já lidas e as durações é candidato também:
+    // duas horas na resposta = ambíguo (repete-se a pergunta).
+    const withoutSpelled = withoutRelatives
+      .replace(EXTENSO_TIME_RE, " ")
+      .replace(QUALIFIED_HOUR_RE, " ");
+    for (const h of bareHours(withoutSpelled)) {
+      const hhmm = hhmmOf(Number(h), 0, zeroPadded(h));
+      if (hhmm) {
+        if (!explicit.has(hhmm)) {
+          clauseHasNewHour = true;
+        }
+        explicit.add(hhmm);
+      }
+    }
+  }
+  return clauseHasNewHour;
+}
+
+/** Decide se cada limite «depois das N horas» da oração é
+ *  alternativa à saída (bound) ou contexto doutro acontecimento
+ *  (looseBound): é alternativa quando a oração declara uma hora nova
+ *  ou quando «ou» o liga à hora — no início («18:05, ou talvez
+ *  depois das 19 horas») ou antes do limite («talvez às 18 ou
+ *  depois das 19»). «ou seja» é explicação, não alternativa. */
+function classifyBoundHours(
+  clauseBoundMatches: RegExpMatchArray[],
+  withoutRelatives: string,
+  normalizedClause: string,
+  clauseHasNewHour: boolean,
+  bound: Set<string>,
+  looseBound: Set<string>
+): void {
+  const clauseTokens = normalizedClause.split(" ");
+  const startsWithOu = clauseTokens[0] === "ou" && clauseTokens[1] !== "seja";
+  for (const m of clauseBoundMatches) {
+    const before = withoutRelatives.slice(0, m.index).trimEnd();
+    const linkedByOu = before === "ou" || before.endsWith(" ou");
+    if (clauseHasNewHour || startsWithOu || linkedByOu) {
+      bound.add(m[1]);
+    } else {
+      looseBound.add(m[1]);
+    }
+  }
+}
+
 /** Junta os candidatos da oração às coleções — explícita (HH:MM ou
  *  por extenso) ou horas soltas. Durações relativas saem primeiro —
  *  «há 2 horas e 15 minutos» não é a hora «14:15»; o que sobra pode
@@ -313,64 +394,24 @@ function collectClause(
   if (negated(normalizedClause)) {
     return;
   }
-  const times = explicitTimes(clause);
   const withoutRelatives = normalizedClause.replace(RELATIVE_DURATION_RE, " ");
   // Limites «depois das 19 horas» — não são hora solta (saem do
-  // bareHours abaixo) mas contam como candidata à ambiguidade. Só
-  // na própria oração: um limite noutra oração («o meu turno era
-  // até às 18 horas») fala doutro acontecimento e fica no
-  // looseBound, que só ambigúa se a resposta não tiver hora nenhuma.
-  const clauseBound = new Set<string>();
-  for (const m of withoutRelatives.matchAll(BOUND_HOUR_RE)) {
-    clauseBound.add(m[1]);
-  }
-  const spelledInvalid = collectSpelledTimes(withoutRelatives, times);
-  for (const hhmm of times) {
-    explicit.add(hhmm);
-  }
-  // Numa oração com hora explícita os dígitos soltos são os minutos
-  // ("18 30") — as horas soltas só contam nas orações sem HH:MM e sem
-  // qualificador impossível («às 18 horas da manhã» é ambígua, não
-  // baixa para «18» solto).
-  let clauseHasHour = times.size > 0;
-  if (times.size === 0 && !spelledInvalid) {
-    // As horas da PRÓPRIA oração (não o delta no conjunto global):
-    // repetir «18» noutra oração não apaga a sua presença aqui —
-    // senão o limite desta caía para contexto e a ambiguidade
-    // perdia-se («Acho que foi às 18. Talvez às 18 ou depois das
-    // 19 horas» gravava 18:00).
-    const clauseBare = bareHours(withoutRelatives);
-    clauseHasHour = clauseBare.size > 0;
-    for (const h of clauseBare) {
-      bare.add(h);
-    }
-  } else if (times.size > 0) {
-    // ...mas uma oração com hora reconhecida pode trazer OUTRA hora
-    // numa alternativa ou intervalo — «entre as 7 e as 8 horas da
-    // noite», «às 8 horas da noite ou às 21». O que sobra depois de
-    // tirar as horas já lidas e as durações é candidato também:
-    // duas horas na resposta = ambíguo (repete-se a pergunta).
-    const withoutSpelled = withoutRelatives
-      .replace(EXTENSO_TIME_RE, " ")
-      .replace(QUALIFIED_HOUR_RE, " ");
-    for (const h of bareHours(withoutSpelled)) {
-      const hhmm = hhmmOf(Number(h), 0, zeroPadded(h));
-      if (hhmm) {
-        explicit.add(hhmm);
-      }
-    }
-  }
-  // Um limite sem hora na própria oração que começa por «ou» é uma
-  // alternativa à hora anterior («18:05, ou talvez depois das 19
-  // horas»), não contexto — conta como bound.
-  const startsWithOu = normalizedClause.split(" ")[0] === "ou";
-  for (const b of clauseBound) {
-    if (clauseHasHour || startsWithOu) {
-      bound.add(b);
-    } else {
-      looseBound.add(b);
-    }
-  }
+  // bareHours) mas contam como candidata à ambiguidade.
+  const clauseBoundMatches = [...withoutRelatives.matchAll(BOUND_HOUR_RE)];
+  const clauseHasNewHour = collectClauseHours(
+    clause,
+    withoutRelatives,
+    explicit,
+    bare
+  );
+  classifyBoundHours(
+    clauseBoundMatches,
+    withoutRelatives,
+    normalizedClause,
+    clauseHasNewHour,
+    bound,
+    looseBound
+  );
 }
 
 /** Primeira data «23/11[/2026]» do texto — valida dia/mês, normaliza
