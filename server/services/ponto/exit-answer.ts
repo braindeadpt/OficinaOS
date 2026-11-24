@@ -84,15 +84,18 @@ const COMPOUND_DURATION_RE =
 // 8 horas e 30 minutos» é duração (COMPOUND_DURATION_RE), não 20:30.
 // O «à» com acento é reescrito para «ás» antes da normalização —
 // continua a marcar; o «a» conector de intervalo («de 1 a 2 horas
-// e meia») não é marcador. Minutos — com ou sem unidade — não podem
-// ser a cabeça de outra duração: «às 18 horas e 1 hora depois» e «às
-// 18 horas e 15 minutos depois» não são 18:01/18:15 — a leitura fica
-// ambígua e a pergunta repete-se.
+// e meia») não é marcador. O marcador também não pode vir colado a
+// dígitos duma hora compacta: «18:05 horas» fica «18 05» depois de
+// normalizado e um «as»/«pelas» a seguir a dígitos não abre extenso
+// novo. Minutos — com ou sem unidade — não podem ser a cabeça de
+// outra duração: «às 18 horas e 1 hora depois», «às 18 horas e 1
+// hora atrás» e «às 18 horas e 15 minutos depois» não são
+// 18:01/18:15 — a leitura fica ambígua e a pergunta repete-se.
 const EXTENSO_TIME_RE =
-  /\b(?:as|pelas?)\s+(\d{1,2})\s+horas?\s+e\s+(?:(\d{1,2})\s*(?:minutos?|mins?)\b|(\d{1,2})(?!\s+(?:horas?|hrs?|minutos?|mins?|segundos?|segs?|dias?|semanas?|meses?|anos?|depois|apos|antes)\b)|meia)\b(?!\s+(?:depois|apos|antes|mais|seguida)\b)(?:\s+da\s+(manha|tarde|noite)\b)?/gi;
+  /(?<!\d\s)\b(?:as|pelas?)\s+(\d{1,2})\s+horas?\s+e\s+(?:(\d{1,2})\s*(?:minutos?|mins?)\b|(\d{1,2})(?!\s+(?:horas?|hrs?|minutos?|mins?|segundos?|segs?|dias?|semanas?|meses?|anos?|depois|apos|antes|atras)\b)|meia)\b(?!\s+(?:depois|apos|antes|atras|mais|seguida)\b)(?:\s+da\s+(manha|tarde|noite)\b)?/gi;
 // «pelas 8 horas da noite» = 20:00 — período sem «e N minutos».
 const QUALIFIED_HOUR_RE =
-  /\b(?:as|pelas?)\s+(\d{1,2})\s+horas?\s+da\s+(manha|tarde|noite)\b/gi;
+  /(?<!\d\s)\b(?:as|pelas?)\s+(\d{1,2})\s+horas?\s+da\s+(manha|tarde|noite)\b/gi;
 // Pontuação que fecha uma oração — o "." fica quando pode ser o
 // separador Horas.minutos de EXPLICIT_TIME_RE. Junto a dígitos a
 // notação compacta ganha sempre ("18.30", "18. 30", "18 . 30" —

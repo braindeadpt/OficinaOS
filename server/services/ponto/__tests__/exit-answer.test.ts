@@ -202,8 +202,9 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
 
   it("«às 18 horas e 1 hora depois» → null — a 2.ª unidade é duração", () => {
     // O número a seguir a «horas e» não pode virar minutos quando é
-    // ele próprio uma quantidade de duração («1 hora depois») — a
-    // leitura fica ambígua e a pergunta repete-se (nunca 18:01).
+    // ele próprio uma quantidade de duração («1 hora depois»,
+    // «1 hora atrás») — a leitura fica ambígua e a pergunta repete-se
+    // (nunca 18:01).
     expect(
       parsePontoExitAnswer("saí às 18 horas e 1 hora depois cheguei a casa")
     ).toBeNull();
@@ -214,6 +215,7 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
         "Saí pelas 18 horas e 15 minutos depois cheguei a casa"
       )
     ).toBeNull();
+    expect(parsePontoExitAnswer("saí às 18 horas e 1 hora atrás")).toBeNull();
     expect(
       parsePontoExitAnswer("saí às 18:05 horas e 15 minutos depois")
     ).toEqual({ hhmm: "18:05", kind: "time" });
