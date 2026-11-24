@@ -407,11 +407,25 @@ const COMMERCIAL_VARIANT_PHRASES = new Set(["max capacity"]);
 // Pro Max (BUG #166 r11/r13); storage («max 256 gb») continua a ser
 // variante — a unidade distingue (BUG #166 r12).
 const COMMERCIAL_VARIANT_SPEC = /^max \d+(?: \d+)?\s*(?:mah|wh)\b/;
-// «Pro – Max» com travessão ESPAÇADO separa o descritor comercial do
-// modelo («Bateria iPhone 15 Pro – Max 4000 mAh»); «Pro Max» ou
-// «Pro-Max» contíguo é a variante (BUG #166 r15). O normalizeKey perde
-// o travessão, por isso esta decisão lê o nome bruto.
-const SPACED_DASH_PRO_MAX = /pro\s+[-–—]\s+max/i;
+// O separador entre o fim da menção ao modelo e o «max» seguinte,
+// lido no nome BRUTO (o normalizeKey perde a pontuação): « » ou
+// «-»/«–» colado = variante contígua; travessão ESPAÇADO = descritor
+// comercial separado («Bateria iPhone 15 Pro – Max 4000 mAh»).
+// Só conta o separador da ocorrência encontrada — um travessão noutro
+// ponto do nome não absolve a variante (BUG #166 r15/r16).
+const SPACED_DASH_SEP = /\s+[-–—]\s+/;
+function spacedDashBeforeMax(rawHaystack: string, needle: string): boolean {
+  const words = needle
+    .trim()
+    .split(" ")
+    .filter((w) => w.length > 0);
+  if (words.length === 0) {
+    return false;
+  }
+  const re = new RegExp(`${words.join("\\W+")}([\\s\\W]*?)max\\b`, "i");
+  const sep = re.exec(rawHaystack)?.[1] ?? null;
+  return sep !== null && SPACED_DASH_SEP.test(sep);
+}
 
 /**
  * Contains por palavra inteira com rejeição de variantes: devolve true se
@@ -460,7 +474,7 @@ function deviceModelContained(
     const contiguousVariant =
       next === "max" &&
       prevWord === "pro" &&
-      !(rawHaystack && SPACED_DASH_PRO_MAX.test(rawHaystack));
+      !(rawHaystack && spacedDashBeforeMax(rawHaystack, needle));
     const phrase = `${next} ${words[1] ?? ""}`.trim();
     const spec = `${next} ${words.slice(1, 4).join(" ")}`.trim();
     if (

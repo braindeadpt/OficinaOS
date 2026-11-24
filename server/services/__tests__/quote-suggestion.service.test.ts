@@ -631,6 +631,37 @@ describe("buildQuoteSuggestion — device-aware part priority", () => {
     expect(part?.catalogId).toBe("part-pro-spec");
   });
 
+  it("rejects a Pro Max battery whose dash sits in a later descriptor", () => {
+    // BUG #166 r16: o travessão tem de separar o «Pro» da ocorrência do
+    // modelo do «Max» seguinte — um travessão noutro descritor do nome
+    // («PowerPro – Max Capacity») não absolve a variante Pro Max.
+    const parts: QuotePartInput[] = [
+      {
+        category: "BATTERY",
+        defaultPrice: 30,
+        id: "part-pro",
+        name: "Bateria iPhone 15 Pro",
+        stockQuantity: 0,
+      },
+      {
+        category: "BATTERY",
+        defaultPrice: 45,
+        id: "part-promax",
+        name: "Bateria iPhone 15 Pro Max 17,1 Wh — PowerPro – Max Capacity",
+        stockQuantity: 2,
+      },
+    ];
+    const s = build(
+      diag(
+        { "battery.health": { Status: "fail" } },
+        { device: { brand: "Apple", model: "iPhone 15 Pro" } }
+      ),
+      { parts }
+    );
+    const part = s.lines.find((l) => l.kind === "part");
+    expect(part?.catalogId).toBe("part-pro");
+  });
+
   it("rejects a variant followed by a generic descriptor (Pro OEM)", () => {
     // BUG #166 r10: «iPhone 15 Pro OEM» é a variante Pro — a peça do
     // modelo certo esgotada ganha à Pro em stock.
