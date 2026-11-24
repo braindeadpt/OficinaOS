@@ -44,7 +44,9 @@ const BUTTON_ID_RE = /^ponto_(entrada|pausa|voltei|saida)$/i;
 const CODE_TOKEN_RE = /^\d{4}$/;
 const HASH_CODE_RE = /#\s*(\d{4})\b/g;
 const DIGITS_ONLY_RE = /^\d+$/;
-const NEGATION_WORDS = new Set(["jamais", "nao", "nunca"]);
+// Exportado para o parser de respostas ao lembrete (exit-answer.ts) —
+// uma negação dentro da oração anula a hora declarada.
+export const NEGATION_WORDS = new Set(["jamais", "nao", "nunca"]);
 const FUZZY_MIN_LEN = 5;
 const FUZZY_MAX_DISTANCE = 1;
 

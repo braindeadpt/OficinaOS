@@ -98,7 +98,11 @@ export function findOpenPresumedExit(
 }
 
 /** Registos do user desde um instante (sem limite superior) — o ESTADO
- *  usa para as "horas da semana". */
+ *  usa para as "horas da semana". Só marcações efetivas: linhas já
+ *  substituídas por uma correção (correctsId a apontar para elas, ex.:
+ *  a SAIDA presumida corrigida pela resposta ao lembrete) ficam de
+ *  fora — senão o resumo listava a presumida e a correção, contava a
+ *  pendência em duplicado e fechava o turno na primeira saída. */
 export function pontoEntriesSince(
   prisma: DbClient,
   userId: string,
@@ -107,7 +111,7 @@ export function pontoEntriesSince(
   return prisma.timeEntry.findMany({
     orderBy: { at: "asc" },
     select: { at: true, status: true, type: true },
-    where: { at: { gte: since }, userId },
+    where: { at: { gte: since }, corrections: { none: {} }, userId },
   });
 }
 

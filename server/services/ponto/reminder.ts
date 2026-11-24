@@ -48,7 +48,14 @@ import {
   sendWhatsAppTemplateVia,
   sendWhatsAppText,
 } from "../whatsapp-channel.js";
-import { TEMPLATE_LANG } from "../whatsapp-templates.service.js";
+import {
+  approvedTemplateBodyOf,
+  metaConditionalVars,
+  orderedTemplateParams,
+  syncWhatsAppTemplates,
+  TEMPLATE_LANG,
+  templateStatusOf,
+} from "../whatsapp-templates.service.js";
 import { recordPontoEntry } from "./entries.js";
 import { PONTO_EXIT_PENDING_TTL_MS, setPendingPontoExit } from "./state.js";
 import {
@@ -60,6 +67,11 @@ import {
 /** >60 min sem correção → alerta aos gestores (spec item 5). */
 const EXIT_ALERT_AFTER_MS = 60 * 60 * 1000;
 const EXIT_TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+// Re-sync de templates Meta despoletado pelo lembrete — no máximo uma
+// vez por intervalo para não martelar a Graph a cada worker/tick
+// (mesmo critério do TEMPLATE_RESYNC_MIN_MS do outbox).
+const PONTO_TEMPLATE_SYNC_MIN_MS = 10 * 60 * 1000;
+let lastPontoTemplateSyncAt = 0;
 
 // Dedupes em memória — o processo é único (docker compose); o custo de
 // um restart é repetir no máximo um alerta/lembrete por entry aberta.
@@ -70,6 +82,24 @@ const exitAlerted = new Set<string>(); // presumedEntryId
 export function clearPontoReminderState(): void {
   pauseReminded.clear();
   exitAlerted.clear();
+  lastPontoTemplateSyncAt = 0;
+}
+
+/** Template do lembrete por aprovar em modo cloud → re-sync throttled
+ *  (fire-and-forget): a Cloud submete o modelo à Meta e o estado fica
+ *  em whatsappTemplatesJson para a próxima ronda do scheduler. */
+function maybeSyncPontoTemplate(
+  prisma: DbClient,
+  log: FastifyBaseLogger
+): void {
+  const now = Date.now();
+  if (now - lastPontoTemplateSyncAt < PONTO_TEMPLATE_SYNC_MIN_MS) {
+    return;
+  }
+  lastPontoTemplateSyncAt = now;
+  syncWhatsAppTemplates(prisma, log).catch((err) =>
+    log.warn({ err }, "ponto: sync de templates Meta falhou")
+  );
 }
 
 type ShopSettings = NonNullable<
@@ -182,7 +212,9 @@ async function sendPontoText(
 
 /** Lembrete de saída: business-initiated — Evolution recebe texto
  *  livre; o oficial Meta exige o template aprovado `ponto_lembrete`
- *  (única via fora da janela de 24 h). SMS quando pontoSmsAllowed. */
+ *  (única via fora da janela de 24 h). SMS quando pontoSmsAllowed.
+ *  `exitTime` é a hora presumida perguntada ao trabalhador (a hora
+ *  configurada, ou a última marcação se esta for posterior). */
 async function sendExitReminder(
   prisma: DbClient,
   settings: ShopSettings,
@@ -190,6 +222,7 @@ async function sendExitReminder(
   smsChannels: ReturnType<typeof getSmsConfig>,
   user: StaffUser,
   exitTime: string,
+  log: FastifyBaseLogger,
   dedupeId: string
 ): Promise<void> {
   const phone = user.phoneE164;
@@ -226,13 +259,57 @@ async function sendExitReminder(
     }
     return;
   }
+  // Oficial Meta (local ou relay cloud): o nome resolve-se na BD —
+  // a loja pode ter renomeado o modelo nas Definições antes da
+  // aprovação (o {{exitTime}} é o contrato estável); sem isto o sync
+  // submetia um nome e o lembrete enviava outro. Sem linha (modelo
+  // apagado) cai no nome seed — a Meta rejeita como erro normal.
+  const tpl = await prisma.notificationTemplate.findFirst({
+    orderBy: { name: "asc" },
+    select: { body: true, name: true },
+    where: { body: { contains: "{{exitTime}}" }, channel: "WHATSAPP" },
+  });
+  const templateName = tpl?.name ?? PONTO_LEMBRETE_TEMPLATE;
+  if (waChannel.mode === "cloud") {
+    // Cloud gere a submissão: se o modelo ainda não está APPROVED
+    // (lembrete ativado agora, rename por submeter) dispara o re-sync
+    // throttled e adia o envio — enviar já falhava na Graph e a
+    // próxima ronda do scheduler já lê o estado atualizado.
+    const status = templateStatusOf(settings, templateName);
+    if (status !== "APPROVED") {
+      log.warn(
+        { status, template: templateName, userId: user.id },
+        "ponto: lembrete adiado — template Meta por aprovar"
+      );
+      maybeSyncPontoTemplate(prisma, log);
+      return;
+    }
+  }
+  // Modo oficial local: a app não gere modelos na Meta — a loja cria o
+  // template à mão no Business Manager (o estado aparece nas
+  // Definições → Notificações) e o envio falha como erro normal se
+  // faltar ou não estiver aprovado.
+  const orderBody =
+    (waChannel.mode === "cloud"
+      ? approvedTemplateBodyOf(settings, templateName)
+      : null) ?? tpl?.body;
+  // Os params seguem o corpo que a aprovação cobre (o outbox faz o
+  // mesmo): uma edição local posterior não pode trocar a ordem
+  // posicional da versão que a Meta tem.
+  const params = orderBody
+    ? orderedTemplateParams(
+        orderBody,
+        { exitTime, shopName: settings.shopName ?? "" },
+        metaConditionalVars(settings)
+      )
+    : [exitTime];
   const result = await sendWhatsAppTemplateVia(
     prisma,
     waChannel,
     phone,
-    PONTO_LEMBRETE_TEMPLATE,
+    templateName,
     TEMPLATE_LANG,
-    [exitTime],
+    params,
     countryCode,
     settings
   );
@@ -276,6 +353,8 @@ async function alertManagers(
 }
 
 interface UserTickArgs {
+  dayEnd: Date;
+  dayStart: Date;
   exitTime: string | null;
   last: DayEntry | undefined;
   log: FastifyBaseLogger;
@@ -285,73 +364,126 @@ interface UserTickArgs {
   prisma: DbClient;
   reminderInstant: Date | null;
   settings: ShopSettings;
+  /** Última ENTRADA/VOLTEI efetiva — a abertura do turno que a
+   *  presumida fecha (vai no pending para o handler resolver o dia
+   *  de uma hora declarada depois da meia-noite). */
+  shiftOpenAt: Date | undefined;
   shouldAskExit: boolean;
   smsChannels: ReturnType<typeof getSmsConfig>;
+  tz: string;
   user: StaffUser;
   waChannel: ReturnType<typeof resolveWhatsAppChannel>;
+}
+
+/** Lembrete de saída (Esquecimentos): grava a SAIDA presumida (se ainda
+ *  não saiu) e envia a pergunta pelo canal disponível. */
+async function processExitReminder(a: UserTickArgs): Promise<void> {
+  const {
+    dayEnd,
+    dayStart,
+    exitTime,
+    last,
+    log,
+    now,
+    presumedUserIds,
+    prisma,
+    reminderInstant,
+    settings,
+    shiftOpenAt,
+    shouldAskExit,
+    smsChannels,
+    tz,
+    user,
+    waChannel,
+  } = a;
+
+  if (
+    !(
+      shouldAskExit &&
+      exitTime &&
+      reminderInstant &&
+      !user.externalWork &&
+      !presumedUserIds.has(user.id) &&
+      last &&
+      last.type !== "SAIDA"
+    )
+  ) {
+    return;
+  }
+  // Re-leitura à chegada: a lista do dia foi lida em lote no início
+  // do tick e o envio a cada colega demora — uma SAIDA real
+  // registada entretanto (bot, painel) não estava lá e gravava-se
+  // uma segunda saída sem ligação à primeira.
+  const alreadyOut = await prisma.timeEntry.findFirst({
+    select: { id: true },
+    where: {
+      at: { gte: dayStart, lt: dayEnd },
+      corrections: { none: {} },
+      type: "SAIDA",
+      userId: user.id,
+      validations: { none: { decision: "RECUSADO" } },
+    },
+  });
+  if (alreadyOut) {
+    return;
+  }
+  // Nunca antes da última marcação efetiva: quem entra DEPOIS da
+  // hora configurada (turno tardio) recebia uma saída presumida
+  // anterior à entrada e o turno ficava por fechar.
+  const presumedAt =
+    last.at.getTime() > reminderInstant.getTime() ? last.at : reminderInstant;
+  const presumed = await recordPontoEntry(prisma, {
+    at: presumedAt,
+    proofs: { exitReminderPresumed: true },
+    reason: "saída presumida — lembrete de saída",
+    status: "POR_VALIDAR",
+    transport: "MANUAL",
+    type: "SAIDA",
+    userId: user.id,
+  });
+  setPendingPontoExit(user.id, {
+    expiresAt: now.getTime() + PONTO_EXIT_PENDING_TTL_MS,
+    presumedAt: presumedAt.toISOString(),
+    presumedEntryId: presumed.id,
+    ...(shiftOpenAt ? { shiftOpenAt: shiftOpenAt.toISOString() } : {}),
+    userId: user.id,
+  });
+  if (waChannel || (user.pontoSmsAllowed && smsChannels)) {
+    // A pergunta usa a hora presumida real — o SIM confirma
+    // exatamente o instante gravado.
+    await sendExitReminder(
+      prisma,
+      settings,
+      waChannel,
+      smsChannels,
+      user,
+      hhmmAt(tz, presumedAt),
+      log,
+      `ponto-exit-${presumed.id}`
+    );
+  } else {
+    log.warn(
+      { userId: user.id },
+      "ponto: sem canal para lembrete de saída — presumida fica POR_VALIDAR"
+    );
+  }
 }
 
 /** Um utilizador num tick: lembrete de saída (Esquecimentos) e/ou de
  *  pausa (§2.2b). Erros sobem para o try/catch do chamador. */
 async function processUserTick(a: UserTickArgs): Promise<void> {
   const {
-    exitTime,
     last,
-    log,
     now,
     pauseReminderMs,
-    presumedUserIds,
     prisma,
-    reminderInstant,
     settings,
-    shouldAskExit,
     smsChannels,
     user,
     waChannel,
   } = a;
 
-  // — Lembrete de saída (Esquecimentos) —
-  if (
-    shouldAskExit &&
-    exitTime &&
-    reminderInstant &&
-    !user.externalWork &&
-    !presumedUserIds.has(user.id) &&
-    last &&
-    last.type !== "SAIDA"
-  ) {
-    const presumed = await recordPontoEntry(prisma, {
-      at: reminderInstant,
-      proofs: { exitReminderPresumed: true },
-      reason: "saída presumida — lembrete de saída",
-      status: "POR_VALIDAR",
-      transport: "MANUAL",
-      type: "SAIDA",
-      userId: user.id,
-    });
-    setPendingPontoExit(user.id, {
-      expiresAt: now.getTime() + PONTO_EXIT_PENDING_TTL_MS,
-      presumedAt: reminderInstant.toISOString(),
-      presumedEntryId: presumed.id,
-      userId: user.id,
-    });
-    if (waChannel || (user.pontoSmsAllowed && smsChannels)) {
-      await sendExitReminder(
-        prisma,
-        settings,
-        waChannel,
-        smsChannels,
-        user,
-        exitTime,
-        `ponto-exit-${presumed.id}`
-      );
-    } else {
-      log.warn(
-        { userId: user.id },
-        "ponto: sem canal para lembrete de saída — presumida fica POR_VALIDAR"
-      );
-    }
-  }
+  await processExitReminder(a);
 
   // — Lembrete de pausa (§2.2b) — uma vez por PAUSA, nunca fecha.
   if (
@@ -483,8 +615,15 @@ export async function processPontoReminders(
   for (const user of staff) {
     const usable = effectiveEntries(entriesByUser.get(user.id) ?? []);
     const last = usable.at(-1);
+    // Abertura do turno que a presumida fecha — última ENTRADA/VOLTEI
+    // efetiva (uma PAUSA a meio não fecha a abertura).
+    const shiftOpenAt = [...usable]
+      .reverse()
+      .find((e) => e.type === "ENTRADA" || e.type === "VOLTEI")?.at;
     try {
       await processUserTick({
+        dayEnd: end,
+        dayStart: start,
         exitTime,
         last,
         log,
@@ -494,8 +633,10 @@ export async function processPontoReminders(
         prisma,
         reminderInstant,
         settings,
+        shiftOpenAt,
         shouldAskExit,
         smsChannels,
+        tz,
         user,
         waChannel,
       });

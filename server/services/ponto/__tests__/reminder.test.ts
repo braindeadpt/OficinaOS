@@ -7,9 +7,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // valer para verificar o pending awaitingExit.
 
 const mocks = vi.hoisted(() => ({
+  approvedTemplateBodyOf: vi.fn(() => null as string | null),
   findManyUsers: vi.fn(() => Promise.resolve([{ id: "mgr-1" }])),
   findShopSettingsUnique: vi.fn(),
   getSmsConfig: vi.fn(),
+  notificationTemplateFindFirst: vi.fn(
+    (): Promise<{ body: string; name: string } | null> =>
+      Promise.resolve({
+        body: "OficinaOS: ainda não tem saída registada. Saiu às {{exitTime}}? Responda SIM ou indique a hora.",
+        name: "ponto_lembrete",
+      })
+  ),
   notify: vi.fn((_app: unknown, _event: unknown) => Promise.resolve()),
   recordPontoEntry: vi.fn((_prisma: unknown, _input: Record<string, unknown>) =>
     Promise.resolve({ id: "presumed-1" })
@@ -34,6 +42,13 @@ const mocks = vi.hoisted(() => ({
   sendWhatsAppText: vi.fn(
     (_prisma: unknown, _channel: unknown, _to: string, _msg: string) =>
       Promise.resolve({ success: true })
+  ),
+  syncWhatsAppTemplates: vi.fn(() => Promise.resolve({})),
+  templateStatusOf: vi.fn(
+    (_settings: unknown, _name: string) => "APPROVED" as string | null
+  ),
+  timeEntryFindFirst: vi.fn(
+    (): Promise<{ id: string } | null> => Promise.resolve(null)
   ),
   timeEntryFindMany: vi.fn(),
   userFindMany: vi.fn(),
@@ -60,7 +75,23 @@ vi.mock("../../whatsapp-channel.js", () => ({
   sendWhatsAppText: mocks.sendWhatsAppText,
 }));
 vi.mock("../../whatsapp-templates.service.js", () => ({
+  approvedTemplateBodyOf: mocks.approvedTemplateBodyOf,
+  metaConditionalVars: vi.fn(() => ({})),
+  // Versão mínima do real: vars {{x}} por ordem de aparecimento →
+  // params na mesma ordem (sem blocos condicionais — o modelo do
+  // lembrete não os tem).
+  orderedTemplateParams: vi.fn((body: string, vars: Record<string, string>) => {
+    const order: string[] = [];
+    for (const m of body.matchAll(/\{\{(\w+)\}\}/g)) {
+      if (!order.includes(m[1])) {
+        order.push(m[1]);
+      }
+    }
+    return order.map((v) => vars[v] ?? "");
+  }),
+  syncWhatsAppTemplates: mocks.syncWhatsAppTemplates,
   TEMPLATE_LANG: "pt_PT",
+  templateStatusOf: mocks.templateStatusOf,
 }));
 vi.mock("../entries.js", () => ({ recordPontoEntry: mocks.recordPontoEntry }));
 
@@ -73,11 +104,12 @@ const TZ = "Europe/Lisbon";
 const NOW_AFTER = new Date("2026-01-10T18:30:00.000Z"); // 18:30 Lisboa
 const REMINDER_AT = new Date("2026-01-10T18:00:00.000Z");
 
+const warnSpy = vi.fn();
 const log = {
   debug: vi.fn(),
   error: vi.fn(),
   info: vi.fn(),
-  warn: vi.fn(),
+  warn: warnSpy,
 } as never;
 
 function makeSettings(over: Record<string, unknown> = {}) {
@@ -120,14 +152,21 @@ function entry(over: Record<string, unknown>) {
 }
 
 /** dayRows = entries do staff (1.º findMany); saidaRows = SAIDA do dia
- *  (2.º findMany, where.type==="SAIDA"). */
+ *  (2.º findMany, where.type==="SAIDA"). timeEntry.findFirst é a
+ *  re-leitura anti-duplicado antes de gravar a presumida. */
 function makePrisma(dayRows: unknown[], saidaRows: unknown[] = []) {
   mocks.timeEntryFindMany.mockImplementation(
     (args?: { where?: { type?: string } }) =>
       Promise.resolve(args?.where?.type === "SAIDA" ? saidaRows : dayRows)
   );
   return {
-    timeEntry: { findMany: mocks.timeEntryFindMany },
+    notificationTemplate: {
+      findFirst: mocks.notificationTemplateFindFirst,
+    },
+    timeEntry: {
+      findFirst: mocks.timeEntryFindFirst,
+      findMany: mocks.timeEntryFindMany,
+    },
     user: { findMany: mocks.userFindMany },
   } as unknown as DbClient;
 }
@@ -140,6 +179,11 @@ const OFFICIAL_CHANNEL = {
   config: { apiToken: "t", businessId: "b", phoneNumberId: "p" },
   mode: "local" as const,
 };
+const CLOUD_CHANNEL = {
+  apiUrl: "https://cloud.test",
+  mode: "cloud" as const,
+  shopToken: "tok",
+};
 
 beforeEach(() => {
   clearAllPendingPonto();
@@ -149,6 +193,15 @@ beforeEach(() => {
   mocks.userFindMany.mockResolvedValue([staffUser()]);
   mocks.resolveWhatsAppChannel.mockReturnValue(EVOLUTION_CHANNEL);
   mocks.getSmsConfig.mockReturnValue(null);
+  // Re-pondo valores mutados por casos anteriores (mockClear não
+  // remove implementações).
+  mocks.timeEntryFindFirst.mockResolvedValue(null);
+  mocks.notificationTemplateFindFirst.mockResolvedValue({
+    body: "OficinaOS: ainda não tem saída registada. Saiu às {{exitTime}}? Responda SIM ou indique a hora.",
+    name: "ponto_lembrete",
+  });
+  mocks.approvedTemplateBodyOf.mockReturnValue(null);
+  mocks.templateStatusOf.mockReturnValue("APPROVED");
 });
 
 describe("lembrete de saída (Esquecimentos)", () => {
@@ -228,6 +281,71 @@ describe("lembrete de saída (Esquecimentos)", () => {
     expect(mocks.sendWhatsAppTemplateVia).not.toHaveBeenCalled();
   });
 
+  it("entrada depois da hora configurada → presumida não fica antes da entrada", async () => {
+    // Turno tardio: primeira ENTRADA às 18:10 com lembrete às 18:00 —
+    // a presumida ancora na marcação efetiva, nunca a precede.
+    const entrada = entry({
+      at: new Date("2026-01-10T18:10:00.000Z"),
+      type: "ENTRADA",
+    });
+    const prisma = makePrisma([entrada]);
+
+    await processPontoReminders(prisma, log, undefined, NOW_AFTER);
+
+    const input = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect((input.at as Date).toISOString()).toBe("2026-01-10T18:10:00.000Z");
+    // A pergunta pergunta a hora presumida real — o SIM confirma
+    // exatamente o instante gravado.
+    const text = mocks.sendWhatsAppText.mock.calls[0]?.[3] ?? "";
+    expect(text).toContain("Saiu às 18:10");
+    expect(getPendingPontoExit("user-1", NOW_AFTER.getTime())).toMatchObject({
+      presumedAt: "2026-01-10T18:10:00.000Z",
+      shiftOpenAt: "2026-01-10T18:10:00.000Z",
+    });
+  });
+
+  it("regresso de pausa depois da hora configurada → presumida na hora do regresso", async () => {
+    const prisma = makePrisma([
+      entry({
+        at: new Date("2026-01-10T09:00:00.000Z"),
+        type: "ENTRADA",
+      }),
+      entry({ at: new Date("2026-01-10T13:00:00.000Z"), type: "PAUSA" }),
+      entry({
+        at: new Date("2026-01-10T18:20:00.000Z"),
+        type: "VOLTEI",
+      }),
+    ]);
+
+    await processPontoReminders(prisma, log, undefined, NOW_AFTER);
+
+    const input = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect((input.at as Date).toISOString()).toBe("2026-01-10T18:20:00.000Z");
+    // A abertura do turno é o VOLTEI — não a PAUSA.
+    expect(getPendingPontoExit("user-1", NOW_AFTER.getTime())).toMatchObject({
+      shiftOpenAt: "2026-01-10T18:20:00.000Z",
+    });
+  });
+
+  it("SAIDA real registada durante o envio → não grava presumida em duplicado", async () => {
+    // A leitura em lote é anterior ao envio; a re-leitura por
+    // trabalhador apanha a saída real entretanto registada.
+    mocks.timeEntryFindFirst.mockResolvedValue({ id: "saida-real" });
+    const prisma = makePrisma([entry({ type: "ENTRADA" })]);
+
+    await processPontoReminders(prisma, log, undefined, NOW_AFTER);
+
+    expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
+    expect(mocks.sendWhatsAppText).not.toHaveBeenCalled();
+    expect(getPendingPontoExit("user-1")).toBeNull();
+  });
+
   it("antes da hora configurada → nada acontece", async () => {
     const prisma = makePrisma([entry({ type: "ENTRADA" })]);
 
@@ -291,6 +409,51 @@ describe("roteamento do lembrete por canal", () => {
     expect(args[4]).toBe("pt_PT");
     expect(args[5]).toEqual(["18:00"]);
     expect(mocks.sendWhatsAppText).not.toHaveBeenCalled();
+  });
+
+  it("modelo renomeado nas definições → envio usa o nome atual", async () => {
+    mocks.resolveWhatsAppChannel.mockReturnValue(OFFICIAL_CHANNEL);
+    mocks.notificationTemplateFindFirst.mockResolvedValue({
+      body: "OficinaOS: ainda não tem saída registada. Saiu às {{exitTime}}? Responda SIM ou indique a hora.",
+      name: "lembrete_saida_v2",
+    });
+    const prisma = makePrisma([entry({ type: "ENTRADA" })]);
+
+    await processPontoReminders(prisma, log, undefined, NOW_AFTER);
+
+    const args = mocks.sendWhatsAppTemplateVia.mock.calls[0] ?? [];
+    expect(args[3]).toBe("lembrete_saida_v2");
+    expect(args[5]).toEqual(["18:00"]);
+  });
+
+  it("cloud + template APPROVED → envio normal", async () => {
+    mocks.resolveWhatsAppChannel.mockReturnValue(CLOUD_CHANNEL);
+    const prisma = makePrisma([entry({ type: "ENTRADA" })]);
+
+    await processPontoReminders(prisma, log, undefined, NOW_AFTER);
+
+    expect(mocks.sendWhatsAppTemplateVia).toHaveBeenCalledTimes(1);
+    expect(mocks.syncWhatsAppTemplates).not.toHaveBeenCalled();
+  });
+
+  it("cloud + template por aprovar → adia o envio e dispara re-sync uma vez", async () => {
+    mocks.resolveWhatsAppChannel.mockReturnValue(CLOUD_CHANNEL);
+    mocks.templateStatusOf.mockReturnValue(null);
+    mocks.userFindMany.mockResolvedValue([
+      staffUser({ id: "user-1", username: "rui" }),
+      staffUser({ id: "user-2", phoneE164: "+351910000002", username: "ana" }),
+    ]);
+    const prisma = makePrisma([
+      entry({ type: "ENTRADA", userId: "user-1" }),
+      entry({ type: "ENTRADA", userId: "user-2" }),
+    ]);
+
+    await processPontoReminders(prisma, log, undefined, NOW_AFTER);
+
+    // Dois trabalhadores, um só re-sync (throttle) e nenhum envio.
+    expect(mocks.sendWhatsAppTemplateVia).not.toHaveBeenCalled();
+    expect(mocks.syncWhatsAppTemplates).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalled();
   });
 });
 

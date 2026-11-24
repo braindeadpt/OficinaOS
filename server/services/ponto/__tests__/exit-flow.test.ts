@@ -133,11 +133,12 @@ function setup(opts: { smsAllowed?: boolean; transport?: string } = {}) {
   return { ctx, message, phone, prisma, sent, staff, t };
 }
 
-function armPending(userId = "user-1") {
+function armPending(userId = "user-1", shiftOpenAt?: string) {
   setPendingPontoExit(userId, {
     expiresAt: Date.now() + PONTO_EXIT_PENDING_TTL_MS,
     presumedAt: PRESUMED_AT.toISOString(),
     presumedEntryId: "presumed-1",
+    ...(shiftOpenAt ? { shiftOpenAt } : {}),
     userId,
   });
 }
@@ -238,6 +239,83 @@ describe("resposta ao lembrete de saída", () => {
     armPending();
 
     await tryHandlePontoStaff(ctx, message("não sei"), t);
+
+    expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
+    expect(sent.at(-1)).toContain("Responda SIM");
+    expect(getPendingPontoExit("user-1")).not.toBeNull();
+  });
+
+  it("negação com a hora presumida → não regista, repete a pergunta", async () => {
+    const { ctx, message, sent, t } = setup();
+    armPending();
+
+    await tryHandlePontoStaff(
+      ctx,
+      message("Não saí às 18:00, ainda estou a trabalhar"),
+      t
+    );
+
+    expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
+    expect(sent.at(-1)).toContain("Responda SIM");
+    expect(getPendingPontoExit("user-1")).not.toBeNull();
+  });
+
+  it("negação à pergunta + hora afirmada → regista a hora nova", async () => {
+    const { ctx, message, t } = setup();
+    armPending();
+
+    await tryHandlePontoStaff(ctx, message("Não, saí às 18:20"), t);
+
+    const entry = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect(entry).toMatchObject({ status: "POR_VALIDAR", type: "SAIDA" });
+    expect((entry.at as Date).toISOString()).toBe("2026-01-10T18:20:00.000Z");
+  });
+
+  it("resposta depois da meia-noite → hora declarada fica no dia da resposta", async () => {
+    const { ctx, message, t } = setup();
+    // Lembrete das 23:30, entrada às 16:00 — resposta «00:15» às 00:20
+    // declara uma saída do dia seguinte, não antes da entrada.
+    setPendingPontoExit("user-1", {
+      expiresAt: Date.now() + PONTO_EXIT_PENDING_TTL_MS,
+      presumedAt: "2026-01-10T23:30:00.000Z",
+      presumedEntryId: "presumed-1",
+      shiftOpenAt: "2026-01-10T16:00:00.000Z",
+      userId: "user-1",
+    });
+    const msg = {
+      ...message("00:15"),
+      createdAt: "2026-01-11T00:20:00.000Z",
+    };
+
+    await tryHandlePontoStaff(ctx, msg, t);
+
+    const entry = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect(entry).toMatchObject({ status: "POR_VALIDAR", type: "SAIDA" });
+    expect((entry.at as Date).toISOString()).toBe("2026-01-11T00:15:00.000Z");
+  });
+
+  it("dois dias plausíveis → repete a pergunta em vez de gravar data arbitrária", async () => {
+    const { ctx, message, sent, t } = setup();
+    // Pending antigo sem shiftOpenAt (armado antes da atualização):
+    // sem o limite do turno, "00:15" serve para os dois dias.
+    setPendingPontoExit("user-1", {
+      expiresAt: Date.now() + PONTO_EXIT_PENDING_TTL_MS,
+      presumedAt: "2026-01-10T23:30:00.000Z",
+      presumedEntryId: "presumed-1",
+      userId: "user-1",
+    });
+    const msg = {
+      ...message("00:15"),
+      createdAt: "2026-01-11T00:20:00.000Z",
+    };
+
+    await tryHandlePontoStaff(ctx, msg, t);
 
     expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
     expect(sent.at(-1)).toContain("Responda SIM");

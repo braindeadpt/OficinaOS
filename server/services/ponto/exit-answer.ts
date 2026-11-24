@@ -11,6 +11,10 @@
 //   noite: horas 1–7 passam a +12 ("6" → 18:00, "6:30" → 18:30) —
 //   a alternativa (manhã) é implausível à hora do lembrete; a
 //   divergência real fica POR_VALIDAR na mesma.
+// - Negação governa só a oração onde aparece: "não saí às 18:00" não
+//   declara saída nenhuma (a hora nega a pergunta, repete-se); já
+//   "não, saí às 18:20" nega a hora presumida e afirma outra — a
+//   oração é separada por pontuação e a hora conta.
 // - Ambíguo (duas horas distintas, texto irreconhecível) → null: o
 //   handler repete a pergunta e o pending continua vivo.
 // - Comandos ponto (ENTRADA/PAUSA/…) nunca chegam aqui — o handler
@@ -18,9 +22,12 @@
 //
 // A hora explícita lê-se no texto CRU: a normalização troca ":" e "."
 // por espaços ("18:05" → "18 05"), o que destruiria o padrão —
-// a hora solta usa o texto normalizado.
+// a hora solta usa o texto normalizado. As orações partem-se por
+// pontuação FORTE (vírgula, ponto e vírgula, "!", "?", travessão,
+// fim de linha) — o "." só separa quando não está entre dígitos, para
+// não partir "18.05".
 
-import { normalizePontoText } from "./commands.js";
+import { NEGATION_WORDS, normalizePontoText } from "./commands.js";
 
 export type PontoExitAnswer =
   | { kind: "confirmed" }
@@ -47,6 +54,9 @@ const AFFIRMATIVE_WORDS = new Set([
 const EXPLICIT_TIME_RE = /\b(\d{1,2})\s*[:hH.]\s*(\d{2})\b/g;
 // Hora solta — "6", "18". Só conta quando é a única candidata.
 const BARE_HOUR_RE = /\b([01]?\d|2[0-3])\b/g;
+// Pontuação que fecha uma oração — o "." só quando não liga dígitos
+// ("18.05" fica inteiro; "Sai. Saí às 18:20" separa).
+const CLAUSE_SPLIT_RE = /[,;!?\n—–]|(?<!\d)\.(?!\d)/;
 
 /** "6" → 18, "18" → 18, "0" → 0 — saída assume-se depois do meio-dia. */
 function exitHour(raw: number): number | null {
@@ -87,14 +97,40 @@ function bareHours(normalized: string): Set<number> {
   return hours;
 }
 
+/** A oração é negada ("não saí", "nunca") — a hora dentro dela nega a
+ *  pergunta original em vez de declarar uma saída. */
+function negated(normalizedClause: string): boolean {
+  return normalizedClause.split(" ").some((t) => NEGATION_WORDS.has(t));
+}
+
 export function parsePontoExitAnswer(
   text: string | null | undefined
 ): PontoExitAnswer {
   if (!text) {
     return null;
   }
-  // 1) Hora explícita — "18:05", "18h05", "6:30".
-  const explicit = explicitTimes(text);
+  // 1) Horas por oração — uma negação só descarta a hora da própria
+  //    oração: "não, saí às 18:20" afirma 18:20; "não saí às 18:00,
+  //    ainda estou a trabalhar" não declara nada.
+  const explicit = new Set<string>();
+  const bare = new Set<number>();
+  for (const clause of text.split(CLAUSE_SPLIT_RE)) {
+    const normalizedClause = normalizePontoText(clause);
+    if (!normalizedClause || negated(normalizedClause)) {
+      continue;
+    }
+    const times = explicitTimes(clause);
+    for (const hhmm of times) {
+      explicit.add(hhmm);
+    }
+    // Numa oração com hora explícita os dígitos soltos são os minutos
+    // ("18 30") — as horas soltas só contam nas orações sem HH:MM.
+    if (times.size === 0) {
+      for (const h of bareHours(normalizedClause)) {
+        bare.add(h);
+      }
+    }
+  }
   if (explicit.size === 1) {
     return { hhmm: [...explicit][0], kind: "time" };
   }
@@ -112,9 +148,8 @@ export function parsePontoExitAnswer(
   }
   // 3) Hora solta única — "6", "saí às 18". "entre as 18 e as 19"
   //    (duas horas) é ambíguo → repete a pergunta.
-  const hours = bareHours(normalized);
-  if (hours.size === 1) {
-    const hhmm = hhmmOf([...hours][0], 0);
+  if (bare.size === 1) {
+    const hhmm = hhmmOf([...bare][0], 0);
     if (hhmm) {
       return { hhmm, kind: "time" };
     }

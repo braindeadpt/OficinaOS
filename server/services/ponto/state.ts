@@ -60,6 +60,11 @@ export interface PendingPontoExit {
    *  confirma e a base do dia civil para a hora indicada. */
   presumedAt: string;
   presumedEntryId: string;
+  /** ISO da última abertura do turno (ENTRADA/VOLTEI efetiva) no
+   *  instante do lembrete — limite inferior da hora de saída
+   *  declarada: uma resposta depois da meia-noite ("00:15") resolve o
+   *  dia contra este limite (handler.ts). */
+  shiftOpenAt?: string;
   userId: string;
 }
 

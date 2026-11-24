@@ -538,8 +538,8 @@ async function onExitReminderAnswer(
       where: { correctsId: pending.presumedEntryId },
     })
     .catch(() => null);
-  clearPendingPontoExit(env.staff.user.id);
   if (stillOpen) {
+    clearPendingPontoExit(env.staff.user.id);
     await env.say(PONTO_TEXT.commands);
     return;
   }
@@ -550,20 +550,40 @@ async function onExitReminderAnswer(
   let reason = "confirmado pelo trabalhador";
   let proofs: Record<string, unknown> = { exitReminderConfirmed: true };
   if (answer.kind === "time") {
-    // A hora declarada é do mesmo dia civil da presumida (fuso da loja)
-    // — cobre respostas perto da meia-noite sem escorregar de dia.
-    const ymd = dayRange(env.tz, presumedDate).date;
-    const declared = zonedDateTimeToUtc(env.tz, ymd, answer.hhmm);
-    if (!declared) {
+    // A resposta pode chegar já no dia seguinte (o pending vive ~2 h —
+    // um lembrete das 23:30 respondido às 00:20 declara uma saída do
+    // dia da RESPOSTA, não do dia da presumida). Candidatos: esse HH:MM
+    // no dia civil da presumida e no dia seguinte; fica o único que
+    // seja posterior à abertura do turno (o shiftOpenAt guardado no
+    // pending) e não esteja no futuro — zero ou dois plausíveis volta
+    // a perguntar em vez de gravar uma data arbitrária.
+    const answerAt = new Date(env.msg.sentAt ?? env.msg.createdAt);
+    const ymds = new Set([
+      dayRange(env.tz, presumedDate).date,
+      dayRange(env.tz, new Date(presumedDate.getTime() + DAY_MS)).date,
+    ]);
+    const openAt = pending.shiftOpenAt ? Date.parse(pending.shiftOpenAt) : null;
+    const candidates = [...ymds]
+      .map((ymd) => zonedDateTimeToUtc(env.tz, ymd, answer.hhmm))
+      .filter(
+        (d): d is Date =>
+          d !== null &&
+          d.getTime() <= answerAt.getTime() &&
+          (openAt === null || d.getTime() > openAt)
+      );
+    if (candidates.length !== 1) {
+      // Ambíguo ou impossível (futuro, anterior ao turno) — repete a
+      // pergunta com o pending vivo: a resposta seguinte re-tenta.
       await env.say(PONTO_TEXT.exitReminderReprompt);
       return;
     }
-    at = declared;
+    at = candidates[0];
     status = "POR_VALIDAR";
     reason = "hora de saída indicada pelo trabalhador";
     proofs = { exitReminderTimeDeclared: true };
   }
 
+  clearPendingPontoExit(env.staff.user.id);
   await recordPontoEntry(env.ctx.prisma, {
     at,
     correctsId: pending.presumedEntryId,
