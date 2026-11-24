@@ -663,5 +663,16 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
         "Saí às 18:05. A minha saída só saiu registada depois das 19 horas."
       )
     ).toEqual({ kind: "ambiguous" });
+    // «saí» com acento é 1.ª pessoa mesmo com companhia — «com o
+    // meu colega» é complemento, não outro sujeito.
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 18:05. Afinal saí com o meu colega depois das 19 horas."
+      )
+    ).toEqual({ kind: "ambiguous" });
+    // …e na 3.ª pessoa do presente («ele sai») continua contexto.
+    expect(
+      parsePontoExitAnswer("Saí às 18:05. Ele só sai depois das 19 horas.")
+    ).toEqual({ hhmm: "18:05", kind: "time" });
   });
 });

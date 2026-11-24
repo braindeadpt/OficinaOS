@@ -221,7 +221,16 @@ const CLAIMS_EXIT_3RD_RE =
   /\bsai(?:u|d[ao]|ndo)?\b|\b(?:acabou|terminou|chegou)\s+(?:por\s+|a\s+|de\s+)?sair\b/i;
 const THIRD_PERSON_RE =
   /\b(?:colegas?|ele|ela|eles|elas|encomendas?|pedidos?|clientes?|chefe|patrao|gerente|motorista|autocarro|comboio)\b/;
+// …mas só em posição de sujeito — depois de preposição é
+// complemento («saí com o meu colega», «para o cliente»), não
+// outro sujeito.
+const THIRD_PERSON_COMPLEMENT_RE =
+  /\b(?:com|para|de|do|da|dos|das|ao|aos|no|na|nos|nas|pelo|pela|pelos|pelas|como|sem|sobre|contra|entre|apos|antes)\s+(?:(?:o|a|os|as|um|uma|uns|umas|meu|minha|meus|minhas|seu|sua|seus|suas|este|esta|esse|essa|aquele|aquela|outro|outra|cada|toda?|todas|primeira|primeiro|ultima|ultimo)\s+)*(?:colegas?|ele|ela|eles|elas|encomendas?|pedidos?|clientes?|chefe|patrao|gerente|motorista|autocarro|comboio)\b/gi;
 const SELF_EXIT_RE = /\b(?:eu|minh[ao]s?)\b/;
+// No texto cru (antes de tirar os acentos) «saí» é 1.ª pessoa
+// inequívoca — «sai» normalizado é ambíguo com a 3.ª pessoa do
+// presente («ele sai depois das 19»).
+const CLAIMS_EXIT_ACCENT_RE = /\bsaí(?:mos|do)?\b/;
 // Reformulação «ou seja …» no fim do texto antes do limite.
 const OU_SEJA_END_RE = /(?:^|\s)ou\s+seja$/;
 // «ou» a ligar o limite à hora, com advérbios comuns pelo meio —
@@ -495,10 +504,14 @@ function claimsExit(before: string): boolean {
   if (CLAIMS_EXIT_1ST_RE.test(before)) {
     return true;
   }
-  return (
-    CLAIMS_EXIT_3RD_RE.test(before) &&
-    (SELF_EXIT_RE.test(before) || !THIRD_PERSON_RE.test(before))
-  );
+  if (!CLAIMS_EXIT_3RD_RE.test(before)) {
+    return false;
+  }
+  if (SELF_EXIT_RE.test(before)) {
+    return true;
+  }
+  const subjects = before.replace(THIRD_PERSON_COMPLEMENT_RE, " ");
+  return !THIRD_PERSON_RE.test(subjects);
 }
 
 function boundIsAlternative(
@@ -507,9 +520,10 @@ function boundIsAlternative(
   startsWithOu: boolean,
   hourKind: "new" | "repeat" | "none",
   prevRole: ClauseRole | null,
-  chainedAlt: boolean
+  chainedAlt: boolean,
+  firstPersonClaim: boolean
 ): boolean {
-  if (hourKind === "new" || claimsExit(before)) {
+  if (hourKind === "new" || firstPersonClaim || claimsExit(before)) {
     return true;
   }
   if (isFirstBound && startsWithOu) {
@@ -527,6 +541,7 @@ function classifyBoundHours(
   normalizedClause: string,
   hourKind: "new" | "repeat" | "none",
   prevRole: ClauseRole | null,
+  firstPersonClaim: boolean,
   explicit: Set<string>,
   bare: Set<string>,
   bound: Set<string>,
@@ -574,7 +589,8 @@ function classifyBoundHours(
       startsWithOu,
       hourKind,
       prevRole,
-      chainedAlt
+      chainedAlt,
+      firstPersonClaim
     );
     (alt ? bound : looseBound).add(boundHour.toString());
     if (alt) {
@@ -643,6 +659,7 @@ function collectClause(
     normalizedClause,
     hourKind,
     prevRole,
+    CLAIMS_EXIT_ACCENT_RE.test(clause.normalize("NFC")),
     explicit,
     bare,
     bound,
