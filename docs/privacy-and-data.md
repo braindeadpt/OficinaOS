@@ -71,7 +71,10 @@ WhatsApp/SMS a partir de um QR fixo. O que sai da loja e o que fica:
   `POST /ponto/evaluate`, que valida código, raio e precisão — o pedido
   leva o telefone e um indicador da existência de foto, **nunca a
   imagem** (a foto viaja como media do próprio canal). O ESTADO é uma
-  consulta local de registos e **não faz pedido nenhum à Cloud**. A
+  consulta local de registos e **não faz pedido nenhum à Cloud** — mas
+  a **resposta** (o resumo de registos) sai pelo canal ativo e, se esse
+  canal for o relay Cloud do WhatsApp ou o SMS Cloud, **transita pela
+  OficinaOS Cloud** como qualquer mensagem enviada. A
   Cloud **não guarda** localização, fotos nem registos — apenas os
   `PontoToken` de 4 dígitos por ~24 h, para auditoria de uso único.
 - As correções gravadas pela própria app — a saída presumida pelo
