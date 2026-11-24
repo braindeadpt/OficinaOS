@@ -23,7 +23,11 @@ import {
   type EvolutionConfig,
 } from "../evolution.service.js";
 import { rateOk } from "../rate-limit.js";
-import { type PontoCommand, parsePontoCommand } from "./commands.js";
+import {
+  normalizePontoText,
+  type PontoCommand,
+  parsePontoCommand,
+} from "./commands.js";
 import {
   deletePontoPhoto,
   findOpenPresumedExit,
@@ -47,10 +51,12 @@ import {
   PONTO_PHOTO_TTL_MS,
   pontoPendingKey,
   setPendingPonto,
+  setPendingPontoExit,
   takeExpiredPonto,
 } from "./state.js";
 import {
   PONTO_TEXT,
+  pontoExitDateQuestion,
   pontoLocationRequestInteractive,
   pontoNextButtons,
   pontoNextHintText,
@@ -449,6 +455,20 @@ async function routeText(env: FlowEnv): Promise<void> {
     await env.say(PONTO_TEXT.commands);
     return;
   }
+  // Com pergunta de saída pendente, uma declaração COM hora
+  // ("Saí 18:05") responde à pergunta — o parser de comandos lia-a
+  // como SAIDA e a hora declarada perdia-se ("Saí às 18:05" já caía
+  // aqui por não cobrir "às"). Botões e comandos sem hora mantêm a
+  // prioridade normal: matam o pending e seguem o fluxo do comando.
+  const exitPending = getPendingPontoExit(env.staff.user.id);
+  if (
+    exitPending &&
+    !env.msg.interactiveId &&
+    parsePontoExitAnswer(env.msg.text)?.kind === "time"
+  ) {
+    await onExitReminderAnswer(env, exitPending);
+    return;
+  }
   // Qualquer comando ponto normal mata o pending de saída — a SAIDA
   // seguinte corrige a presumida automaticamente no finalizePonto.
   clearPendingPontoExit(env.staff.user.id);
@@ -534,6 +554,12 @@ async function onExitReminderAnswer(
 ): Promise<void> {
   const answer = parsePontoExitAnswer(env.msg.text);
   if (!answer) {
+    // Com clarificação de data pendente, ONTEM/HOJE resolve o dia —
+    // outro texto repete a pergunta de data (o pending fica vivo).
+    if (pending.clarifyDate) {
+      await onExitDateClarification(env, pending);
+      return;
+    }
     await env.say(PONTO_TEXT.exitReminderReprompt);
     return;
   }
@@ -582,10 +608,22 @@ async function onExitReminderAnswer(
           d.getTime() <= answerAt.getTime() &&
           (openAt === null || d.getTime() > openAt)
       );
-    if (candidates.length !== 1) {
-      // Ambíguo ou impossível (futuro, anterior ao turno) — repete a
-      // pergunta com o pending vivo: a resposta seguinte re-tenta.
+    if (candidates.length === 0) {
+      // Impossível (futuro, anterior ao turno) — repete a pergunta
+      // com o pending vivo: a resposta seguinte re-tenta.
       await env.say(PONTO_TEXT.exitReminderReprompt);
+      return;
+    }
+    if (candidates.length > 1) {
+      // Dois dias plausíveis — nunca se assume: pergunta-se ONTEM/HOJE
+      // com o pending vivo (clarifyDate) em vez de gravar ao acaso.
+      // ymds tem exatamente os dois dias candidatos por ordem.
+      const [ymdReminder, ymdReply] = [...ymds].sort();
+      setPendingPontoExit(env.staff.user.id, {
+        ...pending,
+        clarifyDate: { hhmm: answer.hhmm, ymdReply, ymdReminder },
+      });
+      await env.say(pontoExitDateQuestion(answer.hhmm, ymdReminder, ymdReply));
       return;
     }
     at = candidates[0];
@@ -595,6 +633,19 @@ async function onExitReminderAnswer(
   }
 
   clearPendingPontoExit(env.staff.user.id);
+  await recordExitCorrection(env, pending, at, status, reason, proofs);
+}
+
+/** Grava a correção da SAIDA presumida e confirma — partilhado pelo
+ *  SIM, pela hora declarada e pela escolha ONTEM/HOJE. */
+async function recordExitCorrection(
+  env: FlowEnv,
+  pending: PendingPontoExit,
+  at: Date,
+  status: "APROVADO" | "POR_VALIDAR",
+  reason: string,
+  proofs: Record<string, unknown>
+): Promise<void> {
   await recordPontoEntry(env.ctx.prisma, {
     at,
     correctsId: pending.presumedEntryId,
@@ -615,6 +666,54 @@ async function onExitReminderAnswer(
       status,
       reason
     )
+  );
+}
+
+/** Escolha ONTEM/HOJE à pergunta de data — grava a hora declarada no
+ *  dia escolhido (sempre POR_VALIDAR: é autodeclaração). */
+async function onExitDateClarification(
+  env: FlowEnv,
+  pending: PendingPontoExit
+): Promise<void> {
+  const clarify = pending.clarifyDate;
+  if (!clarify) {
+    await env.say(PONTO_TEXT.exitReminderReprompt);
+    return;
+  }
+  const normalized = normalizePontoText(env.msg.text ?? "");
+  let ymd: string | null = null;
+  if (normalized === "hoje" || normalized === "agora") {
+    ymd = clarify.ymdReply;
+  } else if (normalized === "ontem") {
+    ymd = clarify.ymdReminder;
+  }
+  if (!ymd) {
+    await env.say(PONTO_TEXT.exitDateClarifyReprompt);
+    return;
+  }
+  const stillOpen = await env.ctx.prisma.timeEntry
+    .findFirst({
+      select: { id: true },
+      where: { correctsId: pending.presumedEntryId },
+    })
+    .catch(() => null);
+  clearPendingPontoExit(env.staff.user.id);
+  if (stillOpen) {
+    await env.say(PONTO_TEXT.commands);
+    return;
+  }
+  const at = zonedDateTimeToUtc(env.tz, ymd, clarify.hhmm);
+  if (!at) {
+    await env.say(PONTO_TEXT.exitReminderReprompt);
+    return;
+  }
+  await recordExitCorrection(
+    env,
+    pending,
+    at,
+    "POR_VALIDAR",
+    "hora de saída indicada pelo trabalhador",
+    { exitReminderTimeDeclared: true }
   );
 }
 

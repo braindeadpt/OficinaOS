@@ -39,6 +39,9 @@ export const PONTO_TEXT = {
   // o pending de saída continua vivo até resposta clara ou TTL (~2 h).
   exitReminderReprompt:
     "Responda SIM se saiu à hora indicada ou escreva a hora de saída (ex.: 18:05).",
+  // Hora declarada ambígua entre dois dias (resposta depois da
+  // meia-noite): pergunta-se o dia antes de gravar — nunca se assume.
+  exitDateClarifyReprompt: "Responda ONTEM ou HOJE.",
   // Lembrete de pausa (§2.2b) — nunca fecha a pausa sozinho.
   pauseReminder:
     "OficinaOS: ainda está em pausa? Quando regressar, responda VOLTEI.",
@@ -48,6 +51,21 @@ export const PONTO_TEXT = {
  *  `ponto_lembrete` ({{exitTime}} ← pontoExitReminderTime). */
 export function pontoExitReminderText(exitTime: string): string {
   return `OficinaOS: ainda não tem saída registada. Saiu às ${exitTime}? Responda SIM ou indique a hora.`;
+}
+
+/** Pergunta de clarificação quando a hora declarada pode pertencer a
+ *  dois dias civis (resposta depois da meia-noite): `ymdReminder` é o
+ *  dia do lembrete (= ONTEM), `ymdReply` o dia da resposta (= HOJE). */
+export function pontoExitDateQuestion(
+  hhmm: string,
+  ymdReminder: string,
+  ymdReply: string
+): string {
+  const ddmm = (ymd: string) => {
+    const [, m, d] = ymd.split("-");
+    return `${d}/${m}`;
+  };
+  return `${hhmm} — dia ${ddmm(ymdReminder)} ou dia ${ddmm(ymdReply)}? Responda ONTEM ou HOJE.`;
 }
 
 /** Nome do template Meta utility do lembrete de saída — sincronizado

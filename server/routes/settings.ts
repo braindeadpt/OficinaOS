@@ -420,13 +420,22 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       app.resetEmbedOriginsCache();
       // reviewUrl muda os blocos {{if}} dos templates WhatsApp — sem
       // re-sync, o modelo aprovado na Meta diverge dos parâmetros
-      // enviados e as notificações falham. Só em modo Pro/cloud: sem o
-      // módulo "whatsapp-bot" o resolve devolve null e nada corre.
+      // enviados e as notificações falham. pontoExitReminderTime a
+      // definir também exige o modelo `ponto_lembrete` submetido — o
+      // sync cria-o se faltar. Só em modo Pro/cloud: sem o módulo
+      // "whatsapp-bot" o resolve devolve null e nada corre (no modo
+      // local a loja cria o modelo à mão — visível como MISSING na
+      // lista de templates).
+      const needsTemplateSync = Object.entries(parsed.data).some(
+        ([key, value]) =>
+          META_TEMPLATE_KEYS.has(key) ||
+          (key === "pontoExitReminderTime" && Boolean(value))
+      );
       if (
-        Object.keys(parsed.data).some((k) => META_TEMPLATE_KEYS.has(k)) &&
+        needsTemplateSync &&
         resolveWhatsAppChannel(updated)?.mode === "cloud"
       ) {
-        syncWhatsAppTemplates(app.prisma).catch((err) =>
+        syncWhatsAppTemplates(app.prisma, app.log).catch((err) =>
           req.log.warn({ err }, "whatsapp template resync failed")
         );
       }

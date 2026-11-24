@@ -55,6 +55,11 @@ export interface PendingPonto {
  *  pode responder por qualquer canal; o pedido saiu pelo canal do
  *  lembrete mas a resposta chega onde chegar). */
 export interface PendingPontoExit {
+  /** Candidatos de data quando a hora declarada é ambígua — resposta
+   *  depois da meia-noite em que o dia do lembrete e o dia da resposta
+   *  são ambos plausíveis. O handler pergunta ONTEM/HOJE antes de
+   *  gravar; `ymdReminder` é sempre o dia anterior a `ymdReply`. */
+  clarifyDate?: { hhmm: string; ymdReply: string; ymdReminder: string };
   expiresAt: number;
   /** ISO do `at` da SAIDA presumida — a "hora assumida" que o SIM
    *  confirma e a base do dia civil para a hora indicada. */

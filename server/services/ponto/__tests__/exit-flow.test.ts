@@ -170,6 +170,10 @@ beforeEach(() => {
       type: "ENTRADA",
     },
   ]);
+  // Overrides por-teste (mockResolvedValue) sobrevivem ao
+  // clearAllMocks — repor os defaults que os casos assumem.
+  mocks.timeEntryFindFirst.mockResolvedValue(null);
+  mocks.findOpenPresumedExit.mockResolvedValue(null);
 });
 
 describe("resposta ao lembrete de saída", () => {
@@ -295,6 +299,57 @@ describe("resposta ao lembrete de saída", () => {
     expect((entry.at as Date).toISOString()).toBe("2026-01-10T18:20:00.000Z");
   });
 
+  it('"Saí 18:05" com pending → correção na hora declarada (não comando SAIDA)', async () => {
+    // O parser de comandos lia "Saí 18:05" como SAIDA e a hora
+    // declarada perdia-se — com pergunta pendente a declaração COM
+    // hora responde à pergunta.
+    const { ctx, message, t } = setup();
+    armPending();
+
+    await tryHandlePontoStaff(ctx, message("Saí 18:05"), t);
+
+    expect(mocks.recordPontoEntry).toHaveBeenCalledTimes(1);
+    const entry = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect(entry).toMatchObject({
+      correctsId: "presumed-1",
+      reason: "hora de saída indicada pelo trabalhador",
+      status: "POR_VALIDAR",
+      type: "SAIDA",
+    });
+    expect((entry.at as Date).toISOString()).toBe("2026-01-10T18:05:00.000Z");
+    // Não passou pelo evaluate da Cloud — é a correção direta.
+    expect(mocks.cloudFetch).not.toHaveBeenCalled();
+    expect(getPendingPontoExit("user-1")).toBeNull();
+  });
+
+  it("botão SAIDA com pending → comando ganha (pending morre, fluxo normal)", async () => {
+    // Botões/IDs interativos são autoridade — nunca desviados para a
+    // resposta do lembrete mesmo com hora no texto.
+    const { ctx, message, t } = setup({ smsAllowed: true, transport: "sms" });
+    armPending();
+    mocks.findOpenPresumedExit.mockResolvedValue({
+      at: PRESUMED_AT,
+      id: "presumed-1",
+    });
+    const msg = { ...message("Saí 18:05"), interactiveId: "ponto_saida" };
+
+    await tryHandlePontoStaff(ctx, msg, t);
+
+    expect(getPendingPontoExit("user-1")).toBeNull();
+    expect(mocks.recordPontoEntry).toHaveBeenCalledTimes(1);
+    const entry = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    // Caminho do comando: hora da mensagem (18:30), razão de registo
+    // manual — não a hora declarada do exit-answer.
+    expect((entry.at as Date).toISOString()).toBe("2026-01-10T18:30:00.000Z");
+    expect(entry.reason).toBe("saída registada pelo trabalhador");
+  });
+
   it("resposta depois da meia-noite → hora declarada fica no dia da resposta", async () => {
     const { ctx, message, t } = setup();
     // Lembrete das 23:30, entrada às 16:00 — resposta «00:15» às 00:20
@@ -374,10 +429,11 @@ describe("resposta ao lembrete de saída", () => {
     expect((entry.at as Date).toISOString()).toBe("2026-03-29T00:15:00.000Z");
   });
 
-  it("dois dias plausíveis → repete a pergunta em vez de gravar data arbitrária", async () => {
+  it("dois dias plausíveis → pergunta ONTEM/HOJE; a escolha grava", async () => {
     const { ctx, message, sent, t } = setup();
     // Pending antigo sem shiftOpenAt (armado antes da atualização):
-    // sem o limite do turno, "00:15" serve para os dois dias.
+    // sem o limite do turno, "00:15" serve para os dois dias — a app
+    // pergunta o dia em vez de gravar uma data arbitrária.
     setPendingPontoExit("user-1", {
       expiresAt: Date.now() + PONTO_EXIT_PENDING_TTL_MS,
       presumedAt: "2026-01-10T23:30:00.000Z",
@@ -392,8 +448,23 @@ describe("resposta ao lembrete de saída", () => {
     await tryHandlePontoStaff(ctx, msg, t);
 
     expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
-    expect(sent.at(-1)).toContain("Responda SIM");
-    expect(getPendingPontoExit("user-1")).not.toBeNull();
+    expect(sent.at(-1)).toContain("ONTEM ou HOJE");
+    expect(getPendingPontoExit("user-1")?.clarifyDate).toMatchObject({
+      hhmm: "00:15",
+      ymdReply: "2026-01-11",
+      ymdReminder: "2026-01-10",
+    });
+
+    // "HOJE" → grava no dia da resposta; pending morre.
+    await tryHandlePontoStaff(ctx, message("HOJE"), t);
+
+    const entry = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect((entry.at as Date).toISOString()).toBe("2026-01-11T00:15:00.000Z");
+    expect(entry.status).toBe("POR_VALIDAR");
+    expect(getPendingPontoExit("user-1")).toBeNull();
   });
 
   it("comando ponto normal mata o pending de saída", async () => {
