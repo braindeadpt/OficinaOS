@@ -402,6 +402,7 @@ const MODEL_VARIANT_TOKENS = new Set([
 // do 15 Pro Max (BUG #166 r9). Um descritor genérico a seguir à variante
 // («…15 Pro OEM») NÃO salva a correspondência (BUG #166 r10).
 const COMMERCIAL_VARIANT_PHRASES = new Set(["max capacity"]);
+const COMMERCIAL_VARIANT_SPEC = /^max \d/;
 
 /**
  * Contains por palavra inteira com rejeição de variantes: devolve true se
@@ -433,7 +434,11 @@ function deviceModelContained(haystack: string, needle: string): boolean {
     // «…15 – Max Capacity» é descrição comercial (BUG #166 r9); «…15 Pro
     // OEM» continua a ser variante (BUG #166 r10) — descritor genérico
     // não salva a correspondência, só a frase comercial conhecida.
-    if (COMMERCIAL_VARIANT_PHRASES.has(`${next} ${words[1] ?? ""}`.trim())) {
+    const phrase = `${next} ${words[1] ?? ""}`.trim();
+    if (
+      COMMERCIAL_VARIANT_PHRASES.has(phrase) ||
+      COMMERCIAL_VARIANT_SPEC.test(phrase)
+    ) {
       return true;
     }
     from = idx + 1;

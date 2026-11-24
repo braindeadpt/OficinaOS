@@ -473,6 +473,36 @@ describe("buildQuoteSuggestion — device-aware part priority", () => {
     expect(part?.catalogId).toBe("part-maxcap");
   });
 
+  it("keeps model priority when a capacity spec follows the model", () => {
+    // BUG #166 r11: «– Max 4000 mAh» é especificação comercial, não a
+    // variante Max — ambas em stock, a peça do modelo ganha à genérica.
+    const parts: QuotePartInput[] = [
+      {
+        category: "BATTERY",
+        defaultPrice: 20,
+        id: "part-generic",
+        name: "Bateria",
+        stockQuantity: 5,
+      },
+      {
+        category: "BATTERY",
+        defaultPrice: 35,
+        id: "part-maxmah",
+        name: "Bateria iPhone 15 – Max 4000 mAh",
+        stockQuantity: 2,
+      },
+    ];
+    const s = build(
+      diag(
+        { "battery.health": { Status: "fail" } },
+        { device: { brand: "Apple", model: "iPhone 15" } }
+      ),
+      { parts }
+    );
+    const part = s.lines.find((l) => l.kind === "part");
+    expect(part?.catalogId).toBe("part-maxmah");
+  });
+
   it("rejects a variant followed by a generic descriptor (Pro OEM)", () => {
     // BUG #166 r10: «iPhone 15 Pro OEM» é a variante Pro — a peça do
     // modelo certo esgotada ganha à Pro em stock.
