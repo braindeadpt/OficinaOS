@@ -380,5 +380,10 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
     expect(parsePontoExitAnswer("saí antes das 8 horas")).toEqual({
       kind: "ambiguous",
     });
+    // Noutra oração o limite é contexto (o fim previsto do turno),
+    // não uma alternativa — a hora única grava-se.
+    expect(
+      parsePontoExitAnswer("Saí às 18:05. O meu turno era até às 18 horas.")
+    ).toEqual({ hhmm: "18:05", kind: "time" });
   });
 });

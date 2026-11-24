@@ -225,45 +225,14 @@ function negated(normalizedClause: string): boolean {
   return normalizedClause.split(" ").some((t) => NEGATION_WORDS.has(t));
 }
 
-/** Junta os candidatos da oração às coleções — explícita (HH:MM ou
- *  por extenso) ou horas soltas. Durações relativas saem primeiro —
- *  «há 2 horas e 15 minutos» não é a hora «14:15»; o que sobra pode
- *  trazer a hora por extenso («às 18 horas e 15 minutos» = 18:15). */
-function collectClause(
-  clause: string,
-  explicit: Set<string>,
-  bare: Set<string>,
-  bound: Set<string>
-): void {
-  // «à» com acento marca hora como «às» — reescreve-se para «ás» no
-  // texto cru (a normalização apagava a diferença) para o separar do
-  // «a» conector de intervalo («de 1 a 2 horas e meia»), que não é
-  // marcador de hora. O NFC primeiro garante que «à» serve nas duas
-  // codificações (carácter único ou «a» + acento combinante). As
-  // horas compactas e as datas com «/»/«-» saem do texto a
-  // normalizar — os dígitos delas («18:05» → «18 05», «23/11» →
-  // «23 11») não são horas soltas nem abrem extenso novo.
-  const normalizedClause = normalizePontoText(
-    clause
-      .normalize("NFC")
-      .replace(/à(?=\s*\d)/gi, "ás")
-      .replace(DATE_SLASH_RE, " ")
-      .replace(EXPLICIT_TIME_RE, " ")
-  );
-  // Sem texto restante (a oração era só a hora compacta, «18h30»)
-  // segue-se na mesma — a negação precisa de palavras.
-  if (negated(normalizedClause)) {
-    return;
-  }
-  const times = explicitTimes(clause);
-  const withoutRelatives = normalizedClause.replace(RELATIVE_DURATION_RE, " ");
-  // Limites «depois das 19 horas» — não são hora solta (saem do
-  // bareHours abaixo) mas contam como candidata à ambiguidade.
-  for (const m of withoutRelatives.matchAll(BOUND_HOUR_RE)) {
-    bound.add(m[1]);
-  }
-  // Qualificador impossível («às 18 horas da manhã»): a oração não
-  // baixa para horas soltas — fica ambígua e a pergunta repete-se.
+/** Junta as horas por extenso da oração ao conjunto — «às 18 horas
+ *  e 15 minutos», «pelas 8 horas da noite». Devolve true quando um
+ *  qualificador é impossível («às 18 horas da manhã»): a oração não
+ *  baixa para horas soltas — fica ambígua e a pergunta repete-se. */
+function collectSpelledTimes(
+  withoutRelatives: string,
+  times: Set<string>
+): boolean {
   let spelledInvalid = false;
   const addSpelled = (
     hourRaw: string,
@@ -297,6 +266,53 @@ function collectClause(
   for (const m of withoutRelatives.matchAll(QUALIFIED_HOUR_RE)) {
     addSpelled(m[1], 0, m[2]);
   }
+  return spelledInvalid;
+}
+
+/** Junta os candidatos da oração às coleções — explícita (HH:MM ou
+ *  por extenso) ou horas soltas. Durações relativas saem primeiro —
+ *  «há 2 horas e 15 minutos» não é a hora «14:15»; o que sobra pode
+ *  trazer a hora por extenso («às 18 horas e 15 minutos» = 18:15). */
+function collectClause(
+  clause: string,
+  explicit: Set<string>,
+  bare: Set<string>,
+  bound: Set<string>,
+  looseBound: Set<string>
+): void {
+  // «à» com acento marca hora como «às» — reescreve-se para «ás» no
+  // texto cru (a normalização apagava a diferença) para o separar do
+  // «a» conector de intervalo («de 1 a 2 horas e meia»), que não é
+  // marcador de hora. O NFC primeiro garante que «à» serve nas duas
+  // codificações (carácter único ou «a» + acento combinante). As
+  // horas compactas e as datas com «/»/«-» saem do texto a
+  // normalizar — os dígitos delas («18:05» → «18 05», «23/11» →
+  // «23 11») não são horas soltas nem abrem extenso novo.
+  const normalizedClause = normalizePontoText(
+    clause
+      .normalize("NFC")
+      .replace(/à(?=\s*\d)/gi, "ás")
+      .replace(DATE_SLASH_RE, " ")
+      .replace(EXPLICIT_TIME_RE, " ")
+  );
+  // Sem texto restante (a oração era só a hora compacta, «18h30»)
+  // segue-se na mesma — a negação precisa de palavras.
+  if (negated(normalizedClause)) {
+    return;
+  }
+  const times = explicitTimes(clause);
+  const withoutRelatives = normalizedClause.replace(RELATIVE_DURATION_RE, " ");
+  // Limites «depois das 19 horas» — não são hora solta (saem do
+  // bareHours abaixo) mas contam como candidata à ambiguidade. Só
+  // na própria oração: um limite noutra oração («o meu turno era
+  // até às 18 horas») fala doutro acontecimento e fica no
+  // looseBound, que só ambigúa se a resposta não tiver hora nenhuma.
+  const clauseBound = new Set<string>();
+  for (const m of withoutRelatives.matchAll(BOUND_HOUR_RE)) {
+    clauseBound.add(m[1]);
+  }
+  const bareBefore = bare.size;
+  const spelledInvalid = collectSpelledTimes(withoutRelatives, times);
   for (const hhmm of times) {
     explicit.add(hhmm);
   }
@@ -324,6 +340,14 @@ function collectClause(
       }
     }
   }
+  const hasOwnHour = times.size > 0 || bare.size > bareBefore;
+  for (const b of clauseBound) {
+    if (hasOwnHour) {
+      bound.add(b);
+    } else {
+      looseBound.add(b);
+    }
+  }
 }
 
 export function parsePontoExitAnswer(
@@ -338,19 +362,20 @@ export function parsePontoExitAnswer(
   const explicit = new Set<string>();
   const bare = new Set<string>();
   const bound = new Set<string>();
+  const looseBound = new Set<string>();
   for (const clause of text.split(CLAUSE_SPLIT_RE)) {
-    collectClause(clause, explicit, bare, bound);
+    collectClause(clause, explicit, bare, bound, looseBound);
   }
   if (explicit.size === 1 && bound.size === 0) {
     return { hhmm: [...explicit][0], kind: "time" };
   }
   if (explicit.size > 1 || (explicit.size === 1 && bound.size > 0)) {
     // Ambíguo — duas ou mais horas declaradas (uma hora mais um
-    // limite «depois das 19 horas» também tem duas candidatas). O
-    // handler repete a pergunta sem gravar; a distinção de «sem
-    // hora» (null) serve para a rota de comandos não engolir a
-    // resposta (SAÍDA com horas em conflito não pode gravar a hora
-    // de receção).
+    // limite «depois das 19 horas» na mesma oração também tem duas
+    // candidatas). O handler repete a pergunta sem gravar; a
+    // distinção de «sem hora» (null) serve para a rota de comandos
+    // não engolir a resposta (SAÍDA com horas em conflito não pode
+    // gravar a hora de receção).
     return { kind: "ambiguous" };
   }
 
@@ -358,9 +383,15 @@ export function parsePontoExitAnswer(
   if (!normalized) {
     return null;
   }
-  // Limite sozinho («saí depois das 19 horas») não é hora declarada
-  // — a resposta pede uma hora exata e a pergunta repete-se.
+  // Um limite com hora na própria oração («saí às 18 depois das
+  // 19») contradiz a hora — ambíguo. Um limite sozinho na resposta
+  // inteira («saí depois das 19 horas») não é hora declarada —
+  // pede-se uma exata. Já um limite noutra oração («o meu turno
+  // era até às 18 horas») fala doutro acontecimento e não entra.
   if (bound.size > 0) {
+    return { kind: "ambiguous" };
+  }
+  if (looseBound.size > 0 && explicit.size === 0 && bare.size === 0) {
     return { kind: "ambiguous" };
   }
   // 2) Afirmativo exato — "SIM", "certo", "ta"…
