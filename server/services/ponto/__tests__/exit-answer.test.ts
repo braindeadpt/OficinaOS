@@ -115,3 +115,30 @@ describe("parsePontoExitAnswer — ponto antes de duração", () => {
     expect(parsePontoExitAnswer("saí há 20 minutos")).toBeNull();
   });
 });
+
+describe("parsePontoExitAnswer — horas por extenso e durações", () => {
+  it("«saí às 18 horas e 15 minutos» → 18:15 — o «e» liga os minutos", () => {
+    expect(parsePontoExitAnswer("saí às 18 horas e 15 minutos")).toEqual({
+      hhmm: "18:15",
+      kind: "time",
+    });
+    expect(parsePontoExitAnswer("saí às 6 horas e 30")).toEqual({
+      hhmm: "18:30",
+      kind: "time",
+    });
+    // Sem «e», «18 horas» continua hora solta = 18:00.
+    expect(parsePontoExitAnswer("saí às 18 horas")).toEqual({
+      hhmm: "18:00",
+      kind: "time",
+    });
+  });
+
+  it("«saí há 2 horas e 15 minutos» → null — duração não é hora", () => {
+    // «há/faz» + quantidade é duração relativa: a frase sai toda —
+    // «2 horas e 15 minutos» não é o relógio «2:15» e o «2» solto não
+    // pode virar 14:00. Sem hora lida com segurança, repete-se.
+    expect(parsePontoExitAnswer("saí há 2 horas e 15 minutos")).toBeNull();
+    expect(parsePontoExitAnswer("saí há 2 horas")).toBeNull();
+    expect(parsePontoExitAnswer("saí faz 1 hora e 30 minutos")).toBeNull();
+  });
+});

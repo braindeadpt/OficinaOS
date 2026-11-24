@@ -574,33 +574,55 @@ export async function tryHandlePontoStaff(
   return true;
 }
 
+/** Identidade da clarificação servida por uma pergunta — o id só se
+ *  liga se ela ainda for a ativa quando o envio acabar: entre o
+ *  `setPendingPontoExit` da pergunta e a resolução do `sayWithId` pode
+ *  chegar outra hora que a substitua, e associar o id antigo à
+ *  clarificação nova gravava a hora que a pergunta citada não tinha. */
+function clarifyKey(c: {
+  hhmm: string;
+  ymdReminder: string;
+  ymdReply: string;
+}): string {
+  return `${c.hhmm}|${c.ymdReminder}|${c.ymdReply}`;
+}
+
 /** Envia uma pergunta do fluxo de saída e associa o id devolvido pelo
  *  canal à pendência — a citação (reply-quote) do trabalhador aponta
  *  para a mensagem REAL a que respondeu, não só para o lembrete
  *  inicial: sem isto uma resposta citada à repetição ou à pergunta
- *  ONTEM/HOJE era rejeitada e a pergunta voltava a sair em ciclo. */
-async function askExitQuestion(env: FlowEnv, text: string): Promise<void> {
+ *  ONTEM/HOJE era rejeitada e a pergunta voltava a sair em ciclo.
+ *  `clarifyFor` (chave da clarificação que a pergunta serve) faz o id
+ *  juntar-se aos `questionMessageIds` DESSA clarificação — se ela foi
+ *  substituída durante o envio, o id fica só em `sentMessageIds` e a
+ *  citação reenvia a pergunta atual em vez de gravar a hora errada. */
+async function askExitQuestion(
+  env: FlowEnv,
+  text: string,
+  clarifyFor?: string
+): Promise<void> {
   const res = await env.sayWithId(text);
   if (!res.messageId) {
     return;
   }
   const cur = getPendingPontoExit(env.staff.user.id);
   if (cur) {
-    setPendingPontoExit(env.staff.user.id, {
-      ...cur,
-      // Com clarificação de data ativa, a pergunta enviada serve ESSA
-      // clarificação — o id junta-se aos da pergunta ONTEM/HOJE para
-      // que uma resposta citada a uma clarificação já substituída não
-      // grave a hora da pergunta errada.
-      clarifyDate: cur.clarifyDate
+    const curClarify = cur.clarifyDate;
+    const bound =
+      curClarify &&
+      clarifyFor !== undefined &&
+      clarifyKey(curClarify) === clarifyFor
         ? {
-            ...cur.clarifyDate,
+            ...curClarify,
             questionMessageIds: [
-              ...(cur.clarifyDate.questionMessageIds ?? []),
+              ...(curClarify.questionMessageIds ?? []),
               res.messageId,
             ],
           }
-        : cur.clarifyDate,
+        : curClarify;
+    setPendingPontoExit(env.staff.user.id, {
+      ...cur,
+      clarifyDate: bound,
       sentMessageIds: [...(cur.sentMessageIds ?? []), res.messageId],
     });
   }
@@ -705,13 +727,15 @@ async function onExitReminderAnswer(
       // com o pending vivo (clarifyDate) em vez de gravar ao acaso.
       // ymds tem exatamente os dois dias candidatos por ordem.
       const [ymdReminder, ymdReply] = [...ymds].sort();
+      const clarify = { hhmm: answer.hhmm, ymdReminder, ymdReply };
       setPendingPontoExit(env.staff.user.id, {
         ...pending,
-        clarifyDate: { hhmm: answer.hhmm, ymdReply, ymdReminder },
+        clarifyDate: clarify,
       });
       await askExitQuestion(
         env,
-        pontoExitDateQuestion(answer.hhmm, ymdReminder, ymdReply)
+        pontoExitDateQuestion(answer.hhmm, ymdReminder, ymdReply),
+        clarifyKey(clarify)
       );
       return;
     }
@@ -782,7 +806,12 @@ async function onExitDateClarification(
   ) {
     await askExitQuestion(
       env,
-      pontoExitDateQuestion(clarify.hhmm, clarify.ymdReminder, clarify.ymdReply)
+      pontoExitDateQuestion(
+        clarify.hhmm,
+        clarify.ymdReminder,
+        clarify.ymdReply
+      ),
+      clarifyKey(clarify)
     );
     return;
   }
@@ -797,7 +826,11 @@ async function onExitDateClarification(
     ymd = clarify.ymdReminder;
   }
   if (!ymd) {
-    await askExitQuestion(env, PONTO_TEXT.exitDateClarifyReprompt);
+    await askExitQuestion(
+      env,
+      PONTO_TEXT.exitDateClarifyReprompt,
+      clarifyKey(clarify)
+    );
     return;
   }
   const stillOpen = await env.ctx.prisma.timeEntry

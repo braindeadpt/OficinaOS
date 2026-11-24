@@ -64,6 +64,18 @@ const BARE_HOUR_RE = /\b([01]?\d|2[0-3])\b/g;
 // é hora solta ("Saí às 18. 15 minutos depois" não declara as 15:00).
 // «horas»/«hrs» ficam de fora de propósito: «às 18 horas» = 18:00.
 const DURATION_QTY_RE = /\b\d{1,3}\s*(?:minutos?|mins?|segundos?|segs?)\b/gi;
+// Duração relativa por extenso — «há 2 horas», «faz 1 hora e 30
+// minutos»: aqui o número antes de «horas» é quantidade e não hora do
+// relógio («saí há 2 horas e 15 minutos» não é saída às 14:00). A
+// frase sai inteira — a conjunção e a 2.ª quantidade incluídas — antes
+// de se procurarem horas por extenso ou soltas.
+const RELATIVE_DURATION_RE =
+  /\b(?:ha|faz)\s+\d{1,3}\s*(?:horas?|hrs?|minutos?|mins?|segundos?|segs?)(?:\s+e\s+\d{1,3}\s*(?:horas?|hrs?|minutos?|mins?|segundos?|segs?))*\b/gi;
+// Hora por extenso — «às 18 horas e 15 minutos» = 18:15, «às 6 horas
+// e 30» = 18:30 («e» liga os minutos à hora; sem «e» fica «18 horas»
+// como hora solta = 18:00).
+const EXTENSO_TIME_RE =
+  /\b(\d{1,2})\s+horas?\s+e\s+(\d{1,2})\s*(?:minutos?|mins?)?\b/gi;
 // Pontuação que fecha uma oração — o "." fica quando pode ser o
 // separador Horas.minutos de EXPLICIT_TIME_RE. Junto a dígitos a
 // notação compacta ganha sempre ("18.30", "18. 30", "18 . 30" —
@@ -134,6 +146,39 @@ function negated(normalizedClause: string): boolean {
   return normalizedClause.split(" ").some((t) => NEGATION_WORDS.has(t));
 }
 
+/** Junta os candidatos da oração às coleções — explícita (HH:MM ou
+ *  por extenso) ou horas soltas. Durações relativas saem primeiro —
+ *  «há 2 horas e 15 minutos» não é a hora «14:15»; o que sobra pode
+ *  trazer a hora por extenso («às 18 horas e 15 minutos» = 18:15). */
+function collectClause(
+  clause: string,
+  explicit: Set<string>,
+  bare: Set<string>
+): void {
+  const normalizedClause = normalizePontoText(clause);
+  if (!normalizedClause || negated(normalizedClause)) {
+    return;
+  }
+  const times = explicitTimes(clause);
+  const withoutRelatives = normalizedClause.replace(RELATIVE_DURATION_RE, " ");
+  for (const m of withoutRelatives.matchAll(EXTENSO_TIME_RE)) {
+    const hhmm = hhmmOf(Number(m[1]), Number(m[2]), zeroPadded(m[1]));
+    if (hhmm) {
+      times.add(hhmm);
+    }
+  }
+  for (const hhmm of times) {
+    explicit.add(hhmm);
+  }
+  // Numa oração com hora explícita os dígitos soltos são os minutos
+  // ("18 30") — as horas soltas só contam nas orações sem HH:MM.
+  if (times.size === 0) {
+    for (const h of bareHours(withoutRelatives)) {
+      bare.add(h);
+    }
+  }
+}
+
 export function parsePontoExitAnswer(
   text: string | null | undefined
 ): PontoExitAnswer {
@@ -146,21 +191,7 @@ export function parsePontoExitAnswer(
   const explicit = new Set<string>();
   const bare = new Set<string>();
   for (const clause of text.split(CLAUSE_SPLIT_RE)) {
-    const normalizedClause = normalizePontoText(clause);
-    if (!normalizedClause || negated(normalizedClause)) {
-      continue;
-    }
-    const times = explicitTimes(clause);
-    for (const hhmm of times) {
-      explicit.add(hhmm);
-    }
-    // Numa oração com hora explícita os dígitos soltos são os minutos
-    // ("18 30") — as horas soltas só contam nas orações sem HH:MM.
-    if (times.size === 0) {
-      for (const h of bareHours(normalizedClause)) {
-        bare.add(h);
-      }
-    }
+    collectClause(clause, explicit, bare);
   }
   if (explicit.size === 1) {
     return { hhmm: [...explicit][0], kind: "time" };
