@@ -10,6 +10,9 @@ const mocks = vi.hoisted(() => ({
   cloudFetch: vi.fn(),
   deletePontoPhoto: vi.fn(() => Promise.resolve(undefined)),
   downloadEvolutionMedia: vi.fn(() => Promise.resolve(null)),
+  findOpenPresumedExit: vi.fn(
+    (): Promise<{ at: Date; id: string } | null> => Promise.resolve(null)
+  ),
   getOrCreateShopSettings: vi.fn(),
   linkPontoPhoto: vi.fn(() => Promise.resolve(undefined)),
   pontoEntriesSince: vi.fn(
@@ -45,6 +48,7 @@ vi.mock("../../evolution.service.js", () => ({
 }));
 vi.mock("../entries.js", () => ({
   deletePontoPhoto: mocks.deletePontoPhoto,
+  findOpenPresumedExit: mocks.findOpenPresumedExit,
   linkPontoPhoto: mocks.linkPontoPhoto,
   pontoEntriesSince: mocks.pontoEntriesSince,
   recordPontoEntry: mocks.recordPontoEntry,
@@ -359,6 +363,41 @@ describe("comandos sem fluxo", () => {
     );
     expect(sent[0]).toContain("Semana: 8h00");
     expect(sent[0]).not.toContain("32h");
+  });
+
+  it("ESTADO: saída corrigida depois da meia-noite lista-se no dia efetivo mas as horas contam no dia do turno", async () => {
+    vi.useFakeTimers();
+    // Sábado 10/01/2026 00:20 Lisboa (UTC+0) — semana aberta segunda.
+    vi.setSystemTime(new Date("2026-01-10T00:20:00Z"));
+    const { ctx, phone, sent, t } = setup();
+    mocks.pontoEntriesSince.mockResolvedValue([
+      // Sexta: ENTRADA 16:00; a resposta ao lembrete gravou a SAIDA às
+      // 00:15 de sábado ligada à presumida das 23:30 de sexta.
+      {
+        at: new Date("2026-01-09T16:00:00Z"),
+        status: "APROVADO",
+        type: "ENTRADA",
+      },
+      {
+        at: new Date("2026-01-10T00:15:00Z"),
+        corrects: { at: new Date("2026-01-09T23:30:00Z") },
+        status: "APROVADO",
+        type: "SAIDA",
+      },
+    ]);
+
+    await tryHandlePontoStaff(
+      ctx,
+      msg({ fromPhone: phone, text: "ESTADO" }),
+      t
+    );
+
+    // Divergência deliberada (workedMs): a marcação lista-se no dia
+    // civil da hora EFETIVA (sábado 00:15), mas as horas fecham o
+    // turno de sexta — o "Hoje" mostra a saída sem intervalo e a
+    // "Semana" soma as 8h15 completas.
+    expect(sent[0]).toContain("Hoje: 0h00 — Saída 00:15");
+    expect(sent[0]).toContain("Semana: 8h15");
   });
 });
 

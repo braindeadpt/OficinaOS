@@ -24,6 +24,8 @@ const ALLOWED_MIMES = ["image/jpeg", "image/png", "image/webp"];
 
 export interface PontoTimeEntryInput {
   at: Date;
+  /** Correção: aponta para a entry substituída (ex.: SAIDA presumida). */
+  correctsId?: string | null;
   proofs: Record<string, unknown>;
   reason?: string | null;
   status: "APROVADO" | "POR_VALIDAR";
@@ -36,6 +38,7 @@ export function recordPontoEntry(prisma: DbClient, input: PontoTimeEntryInput) {
   return prisma.timeEntry.create({
     data: {
       at: input.at,
+      correctsId: input.correctsId ?? null,
       proofs: input.proofs as Prisma.InputJsonValue,
       reason: input.reason ?? null,
       status: input.status,
@@ -50,12 +53,19 @@ export function recordPontoEntry(prisma: DbClient, input: PontoTimeEntryInput) {
 
 export interface PontoTodayEntry {
   at: Date;
+  /** A correção aponta para a linha que substitui — o `at` dela é o dia
+   *  civil do turno a que a correção pertence (uma saída corrigida para
+   *  depois da meia-noite continua a fechar o turno do dia em que
+   *  abriu). */
+  corrects?: { at: Date } | null;
   status: string;
   type: TimeEntryType;
 }
 
 /** Registos do dia civil da loja (fuso das definições) para um user —
- *  usado pelo gate "entrada hoje" e pelo resumo do ESTADO. */
+ *  usado pelo gate "entrada hoje" e pelo resumo do ESTADO. Desempate
+ *  por createdAt: uma PAUSA e a SAIDA presumida ao mesmo instante ficam
+ *  com ordem determinística (a escrita mais recente decide o "último"). */
 export function todayPontoEntries(
   prisma: DbClient,
   userId: string,
@@ -64,23 +74,56 @@ export function todayPontoEntries(
 ): Promise<PontoTodayEntry[]> {
   const { start, end } = todayRange(tz, now);
   return prisma.timeEntry.findMany({
-    orderBy: { at: "asc" },
+    orderBy: [{ at: "asc" }, { createdAt: "asc" }],
     select: { at: true, status: true, type: true },
     where: { at: { gte: start, lt: end }, userId },
   });
 }
 
+/** SAIDA presumida do dia ainda por corrigir (item 5): proofs
+ *  .exitReminderPresumed=true e nenhuma correction a apontar. É a
+ *  "pergunta pendente" do fluxo Esquecimentos — a resposta do
+ *  trabalhador, uma SAIDA normal ou a correção do painel fecham-na. */
+export function findOpenPresumedExit(
+  prisma: DbClient,
+  userId: string,
+  tz: string,
+  now = new Date()
+): Promise<{ at: Date; id: string } | null> {
+  const { start, end } = todayRange(tz, now);
+  return prisma.timeEntry.findFirst({
+    orderBy: { at: "desc" },
+    select: { at: true, id: true },
+    where: {
+      at: { gte: start, lt: end },
+      corrections: { none: {} },
+      proofs: { equals: true, path: ["exitReminderPresumed"] },
+      type: "SAIDA",
+      userId,
+    },
+  });
+}
+
 /** Registos do user desde um instante (sem limite superior) — o ESTADO
- *  usa para as "horas da semana". */
+ *  usa para as "horas da semana". Só marcações efetivas: linhas já
+ *  substituídas por uma correção (correctsId a apontar para elas, ex.:
+ *  a SAIDA presumida corrigida pela resposta ao lembrete) ficam de
+ *  fora — senão o resumo listava a presumida e a correção, contava a
+ *  pendência em duplicado e fechava o turno na primeira saída. */
 export function pontoEntriesSince(
   prisma: DbClient,
   userId: string,
   since: Date
 ): Promise<PontoTodayEntry[]> {
   return prisma.timeEntry.findMany({
-    orderBy: { at: "asc" },
-    select: { at: true, status: true, type: true },
-    where: { at: { gte: since }, userId },
+    orderBy: [{ at: "asc" }, { createdAt: "asc" }],
+    select: {
+      at: true,
+      corrects: { select: { at: true } },
+      status: true,
+      type: true,
+    },
+    where: { at: { gte: since }, corrections: { none: {} }, userId },
   });
 }
 
@@ -193,5 +236,6 @@ export async function deletePontoPhoto(
 }
 
 // A purga de fotos >90 dias vive em services/ponto-photos.service.ts
-// (cleanupPontoPhotos, ligado ao runCleanup do index.ts na branch do
-// painel — feat/ponto-panel).
+// (cleanupPontoPhotos, ligado ao runCleanup do index.ts — a linha morre,
+// o TimeEntry fica com a referência órfã que o painel mostra como
+// "foto expirada").

@@ -172,6 +172,11 @@ function parsePontoForm(
   };
 }
 
+// Mesmo visual dos links «Abrir folha…» — extraído para aplicar o estado
+// Com alterações por guardar, o clique pede confirmação antes de sair.
+const SHEET_LINK_CLS =
+  "inline-flex min-h-8 pointer-coarse:min-h-11 items-center justify-center gap-1.5 rounded-md border border-outline bg-surface-container-lowest px-3 py-1.5 font-sans font-semibold text-on-surface text-sm transition-colors hover:bg-surface-container";
+
 export default function SettingsPontoSection({
   hasUnsavedChanges = false,
   onDirtyChange,
@@ -193,7 +198,9 @@ export default function SettingsPontoSection({
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<PontoFieldErrors>({});
   const [dirty, setDirty] = useState(false);
-  const [confirmQrLeave, setConfirmQrLeave] = useState(false);
+  const [confirmSheetLeave, setConfirmSheetLeave] = useState<string | null>(
+    null
+  );
   const [geoLat, setGeoLat] = useState("");
   const [geoLng, setGeoLng] = useState("");
   const [radius, setRadius] = useState("100");
@@ -490,15 +497,22 @@ export default function SettingsPontoSection({
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-on-surface-variant text-xs">
-          {config?.slug
-            ? t("ponto.qr_configured", { slug: config.slug })
-            : t("ponto.qr_hint")}
-        </p>
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-1">
+          <p className="text-on-surface-variant text-xs">
+            {config?.slug
+              ? t("ponto.qr_configured", { slug: config.slug })
+              : t("ponto.qr_hint")}
+          </p>
+          {dirty && (
+            <p className="text-on-surface-variant text-xs">
+              {t("ponto.sheets_save_first")}
+            </p>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
           <Link
-            className="inline-flex min-h-8 pointer-coarse:min-h-11 items-center justify-center gap-1.5 rounded-md border border-outline bg-surface-container-lowest px-3 py-1.5 font-sans font-semibold text-on-surface text-sm transition-colors hover:bg-surface-container"
+            className={SHEET_LINK_CLS}
             onClick={(e) => {
               // Ctrl/⌘/Shift+click abre noutro separador — o formulário
               // fica montado na mesma, sem perda de rascunho.
@@ -512,7 +526,26 @@ export default function SettingsPontoSection({
                 return;
               }
               e.preventDefault();
-              setConfirmQrLeave(true);
+              setConfirmSheetLeave("/ponto/info");
+            }}
+            to="/ponto/info"
+          >
+            {t("ponto.info_open")}
+          </Link>
+          <Link
+            className={SHEET_LINK_CLS}
+            onClick={(e) => {
+              if (
+                e.metaKey ||
+                e.ctrlKey ||
+                e.shiftKey ||
+                e.altKey ||
+                !hasUnsavedChanges
+              ) {
+                return;
+              }
+              e.preventDefault();
+              setConfirmSheetLeave("/ponto/qr");
             }}
             to="/ponto/qr"
           >
@@ -524,14 +557,15 @@ export default function SettingsPontoSection({
         </div>
       </div>
 
-      {confirmQrLeave && (
+      {confirmSheetLeave && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay">
           <ConfirmDiscardDialog
             onDiscard={() => {
-              setConfirmQrLeave(false);
-              navigate("/ponto/qr");
+              const target = confirmSheetLeave;
+              setConfirmSheetLeave(null);
+              navigate(target);
             }}
-            onKeepEditing={() => setConfirmQrLeave(false)}
+            onKeepEditing={() => setConfirmSheetLeave(null)}
             open
           />
         </div>

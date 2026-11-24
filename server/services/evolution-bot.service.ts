@@ -66,7 +66,12 @@ interface EvolutionUpsertData {
       selectedDisplayText?: string;
     };
     conversation?: string;
-    extendedTextMessage?: { text?: string };
+    extendedTextMessage?: {
+      // reply-quote: stanzaId é o key.id da mensagem citada — o livro
+      // de ponto correlaciona a resposta com o lembrete enviado.
+      contextInfo?: { stanzaId?: string };
+      text?: string;
+    };
     imageMessage?: { mimetype?: string; url?: string };
     listResponseMessage?: {
       singleSelectReply?: {
@@ -102,15 +107,18 @@ interface ParsedInbound {
   interactiveId?: string | null;
   /** Localização partilhada (locationMessage) — livro de ponto. */
   location?: InboundMessage["location"];
+  /** stanzaId da mensagem citada (reply-quote) — livro de ponto. */
+  quotedMessageId?: string;
   text: string | null;
 }
 
 /** Campos normalizados de uma mensagem Evolution (texto, localização,
- *  imagem, botão interativo). */
+ *  imagem, botão interativo, citação). */
 function messageFields(data: EvolutionUpsertData): {
   imageRef?: InboundMessage["imageRef"];
   interactiveId?: string | null;
   location?: InboundMessage["location"];
+  quotedMessageId?: string;
   text: string | null;
 } {
   const msg = data.message;
@@ -140,10 +148,12 @@ function messageFields(data: EvolutionUpsertData): {
     msg?.buttonsResponseMessage?.selectedButtonId ??
     msg?.listResponseMessage?.singleSelectReply?.selectedRowId ??
     null;
+  const quotedMessageId = msg?.extendedTextMessage?.contextInfo?.stanzaId;
   return {
     ...(imageRef ? { imageRef } : {}),
     ...(interactiveId ? { interactiveId } : {}),
     ...(location ? { location } : {}),
+    ...(quotedMessageId ? { quotedMessageId } : {}),
     text,
   };
 }
@@ -429,13 +439,18 @@ export async function handleEvolutionInbound(
  *  (presença "a escrever…" + atraso humano) mas SEM o suspendBot: uma
  *  sessão caída não pode calar o registo de ponto, e o teto diário do
  *  bot de clientes não se aplica a comandos de staff (o rateOk "ponto"
- *  limita o volume). */
+ *  limita o volume). Devolve o resultado completo (messageId incluído):
+ *  o caller adapta-o a `send`/`sendWithId` do transporte. */
 function makePontoSend(
   prisma: PrismaClient,
   log: FastifyBaseLogger,
   config: EvolutionConfig,
   phone: string
-): (text: string) => Promise<boolean> {
+): (text: string) => Promise<{
+  error?: string;
+  messageId?: string;
+  success: boolean;
+}> {
   return async (text) => {
     const delay = REPLY_DELAY_MIN_MS + Math.random() * REPLY_DELAY_SPREAD_MS;
     await sendEvolutionPresence(config, phone, delay).catch(() => null);
@@ -446,7 +461,7 @@ function makePontoSend(
     if (!res.success) {
       log.warn({ err: res.error, to: phone }, "evolution ponto reply failed");
     }
-    return res.success;
+    return res;
   };
 }
 
@@ -494,13 +509,17 @@ function tryPontoForEvolution(
         "a loja",
       timezone: settings.timezone ?? undefined,
     } satisfies BotReplyCtx);
+  // O envio devolve o key.id — `sendWithId` expõe-o às perguntas de
+  // seguimento do lembrete de saída (citação do trabalhador).
+  const pontoSend = makePontoSend(prisma, log, evoConfig, parsed.fromPhone);
   return tryHandlePontoStaff(
     pontoCtx,
     msg,
     {
       channelLabel: "WhatsApp",
       ponto: { transport: "whatsapp_evolution" },
-      send: makePontoSend(prisma, log, evoConfig, parsed.fromPhone),
+      send: async (text) => (await pontoSend(text)).success,
+      sendWithId: pontoSend,
     },
     { evolution: evoConfig, shopSettings: settings }
   ).catch((err) => {
@@ -533,6 +552,9 @@ async function processParsed(
     ...(parsed.location ? { location: parsed.location } : {}),
     ...(parsed.imageRef ? { imageRef: parsed.imageRef } : {}),
     ...(parsed.interactiveId ? { interactiveId: parsed.interactiveId } : {}),
+    ...(parsed.quotedMessageId
+      ? { quotedMessageId: parsed.quotedMessageId }
+      : {}),
   };
 
   if (evoConfig && isModuleEnabled(settings, "whatsapp-bot")) {

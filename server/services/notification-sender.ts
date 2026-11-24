@@ -13,7 +13,18 @@ export interface WhatsAppConfig {
 
 interface SendResult {
   error?: string;
+  /** wamid da mensagem aceite — correlação de reply-quote (ponto). */
+  messageId?: string;
   success: boolean;
+}
+
+/** wamid da resposta Graph (`messages[0].id`) — best-effort: corpo
+ *  ausente ou não-JSON segue sem id. */
+async function graphMessageId(response: Response): Promise<string | undefined> {
+  const body = (await Promise.resolve()
+    .then(() => response.json())
+    .catch(() => null)) as { messages?: { id?: string }[] } | null;
+  return body?.messages?.[0]?.id;
 }
 
 export async function sendWhatsApp(
@@ -44,7 +55,8 @@ export async function sendWhatsApp(
     });
 
     if (response.ok) {
-      return { success: true };
+      const messageId = await graphMessageId(response);
+      return { ...(messageId ? { messageId } : {}), success: true };
     }
     const body = await response.text();
     return {
@@ -151,7 +163,8 @@ export async function sendWhatsAppTemplate(
     });
 
     if (response.ok) {
-      return { success: true };
+      const messageId = await graphMessageId(response);
+      return { ...(messageId ? { messageId } : {}), success: true };
     }
     const body = await response.text();
     return {

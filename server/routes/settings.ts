@@ -425,19 +425,38 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
           ),
         });
       }
+      // O formulário de ponto envia sempre a hora já gravada — o sync
+      // de templates só se justifica quando `pontoExitReminderTime`
+      // MUDA (definir pela 1.ª vez ou editar): gravar o intervalo de
+      // pausa com a mesma hora não deve re-submeter os modelos todos.
+      const reminderTimeChanged =
+        parsed.data.pontoExitReminderTime !== undefined &&
+        (await getOrCreateShopSettings(app.prisma)).pontoExitReminderTime !==
+          parsed.data.pontoExitReminderTime;
       const updated = await upsertShopSettings(app.prisma, parsed.data);
       // The widget CSP caches embedAllowedOrigins for 60s — drop it so a
       // save takes effect on the next request instead of up to a minute late.
       app.resetEmbedOriginsCache();
       // reviewUrl muda os blocos {{if}} dos templates WhatsApp — sem
       // re-sync, o modelo aprovado na Meta diverge dos parâmetros
-      // enviados e as notificações falham. Só em modo Pro/cloud: sem o
-      // módulo "whatsapp-bot" o resolve devolve null e nada corre.
+      // enviados e as notificações falham. pontoExitReminderTime a
+      // definir também exige o modelo `ponto_lembrete` submetido — o
+      // sync cria-o se faltar. Só em modo Pro/cloud: sem o módulo
+      // "whatsapp-bot" o resolve devolve null e nada corre (no modo
+      // local a loja cria o modelo à mão — visível como MISSING na
+      // lista de templates).
+      const needsTemplateSync = Object.entries(parsed.data).some(
+        ([key, value]) =>
+          META_TEMPLATE_KEYS.has(key) ||
+          (key === "pontoExitReminderTime" &&
+            Boolean(value) &&
+            reminderTimeChanged)
+      );
       if (
-        Object.keys(parsed.data).some((k) => META_TEMPLATE_KEYS.has(k)) &&
+        needsTemplateSync &&
         resolveWhatsAppChannel(updated)?.mode === "cloud"
       ) {
-        syncWhatsAppTemplates(app.prisma).catch((err) =>
+        syncWhatsAppTemplates(app.prisma, app.log).catch((err) =>
           req.log.warn({ err }, "whatsapp template resync failed")
         );
       }

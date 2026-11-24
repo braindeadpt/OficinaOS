@@ -67,6 +67,61 @@ function utcFromZonedYmd(tz: string, y: number, m: number, d: number): Date {
   return new Date(instant);
 }
 
+/**
+ * Instante UTC do HH:MM de um dia civil ("YYYY-MM-DD") no fuso `tz` —
+ * mesmo refinamento iterativo de utcFromZonedYmd (o offset muda entre a
+ * meia-noite e o meio-dia em dias de DST). Usado pelo livro de ponto:
+ * a hora do lembrete de saída e a hora de saída declarada pelo
+ * trabalhador são horas de relógio da loja, não instantes absolutos.
+ * Devolve null para entradas mal formadas.
+ */
+export function zonedDateTimeToUtc(
+  tz: string,
+  ymd: string,
+  hhmm: string
+): Date | null {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const [hh, mm] = hhmm.split(":").map(Number);
+  if (
+    ![y, m, d, hh, mm].every(Number.isInteger) ||
+    hh > 23 ||
+    mm > 59 ||
+    hh < 0 ||
+    mm < 0
+  ) {
+    return null;
+  }
+  const targetUtc = Date.UTC(y, m - 1, d, hh, mm, 0);
+  // Semente ao meio-dia do mesmo dia — longe das bordas de DST.
+  let instant = Date.UTC(y, m - 1, d, 12, 0, 0);
+  for (let i = 0; i < 4; i++) {
+    const p = zonedParts(tz, new Date(instant));
+    const zonedEpoch = Date.UTC(
+      p.year,
+      p.month - 1,
+      p.day,
+      p.hour,
+      p.minute,
+      p.second
+    );
+    const offsetMs = instant - zonedEpoch;
+    const candidate = targetUtc + offsetMs;
+    const cp = zonedParts(tz, new Date(candidate));
+    if (
+      cp.year === y &&
+      cp.month === m &&
+      cp.day === d &&
+      cp.hour === hh &&
+      cp.minute === mm &&
+      cp.second === 0
+    ) {
+      return new Date(candidate);
+    }
+    instant = candidate;
+  }
+  return new Date(instant);
+}
+
 export function todayRange(tz: string, now: Date = new Date()): DateRange {
   const { year, month, day } = zonedParts(tz, now);
   const start = utcFromZonedYmd(tz, year, month, day);

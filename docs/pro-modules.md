@@ -55,6 +55,7 @@ falar com ela. Nunca código pago compilado na app pública.
 | `remarketing` | Recontacto automático de clientes inativos via template WhatsApp aprovado — **requer também `whatsapp-bot`** (o envio usa o canal WhatsApp da loja) | Notificações → Setup → WhatsApp |
 | `sms` | SMS pelo Android da loja — ligado **à Cloud** (sms-gate modo servidor, multi-loja, funciona com o PC desligado) **ou na LAN** como fallback | Notificações → Setup → SMS |
 | `ai-inbox` ⚠️ *em desenvolvimento — ainda não vendido/ativável em produção* | Caixa de entrada unificada de WhatsApp/SMS + assistente de IA para a equipa (qualquer LLM, chat na app ou MCP) — **contratável sozinho** | Mensagens + Definições → IA |
+| `ponto` ⚠️ *em beta — nome e preço por decidir* | Livro de ponto por WhatsApp/SMS: QR fixo impresso, comandos (ENTRADA/PAUSA/VOLTEI/SAIDA/ESTADO), prova de localização no raio da loja, registos guardados 5 anos e folha de informação ao trabalhador imprimível | Definições → Cloud → secção Ponto; folhas `/ponto/qr` e `/ponto/info` |
 
 (Desde 2026-11-23 **todo o SMS é Pro** — inclusive o gateway Android na
 LAN, que passou de "core grátis" a transporte Pro/fallback. O grátis
@@ -75,6 +76,7 @@ não envia nem recebe mensagem nenhuma.)
 | **WhatsApp oficial** | nada | `whatsapp-bot`: Meta Cloud API — envio `POST /whatsapp/send` ou direto app→Meta, templates auto-sincronizados, janela de 24 h, IA |
 | **WhatsApp Evolution** | nada | `whatsapp-bot`: transporte local (não-oficial, disclaimer) + bot inbound com termo próprio + proteções anti-ban (10/h por número, teto diário, dedupe, atraso 3–8 s) |
 | **Caixa de entrada + IA de staff** | nada | `ai-inbox` *(em desenvolvimento)*: caixa unificada WhatsApp/SMS, ferramentas na app, chat IA na app (`/ai/staff-reply`) e MCP na Cloud (`/mcp`) — envio sempre com aprovação humana |
+| **Livro de ponto (`ponto`)** | nada | registos de ponto entram pelos canais Pro de receção acima — WhatsApp oficial (mensagens interativas + template), Evolution (texto + localização/foto) e SMS; **exige pelo menos um canal Pro de receção ativo** |
 
 ## Portal do cliente (`portal`)
 
@@ -192,6 +194,43 @@ Envio sempre em dois passos: a IA cria um rascunho e um humano aprova
 na app. Precisa de um canal que receba mensagens: a Evolution na LAN
 funciona só com este módulo (grava na caixa de entrada, sem resposta
 automática), ou `whatsapp-bot`/`sms` para os canais oficiais.
+
+## Livro de ponto (`ponto`)
+
+> **Em beta** — nome comercial e preço por decidir.
+
+Livro de ponto digital para os trabalhadores da loja, sem ecrã nem
+tablet obrigatório: um **QR fixo impresso** (autocolante) aponta para a
+página pública da Cloud (`/ponto/<slug>`), que emite um código de 4
+dígitos; o trabalhador envia `ENTRADA <código>` (ou PAUSA/VOLTEI/SAIDA/
+ESTADO) pelo WhatsApp ou SMS do número da loja e partilha a
+**localização** — a hora é sempre a do servidor, nunca a do telemóvel.
+
+- **Prova:** entrada na loja exige código válido + localização dentro do
+  raio configurável (default 100 m); pausa/saída só pedem localização.
+  Externos (trabalhadores ao domicílio) registam sem raio e podem enviar
+  foto de prova. SMS só para quem a loja marcar "sem WhatsApp" e fica
+  sempre por validar.
+- **Avaliação na Cloud:** cada marcação (ENTRADA/PAUSA/VOLTEI/SAIDA)
+  recebida pelos canais passa por `POST /ponto/evaluate` (entitlement
+  `ponto` → 402) — uma app alterada não consegue registar ponto. O
+  comando ESTADO dispensa essa avaliação: responde com um resumo local
+  das horas e dos registos por validar (o transporte da mensagem —
+  webhook WhatsApp/SMS — continua a chegar via Cloud). O pedido leva o telefone e um indicador
+  de foto, nunca a imagem. Correções internas (saída presumida pelo
+  lembrete, hora declarada pelo trabalhador) são gravadas só na app,
+  sem chamada à Cloud. A Cloud **não guarda** localização, fotos nem
+  registos: só `PontoToken` de uso único durante ~24 h para auditoria.
+- **Na loja:** `TimeEntry` é append-only (correções são linhas novas),
+  retenção de 5 anos (Código do Trabalho, art. 202.º); fotos de prova
+  apagadas aos 90 dias. O painel de validações e a exportação estão em
+  desenvolvimento.
+- **Informação ao trabalhador:** Definições → Cloud → secção Ponto tem o
+  texto RGPD editável; `/ponto/info` imprime a folha para assinatura e
+  `/ponto/qr` a folha do QR. Ver `docs/privacy-and-data.md`.
+
+Precisa de **pelo menos um canal Pro de receção ativo** (WhatsApp
+oficial, Evolution ou SMS) — os comandos chegam por esses transportes.
 
 ## Emparelhamento com a Cloud
 

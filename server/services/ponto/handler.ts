@@ -12,7 +12,7 @@ import type { TimeEntryTransport, TimeEntryType } from "@generated/client";
 import { getOrCreateShopSettings } from "../../repositories/settings.repository.js";
 import { isModuleEnabled } from "../../utils/modules.js";
 import { fetchPublicMedia } from "../../utils/safe-url.js";
-import { dayRange } from "../../utils/time-range.js";
+import { dayRange, zonedDateTimeToUtc } from "../../utils/time-range.js";
 import type {
   BotReplyCtx,
   InboundMessage,
@@ -23,9 +23,14 @@ import {
   type EvolutionConfig,
 } from "../evolution.service.js";
 import { rateOk } from "../rate-limit.js";
-import { type PontoCommand, parsePontoCommand } from "./commands.js";
+import {
+  normalizePontoText,
+  type PontoCommand,
+  parsePontoCommand,
+} from "./commands.js";
 import {
   deletePontoPhoto,
+  findOpenPresumedExit,
   linkPontoPhoto,
   pontoEntriesSince,
   recordPontoEntry,
@@ -33,19 +38,27 @@ import {
   todayPontoEntries,
 } from "./entries.js";
 import { evaluatePontoMark } from "./evaluate.js";
+import { parsePontoExitAnswer } from "./exit-answer.js";
 import { findPontoStaff, type PontoStaffMatch } from "./staff.js";
 import {
   clearPendingPonto,
+  clearPendingPontoExit,
   getPendingPonto,
+  getPendingPontoExit,
   type PendingPonto,
+  type PendingPontoExit,
   PONTO_LOCATION_TTL_MS,
   PONTO_PHOTO_TTL_MS,
   pontoPendingKey,
   setPendingPonto,
+  setPendingPontoExit,
   takeExpiredPonto,
 } from "./state.js";
 import {
+  PONTO_EXIT_DATE_TERMS,
   PONTO_TEXT,
+  pontoExitDateQuestion,
+  pontoExitReminderText,
   pontoLocationRequestInteractive,
   pontoNextButtons,
   pontoNextHintText,
@@ -55,6 +68,12 @@ import {
 type PontoMarkCommand = Exclude<PontoCommand, "ESTADO">;
 type Settings = Awaited<ReturnType<typeof getOrCreateShopSettings>>;
 type Say = (text: string) => Promise<boolean>;
+/** Como Say mas devolve o id da mensagem quando o canal o expõe — as
+ *  perguntas do fluxo de saída associam-no ao pending para a citação
+ *  do trabalhador apontar para a mensagem certa. */
+type SayWithId = (
+  text: string
+) => Promise<{ messageId?: string; success: boolean }>;
 type SayInteractive = (
   interactive: Record<string, unknown>,
   fallbackText: string
@@ -68,6 +87,9 @@ const ENTRY_TYPE_PT: Record<PontoMarkCommand, string> = {
 };
 
 const NAME_WS_RE = /\s+/;
+// Qualquer dígito no texto — uma resposta SAÍDA com números que não
+// dão hora única é resposta ambígua ao lembrete, não comando.
+const ANY_DIGIT_RE = /\d/;
 
 const ENTRY_ICON: Record<PontoMarkCommand, string> = {
   ENTRADA: "✅",
@@ -151,11 +173,18 @@ function workedIntervalsMs(entries: { at: Date; type: string }[]): number {
  *  saída não atravessa a meia-noite: sem o agrupamento, a entrada de
  *  terça era absorvida pelo turno de segunda e a saída de terça fechava
  *  um intervalo de ~32 h (a regra "entrada no próprio dia" já impede
- *  turnos overnight — §2.2). */
-function workedMs(entries: { at: Date; type: string }[], tz: string): number {
+ *  turnos overnight — §2.2). Exceção com ligação: uma CORREÇÃO herda o
+ *  dia civil da linha que substitui — a saída corrigida para depois da
+ *  meia-noite continua a fechar o turno do dia em que abriu (o `at` da
+ *  presumida é a âncora), senão entrada e saída caíam em grupos
+ *  separados e as horas sumiam. Exportada para testes. */
+export function workedMs(
+  entries: { at: Date; corrects?: { at: Date } | null; type: string }[],
+  tz: string
+): number {
   const byDay = new Map<string, { at: Date; type: string }[]>();
   for (const e of entries) {
-    const day = dayRange(tz, e.at).date;
+    const day = dayRange(tz, e.corrects?.at ?? e.at).date;
     const list = byDay.get(day);
     if (list) {
       list.push(e);
@@ -296,6 +325,7 @@ interface FlowEnv {
   phoneDigits: string;
   say: Say;
   sayInteractive: SayInteractive;
+  sayWithId: SayWithId;
   settings: Settings;
   staff: PontoStaffMatch;
   transport: PontoTransportKind;
@@ -319,6 +349,18 @@ function buildFlowEnv(
       return false;
     }
   };
+  // Canal sem `sendWithId` (SMS, envio suprimido): envia na mesma, o id
+  // fica ausente e a correlação de citação passa a fail-open.
+  const sayWithId: SayWithId = async (text) => {
+    if (!t.sendWithId) {
+      return { success: await say(text) };
+    }
+    try {
+      return await t.sendWithId(text);
+    } catch {
+      return { success: false };
+    }
+  };
   const sayInteractive: SayInteractive = async (interactive, fallbackText) => {
     if (channel.interactive) {
       const ok = await channel.interactive(interactive).catch(() => false);
@@ -337,6 +379,7 @@ function buildFlowEnv(
     phoneDigits: staff.phoneDigits,
     say,
     sayInteractive,
+    sayWithId,
     settings,
     staff,
     transport,
@@ -434,9 +477,49 @@ async function routeText(env: FlowEnv): Promise<void> {
     return;
   }
   if (!parsed) {
+    // Resposta ao lembrete de saída pendente (item 5): "SIM" ou a hora
+    // declarada corrigem a SAIDA presumida. Texto irreconhecível repete
+    // a pergunta — o pending só morre com comando, resposta ou TTL.
+    const exitPending = getPendingPontoExit(env.staff.user.id);
+    if (exitPending && env.msg.text) {
+      await onExitReminderAnswer(env, exitPending);
+      return;
+    }
     await env.say(PONTO_TEXT.commands);
     return;
   }
+  // Com pergunta de saída pendente, uma declaração de SAÍDA com hora
+  // ("Saí 18:05") responde à pergunta — o parser de comandos lia-a
+  // como SAIDA e a hora declarada perdia-se ("Saí às 18:05" já caía
+  // aqui por não cobrir "às"). Uma SAÍDA com números que não dão hora
+  // única («Saí 18:05-19», «SAIDA 99» — o parser de comandos tolera
+  // tokens numéricos soltos) é resposta ambígua, não comando: repete
+  // a pergunta em vez de cair no fluxo da SAÍDA, que gravava a hora
+  // de receção como correção. O código QR («SAIDA #4821») fica de
+  // fora — é comando, não hora. Um token de 4 dígitos pode ser um
+  // ANO, não código («09/01/2026 ou 10/01/2026»): a declaração
+  // ambígua vai para a pergunta na mesma — só o texto sem hora nem
+  // ambiguidade e com código respeita o comando. O desvio vale só
+  // para SAIDA: «VOLTEI 18:05» é regresso de pausa e segue o seu
+  // fluxo mesmo com hora no texto. Botões e comandos sem hora
+  // mantêm a prioridade normal: matam o pending e seguem o fluxo
+  // do comando.
+  const exitPending = getPendingPontoExit(env.staff.user.id);
+  const answer = parsePontoExitAnswer(env.msg.text);
+  if (
+    exitPending &&
+    !env.msg.interactiveId &&
+    parsed.command === "SAIDA" &&
+    (answer?.kind === "time" ||
+      answer?.kind === "ambiguous" ||
+      (!parsed.code && ANY_DIGIT_RE.test(env.msg.text ?? "")))
+  ) {
+    await onExitReminderAnswer(env, exitPending);
+    return;
+  }
+  // Qualquer comando ponto normal mata o pending de saída — a SAIDA
+  // seguinte corrige a presumida automaticamente no finalizePonto.
+  clearPendingPontoExit(env.staff.user.id);
   clearPendingPonto(env.key);
   await dispatchCommand({
     channel: env.channel,
@@ -504,6 +587,317 @@ export async function tryHandlePontoStaff(
   }
   await routeText(env);
   return true;
+}
+
+/** Identidade da clarificação servida por uma pergunta — o id só se
+ *  liga se ela ainda for a ativa quando o envio acabar: entre o
+ *  `setPendingPontoExit` da pergunta e a resolução do `sayWithId` pode
+ *  chegar outra hora que a substitua, e associar o id antigo à
+ *  clarificação nova gravava a hora que a pergunta citada não tinha. */
+function clarifyKey(c: {
+  hhmm: string;
+  ymdReminder: string;
+  ymdReply: string;
+}): string {
+  return `${c.hhmm}|${c.ymdReminder}|${c.ymdReply}`;
+}
+
+/** Envia uma pergunta do fluxo de saída e associa o id devolvido pelo
+ *  canal à pendência — a citação (reply-quote) do trabalhador aponta
+ *  para a mensagem REAL a que respondeu, não só para o lembrete
+ *  inicial: sem isto uma resposta citada à repetição ou à pergunta
+ *  ONTEM/HOJE era rejeitada e a pergunta voltava a sair em ciclo.
+ *  `clarifyFor` (chave da clarificação que a pergunta serve) faz o id
+ *  juntar-se aos `questionMessageIds` DESSA clarificação — se ela foi
+ *  substituída durante o envio, o id fica só em `sentMessageIds` e a
+ *  citação reenvia a pergunta atual em vez de gravar a hora errada. */
+async function askExitQuestion(
+  env: FlowEnv,
+  text: string,
+  clarifyFor?: string
+): Promise<void> {
+  const res = await env.sayWithId(text);
+  if (!res.messageId) {
+    return;
+  }
+  const cur = getPendingPontoExit(env.staff.user.id);
+  if (cur) {
+    const curClarify = cur.clarifyDate;
+    const bound =
+      curClarify &&
+      clarifyFor !== undefined &&
+      clarifyKey(curClarify) === clarifyFor
+        ? {
+            ...curClarify,
+            questionMessageIds: [
+              ...(curClarify.questionMessageIds ?? []),
+              res.messageId,
+            ],
+          }
+        : curClarify;
+    setPendingPontoExit(env.staff.user.id, {
+      ...cur,
+      clarifyDate: bound,
+      sentMessageIds: [...(cur.sentMessageIds ?? []), res.messageId],
+    });
+  }
+}
+
+/**
+ * Resposta ao lembrete de saída (item 5): "SIM" confirma a hora
+ * presumida (correção APROVADO); uma hora indicada cria correção
+ * POR_VALIDAR (autodeclaração divergente). Qualquer outro texto
+ * repete a pergunta — o pending continua até resposta clara, comando
+ * ponto ou TTL.
+ */
+async function onExitReminderAnswer(
+  env: FlowEnv,
+  pending: PendingPontoExit
+): Promise<void> {
+  // Citação de mensagem (reply-quote do WhatsApp): só aplica a
+  // resposta quando a citação aponta para uma pergunta desta pendência
+  // (o lembrete inicial ou qualquer repetição/clarificação — cada uma
+  // regista o seu id ao sair). Um "SIM" citando um lembrete mais
+  // antigo (dois turnos no dia) não pode confirmar a presumida do
+  // lembrete novo — a pergunta ativa repete-se para o trabalhador
+  // responder sobre a saída certa. Sem ids conhecidos (SMS, relay
+  // cloud sem wamid) não há como verificar — fail-open.
+  if (
+    env.msg.quotedMessageId &&
+    pending.sentMessageIds?.length &&
+    !pending.sentMessageIds.includes(env.msg.quotedMessageId)
+  ) {
+    await askExitQuestion(
+      env,
+      pontoExitReminderText(hhmm(new Date(pending.presumedAt), env.tz))
+    );
+    return;
+  }
+  const answer = parsePontoExitAnswer(env.msg.text);
+  // Com clarificação de data pendente (ONTEM/HOJE), só uma NOVA hora
+  // explícita reabre o cálculo — «SIM», «certo» ou texto solto não
+  // escolhem dia nenhum: segue o fluxo da data, que repete a pergunta
+  // sem gravar nem limpar o pending.
+  if (pending.clarifyDate && answer?.kind !== "time") {
+    await onExitDateClarification(env, pending);
+    return;
+  }
+  // Ambíguo ou irreconhecível — repete a pergunta sem gravar nem
+  // limpar o pending (nunca confirma a presumida).
+  if (!answer || answer.kind === "ambiguous") {
+    await askExitQuestion(env, PONTO_TEXT.exitReminderReprompt);
+    return;
+  }
+  // A presumida pode ter sido corrigida entretanto (SAIDA por comando,
+  // painel) — nesse caso o pending já não se aplica.
+  const stillOpen = await env.ctx.prisma.timeEntry
+    .findFirst({
+      select: { id: true },
+      where: { correctsId: pending.presumedEntryId },
+    })
+    .catch(() => null);
+  if (stillOpen) {
+    clearPendingPontoExit(env.staff.user.id);
+    await env.say(PONTO_TEXT.commands);
+    return;
+  }
+
+  const presumedDate = new Date(pending.presumedAt);
+  let at = presumedDate;
+  let status: "APROVADO" | "POR_VALIDAR" = "APROVADO";
+  let reason = "confirmado pelo trabalhador";
+  let proofs: Record<string, unknown> = { exitReminderConfirmed: true };
+  if (answer.kind === "time") {
+    // A resposta pode chegar já no dia seguinte (o pending vive ~2 h —
+    // um lembrete das 23:30 respondido às 00:20 declara uma saída do
+    // dia da RESPOSTA, não do dia da presumida). Candidatos: esse HH:MM
+    // no dia civil da presumida e no dia seguinte; fica o único que
+    // seja posterior à abertura do turno (o shiftOpenAt guardado no
+    // pending) e não esteja no futuro — zero ou dois plausíveis volta
+    // a perguntar em vez de gravar uma data arbitrária.
+    const answerAt = new Date(env.msg.sentAt ?? env.msg.createdAt);
+    // O dia seguinte é o dia civil a seguir — somar 24 h ao instante
+    // salta o dia inteiro na transição para a hora de verão (o dia civil
+    // tem 23 h, não 24).
+    const presumedDay = dayRange(env.tz, presumedDate);
+    const ymds = new Set([
+      presumedDay.date,
+      dayRange(env.tz, presumedDay.end).date,
+    ]);
+    // Data declarada («saí 23/11 às 18:05») — só serve quando bate num
+    // dos dias candidatos. Se aponta para outro dia, a resposta não é
+    // sobre este turno: repete-se a pergunta com o pending vivo em vez
+    // de gravar a hora no dia errado.
+    const stated = answer.date;
+    const wanted = stated
+      ? new Set(
+          [...ymds].filter((ymd) => {
+            const [y, mo, d] = ymd.split("-").map(Number);
+            return (
+              d === stated.day &&
+              mo === stated.month &&
+              (stated.year === null || y === stated.year)
+            );
+          })
+        )
+      : ymds;
+    if (wanted.size === 0) {
+      await askExitQuestion(env, PONTO_TEXT.exitReminderReprompt);
+      return;
+    }
+    const openAt = pending.shiftOpenAt ? Date.parse(pending.shiftOpenAt) : null;
+    const candidates = [...wanted]
+      .map((ymd) => zonedDateTimeToUtc(env.tz, ymd, answer.hhmm))
+      .filter(
+        (d): d is Date =>
+          d !== null &&
+          d.getTime() <= answerAt.getTime() &&
+          (openAt === null || d.getTime() > openAt)
+      );
+    if (candidates.length === 0) {
+      // Impossível (futuro, anterior ao turno) — repete a pergunta
+      // com o pending vivo: a resposta seguinte re-tenta.
+      await askExitQuestion(env, PONTO_TEXT.exitReminderReprompt);
+      return;
+    }
+    if (candidates.length > 1) {
+      // Dois dias plausíveis — nunca se assume: pergunta-se ONTEM/HOJE
+      // com o pending vivo (clarifyDate) em vez de gravar ao acaso.
+      // wanted tem exatamente os dois dias candidatos por ordem.
+      const [ymdReminder, ymdReply] = [...wanted].sort();
+      const clarify = { hhmm: answer.hhmm, ymdReminder, ymdReply };
+      setPendingPontoExit(env.staff.user.id, {
+        ...pending,
+        clarifyDate: clarify,
+      });
+      await askExitQuestion(
+        env,
+        pontoExitDateQuestion(answer.hhmm, ymdReminder, ymdReply),
+        clarifyKey(clarify)
+      );
+      return;
+    }
+    at = candidates[0];
+    status = "POR_VALIDAR";
+    reason = "hora de saída indicada pelo trabalhador";
+    proofs = { exitReminderTimeDeclared: true };
+  }
+
+  clearPendingPontoExit(env.staff.user.id);
+  await recordExitCorrection(env, pending, at, status, reason, proofs);
+}
+
+/** Grava a correção da SAIDA presumida e confirma — partilhado pelo
+ *  SIM, pela hora declarada e pela escolha ONTEM/HOJE. */
+async function recordExitCorrection(
+  env: FlowEnv,
+  pending: PendingPontoExit,
+  at: Date,
+  status: "APROVADO" | "POR_VALIDAR",
+  reason: string,
+  proofs: Record<string, unknown>
+): Promise<void> {
+  await recordPontoEntry(env.ctx.prisma, {
+    at,
+    correctsId: pending.presumedEntryId,
+    proofs,
+    reason,
+    status,
+    transport: TRANSPORT_ENUM[env.transport],
+    type: "SAIDA",
+    userId: env.staff.user.id,
+  });
+  await env.say(
+    confirmationText(
+      "SAIDA",
+      at,
+      env.tz,
+      firstNameOf(env.staff.user),
+      null,
+      status,
+      reason
+    )
+  );
+}
+
+/** Escolha ONTEM/HOJE à pergunta de data — grava a hora declarada no
+ *  dia escolhido (sempre POR_VALIDAR: é autodeclaração). */
+async function onExitDateClarification(
+  env: FlowEnv,
+  pending: PendingPontoExit
+): Promise<void> {
+  const clarify = pending.clarifyDate;
+  if (!clarify) {
+    await askExitQuestion(env, PONTO_TEXT.exitReminderReprompt);
+    return;
+  }
+  // Citação a uma pergunta de OUTRA clarificação (a hora ambígua foi
+  // substituída entretanto e a citação aponta para a pergunta antiga):
+  // gravar ONTEM/HOJE aplicaria a hora da clarificação ativa à pergunta
+  // citada — reenvia-se a pergunta atual sem gravar. O mesmo vale para
+  // a janela em que a pergunta substituta ainda vai a caminho: enquanto
+  // o id não chega, `questionMessageIds` está vazio e nenhuma citação é
+  // verificável. A verificação só acontece quando o canal devolve ids
+  // (`sentMessageIds` não vazio) — sem ids (SMS) segue como antes,
+  // fail-open.
+  if (
+    env.msg.quotedMessageId &&
+    pending.sentMessageIds?.length &&
+    !clarify.questionMessageIds?.includes(env.msg.quotedMessageId)
+  ) {
+    await askExitQuestion(
+      env,
+      pontoExitDateQuestion(
+        clarify.hhmm,
+        clarify.ymdReminder,
+        clarify.ymdReply
+      ),
+      clarifyKey(clarify)
+    );
+    return;
+  }
+  const normalized = normalizePontoText(env.msg.text ?? "");
+  let ymd: string | null = null;
+  if (
+    normalized === PONTO_EXIT_DATE_TERMS.today ||
+    normalized === PONTO_EXIT_DATE_TERMS.now
+  ) {
+    ymd = clarify.ymdReply;
+  } else if (normalized === PONTO_EXIT_DATE_TERMS.yesterday) {
+    ymd = clarify.ymdReminder;
+  }
+  if (!ymd) {
+    await askExitQuestion(
+      env,
+      PONTO_TEXT.exitDateClarifyReprompt,
+      clarifyKey(clarify)
+    );
+    return;
+  }
+  const stillOpen = await env.ctx.prisma.timeEntry
+    .findFirst({
+      select: { id: true },
+      where: { correctsId: pending.presumedEntryId },
+    })
+    .catch(() => null);
+  clearPendingPontoExit(env.staff.user.id);
+  if (stillOpen) {
+    await env.say(PONTO_TEXT.commands);
+    return;
+  }
+  const at = zonedDateTimeToUtc(env.tz, ymd, clarify.hhmm);
+  if (!at) {
+    await askExitQuestion(env, PONTO_TEXT.exitReminderReprompt);
+    return;
+  }
+  await recordExitCorrection(
+    env,
+    pending,
+    at,
+    "POR_VALIDAR",
+    "hora de saída indicada pelo trabalhador",
+    { exitReminderTimeDeclared: true }
+  );
 }
 
 async function askLocation(
@@ -822,6 +1216,22 @@ async function finalizePonto(
     return;
   }
 
+  // SAIDA normal depois de uma presumida aberta corrige-a: a linha nova
+  // aponta correctsId→presumida (a presumida sai dos cálculos por ser
+  // superseded) — item 5, fluxo Esquecimentos.
+  let correctsId: string | null = null;
+  let entryReason = result.reason ?? null;
+  if (args.command === "SAIDA") {
+    const presumed = await findOpenPresumedExit(
+      ctx.prisma,
+      staff.user.id,
+      tzOf(settings)
+    ).catch(() => null);
+    if (presumed) {
+      correctsId = presumed.id;
+      entryReason = "saída registada pelo trabalhador";
+    }
+  }
   const proofs: Record<string, unknown> = {
     ...result.proofs,
     hasPhoto: args.hasPhoto,
@@ -836,8 +1246,9 @@ async function finalizePonto(
   };
   const entry = await recordPontoEntry(ctx.prisma, {
     at: args.at,
+    correctsId,
     proofs,
-    reason: result.reason ?? null,
+    reason: entryReason,
     status: result.status,
     transport: TRANSPORT_ENUM[transport],
     type: args.command as TimeEntryType,

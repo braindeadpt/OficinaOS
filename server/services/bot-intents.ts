@@ -104,6 +104,11 @@ export interface InboundMessage {
    *  locationMessage da Evolution). Coordenadas WGS84. */
   location?: { accuracy?: number; lat: number; lng: number };
   messageType: string;
+  /** Id da mensagem citada (reply-quote do WhatsApp): stanzaId da
+   *  Evolution ou context.id da Meta quando a fila cloud o expõe —
+   *  o livro de ponto correlaciona a resposta ao lembrete de saída
+   *  com a pergunta enviada. */
+  quotedMessageId?: string;
   /** Hora de ENVIO segundo o canal (sentAt da Meta na fila oficial) —
    *  o livro de ponto mede a validade do código e a frescura do
    *  registo a partir daqui; ausente → createdAt (hora de receção). */
@@ -804,6 +809,14 @@ export interface InboundTransport {
    *  em vez de seguir sem registo — sem ele a mensagem perder-se-ia. */
   requireInboxPersist?: boolean;
   send: (text: string) => Promise<boolean>;
+  /** Como `send` mas devolve o id da mensagem quando o canal o expõe
+   *  (key.id da Evolution, wamid da Meta) — o livro de ponto usa-o nas
+   *  perguntas de seguimento para a citação da resposta apontar para a
+   *  mensagem real a que o trabalhador respondeu. Ausente quando o
+   *  canal não devolve ids (SMS, envio suprimido). */
+  sendWithId?: (
+    text: string
+  ) => Promise<{ messageId?: string; success: boolean }>;
   /** Envio suprimido (mensagem >23 h Meta, bot suspenso): o pipeline
    *  corre mas nada sai — a inbox grava o inbound, não o "envio". */
   silentSend?: boolean;

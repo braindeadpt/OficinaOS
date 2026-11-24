@@ -349,3 +349,15 @@ h3,
     background: #fff;
   }
 }
+
+/* The /ponto/info worker sheet pins A4 output via a named page (the
+   `page` property is inherited). Browsers without named-page support
+   fall back to the size chosen in the print dialog. Scoped so receipts
+   and labels keep their own paper size. */
+@page ponto-info {
+  size: A4;
+}
+
+.print-ponto-info {
+  page: ponto-info;
+}

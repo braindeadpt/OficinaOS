@@ -77,7 +77,7 @@ export async function sendEvolutionText(
     cloudEntitlements?: unknown;
     cloudSyncedAt?: Date | null;
   } | null
-): Promise<{ error?: string; success: boolean }> {
+): Promise<{ error?: string; messageId?: string; success: boolean }> {
   // Demo bloqueia qualquer saída antes de se olhar para o entitlement.
   assertNotDemoMode();
   // Defesa em profundidade: o resolve já gateia o canal, mas uma
@@ -107,7 +107,10 @@ export async function sendEvolutionText(
         ?.message?.[0] ?? (res.body as { message?: string } | null)?.message;
     return { error: msg ?? `Evolution API ${res.status}`, success: false };
   }
-  return { success: true };
+  // O key.id permite correlacionar um reply-quote inbound (stanzaId)
+  // com a mensagem enviada — livro de ponto.
+  const messageId = (res.body as { key?: { id?: string } } | null)?.key?.id;
+  return { ...(messageId ? { messageId } : {}), success: true };
 }
 
 /** Presença "a escrever…" antes da resposta do bot (§5.7) — best-effort. */
