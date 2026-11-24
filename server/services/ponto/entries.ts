@@ -24,6 +24,8 @@ const ALLOWED_MIMES = ["image/jpeg", "image/png", "image/webp"];
 
 export interface PontoTimeEntryInput {
   at: Date;
+  /** Correção: aponta para a entry substituída (ex.: SAIDA presumida). */
+  correctsId?: string | null;
   proofs: Record<string, unknown>;
   reason?: string | null;
   status: "APROVADO" | "POR_VALIDAR";
@@ -36,6 +38,7 @@ export function recordPontoEntry(prisma: DbClient, input: PontoTimeEntryInput) {
   return prisma.timeEntry.create({
     data: {
       at: input.at,
+      correctsId: input.correctsId ?? null,
       proofs: input.proofs as Prisma.InputJsonValue,
       reason: input.reason ?? null,
       status: input.status,
@@ -67,6 +70,30 @@ export function todayPontoEntries(
     orderBy: { at: "asc" },
     select: { at: true, status: true, type: true },
     where: { at: { gte: start, lt: end }, userId },
+  });
+}
+
+/** SAIDA presumida do dia ainda por corrigir (item 5): proofs
+ *  .exitReminderPresumed=true e nenhuma correction a apontar. É a
+ *  "pergunta pendente" do fluxo Esquecimentos — a resposta do
+ *  trabalhador, uma SAIDA normal ou a correção do painel fecham-na. */
+export function findOpenPresumedExit(
+  prisma: DbClient,
+  userId: string,
+  tz: string,
+  now = new Date()
+): Promise<{ at: Date; id: string } | null> {
+  const { start, end } = todayRange(tz, now);
+  return prisma.timeEntry.findFirst({
+    orderBy: { at: "desc" },
+    select: { at: true, id: true },
+    where: {
+      at: { gte: start, lt: end },
+      corrections: { none: {} },
+      proofs: { equals: true, path: ["exitReminderPresumed"] },
+      type: "SAIDA",
+      userId,
+    },
   });
 }
 

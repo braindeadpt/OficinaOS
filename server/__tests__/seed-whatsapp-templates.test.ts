@@ -130,6 +130,18 @@ const DISPATCH_CONTEXT: Record<string, Record<string, string>> = {
     signUrl: "https://oficinaos.test/sign/abc123",
     ttlMinutes: "30",
   },
+  // Livro de ponto — lembrete de saída ao funcionário (enviado pelo
+  // scheduler do ponto, não pelo notify(); exitTime = hora configurada).
+  ponto_lembrete: {
+    exitTime: "18:00",
+    recipientPhone: "+351910000001",
+  },
+  // Livro de ponto — alerta IN_APP ao gestor quando o trabalhador não
+  // respondeu ao lembrete (workerName/exitTime vêm do contexto do notify).
+  ponto_saida_pendente: {
+    exitTime: "18:00",
+    workerName: "Rui Silva",
+  },
 };
 
 // Events the seed must provide WHATSAPP templates for.
@@ -148,6 +160,7 @@ const REQUIRED_WHATSAPP_EVENTS = [
   "part_low_stock",
   "quote_sent",
   "signature_link",
+  "ponto_lembrete",
 ];
 
 const PLACEHOLDER_RE = /\{\{[^}]*\}\}/g;

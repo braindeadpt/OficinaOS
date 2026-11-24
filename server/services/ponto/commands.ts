@@ -44,7 +44,10 @@ const NEGATION_WORDS = new Set(["jamais", "nao", "nunca"]);
 const FUZZY_MIN_LEN = 5;
 const FUZZY_MAX_DISTANCE = 1;
 
-function normalizePontoText(text: string): string {
+// Exportada para o parser de respostas ao lembrete de saída
+// (exit-answer.ts) — a mesma normalização (minúsculas, sem acentos,
+// pontuação→espaço) aplica-se às duas interpretações.
+export function normalizePontoText(text: string): string {
   return text
     .toLowerCase()
     .normalize("NFD")

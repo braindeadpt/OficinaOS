@@ -11,7 +11,7 @@
 import type { TimeEntryTransport, TimeEntryType } from "@generated/client";
 import { getOrCreateShopSettings } from "../../repositories/settings.repository.js";
 import { isModuleEnabled } from "../../utils/modules.js";
-import { dayRange } from "../../utils/time-range.js";
+import { dayRange, zonedDateTimeToUtc } from "../../utils/time-range.js";
 import type {
   BotReplyCtx,
   InboundMessage,
@@ -25,6 +25,7 @@ import { rateOk } from "../rate-limit.js";
 import { type PontoCommand, parsePontoCommand } from "./commands.js";
 import {
   deletePontoPhoto,
+  findOpenPresumedExit,
   linkPontoPhoto,
   pontoEntriesSince,
   recordPontoEntry,
@@ -32,11 +33,15 @@ import {
   todayPontoEntries,
 } from "./entries.js";
 import { evaluatePontoMark } from "./evaluate.js";
+import { parsePontoExitAnswer } from "./exit-answer.js";
 import { findPontoStaff, type PontoStaffMatch } from "./staff.js";
 import {
   clearPendingPonto,
+  clearPendingPontoExit,
   getPendingPonto,
+  getPendingPontoExit,
   type PendingPonto,
+  type PendingPontoExit,
   PONTO_LOCATION_TTL_MS,
   PONTO_PHOTO_TTL_MS,
   pontoPendingKey,
@@ -421,9 +426,20 @@ async function routeText(env: FlowEnv): Promise<void> {
     return;
   }
   if (!parsed) {
+    // Resposta ao lembrete de saída pendente (item 5): "SIM" ou a hora
+    // declarada corrigem a SAIDA presumida. Texto irreconhecível repete
+    // a pergunta — o pending só morre com comando, resposta ou TTL.
+    const exitPending = getPendingPontoExit(env.staff.user.id);
+    if (exitPending && env.msg.text) {
+      await onExitReminderAnswer(env, exitPending);
+      return;
+    }
     await env.say(PONTO_TEXT.commands);
     return;
   }
+  // Qualquer comando ponto normal mata o pending de saída — a SAIDA
+  // seguinte corrige a presumida automaticamente no finalizePonto.
+  clearPendingPontoExit(env.staff.user.id);
   clearPendingPonto(env.key);
   await dispatchCommand({
     channel: env.channel,
@@ -491,6 +507,79 @@ export async function tryHandlePontoStaff(
   }
   await routeText(env);
   return true;
+}
+
+/**
+ * Resposta ao lembrete de saída (item 5): "SIM" confirma a hora
+ * presumida (correção APROVADO); uma hora indicada cria correção
+ * POR_VALIDAR (autodeclaração divergente). Qualquer outro texto
+ * repete a pergunta — o pending continua até resposta clara, comando
+ * ponto ou TTL.
+ */
+async function onExitReminderAnswer(
+  env: FlowEnv,
+  pending: PendingPontoExit
+): Promise<void> {
+  const answer = parsePontoExitAnswer(env.msg.text);
+  if (!answer) {
+    await env.say(PONTO_TEXT.exitReminderReprompt);
+    return;
+  }
+  // A presumida pode ter sido corrigida entretanto (SAIDA por comando,
+  // painel) — nesse caso o pending já não se aplica.
+  const stillOpen = await env.ctx.prisma.timeEntry
+    .findFirst({
+      select: { id: true },
+      where: { correctsId: pending.presumedEntryId },
+    })
+    .catch(() => null);
+  clearPendingPontoExit(env.staff.user.id);
+  if (stillOpen) {
+    await env.say(PONTO_TEXT.commands);
+    return;
+  }
+
+  const presumedDate = new Date(pending.presumedAt);
+  let at = presumedDate;
+  let status: "APROVADO" | "POR_VALIDAR" = "APROVADO";
+  let reason = "confirmado pelo trabalhador";
+  let proofs: Record<string, unknown> = { exitReminderConfirmed: true };
+  if (answer.kind === "time") {
+    // A hora declarada é do mesmo dia civil da presumida (fuso da loja)
+    // — cobre respostas perto da meia-noite sem escorregar de dia.
+    const ymd = dayRange(env.tz, presumedDate).date;
+    const declared = zonedDateTimeToUtc(env.tz, ymd, answer.hhmm);
+    if (!declared) {
+      await env.say(PONTO_TEXT.exitReminderReprompt);
+      return;
+    }
+    at = declared;
+    status = "POR_VALIDAR";
+    reason = "hora de saída indicada pelo trabalhador";
+    proofs = { exitReminderTimeDeclared: true };
+  }
+
+  await recordPontoEntry(env.ctx.prisma, {
+    at,
+    correctsId: pending.presumedEntryId,
+    proofs,
+    reason,
+    status,
+    transport: TRANSPORT_ENUM[env.transport],
+    type: "SAIDA",
+    userId: env.staff.user.id,
+  });
+  await env.say(
+    confirmationText(
+      "SAIDA",
+      at,
+      env.tz,
+      firstNameOf(env.staff.user),
+      null,
+      status,
+      reason
+    )
+  );
 }
 
 async function askLocation(
@@ -780,6 +869,22 @@ async function finalizePonto(
     return;
   }
 
+  // SAIDA normal depois de uma presumida aberta corrige-a: a linha nova
+  // aponta correctsId→presumida (a presumida sai dos cálculos por ser
+  // superseded) — item 5, fluxo Esquecimentos.
+  let correctsId: string | null = null;
+  let entryReason = result.reason ?? null;
+  if (args.command === "SAIDA") {
+    const presumed = await findOpenPresumedExit(
+      ctx.prisma,
+      staff.user.id,
+      tzOf(settings)
+    ).catch(() => null);
+    if (presumed) {
+      correctsId = presumed.id;
+      entryReason = "saída registada pelo trabalhador";
+    }
+  }
   const proofs: Record<string, unknown> = {
     ...result.proofs,
     hasPhoto: args.hasPhoto,
@@ -794,8 +899,9 @@ async function finalizePonto(
   };
   const entry = await recordPontoEntry(ctx.prisma, {
     at: args.at,
+    correctsId,
     proofs,
-    reason: result.reason ?? null,
+    reason: entryReason,
     status: result.status,
     transport: TRANSPORT_ENUM[transport],
     type: args.command as TimeEntryType,

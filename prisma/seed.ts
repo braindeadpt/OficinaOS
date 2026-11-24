@@ -421,6 +421,26 @@ async function seedNotificationTemplates() {
       body: "Olá {{customerName}}, por favor reveja e assine {{docLabel}}{{if jobCode}} da reparação {{jobCode}}{{endif}}: {{signUrl}} (válido durante {{ttlMinutes}} min).{{if shopName}} — {{shopName}}.{{endif}}",
       isDefault: true,
     },
+    {
+      // Livro de ponto (Pro "ponto") — lembrete de saída business-initiated
+      // ao funcionário. Sai como template Meta aprovado (fora da janela de
+      // 24 h); {{exitTime}} é a hora configurada em pontoExitReminderTime.
+      // O lembrete em si é enviado diretamente pelo scheduler do ponto —
+      // não passa pelo notify()/outbox (o destinatário é staff, não cliente).
+      name: "ponto_lembrete",
+      channel: "WHATSAPP" as const,
+      body: "OficinaOS: ainda não tem saída registada. Saiu às {{exitTime}}? Responda SIM ou indique a hora.",
+      isDefault: true,
+    },
+    {
+      // Livro de ponto — alerta ao gestor quando o funcionário não
+      // respondeu ao lembrete de saída (>60 min sem correção). IN_APP
+      // apenas: chega pela central de notificações + websocket.
+      name: "ponto_saida_pendente",
+      channel: "IN_APP" as const,
+      body: "Livro de ponto: {{workerName}} não confirmou a saída das {{exitTime}} — registo presumido por validar.",
+      isDefault: true,
+    },
   ];
 
   for (const tmpl of templates) {

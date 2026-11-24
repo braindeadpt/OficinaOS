@@ -35,7 +35,24 @@ export const PONTO_TEXT = {
     "Não tenho nenhum pedido de foto pendente — escreva ENTRADA, PAUSA, VOLTEI, SAIDA ou ESTADO.",
   photoPrompt: "Envie uma foto do local de trabalho como prova do registo.",
   smsNotAllowed: "O registo por SMS não está ativado — use o WhatsApp.",
+  // Lembrete de saída (item 5) — a resposta ambígua repete a pergunta;
+  // o pending de saída continua vivo até resposta clara ou TTL (~2 h).
+  exitReminderReprompt:
+    "Responda SIM se saiu à hora indicada ou escreva a hora de saída (ex.: 18:05).",
+  // Lembrete de pausa (§2.2b) — nunca fecha a pausa sozinho.
+  pauseReminder:
+    "OficinaOS: ainda está em pausa? Quando regressar, responda VOLTEI.",
 } as const;
+
+/** Texto livre do lembrete de saída — o mesmo corpo do template Meta
+ *  `ponto_lembrete` ({{exitTime}} ← pontoExitReminderTime). */
+export function pontoExitReminderText(exitTime: string): string {
+  return `OficinaOS: ainda não tem saída registada. Saiu às ${exitTime}? Responda SIM ou indique a hora.`;
+}
+
+/** Nome do template Meta utility do lembrete de saída — sincronizado
+ *  automaticamente para a WABA da loja (whatsapp-templates.service). */
+export const PONTO_LEMBRETE_TEMPLATE = "ponto_lembrete";
 
 /** Pedido interativo de localização (Meta Cloud API / Graph). */
 export function pontoLocationRequestInteractive(

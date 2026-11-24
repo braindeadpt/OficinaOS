@@ -12,6 +12,10 @@ import type { PontoCommand } from "./commands.js";
 
 export const PONTO_LOCATION_TTL_MS = 3 * 60 * 1000;
 export const PONTO_PHOTO_TTL_MS = 5 * 60 * 1000;
+/** Janela para responder ao lembrete de saída ("SIM" ou a hora) —
+ *  ~2 h conforme a spec do item 5; passado isso a presumida fica
+ *  POR_VALIDAR para o painel. */
+export const PONTO_EXIT_PENDING_TTL_MS = 2 * 60 * 60 * 1000;
 
 export interface PontoPendingLocation {
   accuracy?: number;
@@ -45,7 +49,20 @@ export interface PendingPonto {
   wantPhoto: boolean;
 }
 
+/** Resposta pendente ao lembrete de saída — chave: userId (o trabalhador
+ *  pode responder por qualquer canal; o pedido saiu pelo canal do
+ *  lembrete mas a resposta chega onde chegar). */
+export interface PendingPontoExit {
+  expiresAt: number;
+  /** ISO do `at` da SAIDA presumida — a "hora assumida" que o SIM
+   *  confirma e a base do dia civil para a hora indicada. */
+  presumedAt: string;
+  presumedEntryId: string;
+  userId: string;
+}
+
 const pending = new Map<string, PendingPonto>();
+const exitPending = new Map<string, PendingPontoExit>();
 
 export function pontoPendingKey(
   transport: string,
@@ -92,7 +109,35 @@ export function takeExpiredPonto(
   return null;
 }
 
-/** Apenas para testes — esvazia o mapa entre casos. */
+/** Apenas para testes — esvazia os mapas entre casos. */
 export function clearAllPendingPonto(): void {
   pending.clear();
+  exitPending.clear();
+}
+
+export function setPendingPontoExit(
+  userId: string,
+  value: PendingPontoExit
+): void {
+  exitPending.set(userId, value);
+}
+
+/** Pending de saída vivo, ou null (e remove) se expirado. */
+export function getPendingPontoExit(
+  userId: string,
+  now = Date.now()
+): PendingPontoExit | null {
+  const p = exitPending.get(userId);
+  if (!p) {
+    return null;
+  }
+  if (p.expiresAt <= now) {
+    exitPending.delete(userId);
+    return null;
+  }
+  return p;
+}
+
+export function clearPendingPontoExit(userId: string): void {
+  exitPending.delete(userId);
 }

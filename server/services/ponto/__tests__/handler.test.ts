@@ -10,6 +10,9 @@ const mocks = vi.hoisted(() => ({
   cloudFetch: vi.fn(),
   deletePontoPhoto: vi.fn(() => Promise.resolve(undefined)),
   downloadEvolutionMedia: vi.fn(() => Promise.resolve(null)),
+  findOpenPresumedExit: vi.fn(
+    (): Promise<{ at: Date; id: string } | null> => Promise.resolve(null)
+  ),
   getOrCreateShopSettings: vi.fn(),
   linkPontoPhoto: vi.fn(() => Promise.resolve(undefined)),
   pontoEntriesSince: vi.fn(
@@ -37,6 +40,7 @@ vi.mock("../../evolution.service.js", () => ({
 }));
 vi.mock("../entries.js", () => ({
   deletePontoPhoto: mocks.deletePontoPhoto,
+  findOpenPresumedExit: mocks.findOpenPresumedExit,
   linkPontoPhoto: mocks.linkPontoPhoto,
   pontoEntriesSince: mocks.pontoEntriesSince,
   recordPontoEntry: mocks.recordPontoEntry,
