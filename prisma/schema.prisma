@@ -207,6 +207,16 @@ model User {
   banned              Boolean           @default(false)
   banReason           String?
   banExpires          DateTime?         @db.Timestamptz
+  // Livro de ponto (Pro "ponto") — telefone E.164 que identifica o
+  // funcionário nas mensagens WhatsApp/SMS e as flags do módulo.
+  // pontoScheduleStart/End: horário opcional (HH:MM) para deteção de
+  // atrasos no painel de horas.
+  phoneE164           String?           @unique
+  pontoEnabled        Boolean           @default(false)
+  externalWork        Boolean           @default(false)
+  pontoSmsAllowed     Boolean           @default(false)
+  pontoScheduleStart  String?
+  pontoScheduleEnd    String?
   createdAt           DateTime          @default(now()) @db.Timestamptz
   updatedAt           DateTime          @updatedAt @db.Timestamptz
 
@@ -241,6 +251,10 @@ model User {
   inboxAssigned         InboxConversation[] @relation("InboxAssignee")
   inboxDraftsCreated    InboxDraft[]        @relation("InboxDraftCreator")
   inboxDraftsApproved   InboxDraft[]        @relation("InboxDraftApprover")
+  timeEntries           TimeEntry[]
+  timeEntriesCreated    TimeEntry[]         @relation("TimeEntryCreatedBy")
+  timeEntryValidations  TimeEntryValidation[]
+  pontoPhotos           PontoPhoto[]
 
   @@map("users")
 }
@@ -1332,6 +1346,21 @@ model ShopSettings {
   invoicingAccount            String?
   invoicingApiKeyEncrypted    String?   @db.Text
   invoicingTaxName            String    @default("IVA23")
+  // Livro de ponto (Pro module "ponto") — geolocalização da loja e raio do
+  // registo (defeito 100 m), comportamento dos externos e lembretes do
+  // bot. pontoWaNumber/pontoSmsNumber são os números que o QR do livro de
+  // ponto divulga aos trabalhadores — publicados na Cloud via
+  // PUT /api/ponto/config.
+  pontoGeoLat                Float?
+  pontoGeoLng                Float?
+  pontoRadiusM               Int       @default(100)
+  pontoExternalAutoApprove   Boolean   @default(true)
+  pontoExternalPhotoRequired Boolean   @default(false)
+  pontoExitReminderTime      String?
+  pontoPauseReminderMinutes  Int       @default(20)
+  pontoInfoText              String?   @db.Text
+  pontoWaNumber              String?
+  pontoSmsNumber             String?
   createdAt                   DateTime  @default(now()) @db.Timestamptz
   updatedAt                   DateTime  @updatedAt @db.Timestamptz
 
@@ -1975,4 +2004,98 @@ model CodeLockout {
   updatedAt     DateTime  @updatedAt @db.Timestamptz
 
   @@map("code_lockouts")
+}
+
+// ─────────────────────────────────────────────
+// LIVRO DE PONTO (Pro module "ponto")
+// Registos de ponto dos funcionários via WhatsApp/SMS — append-only:
+// nunca UPDATE/DELETE (trigger ponto_timeentry_immutable na BD); correções
+// fazem-se com linhas novas que apontam para a original via correctsId.
+// Retenção legal: 5 anos (Código do Trabalho, art. 202).
+// ─────────────────────────────────────────────
+
+enum TimeEntryType {
+  ENTRADA
+  PAUSA
+  VOLTEI
+  SAIDA
+}
+
+enum TimeEntryTransport {
+  WHATSAPP_META
+  WHATSAPP_EVOLUTION
+  SMS
+}
+
+enum TimeEntryStatus {
+  APROVADO
+  POR_VALIDAR
+}
+
+enum TimeEntryDecision {
+  APROVADO
+  RECUSADO
+}
+
+model TimeEntry {
+  id        String             @id @default(cuid())
+  userId    String
+  user      User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  type      TimeEntryType
+  // Hora do servidor — nunca a do telemóvel nem a escrita na mensagem.
+  at        DateTime           @db.Timestamptz
+  transport TimeEntryTransport
+  status    TimeEntryStatus
+  // Provas da avaliação da Cloud: codeValid, onShopWifi, lat, lng,
+  // accuracy, distanceM, insideRadius, photoId?, hasPhoto.
+  proofs    Json
+  reason    String?
+  // Uma correção é uma linha nova que aponta para a original.
+  correctsId  String?
+  corrects    TimeEntry?         @relation("TimeEntryCorrection", fields: [correctsId], references: [id], onDelete: SetNull)
+  corrections TimeEntry[]        @relation("TimeEntryCorrection")
+  // null = registo criado pelo sistema (bot); senão o utilizador staff.
+  createdById String?
+  createdBy   User?              @relation("TimeEntryCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime           @default(now()) @db.Timestamptz
+
+  validations TimeEntryValidation[]
+
+  @@index([userId, at])
+  @@index([status, at])
+  @@index([at])
+  @@map("time_entries")
+}
+
+model TimeEntryValidation {
+  id       String            @id @default(cuid())
+  entryId  String
+  entry    TimeEntry         @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  decision TimeEntryDecision
+  byUserId String
+  byUser   User              @relation(fields: [byUserId], references: [id], onDelete: Restrict)
+  at       DateTime          @default(now()) @db.Timestamptz
+  note     String?
+
+  @@index([entryId])
+  @@index([byUserId])
+  @@map("time_entry_validations")
+}
+
+// Foto de prova do registo (externos, ou quando a loja a exige). Guardada
+// localmente como JobPhoto e apagada automaticamente aos 90 dias — o
+// registo fica com "foto expirada". entryId é texto simples, sem FK: a
+// foto chega antes do TimeEntry (o registo só existe depois da avaliação
+// na Cloud) e as fotos expiram muito antes dos registos (5 anos).
+model PontoPhoto {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entryId   String?
+  path      String
+  createdAt DateTime @default(now()) @db.Timestamptz
+
+  @@index([userId])
+  @@index([entryId])
+  @@map("ponto_photos")
 }

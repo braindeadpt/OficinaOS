@@ -41,6 +41,7 @@ const TasksPage = lazy(() => import("@/pages/tasks"));
 const JobDetailPage = lazy(() => import("@/pages/jobs/detail"));
 const NotificationsPage = lazy(() => import("@/pages/notifications"));
 const PartsCatalogPage = lazy(() => import("@/pages/parts"));
+const PontoQrPage = lazy(() => import("@/pages/ponto/qr"));
 const PosPage = lazy(() => import("@/pages/pos"));
 const PreCheckPage = lazy(() => import("@/pages/pre-check"));
 const ProfilePage = lazy(() => import("@/pages/profile"));
@@ -372,6 +373,9 @@ export default function App() {
                 }
                 path="/settings"
               />
+              {/* Standalone print sheet — no DashboardLayout chrome so the
+                  A5 PDF stays clean. */}
+              <Route element={<PontoQrPage />} path="/ponto/qr" />
             </Route>
             <Route element={<RequirePermission perm={{ ai: ["access"] }} />}>
               <Route

@@ -21,6 +21,7 @@ import { notificationsRoutes } from "./routes/notifications.js";
 import { partRequestsRoutes } from "./routes/part-requests.js";
 import { partsRoutes } from "./routes/parts.js";
 import { paymentRoutes } from "./routes/payments.js";
+import { pontoRoutes } from "./routes/ponto.js";
 import { publicRoutes } from "./routes/public.js";
 import { purchaseOrdersRoutes } from "./routes/purchase-orders.js";
 import { receiptRoutes } from "./routes/receipts.js";
@@ -78,6 +79,7 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
   app.register(marketPricesRoutes, { prefix: "/api/market-prices" });
   app.register(storefrontRoutes, { prefix: "/api/storefront" });
   app.register(invoicingRoutes, { prefix: "/api/invoicing" });
+  app.register(pontoRoutes, { prefix: "/api/ponto" });
   app.register(feedbackRoutes, { prefix: "/api/feedback" });
   app.register(suppliersRoutes, { prefix: "/api/suppliers" });
   app.register(supplierRmasRoutes, { prefix: "/api/supplier-rmas" });

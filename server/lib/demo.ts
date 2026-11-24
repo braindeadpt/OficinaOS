@@ -42,6 +42,7 @@ const BLOCKED_ALL_METHODS = [
   // Proxies/boards that live on oficinaos-cloud or the Trade marketplace.
   "/api/part-requests",
   "/api/market-prices",
+  "/api/ponto",
   "/api/storefront",
   // Bulk exports exfiltrate the dataset in one click.
   "/api/export",

@@ -8,6 +8,7 @@ import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import api, { getErrorMessage } from "@/lib/api";
 import SettingsInvoicingSection from "./settings-invoicing-section";
+import SettingsPontoSection from "./settings-ponto-section";
 import SettingsStorefrontSection from "./settings-storefront-section";
 
 interface CloudStatus {
@@ -353,6 +354,10 @@ export default function SettingsCloudTab({
 
           <SettingsStorefrontSection onToast={onToast} />
           <SettingsInvoicingSection
+            onDirtyChange={onDirtyChange}
+            onToast={onToast}
+          />
+          <SettingsPontoSection
             onDirtyChange={onDirtyChange}
             onToast={onToast}
           />

@@ -161,6 +161,16 @@ interface SettingsState {
     botInfoText?: string | null;
     botAvgRepairDaysAfterPart?: number;
     botClosedFallbackText?: string | null;
+    pontoGeoLat?: number | null;
+    pontoGeoLng?: number | null;
+    pontoRadiusM?: number;
+    pontoExternalAutoApprove?: boolean;
+    pontoExternalPhotoRequired?: boolean;
+    pontoExitReminderTime?: string | null;
+    pontoPauseReminderMinutes?: number;
+    pontoInfoText?: string | null;
+    pontoWaNumber?: string | null;
+    pontoSmsNumber?: string | null;
   }) => Promise<ShopSettings>;
   saveSmsSettings: (data: {
     enabled?: boolean;
