@@ -143,9 +143,19 @@ export async function recordInboundMessage(
   if (opts.externalId) {
     const existing = await prisma.businessMessage.findFirst({
       where: { channel: opts.channel, externalId: opts.externalId },
-      select: { id: true, conversationId: true },
+      select: { deliveryStatus: true, id: true, conversationId: true },
     });
     if (existing?.conversationId) {
+      // Recuperação após falha de persistência: o registo FAILED vira
+      // RECEIVED quando a mensagem é finalmente processada (BUG #167 r10).
+      if (existing.deliveryStatus === "FAILED") {
+        await prisma.businessMessage
+          .update({
+            data: { deliveryStatus: "RECEIVED" },
+            where: { id: existing.id },
+          })
+          .catch(() => undefined);
+      }
       return {
         conversationId: existing.conversationId,
         created: false,
@@ -179,7 +189,13 @@ export async function recordInboundMessage(
       // conversa nunca recuam — um retry antigo escondia conversas do
       // filtro "Sem resposta" (BUG #167 r9).
       await tx.inboxConversation.updateMany({
-        where: { id: conv.id, lastInboundAt: { lt: at } },
+        where: {
+          id: conv.id,
+          OR: [
+            { lastInboundAt: { equals: null } },
+            { lastInboundAt: { lt: at } },
+          ],
+        },
         data: { lastInboundAt: at },
       });
       await tx.inboxConversation.updateMany({
