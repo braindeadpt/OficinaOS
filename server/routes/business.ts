@@ -10,7 +10,9 @@ import {
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { requirePermission } from "../middlewares/rbac.js";
+import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import { authorizeWorkflow } from "../services/workflow.service.js";
+import { isModuleEnabled } from "../utils/modules.js";
 import { parseInput } from "../utils/parse-input.js";
 import { getRole, getUserId } from "../utils/request.js";
 
@@ -43,6 +45,29 @@ export const businessRoutes: FastifyPluginAsync = (app) => {
         where: { id: value.supplierId },
       }))
     ) {
+      throw new AppError("NOT_FOUND");
+    }
+  };
+  // SEC #164 — com o módulo ai-inbox revogado, as mensagens da caixa de
+  // entrada deixam de aparecer na captura manual: não se lê nem se
+  // altera nada que pertença a uma conversa.
+  const inboxRevokedFilter =
+    async (): Promise<Prisma.BusinessMessageWhereInput> => {
+      const settings = await getOrCreateShopSettings(app.prisma);
+      return isModuleEnabled(settings, "ai-inbox")
+        ? {}
+        : { conversationId: { equals: null } };
+    };
+  const assertNotInboxMessage = async (id: string) => {
+    const settings = await getOrCreateShopSettings(app.prisma);
+    if (isModuleEnabled(settings, "ai-inbox")) {
+      return;
+    }
+    const msg = await app.prisma.businessMessage.findUnique({
+      select: { conversationId: true },
+      where: { id },
+    });
+    if (msg?.conversationId) {
       throw new AppError("NOT_FOUND");
     }
   };
@@ -350,6 +375,7 @@ export const businessRoutes: FastifyPluginAsync = (app) => {
         ...base,
         where: {
           ...where,
+          ...(await inboxRevokedFilter()),
           ...(query.entityType
             ? {
                 links: {
@@ -382,6 +408,7 @@ export const businessRoutes: FastifyPluginAsync = (app) => {
     inbox.patch("/messages/:id", async (req) => {
       const { id } = req.params as { id: string };
       await authorizeWorkflow(req, "MESSAGE", "edit", id);
+      await assertNotInboxMessage(id);
       const data = parseInput(messageFields, req.body);
       await parties(data);
       return {
@@ -395,6 +422,7 @@ export const businessRoutes: FastifyPluginAsync = (app) => {
     inbox.post("/messages/:id/links", async (req) => {
       const { id } = req.params as { id: string };
       await authorizeWorkflow(req, "MESSAGE", "edit", id);
+      await assertNotInboxMessage(id);
       const data = parseInput(messageLink, req.body);
       await authorizeWorkflow(req, data.entityType, "edit", data.entityId);
       return {
@@ -408,6 +436,7 @@ export const businessRoutes: FastifyPluginAsync = (app) => {
     inbox.delete("/messages/:id/links/:linkId", async (req, reply) => {
       const { id, linkId } = req.params as { id: string; linkId: string };
       await authorizeWorkflow(req, "MESSAGE", "edit", id);
+      await assertNotInboxMessage(id);
       await app.prisma.businessMessageLink.deleteMany({
         where: { id: linkId, messageId: id },
       });

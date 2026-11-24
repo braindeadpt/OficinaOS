@@ -12,6 +12,7 @@ import {
 
 const mocks = vi.hoisted(() => ({
   createAuditLog: vi.fn(async () => undefined),
+  decryptSmsConfig: vi.fn(() => null),
   sendSms: vi.fn(async () => ({ success: true })),
   sendSmsViaCloud: vi.fn(async () => ({ success: true })),
   sendViaEvolutionAntiBan: vi.fn(async () => ({ success: true })),
@@ -47,7 +48,7 @@ vi.mock("../services/inbox.service.js", async () => {
 });
 
 vi.mock("../services/sms.service.js", () => ({
-  decryptSmsConfig: vi.fn(() => null),
+  decryptSmsConfig: mocks.decryptSmsConfig,
   sendSms: mocks.sendSms,
 }));
 
@@ -404,6 +405,40 @@ describe("rascunhar_resposta / enviar_rascunho — §G.5", () => {
         "INBOX_MESSAGE_SENT"
     );
     expect(sentAudit).toBeDefined();
+  });
+
+  it("SMS com o módulo revogado não sai nem pelo gateway LAN (SEC #164)", async () => {
+    // Gateway LAN configurado, mas o módulo sms NÃO está nos entitlements:
+    // antes da correcção caía no fallback local e enviava na mesma.
+    mocks.decryptSmsConfig.mockReturnValue({
+      gatewayPassword: "p",
+      gatewayUrl: "http://gw",
+      gatewayUser: "u",
+    } as never);
+    const prisma = fakePrisma({
+      inboxDraft: {
+        findUnique: vi.fn(async () => ({
+          approvedAt: new Date(),
+          approvedById: null,
+          conversation: {
+            channel: "sms",
+            id: "conv-1",
+            lastInboundAt: new Date(),
+            phone: "351912345678",
+          },
+          id: "draft-1",
+          status: "PENDING",
+          text: "resposta por sms",
+        })),
+        update: vi.fn(async () => ({})),
+        updateMany: vi.fn(async () => ({ count: 1 })),
+      },
+    });
+    const out = await sendApprovedDraft(prisma, log, "draft-1", "u-owner");
+    expect(out.error).toContain("módulo sms inativo");
+    expect(mocks.sendSms).not.toHaveBeenCalled();
+    expect(mocks.sendSmsViaCloud).not.toHaveBeenCalled();
+    mocks.decryptSmsConfig.mockReturnValue(null);
   });
 
   it("sendApprovedDraft sem approvedAt → recusa", async () => {

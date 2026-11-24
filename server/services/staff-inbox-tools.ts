@@ -670,6 +670,11 @@ async function sendSmsForConversation(
   to: string,
   text: string
 ): Promise<SmsSendResult> {
+  // SEC #164 — o gateway LAN também é Pro: com o módulo sms revogado a
+  // resposta da caixa de entrada não sai por transporte nenhum.
+  if (!isModuleEnabled(settings, "sms")) {
+    return { error: "SMS indisponível: módulo sms inativo", success: false };
+  }
   const cloudToken = settings.cloudShopTokenEncrypted
     ? decryptSecret(settings.cloudShopTokenEncrypted)
     : null;
