@@ -412,6 +412,75 @@ describe("buildQuoteSuggestion — device-aware part priority", () => {
     expect(part?.inStock).toBe(true);
   });
 
+  it("does not treat a longer variant as the same model (BUG r7)", () => {
+    // «iPhone 15 Pro» é outra variante: a bateria Pro esgotada não pode
+    // ganhar à genérica em stock num iPhone 15 — deviceHit rejeitado.
+    const parts: QuotePartInput[] = [
+      {
+        category: "BATTERY",
+        defaultPrice: 20,
+        id: "part-generic",
+        name: "Bateria",
+        stockQuantity: 5,
+      },
+      {
+        category: "BATTERY",
+        defaultPrice: 24,
+        id: "part-15pro",
+        name: "Bateria iPhone 15 Pro",
+        stockQuantity: 0,
+      },
+    ];
+    const s = build(
+      diag(
+        { "battery.health": { Status: "fail" } },
+        { device: { brand: "Apple", model: "iPhone 15" } }
+      ),
+      { parts }
+    );
+    const part = s.lines.find((l) => l.kind === "part");
+    expect(part?.catalogId).toBe("part-generic");
+    expect(part?.inStock).toBe(true);
+  });
+
+  it("still prefers the exact-model out-of-stock part over a variant in stock", () => {
+    // Controlo da decisão do dono com variantes: «Bateria iPhone 15»
+    // esgotada continua a ganhar — à Pro em stock E à genérica em stock.
+    const parts: QuotePartInput[] = [
+      {
+        category: "BATTERY",
+        defaultPrice: 20,
+        id: "part-generic",
+        name: "Bateria",
+        stockQuantity: 5,
+      },
+      {
+        category: "BATTERY",
+        defaultPrice: 24,
+        id: "part-15",
+        name: "Bateria iPhone 15",
+        stockQuantity: 0,
+      },
+      {
+        category: "BATTERY",
+        defaultPrice: 26,
+        id: "part-15pro",
+        name: "Bateria iPhone 15 Pro",
+        stockQuantity: 4,
+      },
+    ];
+    const s = build(
+      diag(
+        { "battery.health": { Status: "fail" } },
+        { device: { brand: "Apple", model: "iPhone 15" } }
+      ),
+      { parts }
+    );
+    const part = s.lines.find((l) => l.kind === "part");
+    expect(part?.catalogId).toBe("part-15");
+    expect(part?.inStock).toBe(false);
+  });
+
   it("prefers the right-model out-of-stock part over another model in stock", () => {
     // BUG #166 r6 (decisão do dono): uma peça de outro modelo nunca ganha
     // à do modelo certo, mesmo esgotada — «Bateria Samsung A54» em stock

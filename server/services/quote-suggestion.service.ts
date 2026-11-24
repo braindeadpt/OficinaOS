@@ -382,11 +382,42 @@ function matchConfidence(
 }
 
 /**
- * Contains por palavra inteira sobre strings normalizadas (separadas por
- * espaços): evita falsos positivos tipo "pro" dentro de "protetor".
+ * Tokens que distinguem variantes do mesmo modelo base («iPhone 15» vs
+ * «iPhone 15 Pro», «Galaxy S24» vs «S24 Ultra»). Um nome de catálogo que
+ * continua com um destes tokens a seguir ao modelo é OUTRA variante —
+ * «Bateria iPhone 15 Pro» não serve um iPhone 15 (BUG #166 r7).
  */
-function termContained(haystack: string, needle: string): boolean {
-  return ` ${haystack} `.includes(` ${needle} `);
+const MODEL_VARIANT_TOKENS = new Set([
+  "fe",
+  "lite",
+  "max",
+  "mini",
+  "plus",
+  "pro",
+  "ultra",
+]);
+
+/**
+ * Contains por palavra inteira com rejeição de variantes: devolve true se
+ * `needle` ocorre em `haystack` (ambos normalizados) e a palavra seguinte
+ * à ocorrência NÃO é um token de variante. «iphone 15» dentro de
+ * «bateria iphone 15 pro» é rejeitado; no fim do nome, é aceite.
+ */
+function deviceModelContained(haystack: string, needle: string): boolean {
+  const hay = ` ${haystack} `;
+  const ned = ` ${needle} `;
+  let from = 0;
+  for (;;) {
+    const idx = hay.indexOf(ned, from);
+    if (idx === -1) {
+      return false;
+    }
+    const rest = hay.slice(idx + ned.length).trimStart();
+    if (!MODEL_VARIANT_TOKENS.has(rest.split(" ", 1)[0] ?? "")) {
+      return true;
+    }
+    from = idx + 1;
+  }
 }
 
 /**
@@ -533,7 +564,7 @@ function pickBest<T extends { id: string; name: string }>(
       continue;
     }
     const deviceHit = normalizedDeviceHints.some(
-      (h) => termContained(norm, h) || termContained(h, norm)
+      (h) => deviceModelContained(norm, h) || deviceModelContained(h, norm)
     );
     const candidate: ScoredCandidate<T> = {
       // confidence de exibição: exact ou deviceHit → "high". O rank, em
