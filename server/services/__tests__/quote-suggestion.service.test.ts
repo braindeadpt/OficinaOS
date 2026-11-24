@@ -732,6 +732,34 @@ describe("buildQuoteSuggestion — speaker vs earpiece disambiguation", () => {
   });
 });
 
+describe("excludeHints — serviços combinados de som", () => {
+  it("keeps a combined repair matched to both speaker and earpiece", () => {
+    // BUG #166 r4: «Troca de coluna e altifalante superior» serve as duas
+    // avarias — a exclusão cega deixava a coluna sem correspondência.
+    const repairs: QuoteRepairInput[] = [
+      {
+        category: "HARDWARE",
+        defaultPrice: 45,
+        id: "rep-som-combinado",
+        name: "Troca de coluna e altifalante superior",
+      },
+    ];
+    const s = build(
+      diag({
+        "checklist.earpiece": { Status: "fail" },
+        "checklist.speaker": { Status: "fail" },
+      }),
+      { parts: [], repairs }
+    );
+    const repairLines = s.lines.filter((l) => l.kind === "repair");
+    expect(repairLines).toHaveLength(1);
+    expect(repairLines[0].catalogId).toBe("rep-som-combinado");
+    expect(repairLines[0].reasonCheck).toContain("checklist.speaker");
+    expect(repairLines[0].reasonCheck).toContain("checklist.earpiece");
+    expect(s.unmatchedChecks).toEqual([]);
+  });
+});
+
 describe("hint matching — abreviaturas fora do catálogo de som", () => {
   it("still matches an abbreviated charging part name («Conector»)", () => {
     // ANALYSIS #166 r3: a direcção estrita é só do earpiece; as restantes

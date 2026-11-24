@@ -453,7 +453,19 @@ function pickBest<T extends { id: string; name: string }>(
       continue;
     }
     if (normalizedExclude.some((ex) => norm.includes(ex))) {
-      continue;
+      // Nome que fala SÓ do outro componente é ignorado; um serviço
+      // combinado («Troca de coluna e altifalante superior») serve às duas
+      // avarias — se, removida a expressão alheia, o nome ainda casa com
+      // os hints da regra, o candidato mantém-se (BUG #166 r4).
+      const stripped = normalizedExclude
+        .reduce((acc, ex) => acc.split(ex).join(" "), norm)
+        .replace(/\s+/g, " ")
+        .trim();
+      if (
+        matchConfidence(stripped, normalizedHints, strictMultiWord) === null
+      ) {
+        continue;
+      }
     }
     const matched = matchConfidence(norm, normalizedHints, strictMultiWord);
     if (!matched) {
