@@ -220,4 +220,59 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
       parsePontoExitAnswer("saí às 18:05 horas e 15 minutos depois")
     ).toEqual({ hhmm: "18:05", kind: "time" });
   });
+
+  it("intervalo/alternativa com hora lida → ambíguo, repete-se", () => {
+    // «entre as 7 e as 8 horas da noite» não escolhe a última: o «7»
+    // que fica fora da leitura «8 da noite» é outra hora candidata.
+    expect(
+      parsePontoExitAnswer("Saí entre as 7 e as 8 horas da noite")
+    ).toBeNull();
+    expect(parsePontoExitAnswer("saí às 8 horas da noite ou às 21")).toBeNull();
+    // «N a N» é intervalo de duração, não alternativa de horas — a
+    // hora compacta mantém-se única.
+    expect(
+      parsePontoExitAnswer("Saí às 18:05 após um turno de 7 a 8 horas")
+    ).toEqual({ hhmm: "18:05", kind: "time" });
+    // «dia 5» é data, não a hora 17:00.
+    expect(parsePontoExitAnswer("saí pelas 8 horas da noite no dia 5")).toEqual(
+      { hhmm: "20:00", kind: "time" }
+    );
+  });
+
+  it("«00 horas … da noite» é meia-noite, não meio-dia", () => {
+    // «00» já vem em formato 24 h — o período não lhe soma 12.
+    expect(
+      parsePontoExitAnswer("Saí às 00 horas e 15 minutos da noite")
+    ).toEqual({ hhmm: "00:15", kind: "time" });
+    expect(parsePontoExitAnswer("saí pelas 12 horas da noite")).toEqual({
+      hhmm: "00:00",
+      kind: "time",
+    });
+    expect(parsePontoExitAnswer("saí pelas 8 horas da noite")).toEqual({
+      hhmm: "20:00",
+      kind: "time",
+    });
+  });
+
+  it("«mais ou menos» não corta a hora por extenso", () => {
+    expect(
+      parsePontoExitAnswer("Saí pelas 18 horas e 15 minutos mais ou menos")
+    ).toEqual({ hhmm: "18:15", kind: "time" });
+    // «mais tarde» continua a ser continuação temporal — ambíguo.
+    expect(
+      parsePontoExitAnswer("Saí pelas 18 horas e 15 minutos mais tarde")
+    ).toBeNull();
+  });
+
+  it("«à» marcador serve nas duas codificações Unicode", () => {
+    // NFC: «à» num só carácter; NFD: «a» + acento combinante.
+    expect(parsePontoExitAnswer("Saí à 1 hora e 15 minutos da tarde")).toEqual({
+      hhmm: "13:15",
+      kind: "time",
+    });
+    expect(parsePontoExitAnswer("Saí à 1 hora e 15 minutos da tarde")).toEqual({
+      hhmm: "13:15",
+      kind: "time",
+    });
+  });
 });
