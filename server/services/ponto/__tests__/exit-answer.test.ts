@@ -502,5 +502,20 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
       hhmm: "18:05",
       kind: "time",
     });
+    // «ou» continua a oração que o antecede — ligado a um limite de
+    // contexto («o turno costuma ser até às 18») continua a falar do
+    // horário, não propõe alternativa à saída declarada.
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 18:05. O meu turno costuma ser até às 18 horas, ou até às 19 horas às sextas."
+      )
+    ).toEqual({ hhmm: "18:05", kind: "time" });
+    // …mas ligado à hora declarada continua alternativa, mesmo com
+    // oração de contexto pelo meio a encadear alternativas.
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 18:05, ou depois das 19 horas, ou antes das 17 horas"
+      )
+    ).toEqual({ kind: "ambiguous" });
   });
 });
