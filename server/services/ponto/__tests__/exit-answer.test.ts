@@ -729,4 +729,56 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
       parsePontoExitAnswer("Saímos depois das 19 horas, as 18:05.")
     ).toEqual({ kind: "ambiguous" });
   });
+
+  it("reconhece o verbo depois do limite quando ligado por «que»", () => {
+    // «foi só depois das 19 que saímos» — o limite modifica a
+    // saída do trabalhador, não é horário de contexto.
+    expect(
+      parsePontoExitAnswer(
+        "Saímos às 18:05. Afinal foi só depois das 19 horas que saímos."
+      )
+    ).toEqual({ kind: "ambiguous" });
+    expect(
+      parsePontoExitAnswer("Saí às 18:05. Foi depois das 19 horas que saí.")
+    ).toEqual({ kind: "ambiguous" });
+    // …mas «quando saímos» a explicar outro acontecimento continua
+    // fora da prova.
+    expect(
+      parsePontoExitAnswer(
+        "Saímos às 18:05. O gerente saiu depois das 19 horas porque lhe deixámos mais trabalho quando saímos."
+      )
+    ).toEqual({ hhmm: "18:05", kind: "time" });
+  });
+
+  it("o possessivo de «saída» só veta quando o limite rege essa saída", () => {
+    // O limite pertence ao «fui embora» do trabalhador — a saída
+    // do colega é só a explicação do atraso.
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 18:05. A saída do colega atrasou tudo e só fui embora depois das 19 horas."
+      )
+    ).toEqual({ kind: "ambiguous" });
+    // …e o limite sobre a saída doutra pessoa continua contexto.
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 18:05. A saída do colega foi depois das 19 horas."
+      )
+    ).toEqual({ hhmm: "18:05", kind: "time" });
+  });
+
+  it("a relativa só segura o sujeito quando contém o verbo de saída", () => {
+    // «que tem carro» descreve o acompanhante — o limite é da
+    // saída na oração principal.
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 18:05. A saída com o colega que tem carro só foi depois das 19 horas."
+      )
+    ).toEqual({ kind: "ambiguous" });
+    // …e «que saiu» continua a fazer do colega o sujeito.
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 18:05. Falei com o colega que saiu depois das 19 horas."
+      )
+    ).toEqual({ hhmm: "18:05", kind: "time" });
+  });
 });
