@@ -676,6 +676,41 @@ describe("buildQuoteSuggestion — speaker vs earpiece disambiguation", () => {
     expect(s.unmatchedChecks).toEqual(["checklist.earpiece"]);
   });
 
+  it("suggests speaker and earpiece as separate lines when both fail", () => {
+    // BUG #166 r3: com as duas avarias em falha e as duas peças em stock,
+    // a regra da coluna exclui nomes de earpiece — cada avaria fica com a
+    // sua linha em vez de fundir numa só.
+    const parts: QuotePartInput[] = [
+      {
+        category: "SPEAKER",
+        defaultPrice: 20,
+        id: "part-alt-superior",
+        name: "Altifalante superior iPhone 15",
+        stockQuantity: 1,
+      },
+      {
+        category: "SPEAKER",
+        defaultPrice: 15,
+        id: "part-coluna",
+        name: "Coluna iPhone 15",
+        stockQuantity: 2,
+      },
+    ];
+    const s = build(
+      diag({
+        "checklist.earpiece": { Status: "fail" },
+        "checklist.speaker": { Status: "fail" },
+      }),
+      { parts }
+    );
+    const partLines = s.lines.filter((l) => l.kind === "part");
+    expect(partLines.map((l) => l.catalogId).sort()).toEqual([
+      "part-alt-superior",
+      "part-coluna",
+    ]);
+    expect(s.unmatchedChecks).toEqual([]);
+  });
+
   it("recognises 'Altifalante superior' as the earpiece", () => {
     // Posição do auricular sem a palavra «chamadas» — sem o hint próprio a
     // avaria ficava sem sugestão mesmo com a peça certa em stock.
@@ -693,6 +728,29 @@ describe("buildQuoteSuggestion — speaker vs earpiece disambiguation", () => {
     });
     const part = s.lines.find((l) => l.kind === "part");
     expect(part?.catalogId).toBe("part-alt-superior");
+    expect(s.unmatchedChecks).toEqual([]);
+  });
+});
+
+describe("hint matching — abreviaturas fora do catálogo de som", () => {
+  it("still matches an abbreviated charging part name («Conector»)", () => {
+    // ANALYSIS #166 r3: a direcção estrita é só do earpiece; as restantes
+    // regras mantêm os dois sentidos, por isso «Conector» continua a
+    // corresponder a «conector de carga» na categoria Porta de carga.
+    const parts: QuotePartInput[] = [
+      {
+        category: "CHARGING_PORT",
+        defaultPrice: 12,
+        id: "part-conector-abrev",
+        name: "Conector",
+        stockQuantity: 3,
+      },
+    ];
+    const s = build(diag({ "checklist.charge_port": { Status: "fail" } }), {
+      parts,
+    });
+    const part = s.lines.find((l) => l.kind === "part");
+    expect(part?.catalogId).toBe("part-conector-abrev");
     expect(s.unmatchedChecks).toEqual([]);
   });
 });

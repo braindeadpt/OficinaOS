@@ -131,11 +131,18 @@ function normalizeKey(value: string): string {
 // ── Tabela check → categoria ────────────────────────────────────────
 
 interface CheckRule {
+  /** expressões que identificam OUTRO componente: itens cujo nome as
+   * contém são excluídos dos candidatos desta regra. */
+  excludeHints?: string[];
   hints: string[];
   partCategory?: PartCategoryType;
   repairCategories: RepairCategoryType[];
   /** true = a linha só sai com deviceMatch (hardware). */
   requiresDeviceMatch: boolean;
+  /** hints multi-palavra só correspondem quando o NOME DO ITEM os contém
+   * (o inverso — item contido no hint — é rejeitado). Usado pelo
+   * earpiece para «Speaker» não casar com «speaker de chamadas». */
+  strictMultiWord?: boolean;
 }
 
 const HARDWARE: RepairCategoryType[] = ["HARDWARE"];
@@ -175,6 +182,14 @@ const RULE_SPEAKER: CheckRule = {
   // Coluna/altifalante principal. O earpiece de chamadas é outro
   // componente físico → RULE_EARPIECE (regra própria = linha própria).
   hints: ["altifalante", "speaker", "coluna"],
+  // «Altifalante superior»/«speaker de chamadas» são o earpiece: sem esta
+  // exclusão a regra da coluna também os escolhia e as duas avarias
+  // fundiam-se numa só linha (BUG #166 r3).
+  excludeHints: [
+    "altifalante de chamadas",
+    "altifalante superior",
+    "speaker de chamadas",
+  ],
   partCategory: "SPEAKER",
   repairCategories: HARDWARE,
   requiresDeviceMatch: true,
@@ -191,6 +206,10 @@ const RULE_EARPIECE: CheckRule = {
     "altifalante superior",
     "speaker de chamadas",
   ],
+  // Multi-palavra só no sentido item→hint: «Speaker» (a coluna) não pode
+  // casar com «speaker de chamadas». Os hints simples mantêm os dois
+  // sentidos (ex.: «Fone auricular»).
+  strictMultiWord: true,
   partCategory: "SPEAKER",
   repairCategories: HARDWARE,
   requiresDeviceMatch: true,
@@ -333,17 +352,18 @@ interface ScoredCandidate<T> {
  * equals → "high" (match exato), contains → "low". Um equals em qualquer
  * hint ganha sempre.
  *
- * A direcção do contains depende da especificidade do hint: palavras
- * simples («bateria», «coluna») aceitam os dois sentidos — «Bateria
- * iPhone 15» contém «bateria» e «bateria» contém-se a si. Expressões
- * multi-palavra («speaker de chamadas», «altifalante superior») identificam
- * um componente concreto e só contam quando o NOME DO ITEM as contém —
- * aceitar o inverso («Speaker» contido em «speaker de chamadas») sugeria
- * a coluna como auricular (BUG #166 r2).
+ * A direcção do contains depende da regra (strictMultiWord): por defeito
+ * os dois sentidos valem — «Conector» contém-se em «conector de carga» e
+ * nomes abreviados continuam a casar. Com strictMultiWord (earpiece),
+ * expressões multi-palavra («speaker de chamadas», «altifalante
+ * superior») identificam um componente concreto e só contam quando o
+ * NOME DO ITEM as contém — aceitar o inverso («Speaker» contido em
+ * «speaker de chamadas») sugeria a coluna como auricular (BUG #166 r2).
  */
 function matchConfidence(
   norm: string,
-  hints: string[]
+  hints: string[],
+  strictMultiWord = false
 ): QuoteConfidence | null {
   let confidence: QuoteConfidence | null = null;
   for (const hint of hints) {
@@ -351,7 +371,10 @@ function matchConfidence(
       return "high";
     }
     const specific = hint.includes(" ");
-    if (norm.includes(hint) || (!specific && hint.includes(norm))) {
+    if (
+      norm.includes(hint) ||
+      (hint.includes(norm) && !(specific && strictMultiWord))
+    ) {
       confidence = "low";
     }
   }
@@ -411,12 +434,17 @@ function pickBest<T extends { id: string; name: string }>(
   pool: T[],
   hints: string[],
   stockOf?: (item: T) => number,
-  deviceHints: string[] = []
+  deviceHints: string[] = [],
+  strictMultiWord = false,
+  excludeHints: string[] = []
 ): ScoredCandidate<T> | null {
   const normalizedHints = hints
     .map((h) => normalizeKey(h))
     .filter((h) => h.length > 0);
   const normalizedDeviceHints = deviceHints.filter((h) => h.length > 0);
+  const normalizedExclude = excludeHints
+    .map((h) => normalizeKey(h))
+    .filter((h) => h.length > 0);
   let best: ScoredCandidate<T> | null = null;
 
   for (const item of pool) {
@@ -424,7 +452,10 @@ function pickBest<T extends { id: string; name: string }>(
     if (!norm) {
       continue;
     }
-    const matched = matchConfidence(norm, normalizedHints);
+    if (normalizedExclude.some((ex) => norm.includes(ex))) {
+      continue;
+    }
+    const matched = matchConfidence(norm, normalizedHints, strictMultiWord);
     if (!matched) {
       continue;
     }
@@ -662,7 +693,9 @@ function emitRuleLines(
         ctx.parts.filter((p) => p.category === rule.partCategory),
         [...rule.hints, ...partExtra],
         (p) => (p.stockQuantity > 0 ? 1 : 0),
-        ctx.deviceHints
+        ctx.deviceHints,
+        rule.strictMultiWord ?? false,
+        rule.excludeHints ?? []
       )
     );
     if (best) {
@@ -686,7 +719,9 @@ function emitRuleLines(
         ctx.repairs.filter((r) => rule.repairCategories.includes(r.category)),
         [...rule.hints, ...repairExtra],
         undefined,
-        ctx.deviceHints
+        ctx.deviceHints,
+        rule.strictMultiWord ?? false,
+        rule.excludeHints ?? []
       )
     );
     if (best) {
