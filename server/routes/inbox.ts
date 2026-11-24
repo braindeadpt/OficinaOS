@@ -11,6 +11,7 @@ import {
 } from "../services/inbox.service.js";
 import { askStaffAi } from "../services/staff-ai.service.js";
 import {
+  reconcileStaleSending,
   runStaffInboxTool,
   STALE_SENDING_MS,
   sendApprovedDraft,
@@ -502,6 +503,18 @@ export const inboxRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       await assertInboxEnabled(app.prisma);
       const { id } = req.params as Params;
+      const draft = await app.prisma.inboxDraft.findUnique({
+        select: { id: true, status: true },
+        where: { id },
+      });
+      // Restart a meio do envio: a mensagem pode já estar no histórico
+      // — reconcilia para SENT em vez de gravar um cancelamento falso.
+      if (
+        draft?.status === "SENDING" &&
+        (await reconcileStaleSending(app.prisma, draft))
+      ) {
+        return reply.send({ ok: true, reconciled: true });
+      }
       const updated = await app.prisma.inboxDraft.updateMany({
         data: { status: "CANCELLED" },
         where: {

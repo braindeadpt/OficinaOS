@@ -55,6 +55,31 @@ const MAX_MESSAGE_LEN = 4000;
 const REPLY_WINDOW_MS = 23 * 60 * 60 * 1000; // janela Meta 24h (margem)
 /** SENDING mais velho que isto é resíduo de restart — volta a reclamável. */
 export const STALE_SENDING_MS = 10 * 60 * 1000;
+
+/**
+ * SENDING pode ser resíduo de um restart ENTRE gravar a mensagem enviada
+ * (recordOutboundMessage, externalId `draft:<id>`) e finalizar o
+ * rascunho. Se o envio já está gravado, reconcilia o rascunho para SENT
+ * sem reenviar nem cancelar. updateMany condicionado a SENDING para não
+ * interferir com um envio reclamado entretanto.
+ */
+export async function reconcileStaleSending(
+  prisma: PrismaClient,
+  draft: { id: string }
+): Promise<boolean> {
+  const sent = await prisma.businessMessage.findFirst({
+    select: { id: true, receivedAt: true },
+    where: { externalId: `draft:${draft.id}` },
+  });
+  if (!sent) {
+    return false;
+  }
+  await prisma.inboxDraft.updateMany({
+    data: { messageId: sent.id, sentAt: sent.receivedAt, status: "SENT" },
+    where: { id: draft.id, status: "SENDING" },
+  });
+  return true;
+}
 const LEADING_PLUS_RE = /^\+/;
 
 export const STAFF_INBOX_TOOLS = [
@@ -692,6 +717,15 @@ export async function sendApprovedDraft(
     return err("rascunho não encontrado");
   }
   if (draft.status === "SENT") {
+    return ok({ ja_enviado: true, rascunho_id: draftId });
+  }
+  // Restart entre gravar o envio e finalizar o rascunho: se a mensagem
+  // já consta do histórico, reconcilia sem reenviar (senão o retry
+  // abaixo enviava uma segunda vez).
+  if (
+    draft.status === "SENDING" &&
+    (await reconcileStaleSending(prisma, draft))
+  ) {
     return ok({ ja_enviado: true, rascunho_id: draftId });
   }
   // Aprovação humana: vem da rota da app (approvedBy) ou — só com

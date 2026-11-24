@@ -99,25 +99,25 @@ CREATE INDEX IF NOT EXISTS "business_messages_conversationId_receivedAt_idx" ON 
 -- existam (base que correu a versão com o nome antigo).
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'inbox_conversations_customerId_fkey') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'inbox_conversations_customerId_fkey' AND conrelid = 'inbox_conversations'::regclass) THEN
     ALTER TABLE "inbox_conversations" ADD CONSTRAINT "inbox_conversations_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "customers"("id") ON DELETE SET NULL ON UPDATE CASCADE;
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'inbox_conversations_assignedToId_fkey') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'inbox_conversations_assignedToId_fkey' AND conrelid = 'inbox_conversations'::regclass) THEN
     ALTER TABLE "inbox_conversations" ADD CONSTRAINT "inbox_conversations_assignedToId_fkey" FOREIGN KEY ("assignedToId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'inbox_drafts_conversationId_fkey') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'inbox_drafts_conversationId_fkey' AND conrelid = 'inbox_drafts'::regclass) THEN
     ALTER TABLE "inbox_drafts" ADD CONSTRAINT "inbox_drafts_conversationId_fkey" FOREIGN KEY ("conversationId") REFERENCES "inbox_conversations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'inbox_drafts_createdById_fkey') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'inbox_drafts_createdById_fkey' AND conrelid = 'inbox_drafts'::regclass) THEN
     ALTER TABLE "inbox_drafts" ADD CONSTRAINT "inbox_drafts_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'inbox_drafts_approvedById_fkey') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'inbox_drafts_approvedById_fkey' AND conrelid = 'inbox_drafts'::regclass) THEN
     ALTER TABLE "inbox_drafts" ADD CONSTRAINT "inbox_drafts_approvedById_fkey" FOREIGN KEY ("approvedById") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'inbox_drafts_messageId_fkey') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'inbox_drafts_messageId_fkey' AND conrelid = 'inbox_drafts'::regclass) THEN
     ALTER TABLE "inbox_drafts" ADD CONSTRAINT "inbox_drafts_messageId_fkey" FOREIGN KEY ("messageId") REFERENCES "business_messages"("id") ON DELETE SET NULL ON UPDATE CASCADE;
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'business_messages_conversationId_fkey') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'business_messages_conversationId_fkey' AND conrelid = 'business_messages'::regclass) THEN
     ALTER TABLE "business_messages" ADD CONSTRAINT "business_messages_conversationId_fkey" FOREIGN KEY ("conversationId") REFERENCES "inbox_conversations"("id") ON DELETE SET NULL ON UPDATE CASCADE;
   END IF;
 END $$;

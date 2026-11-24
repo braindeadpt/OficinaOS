@@ -275,6 +275,45 @@ describe("recordInboundMessage", () => {
     expect(outbound?.conversationId).toBe(inbound?.conversationId);
   });
 
+  it("reply por conversationId fica na conversa certa — número intl curto (loja US)", async () => {
+    // Regressão Devin: o phone guardado (dígitos intl, sem "+") era
+    // renormalizado ao gravar a resposta e ganhava o indicativo da loja
+    // — "3547712345" com loja US virava "13547712345" e a resposta era
+    // arquivada noutra conversa.
+    const { tx, messages } = fakePrisma();
+    const txx = tx as never as {
+      inboxConversation: {
+        findUnique: (o: {
+          where: { id: string };
+        }) => Promise<{ phone: string } | null>;
+      };
+      shopSettings: { findUnique: unknown };
+    };
+    txx.shopSettings.findUnique = vi.fn(async () => ({
+      countryCode: "US",
+    }));
+    const inbound = await recordInboundMessage(tx, log, {
+      channel: "sms",
+      externalId: "in-us-1",
+      phone: "+3547712345",
+      text: "olá",
+    });
+    const conv = await txx.inboxConversation.findUnique({
+      where: { id: inbound?.conversationId as string },
+    });
+    expect(conv?.phone).toBe("3547712345");
+    const out = await recordOutboundMessage(tx, log, {
+      channel: "sms",
+      conversationId: inbound?.conversationId,
+      handledBy: "STAFF",
+      phone: conv?.phone as string,
+      text: "resposta",
+    });
+    expect(out?.conversationId).toBe(inbound?.conversationId);
+    const outbound = messages.find((m) => m.direction === "OUTBOUND");
+    expect(outbound?.conversationKey).toBe("sms:3547712345");
+  });
+
   it("conversationKey normaliza o telefone para dígitos", () => {
     expect(inboxConversationKey("sms", "+351912345678")).toBe(
       inboxConversationKey("sms", "351912345678")

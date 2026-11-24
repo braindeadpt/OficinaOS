@@ -94,6 +94,7 @@ const TECH = {
 function fakePrisma(overrides: Record<string, unknown> = {}) {
   const p: Record<string, unknown> = {
     businessMessage: {
+      findFirst: vi.fn(async () => null),
       findMany: vi.fn(async () => []),
     },
     customer: {
