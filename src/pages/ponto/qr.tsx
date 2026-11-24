@@ -26,6 +26,10 @@ const STEPS = ["ponto.qr_step1", "ponto.qr_step2", "ponto.qr_step3"] as const;
 
 const TRAILING_SLASHES = /\/+$/;
 
+// A folha é A5 — sem @page o botão de impressão usava o papel que o
+// navegador tivesse selecionado.
+const PRINT_CSS = "@page { size: A5; margin: 10mm; }";
+
 type PontoQrState =
   | { kind: "loading" }
   | { kind: "unavailable" }
@@ -99,6 +103,7 @@ export default function PontoQrPage() {
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col gap-6 bg-surface p-6 print:max-w-none print:bg-white print:p-0">
+      <style>{PRINT_CSS}</style>
       <div className="flex items-center justify-between print:hidden">
         <Link
           className="inline-flex items-center gap-1.5 font-semibold text-on-surface-variant text-sm"

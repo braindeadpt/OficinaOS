@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,22 @@ export default function SettingsCloudTab({
   const [stations, setStations] = useState<CloudStation[] | null>(null);
   const [confirmUnpair, setConfirmUnpair] = useState(false);
   const [confirmRevokeId, setConfirmRevokeId] = useState<string | null>(null);
+  const [cloudDirty, setCloudDirty] = useState(false);
+  const [syncNonce, setSyncNonce] = useState(0);
+  // Cada secção reporta o seu próprio sujo — a aba fica suja enquanto
+  // pelo menos uma tiver rascunho (gravar uma não limpa o aviso da outra).
+  const sectionDirtyRef = useRef({ invoicing: false, ponto: false });
+
+  const reportSectionDirty = (
+    section: "invoicing" | "ponto",
+    dirty: boolean
+  ) => {
+    sectionDirtyRef.current[section] = dirty;
+    const anyDirty =
+      sectionDirtyRef.current.invoicing || sectionDirtyRef.current.ponto;
+    setCloudDirty(anyDirty);
+    onDirtyChange?.(anyDirty);
+  };
 
   const stationStatus = (s: CloudStation): string => {
     if (s.revokedAt) {
@@ -144,6 +160,8 @@ export default function SettingsCloudTab({
     try {
       const res = await api.post<CloudStatus>("/settings/cloud/sync");
       setStatus(res.data);
+      // A sync pode ter ativado módulos — as secções abaixo recarregam.
+      setSyncNonce((n) => n + 1);
       onToast(t("cloud_sync_success"), "success");
     } catch (err) {
       onToast(getErrorMessage(err, t("cloud_sync_failed")), "error");
@@ -354,12 +372,14 @@ export default function SettingsCloudTab({
 
           <SettingsStorefrontSection onToast={onToast} />
           <SettingsInvoicingSection
-            onDirtyChange={onDirtyChange}
+            onDirtyChange={(d) => reportSectionDirty("invoicing", d)}
             onToast={onToast}
           />
           <SettingsPontoSection
-            onDirtyChange={onDirtyChange}
+            hasUnsavedChanges={cloudDirty}
+            onDirtyChange={(d) => reportSectionDirty("ponto", d)}
             onToast={onToast}
+            refreshNonce={syncNonce}
           />
 
           <div className="flex gap-2">
