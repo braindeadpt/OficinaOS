@@ -440,7 +440,14 @@ function classifyBoundHours(
   let first = true;
   for (const m of clauseBoundMatches) {
     const before = withoutRelatives.slice(0, m.index).trimEnd();
-    const boundHour = Number(m[2]);
+    // O limite interpreta-se como a hora declarada — «depois das 7
+    // horas» é 19:00 (a reformulação «ou seja depois das 7» de
+    // «saí às 6» contradiz 18:00); o zero inicial («07») fica em
+    // 24 h como nas horas soltas.
+    const rawBoundHour = m[2];
+    const boundHour = zeroPadded(rawBoundHour)
+      ? Number(rawBoundHour)
+      : (exitHour(Number(rawBoundHour)) ?? Number.NaN);
     let alt = false;
     if (OU_SEJA_END_RE.test(before)) {
       // «ou seja» reformula a hora declarada: coerente ignora-se,
@@ -589,7 +596,12 @@ function statedDate(text: string): {
   const keys = new Set<string>();
   let date: { day: number; month: number; year: number | null } | undefined;
   let invalid = false;
-  for (const clause of text.split(CLAUSE_SPLIT_RE)) {
+  for (const rawClause of text.split(CLAUSE_SPLIT_RE)) {
+    // NFC primeiro — a posição da negação e os índices das datas
+    // medem-se no mesmo texto: com o til separado («a» + U+0303)
+    // a procura não encontrava o «não» e a data negada ficava
+    // incerta em vez de anulada.
+    const clause = rawClause.normalize("NFC");
     const clauseNegated = negated(normalizePontoText(clause));
     const negIdx = clauseNegated
       ? clause.toLowerCase().search(NEGATION_START_RE)

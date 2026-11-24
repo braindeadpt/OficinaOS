@@ -363,6 +363,17 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
       hhmm: "18:05",
       kind: "time",
     });
+    // O til separado («a» + U+0303) lê-se igual — a posição da
+    // negação mede-se no texto NFC tal como os índices das datas.
+    expect(
+      parsePontoExitAnswer(
+        "Não foi a 9/1, saí a 10/1 às 18:05".normalize("NFD")
+      )
+    ).toEqual({
+      date: { day: 10, month: 1, year: null },
+      hhmm: "18:05",
+      kind: "time",
+    });
   });
 
   it("«mais cedo» é continuação temporal como «mais tarde»", () => {
@@ -452,6 +463,18 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
     expect(
       parsePontoExitAnswer("Saí às 18:05, ou seja depois das 19 horas")
     ).toEqual({ kind: "ambiguous" });
+    // O limite interpreta-se como a hora declarada — «depois das 7»
+    // é depois das 19:00 e contradiz «às 6» (18:00); com zero
+    // inicial («07») fica em 24 h e a reformulação é coerente.
+    expect(
+      parsePontoExitAnswer("Saí às 6, ou seja depois das 7 horas")
+    ).toEqual({ kind: "ambiguous" });
+    expect(
+      parsePontoExitAnswer("Saí às 6, ou seja depois das 07 horas")
+    ).toEqual({ hhmm: "18:00", kind: "time" });
+    expect(parsePontoExitAnswer("Saí às 6, ou seja antes das 7 horas")).toEqual(
+      { hhmm: "18:00", kind: "time" }
+    );
     // Advérbios entre «ou» e o limite não escondem a alternativa.
     expect(
       parsePontoExitAnswer(
