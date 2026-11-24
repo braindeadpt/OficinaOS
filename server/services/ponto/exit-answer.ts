@@ -65,7 +65,16 @@ const AFFIRMATIVE_WORDS = new Set([
 
 // "18:05", "18h05", "18H05", "18.05", "6:30" — no texto cru, antes da
 // normalização. \b impede casar dentro de números maiores ("118:05").
-const EXPLICIT_TIME_RE = /\b(\d{1,2})\s*[:hH.]\s*(\d{2})\b/g;
+// O qualificador de período a seguir («8:30 da noite») faz parte da
+// hora — sem ele a compacta lia-se em 24 h (08:30).
+const EXPLICIT_TIME_RE =
+  /\b(\d{1,2})\s*[:hH.]\s*(\d{2})(?:\s+da\s+(manhã|manha|tarde|noite)\b)?/gi;
+// Limite com hora compacta — «depois das 18:30», «até às 8h30»:
+// reescreve-se para a forma extensa antes de qualquer leitura, para
+// o limite compacto valer como o por extenso (limite, não hora
+// exata).
+const BOUND_COMPACT_RE =
+  /\b(depois|ap[oó]s|antes|at[eé])\s+(das|dás|dàs|as|ás|às)\s+(\d{1,2})\s*[:hH.]\s*(\d{2})\b/gi;
 // Hora solta — "6", "18". Só conta quando é a única candidata.
 const BARE_HOUR_RE = /\b([01]?\d|2[0-3])\b/g;
 // Quantidade de duração — "15 minutos", "2 mins", "30 segundos" — não
@@ -151,7 +160,21 @@ function zeroPadded(raw: string): boolean {
 function explicitTimes(raw: string): Set<string> {
   const found = new Set<string>();
   for (const m of raw.matchAll(EXPLICIT_TIME_RE)) {
-    const hhmm = hhmmOf(Number(m[1]), Number(m[2]), zeroPadded(m[1]));
+    const hour = Number(m[1]);
+    const minute = Number(m[2]);
+    let hhmm: string | null;
+    if (m[3]) {
+      // «8:30 da noite» = 20:30 — o período manda; contraditório
+      // («18:30 da manhã») cai na leitura 24 h da forma compacta.
+      const period = m[3]
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+      const adjusted = hourWithPeriod(hour, period) ?? hour;
+      hhmm = `${String(adjusted).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+    } else {
+      hhmm = hhmmOf(hour, minute, zeroPadded(m[1]));
+    }
     if (hhmm) {
       found.add(hhmm);
     }
@@ -363,7 +386,8 @@ function collectClauseHours(
   clause: string,
   withoutRelatives: string,
   explicit: Set<string>,
-  bare: Set<string>
+  bare: Set<string>,
+  ouLinked: boolean
 ): "new" | "repeat" | "none" {
   const times = explicitTimes(clause);
   const spelledInvalid = collectSpelledTimes(withoutRelatives, times);
@@ -392,10 +416,11 @@ function collectClauseHours(
   if (times.size === 0 && !spelledInvalid) {
     for (const h of bareHours(withoutRelatives)) {
       sawHour = true;
-      if (!seenBare(h)) {
+      if (
+        collectBareHour(h, ouLinked, explicit, bare, seenExplicit, seenBare)
+      ) {
         clauseHasNewHour = true;
       }
-      bare.add(h);
     }
   } else if (times.size > 0) {
     // ...mas uma oração com hora reconhecida pode trazer OUTRA hora
@@ -415,6 +440,29 @@ function collectClauseHours(
     return "new";
   }
   return sawHour ? "repeat" : "none";
+}
+
+/** Junta uma hora solta da oração às coleções — devolve true quando
+ *  é hora nova. Numa oração aberta por «ou» («ou às 19») a hora
+ *  solta é alternativa proposta à declarada — conta como candidata
+ *  explícita: duas horas em aberto = ambíguo. */
+function collectBareHour(
+  h: string,
+  ouLinked: boolean,
+  explicit: Set<string>,
+  bare: Set<string>,
+  seenExplicit: (hhmm: string) => boolean,
+  seenBare: (h: string) => boolean
+): boolean {
+  const asExplicit = ouLinked ? hhmmOf(Number(h), 0, zeroPadded(h)) : null;
+  if (asExplicit) {
+    const isNew = !seenExplicit(asExplicit);
+    explicit.add(asExplicit);
+    return isNew;
+  }
+  const isNew = !seenBare(h);
+  bare.add(h);
+  return isNew;
 }
 
 /** Horas soltas convertidas a HH:MM numa oração que já tem hora
@@ -676,9 +724,14 @@ function collectClause(
   // horas compactas e as datas com «/»/«-» saem do texto a
   // normalizar — os dígitos delas («18:05» → «18 05», «23/11» →
   // «23 11») não são horas soltas nem abrem extenso novo.
+  // Limites com hora compacta («depois das 18:30») viram forma
+  // extensa logo no texto cru — o resto da leitura (limite,
+  // minutos, período) é igual à forma por extenso.
+  const clausePre = clause
+    .normalize("NFC")
+    .replace(BOUND_COMPACT_RE, "$1 $2 $3 horas e $4 minutos");
   const normalizedClause = normalizePontoText(
-    clause
-      .normalize("NFC")
+    clausePre
       .replace(/à(?=\s*\d)/gi, "ás")
       .replace(DATE_SLASH_RE, " ")
       .replace(EXPLICIT_TIME_RE, " ")
@@ -701,7 +754,7 @@ function collectClause(
   // comprimento (NFC «í»→NFD i+marca→i é 1:1), logo os índices dos
   // matches alinham com os da oração normalizada e cada limite
   // sabe o trecho cru que o precede (para «saí» acentuado).
-  const clauseNfc = clause.normalize("NFC");
+  const clauseNfc = clausePre;
   const rawStripped = clauseNfc
     .toLowerCase()
     .normalize("NFD")
@@ -715,11 +768,14 @@ function collectClause(
     rawBoundPrefixes.length === clauseBoundMatches.length
       ? rawBoundPrefixes
       : clauseBoundMatches.map(() => clauseNfc);
+  const clauseTokens = normalizedClause.split(" ");
+  const ouLinked = clauseTokens[0] === "ou" && clauseTokens[1] !== "seja";
   const hourKind = collectClauseHours(
-    clause,
+    clausePre,
     withoutRelatives.replace(BOUND_HOUR_RE, " "),
     explicit,
-    bare
+    bare,
+    ouLinked
   );
   const added = classifyBoundHours(
     clauseBoundMatches,

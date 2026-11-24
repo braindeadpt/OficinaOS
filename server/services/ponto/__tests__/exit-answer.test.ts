@@ -781,4 +781,55 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
       )
     ).toEqual({ hhmm: "18:05", kind: "time" });
   });
+
+  it("«ou» com hora solta é alternativa mesmo depois de vírgula", () => {
+    expect(parsePontoExitAnswer("Saí às 18:05, ou às 19")).toEqual({
+      kind: "ambiguous",
+    });
+    expect(parsePontoExitAnswer("Saí às 18:05 ou às 19")).toEqual({
+      kind: "ambiguous",
+    });
+    // …mas «ou seja» continua reformulação, não alternativa.
+    expect(
+      parsePontoExitAnswer("Saí às 18:05, ou seja antes das 19 horas")
+    ).toEqual({ hhmm: "18:05", kind: "time" });
+  });
+
+  it("limite com hora compacta vale como o por extenso", () => {
+    expect(parsePontoExitAnswer("Saí depois das 18:30")).toEqual({
+      kind: "ambiguous",
+    });
+    expect(parsePontoExitAnswer("depois das 18:30")).toEqual({
+      kind: "ambiguous",
+    });
+    expect(parsePontoExitAnswer("saí até às 18h30")).toEqual({
+      kind: "ambiguous",
+    });
+    // …e declarada sem operador continua hora exata.
+    expect(parsePontoExitAnswer("saí às 18:30")).toEqual({
+      hhmm: "18:30",
+      kind: "time",
+    });
+  });
+
+  it("hora compacta com qualificador de período obedece ao período", () => {
+    expect(parsePontoExitAnswer("Saí às 8:30 da noite")).toEqual({
+      hhmm: "20:30",
+      kind: "time",
+    });
+    expect(parsePontoExitAnswer("saí às 8:30 da manhã")).toEqual({
+      hhmm: "08:30",
+      kind: "time",
+    });
+    // Qualificador impossível cai na leitura 24 h da forma compacta.
+    expect(parsePontoExitAnswer("saí às 18:30 da manhã")).toEqual({
+      hhmm: "18:30",
+      kind: "time",
+    });
+    // Sem qualificador a compacta lê-se como antes.
+    expect(parsePontoExitAnswer("saí às 8:30")).toEqual({
+      hhmm: "08:30",
+      kind: "time",
+    });
+  });
 });
