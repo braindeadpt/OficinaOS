@@ -51,9 +51,12 @@ const inFlightIds = new Set<string>();
 
 // Gravação inbox antes do ack (BUG #164 r8): se o registo local falha,
 // a mensagem NÃO é confirmada à Cloud — fica na fila e o próximo ciclo
-// retenta com backoff. Esgotado o limite, grava-se uma mensagem FAILED
-// visível na caixa de entrada e só então se confirma: a fila não
-// bloqueia e a mensagem não se perde.
+// retenta com backoff. No limite grava-se uma mensagem FAILED visível
+// na caixa de entrada, mas a confirmação à Cloud só acontece depois do
+// processamento completo: confirmar num estado de falha perdia comandos
+// (ex. PARAR) e, se a própria gravação FAILED falhasse, a mensagem
+// sumia sem rasto (BUG #167 r9). A fila não bloqueia — o ack da Cloud é
+// por mensagem e as outras seguem.
 const MAX_INBOX_PERSIST_ATTEMPTS = 5;
 const inboxPersistRetries = new Map<
   string,
@@ -69,36 +72,33 @@ function inboxPersistBackoffActive(msgId: string): boolean {
   return state !== undefined && Date.now() < state.nextAt;
 }
 
-/** Devolve true quando a mensagem já pode ser confirmada (limite atingido). */
+/** Nunca confirma: a mensagem fica na fila da Cloud até ser processada.
+ *  No limite de tentativas grava o estado FAILED visível na caixa de
+ *  entrada (uma vez — o externalId deduplica as repetições). */
 async function handleInboxPersistFailure(
   ctx: BotCtx | BotReplyCtx,
   msg: InboundMessage
-): Promise<boolean> {
+): Promise<void> {
   const attempts = (inboxPersistRetries.get(msg.id)?.attempts ?? 0) + 1;
-  if (attempts < MAX_INBOX_PERSIST_ATTEMPTS) {
-    inboxPersistRetries.set(msg.id, {
-      attempts,
-      nextAt: Date.now() + inboxPersistBackoffMs(attempts),
+  if (attempts === MAX_INBOX_PERSIST_ATTEMPTS) {
+    await recordInboundMessage(ctx.prisma, ctx.log, {
+      at: new Date(msg.createdAt),
+      channel: ctx.inbox?.channel ?? "whatsapp",
+      deliveryStatus: "FAILED",
+      externalId: msg.id,
+      phone: msg.fromPhone,
+      text: msg.text ?? `[${msg.messageType}]`,
+    }).catch((err) => {
+      ctx.log.error(
+        { err, msgId: msg.id },
+        "whatsapp-bot: falha ao gravar registo FAILED da inbox"
+      );
     });
-    return false;
   }
-  inboxPersistRetries.delete(msg.id);
-  await recordInboundMessage(ctx.prisma, ctx.log, {
-    at: new Date(msg.createdAt),
-    channel: ctx.inbox?.channel ?? "whatsapp",
-    deliveryStatus: "FAILED",
-    externalId: msg.id,
-    phone: msg.fromPhone,
-    text: msg.text ?? `[${msg.messageType}]`,
-  }).catch((err) => {
-    // BD continua em baixo: nada mais é possível — confirma na mesma
-    // para não bloquear a fila (o erro fica no log).
-    ctx.log.error(
-      { err, msgId: msg.id },
-      "whatsapp-bot: falha ao gravar registo FAILED da inbox"
-    );
+  inboxPersistRetries.set(msg.id, {
+    attempts,
+    nextAt: Date.now() + inboxPersistBackoffMs(attempts),
   });
-  return true;
 }
 
 interface BotCtx extends BotReplyCtx {
@@ -296,7 +296,8 @@ async function processInboxOnlyMessage(
   } catch (err) {
     if (err instanceof InboxPersistError) {
       // Sem registo local: retry com backoff; no limite grava FAILED.
-      return handleInboxPersistFailure(ctx, msg);
+      await handleInboxPersistFailure(ctx, msg);
+      return false;
     }
     // Poisoned — regista e confirma na mesma para não bloquear a fila.
     log.warn({ err, msgId: msg.id }, "whatsapp inbox record falhou");
@@ -461,7 +462,8 @@ async function processInbound(
   } catch (err) {
     if (err instanceof InboxPersistError) {
       // Sem registo local: retry com backoff; no limite grava FAILED.
-      return handleInboxPersistFailure(ctx, msg);
+      await handleInboxPersistFailure(ctx, msg);
+      return false;
     }
     ctx.log.warn({ err, msgId: msg.id }, "whatsapp-bot message failed");
     return true; // poisoned — don't loop forever

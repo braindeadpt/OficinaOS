@@ -170,12 +170,21 @@ export async function recordInboundMessage(
         },
         update: {
           ...(customerId ? { customerId } : {}),
-          lastInboundAt: at,
-          lastMessageAt: at,
           phone: intlPhone,
           unreadCount: { increment: 1 },
         },
         where: { conversationKey: key },
+      });
+      // Mensagens recuperadas da fila chegam fora de ordem: as datas da
+      // conversa nunca recuam — um retry antigo escondia conversas do
+      // filtro "Sem resposta" (BUG #167 r9).
+      await tx.inboxConversation.updateMany({
+        where: { id: conv.id, lastInboundAt: { lt: at } },
+        data: { lastInboundAt: at },
+      });
+      await tx.inboxConversation.updateMany({
+        where: { id: conv.id, lastMessageAt: { lt: at } },
+        data: { lastMessageAt: at },
       });
       const msg = await tx.businessMessage.create({
         data: {

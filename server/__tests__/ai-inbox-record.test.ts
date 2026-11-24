@@ -93,6 +93,30 @@ function fakePrisma() {
         return Promise.resolve(conv);
       }
     ),
+    updateMany: vi.fn(
+      ({
+        data,
+        where,
+      }: {
+        data: Record<string, unknown>;
+        where: { id: string };
+      }) => {
+        const conv = [...conversations.values()].find((c) => c.id === where.id);
+        if (!conv) {
+          return Promise.resolve({ count: 0 });
+        }
+        // O where real filtra por OR null/lt no campo de `data` — o mock
+        // infere o campo do próprio data (uma chave por chamada).
+        const field = Object.keys(data)[0] as string;
+        const at = data[field] as Date;
+        const current = conv[field] as Date | null;
+        if (current === null || current === undefined || current < at) {
+          conv[field] = at;
+          return Promise.resolve({ count: 1 });
+        }
+        return Promise.resolve({ count: 0 });
+      }
+    ),
   };
   tx.businessMessage = {
     create: vi.fn(({ data }: { data: Record<string, unknown> }) => {
@@ -228,6 +252,51 @@ describe("recordInboundMessage", () => {
     });
     expect(otherChannel?.created).toBe(true);
     expect(messages).toHaveLength(2);
+  });
+
+  it("nunca recua as datas da conversa — mensagem recuperada fora de ordem", async () => {
+    // Regressão Devin #167: um retry tardio da fila gravava o createdAt
+    // antigo e recuava lastInboundAt/lastMessageAt, escondendo a
+    // conversa do filtro "Sem resposta".
+    const { tx } = fakePrisma();
+    const t0 = new Date("2026-01-01T10:00:00.000Z");
+    const t2 = new Date("2026-01-01T10:10:00.000Z");
+    await recordInboundMessage(tx, log, {
+      at: t0,
+      channel: "whatsapp",
+      externalId: "m-old",
+      phone: "+351912345678",
+      text: "primeira",
+    });
+    await recordInboundMessage(tx, log, {
+      at: t2,
+      channel: "whatsapp",
+      externalId: "m-new",
+      phone: "+351912345678",
+      text: "segunda",
+    });
+    // Chega agora mas com createdAt antigo (retry da fila da Cloud).
+    await recordInboundMessage(tx, log, {
+      at: t0,
+      channel: "whatsapp",
+      externalId: "m-recovered",
+      phone: "+351912345678",
+      text: "recuperada",
+    });
+    const conv = await (
+      tx as never as {
+        inboxConversation: {
+          findUnique: (a: { where: { conversationKey: string } }) => Promise<{
+            lastInboundAt?: Date | null;
+            lastMessageAt?: Date | null;
+          } | null>;
+        };
+      }
+    ).inboxConversation.findUnique({
+      where: { conversationKey: "whatsapp:351912345678" },
+    });
+    expect(conv?.lastInboundAt?.getTime()).toBe(t2.getTime());
+    expect(conv?.lastMessageAt?.getTime()).toBe(t2.getTime());
   });
 
   it("markConversationRead zera não-lidas e marca readAt nas inbound", async () => {
