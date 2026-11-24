@@ -691,6 +691,11 @@ export async function processPontoReminders(
   // Entries do dia para TODO o staff de uma vez + varrimento das
   // presumidas (inclui quem tenha pontoEnabled desligado entretanto —
   // o alerta ao gestor não pode depender da flag atual).
+  // A janela cobre também o dia civil anterior: a hora configurada
+  // pode cair entre o último ciclo do dia e a meia-noite (ex.: ciclos
+  // 23:46/00:01 com lembrete às 23:55) — o ciclo seguinte tem de
+  // recuperar a véspera com as marcações do dia dela.
+  const prevRange = localDayRange(tz, prevYmd(range.date));
   const [dayEntries, saidaEntries] = await Promise.all([
     staffIds.length
       ? prisma.timeEntry.findMany({
@@ -710,7 +715,10 @@ export async function processPontoReminders(
               take: 1,
             },
           },
-          where: { at: { gte: start, lt: end }, userId: { in: staffIds } },
+          where: {
+            at: { gte: prevRange.start, lt: end },
+            userId: { in: staffIds },
+          },
         })
       : Promise.resolve([]),
     // As SAIDA cobrem também o dia anterior: uma presumida aberta de
@@ -776,12 +784,26 @@ export async function processPontoReminders(
       : null;
   const shouldAskExit =
     reminderInstant !== null && now.getTime() >= reminderInstant.getTime();
+  // Hora de lembrete da véspera — quando passou sem ciclo que a
+  // apanhasse (janela entre o último ciclo do dia e a meia-noite),
+  // o ciclo de hoje recupera-a com as marcações do dia civil dela.
+  const prevReminderInstant =
+    exitTimeValid && exitTime
+      ? zonedDateTimeToUtc(tz, prevYmd(range.date), exitTime)
+      : null;
+  const catchUpYesterday =
+    prevReminderInstant !== null &&
+    now.getTime() >= prevReminderInstant.getTime() &&
+    now.getTime() < end.getTime();
   const waChannel = resolveWhatsAppChannel(settings);
   const smsChannels = getSmsConfig(settings);
   const pauseReminderMs = settings.pontoPauseReminderMinutes * 60 * 1000;
 
   for (const user of staff) {
-    const usable = effectiveEntries(entriesByUser.get(user.id) ?? []);
+    const usableAll = effectiveEntries(entriesByUser.get(user.id) ?? []);
+    const usable = usableAll.filter(
+      (e) => e.at.getTime() >= start.getTime()
+    );
     const last = usable.at(-1);
     // Abertura do turno que a presumida fecha — última ENTRADA/VOLTEI
     // efetiva (uma PAUSA a meio não fecha a abertura).
@@ -789,6 +811,34 @@ export async function processPontoReminders(
       .reverse()
       .find((e) => e.type === "ENTRADA" || e.type === "VOLTEI")?.at;
     try {
+      if (catchUpYesterday) {
+        const yestUsable = usableAll.filter(
+          (e) => e.at.getTime() < start.getTime()
+        );
+        const yLast = yestUsable.at(-1);
+        const yShiftOpenAt = [...yestUsable]
+          .reverse()
+          .find((e) => e.type === "ENTRADA" || e.type === "VOLTEI")?.at;
+        await processExitReminder({
+          dayEnd: start,
+          dayStart: prevRange.start,
+          exitTime,
+          last: yLast,
+          log,
+          now,
+          openPresumedByUser,
+          pauseReminderMs,
+          prisma,
+          reminderInstant: prevReminderInstant,
+          settings,
+          shiftOpenAt: yShiftOpenAt,
+          shouldAskExit: true,
+          smsChannels,
+          tz,
+          user,
+          waChannel,
+        });
+      }
       await processUserTick({
         dayEnd: end,
         dayStart: start,

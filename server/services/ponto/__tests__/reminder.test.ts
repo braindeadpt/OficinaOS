@@ -286,6 +286,67 @@ describe("lembrete de saída (Esquecimentos)", () => {
     });
   });
 
+  it("lembrete entre o último ciclo do dia e a meia-noite é recuperado no ciclo seguinte", async () => {
+    // Ciclos a cada 15 min: 23:46 → 00:01. Com lembrete às 23:55,
+    // nenhum ciclo de 10/01 acontece depois da hora — sem recuperação,
+    // o turno de ontem ficava sem presumida nem pergunta.
+    mocks.findShopSettingsUnique.mockResolvedValue(
+      makeSettings({ pontoExitReminderTime: "23:55" })
+    );
+    const entrada = entry({
+      at: new Date("2026-01-10T09:00:00.000Z"),
+      type: "ENTRADA",
+    });
+    const prisma = makePrisma([entrada], []);
+
+    // 00:05 Lisboa de 11/01 — o ciclo já é do dia seguinte.
+    const now = new Date("2026-01-11T00:05:00.000Z");
+    await processPontoReminders(prisma, log, undefined, now);
+
+    expect(mocks.recordPontoEntry).toHaveBeenCalledTimes(1);
+    const input = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    // A presumida fica no dia civil do turno (10/01 às 23:55) — o
+    // apuramento de ontem fecha e hoje arranca limpo.
+    expect(input).toMatchObject({
+      at: new Date("2026-01-10T23:55:00.000Z"),
+      type: "SAIDA",
+      userId: "user-1",
+    });
+    expect(mocks.sendWhatsAppText).toHaveBeenCalledTimes(1);
+    expect(mocks.sendWhatsAppText.mock.calls[0]?.[3] ?? "").toContain(
+      "Saiu às 23:55"
+    );
+  });
+
+  it("recuperação da véspera não repete quando já há SAIDA no dia civil dela", async () => {
+    mocks.findShopSettingsUnique.mockResolvedValue(
+      makeSettings({ pontoExitReminderTime: "23:55" })
+    );
+    const entrada = entry({
+      at: new Date("2026-01-10T09:00:00.000Z"),
+      type: "ENTRADA",
+    });
+    // O trabalhador picou a saída na véspera — a recuperação não pode
+    // criar uma segunda saída sobre o turno fechado.
+    const saida = entry({
+      at: new Date("2026-01-10T23:50:00.000Z"),
+      type: "SAIDA",
+    });
+    const prisma = makePrisma([entrada, saida], [saida]);
+
+    await processPontoReminders(
+      prisma,
+      log,
+      undefined,
+      new Date("2026-01-11T00:05:00.000Z")
+    );
+
+    expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
+  });
+
   it("presumida já perguntada (pending vivo) → não repete lembrete", async () => {
     const presumed = entry({
       at: REMINDER_AT,
