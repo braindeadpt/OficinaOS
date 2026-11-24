@@ -443,6 +443,36 @@ describe("buildQuoteSuggestion — device-aware part priority", () => {
     expect(part?.inStock).toBe(true);
   });
 
+  it("keeps model priority when a commercial description follows the model", () => {
+    // BUG #166 r9: «– Max Capacity» é descrição comercial, não a
+    // variante Max — a peça específica em stock ganha à genérica.
+    const parts: QuotePartInput[] = [
+      {
+        category: "BATTERY",
+        defaultPrice: 20,
+        id: "part-generic",
+        name: "Bateria",
+        stockQuantity: 5,
+      },
+      {
+        category: "BATTERY",
+        defaultPrice: 35,
+        id: "part-maxcap",
+        name: "Bateria iPhone 15 – Max Capacity",
+        stockQuantity: 2,
+      },
+    ];
+    const s = build(
+      diag(
+        { "battery.health": { Status: "fail" } },
+        { device: { brand: "Apple", model: "iPhone 15" } }
+      ),
+      { parts }
+    );
+    const part = s.lines.find((l) => l.kind === "part");
+    expect(part?.catalogId).toBe("part-maxcap");
+  });
+
   it("still prefers the exact-model out-of-stock part over a variant in stock", () => {
     // Controlo da decisão do dono com variantes: «Bateria iPhone 15»
     // esgotada continua a ganhar — à Pro em stock E à genérica em stock.

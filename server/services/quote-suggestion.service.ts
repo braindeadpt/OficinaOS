@@ -400,8 +400,10 @@ const MODEL_VARIANT_TOKENS = new Set([
 /**
  * Contains por palavra inteira com rejeição de variantes: devolve true se
  * `needle` ocorre em `haystack` (ambos normalizados) e a palavra seguinte
- * à ocorrência NÃO é um token de variante. «iphone 15» dentro de
- * «bateria iphone 15 pro» é rejeitado; no fim do nome, é aceite.
+ * à ocorrência não estende o modelo com uma variante («iphone 15 pro»).
+ * A variante só conta no fim da menção ou antes de outra variante —
+ * «bateria iphone 15 – max capacity» mantém o deviceHit (descrição
+ * comercial, BUG #166 r9).
  */
 function deviceModelContained(haystack: string, needle: string): boolean {
   const hay = ` ${haystack} `;
@@ -412,8 +414,19 @@ function deviceModelContained(haystack: string, needle: string): boolean {
     if (idx === -1) {
       return false;
     }
-    const rest = hay.slice(idx + ned.length).trimStart();
-    if (!MODEL_VARIANT_TOKENS.has(rest.split(" ", 1)[0] ?? "")) {
+    const words = hay
+      .slice(idx + ned.length)
+      .trimStart()
+      .split(" ")
+      .filter((w) => w.length > 0);
+    const next = words[0] ?? "";
+    if (!MODEL_VARIANT_TOKENS.has(next)) {
+      return true;
+    }
+    // A variante só estende o modelo quando FECHA a menção («…15 Pro»,
+    // «…15 Pro Max») — «…15 – Max Capacity» é descrição comercial e a
+    // peça mantém a prioridade (BUG #166 r9).
+    if (words.length > 1 && !MODEL_VARIANT_TOKENS.has(words[1] ?? "")) {
       return true;
     }
     from = idx + 1;
