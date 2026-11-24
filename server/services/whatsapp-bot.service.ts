@@ -6,9 +6,11 @@ import {
   type BotReplyCtx,
   handleInboundMessage,
   type InboundMessage,
+  InboxPersistError,
   isStopText,
 } from "./bot-intents.js";
 import { cloudFetch } from "./cloud.service.js";
+import { recordInboundMessage } from "./inbox.service.js";
 import type { NotifyContext } from "./job.service.js";
 import {
   maskPhone,
@@ -46,6 +48,58 @@ const sendAttempts = new Map<string, number>();
 // Ids em processamento — o poller rápido e o ciclo lento de entitlements
 // leem a mesma fila antes do ack; a guarda evita respostas duplicadas.
 const inFlightIds = new Set<string>();
+
+// Gravação inbox antes do ack (BUG #164 r8): se o registo local falha,
+// a mensagem NÃO é confirmada à Cloud — fica na fila e o próximo ciclo
+// retenta com backoff. No limite grava-se uma mensagem FAILED visível
+// na caixa de entrada, mas a confirmação à Cloud só acontece depois do
+// processamento completo: confirmar num estado de falha perdia comandos
+// (ex. PARAR) e, se a própria gravação FAILED falhasse, a mensagem
+// sumia sem rasto (BUG #167 r9). A fila não bloqueia — o ack da Cloud é
+// por mensagem e as outras seguem.
+const MAX_INBOX_PERSIST_ATTEMPTS = 5;
+const inboxPersistRetries = new Map<
+  string,
+  { attempts: number; nextAt: number }
+>();
+
+function inboxPersistBackoffMs(attempts: number): number {
+  return Math.min(60_000 * 2 ** (attempts - 1), 10 * 60_000);
+}
+
+function inboxPersistBackoffActive(msgId: string): boolean {
+  const state = inboxPersistRetries.get(msgId);
+  return state !== undefined && Date.now() < state.nextAt;
+}
+
+/** Nunca confirma: a mensagem fica na fila da Cloud até ser processada.
+ *  No limite de tentativas grava o estado FAILED visível na caixa de
+ *  entrada (uma vez — o externalId deduplica as repetições). */
+async function handleInboxPersistFailure(
+  ctx: BotCtx | BotReplyCtx,
+  msg: InboundMessage
+): Promise<void> {
+  const attempts = (inboxPersistRetries.get(msg.id)?.attempts ?? 0) + 1;
+  if (attempts === MAX_INBOX_PERSIST_ATTEMPTS) {
+    await recordInboundMessage(ctx.prisma, ctx.log, {
+      at: new Date(msg.createdAt),
+      channel: ctx.inbox?.channel ?? "whatsapp",
+      deliveryStatus: "FAILED",
+      externalId: msg.id,
+      phone: msg.fromPhone,
+      text: msg.text ?? `[${msg.messageType}]`,
+    }).catch((err) => {
+      ctx.log.error(
+        { err, msgId: msg.id },
+        "whatsapp-bot: falha ao gravar registo FAILED da inbox"
+      );
+    });
+  }
+  inboxPersistRetries.set(msg.id, {
+    attempts,
+    nextAt: Date.now() + inboxPersistBackoffMs(attempts),
+  });
+}
 
 interface BotCtx extends BotReplyCtx {
   apiUrl: string;
@@ -218,6 +272,39 @@ async function pollWhatsAppInboundCycle(
   await drainInbound(ctx, messages, blockedEvolution);
 }
 
+/** Processa uma mensagem no consumo record-only. Devolve true se pode
+ *  ser confirmada à Cloud. */
+async function processInboxOnlyMessage(
+  ctx: BotReplyCtx,
+  msg: InboundMessage,
+  log: FastifyBaseLogger
+): Promise<boolean> {
+  // silentSend: o pipeline corre (registo + PARAR + escalada) mas o
+  // envio é no-op — sem canal resolvido nada sai para o cliente.
+  // allowQuoteDecision=false: sem canal real de resposta, SIM/NÃO não
+  // pode aprovar/rejeitar orçamentos em silêncio.
+  try {
+    await handleInboundMessage(ctx, msg, {
+      allowQuoteDecision: false,
+      channelLabel: "WhatsApp",
+      requireInboxPersist: true,
+      send: () => Promise.resolve(true),
+      silentSend: true,
+    });
+    inboxPersistRetries.delete(msg.id);
+    return true;
+  } catch (err) {
+    if (err instanceof InboxPersistError) {
+      // Sem registo local: retry com backoff; no limite grava FAILED.
+      await handleInboxPersistFailure(ctx, msg);
+      return false;
+    }
+    // Poisoned — regista e confirma na mesma para não bloquear a fila.
+    log.warn({ err, msgId: msg.id }, "whatsapp inbox record falhou");
+    return true;
+  }
+}
+
 /**
  * Consumo record-only da fila oficial — modo ai-inbox sem
  * "whatsapp-bot". Cada mensagem entra na caixa de entrada e o pipeline
@@ -255,27 +342,14 @@ async function drainInboxOnly(
   const ackIds: string[] = [];
   const processed: string[] = [];
   for (const msg of messages) {
-    if (inFlightIds.has(msg.id)) {
+    if (inFlightIds.has(msg.id) || inboxPersistBackoffActive(msg.id)) {
       continue;
     }
     inFlightIds.add(msg.id);
     processed.push(msg.id);
-    // silentSend: o pipeline corre (registo + PARAR + escalada) mas o
-    // envio é no-op — sem canal resolvido nada sai para o cliente.
-    // allowQuoteDecision=false: sem canal real de resposta, SIM/NÃO não
-    // pode aprovar/rejeitar orçamentos em silêncio.
-    await handleInboundMessage(ctx, msg, {
-      allowQuoteDecision: false,
-      channelLabel: "WhatsApp",
-      send: () => Promise.resolve(true),
-      silentSend: true,
-    })
-      .then(() => ackIds.push(msg.id))
-      .catch((err) => {
-        // Poisoned — regista e confirma na mesma para não bloquear a fila.
-        log.warn({ err, msgId: msg.id }, "whatsapp inbox record falhou");
-        ackIds.push(msg.id);
-      });
+    if (await processInboxOnlyMessage(ctx, msg, log)) {
+      ackIds.push(msg.id);
+    }
   }
   try {
     if (ackIds.length) {
@@ -344,6 +418,9 @@ async function processInbound(
   msg: InboundMessage,
   silent = false
 ): Promise<boolean> {
+  if (inboxPersistBackoffActive(msg.id)) {
+    return false; // backoff da gravação inbox — não confirma, o próximo ciclo tenta
+  }
   const age = Date.now() - Date.parse(msg.createdAt);
   const stale = Number.isFinite(age) && age > REPLY_WINDOW_MS;
   if (stale) {
@@ -359,6 +436,7 @@ async function processInbound(
       // registada no errado sem confirmação ao cliente.
       allowQuoteDecision: !(stale || silent),
       channelLabel: "WhatsApp",
+      requireInboxPersist: true,
       // Fora da janela ou bot bloqueado: nunca envia — corre o pipeline
       // (PARAR/SIM/NÃO/escalada) com envio suprimido.
       send:
@@ -367,6 +445,7 @@ async function processInbound(
           : (text) => send(ctx, msg.fromPhone, text),
       silentSend: stale || silent,
     });
+    inboxPersistRetries.delete(msg.id);
     if (!out) {
       return true; // flood — descarta sem responder
     }
@@ -381,6 +460,11 @@ async function processInbound(
     }
     return false;
   } catch (err) {
+    if (err instanceof InboxPersistError) {
+      // Sem registo local: retry com backoff; no limite grava FAILED.
+      await handleInboxPersistFailure(ctx, msg);
+      return false;
+    }
     ctx.log.warn({ err, msgId: msg.id }, "whatsapp-bot message failed");
     return true; // poisoned — don't loop forever
   }

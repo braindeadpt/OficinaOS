@@ -750,12 +750,48 @@ async function tryBotAiReply(
   return res ? { escalate: res.escalate, text: res.reply } : null;
 }
 
+/** Regista o inbound na caixa de entrada; com requireInboxPersist um
+ *  registo falhado lança InboxPersistError (canal com fila não confirma
+ *  a mensagem sem registo local — BUG #164 r8). */
+async function recordInboundForChannel(
+  ctx: BotReplyCtx,
+  msg: InboundMessage,
+  t: InboundTransport
+): Promise<Awaited<ReturnType<typeof recordInboundMessage>>> {
+  if (!ctx.inbox?.enabled) {
+    return null;
+  }
+  const inboxRecord = await recordInboundMessage(ctx.prisma, ctx.log, {
+    at: new Date(msg.createdAt),
+    channel: ctx.inbox.channel,
+    externalId: msg.id,
+    phone: msg.fromPhone,
+    text: msg.text ?? `[${msg.messageType}]`,
+  }).catch((err) => {
+    ctx.log.warn({ err }, `${t.channelLabel}: inbox record falhou`);
+    return null;
+  });
+  if (!inboxRecord && t.requireInboxPersist) {
+    throw new InboxPersistError(`${t.channelLabel}: inbox record falhou`);
+  }
+  return inboxRecord;
+}
+
 /**
  * Pipeline de entrada partilhado pelos três canais (§2.1 do plano):
  * rate-limit → composeReply (regras → IA) → envio → escalada.
  * `sent=false` deixa o canal decidir o retry (a cloud só recebe ack
  * depois de envio confirmado); null = flood descartada sem resposta.
  */
+/** Sinal interno: o registo na caixa de entrada falhou num canal com
+ *  fila — o consumidor não confirma a mensagem e tenta de novo. */
+export class InboxPersistError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InboxPersistError";
+  }
+}
+
 export interface InboundTransport {
   /** Meta oficial fora da janela de 24h: SIM/NÃO não decide orçamentos. */
   allowQuoteDecision?: boolean;
@@ -763,6 +799,9 @@ export interface InboundTransport {
   plainText?: boolean;
   /** Evolution usa 10/h; oficial e SMS ficam no default de 20/h. */
   rateLimitPerHour?: number;
+  /** Filas (Cloud): se o registo inbox falhar, lança InboxPersistError
+   *  em vez de seguir sem registo — sem ele a mensagem perder-se-ia. */
+  requireInboxPersist?: boolean;
   send: (text: string) => Promise<boolean>;
   /** Envio suprimido (mensagem >23 h Meta, bot suspenso): o pipeline
    *  corre mas nada sai — a inbox grava o inbound, não o "envio". */
@@ -783,18 +822,7 @@ export async function handleInboundMessage(
   // §G — caixa de entrada: grava TODAS as mensagens inbound antes de
   // qualquer decisão. A mensagem floodada por rate-limit também fica
   // registada — o limite é sobre respostas, não sobre o que a loja vê.
-  const inboxRecord = ctx.inbox?.enabled
-    ? await recordInboundMessage(ctx.prisma, ctx.log, {
-        at: new Date(msg.createdAt),
-        channel: ctx.inbox.channel,
-        externalId: msg.id,
-        phone: msg.fromPhone,
-        text: msg.text ?? `[${msg.messageType}]`,
-      }).catch((err) => {
-        ctx.log.warn({ err }, `${t.channelLabel}: inbox record falhou`);
-        return null;
-      })
-    : null;
+  const inboxRecord = await recordInboundForChannel(ctx, msg, t);
   const withinLimit = rateOk(msg.fromPhone, t.rateLimitPerHour);
   if (!(isStop || withinLimit)) {
     return null;

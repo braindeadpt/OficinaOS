@@ -96,6 +96,8 @@ interface RecordBase {
   at?: Date;
   channel: string;
   customerId?: string | null;
+  /** RECEIVED por defeito; FAILED na reconciliação de falha de persistência. */
+  deliveryStatus?: string;
   /** Id do gateway/Cloud para dedup — null grava sempre. */
   externalId?: string | null;
   phone: string;
@@ -141,9 +143,19 @@ export async function recordInboundMessage(
   if (opts.externalId) {
     const existing = await prisma.businessMessage.findFirst({
       where: { channel: opts.channel, externalId: opts.externalId },
-      select: { id: true, conversationId: true },
+      select: { deliveryStatus: true, id: true, conversationId: true },
     });
     if (existing?.conversationId) {
+      // Recuperação após falha de persistência: o registo FAILED vira
+      // RECEIVED quando a mensagem é finalmente processada (BUG #167 r10).
+      if (existing.deliveryStatus === "FAILED") {
+        await prisma.businessMessage
+          .update({
+            data: { deliveryStatus: "RECEIVED" },
+            where: { id: existing.id },
+          })
+          .catch(() => undefined);
+      }
       return {
         conversationId: existing.conversationId,
         created: false,
@@ -168,12 +180,27 @@ export async function recordInboundMessage(
         },
         update: {
           ...(customerId ? { customerId } : {}),
-          lastInboundAt: at,
-          lastMessageAt: at,
           phone: intlPhone,
           unreadCount: { increment: 1 },
         },
         where: { conversationKey: key },
+      });
+      // Mensagens recuperadas da fila chegam fora de ordem: as datas da
+      // conversa nunca recuam — um retry antigo escondia conversas do
+      // filtro "Sem resposta" (BUG #167 r9).
+      await tx.inboxConversation.updateMany({
+        where: {
+          id: conv.id,
+          OR: [
+            { lastInboundAt: { equals: null } },
+            { lastInboundAt: { lt: at } },
+          ],
+        },
+        data: { lastInboundAt: at },
+      });
+      await tx.inboxConversation.updateMany({
+        where: { id: conv.id, lastMessageAt: { lt: at } },
+        data: { lastMessageAt: at },
       });
       const msg = await tx.businessMessage.create({
         data: {
@@ -183,7 +210,7 @@ export async function recordInboundMessage(
           conversationKey: key,
           correspondent: intlPhone,
           customerId,
-          deliveryStatus: "RECEIVED",
+          deliveryStatus: opts.deliveryStatus ?? "RECEIVED",
           direction: "INBOUND",
           externalId: opts.externalId ?? null,
           subject: subjectFor(opts.channel),
@@ -383,7 +410,9 @@ export async function getConversationHistory(
     },
   });
   return rows.reverse().map((r) => ({
-    content: r.body,
+    // URLs (links de assinatura, portal) nunca vão para o fornecedor de
+    // IA — o histórico é contexto de conversa, não um arquivo de links.
+    content: r.body.replace(/https?:\/\/\S+|www\.\S+/gi, "[link]"),
     role: (r.direction === "INBOUND" ? "user" : "assistant") as
       | "assistant"
       | "user",
