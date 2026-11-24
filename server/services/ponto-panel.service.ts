@@ -95,13 +95,31 @@ export function resolvePontoRange(
   };
 }
 
+// Formatadores Intl são caros de construir — o agrupamento por dia
+// chama localDateKey por cada picagem (2× por consulta), por isso os
+// formatadores ficam em cache por fuso em vez de criados por chamada.
+const DTF_CACHE = new Map<string, Intl.DateTimeFormat>();
+
+function cachedDtf(
+  cacheKey: string,
+  locale: string,
+  options: Intl.DateTimeFormatOptions
+): Intl.DateTimeFormat {
+  let fmt = DTF_CACHE.get(cacheKey);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat(locale, options);
+    DTF_CACHE.set(cacheKey, fmt);
+  }
+  return fmt;
+}
+
 /** "YYYY-MM-DD" do instante no fuso da loja (mesmo truque de customer-job-view). */
 export function localDateKey(tz: string, d: Date): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(d);
+  return cachedDtf(`date|${tz}`, "en-CA", { timeZone: tz }).format(d);
 }
 
 function localMinutesOfDay(tz: string, d: Date): number {
-  const parts = new Intl.DateTimeFormat("en-US", {
+  const parts = cachedDtf(`minutes|${tz}`, "en-US", {
     hour: "2-digit",
     hour12: false,
     minute: "2-digit",
@@ -513,6 +531,12 @@ interface WorkInterval {
  * uma saída esquecida não pode inflar todos os dias seguintes até que
  * alguém registe a correção — os dias intermédios sem eventos continuam
  * sem linha, como antes.
+ *
+ * Uma abertura (ENTRADA/VOLTEI) JÁ NOUTRO dia civil com o turno ainda
+ * aberto fecha o intervalo anterior no fim do dia em que ele abriu: o
+ * trabalhador esqueceu-se de picar a saída e voltou no dia seguinte,
+ * não é um turno overnight. Sem este corte a SAIDA seguinte fechava o
+ * turno antigo e contava também as horas antes da nova ENTRADA.
  */
 function pairWorkIntervals(
   usable: ComputeRow[],
@@ -520,27 +544,31 @@ function pairWorkIntervals(
   now: Date
 ): WorkInterval[] {
   const intervals: WorkInterval[] = [];
-  let open: { atMs: number; entry: ComputeRow } | null = null;
+  let open: { atMs: number; dayEndMs: number } | null = null;
   for (const e of usable) {
     if (e.type === "ENTRADA" || e.type === "VOLTEI") {
-      // A primeira abertura ganha; entradas/voltas duplicadas não
-      // reiniciam o intervalo.
-      open ??= { atMs: e.at.getTime(), entry: e };
+      if (open && e.at.getTime() >= open.dayEndMs) {
+        intervals.push({ endMs: open.dayEndMs, startMs: open.atMs });
+        open = null;
+      }
+      // A primeira abertura ganha; entradas/voltas duplicadas no mesmo
+      // dia civil não reiniciam o intervalo.
+      open ??= {
+        atMs: e.at.getTime(),
+        dayEndMs: localDayRange(tz, localDateKey(tz, e.at)).end.getTime(),
+      };
       continue;
     }
-    // PAUSA e SAIDA fecham o intervalo aberto.
+    // PAUSA e SAIDA fecham o intervalo aberto — inclusive no dia civil
+    // seguinte, que é como o turno overnight se completa.
     if (open) {
       intervals.push({ endMs: e.at.getTime(), startMs: open.atMs });
       open = null;
     }
   }
   if (open) {
-    const openerDayEnd = localDayRange(
-      tz,
-      localDateKey(tz, open.entry.at)
-    ).end.getTime();
     intervals.push({
-      endMs: Math.min(now.getTime(), openerDayEnd),
+      endMs: Math.min(now.getTime(), open.dayEndMs),
       startMs: open.atMs,
     });
   }

@@ -505,6 +505,67 @@ describe("ponto panel — GET /hours + /missing-exits", () => {
     expect(miss.json()).toHaveLength(0);
   });
 
+  it("caps a forgotten-exit shift at day end; a next-day ENTRADA opens a new shift", async () => {
+    // Ana entra seg 09:00 e esquece a saída; ter entra 09:00 e sai 17:00
+    // (UTC = hora da loja em janeiro, Europe/Lisbon).
+    const prisma = fakePrisma({
+      entries: [
+        entryRow({
+          at: new Date("2026-01-12T09:00:00Z"),
+          id: "m1",
+          type: "ENTRADA",
+        }),
+        entryRow({
+          at: new Date("2026-01-13T09:00:00Z"),
+          id: "t1",
+          type: "ENTRADA",
+        }),
+        entryRow({
+          at: new Date("2026-01-13T17:00:00Z"),
+          id: "t2",
+          type: "SAIDA",
+        }),
+      ],
+    });
+    const app = buildApp(prisma);
+
+    // Relatório só de terça: 8h — antes contava as 17h desde seg 00:00.
+    const tueOnly = await app.inject({
+      method: "GET",
+      url: "/api/ponto/hours?from=2026-01-13&to=2026-01-13",
+    });
+    expect(tueOnly.json().days[0].hours.workedMinutes).toBe(480);
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/ponto/hours?from=2026-01-12&to=2026-01-13",
+    });
+    const byDate = Object.fromEntries(
+      res
+        .json()
+        .days.map(
+          (d: {
+            date: string;
+            hours: { missingExit: boolean; workedMinutes: number };
+          }) => [d.date, d]
+        )
+    );
+    // Seg: o turno por fechar conta até ao fim do PRÓPRIO dia (15h)…
+    expect(byDate["2026-01-12"].hours.workedMinutes).toBe(900);
+    // …e a saída esquecida continua assinalada — a ENTRADA de terça não
+    // a resolve, ao contrário da SAIDA de um turno overnight.
+    expect(byDate["2026-01-12"].hours.missingExit).toBe(true);
+    expect(byDate["2026-01-13"].hours.missingExit).toBe(false);
+
+    const miss = await app.inject({
+      method: "GET",
+      url: "/api/ponto/missing-exits?from=2026-01-12&to=2026-01-13",
+    });
+    expect(miss.json().map((m: { date: string }) => m.date)).toEqual([
+      "2026-01-12",
+    ]);
+  });
+
   it("does not flag the current civil day as a missing exit", async () => {
     const prisma = fakePrisma({
       entries: [

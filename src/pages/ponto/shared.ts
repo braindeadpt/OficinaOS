@@ -118,17 +118,17 @@ function zonedParts(
   };
 }
 
-/**
- * Converte "YYYY-MM-DD" + "HH:MM" lidos NO FUSO DA LOJA num instante UTC.
- * O input datetime-local devolve hora de parede — interpretá-la no fuso
- * do dispositivo gravava a saída no dia errado (o caso dos Açores/Lisboa).
- * Devolve null se os argumentos não formarem uma data válida.
- */
-export function shopWallTimeToUtc(
-  tz: string,
+function wallTimeParts(
   ymd: string,
   hhmm: string
-): Date | null {
+): {
+  d: number;
+  h: number;
+  mi: number;
+  mo: number;
+  targetUtc: number;
+  y: number;
+} | null {
   const [y, mo, d] = ymd.split("-").map(Number);
   const [h, mi] = hhmm.split(":").map(Number);
   if (
@@ -150,36 +150,87 @@ export function shopWallTimeToUtc(
   ) {
     return null;
   }
-  const targetUtc = Date.UTC(y, mo - 1, d, h, mi, 0);
-  // Itera o offset: cada passagem refina o instante até a leitura zoned
-  // coincidir com a hora de parede pedida (2 voltas chegam; DST na
-  // transição pode precisar de mais — daí o teto de 4, como no servidor).
-  let instant = targetUtc;
-  for (let i = 0; i < 4; i++) {
-    const p = zonedParts(tz, new Date(instant));
-    const zonedEpoch = Date.UTC(
-      p.year,
-      p.month - 1,
-      p.day,
-      p.hour,
-      p.minute,
-      0
-    );
-    const offsetMs = instant - zonedEpoch;
-    const candidate = targetUtc + offsetMs;
-    const cp = zonedParts(tz, new Date(candidate));
-    if (
-      cp.year === y &&
-      cp.month === mo &&
-      cp.day === d &&
-      cp.hour === h &&
-      cp.minute === mi
-    ) {
-      return new Date(candidate);
-    }
-    instant = candidate;
+  return { d, h, mi, mo, targetUtc: Date.UTC(y, mo - 1, d, h, mi, 0), y };
+}
+
+/**
+ * Todos os instantes UTC cuja leitura NO FUSO DA LOJA é "YYYY-MM-DD
+ * HH:MM", por ordem cronológica. Na mudança para a hora de inverno a
+ * mesma hora de parede acontece duas vezes com desvios UTC diferentes
+ * (devolve [2]); na mudança para o verão há horas que não existem
+ * (devolve []). Uma hora normal devolve um único candidato — e um
+ * datetime-local inválido devolve [] tal como uma data válida.
+ */
+export function shopWallTimeCandidates(
+  tz: string,
+  ymd: string,
+  hhmm: string
+): Date[] {
+  const w = wallTimeParts(ymd, hhmm);
+  if (!w) {
+    return [];
   }
-  return null;
+  // Um instante com a leitura pedida está a |desvio UTC| ≤ 14h do alvo.
+  // Varrem-se os desvios em vigor numa janela de ±15h (amostras de 15
+  // min — cada desvio dura semanas, não falha nenhum) e verifica-se
+  // quais reproduzem a hora de parede.
+  const offsets = new Set<number>();
+  for (
+    let probe = w.targetUtc - 15 * 3_600_000;
+    probe <= w.targetUtc + 15 * 3_600_000;
+    probe += 15 * 60_000
+  ) {
+    const p = zonedParts(tz, new Date(probe));
+    offsets.add(
+      probe - Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, 0)
+    );
+  }
+  const matches: Date[] = [];
+  for (const offsetMs of offsets) {
+    const candidate = new Date(w.targetUtc + offsetMs);
+    const cp = zonedParts(tz, candidate);
+    if (
+      cp.year === w.y &&
+      cp.month === w.mo &&
+      cp.day === w.d &&
+      cp.hour === w.h &&
+      cp.minute === w.mi
+    ) {
+      matches.push(candidate);
+    }
+  }
+  return matches.sort((a, b) => a.getTime() - b.getTime());
+}
+
+/**
+ * Converte "YYYY-MM-DD" + "HH:MM" lidos NO FUSO DA LOJA num instante UTC.
+ * O input datetime-local devolve hora de parede — interpretá-la no fuso
+ * do dispositivo gravava a saída no dia errado (o caso dos Açores/Lisboa).
+ * Devolve a ocorrência mais cedo (ver shopWallTimeCandidates para a hora
+ * repetida na mudança para a hora de inverno) ou null se os argumentos
+ * não formarem uma data/hora que exista na loja.
+ */
+export function shopWallTimeToUtc(
+  tz: string,
+  ymd: string,
+  hhmm: string
+): Date | null {
+  return shopWallTimeCandidates(tz, ymd, hhmm)[0] ?? null;
+}
+
+/**
+ * "UTC±HH:MM" do desvio em vigor num instante — etiqueta das ocorrências
+ * quando a mesma hora de parede acontece duas vezes (mudança de hora).
+ */
+export function shopUtcOffsetLabel(tz: string, d: Date): string {
+  const p = zonedParts(tz, d);
+  const offsetMin = Math.round(
+    (Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, 0) - d.getTime()) /
+      60_000
+  );
+  const sign = offsetMin < 0 ? "-" : "+";
+  const abs = Math.abs(offsetMin);
+  return `UTC${sign}${String(Math.floor(abs / 60)).padStart(2, "0")}:${String(abs % 60).padStart(2, "0")}`;
 }
 
 /**

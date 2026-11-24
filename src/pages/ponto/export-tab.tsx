@@ -42,7 +42,7 @@ async function downloadPdf(
       d.hours.missingExit ? "!" : "",
       d.hours.lateMinutes > 0 ? `${d.hours.lateMinutes}m` : "",
       d.hours.earlyExitMinutes > 0 ? `${d.hours.earlyExitMinutes}m` : "",
-      d.hours.hasCorrection || d.hours.recusadoCount > 0 ? "✓" : "",
+      d.hours.hasCorrection || d.hours.recusadoCount > 0 ? "X" : "",
     ]),
     head: [
       [

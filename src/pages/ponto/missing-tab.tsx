@@ -5,13 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import api from "@/lib/api";
 import {
   formatClock,
   formatDay,
   shopDateKey,
-  shopWallTimeToUtc,
+  shopUtcOffsetLabel,
+  shopWallTimeCandidates,
   TYPE_LABEL,
   useShopTz,
   ymdAddDays,
@@ -30,8 +32,11 @@ export default function MissingTab() {
   const [error, setError] = useState(false);
   const [modalFor, setModalFor] = useState<PontoMissingExitDTO | null>(null);
   // "at" guarda hora de parede NO FUSO DA LOJA ("YYYY-MM-DDTHH:MM"), não
-  // do dispositivo — é essa leitura que shopWallTimeToUtc converte.
+  // do dispositivo — é essa leitura que shopWallTimeCandidates converte.
   const [at, setAt] = useState("");
+  // Índice da ocorrência escolhida quando a hora de parede acontece duas
+  // vezes na mudança para a hora de inverno (dois desvios UTC válidos).
+  const [occurrence, setOccurrence] = useState(0);
   const [reason, setReason] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -66,17 +71,27 @@ export default function MissingTab() {
     // ajusta para a hora real da saída (puede ser já no dia seguinte,
     // caso de turno overnight).
     setAt(`${item.date}T23:59`);
+    setOccurrence(0);
     setReason("");
     setFormError(null);
     setModalFor(item);
   };
 
+  // Instantes UTC que batem na hora de parede escolhida — dois quando
+  // o relógio atrasou nessa madrugada e a hora local se repetiu.
+  const candidates = useMemo(() => {
+    const [ymd, hm] = at.split("T");
+    if (!(ymd && hm)) {
+      return [];
+    }
+    return shopWallTimeCandidates(tz, ymd, hm.slice(0, 5));
+  }, [at, tz]);
+
   const submit = async () => {
     if (!(modalFor && at)) {
       return;
     }
-    const [ymd, hm] = at.split("T");
-    const instant = shopWallTimeToUtc(tz, ymd ?? "", (hm ?? "").slice(0, 5));
+    const instant = candidates[Math.min(occurrence, candidates.length - 1)];
     if (!instant) {
       setFormError(t("ponto.err_exit_time"));
       return;
@@ -229,6 +244,7 @@ export default function MissingTab() {
             <Input
               onChange={(e) => {
                 setAt(e.target.value);
+                setOccurrence(0);
                 setFormError(null);
               }}
               type="datetime-local"
@@ -238,6 +254,23 @@ export default function MissingTab() {
           <p className="text-on-surface-variant text-xs">
             {t("ponto.exit_at_hint", { date: modalFor?.date ?? "" })}
           </p>
+          {candidates.length > 1 && (
+            <Field
+              hint={t("ponto.exit_dst_hint")}
+              label={t("ponto.exit_dst_offset")}
+            >
+              <Select
+                onChange={(e) => setOccurrence(Number(e.target.value))}
+                value={occurrence}
+              >
+                {candidates.map((c, i) => (
+                  <option key={c.toISOString()} value={i}>
+                    {shopUtcOffsetLabel(tz, c)}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
           <Field label={t("ponto.reason_optional")}>
             <Textarea
               onChange={(e) => setReason(e.target.value)}
