@@ -62,13 +62,18 @@ WhatsApp/SMS a partir de um QR fixo. O que sai da loja e o que fica:
 
 **Sai da loja (só com o módulo ativo e um canal Pro de receção):**
 
-- O comando do trabalhador e a **localização no momento do registo**
-  transitam pela OficinaOS Cloud até `POST /ponto/evaluate`, que valida
-  código, raio e precisão — o pedido leva o telefone e um indicador da
-  existência de foto, **nunca a imagem** (a foto viaja como media do
-  próprio canal). A Cloud **não guarda** localização, fotos nem registos —
-  apenas os `PontoToken` de 4 dígitos por ~24 h, para auditoria de uso
-  único.
+- A mensagem do trabalhador — texto e **localização no momento do
+  registo** — chega à app pelo canal ativo: no canal Evolution o webhook
+  entrega diretamente à aplicação, **sem passar pela OficinaOS Cloud**
+  (no relay Cloud a mensagem transita por ela; no WhatsApp oficial
+  chega pelo webhook da Meta). A ida à Cloud é um passo separado e só
+  acontece nas marcações (ENTRADA, PAUSA, VOLTEI, SAIDA): a app chama
+  `POST /ponto/evaluate`, que valida código, raio e precisão — o pedido
+  leva o telefone e um indicador da existência de foto, **nunca a
+  imagem** (a foto viaja como media do próprio canal). O ESTADO é uma
+  consulta local de registos e **não faz pedido nenhum à Cloud**. A
+  Cloud **não guarda** localização, fotos nem registos — apenas os
+  `PontoToken` de 4 dígitos por ~24 h, para auditoria de uso único.
 - As correções gravadas pela própria app — a saída presumida pelo
   lembrete de saída e a hora de saída declarada pelo trabalhador em
   resposta a esse lembrete — ficam **só na loja**: não passam pela

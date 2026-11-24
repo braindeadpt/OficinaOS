@@ -414,6 +414,14 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
           ),
         });
       }
+      // O formulário de ponto envia sempre a hora já gravada — o sync
+      // de templates só se justifica quando `pontoExitReminderTime`
+      // MUDA (definir pela 1.ª vez ou editar): gravar o intervalo de
+      // pausa com a mesma hora não deve re-submeter os modelos todos.
+      const reminderTimeChanged =
+        parsed.data.pontoExitReminderTime !== undefined &&
+        (await getOrCreateShopSettings(app.prisma)).pontoExitReminderTime !==
+          parsed.data.pontoExitReminderTime;
       const updated = await upsertShopSettings(app.prisma, parsed.data);
       // The widget CSP caches embedAllowedOrigins for 60s — drop it so a
       // save takes effect on the next request instead of up to a minute late.
@@ -429,7 +437,9 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       const needsTemplateSync = Object.entries(parsed.data).some(
         ([key, value]) =>
           META_TEMPLATE_KEYS.has(key) ||
-          (key === "pontoExitReminderTime" && Boolean(value))
+          (key === "pontoExitReminderTime" &&
+            Boolean(value) &&
+            reminderTimeChanged)
       );
       if (
         needsTemplateSync &&

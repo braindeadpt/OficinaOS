@@ -13,6 +13,17 @@ export const PONTO_BUTTON_IDS = {
 export type PontoButtonId =
   (typeof PONTO_BUTTON_IDS)[keyof typeof PONTO_BUTTON_IDS];
 
+// Termos apresentados na pergunta de clarificação do dia (ONTEM/HOJE)
+// e reconhecidos na resposta — fonte única para o texto enviado (aqui)
+// e para o parser da resposta (handler.ts), para que a pergunta e as
+// respostas aceites nunca divirjam. Em pt-PT como o resto do protocolo
+// do ponto (os próprios comandos são palavras PT).
+export const PONTO_EXIT_DATE_TERMS = {
+  now: "agora",
+  today: "hoje",
+  yesterday: "ontem",
+} as const;
+
 export const PONTO_TEXT = {
   commands:
     "Comandos do livro de ponto: ENTRADA (leia o QR), PAUSA, VOLTEI, SAIDA, ESTADO.",
@@ -41,7 +52,7 @@ export const PONTO_TEXT = {
     "Responda SIM se saiu à hora indicada ou escreva a hora de saída (ex.: 18:05).",
   // Hora declarada ambígua entre dois dias (resposta depois da
   // meia-noite): pergunta-se o dia antes de gravar — nunca se assume.
-  exitDateClarifyReprompt: "Responda ONTEM ou HOJE.",
+  exitDateClarifyReprompt: `Responda ${PONTO_EXIT_DATE_TERMS.yesterday.toUpperCase()} ou ${PONTO_EXIT_DATE_TERMS.today.toUpperCase()}.`,
   // Lembrete de pausa (§2.2b) — nunca fecha a pausa sozinho.
   pauseReminder:
     "OficinaOS: ainda está em pausa? Quando regressar, responda VOLTEI.",
@@ -65,7 +76,9 @@ export function pontoExitDateQuestion(
     const [, m, d] = ymd.split("-");
     return `${d}/${m}`;
   };
-  return `${hhmm} — dia ${ddmm(ymdReminder)} ou dia ${ddmm(ymdReply)}? Responda ONTEM ou HOJE.`;
+  const ontem = PONTO_EXIT_DATE_TERMS.yesterday.toUpperCase();
+  const hoje = PONTO_EXIT_DATE_TERMS.today.toUpperCase();
+  return `${hhmm} — dia ${ddmm(ymdReminder)} ou dia ${ddmm(ymdReply)}? Responda ${ontem} ou ${hoje}.`;
 }
 
 /** Nome do template Meta utility do lembrete de saída — sincronizado

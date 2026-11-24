@@ -181,7 +181,11 @@ export default function PontoInfoPage() {
 
       {state.kind === "ready" && (
         <article className="flex flex-col gap-5 rounded-2xl bg-white p-8 text-neutral-900 print:rounded-none print:p-0">
-          <header className="flex flex-col gap-1">
+          {/* O documento é sempre PT-PT mesmo com a app noutro idioma —
+              os lang locais dizem ao leitor de ecrã a pronúncia certa.
+              O texto personalizado (state.infoText) fica sem lang: a
+              língua em que a loja o escreveu é desconhecida. */}
+          <header className="flex flex-col gap-1" lang="pt-PT">
             <h1 className="font-extrabold font-headline text-2xl">
               {docT("ponto.info_doc_title")}
             </h1>
@@ -198,7 +202,10 @@ export default function PontoInfoPage() {
               {state.infoText}
             </div>
           ) : (
-            <div className="flex flex-col gap-4 text-sm leading-relaxed">
+            <div
+              className="flex flex-col gap-4 text-sm leading-relaxed"
+              lang="pt-PT"
+            >
               {DEFAULT_INFO_MODEL.map((block) => (
                 <section key={block.heading ?? "intro"}>
                   {block.heading && (
@@ -221,7 +228,7 @@ export default function PontoInfoPage() {
             </div>
           )}
 
-          <section className="mt-4">
+          <section className="mt-4" lang="pt-PT">
             <p className="mb-4 font-semibold text-neutral-800 text-sm">
               {docT("ponto.info_doc_sig_heading")}
             </p>

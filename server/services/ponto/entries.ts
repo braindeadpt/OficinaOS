@@ -236,5 +236,6 @@ export async function deletePontoPhoto(
 }
 
 // A purga de fotos >90 dias vive em services/ponto-photos.service.ts
-// (cleanupPontoPhotos, ligado ao runCleanup do index.ts na branch do
-// painel — feat/ponto-panel).
+// (cleanupPontoPhotos, ligado ao runCleanup do index.ts — a linha morre,
+// o TimeEntry fica com a referência órfã que o painel mostra como
+// "foto expirada").

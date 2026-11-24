@@ -30,6 +30,7 @@ import { syncDeviceCatalogIfStale } from "./services/device-catalog.service.js";
 import { startLowStockScheduler } from "./services/low-stock.service.js";
 import { cleanupReadNotifications } from "./services/notification-inapp.service.js";
 import { startOutboxWorker } from "./services/notification-outbox.service.js";
+import { cleanupPontoPhotos } from "./services/ponto-photos.service.js";
 import { startRemarketingScheduler } from "./services/remarketing.service.js";
 import { applyTaskRules } from "./services/tasks.service.js";
 import { initValidationI18n } from "./utils/resolve-validation-messages.js";
@@ -178,6 +179,9 @@ const runCleanup = () =>
     }),
     cleanupOldAuditLogs(app.prisma).catch((err) => {
       app.log.error(err, "Audit log cleanup error");
+    }),
+    cleanupPontoPhotos(app.prisma).catch((err) => {
+      app.log.error(err, "Ponto photo cleanup error");
     }),
   ]);
 const cleanupHandle = setInterval(runCleanup, CLEANUP_INTERVAL_MS);

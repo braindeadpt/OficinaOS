@@ -501,6 +501,81 @@ describe("resposta ao lembrete de saída", () => {
     expect((entry.at as Date).toISOString()).toBe("2026-03-29T00:15:00.000Z");
   });
 
+  it("«VOLTEI 18:05» com pending → fluxo VOLTEI normal, não correção de saída", async () => {
+    // O parser de comandos aceita o sufixo numérico e o exit-answer lia
+    // a hora — sem o gate SAIDA o regresso da pausa gravava uma SAIDA
+    // POR_VALIDAR e o regresso nunca acontecia.
+    const { ctx, message, t } = setup();
+    armPending();
+
+    await tryHandlePontoStaff(ctx, message("VOLTEI 18:05"), t);
+
+    // Sem correção de saída; o comando mata o pending e segue o fluxo
+    // normal de marcação (pedido de localização do VOLTEI).
+    expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
+    expect(getPendingPontoExit("user-1")).toBeNull();
+    expect(t.ponto?.interactive).toHaveBeenCalled();
+  });
+
+  it("com clarifyDate pendente, «SIM»/«Certo» repete a pergunta sem gravar", async () => {
+    // «SIM» responde à pergunta ERRADA (a anterior, SIM/hora) — com a
+    // escolha do dia pendente não pode aprovar a presumida nem descartar
+    // a hora declarada. O pending fica vivo com clarifyDate intacto.
+    const { ctx, message, sent, t } = setup();
+    setPendingPontoExit("user-1", {
+      clarifyDate: {
+        hhmm: "00:15",
+        ymdReminder: "2026-01-10",
+        ymdReply: "2026-01-11",
+      },
+      expiresAt: Date.now() + PONTO_EXIT_PENDING_TTL_MS,
+      presumedAt: "2026-01-10T23:30:00.000Z",
+      presumedEntryId: "presumed-1",
+      userId: "user-1",
+    });
+    const msg = { ...message(""), createdAt: "2026-01-11T00:25:00.000Z" };
+
+    await tryHandlePontoStaff(ctx, { ...msg, text: "SIM" }, t);
+    await tryHandlePontoStaff(ctx, { ...msg, text: "Certo" }, t);
+
+    expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
+    expect(sent.at(-1)).toContain("Responda ONTEM ou HOJE");
+    const pending = getPendingPontoExit("user-1");
+    expect(pending?.clarifyDate?.hhmm).toBe("00:15");
+  });
+
+  it("com clarifyDate pendente, uma nova hora explícita reabre o cálculo", async () => {
+    // O trabalhador pode corrigir a hora em vez de escolher o dia —
+    // "saí às 22:15" só é plausível no dia do lembrete (no dia da
+    // resposta estaria no futuro) → grava sem nova pergunta.
+    const { ctx, message, t } = setup();
+    setPendingPontoExit("user-1", {
+      clarifyDate: {
+        hhmm: "00:15",
+        ymdReminder: "2026-01-10",
+        ymdReply: "2026-01-11",
+      },
+      expiresAt: Date.now() + PONTO_EXIT_PENDING_TTL_MS,
+      presumedAt: "2026-01-10T23:30:00.000Z",
+      presumedEntryId: "presumed-1",
+      userId: "user-1",
+    });
+    const msg = {
+      ...message("saí às 22:15"),
+      createdAt: "2026-01-11T00:25:00.000Z",
+    };
+
+    await tryHandlePontoStaff(ctx, msg, t);
+
+    const entry = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect(entry).toMatchObject({ status: "POR_VALIDAR", type: "SAIDA" });
+    expect((entry.at as Date).toISOString()).toBe("2026-01-10T22:15:00.000Z");
+    expect(getPendingPontoExit("user-1")).toBeNull();
+  });
+
   it("dois dias plausíveis → pergunta ONTEM/HOJE; a escolha grava", async () => {
     const { ctx, message, sent, t } = setup();
     // Pending antigo sem shiftOpenAt (armado antes da atualização):

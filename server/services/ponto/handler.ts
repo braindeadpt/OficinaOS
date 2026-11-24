@@ -55,6 +55,7 @@ import {
   takeExpiredPonto,
 } from "./state.js";
 import {
+  PONTO_EXIT_DATE_TERMS,
   PONTO_TEXT,
   pontoExitDateQuestion,
   pontoExitReminderText,
@@ -456,15 +457,18 @@ async function routeText(env: FlowEnv): Promise<void> {
     await env.say(PONTO_TEXT.commands);
     return;
   }
-  // Com pergunta de saída pendente, uma declaração COM hora
+  // Com pergunta de saída pendente, uma declaração de SAÍDA com hora
   // ("Saí 18:05") responde à pergunta — o parser de comandos lia-a
   // como SAIDA e a hora declarada perdia-se ("Saí às 18:05" já caía
-  // aqui por não cobrir "às"). Botões e comandos sem hora mantêm a
-  // prioridade normal: matam o pending e seguem o fluxo do comando.
+  // aqui por não cobrir "às"). O desvio vale só para SAIDA: «VOLTEI
+  // 18:05» é regresso de pausa e segue o seu fluxo mesmo com hora no
+  // texto. Botões e comandos sem hora mantêm a prioridade normal:
+  // matam o pending e seguem o fluxo do comando.
   const exitPending = getPendingPontoExit(env.staff.user.id);
   if (
     exitPending &&
     !env.msg.interactiveId &&
+    parsed.command === "SAIDA" &&
     parsePontoExitAnswer(env.msg.text)?.kind === "time"
   ) {
     await onExitReminderAnswer(env, exitPending);
@@ -570,13 +574,15 @@ async function onExitReminderAnswer(
     return;
   }
   const answer = parsePontoExitAnswer(env.msg.text);
+  // Com clarificação de data pendente (ONTEM/HOJE), só uma NOVA hora
+  // explícita reabre o cálculo — «SIM», «certo» ou texto solto não
+  // escolhem dia nenhum: segue o fluxo da data, que repete a pergunta
+  // sem gravar nem limpar o pending.
+  if (pending.clarifyDate && answer?.kind !== "time") {
+    await onExitDateClarification(env, pending);
+    return;
+  }
   if (!answer) {
-    // Com clarificação de data pendente, ONTEM/HOJE resolve o dia —
-    // outro texto repete a pergunta de data (o pending fica vivo).
-    if (pending.clarifyDate) {
-      await onExitDateClarification(env, pending);
-      return;
-    }
     await env.say(PONTO_TEXT.exitReminderReprompt);
     return;
   }
@@ -699,9 +705,12 @@ async function onExitDateClarification(
   }
   const normalized = normalizePontoText(env.msg.text ?? "");
   let ymd: string | null = null;
-  if (normalized === "hoje" || normalized === "agora") {
+  if (
+    normalized === PONTO_EXIT_DATE_TERMS.today ||
+    normalized === PONTO_EXIT_DATE_TERMS.now
+  ) {
     ymd = clarify.ymdReply;
-  } else if (normalized === "ontem") {
+  } else if (normalized === PONTO_EXIT_DATE_TERMS.yesterday) {
     ymd = clarify.ymdReminder;
   }
   if (!ymd) {
