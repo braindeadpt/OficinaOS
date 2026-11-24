@@ -422,5 +422,28 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
     expect(
       parsePontoExitAnswer("Saí às 18:05, ou seja antes das 19 horas")
     ).toEqual({ hhmm: "18:05", kind: "time" });
+    // …mas uma reformulação que contradiz a hora declarada
+    // («ou seja depois das 19» para 18:05) fica ambígua.
+    expect(
+      parsePontoExitAnswer("Saí às 18:05, ou seja depois das 19 horas")
+    ).toEqual({ kind: "ambiguous" });
+    // Advérbios entre «ou» e o limite não escondem a alternativa.
+    expect(
+      parsePontoExitAnswer(
+        "Acho que saí às 18. Talvez às 18 ou só depois das 19 horas"
+      )
+    ).toEqual({ kind: "ambiguous" });
+    // «18:00» e «18» declaram a mesma hora — repetida a explicar o
+    // horário da loja fica contexto mesmo trocando o formato.
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 18:00. Às 18 a loja ainda estava aberta até às 19 horas"
+      )
+    ).toEqual({ hhmm: "18:00", kind: "time" });
+    expect(
+      parsePontoExitAnswer(
+        "Acho que saí às 18:05. Talvez às 18:05 ou só depois das 19 horas"
+      )
+    ).toEqual({ kind: "ambiguous" });
   });
 });

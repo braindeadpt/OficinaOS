@@ -192,7 +192,13 @@ const WORKED_DURATION_RE =
 // essa hora — sozinho não é resposta válida. Mas conta para a
 // ambiguidade: «18:05 ou depois das 19 horas» tem duas candidatas.
 const BOUND_HOUR_RE =
-  /\b(?:depois|apos|antes|ate)\s+(?:das?|as)\s+(\d{1,2})\s*horas?\b/gi;
+  /\b(depois|apos|antes|ate)\s+(?:das?|as)\s+(\d{1,2})\s*horas?\b/gi;
+// Reformulação «ou seja …» no fim do texto antes do limite.
+const OU_SEJA_END_RE = /(?:^|\s)ou\s+seja$/;
+// «ou» a ligar o limite à hora, com advérbios comuns pelo meio —
+// «ou só depois das 19», «ou talvez mesmo depois das 19».
+const OU_LINK_END_RE =
+  /(?:^|\s)ou(?:\s+(?:so|talvez|mesmo|ainda|apenas|logo|afinal|tambem|nem))*$/;
 
 /** Horas soltas distintas no texto normalizado — "6" ou "18" a sós
  *  (guarda o texto cru para distinguir "07" de "7"). Quantidades de
@@ -296,9 +302,17 @@ function collectClauseHours(
 ): boolean {
   const times = explicitTimes(clause);
   const spelledInvalid = collectSpelledTimes(withoutRelatives, times);
+  // «18:00» e «18» declaram a mesma hora — a hora só é «nova» quando
+  // não foi declarada em nenhum dos dois formatos.
+  const seenExplicit = (hhmm: string): boolean =>
+    explicit.has(hhmm) ||
+    (hhmm.endsWith(":00") &&
+      [...bare].some((b) => Number(b) === Number(hhmm.slice(0, 2))));
+  const seenBare = (h: string): boolean =>
+    bare.has(h) || explicit.has(hhmmOf(Number(h), 0, zeroPadded(h)) ?? "\0");
   let clauseHasNewHour = false;
   for (const hhmm of times) {
-    if (!explicit.has(hhmm)) {
+    if (!seenExplicit(hhmm)) {
       clauseHasNewHour = true;
     }
     explicit.add(hhmm);
@@ -309,7 +323,7 @@ function collectClauseHours(
   // baixa para «18» solto).
   if (times.size === 0 && !spelledInvalid) {
     for (const h of bareHours(withoutRelatives)) {
-      if (!bare.has(h)) {
+      if (!seenBare(h)) {
         clauseHasNewHour = true;
       }
       bare.add(h);
@@ -326,7 +340,7 @@ function collectClauseHours(
     for (const h of bareHours(withoutSpelled)) {
       const hhmm = hhmmOf(Number(h), 0, zeroPadded(h));
       if (hhmm) {
-        if (!explicit.has(hhmm)) {
+        if (!seenExplicit(hhmm)) {
           clauseHasNewHour = true;
         }
         explicit.add(hhmm);
@@ -336,29 +350,66 @@ function collectClauseHours(
   return clauseHasNewHour;
 }
 
+/** O limite reformulado por «ou seja» é coerente quando TODAS as
+ *  horas declaradas respeitam o operador — «antes das 19» vale para
+ *  18:05. Uma contradição («ou seja depois das 19» para 18:05) é
+ *  candidata como alternativa e ambigúa a resposta. */
+function boundConsistent(
+  declared: number[],
+  op: string,
+  boundHour: number
+): boolean {
+  const after = op === "depois" || op === "apos";
+  return declared.every((h) => (after ? h > boundHour : h < boundHour));
+}
+
 /** Decide se cada limite «depois das N horas» da oração é
- *  alternativa à saída (bound) ou contexto doutro acontecimento
- *  (looseBound): é alternativa quando a oração declara uma hora nova
- *  ou quando «ou» o liga à hora — no início («18:05, ou talvez
- *  depois das 19 horas») ou antes do limite («talvez às 18 ou
- *  depois das 19»). «ou seja» é explicação, não alternativa. */
+ *  alternativa à saída (bound), contexto doutro acontecimento
+ *  (looseBound) ou reformulação «ou seja» (aceite quando coerente
+ *  com a hora declarada, ambíguo quando a contradiz). É alternativa
+ *  quando a oração declara uma hora nova ou quando «ou» o liga à
+ *  hora — no início («18:05, ou talvez depois das 19 horas») ou
+ *  antes do limite («talvez às 18 ou só depois das 19»), com
+ *  advérbios comuns pelo meio. */
 function classifyBoundHours(
   clauseBoundMatches: RegExpMatchArray[],
   withoutRelatives: string,
   normalizedClause: string,
   clauseHasNewHour: boolean,
+  explicit: Set<string>,
+  bare: Set<string>,
   bound: Set<string>,
   looseBound: Set<string>
 ): void {
   const clauseTokens = normalizedClause.split(" ");
   const startsWithOu = clauseTokens[0] === "ou" && clauseTokens[1] !== "seja";
+  const declared = [
+    ...[...explicit].map((h) => {
+      const [hh, mm] = h.split(":").map(Number);
+      return hh + mm / 60;
+    }),
+    ...[...bare].map(Number),
+  ];
   for (const m of clauseBoundMatches) {
     const before = withoutRelatives.slice(0, m.index).trimEnd();
-    const linkedByOu = before === "ou" || before.endsWith(" ou");
-    if (clauseHasNewHour || startsWithOu || linkedByOu) {
-      bound.add(m[1]);
+    const boundHour = Number(m[2]);
+    if (OU_SEJA_END_RE.test(before)) {
+      // «ou seja» reformula a hora declarada: coerente ignora-se,
+      // contraditória conta como alternativa; sem hora declarada
+      // fica como contexto (solto, ambigúa sozinho).
+      if (declared.length === 0) {
+        looseBound.add(boundHour.toString());
+      } else if (!boundConsistent(declared, m[1], boundHour)) {
+        bound.add(boundHour.toString());
+      }
+    } else if (
+      clauseHasNewHour ||
+      startsWithOu ||
+      OU_LINK_END_RE.test(before)
+    ) {
+      bound.add(boundHour.toString());
     } else {
-      looseBound.add(m[1]);
+      looseBound.add(boundHour.toString());
     }
   }
 }
@@ -409,6 +460,8 @@ function collectClause(
     withoutRelatives,
     normalizedClause,
     clauseHasNewHour,
+    explicit,
+    bare,
     bound,
     looseBound
   );
