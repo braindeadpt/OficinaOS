@@ -473,6 +473,36 @@ describe("buildQuoteSuggestion — device-aware part priority", () => {
     expect(part?.catalogId).toBe("part-maxcap");
   });
 
+  it("rejects a variant followed by a generic descriptor (Pro OEM)", () => {
+    // BUG #166 r10: «iPhone 15 Pro OEM» é a variante Pro — a peça do
+    // modelo certo esgotada ganha à Pro em stock.
+    const parts: QuotePartInput[] = [
+      {
+        category: "BATTERY",
+        defaultPrice: 30,
+        id: "part-base",
+        name: "Bateria iPhone 15",
+        stockQuantity: 0,
+      },
+      {
+        category: "BATTERY",
+        defaultPrice: 38,
+        id: "part-pro-oem",
+        name: "Bateria iPhone 15 Pro OEM",
+        stockQuantity: 4,
+      },
+    ];
+    const s = build(
+      diag(
+        { "battery.health": { Status: "fail" } },
+        { device: { brand: "Apple", model: "iPhone 15" } }
+      ),
+      { parts }
+    );
+    const part = s.lines.find((l) => l.kind === "part");
+    expect(part?.catalogId).toBe("part-base");
+  });
+
   it("still prefers the exact-model out-of-stock part over a variant in stock", () => {
     // Controlo da decisão do dono com variantes: «Bateria iPhone 15»
     // esgotada continua a ganhar — à Pro em stock E à genérica em stock.

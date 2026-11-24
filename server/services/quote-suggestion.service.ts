@@ -397,13 +397,20 @@ const MODEL_VARIANT_TOKENS = new Set([
   "ultra",
 ]);
 
+// Frases comerciais que CONTÊM um token de variante mas não são variantes
+// de modelo — «bateria iphone 15 – max capacity» é a bateria do 15, não
+// do 15 Pro Max (BUG #166 r9). Um descritor genérico a seguir à variante
+// («…15 Pro OEM») NÃO salva a correspondência (BUG #166 r10).
+const COMMERCIAL_VARIANT_PHRASES = new Set(["max capacity"]);
+
 /**
  * Contains por palavra inteira com rejeição de variantes: devolve true se
  * `needle` ocorre em `haystack` (ambos normalizados) e a palavra seguinte
  * à ocorrência não estende o modelo com uma variante («iphone 15 pro»).
- * A variante só conta no fim da menção ou antes de outra variante —
- * «bateria iphone 15 – max capacity» mantém o deviceHit (descrição
- * comercial, BUG #166 r9).
+ * A variante conta no fim da menção, antes de outra variante ou antes
+ * de um descritor («…15 Pro OEM») — só uma frase comercial conhecida
+ * («max capacity») mantém a correspondência com o modelo base
+ * (BUG #166 r9/r10).
  */
 function deviceModelContained(haystack: string, needle: string): boolean {
   const hay = ` ${haystack} `;
@@ -423,10 +430,10 @@ function deviceModelContained(haystack: string, needle: string): boolean {
     if (!MODEL_VARIANT_TOKENS.has(next)) {
       return true;
     }
-    // A variante só estende o modelo quando FECHA a menção («…15 Pro»,
-    // «…15 Pro Max») — «…15 – Max Capacity» é descrição comercial e a
-    // peça mantém a prioridade (BUG #166 r9).
-    if (words.length > 1 && !MODEL_VARIANT_TOKENS.has(words[1] ?? "")) {
+    // «…15 – Max Capacity» é descrição comercial (BUG #166 r9); «…15 Pro
+    // OEM» continua a ser variante (BUG #166 r10) — descritor genérico
+    // não salva a correspondência, só a frase comercial conhecida.
+    if (COMMERCIAL_VARIANT_PHRASES.has(`${next} ${words[1] ?? ""}`.trim())) {
       return true;
     }
     from = idx + 1;
