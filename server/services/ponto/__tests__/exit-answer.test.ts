@@ -262,6 +262,26 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
     expect(
       parsePontoExitAnswer("Saí pelas 18 horas e 15 minutos mais tarde")
     ).toBeNull();
+    // «mais cedo» também — os «15 minutos» podem ser duração.
+    expect(
+      parsePontoExitAnswer(
+        "Saí pelas 18 horas e 15 minutos mais cedo do que o habitual"
+      )
+    ).toBeNull();
+    // E sem unidade nos minutos.
+    expect(parsePontoExitAnswer("saí às 18 horas e 15 mais cedo")).toBeNull();
+  });
+
+  it("«depois de trabalhar 8 horas» não é segunda hora de saída", () => {
+    // A quantidade mede o turno — a hora única é a compacta.
+    expect(
+      parsePontoExitAnswer("Saí às 18:05 depois de trabalhar 8 horas")
+    ).toEqual({ hhmm: "18:05", kind: "time" });
+    expect(
+      parsePontoExitAnswer("Saí às 18:05 e trabalhei mais de 2 horas")
+    ).toEqual({ hhmm: "18:05", kind: "time" });
+    // Sem verbo de duração, «às 19 horas» é alternativa — ambíguo.
+    expect(parsePontoExitAnswer("saí às 18:05 ou às 19 horas")).toBeNull();
   });
 
   it("«à» marcador serve nas duas codificações Unicode", () => {

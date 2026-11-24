@@ -460,6 +460,23 @@ describe("resposta ao lembrete de saída", () => {
     expect(entry.reason).toBe("saída registada pelo trabalhador");
   });
 
+  it("«Saí 23/11 18:05» por SMS com pending → repete a pergunta, não grava a receção", async () => {
+    // Os números da data tornam a resposta ambígua. Sem o desvio, o
+    // comando SAÍDA gravava a hora de receção (18:30) como correção
+    // da presumida em vez de pedir uma hora única.
+    const { ctx, message, sent, t } = setup({
+      smsAllowed: true,
+      transport: "sms",
+    });
+    armPending();
+
+    await tryHandlePontoStaff(ctx, message("Saí 23/11 18:05"), t);
+
+    expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
+    expect(sent.at(-1)).toContain("Responda SIM");
+    expect(getPendingPontoExit("user-1")).not.toBeNull();
+  });
+
   it("resposta depois da meia-noite → hora declarada fica no dia da resposta", async () => {
     const { ctx, message, t } = setup();
     // Lembrete das 23:30, entrada às 16:00 — resposta «00:15» às 00:20

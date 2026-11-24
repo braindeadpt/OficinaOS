@@ -90,11 +90,12 @@ const COMPOUND_DURATION_RE =
 // novo. Minutos — com ou sem unidade — não podem ser a cabeça de
 // outra duração: «às 18 horas e 1 hora depois», «às 18 horas e 1
 // hora atrás» e «às 18 horas e 15 minutos depois» não são
-// 18:01/18:15 — a leitura fica ambígua e a pergunta repete-se. A
-// exceção é «mais ou menos» (aproximado): só «mais tarde» é
-// continuação temporal.
+// 18:01/18:15 — a leitura fica ambígua e a pergunta repete-se.
+// «mais» corta sempre («15 minutos mais cedo/tarde» é duração,
+// não a hora 18:15) — a única exceção é «mais ou menos»
+// (aproximado).
 const EXTENSO_TIME_RE =
-  /(?<!\d\s)\b(?:as|pelas?)\s+(\d{1,2})\s+horas?\s+e\s+(?:(\d{1,2})\s*(?:minutos?|mins?)\b|(\d{1,2})(?!\s+(?:horas?|hrs?|minutos?|mins?|segundos?|segs?|dias?|semanas?|meses?|anos?|depois|apos|antes|atras)\b)|meia)\b(?!\s+(?:depois|apos|antes|atras|seguida|mais\s+tarde)\b)(?:\s+da\s+(manha|tarde|noite)\b)?/gi;
+  /(?<!\d\s)\b(?:as|pelas?)\s+(\d{1,2})\s+horas?\s+e\s+(?:(\d{1,2})\s*(?:minutos?|mins?)\b|(\d{1,2})(?!\s+(?:horas?|hrs?|minutos?|mins?|segundos?|segs?|dias?|semanas?|meses?|anos?|depois|apos|antes|atras)\b)|meia)\b(?!\s+(?:depois|apos|antes|atras|seguida|mais(?!\s+ou\s+menos))\b)(?:\s+da\s+(manha|tarde|noite)\b)?/gi;
 // «pelas 8 horas da noite» = 20:00 — período sem «e N minutos».
 const QUALIFIED_HOUR_RE =
   /(?<!\d\s)\b(?:as|pelas?)\s+(\d{1,2})\s+horas?\s+da\s+(manha|tarde|noite)\b/gi;
@@ -157,16 +158,25 @@ const DATE_REF_RE =
 // Intervalo «de 7 a 8 horas» — os dois números são as pontas duma
 // duração ou faixa («de 1 a 2 horas e meia»), não horas soltas.
 const RANGE_QTY_RE = /\b\d{1,3}\s+a\s+\d{1,3}\b/gi;
+// Quantidade de horas com contexto de duração — «depois de
+// trabalhar 8 horas», «fiquei mais de 2 horas»: o número mede o
+// tempo passado, não a hora de saída. Sem verbo de duração à
+// frente, «às 8 horas» continua hora do relógio («ou às 19 horas»
+// fica ambíguo).
+const WORKED_DURATION_RE =
+  /\b(?:depois|apos|antes|trabalhei|trabalhar|trabalhando|fiz|fiquei|aguardei|esperei|levei|demorei|completei|passei)\s+(?:(?:mais\s+de|de|das?|a|as|cerca\s+de|umas?)\s+)*\d{1,3}\s*horas?\b/gi;
 
 /** Horas soltas distintas no texto normalizado — "6" ou "18" a sós
  *  (guarda o texto cru para distinguir "07" de "7"). Quantidades de
  *  duração, datas e intervalos «N a N» saem antes: "15 minutos
  *  depois" não é a hora 15, "no dia 5" não é a hora 17, "de 7 a 8
- *  horas" não são as horas 19 e 20. */
+ *  horas" não são as horas 19 e 20 e «trabalhar 8 horas» não é a
+ *  hora 8. */
 function bareHours(normalized: string): Set<string> {
   const hours = new Set<string>();
   const withoutDurations = normalized
     .replace(RANGE_QTY_RE, " ")
+    .replace(WORKED_DURATION_RE, " ")
     .replace(COMPOUND_DURATION_RE, " ")
     .replace(DURATION_QTY_RE, " ")
     .replace(DATE_REF_RE, " ");

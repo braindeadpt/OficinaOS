@@ -87,6 +87,9 @@ const ENTRY_TYPE_PT: Record<PontoMarkCommand, string> = {
 };
 
 const NAME_WS_RE = /\s+/;
+// Qualquer dígito no texto — uma resposta SAÍDA com números que não
+// dão hora única é resposta ambígua ao lembrete, não comando.
+const ANY_DIGIT_RE = /\d/;
 
 const ENTRY_ICON: Record<PontoMarkCommand, string> = {
   ENTRADA: "✅",
@@ -488,16 +491,22 @@ async function routeText(env: FlowEnv): Promise<void> {
   // Com pergunta de saída pendente, uma declaração de SAÍDA com hora
   // ("Saí 18:05") responde à pergunta — o parser de comandos lia-a
   // como SAIDA e a hora declarada perdia-se ("Saí às 18:05" já caía
-  // aqui por não cobrir "às"). O desvio vale só para SAIDA: «VOLTEI
-  // 18:05» é regresso de pausa e segue o seu fluxo mesmo com hora no
-  // texto. Botões e comandos sem hora mantêm a prioridade normal:
-  // matam o pending e seguem o fluxo do comando.
+  // aqui por não cobrir "às"). Uma SAÍDA com números que não dão hora
+  // única («Saí 23/11 18:05», «Saí 18:05-19» — o parser de comandos
+  // tolera tokens numéricos soltos) é resposta ambígua, não comando:
+  // repete a pergunta em vez de cair no fluxo da SAÍDA, que gravava
+  // a hora de receção como correção. O código QR («SAIDA #4821»)
+  // fica de fora — é comando, não hora. O desvio vale só para SAIDA:
+  // «VOLTEI 18:05» é regresso de pausa e segue o seu fluxo mesmo com
+  // hora no texto. Botões e comandos sem hora mantêm a prioridade
+  // normal: matam o pending e seguem o fluxo do comando.
   const exitPending = getPendingPontoExit(env.staff.user.id);
+  const parsedHour = parsePontoExitAnswer(env.msg.text)?.kind === "time";
   if (
     exitPending &&
     !env.msg.interactiveId &&
     parsed.command === "SAIDA" &&
-    parsePontoExitAnswer(env.msg.text)?.kind === "time"
+    (parsedHour || (!parsed.code && ANY_DIGIT_RE.test(env.msg.text ?? "")))
   ) {
     await onExitReminderAnswer(env, exitPending);
     return;
