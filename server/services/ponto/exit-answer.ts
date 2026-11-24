@@ -197,10 +197,12 @@ const WORKED_DURATION_RE =
 // ambiguidade: «18:05 ou depois das 19 horas» tem duas candidatas.
 const BOUND_HOUR_RE =
   /\b(depois|apos|antes|ate)\s+(?:das?|as)\s+(\d{1,2})\s*horas?(?:\s+da\s+(manha|tarde|noite)\b)?/gi;
-// A oração volta a dizer «saí» — o limite descreve a saída, não
+// A oração volta a afirmar a saída — o limite descreve-a, não
 // outro acontecimento: «ou saí depois das 19» é alternativa mesmo
-// depois dum contexto de turno.
-const CLAIMS_EXIT_RE = /\bsai(?:r|da|a|u|ndo|mos|ram|ste|am)?\b/i;
+// depois dum contexto de turno. Só formas afirmadas: «sair»
+// infinito («autorização para sair depois das 17») e «saía»
+// habitual são permissão ou horário, não a saída de hoje.
+const CLAIMS_EXIT_RE = /\bsai(?:d[ao]|mos|ndo)?\b/i;
 // Reformulação «ou seja …» no fim do texto antes do limite.
 const OU_SEJA_END_RE = /(?:^|\s)ou\s+seja$/;
 // «ou» a ligar o limite à hora, com advérbios comuns pelo meio —
@@ -446,11 +448,12 @@ function ouSejaVerdict(
 }
 
 /** O limite é alternativa à saída quando a oração traz hora nova
- *  ou volta a reivindicá-la («ou saí depois das 19» — o «saí»
- *  antes do limite descreve a saída, não o horário), ou quando
- *  «ou» o liga à hora — no início da oração, herdando o papel da
- *  anterior (contexto continua contexto do turno), ou dentro dela
- *  ligado à hora ou a uma alternativa já encadeada. */
+ *  ou volta a reivindicá-la («ou saí depois das 19», «saí depois
+ *  das 19» — o verbo afirmado antes do limite descreve a saída,
+ *  não o horário), ou quando «ou» o liga à hora — no início da
+ *  oração, herdando o papel da anterior (contexto continua
+ *  contexto do turno), ou dentro dela ligado à hora ou a uma
+ *  alternativa já encadeada. */
 function boundIsAlternative(
   before: string,
   isFirstBound: boolean,
@@ -576,9 +579,17 @@ function collectClause(
   }
   const withoutRelatives = normalizedClause.replace(RELATIVE_DURATION_RE, " ");
   // Limites «depois das 19 horas» — não são hora solta (saem do
-  // bareHours) mas contam como candidata à ambiguidade.
+  // bareHours) mas contam como candidata à ambiguidade. Saem do
+  // texto das horas para o leitor por extenso não ler a hora do
+  // limite uma segunda vez («após as 6 horas da manhã» daria um
+  // 06:00 solto além do limite).
   const clauseBoundMatches = [...withoutRelatives.matchAll(BOUND_HOUR_RE)];
-  const hourKind = collectClauseHours(clause, withoutRelatives, explicit, bare);
+  const hourKind = collectClauseHours(
+    clause,
+    withoutRelatives.replace(BOUND_HOUR_RE, " "),
+    explicit,
+    bare
+  );
   const added = classifyBoundHours(
     clauseBoundMatches,
     withoutRelatives,

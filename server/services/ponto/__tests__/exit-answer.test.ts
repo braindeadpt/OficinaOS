@@ -552,6 +552,16 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
         "Saí às 18:05. O meu turno era até às 18 horas, ou a minha saída foi depois das 19 horas"
       )
     ).toEqual({ kind: "ambiguous" });
+    // …mas só formas AFIRMADAS reivindicam — «autorização para
+    // sair» é permissão e «saía» é hábito: contexto, grava a hora.
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 18:05. Tinha autorização para sair depois das 17 horas."
+      )
+    ).toEqual({ hhmm: "18:05", kind: "time" });
+    expect(
+      parsePontoExitAnswer("Saí às 18:05. Saía sempre depois das 19 horas.")
+    ).toEqual({ hhmm: "18:05", kind: "time" });
     // Repetir o limite de contexto (já deduplicado) não muda o
     // papel da oração — «ou» a seguir continua o horário.
     expect(
@@ -564,6 +574,14 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
     expect(
       parsePontoExitAnswer("Saí às 06:30, ou seja depois das 6 horas da manhã")
     ).toEqual({ hhmm: "06:30", kind: "time" });
+    // «após» com a mesma forma — a hora qualificada do limite não
+    // volta a ser lida como hora solta.
+    expect(
+      parsePontoExitAnswer("Saí às 06:30, ou seja após as 6 horas da manhã")
+    ).toEqual({ hhmm: "06:30", kind: "time" });
+    expect(
+      parsePontoExitAnswer("Saí às 06:30, ou seja após as 8 horas da manhã")
+    ).toEqual({ kind: "ambiguous" });
     expect(
       parsePontoExitAnswer("Saí às 06:30, ou seja antes das 6 horas da manhã")
     ).toEqual({ kind: "ambiguous" });
