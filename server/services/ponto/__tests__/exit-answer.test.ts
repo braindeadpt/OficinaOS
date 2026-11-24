@@ -371,4 +371,14 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
       parsePontoExitAnswer("Saí às 18:05 depois de trabalhar 8 horas e 15")
     ).toEqual({ hhmm: "18:05", kind: "time" });
   });
+
+  it("limite «depois das»/«antes das» sozinho não é hora exata", () => {
+    // «Saí depois das 19 horas» diz que saiu DEPOIS — não às 19:00.
+    expect(parsePontoExitAnswer("Saí depois das 19 horas")).toEqual({
+      kind: "ambiguous",
+    });
+    expect(parsePontoExitAnswer("saí antes das 8 horas")).toEqual({
+      kind: "ambiguous",
+    });
+  });
 });

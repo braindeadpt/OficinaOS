@@ -174,6 +174,12 @@ const RANGE_QTY_RE = /\b\d{1,3}\s+a\s+\d{1,3}\b/gi;
 // do relógio («ou às 19 horas» fica ambíguo).
 const WORKED_DURATION_RE =
   /\b(?:depois|apos|antes|trabalhei|trabalhar|trabalhou|trabalhava|trabalhando|estive|esteve|fiz|fez|fiquei|ficou|aguardei|esperei|levei|levou|demorei|demorou|completei|passei|passou|durei|durou)\s+(?:(?:mais\s+de|de|cerca\s+de|quase|perto\s+de|por|umas?|ao\s+todo|no\s+total)\s+)*\d{1,3}\s*horas?\b/gi;
+// Limite de hora — «depois das 19 horas», «antes das 8», «até às
+// duas»: o trabalhador diz que saiu DEPOIS/ANTES dessa hora, não a
+// essa hora — sozinho não é resposta válida. Mas conta para a
+// ambiguidade: «18:05 ou depois das 19 horas» tem duas candidatas.
+const BOUND_HOUR_RE =
+  /\b(?:depois|apos|antes|ate)\s+(?:das?|as)\s+(\d{1,2})\s*horas?\b/gi;
 
 /** Horas soltas distintas no texto normalizado — "6" ou "18" a sós
  *  (guarda o texto cru para distinguir "07" de "7"). Quantidades de
@@ -189,6 +195,7 @@ function bareHours(normalized: string): Set<string> {
     // duração só: tirar «8 horas» primeiro deixava o «15» como hora.
     .replace(COMPOUND_DURATION_RE, " ")
     .replace(WORKED_DURATION_RE, " ")
+    .replace(BOUND_HOUR_RE, " ")
     .replace(DURATION_QTY_RE, " ")
     .replace(DATE_REF_RE, " ");
   for (const m of withoutDurations.matchAll(BARE_HOUR_RE)) {
@@ -225,7 +232,8 @@ function negated(normalizedClause: string): boolean {
 function collectClause(
   clause: string,
   explicit: Set<string>,
-  bare: Set<string>
+  bare: Set<string>,
+  bound: Set<string>
 ): void {
   // «à» com acento marca hora como «às» — reescreve-se para «ás» no
   // texto cru (a normalização apagava a diferença) para o separar do
@@ -249,6 +257,11 @@ function collectClause(
   }
   const times = explicitTimes(clause);
   const withoutRelatives = normalizedClause.replace(RELATIVE_DURATION_RE, " ");
+  // Limites «depois das 19 horas» — não são hora solta (saem do
+  // bareHours abaixo) mas contam como candidata à ambiguidade.
+  for (const m of withoutRelatives.matchAll(BOUND_HOUR_RE)) {
+    bound.add(m[1]);
+  }
   // Qualificador impossível («às 18 horas da manhã»): a oração não
   // baixa para horas soltas — fica ambígua e a pergunta repete-se.
   let spelledInvalid = false;
@@ -324,23 +337,31 @@ export function parsePontoExitAnswer(
   //    ainda estou a trabalhar" não declara nada.
   const explicit = new Set<string>();
   const bare = new Set<string>();
+  const bound = new Set<string>();
   for (const clause of text.split(CLAUSE_SPLIT_RE)) {
-    collectClause(clause, explicit, bare);
+    collectClause(clause, explicit, bare, bound);
   }
-  if (explicit.size === 1) {
+  if (explicit.size === 1 && bound.size === 0) {
     return { hhmm: [...explicit][0], kind: "time" };
   }
-  if (explicit.size > 1) {
-    // Ambíguo — duas ou mais horas declaradas. O handler repete a
-    // pergunta sem gravar; a distinção de «sem hora» (null) serve
-    // para a rota de comandos não engolir a resposta (SAÍDA com
-    // horas em conflito não pode gravar a hora de receção).
+  if (explicit.size > 1 || (explicit.size === 1 && bound.size > 0)) {
+    // Ambíguo — duas ou mais horas declaradas (uma hora mais um
+    // limite «depois das 19 horas» também tem duas candidatas). O
+    // handler repete a pergunta sem gravar; a distinção de «sem
+    // hora» (null) serve para a rota de comandos não engolir a
+    // resposta (SAÍDA com horas em conflito não pode gravar a hora
+    // de receção).
     return { kind: "ambiguous" };
   }
 
   const normalized = normalizePontoText(text);
   if (!normalized) {
     return null;
+  }
+  // Limite sozinho («saí depois das 19 horas») não é hora declarada
+  // — a resposta pede uma hora exata e a pergunta repete-se.
+  if (bound.size > 0) {
+    return { kind: "ambiguous" };
   }
   // 2) Afirmativo exato — "SIM", "certo", "ta"…
   if (AFFIRMATIVE_WORDS.has(normalized)) {
