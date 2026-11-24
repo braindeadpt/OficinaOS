@@ -99,19 +99,41 @@ function fakePrisma() {
         where,
       }: {
         data: Record<string, unknown>;
-        where: { id: string };
+        where: {
+          OR?: Record<string, { equals?: null; lt?: Date }>[];
+          id: string;
+        } & Record<string, unknown>;
       }) => {
         const conv = [...conversations.values()].find((c) => c.id === where.id);
         if (!conv) {
           return Promise.resolve({ count: 0 });
         }
-        // O where real filtra por OR null/lt no campo de `data` — o mock
-        // infere o campo do próprio data (uma chave por chamada).
-        const field = Object.keys(data)[0] as string;
-        const at = data[field] as Date;
-        const current = conv[field] as Date | null;
-        if (current === null || current === undefined || current < at) {
-          conv[field] = at;
+        // Emula o filtro real: OR [equals:null, lt] para lastInboundAt
+        // (nullable) e lt directo para lastMessageAt — uma regressão no
+        // ramo null tem de falhar aqui (Devin #167 r3).
+        const clauses = (where.OR ?? [where]) as Record<
+          string,
+          { equals?: null; lt?: Date }
+        >[];
+        const match = clauses.some((clause) =>
+          Object.entries(clause).some(([f, cond]) => {
+            if (f === "id") {
+              return false;
+            }
+            const current = conv[f] as Date | null | undefined;
+            if ("equals" in cond) {
+              return current === null || current === undefined;
+            }
+            return (
+              current !== null &&
+              current !== undefined &&
+              current < (cond.lt as Date)
+            );
+          })
+        );
+        if (match) {
+          const field = Object.keys(data)[0] as string;
+          conv[field] = data[field] as Date;
           return Promise.resolve({ count: 1 });
         }
         return Promise.resolve({ count: 0 });
@@ -297,6 +319,36 @@ describe("recordInboundMessage", () => {
     });
     expect(conv?.lastInboundAt?.getTime()).toBe(t2.getTime());
     expect(conv?.lastMessageAt?.getTime()).toBe(t2.getTime());
+  });
+
+  it("define lastInboundAt na primeira mensagem de uma conversa iniciada pela loja", async () => {
+    // Regressão Devin (#167 r3): o filtro real é OR equals:null|lt — sem
+    // o ramo null, o 1.º inbound de uma conversa outbound-first nunca
+    // marcava lastInboundAt (fora do "Sem resposta" e da janela de 24 h).
+    const { tx } = fakePrisma();
+    await recordOutboundMessage(tx, log, {
+      channel: "whatsapp",
+      handledBy: "STAFF",
+      phone: "+351912345678",
+      text: "contactámos sobre o aparelho",
+    });
+    await recordInboundMessage(tx, log, {
+      channel: "whatsapp",
+      externalId: "wamid-first",
+      phone: "+351912345678",
+      text: "sim, digam",
+    });
+    const txx = tx as unknown as {
+      inboxConversation: {
+        findUnique: (o: {
+          where: { conversationKey: string };
+        }) => Promise<{ lastInboundAt?: Date | null } | null>;
+      };
+    };
+    const conv = await txx.inboxConversation.findUnique({
+      where: { conversationKey: "whatsapp:351912345678" },
+    });
+    expect(conv?.lastInboundAt).toBeInstanceOf(Date);
   });
 
   it("markConversationRead zera não-lidas e marca readAt nas inbound", async () => {
