@@ -22,7 +22,8 @@ export interface PontoEvaluateInput {
   externalAutoApprove: boolean;
   hasPhoto: boolean;
   location?: PontoPendingLocation;
-  /** ISO do msg.createdAt do comando — ver state.ts commandAt. */
+  /** ISO do instante de envio da mensagem de comando (sentAt ??
+   *  createdAt) — ver state.ts commandAt. */
   messageAt?: string;
   phone: string;
   photoRequired?: boolean;

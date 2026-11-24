@@ -547,6 +547,14 @@ async function processParsed(
       evoConfig
     );
     if (handled) {
+      // Dual-role (funcionário que também é cliente): o ponto engole
+      // PARAR/STOP — a revogação de consentimento é legal e corre na
+      // mesma (§E.9/G.7), senão os avisos continuavam autorizados.
+      if (parsed.text && isStopText(parsed.text)) {
+        await revokeConsentForPhone(prisma, parsed.fromPhone).catch(
+          () => undefined
+        );
+      }
       return;
     }
   }

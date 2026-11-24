@@ -246,6 +246,61 @@ describe("handleEvolutionInbound — proteções anti-ban", () => {
     expect(mocks.handleInboundMessage).toHaveBeenCalledTimes(1);
   });
 
+  it("PARAR de número dual-role (staff ponto + cliente) → ponto responde E consentimento revoga", async () => {
+    // O ponto corre antes do pipeline de clientes: sem a revogação
+    // transversal o PARAR morria como "comando desconhecido" e os
+    // avisos automáticos continuavam autorizados.
+    const staff = {
+      externalWork: false,
+      id: "u-staff",
+      name: "Rui",
+      phoneE164: "+351912345678",
+      pontoSmsAllowed: false,
+      username: "rui",
+    };
+    const customerUpdate = vi.fn(() => Promise.resolve({}));
+    const prismaFull = {
+      customer: {
+        // revokeConsentForPhone usa a findCustomersByPhone real (a
+        // versão interna do módulo) — precisa do findMany+update.
+        findMany: vi.fn(async () => [
+          { id: "cust-1", name: "Rui", phone: "+351912345678" },
+        ]),
+        update: customerUpdate,
+      },
+      shopSettings: { update: mocks.updateSettings },
+      user: { findMany: vi.fn(async () => [staff]) },
+    } as never;
+    mocks.getOrCreateShopSettings.mockResolvedValue({
+      ...SETTINGS,
+      cloudEntitlements: ["ponto", "whatsapp-bot"],
+    });
+    const p = handleEvolutionInbound(
+      prismaFull,
+      log,
+      undefined,
+      envelope({ message: { conversation: "PARAR" } })
+    );
+    // O send do ponto espera 3–8 s (presença "a escrever…").
+    await vi.runAllTimersAsync();
+    await p;
+    // O ponto consumiu a mensagem — a resposta é a lista de comandos,
+    // não a do pipeline de clientes ("resposta" do mock).
+    expect(mocks.sendEvolutionText).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.stringContaining("Comandos"),
+      expect.anything()
+    );
+    // …e o consentimento do cliente foi revogado na mesma.
+    expect(customerUpdate).toHaveBeenCalledWith({
+      data: { whatsappConsent: false },
+      where: { id: "cust-1" },
+    });
+    // Nunca chegou ao pipeline de clientes.
+    expect(mocks.handleInboundMessage).not.toHaveBeenCalled();
+  });
+
   it("sessão fechada no envio → suspende o bot e avisa o staff", async () => {
     mocks.sendEvolutionText.mockResolvedValue({
       error: "Connection Closed",
