@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import api from "@/lib/api";
 import { useUsersStore } from "@/stores/users";
@@ -122,16 +123,14 @@ export default function HoursTab() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
         <Field label={t("ponto.from")}>
-          <input
-            className="rounded-lg border border-outline bg-surface-container-lowest px-3 py-2 text-sm"
+          <Input
             onChange={(e) => setFrom(e.target.value)}
             type="date"
             value={from}
           />
         </Field>
         <Field label={t("ponto.to")}>
-          <input
-            className="rounded-lg border border-outline bg-surface-container-lowest px-3 py-2 text-sm"
+          <Input
             onChange={(e) => setTo(e.target.value)}
             type="date"
             value={to}
