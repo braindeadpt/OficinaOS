@@ -71,11 +71,19 @@ const DURATION_QTY_RE = /\b\d{1,3}\s*(?:minutos?|mins?|segundos?|segs?)\b/gi;
 // de se procurarem horas por extenso ou soltas.
 const RELATIVE_DURATION_RE =
   /\b(?:ha|faz)\s+\d{1,3}\s*(?:horas?|hrs?|minutos?|mins?|segundos?|segs?)(?:\s+e\s+\d{1,3}\s*(?:horas?|hrs?|minutos?|mins?|segundos?|segs?))*\b/gi;
+// Duração composta sem «há/faz» nem «às» — «trabalhei 8 horas e 30
+// minutos», «fiquei 2 horas e meia»: não é hora por extenso (falta o
+// «às») e a parte das «horas» não pode virar hora solta (20:00 por
+// engano). A frase sai inteira antes das horas soltas.
+const COMPOUND_DURATION_RE =
+  /\b\d{1,3}\s*horas?\s+e\s+(?:\d{1,3}\s*(?:minutos?|mins?)?|meia)\b/gi;
 // Hora por extenso — «às 18 horas e 15 minutos» = 18:15, «às 6 horas
-// e 30» = 18:30 («e» liga os minutos à hora; sem «e» fica «18 horas»
-// como hora solta = 18:00).
+// e 30» = 18:30, «às 6 horas e meia» = 18:30 («e» liga os minutos à
+// hora; sem «e» fica «18 horas» como hora solta = 18:00). A
+// preposição «as»/«às» é obrigatória — «trabalhei 8 horas e 30
+// minutos» é duração (COMPOUND_DURATION_RE), não 20:30.
 const EXTENSO_TIME_RE =
-  /\b(\d{1,2})\s+horas?\s+e\s+(\d{1,2})\s*(?:minutos?|mins?)?\b/gi;
+  /\bas\s+(\d{1,2})\s+horas?\s+e\s+(?:(\d{1,2})\s*(?:minutos?|mins?)?|meia)\b/gi;
 // Pontuação que fecha uma oração — o "." fica quando pode ser o
 // separador Horas.minutos de EXPLICIT_TIME_RE. Junto a dígitos a
 // notação compacta ganha sempre ("18.30", "18. 30", "18 . 30" —
@@ -133,7 +141,9 @@ function explicitTimes(raw: string): Set<string> {
  *  duração são retiradas antes: "15 minutos depois" não é a hora 15. */
 function bareHours(normalized: string): Set<string> {
   const hours = new Set<string>();
-  const withoutDurations = normalized.replace(DURATION_QTY_RE, " ");
+  const withoutDurations = normalized
+    .replace(COMPOUND_DURATION_RE, " ")
+    .replace(DURATION_QTY_RE, " ");
   for (const m of withoutDurations.matchAll(BARE_HOUR_RE)) {
     hours.add(m[1]);
   }
@@ -162,7 +172,8 @@ function collectClause(
   const times = explicitTimes(clause);
   const withoutRelatives = normalizedClause.replace(RELATIVE_DURATION_RE, " ");
   for (const m of withoutRelatives.matchAll(EXTENSO_TIME_RE)) {
-    const hhmm = hhmmOf(Number(m[1]), Number(m[2]), zeroPadded(m[1]));
+    const minute = m[2] === undefined ? 30 : Number(m[2]);
+    const hhmm = hhmmOf(Number(m[1]), minute, zeroPadded(m[1]));
     if (hhmm) {
       times.add(hhmm);
     }

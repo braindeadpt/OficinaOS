@@ -141,4 +141,18 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
     expect(parsePontoExitAnswer("saí há 2 horas")).toBeNull();
     expect(parsePontoExitAnswer("saí faz 1 hora e 30 minutos")).toBeNull();
   });
+
+  it("«às 6 horas e meia» → 18:30", () => {
+    expect(parsePontoExitAnswer("saí às 6 horas e meia")).toEqual({
+      hhmm: "18:30",
+      kind: "time",
+    });
+  });
+
+  it("«trabalhei 8 horas e 30 minutos» → null — sem «às» não é hora", () => {
+    // Duração composta sem «há/faz» nem «às»: nem a hora por extenso
+    // (20:30) nem a parte das «horas» solta (20:00) podem gravar-se.
+    expect(parsePontoExitAnswer("trabalhei 8 horas e 30 minutos")).toBeNull();
+    expect(parsePontoExitAnswer("fiquei 2 horas e meia")).toBeNull();
+  });
 });
