@@ -822,11 +822,17 @@ async function tryRegisterEvolutionWebhook(
     return false;
   }
   let row = await getOrCreateShopSettings(prisma);
+  // ai-inbox-only também precisa do webhook — a caixa de entrada recebe
+  // mensagens Evolution sem o bot (o handler grava e só processa PARAR).
+  const evolutionConsumer =
+    isModuleEnabled(row, "ai-inbox") ||
+    (isModuleEnabled(row, "whatsapp-bot") &&
+      Boolean(row.whatsappBotDisclaimerAt));
   // Instalações que aceitaram o termo antes do token próprio existir:
   // gera-o aqui — o token SMS não é reutilizado (§5.7, ver rota pública).
   if (
     row.whatsappTransport === "evolution" &&
-    row.whatsappBotDisclaimerAt &&
+    evolutionConsumer &&
     !row.evolutionWebhookToken
   ) {
     await prisma.shopSettings.updateMany({
@@ -838,11 +844,10 @@ async function tryRegisterEvolutionWebhook(
   if (
     !(
       row.whatsappTransport === "evolution" &&
-      row.whatsappBotDisclaimerAt &&
+      evolutionConsumer &&
       row.evolutionWebhookToken &&
       row.evolutionUrl &&
-      row.evolutionApiKeyEncrypted &&
-      isModuleEnabled(row, "whatsapp-bot")
+      row.evolutionApiKeyEncrypted
     )
   ) {
     return false;

@@ -59,6 +59,11 @@ export const statement = {
 
   notifications: ["read", "send", "manage"] as const,
 
+  // Caixa de entrada de mensagens de clientes (módulo Pro "ai-inbox"):
+  // view = ler conversas/mensagens/cliente; send = responder, rascunhos,
+  // marcar estado/lida; manage = atribuir conversas a utilizadores.
+  inbox: ["view", "send", "manage"] as const,
+
   ai: ["access"] as const,
 
   dashboard: ["viewOwner", "viewTechnician", "viewFrontDesk"] as const,
@@ -134,6 +139,7 @@ export const ownerRole = ac.newRole({
   reports: ["viewSelf", "viewShop", "viewMargin"],
   settings: ["view", "edit"],
   notifications: ["read", "send", "manage"],
+  inbox: ["view", "send", "manage"],
   ai: ["access"],
   dashboard: ["viewOwner", "viewTechnician", "viewFrontDesk"],
   returns: [
@@ -171,6 +177,7 @@ export const technicianRole = ac.newRole({
   repairs: ["viewCatalog", "manageCatalog"],
   reports: ["viewSelf"],
   notifications: ["read", "send"],
+  inbox: ["view", "send"],
   // No settings
   // No ai — the analyst reads job_notes (free text with customer contacts);
   // exposing it to every technician profile widened PII access beyond what
@@ -201,6 +208,7 @@ export const frontDeskRole = ac.newRole({
   // No reports
   // No settings
   notifications: ["read", "send"],
+  inbox: ["view", "send", "manage"],
   // No ai
   dashboard: ["viewFrontDesk"],
   returns: ["create", "edit", "viewSelf"],

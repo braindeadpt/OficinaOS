@@ -13,6 +13,13 @@ import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import { logger } from "../utils/logger.js";
 import { isModuleEnabled } from "../utils/modules.js";
+import {
+  INBOX_CHANNEL_EVOLUTION,
+  INBOX_CHANNEL_SMS,
+  INBOX_CHANNEL_WHATSAPP,
+  INBOX_HANDLED_SYSTEM,
+  recordOutboundMessage,
+} from "./inbox.service.js";
 import { renderTemplate } from "./notification-renderer.js";
 import { formatPhone } from "./notification-sender.js";
 import { decryptSmsConfig, type SendResult, sendSms } from "./sms.service.js";
@@ -398,6 +405,25 @@ async function processWhatsAppEntry(
       return;
     }
   }
+  await sendWhatsAppAndSettle(
+    prisma,
+    entry,
+    channel,
+    metaParams,
+    countryCode,
+    settings
+  );
+}
+
+/** Envia (template Meta ou texto livre) e acerta o estado do outbox. */
+async function sendWhatsAppAndSettle(
+  prisma: DbClient,
+  entry: OutboxEntry,
+  channel: WhatsAppChannel,
+  metaParams: string[] | null,
+  countryCode: string,
+  settings: ShopSettingsRow | null
+): Promise<void> {
   const result =
     channel.mode !== "evolution" && metaParams !== null
       ? await sendWhatsAppTemplateVia(
@@ -420,6 +446,13 @@ async function processWhatsAppEntry(
         );
   if (result.success) {
     await markSent(prisma, entry.id);
+    await recordSystemSend(prisma, settings, {
+      channel:
+        channel.mode === "evolution"
+          ? INBOX_CHANNEL_EVOLUTION
+          : INBOX_CHANNEL_WHATSAPP,
+      entry,
+    });
     return;
   }
   try {
@@ -437,12 +470,33 @@ async function processWhatsAppEntry(
   }
 }
 
+/** §G — notificações automáticas também entram na conversa da inbox
+ * (handledBy SYSTEM): o staff vê o que a loja enviou ao cliente. */
+async function recordSystemSend(
+  prisma: DbClient,
+  settings: ShopSettingsRow | null,
+  input: { channel: string; entry: OutboxEntry }
+): Promise<void> {
+  if (!isModuleEnabled(settings, "ai-inbox")) {
+    return;
+  }
+  await recordOutboundMessage(prisma, logger, {
+    channel: input.channel,
+    deliveryStatus: "SENT",
+    externalId: `outbox:${input.entry.id}`,
+    handledBy: INBOX_HANDLED_SYSTEM,
+    phone: input.entry.recipientPhone,
+    text: input.entry.renderedBody,
+  }).catch((err) => logger.warn({ err }, "inbox: system send record falhou"));
+}
+
 async function processSmsEntry(
   prisma: DbClient,
   entry: OutboxEntry,
   channels: SmsChannels,
   countryCode: string,
-  shopPhone: string | null
+  shopPhone: string | null,
+  settings: ShopSettingsRow | null
 ): Promise<void> {
   if (await cancelIfExpired(prisma, entry)) {
     return;
@@ -493,6 +547,10 @@ async function processSmsEntry(
   result ??= { error: "SMS channel unavailable", success: false };
   if (result.success) {
     await markSent(prisma, entry.id);
+    await recordSystemSend(prisma, settings, {
+      channel: INBOX_CHANNEL_SMS,
+      entry,
+    });
     return;
   }
   try {
@@ -540,7 +598,14 @@ async function processEntry(
         shopSettings
       );
     } else if (entry.channel === "SMS" && configs.sms) {
-      await processSmsEntry(prisma, entry, configs.sms, countryCode, shopPhone);
+      await processSmsEntry(
+        prisma,
+        entry,
+        configs.sms,
+        countryCode,
+        shopPhone,
+        shopSettings
+      );
     } else if (entry.channel === "WHATSAPP" || entry.channel === "SMS") {
       // Channel unavailable — not configured, or the Pro module was
       // revoked since the entry was queued (resolve/getSmsConfig

@@ -52,6 +52,8 @@ export const updateShopSettingsSchema = z
     receiptFooter: z.string().max(2000).optional(),
     // Claúsulas da ficha de entrada — null/vazio = predefinição da app.
     intakeTerms: z.string().max(4000).optional(),
+    // Caixa de entrada (Pro "ai-inbox") — dias de retenção das conversas.
+    inboxRetentionDays: z.number().int().min(30).max(3650).optional(),
     // Bot com IA (Pro): flag de rollout + ficha "O que o bot pode dizer".
     botAiEnabled: z.boolean().optional(),
     botInfoText: z.string().max(4000).nullable().optional(),
@@ -103,6 +105,7 @@ export const updateShopSettingsSchema = z
       data.currency !== undefined ||
       data.receiptFooter !== undefined ||
       data.intakeTerms !== undefined ||
+      data.inboxRetentionDays !== undefined ||
       data.botAiEnabled !== undefined ||
       data.botInfoText !== undefined ||
       data.botAvgRepairDaysAfterPart !== undefined ||

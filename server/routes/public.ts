@@ -298,7 +298,14 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
       if (body.event === "sms:received") {
         const from = body.payload?.sender ?? body.payload?.phoneNumber;
         const text = body.payload?.message;
-        if (from && text && isModuleEnabled(settings, "sms")) {
+        // "ai-inbox" sem "sms" entra também: handleInboundSms grava a
+        // mensagem na caixa de entrada e devolve sem responder (§G.7).
+        if (
+          from &&
+          text &&
+          (isModuleEnabled(settings, "sms") ||
+            isModuleEnabled(settings, "ai-inbox"))
+        ) {
           await handleInboundSms(
             app.prisma,
             app.log,

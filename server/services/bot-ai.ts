@@ -32,6 +32,9 @@ interface BotAiCall {
 
 export interface BotAiInput {
   channel: "sms" | "whatsapp" | "evolution";
+  /** Histórico da conversa gravada na inbox (§G.4) — últimas mensagens
+   *  ANTES da atual; substitui o transporte de contexto na request. */
+  history?: { content: string; role: "assistant" | "user" }[];
   phone: string;
   userText: string;
 }
@@ -116,7 +119,10 @@ export async function askBotAi(
   input: BotAiInput
 ): Promise<BotAiResult | null> {
   const deadline = Date.now() + TOTAL_BUDGET_MS;
-  const messages: BotAiMessage[] = [{ content: input.userText, role: "user" }];
+  const messages: BotAiMessage[] = [
+    ...(input.history ?? []),
+    { content: input.userText, role: "user" },
+  ];
   let escalate = false;
 
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round += 1) {

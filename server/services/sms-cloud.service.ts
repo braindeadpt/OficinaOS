@@ -163,6 +163,7 @@ async function syncSmsInboundCycle(
       token,
     },
     currency: settings.currency ?? "EUR",
+    inbox: { channel: "sms", enabled: isModuleEnabled(settings, "ai-inbox") },
     log,
     notifyCtx,
     portalApiUrl: apiUrl,
