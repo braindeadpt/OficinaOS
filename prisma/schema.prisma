@@ -635,6 +635,10 @@ model IntakeRequest {
   // AI report attached to the diagnostic — either generated in the diag tool
   // and sent with it, or generated on demand by the shop via cloud ai-reports.
   aiReport      String?             @db.Text
+  // Deterministic pre-quote built from the diagnostic checks against the
+  // active catalogs (see quote-suggestion.service). Advisory snapshot only —
+  // it never pre-fills a Job; staff reviews and picks what applies.
+  quoteSuggestion Json?
   customerName  String
   customerPhone String
   customerEmail String?

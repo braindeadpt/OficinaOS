@@ -564,6 +564,7 @@ describe("route classification — every /api route is decided", () => {
     "POST /api/external-repairs/:repairId/return",
     "POST /api/intake-requests/:id/convert",
     "POST /api/intake-requests/:id/dismiss",
+    "POST /api/intake-requests/:id/quote-suggestion",
     "POST /api/jobs",
     "POST /api/jobs/:id/external-repairs",
     "POST /api/jobs/:id/loaner-signature",

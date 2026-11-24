@@ -10,6 +10,7 @@ import { Link } from "react-router";
 import { toast } from "sonner";
 import { RecordWorkflow } from "@/components/modules/tasks/record-workflow";
 import { useCan } from "@/hooks/use-can";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 import api from "@/lib/api";
 import MarkdownRenderer from "@/pages/ai-analyst/markdown-renderer";
 import { useUiStore } from "@/stores/ui";
@@ -18,6 +19,35 @@ interface DiagnosticResult {
   Detail?: string;
   Status?: string;
   Value?: string;
+}
+
+interface QuoteSuggestionLine {
+  catalogId: string;
+  confidence: "high" | "low";
+  inStock: boolean;
+  kind: "part" | "repair";
+  name: string;
+  priceCents: number;
+  reasonCheck: string;
+  reasonStatus: "fail" | "info" | "warn";
+}
+
+interface QuoteSuggestion {
+  candidates?: {
+    brand: string;
+    deviceId: string;
+    model: string;
+  }[];
+  deviceMatch: {
+    brand: string;
+    confidence: "high" | "low";
+    deviceId: string;
+    model: string;
+  } | null;
+  generatedAt: string;
+  lines: QuoteSuggestionLine[];
+  skippedReason?: "no-fail-warn-checks" | "purpose-sale";
+  unmatchedChecks: string[];
 }
 
 interface IntakeRequest {
@@ -31,6 +61,7 @@ interface IntakeRequest {
   diagnostic?: {
     device?: {
       brand?: string;
+      marketingName?: string;
       model?: string;
       os?: string;
       osVersion?: string;
@@ -42,6 +73,7 @@ interface IntakeRequest {
   job: { jobCode: string } | null;
   jobId: string | null;
   problem: string;
+  quoteSuggestion?: QuoteSuggestion | null;
   scheduledFor: string | null;
   status: "PENDING" | "CONVERTED" | "DISMISSED";
   whatsappOptIn: boolean;
@@ -64,6 +96,209 @@ const RESULT_STATUS_STYLE: Record<string, string> = {
   warn: "bg-tertiary-container/30 text-on-tertiary-container",
 };
 
+// reasonStatus vem do backend como "fail" | "warn" | "info" — "info" não é
+// mostrado; fail/warn passam por i18n (nunca raw English).
+const REASON_STATUS_LABEL: Record<"fail" | "warn", string> = {
+  fail: "requests_quote_status_fail",
+  warn: "requests_quote_status_warn",
+};
+
+function QuoteLineRow({ line }: { line: QuoteSuggestionLine }) {
+  const { t } = useTranslation();
+  const fmt = useFormatCurrency();
+  return (
+    <div className="flex flex-wrap items-baseline gap-2 text-xs">
+      <span
+        className={`rounded px-1.5 py-0.5 font-bold uppercase ${
+          line.kind === "repair"
+            ? "bg-primary/15 text-primary"
+            : "bg-surface-container-highest text-on-surface-variant"
+        }`}
+      >
+        {line.kind === "repair"
+          ? t("requests_quote_repair")
+          : t("requests_quote_part")}
+      </span>
+      <span className="font-medium text-on-surface">{line.name}</span>
+      <span className="font-bold text-on-surface">
+        {fmt(line.priceCents / 100)}
+      </span>
+      <span
+        className={`rounded px-1.5 py-0.5 font-medium ${
+          line.inStock
+            ? "bg-primary/10 text-primary"
+            : "bg-tertiary-container/30 text-on-tertiary-container"
+        }`}
+      >
+        {line.inStock
+          ? t("requests_quote_in_stock")
+          : t("requests_quote_on_order")}
+      </span>
+      {line.confidence === "low" && (
+        <span className="rounded bg-tertiary-container/30 px-1.5 py-0.5 text-on-tertiary-container text-xs">
+          {t("requests_quote_match_approx")}
+        </span>
+      )}
+      <span className="text-on-surface-variant">
+        {line.reasonCheck}
+        {line.reasonStatus !== "info" &&
+          ` · ${t(REASON_STATUS_LABEL[line.reasonStatus])}`}
+      </span>
+    </div>
+  );
+}
+
+/** Inline job search + pick list shown under a pending request card. */
+function JobLinkPicker({
+  acting,
+  hits,
+  onJobQuery,
+  onSelectJob,
+  query,
+  searching,
+}: {
+  acting: boolean;
+  hits: JobHit[];
+  onJobQuery: (q: string) => void;
+  onSelectJob: (jobId: string) => void;
+  query: string;
+  searching: boolean;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="mt-4 border-outline-variant/40 border-t pt-4">
+      <input
+        autoFocus
+        className="w-full rounded-xl border border-outline-variant/40 bg-surface-container-lowest px-4 py-2.5 text-on-surface text-sm outline-none focus:border-primary"
+        onChange={(e) => onJobQuery(e.target.value)}
+        placeholder={t("requests_search_jobs")}
+        type="search"
+        value={query}
+      />
+      <div className="mt-2 space-y-1">
+        {searching && (
+          <p className="py-2 text-center text-on-surface-variant text-xs">…</p>
+        )}
+        {!searching && hits.length === 0 && (
+          <p className="py-2 text-center text-on-surface-variant text-xs">
+            {t("requests_no_jobs_found")}
+          </p>
+        )}
+        {hits.map((j) => (
+          <button
+            className="flex w-full flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-surface-container-high disabled:opacity-50"
+            disabled={acting}
+            key={j.id}
+            onClick={() => onSelectJob(j.id)}
+            type="button"
+          >
+            <span className="font-bold font-mono text-primary text-xs">
+              {j.jobCode}
+            </span>
+            <span className="font-medium text-on-surface">
+              {j.customer?.name}
+            </span>
+            <span className="text-on-surface-variant text-xs">
+              {j.device?.brand?.name} {j.device?.model}
+            </span>
+            <span className="ml-auto rounded bg-surface-container-highest px-1.5 py-0.5 text-on-surface-variant text-xs">
+              {j.status}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Advisory pre-quote card — renders the persisted suggestion snapshot.
+ * Never creates or edits a Job; staff reviews the candidates.
+ */
+function QuoteSuggestionCard({ suggestion }: { suggestion: QuoteSuggestion }) {
+  const { t, i18n } = useTranslation();
+  const generatedLabel = new Intl.DateTimeFormat(i18n.language, {
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "short",
+  }).format(new Date(suggestion.generatedAt));
+  return (
+    <div className="mt-3 rounded-xl bg-surface-container-lowest p-3">
+      <p className="mb-2 font-bold text-on-surface-variant text-xs uppercase tracking-wide">
+        {t("requests_quote_title")}
+        <span className="ms-2 font-normal normal-case tracking-normal">
+          {t("requests_quote_generated", { date: generatedLabel })}
+        </span>
+      </p>
+      {suggestion.skippedReason ? (
+        <p className="text-on-surface-variant text-xs">
+          {t("requests_quote_no_actionable")}
+        </p>
+      ) : (
+        <>
+          {suggestion.deviceMatch ? (
+            <p className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+              <span className="material-symbols-outlined text-primary text-sm">
+                smartphone
+              </span>
+              <span className="font-medium text-on-surface">
+                {suggestion.deviceMatch.brand} {suggestion.deviceMatch.model}
+              </span>
+              {suggestion.deviceMatch.confidence === "low" && (
+                <span className="rounded bg-tertiary-container/30 px-1.5 py-0.5 text-on-tertiary-container text-xs">
+                  {t("requests_quote_low_confidence")}
+                </span>
+              )}
+            </p>
+          ) : (
+            <p className="mb-2 text-on-surface-variant text-xs">
+              {t("requests_quote_device_not_found")}
+            </p>
+          )}
+          {suggestion.candidates && suggestion.candidates.length > 0 && (
+            <p className="mb-2 text-on-surface-variant text-xs">
+              {t("requests_quote_candidates")}:{" "}
+              {suggestion.candidates
+                .map((c) => `${c.brand} ${c.model}`)
+                .join(", ")}
+            </p>
+          )}
+          {suggestion.lines.length > 0 && (
+            <div className="space-y-1.5">
+              {suggestion.lines.map((line) => (
+                <QuoteLineRow
+                  key={`${line.kind}:${line.catalogId}`}
+                  line={line}
+                />
+              ))}
+            </div>
+          )}
+          {suggestion.unmatchedChecks.length > 0 && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-on-surface-variant text-xs">
+                {t("requests_quote_unmatched", {
+                  count: suggestion.unmatchedChecks.length,
+                })}
+              </summary>
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {suggestion.unmatchedChecks.map((key) => (
+                  <span
+                    className="rounded bg-surface-container-highest px-1.5 py-0.5 font-mono text-on-surface-variant text-xs"
+                    key={key}
+                  >
+                    {key}
+                  </span>
+                ))}
+              </div>
+            </details>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function RequestsPage() {
   const { t, i18n } = useTranslation();
   const [requests, setRequests] = useState<IntakeRequest[]>([]);
@@ -71,6 +306,12 @@ export default function RequestsPage() {
   const [filter, setFilter] = useState<Filter>("PENDING");
   const [actingId, setActingId] = useState<string | null>(null);
   const canCreateJob = useCan({ jobs: ["create"] });
+  // O pré-orçamento expõe nomes/preços/stock dos catálogos — o endpoint
+  // exige parts+repairs viewCatalog, por isso o botão segue a mesma regra.
+  const canViewCatalogs = useCan({
+    parts: ["viewCatalog"],
+    repairs: ["viewCatalog"],
+  });
   const openIntakeModal = useUiStore((s) => s.openIntakeModal);
   const intakeModalOpen = useUiStore((s) => s.intakeModalOpen);
   const modalOpenedForRequest = useRef(false);
@@ -128,6 +369,18 @@ export default function RequestsPage() {
       await load(filter);
     } catch {
       toast.error(t("requests_ai_report_error"));
+    } finally {
+      setActingId(null);
+    }
+  };
+
+  const generateQuoteSuggestion = async (id: string) => {
+    setActingId(id);
+    try {
+      await api.post(`/intake-requests/${id}/quote-suggestion`);
+      await load(filter);
+    } catch {
+      toast.error(t("requests_quote_error"));
     } finally {
       setActingId(null);
     }
@@ -364,10 +617,15 @@ export default function RequestsPage() {
                     />
                   </div>
                 )}
+                {r.quoteSuggestion && (
+                  <QuoteSuggestionCard suggestion={r.quoteSuggestion} />
+                )}
               </div>
 
+              {/* w-full + flex-wrap: em ecrãs estreitos os botões passam
+                  para a linha seguinte em vez de cortar o "Ignorar". */}
               {r.status === "PENDING" && (
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto">
                   {canCreateJob && (
                     <button
                       className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 font-bold text-on-primary text-sm transition-all active:scale-[0.98]"
@@ -410,6 +668,24 @@ export default function RequestsPage() {
                       {t("requests_ai_report")}
                     </button>
                   )}
+                  {r.diagnostic &&
+                    r.diagnostic.purpose !== "sale" &&
+                    canViewCatalogs && (
+                      <button
+                        className="flex items-center gap-2 rounded-xl bg-surface-container-high px-4 py-2.5 font-bold text-on-surface text-sm transition-all hover:bg-surface-container-highest active:scale-[0.98] disabled:opacity-50"
+                        disabled={actingId === r.id}
+                        onClick={() => generateQuoteSuggestion(r.id)}
+                        title={t("requests_quote_hint")}
+                        type="button"
+                      >
+                        <span className="material-symbols-outlined text-lg">
+                          request_quote
+                        </span>
+                        {r.quoteSuggestion
+                          ? t("requests_quote_update")
+                          : t("requests_quote_generate")}
+                      </button>
+                    )}
                   <button
                     className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-container-highest text-on-surface-variant transition-colors hover:text-error disabled:opacity-50"
                     disabled={actingId === r.id}
@@ -424,50 +700,14 @@ export default function RequestsPage() {
             </div>
 
             {r.status === "PENDING" && linkingId === r.id && (
-              <div className="mt-4 border-outline-variant/40 border-t pt-4">
-                <input
-                  autoFocus
-                  className="w-full rounded-xl border border-outline-variant/40 bg-surface-container-lowest px-4 py-2.5 text-on-surface text-sm outline-none focus:border-primary"
-                  onChange={(e) => setJobQuery(e.target.value)}
-                  placeholder={t("requests_search_jobs")}
-                  type="search"
-                  value={jobQuery}
-                />
-                <div className="mt-2 space-y-1">
-                  {searchingJobs && (
-                    <p className="py-2 text-center text-on-surface-variant text-xs">
-                      …
-                    </p>
-                  )}
-                  {!searchingJobs && jobHits.length === 0 && (
-                    <p className="py-2 text-center text-on-surface-variant text-xs">
-                      {t("requests_no_jobs_found")}
-                    </p>
-                  )}
-                  {jobHits.map((j) => (
-                    <button
-                      className="flex w-full flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-surface-container-high disabled:opacity-50"
-                      disabled={actingId === r.id}
-                      key={j.id}
-                      onClick={() => linkToJob(r.id, j.id)}
-                      type="button"
-                    >
-                      <span className="font-bold font-mono text-primary text-xs">
-                        {j.jobCode}
-                      </span>
-                      <span className="font-medium text-on-surface">
-                        {j.customer?.name}
-                      </span>
-                      <span className="text-on-surface-variant text-xs">
-                        {j.device?.brand?.name} {j.device?.model}
-                      </span>
-                      <span className="ml-auto rounded bg-surface-container-highest px-1.5 py-0.5 text-on-surface-variant text-xs">
-                        {j.status}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <JobLinkPicker
+                acting={actingId === r.id}
+                hits={jobHits}
+                onJobQuery={setJobQuery}
+                onSelectJob={(jobId) => linkToJob(r.id, jobId)}
+                query={jobQuery}
+                searching={searchingJobs}
+              />
             )}
           </div>
         ))}
