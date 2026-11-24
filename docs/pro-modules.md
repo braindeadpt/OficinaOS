@@ -211,9 +211,11 @@ ESTADO) pelo WhatsApp ou SMS do número da loja e partilha a
   Externos (trabalhadores ao domicílio) registam sem raio e podem enviar
   foto de prova. SMS só para quem a loja marcar "sem WhatsApp" e fica
   sempre por validar.
-- **Avaliação na Cloud:** cada comando recebido pelos canais passa por
-  `POST /ponto/evaluate` (entitlement `ponto` → 402) — uma app alterada
-  não consegue registar ponto. O pedido leva o telefone e um indicador
+- **Avaliação na Cloud:** cada marcação (ENTRADA/PAUSA/VOLTEI/SAIDA)
+  recebida pelos canais passa por `POST /ponto/evaluate` (entitlement
+  `ponto` → 402) — uma app alterada não consegue registar ponto. O
+  comando ESTADO não passa pela Cloud: responde com um resumo local das
+  horas e dos registos por validar. O pedido leva o telefone e um indicador
   de foto, nunca a imagem. Correções internas (saída presumida pelo
   lembrete, hora declarada pelo trabalhador) são gravadas só na app,
   sem chamada à Cloud. A Cloud **não guarda** localização, fotos nem
