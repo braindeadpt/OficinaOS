@@ -24,10 +24,18 @@
  * a server); the CI `check` job always provides one.
  */
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { renderTemplate } from "../services/notification-renderer.js";
+
+// Extrai o padrão do regexp_replace da migração meta-safe — fonte única,
+// para o teste não validar uma cópia que possa divergir da migração.
+const MIGRATION_REPAIR_PATTERN_RE =
+  /regexp_replace\(\s*body\s*,\s*'((?:[^']|'')*)'/s;
+
 import {
   deriveMetaTemplate,
   expandConditionals,
@@ -356,11 +364,24 @@ describe.skipIf(!serverReachable)(
       // texto fixo entre blocos {{if}} como parte da cadeia terminal e
       // inserir "." a seguir a {{trackingUrl}} — dentro de um URL de
       // seguimento (?phone4=NNNN&utm_…) isso corrompia a ligação. O
-      // mesmo padrão corre na migração de convergência 20261230000000 —
-      // aqui replica-se o loop: duas passagens bastam para cadeias de
-      // dois blocos.
-      const pattern =
-        "(\\{\\{\\w+\\}\\})(\\{\\{endif\\}\\})(([[:space:]]*\\{\\{if[^{}]*\\}\\}((?!\\{\\{endif\\}\\}).)*?\\{\\{endif\\}\\})*[[:space:]]*$)";
+      // padrão é lido da própria migração de convergência 20261230000000
+      // (e não copiado à mão): se a regex mudar lá, este teste muda com
+      // ela. O loop é replicado aqui — duas passadas bastam para cadeias
+      // de dois blocos.
+      const migrationSql = readFileSync(
+        fileURLToPath(
+          new URL(
+            "../../prisma/migrations/20261230000000_meta_safe_trailing_template_blocks/migration.sql",
+            import.meta.url
+          )
+        ),
+        "utf8"
+      );
+      const patternMatch = migrationSql.match(MIGRATION_REPAIR_PATTERN_RE);
+      if (!patternMatch) {
+        throw new Error("padrão regexp_replace não encontrado na migração");
+      }
+      const pattern = patternMatch[1].replace(/''/g, "'");
       const urlBody =
         "{{if shopName}}Oficina {{shopName}}{{endif}}{{if trackingUrl}} Consulte {{trackingUrl}}{{endif}}{{if trackingUrl}}&utm_source=whatsapp{{endif}}&utm_medium=mensagem{{if reviewUrl}} Avalie-nos em {{reviewUrl}}.{{endif}}";
       const res = await getDb().query(
