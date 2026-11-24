@@ -172,9 +172,24 @@ const RULE_CAMERA: CheckRule = {
   requiresDeviceMatch: true,
 };
 const RULE_SPEAKER: CheckRule = {
-  // "coluna" é o nome PT comum no catálogo demo; auricular/earpiece é o
-  // altifalante de chamadas (ouvir) — NÃO o microfone.
-  hints: ["altifalante", "speaker", "coluna", "auricular", "earpiece"],
+  // Coluna/altifalante principal. O earpiece de chamadas é outro
+  // componente físico → RULE_EARPIECE (regra própria = linha própria).
+  hints: ["altifalante", "speaker", "coluna"],
+  partCategory: "SPEAKER",
+  repairCategories: HARDWARE,
+  requiresDeviceMatch: true,
+};
+const RULE_EARPIECE: CheckRule = {
+  // Auricular/earpiece = altifalante de chamadas (ouvir) — NÃO o
+  // microfone. Divide a categoria SPEAKER com RULE_SPEAKER mas tem hints
+  // próprios: speaker e earpiece avariados são duas linhas, não uma.
+  hints: [
+    "auricular",
+    "earpiece",
+    "receiver",
+    "altifalante de chamadas",
+    "speaker de chamadas",
+  ],
   partCategory: "SPEAKER",
   repairCategories: HARDWARE,
   requiresDeviceMatch: true,
@@ -217,7 +232,7 @@ const EXACT_RULES: Record<string, CheckRule> = {
   "checklist.buttons": RULE_BUTTON,
   "checklist.cameras": RULE_CAMERA,
   "checklist.charge_port": RULE_CHARGING,
-  "checklist.earpiece": RULE_SPEAKER,
+  "checklist.earpiece": RULE_EARPIECE,
   "checklist.liquid": RULE_LIQUID,
   "checklist.mic": RULE_MICROPHONE,
   "checklist.screen_visual": RULE_SCREEN,
@@ -342,9 +357,13 @@ function termContained(haystack: string, needle: string): boolean {
 }
 
 /**
- * Ordem de preferência entre dois candidatos: rank (equals > contains),
- * depois compatibilidade com o modelo do aparelho, depois stock>0 (peças),
- * depois nome normalizado, depois id — sempre determinístico.
+ * Ordem de preferência entre dois candidatos — sempre determinístico:
+ *  1. rank: igualdade EXATA de hint (equals) > contains. O deviceHit NÃO
+ *     promove um contains a equals — ex.: "Troca de bateria" (exato do
+ *     template) ganha a "Troca de bateria iPhone 15" (contains+deviceHit).
+ *  2. deviceHit: entre não-exatos, o item que menciona o modelo do
+ *     aparelho ganha (compatibilidade por nome — ver pickBest).
+ *  3. stock>0 (peças), depois nome normalizado, depois id.
  */
 function isPreferred<T extends { id: string; name: string }>(
   next: ScoredCandidate<T>,
@@ -371,12 +390,12 @@ function isPreferred<T extends { id: string; name: string }>(
  * isPreferred — determinístico.
  *
  * deviceHints (nomes normalizados do modelo/nome comercial do aparelho
- * matched) não são gate de match — são boost: um item que passa nos hints
- * de categoria E menciona o modelo ganha confidence "high". O catálogo não
- * tem campo peça↔modelo, por isso a heurística é por nome; itens sem o
- * nome do modelo não são penalizados — só perdem o desempate para os que
- * o mencionam (limitação documentada: compatibilidade real pode divergir
- * do nome).
+ * matched) não são gate de match — são desempate: entre candidatos com o
+ * mesmo rank de hint, o que menciona o modelo ganha (e a confidence
+ * mostrada passa a "high"). O catálogo não tem campo peça↔modelo, por
+ * isso a heurística é por nome; itens sem o nome do modelo não são
+ * penalizados — só perdem o desempate (limitação documentada:
+ * compatibilidade real pode divergir do nome).
  */
 function pickBest<T extends { id: string; name: string }>(
   pool: T[],
@@ -395,22 +414,22 @@ function pickBest<T extends { id: string; name: string }>(
     if (!norm) {
       continue;
     }
-    let confidence = matchConfidence(norm, normalizedHints);
-    if (!confidence) {
+    const matched = matchConfidence(norm, normalizedHints);
+    if (!matched) {
       continue;
     }
     const deviceHit = normalizedDeviceHints.some(
       (h) => termContained(norm, h) || termContained(h, norm)
     );
-    if (deviceHit) {
-      confidence = "high";
-    }
     const candidate: ScoredCandidate<T> = {
-      confidence,
+      // confidence de exibição: exact ou deviceHit → "high". O rank, em
+      // contraste, reflete SÓ a igualdade exata — deviceHit nunca promove
+      // um contains a equals na ordenação (isPreferred).
+      confidence: deviceHit ? "high" : matched,
       deviceHit,
       item,
       norm,
-      rank: confidence === "high" ? 2 : 1,
+      rank: matched === "high" ? 2 : 1,
       stock: stockOf ? stockOf(item) : 0,
     };
     if (!best || isPreferred(candidate, best)) {

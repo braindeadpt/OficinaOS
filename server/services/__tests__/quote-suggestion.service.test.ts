@@ -285,15 +285,15 @@ describe("buildQuoteSuggestion — matching confidence", () => {
 
 describe("buildQuoteSuggestion — device-aware part priority", () => {
   it("prefers parts named after the matched device over other models", () => {
-    // Sem relação peça↔modelo no catálogo, o nome do item é o sinal: a
-    // bateria "iPhone 15" ganha à "Samsung A54" mesmo com menos stock, e
-    // ganha à "Bateria" genérica porque menciona o modelo.
+    // Sem relação peça↔modelo no catálogo, o nome do item é o sinal: entre
+    // matches contains (não-exatos), a peça "iPhone 15" ganha à "Samsung
+    // A54" mesmo com menos stock — stock não vence compatibilidade de nome.
     const parts: QuotePartInput[] = [
       {
         category: "BATTERY",
-        defaultPrice: 20,
-        id: "part-generic",
-        name: "Bateria",
+        defaultPrice: 21,
+        id: "part-universal",
+        name: "Bateria universal",
         stockQuantity: 5,
       },
       {
@@ -315,6 +315,55 @@ describe("buildQuoteSuggestion — device-aware part priority", () => {
     const part = s.lines.find((l) => l.kind === "part");
     expect(part?.catalogId).toBe("part-iphone");
     expect(part?.confidence).toBe("high");
+  });
+
+  it("lets an exact hint match beat a device-name contains match", () => {
+    // Prioridade: equals exato > deviceHit > stock > contains. O template
+    // battery dá o hint exato "troca de bateria" — a linha guardada é a
+    // genérica exata, não a específica do modelo (contains+deviceHit).
+    const repairs: QuoteRepairInput[] = [
+      {
+        category: "HARDWARE",
+        defaultPrice: 25,
+        id: "rep-generic",
+        name: "Troca de bateria",
+      },
+      {
+        category: "HARDWARE",
+        defaultPrice: 35,
+        id: "rep-iphone",
+        name: "Troca de bateria iPhone 15",
+      },
+    ];
+    const parts: QuotePartInput[] = [
+      {
+        category: "BATTERY",
+        defaultPrice: 20,
+        id: "part-generic",
+        name: "Bateria",
+        stockQuantity: 3,
+      },
+      {
+        category: "BATTERY",
+        defaultPrice: 28,
+        id: "part-iphone",
+        name: "Bateria iPhone 15",
+        stockQuantity: 3,
+      },
+    ];
+    const s = build(
+      diag({
+        "battery.health": { Status: "fail" },
+        "service.template": { Status: "info", Value: "battery" },
+      }),
+      { parts, repairs }
+    );
+    expect(s.lines.find((l) => l.kind === "repair")?.catalogId).toBe(
+      "rep-generic"
+    );
+    expect(s.lines.find((l) => l.kind === "part")?.catalogId).toBe(
+      "part-generic"
+    );
   });
 
   it("still emits a generic part when no catalog item mentions the device", () => {
@@ -450,6 +499,68 @@ describe("buildQuoteSuggestion — check → category rules", () => {
     const part = s.lines.find((l) => l.kind === "part");
     expect(part?.catalogId).toBe("part-ear");
     expect(s.unmatchedChecks).toEqual([]);
+  });
+
+  it("emits separate lines when speaker and earpiece are both faulty", () => {
+    // Coluna e auricular de chamadas são componentes físicos distintos —
+    // regras diferentes → caches diferentes → duas linhas de peça.
+    const parts: QuotePartInput[] = [
+      {
+        category: "SPEAKER",
+        defaultPrice: 15,
+        id: "part-coluna",
+        name: "Coluna Bluetooth",
+        stockQuantity: 2,
+      },
+      {
+        category: "SPEAKER",
+        defaultPrice: 12,
+        id: "part-auricular",
+        name: "Auricular chamadas",
+        stockQuantity: 1,
+      },
+    ];
+    const s = build(
+      diag({
+        "checklist.earpiece": { Status: "fail" },
+        "checklist.speaker": { Status: "fail" },
+      }),
+      { parts }
+    );
+    const partLines = s.lines.filter((l) => l.kind === "part");
+    expect(partLines).toHaveLength(2);
+    expect(partLines.map((l) => l.catalogId).sort()).toEqual([
+      "part-auricular",
+      "part-coluna",
+    ]);
+    expect(s.unmatchedChecks).toEqual([]);
+  });
+
+  it("still merges checks of the SAME component into one line", () => {
+    // checklist.speaker e sensor.speaker são a mesma avaria (a coluna) —
+    // a dedupe por regra continua: uma linha com as duas razões.
+    const parts: QuotePartInput[] = [
+      {
+        category: "SPEAKER",
+        defaultPrice: 15,
+        id: "part-coluna",
+        name: "Coluna Bluetooth",
+        stockQuantity: 2,
+      },
+    ];
+    const s = build(
+      diag({
+        "checklist.speaker": { Status: "fail" },
+        "sensor.speaker": { Status: "warn" },
+      }),
+      { parts }
+    );
+    const partLines = s.lines.filter((l) => l.kind === "part");
+    expect(partLines).toHaveLength(1);
+    expect(partLines[0].catalogId).toBe("part-coluna");
+    expect(partLines[0].reasonCheck).toContain("checklist.speaker");
+    expect(partLines[0].reasonCheck).toContain("sensor.speaker");
+    expect(partLines[0].reasonStatus).toBe("fail");
   });
 });
 
