@@ -407,6 +407,11 @@ const COMMERCIAL_VARIANT_PHRASES = new Set(["max capacity"]);
 // Pro Max (BUG #166 r11/r13); storage («max 256 gb») continua a ser
 // variante — a unidade distingue (BUG #166 r12).
 const COMMERCIAL_VARIANT_SPEC = /^max \d+(?: \d+)?\s*(?:mah|wh)\b/;
+// «Pro – Max» com travessão ESPAÇADO separa o descritor comercial do
+// modelo («Bateria iPhone 15 Pro – Max 4000 mAh»); «Pro Max» ou
+// «Pro-Max» contíguo é a variante (BUG #166 r15). O normalizeKey perde
+// o travessão, por isso esta decisão lê o nome bruto.
+const SPACED_DASH_PRO_MAX = /pro\s+[-–—]\s+max/i;
 
 /**
  * Contains por palavra inteira com rejeição de variantes: devolve true se
@@ -417,7 +422,11 @@ const COMMERCIAL_VARIANT_SPEC = /^max \d+(?: \d+)?\s*(?:mah|wh)\b/;
  * («max capacity») mantém a correspondência com o modelo base
  * (BUG #166 r9/r10).
  */
-function deviceModelContained(haystack: string, needle: string): boolean {
+function deviceModelContained(
+  haystack: string,
+  needle: string,
+  rawHaystack?: string
+): boolean {
   const hay = ` ${haystack} `;
   const ned = ` ${needle} `;
   let from = 0;
@@ -448,7 +457,10 @@ function deviceModelContained(haystack: string, needle: string): boolean {
       .split(" ")
       .filter((w) => w.length > 0);
     const prevWord = before.at(-1) ?? "";
-    const contiguousVariant = next === "max" && prevWord === "pro";
+    const contiguousVariant =
+      next === "max" &&
+      prevWord === "pro" &&
+      !(rawHaystack && SPACED_DASH_PRO_MAX.test(rawHaystack));
     const phrase = `${next} ${words[1] ?? ""}`.trim();
     const spec = `${next} ${words.slice(1, 4).join(" ")}`.trim();
     if (
@@ -606,7 +618,9 @@ function pickBest<T extends { id: string; name: string }>(
       continue;
     }
     const deviceHit = normalizedDeviceHints.some(
-      (h) => deviceModelContained(norm, h) || deviceModelContained(h, norm)
+      (h) =>
+        deviceModelContained(norm, h, item.name) ||
+        deviceModelContained(h, norm)
     );
     const candidate: ScoredCandidate<T> = {
       // confidence de exibição: exact ou deviceHit → "high". O rank, em
