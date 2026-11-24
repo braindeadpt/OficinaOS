@@ -7,10 +7,13 @@
 // - Sinónimos PT-PT por comando + tolerância a 1 erro de edição
 //   (OSA ≤ 1) apenas em palavras com ≥5 letras — "entardas"→ENTRADA,
 //   "almoco"→PAUSA, mas "sai" nunca casa por fuzzy.
-// - Código de entrada: \b\d{4}\b em qualquer posição (o fluxo do QR é
-//   "ENTRADA <slug-da-loja> #<codigo>" — as palavras do slug são
-//   toleradas quando há código; sem código a cobertura é estrita para
-//   não registar "fim de semana" como VOLTEI).
+// - Código de entrada: "#4821" no texto cru tem prioridade; senão o
+//   ÚLTIMO token de 4 dígitos. O fluxo do QR é
+//   "ENTRADA <slug-da-loja> #<codigo>" — a normalização remove o "#",
+//   por isso o marcador é lido no texto original, e o "último" impede
+//   um slug com números ("ENTRADA #4821 loja 2024") de roubar o código.
+//   Sem código a cobertura é estrita para não registar "fim de semana"
+//   como VOLTEI.
 // - IDs de botão Meta/Evolution ("ponto_entrada"…) são autoridade
 //   absoluta e vêm do campo interactivo, não do texto normalizado.
 // - Ambiguidade → null: o handler responde com a lista de comandos.
@@ -38,7 +41,8 @@ const COMMAND_PHRASES: { command: PontoCommand; tokens: string[] }[] = [
 ];
 
 const BUTTON_ID_RE = /^ponto_(entrada|pausa|voltei|saida)$/i;
-const CODE_RE = /\b\d{4}\b/;
+const CODE_TOKEN_RE = /^\d{4}$/;
+const HASH_CODE_RE = /#\s*(\d{4})\b/g;
 const DIGITS_ONLY_RE = /^\d+$/;
 const NEGATION_WORDS = new Set(["jamais", "nao", "nunca"]);
 const FUZZY_MIN_LEN = 5;
@@ -209,6 +213,26 @@ function fullyCovered(tokens: string[], covered: boolean[]): boolean {
   return tokens.every((token, j) => covered[j] || DIGITS_ONLY_RE.test(token));
 }
 
+/** Código de 4 dígitos: "#4821" no texto cru ganha sempre (marcador
+ *  explícito do QR — sobrevive mesmo que um slug numérico venha
+ *  depois); senão o ÚLTIMO token de 4 dígitos do texto normalizado —
+ *  "ENTRADA <slug> #<codigo>" põe o código no fim e um slug como
+ *  "loja 2024" não o intercepta. */
+function extractCode(rawText: string, tokens: string[]): string | undefined {
+  let hashCode: string | undefined;
+  for (const m of rawText.matchAll(HASH_CODE_RE)) {
+    hashCode = m[1];
+  }
+  if (hashCode) {
+    return hashCode;
+  }
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    if (CODE_TOKEN_RE.test(tokens[i])) {
+      return tokens[i];
+    }
+  }
+}
+
 export function parsePontoCommand(
   text: string | null | undefined,
   interactiveId?: string | null
@@ -227,9 +251,8 @@ export function parsePontoCommand(
     return null;
   }
 
-  const codeMatch = CODE_RE.exec(normalized);
-  const code = codeMatch ? codeMatch[0] : undefined;
   const tokens = normalized.split(" ");
+  const code = extractCode(text, tokens);
   const { covered, spans } = collectSpans(tokens);
   if (spans.length === 0) {
     return null;

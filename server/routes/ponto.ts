@@ -6,6 +6,7 @@ import { requirePermission } from "../middlewares/rbac.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import { cloudFetch } from "../services/cloud.service.js";
 import { isModuleEnabled } from "../utils/modules.js";
+import { tryRegisterEvolutionWebhook } from "./settings.js";
 
 const MODULE = "ponto";
 
@@ -96,7 +97,7 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
         tags: ["ponto"],
       },
     },
-    async (_req, reply) => {
+    async (req, reply) => {
       const { apiUrl, settings, token } = await requirePonto(app.prisma);
       const res = await cloudFetch(apiUrl, "/ponto/config", {
         body: {
@@ -115,6 +116,17 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
       if (!res.ok) {
         throw new AppError("CLOUD_REQUEST_FAILED");
       }
+      // Ativação do ponto é o momento em que o webhook Evolution tem de
+      // existir: se o módulo chegou depois da última gravação de
+      // definições WhatsApp (e sem termo do bot aceite), a instância
+      // ainda não tem callback — sem ele as marcações nunca chegam.
+      // O Host do pedido é o endereço que a Evolution alcança.
+      await tryRegisterEvolutionWebhook(
+        app.prisma,
+        req.headers.host ?? ""
+      ).catch((err) =>
+        req.log.warn({ err }, "evolution webhook register failed")
+      );
       return reply.send(
         res.body && typeof res.body === "object" ? res.body : { ok: true }
       );

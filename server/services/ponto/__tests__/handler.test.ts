@@ -15,9 +15,17 @@ const mocks = vi.hoisted(() => ({
   pontoEntriesSince: vi.fn(
     (): Promise<Record<string, unknown>[]> => Promise.resolve([])
   ),
-  recordPontoEntry: vi.fn(() => Promise.resolve({ id: "entry-1" })),
-  savePontoPhotoFile: vi.fn(() =>
-    Promise.resolve({ id: "photo-1", path: "ponto-photos/u1/p.jpg" })
+  recordPontoEntry: vi.fn((_prisma: unknown, _input: Record<string, unknown>) =>
+    Promise.resolve({ id: "entry-1" })
+  ),
+  savePontoPhotoFile: vi.fn(
+    (
+      _prisma: unknown,
+      _userId: string,
+      _buffer: Buffer,
+      _hintedMime?: string | null
+    ): Promise<{ id: string; path: string } | null> =>
+      Promise.resolve({ id: "photo-1", path: "ponto-photos/u1/p.jpg" })
   ),
   todayPontoEntries: vi.fn(
     (): Promise<Record<string, unknown>[]> => Promise.resolve([])
@@ -60,7 +68,7 @@ import type {
 } from "../../bot-intents.js";
 import { handleInboundMessage } from "../../bot-intents.js";
 import { tryHandlePontoStaff } from "../handler.js";
-import { clearAllPendingPonto } from "../state.js";
+import { clearAllPendingPonto, PONTO_PHOTO_TTL_MS } from "../state.js";
 
 // Telefone único por caso — rateOk(phone, 30, "ponto") é real.
 let phoneSeq = 0;
@@ -98,9 +106,12 @@ function makeSettings(over: Record<string, unknown> = {}) {
   };
 }
 
-function makePrisma(staffUsers: unknown[] = []) {
+function makePrisma(staffUsers: unknown[] = [], customers: unknown[] = []) {
   return {
-    customer: { findMany: vi.fn(() => Promise.resolve([])) },
+    customer: {
+      findMany: vi.fn(() => Promise.resolve(customers)),
+      update: vi.fn(() => Promise.resolve({})),
+    },
     job: { findMany: vi.fn(() => Promise.resolve([])) },
     user: { findMany: vi.fn(() => Promise.resolve(staffUsers)) },
   };
@@ -314,6 +325,41 @@ describe("comandos sem fluxo", () => {
     expect(sent[0]).toContain("Hoje:");
     expect(sent[0]).toContain("Semana:");
   });
+
+  it("ESTADO: horas da semana somam intervalos por dia civil — entrada de ontem sem saída não infla", async () => {
+    vi.useFakeTimers();
+    // Quarta 07/01/2026 — a semana começa segunda 05/01 (Europe/Lisbon
+    // em janeiro = UTC).
+    vi.setSystemTime(new Date("2026-01-07T12:00:00Z"));
+    const { ctx, phone, sent, t } = setup();
+    mocks.pontoEntriesSince.mockResolvedValue([
+      // Segunda: ENTRADA sem SAIDA (esqueceu-se) — intervalo aberto
+      // não pode fechar na saída de terça e inflar ~32 h.
+      {
+        at: new Date("2026-01-05T09:00:00Z"),
+        status: "APROVADO",
+        type: "ENTRADA",
+      },
+      // Terça: turno completo 09:00→17:00 = 8 h.
+      {
+        at: new Date("2026-01-06T09:00:00Z"),
+        status: "APROVADO",
+        type: "ENTRADA",
+      },
+      {
+        at: new Date("2026-01-06T17:00:00Z"),
+        status: "APROVADO",
+        type: "SAIDA",
+      },
+    ]);
+    await tryHandlePontoStaff(
+      ctx,
+      msg({ fromPhone: phone, text: "ESTADO" }),
+      t
+    );
+    expect(sent[0]).toContain("Semana: 8h00");
+    expect(sent[0]).not.toContain("32h");
+  });
 });
 
 describe("fluxo ENTRADA staff (QR + localização)", () => {
@@ -524,6 +570,46 @@ describe("fluxo PAUSA/VOLTEI/SAIDA", () => {
     const text = lastInteractiveText(interactive);
     expect(text).toContain("Regresso");
     expect(text).toContain("pausa de 11 min");
+  });
+
+  it("segunda localização no mesmo pedido não volta a avaliar (dedupe)", async () => {
+    const { ctx, phone, sent, t } = setup();
+    mocks.todayPontoEntries.mockResolvedValue([
+      {
+        at: new Date(Date.now() - 4 * 3_600_000),
+        status: "APROVADO",
+        type: "ENTRADA",
+      },
+    ]);
+    await tryHandlePontoStaff(ctx, msg({ fromPhone: phone, text: "PAUSA" }), t);
+    await tryHandlePontoStaff(
+      ctx,
+      msg({
+        fromPhone: phone,
+        location: { lat: 38.72, lng: -9.14 },
+        messageType: "location",
+      }),
+      t
+    );
+    const evaluateCalls = () =>
+      mocks.cloudFetch.mock.calls.filter((c) => c[1] === "/ponto/evaluate")
+        .length;
+    expect(evaluateCalls()).toBe(1);
+    expect(mocks.recordPontoEntry).toHaveBeenCalledTimes(1);
+    // O pedido morreu com a primeira localização — a segunda partilha
+    // é uma localização órfã, nunca uma segunda PAUSA.
+    await tryHandlePontoStaff(
+      ctx,
+      msg({
+        fromPhone: phone,
+        location: { lat: 38.73, lng: -9.15 },
+        messageType: "location",
+      }),
+      t
+    );
+    expect(evaluateCalls()).toBe(1);
+    expect(mocks.recordPontoEntry).toHaveBeenCalledTimes(1);
+    expect(sent.at(-1)).toContain("localização");
   });
 });
 
@@ -740,6 +826,126 @@ describe("externos (externalWork)", () => {
     const text = lastInteractiveText(interactive);
     expect(text).toContain("Entrada");
   });
+
+  it("foto não chega → o timer do TTL finaliza sozinho, sem mensagem nova", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-10T09:00:00Z"));
+    const { ctx, phone, t } = setup({
+      staffOver: { externalWork: true },
+    });
+    mocks.todayPontoEntries.mockResolvedValue([]);
+    await tryHandlePontoStaff(
+      ctx,
+      msg({
+        createdAt: new Date().toISOString(),
+        fromPhone: phone,
+        text: "ENTRADA",
+      }),
+      t
+    );
+    await tryHandlePontoStaff(
+      ctx,
+      msg({
+        createdAt: new Date().toISOString(),
+        fromPhone: phone,
+        location: { lat: 41.1, lng: -8.6 },
+        messageType: "location",
+      }),
+      t
+    );
+    expect(mocks.cloudFetch).not.toHaveBeenCalled();
+    // Nenhum inbound a seguir — só o relógio anda. O timer agendado ao
+    // entrar na etapa de foto tem de finalizar com hasPhoto=false.
+    await vi.advanceTimersByTimeAsync(PONTO_PHOTO_TTL_MS + 1000);
+    expect(evaluateBody()).toMatchObject({ hasPhoto: false });
+    expect(mocks.recordPontoEntry).toHaveBeenCalledTimes(1);
+    // E não repete: o pendente foi consumido uma única vez.
+    await vi.advanceTimersByTimeAsync(PONTO_PHOTO_TTL_MS * 2);
+    expect(mocks.recordPontoEntry).toHaveBeenCalledTimes(1);
+  });
+
+  it("foto que não grava (imagem inválida) → hasPhoto=false, sem photoId", async () => {
+    const { ctx, phone, t } = setup({
+      staffOver: { externalWork: true },
+    });
+    mocks.todayPontoEntries.mockResolvedValue([]);
+    await tryHandlePontoStaff(
+      ctx,
+      msg({ fromPhone: phone, text: "ENTRADA" }),
+      t
+    );
+    await tryHandlePontoStaff(
+      ctx,
+      msg({
+        fromPhone: phone,
+        location: { lat: 41.1, lng: -8.6 },
+        messageType: "location",
+      }),
+      t
+    );
+    // A foto chega mas a gravação rejeita-a (magic bytes inválidos) —
+    // a marcação segue sem prova, nunca APROVADO com foto fantasma.
+    mocks.savePontoPhotoFile.mockResolvedValueOnce(null);
+    await tryHandlePontoStaff(
+      ctx,
+      msg({
+        fromPhone: phone,
+        imageRef: { mimetype: "image/png", raw: { key: { id: "k" } } },
+        messageType: "image",
+      }),
+      t,
+      {
+        fetchPhoto: async () => ({
+          buffer: Buffer.from("isto nao e uma imagem"),
+          mimetype: "image/png",
+        }),
+      }
+    );
+    expect(evaluateBody()).toMatchObject({ hasPhoto: false });
+    const entryArg = mocks.recordPontoEntry.mock.calls.at(-1)?.[1] as
+      | { proofs: Record<string, unknown> }
+      | undefined;
+    expect(entryArg?.proofs.hasPhoto).toBe(false);
+    expect(entryArg?.proofs.photoId).toBeUndefined();
+    expect(mocks.linkPontoPhoto).not.toHaveBeenCalled();
+  });
+
+  it("URL de foto privada (SSRF) → descartada sem download, hasPhoto=false", async () => {
+    const { ctx, phone, t } = setup({
+      staffOver: { externalWork: true },
+    });
+    mocks.todayPontoEntries.mockResolvedValue([]);
+    await tryHandlePontoStaff(
+      ctx,
+      msg({ fromPhone: phone, text: "ENTRADA" }),
+      t
+    );
+    await tryHandlePontoStaff(
+      ctx,
+      msg({
+        fromPhone: phone,
+        location: { lat: 41.1, lng: -8.6 },
+        messageType: "location",
+      }),
+      t
+    );
+    // Sem opts.fetchPhoto → defaultFetchPhoto → a url do webhook passa
+    // pela guarda SSRF: IP privado/link-local nunca é contactado.
+    await tryHandlePontoStaff(
+      ctx,
+      msg({
+        fromPhone: phone,
+        imageRef: {
+          mimetype: "image/png",
+          url: "https://169.254.169.254/latest/meta-data",
+        },
+        messageType: "image",
+      }),
+      t
+    );
+    expect(evaluateBody()).toMatchObject({ hasPhoto: false });
+    expect(mocks.savePontoPhotoFile).not.toHaveBeenCalled();
+  });
 });
 
 describe("separação staff ↔ clientes (handleInboundMessage)", () => {
@@ -774,6 +980,57 @@ describe("separação staff ↔ clientes (handleInboundMessage)", () => {
     expect(out).not.toBeNull();
     expect(mocks.cloudFetch).not.toHaveBeenCalled();
     expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
+  });
+
+  it("PARAR de número dual-role (staff+cliente) → ponto responde E consentimento revoga", async () => {
+    const phone = nextPhone();
+    const staff = staffUserFor(phone);
+    const customer = { id: "cust-1", name: "Rui", phone: `+${phone}` };
+    const prisma = makePrisma([staff], [customer]);
+    const ctx = makeCtx(prisma);
+    const { sent, t } = makeTransport();
+    const out = await handleInboundMessage(
+      ctx,
+      msg({ fromPhone: phone, text: "PARAR" }),
+      t
+    );
+    expect(out?.sent).toBe(true);
+    // O ponto consumiu a mensagem (lista de comandos)…
+    expect(sent[0]).toContain("Comandos");
+    // …mas a revogação de consentimento corre na mesma — sem ela os
+    // avisos automáticos continuavam autorizados.
+    expect(prisma.customer.update).toHaveBeenCalledWith({
+      data: { whatsappConsent: false },
+      where: { id: "cust-1" },
+    });
+    // E nunca chegou ao pipeline de clientes.
+    expect(prisma.job.findMany).not.toHaveBeenCalled();
+  });
+
+  it("sentAt da fila oficial propaga-se como messageAt no evaluate", async () => {
+    const sentAt = "2026-01-10T08:00:00.000Z";
+    const { ctx, phone, t } = setup();
+    await tryHandlePontoStaff(
+      ctx,
+      msg({
+        createdAt: "2026-01-10T08:05:00.000Z", // receção 5 min depois
+        fromPhone: phone,
+        sentAt,
+        text: "ENTRADA loja-x 4821",
+      }),
+      t
+    );
+    await tryHandlePontoStaff(
+      ctx,
+      msg({
+        fromPhone: phone,
+        location: { lat: 38.72, lng: -9.14 },
+        messageType: "location",
+      }),
+      t
+    );
+    // A Cloud mede a validade do código ao ENVIO (Meta), não à receção.
+    expect(evaluateBody().messageAt).toBe(sentAt);
   });
 });
 

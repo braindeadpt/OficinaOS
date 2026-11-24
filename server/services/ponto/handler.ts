@@ -11,6 +11,7 @@
 import type { TimeEntryTransport, TimeEntryType } from "@generated/client";
 import { getOrCreateShopSettings } from "../../repositories/settings.repository.js";
 import { isModuleEnabled } from "../../utils/modules.js";
+import { fetchPublicMedia } from "../../utils/safe-url.js";
 import { dayRange } from "../../utils/time-range.js";
 import type {
   BotReplyCtx,
@@ -125,10 +126,11 @@ function fmtHours(ms: number): string {
   return `${h}h${String(m).padStart(2, "0")}`;
 }
 
-/** Soma dos intervalos trabalhados: ENTRADA/VOLTEI abrem (o primeiro
- *  marca ganha se houver duplicados), PAUSA/SAIDA fecham. Um turno ainda
- *  aberto não conta — "horas trabalhadas" exclui o presente. */
-function workedMs(entries: { at: Date; type: string }[]): number {
+/** Intervalos fechados dentro de um só conjunto de registos: ENTRADA/
+ *  VOLTEI abrem (o primeiro marca ganha se houver duplicados),
+ *  PAUSA/SAIDA fecham. Um turno ainda aberto não conta — "horas
+ *  trabalhadas" exclui o presente. */
+function workedIntervalsMs(entries: { at: Date; type: string }[]): number {
   let total = 0;
   let open: number | null = null;
   for (const e of entries) {
@@ -141,6 +143,29 @@ function workedMs(entries: { at: Date; type: string }[]): number {
       total += t - open;
       open = null;
     }
+  }
+  return total;
+}
+
+/** Soma os intervalos fechados POR DIA CIVIL da loja. Uma entrada sem
+ *  saída não atravessa a meia-noite: sem o agrupamento, a entrada de
+ *  terça era absorvida pelo turno de segunda e a saída de terça fechava
+ *  um intervalo de ~32 h (a regra "entrada no próprio dia" já impede
+ *  turnos overnight — §2.2). */
+function workedMs(entries: { at: Date; type: string }[], tz: string): number {
+  const byDay = new Map<string, { at: Date; type: string }[]>();
+  for (const e of entries) {
+    const day = dayRange(tz, e.at).date;
+    const list = byDay.get(day);
+    if (list) {
+      list.push(e);
+    } else {
+      byDay.set(day, [e]);
+    }
+  }
+  let total = 0;
+  for (const dayEntries of byDay.values()) {
+    total += workedIntervalsMs(dayEntries);
   }
   return total;
 }
@@ -230,14 +255,17 @@ async function defaultFetchPhoto(
     }
   }
   if (ref.url) {
-    const res = await fetch(ref.url, {
-      signal: AbortSignal.timeout(15_000),
-    }).catch(() => null);
-    if (res?.ok) {
-      const buffer = Buffer.from(await res.arrayBuffer());
+    // A URL vem do payload do webhook — controlada por quem o enviou.
+    // Sem a guarda SSRF um webhook forjado faria a app pedir serviços
+    // internos (metadata, router, loopback). Só https público, ou a
+    // origem da instância Evolution configurada.
+    const media = await fetchPublicMedia(ref.url, {
+      trustedOrigin: opts?.evolution?.baseUrl ?? null,
+    });
+    if (media) {
       return {
-        buffer,
-        mimetype: res.headers.get("content-type") ?? ref.mimetype ?? null,
+        buffer: media.buffer,
+        mimetype: media.contentType ?? ref.mimetype ?? null,
       };
     }
   }
@@ -371,18 +399,7 @@ async function routeLocation(
 ): Promise<void> {
   const pending = getPendingPonto(env.key);
   if (pending?.stage === "location") {
-    await onLocation(
-      env.ctx,
-      env.say,
-      env.sayInteractive,
-      env.settings,
-      env.staff,
-      pending,
-      env.msg,
-      env.transport,
-      env.phoneDigits,
-      env.key
-    );
+    await onLocation(env, pending);
     return;
   }
   await env.say(orphanLocationReply(pending, expired));
@@ -391,19 +408,7 @@ async function routeLocation(
 async function routePhoto(env: FlowEnv): Promise<void> {
   const pending = getPendingPonto(env.key);
   if (pending?.stage === "photo") {
-    await onPhoto(
-      env.ctx,
-      env.say,
-      env.sayInteractive,
-      env.settings,
-      env.staff,
-      pending,
-      env.msg,
-      env.transport,
-      env.phoneDigits,
-      env.key,
-      env.opts
-    );
+    await onPhoto(env, pending);
     return;
   }
   await env.say(PONTO_TEXT.noPendingPhoto);
@@ -580,7 +585,7 @@ async function dispatchCommand(a: DispatchArgs): Promise<void> {
           : undefined,
       command: effective,
       hasPhoto: false,
-      messageAt: msg.createdAt,
+      messageAt: msg.sentAt ?? msg.createdAt,
       pauseMinutes: pauseMinutesOf(pauseSinceAt, new Date(msg.createdAt)),
       phoneDigits,
       todayHasEntry: hasEntrada,
@@ -598,7 +603,11 @@ async function dispatchCommand(a: DispatchArgs): Promise<void> {
   const wantPhoto = staff.user.externalWork && effective === "ENTRADA";
   const pending: PendingPonto = {
     command: effective,
-    commandAt: msg.createdAt,
+    // Hora de ENVIO da mensagem de comando quando o canal a expõe
+    // (sentAt da Meta na fila oficial; na Evolution o createdAt já é o
+    // messageTimestamp do payload) — a Cloud mede a validade do código
+    // e a frescura do registo a partir daqui.
+    commandAt: msg.sentAt ?? msg.createdAt,
     ...(effective === "ENTRADA" && !staff.user.externalWork && parsed.code
       ? { code: parsed.code }
       : {}),
@@ -628,18 +637,38 @@ interface FinalizeArgs {
   todayHasEntry: boolean;
 }
 
-async function onLocation(
-  ctx: BotReplyCtx,
-  say: Say,
-  sayInteractive: SayInteractive,
-  settings: Settings,
-  staff: PontoStaffMatch,
-  pending: PendingPonto,
-  msg: InboundMessage,
-  transport: NonNullable<InboundTransport["ponto"]>["transport"],
-  phoneDigits: string,
-  key: string
-): Promise<void> {
+/** Etapa de foto sem foto: ao fim do TTL a marcação finaliza sozinha
+ *  com hasPhoto=false — o registo não se perde (§2.1). Timer em memória
+ *  como o próprio pending: morre com o processo, efeito aceite. Um
+ *  timer velho (pedido substituído) não faz nada — takeExpiredPonto só
+ *  devolve pendências já expiradas, e a foto a tempo limpa o pending
+ *  antes do timer disparar. */
+function schedulePhotoExpiry(env: FlowEnv, expiresAt: number): void {
+  const timer = setTimeout(
+    () => {
+      finalizeExpiredPhoto(env).catch((err) =>
+        env.ctx.log.warn({ err }, "ponto: TTL da foto — finalização falhou")
+      );
+    },
+    Math.max(0, expiresAt - Date.now())
+  );
+  if (timer.unref) {
+    timer.unref();
+  }
+}
+
+async function onLocation(env: FlowEnv, pending: PendingPonto): Promise<void> {
+  const {
+    ctx,
+    key,
+    msg,
+    phoneDigits,
+    say,
+    sayInteractive,
+    settings,
+    staff,
+    transport,
+  } = env;
   const loc = msg.location;
   if (!(loc && Number.isFinite(loc.lat) && Number.isFinite(loc.lng))) {
     await say(PONTO_TEXT.locationPromptText);
@@ -655,9 +684,14 @@ async function onLocation(
     pending.stage = "photo";
     pending.expiresAt = Date.now() + PONTO_PHOTO_TTL_MS;
     setPendingPonto(key, pending);
+    schedulePhotoExpiry(env, pending.expiresAt);
     await say(PONTO_TEXT.photoPrompt);
     return;
   }
+  // O pedido morre ANTES de avaliar — sem isto uma segunda partilha de
+  // localização reencontrava-o e gravava outra marcação (dedupe, como
+  // onPhoto já faz).
+  clearPendingPonto(key);
   await finalizePonto(ctx, say, sayInteractive, settings, staff, transport, {
     at: new Date(pending.locationAt),
     code: pending.command === "ENTRADA" ? pending.code : undefined,
@@ -674,22 +708,21 @@ async function onLocation(
   });
 }
 
-async function onPhoto(
-  ctx: BotReplyCtx,
-  say: Say,
-  sayInteractive: SayInteractive,
-  settings: Settings,
-  staff: PontoStaffMatch,
-  pending: PendingPonto,
-  msg: InboundMessage,
-  transport: NonNullable<InboundTransport["ponto"]>["transport"],
-  phoneDigits: string,
-  key: string,
-  opts?: PontoHandlerOpts
-): Promise<void> {
+async function onPhoto(env: FlowEnv, pending: PendingPonto): Promise<void> {
+  const {
+    ctx,
+    key,
+    msg,
+    phoneDigits,
+    say,
+    sayInteractive,
+    settings,
+    staff,
+    transport,
+  } = env;
   clearPendingPonto(key);
   const ref = msg.imageRef;
-  const photo = ref ? await fetchPhotoForEntry(ref, opts) : null;
+  const photo = ref ? await fetchPhotoForEntry(ref, env.opts) : null;
   let photoId: string | null = null;
   if (photo) {
     const saved = await savePontoPhotoFile(
@@ -700,13 +733,14 @@ async function onPhoto(
     ).catch(() => null);
     photoId = saved?.id ?? null;
   }
-  // hasPhoto = a foto chegou (a presença é prova); photoId só quando o
-  // ficheiro validou e gravou.
+  // hasPhoto = a foto foi validada e gravada — sem ficheiro não há
+  // prova (a Cloud avalia com hasPhoto=false → POR_VALIDAR quando a
+  // foto é obrigatória, nunca APROVADO com prova fantasma).
   await finalizePonto(ctx, say, sayInteractive, settings, staff, transport, {
     at: new Date(pending.locationAt ?? pending.commandAt),
     code: pending.command === "ENTRADA" ? pending.code : undefined,
     command: pending.command,
-    hasPhoto: true,
+    hasPhoto: photoId !== null,
     location: pending.location,
     messageAt: pending.commandAt,
     pauseMinutes: pauseMinutesOf(
@@ -850,8 +884,8 @@ async function replyEstado(
     .map((e) => `${ENTRY_TYPE_PT[e.type] ?? e.type} ${hhmm(e.at, tz)}`)
     .join(" · ");
   const lines = [
-    `Hoje: ${fmtHours(workedMs(today))}${marks ? ` — ${marks}` : ""}`,
-    `Semana: ${fmtHours(workedMs(entries))}`,
+    `Hoje: ${fmtHours(workedMs(today, tz))}${marks ? ` — ${marks}` : ""}`,
+    `Semana: ${fmtHours(workedMs(entries, tz))}`,
   ];
   if (pendingCount > 0) {
     lines.push(`${pendingCount} por validar.`);

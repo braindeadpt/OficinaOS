@@ -61,7 +61,14 @@ export async function findPontoStaff(
       pontoSmsAllowed: true,
       username: true,
     },
-    where: { phoneE164: { endsWith: last4 }, pontoEnabled: true },
+    // isActive: uma conta desativada (ex-funcionário) não é staff do
+    // livro de ponto — sem o filtro continuava a picar e a consultar o
+    // próprio histórico enquanto o número fosse conhecido.
+    where: {
+      isActive: true,
+      phoneE164: { endsWith: last4 },
+      pontoEnabled: true,
+    },
   });
   const match = candidates.find((u) => {
     if (!u.phoneE164) {

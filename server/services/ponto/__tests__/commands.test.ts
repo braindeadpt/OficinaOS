@@ -88,7 +88,13 @@ describe("parsePontoCommand — código de 4 dígitos e slug do QR", () => {
     ["entrada Oficina do Rui #1234", "1234"],
     ["ENTRADA meu espaco comercial 9876", "9876"],
     ["PAUSA 4821", "4821"],
-    ["entrada 4821 9999", "4821"],
+    // Sem "#", o ÚLTIMO token de 4 dígitos é o código — o fluxo do QR
+    // é "ENTRADA <slug> #<codigo>" e um slug com números não o rouba.
+    ["entrada 4821 9999", "9999"],
+    ["ENTRADA loja 2024 4821", "4821"],
+    // Com "#" o marcador ganha sempre — mesmo com dígitos a seguir.
+    ["ENTRADA #4821 loja 2024", "4821"],
+    ["ENTRADA loja 2024 #4821", "4821"],
   ];
   for (const [text, code] of cases) {
     it(`"${text}" → code ${code}`, () => {

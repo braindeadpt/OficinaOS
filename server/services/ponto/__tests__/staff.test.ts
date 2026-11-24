@@ -44,12 +44,13 @@ describe("findPontoStaff — correspondência de telefone", () => {
     expect(m?.user.id).toBe("user-1");
   });
 
-  it("filtro DB pede pontoEnabled=true e sufixo de 4 dígitos", async () => {
+  it("filtro DB pede conta ativa, pontoEnabled=true e sufixo de 4 dígitos", async () => {
     const prisma = makePrisma([]);
     await findPontoStaff(prisma as never, "351912345678");
     expect(prisma.user.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
+          isActive: true,
           phoneE164: { endsWith: "5678" },
           pontoEnabled: true,
         },
