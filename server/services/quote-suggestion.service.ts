@@ -421,30 +421,31 @@ function isPreferredRepair<T extends { id: string; name: string }>(
 /**
  * Ordem de preferência entre PEÇAS — de bancada, diferente das
  * reparações porque uma peça errada ou indisponível trava o serviço:
- *  1. stock>0: disponibilidade — uma peça exata mas esgotada não resolve
- *     hoje; a que está em stock ganha mesmo sendo contains/deviceHit.
- *     Consequência deliberada: "Bateria" (equals, sem stock) PERDE para
- *     "Bateria iPhone 15" (contains+deviceHit, em stock) — a peça certa
- *     em stock ganha à genérica exata mas indisponível (BUG #166 r3).
- *  2. rank: equals > contains — entre peças igualmente disponíveis, a
- *     exatidão do nome decide ("Bateria" ganha a "Bateria iPhone 15"
- *     quando ambas estão em stock — prioridade aprovada na r2).
- *  3. deviceHit: entre não-exatos e com o mesmo rank, a que menciona o
- *     modelo ganha.
+ *  1. deviceHit: a peça que menciona o modelo do aparelho ganha sempre —
+ *     uma peça de OUTRO modelo nunca ganha à do modelo certo, mesmo
+ *     esgotada (decisão do dono; sugeria «Bateria Samsung» para um
+ *     iPhone 15 — BUG #166 r6); a do modelo certo fica «sob encomenda».
+ *  2. stock>0: entre peças do mesmo modelo (ou genéricas), a
+ *     disponibilidade decide — uma peça exata mas esgotada não resolve
+ *     hoje; a que está em stock ganha mesmo sendo contains
+ *     (BUG #166 r3: "Bateria iPhone 15" em stock ganha a "Bateria"
+ *     exata esgotada).
+ *  3. rank: equals > contains — com o mesmo modelo e stock, a exatidão
+ *     do nome decide ("Bateria" ganha a "Bateria universal" — r2/r3).
  *  4. nome normalizado, depois id.
  */
 function isPreferredPart<T extends { id: string; name: string }>(
   next: ScoredCandidate<T>,
   best: ScoredCandidate<T>
 ): boolean {
+  if (next.deviceHit !== best.deviceHit) {
+    return next.deviceHit;
+  }
   if (next.stock !== best.stock) {
     return next.stock > best.stock;
   }
   if (next.rank !== best.rank) {
     return next.rank > best.rank;
-  }
-  if (next.deviceHit !== best.deviceHit) {
-    return next.deviceHit;
   }
   const byNorm = compareStr(next.norm, best.norm);
   if (byNorm !== 0) {

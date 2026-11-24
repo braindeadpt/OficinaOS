@@ -318,9 +318,10 @@ describe("buildQuoteSuggestion — device-aware part priority", () => {
   });
 
   it("lets an exact hint match beat a device-name contains match", () => {
-    // Prioridade: equals exato > deviceHit > stock > contains. O template
-    // battery dá o hint exato "troca de bateria" — a linha guardada é a
-    // genérica exata, não a específica do modelo (contains+deviceHit).
+    // Reparações: equals exato > deviceHit > stock > contains — o
+    // template battery dá o hint exato "troca de bateria" e a linha é a
+    // genérica exata. Peças: deviceHit primeiro (decisão do dono — a
+    // peça do modelo certo ganha à genérica exata), depois stock e rank.
     const repairs: QuoteRepairInput[] = [
       {
         category: "HARDWARE",
@@ -362,7 +363,7 @@ describe("buildQuoteSuggestion — device-aware part priority", () => {
       "rep-generic"
     );
     expect(s.lines.find((l) => l.kind === "part")?.catalogId).toBe(
-      "part-generic"
+      "part-iphone"
     );
   });
 
@@ -409,6 +410,32 @@ describe("buildQuoteSuggestion — device-aware part priority", () => {
     const part = s.lines.find((l) => l.kind === "part");
     expect(part?.catalogId).toBe("part-iphone");
     expect(part?.inStock).toBe(true);
+  });
+
+  it("prefers the right-model out-of-stock part over another model in stock", () => {
+    // BUG #166 r6 (decisão do dono): uma peça de outro modelo nunca ganha
+    // à do modelo certo, mesmo esgotada — «Bateria Samsung A54» em stock
+    // não pode suplantar «Bateria iPhone 15» num iPhone 15.
+    const parts: QuotePartInput[] = [
+      {
+        category: "BATTERY",
+        defaultPrice: 22,
+        id: "part-samsung",
+        name: "Bateria Samsung A54",
+        stockQuantity: 4,
+      },
+      {
+        category: "BATTERY",
+        defaultPrice: 28,
+        id: "part-iphone15",
+        name: "Bateria iPhone 15",
+        stockQuantity: 0,
+      },
+    ];
+    const s = build(diag({ "battery.health": { Status: "fail" } }), { parts });
+    const part = s.lines.find((l) => l.kind === "part");
+    expect(part?.catalogId).toBe("part-iphone15");
+    expect(part?.inStock).toBe(false);
   });
 
   it("keeps exact-match priority between equally stocked parts", () => {
