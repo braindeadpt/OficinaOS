@@ -496,17 +496,23 @@ async function routeText(env: FlowEnv): Promise<void> {
   // tokens numéricos soltos) é resposta ambígua, não comando: repete
   // a pergunta em vez de cair no fluxo da SAÍDA, que gravava a hora
   // de receção como correção. O código QR («SAIDA #4821») fica de
-  // fora — é comando, não hora. O desvio vale só para SAIDA:
-  // «VOLTEI 18:05» é regresso de pausa e segue o seu fluxo mesmo com
-  // hora no texto. Botões e comandos sem hora mantêm a prioridade
-  // normal: matam o pending e seguem o fluxo do comando.
+  // fora — é comando, não hora. Um token de 4 dígitos pode ser um
+  // ANO, não código («09/01/2026 ou 10/01/2026»): a declaração
+  // ambígua vai para a pergunta na mesma — só o texto sem hora nem
+  // ambiguidade e com código respeita o comando. O desvio vale só
+  // para SAIDA: «VOLTEI 18:05» é regresso de pausa e segue o seu
+  // fluxo mesmo com hora no texto. Botões e comandos sem hora
+  // mantêm a prioridade normal: matam o pending e seguem o fluxo
+  // do comando.
   const exitPending = getPendingPontoExit(env.staff.user.id);
-  const parsedHour = parsePontoExitAnswer(env.msg.text)?.kind === "time";
+  const answer = parsePontoExitAnswer(env.msg.text);
   if (
     exitPending &&
     !env.msg.interactiveId &&
     parsed.command === "SAIDA" &&
-    (parsedHour || (!parsed.code && ANY_DIGIT_RE.test(env.msg.text ?? "")))
+    (answer?.kind === "time" ||
+      answer?.kind === "ambiguous" ||
+      (!parsed.code && ANY_DIGIT_RE.test(env.msg.text ?? "")))
   ) {
     await onExitReminderAnswer(env, exitPending);
     return;

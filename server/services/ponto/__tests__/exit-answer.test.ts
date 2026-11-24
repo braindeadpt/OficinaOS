@@ -338,6 +338,31 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
     expect(parsePontoExitAnswer("Saí 23/11 ou 24/11 às 18:05")).toEqual({
       kind: "ambiguous",
     });
+    // ISO «2026-01-10» lê-se inteira — o sufixo «01-10» não vira
+    // 1 de outubro.
+    expect(parsePontoExitAnswer("Saí às 18:05 em 2026-01-10")).toEqual({
+      date: { day: 10, month: 1, year: 2026 },
+      hhmm: "18:05",
+      kind: "time",
+    });
+    // Dois-pontos a introduzir texto não escondem a data — «10/1:
+    // saí …» declara a data e a hora («18-19:30» continua ambíguo:
+    // aí os dois-pontos formam uma hora).
+    expect(parsePontoExitAnswer("10/1: saí às 18:05")).toEqual({
+      date: { day: 10, month: 1, year: null },
+      hhmm: "18:05",
+      kind: "time",
+    });
+  });
+
+  it("data negada não conta — a afirmada qualifica a saída", () => {
+    // «Não foi a 9/1, saí a 10/1 às 18:05» — a mesma regra das
+    // horas por oração: a negação só descarta a própria oração.
+    expect(parsePontoExitAnswer("Não foi a 9/1, saí a 10/1 às 18:05")).toEqual({
+      date: { day: 10, month: 1, year: null },
+      hhmm: "18:05",
+      kind: "time",
+    });
   });
 
   it("«mais cedo» é continuação temporal como «mais tarde»", () => {

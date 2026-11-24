@@ -461,6 +461,27 @@ describe("resposta ao lembrete de saída", () => {
     expect(getPendingPontoExit("user-1")).toBeNull();
   });
 
+  it("SAIDA com datas ambíguas (SMS) → o ano não é código, repete a pergunta", async () => {
+    // «09/01/2026 ou 10/01/2026» — o token de 4 dígitos é um ano,
+    // não código QR: sem o desvio o comando gravava a hora de
+    // receção e limpava o pending.
+    const { ctx, message, sent, t } = setup({
+      smsAllowed: true,
+      transport: "sms",
+    });
+    armPending();
+
+    await tryHandlePontoStaff(
+      ctx,
+      message("Saí às 18:05 em 09/01/2026 ou 10/01/2026"),
+      t
+    );
+
+    expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
+    expect(getPendingPontoExit("user-1")).not.toBeNull();
+    expect(sent.at(-1)).toContain("escreva a hora de saída");
+  });
+
   it("botão SAIDA com pending → comando ganha (pending morre, fluxo normal)", async () => {
     // Botões/IDs interativos são autoridade — nunca desviados para a
     // resposta do lembrete mesmo com hora no texto.
@@ -554,6 +575,34 @@ describe("resposta ao lembrete de saída", () => {
     >;
     expect(entry).toMatchObject({ status: "POR_VALIDAR", type: "SAIDA" });
     expect((entry.at as Date).toISOString()).toBe("2026-01-11T00:15:00.000Z");
+  });
+
+  it("resposta depois da meia-noite com data declarada aceita o dia seguinte", async () => {
+    // «Saí a 11/1 às 00:15» — a data declarada é o dia civil seguinte
+    // ao da presumida: bate no segundo dia candidato e a correção
+    // grava-se nesse dia.
+    const { ctx, message, t } = setup();
+    setPendingPontoExit("user-1", {
+      expiresAt: Date.now() + PONTO_EXIT_PENDING_TTL_MS,
+      presumedAt: "2026-01-10T23:30:00.000Z",
+      presumedEntryId: "presumed-1",
+      shiftOpenAt: "2026-01-10T16:00:00.000Z",
+      userId: "user-1",
+    });
+    const msg = {
+      ...message("Saí a 11/1 às 00:15"),
+      createdAt: "2026-01-11T00:20:00.000Z",
+    };
+
+    await tryHandlePontoStaff(ctx, msg, t);
+
+    const entry = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect(entry).toMatchObject({ status: "POR_VALIDAR", type: "SAIDA" });
+    expect((entry.at as Date).toISOString()).toBe("2026-01-11T00:15:00.000Z");
+    expect(getPendingPontoExit("user-1")).toBeNull();
   });
 
   it("hora com zero inicial ('01:15') depois da meia-noite fica na madrugada", async () => {

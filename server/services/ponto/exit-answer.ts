@@ -172,8 +172,12 @@ const DATE_REF_RE =
 // frase fica inteira e as duas horas tornam a resposta ambígua. Os
 // grupos capturados servem para devolver a data declarada na
 // resposta.
+// A forma ISO «2026-01-10» casa primeiro — senão o sufixo «01-10»
+// lia-se como 1 de outubro. À direita só bloqueia um separador que
+// forme hora («:30», «.30»): dois-pontos ou ponto a introduzir texto
+// («10/1: saí às 18:05», «10/1. Foi isso») não escondem a data.
 const DATE_SLASH_RE =
-  /(?<![\d:.])\b(\d{1,2})\s*[/-]\s*(\d{1,2})(?:\s*[/-]\s*(\d{2,4}))?\b(?![\d:.])/g;
+  /(?<![\d:.])\b(?:(\d{4})\s*[/-]\s*(\d{1,2})\s*[/-]\s*(\d{1,2})|(\d{1,2})\s*[/-]\s*(\d{1,2})(?:\s*[/-]\s*(\d{2,4}))?)\b(?!\d|[:/.]\s*\d)/g;
 // Intervalo «de 7 a 8 horas» — os dois números são as pontas duma
 // duração ou faixa («de 1 a 2 horas e meia»), não horas soltas.
 const RANGE_QTY_RE = /\b\d{1,3}\s+a\s+\d{1,3}\b/gi;
@@ -467,28 +471,58 @@ function collectClause(
   );
 }
 
-/** Primeira data «23/11[/2026]» do texto — valida dia/mês, normaliza
- *  ano de 2 dígitos. `ambiguous` quando há datas distintas declaradas
- *  («23/11 ou 24/11») — tal como duas horas, nunca se escolhe uma. */
+/** Mapeia os grupos de um match de DATE_SLASH_RE para a data — o
+ *  primeiro ramo (grupo 1 presente) é ISO «2026-01-10» ano-mês-dia,
+ *  o segundo é «23/11[/2026]» dia-mês-ano opcional. Devolve null se
+ *  dia/mês forem inválidos. */
+function dateMatchToParts(
+  m: RegExpMatchArray
+): { day: number; month: number; year: number | null } | null {
+  let day: number;
+  let month: number;
+  let year: number | null = null;
+  if (m[1] === undefined) {
+    day = Number(m[4]);
+    month = Number(m[5]);
+    if (m[6] !== undefined) {
+      const y = Number(m[6]);
+      year = y < 100 ? y + 2000 : y;
+    }
+  } else {
+    year = Number(m[1]);
+    month = Number(m[2]);
+    day = Number(m[3]);
+  }
+  if (day < 1 || day > 31 || month < 1 || month > 12) {
+    return null;
+  }
+  return { day, month, year };
+}
+
+/** Primeira data declarada — «23/11[/2026]» dia-mês ou ISO
+ *  «2026-01-10» ano-mês-dia — valida dia/mês e normaliza ano de 2
+ *  dígitos. `ambiguous` quando há datas distintas declaradas
+ *  («23/11 ou 24/11») — tal como duas horas, nunca se escolhe uma.
+ *  A negação aplica-se por oração como às horas: «não foi a 9/1,
+ *  saí a 10/1» fica só com a data afirmada. */
 function statedDate(text: string): {
   ambiguous: boolean;
   date?: { day: number; month: number; year: number | null };
 } {
   const keys = new Set<string>();
   let date: { day: number; month: number; year: number | null } | undefined;
-  for (const m of text.matchAll(DATE_SLASH_RE)) {
-    const day = Number(m[1]);
-    const month = Number(m[2]);
-    if (day < 1 || day > 31 || month < 1 || month > 12) {
+  for (const clause of text.split(CLAUSE_SPLIT_RE)) {
+    if (negated(normalizePontoText(clause))) {
       continue;
     }
-    let year: number | null = null;
-    if (m[3] !== undefined) {
-      const y = Number(m[3]);
-      year = y < 100 ? y + 2000 : y;
+    for (const m of clause.matchAll(DATE_SLASH_RE)) {
+      const parsed = dateMatchToParts(m);
+      if (!parsed) {
+        continue;
+      }
+      keys.add(`${parsed.year ?? "*"}/${parsed.month}/${parsed.day}`);
+      date ??= parsed;
     }
-    keys.add(`${year ?? "*"}/${month}/${day}`);
-    date ??= { day, month, year };
   }
   return { ambiguous: keys.size > 1, date };
 }
