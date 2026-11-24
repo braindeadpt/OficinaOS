@@ -3,7 +3,7 @@ import type { RoleType } from "@shared/constants/roles";
 import { AppError } from "@shared/errors/app-error.js";
 import type { PermissionCheck } from "@shared/permissions";
 import { convertIntakeRequestSchema } from "@shared/schemas/intake-request.schema";
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { requirePermission } from "../middlewares/rbac.js";
 import {
   convertIntakeRequest,
@@ -24,6 +24,30 @@ const QUOTE_CATALOG_VIEW: PermissionCheck = {
   parts: ["viewCatalog"],
   repairs: ["viewCatalog"],
 };
+
+/** quoteSuggestion guarda nomes/preços/stock dos catálogos — só sai na
+ * resposta para quem tem viewCatalog. A listagem já filtrava, mas as
+ * ações (convert/dismiss/ai-report) devolvem a linha completa e expunham
+ * o snapshot à receção (SEC #166). */
+async function quoteCatalogAllowed(req: FastifyRequest): Promise<boolean> {
+  if (!req.user) {
+    return false;
+  }
+  const res = await req.server.auth.api.userHasPermission({
+    body: {
+      permissions: QUOTE_CATALOG_VIEW,
+      role: req.user.role as RoleType,
+    },
+  });
+  return res.success;
+}
+
+function visibleIntakeRequest<T extends { quoteSuggestion: unknown }>(
+  row: T,
+  catalogAllowed: boolean
+): T {
+  return catalogAllowed ? row : { ...row, quoteSuggestion: null };
+}
 
 // Staff-facing queue for the public pre-check form. Convert links the request
 // to a job created through the normal intake modal — never creates jobs here.
@@ -54,18 +78,9 @@ export const intakeRequestsRoutes: FastifyPluginAsync = async (app) => {
       // quoteSuggestion contém dados de catálogo (nomes/preços/stock) —
       // só sai na resposta para quem tem viewCatalog; sem isso o FRONT_DESK
       // leria o snapshot mesmo sem poder gerá-lo.
-      const catalogAccess = req.user
-        ? await req.server.auth.api.userHasPermission({
-            body: {
-              permissions: QUOTE_CATALOG_VIEW,
-              role: req.user.role as RoleType,
-            },
-          })
-        : { success: false };
+      const catalogAllowed = await quoteCatalogAllowed(req);
       return reply.send(
-        catalogAccess.success
-          ? requests
-          : requests.map((r) => ({ ...r, quoteSuggestion: null }))
+        requests.map((r) => visibleIntakeRequest(r, catalogAllowed))
       );
     }
   );
@@ -87,7 +102,9 @@ export const intakeRequestsRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       const { id } = req.params as { id: string };
       const request = await dismissIntakeRequest(app.prisma, id);
-      return reply.send(request);
+      return reply.send(
+        visibleIntakeRequest(request, await quoteCatalogAllowed(req))
+      );
     }
   );
 
@@ -126,7 +143,9 @@ export const intakeRequestsRoutes: FastifyPluginAsync = async (app) => {
         id,
         parsed.data.jobId
       );
-      return reply.send(request);
+      return reply.send(
+        visibleIntakeRequest(request, await quoteCatalogAllowed(req))
+      );
     }
   );
 
@@ -149,7 +168,9 @@ export const intakeRequestsRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       const { id } = req.params as { id: string };
       const request = await generateIntakeAiReport(app.prisma, id, req.locale);
-      return reply.send(request);
+      return reply.send(
+        visibleIntakeRequest(request, await quoteCatalogAllowed(req))
+      );
     }
   );
 
