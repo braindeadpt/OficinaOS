@@ -809,6 +809,14 @@ export interface InboundTransport {
    *  em vez de seguir sem registo — sem ele a mensagem perder-se-ia. */
   requireInboxPersist?: boolean;
   send: (text: string) => Promise<boolean>;
+  /** Como `send` mas devolve o id da mensagem quando o canal o expõe
+   *  (key.id da Evolution, wamid da Meta) — o livro de ponto usa-o nas
+   *  perguntas de seguimento para a citação da resposta apontar para a
+   *  mensagem real a que o trabalhador respondeu. Ausente quando o
+   *  canal não devolve ids (SMS, envio suprimido). */
+  sendWithId?: (
+    text: string
+  ) => Promise<{ messageId?: string; success: boolean }>;
   /** Envio suprimido (mensagem >23 h Meta, bot suspenso): o pipeline
    *  corre mas nada sai — a inbox grava o inbound, não o "envio". */
   silentSend?: boolean;

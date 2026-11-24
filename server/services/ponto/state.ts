@@ -65,12 +65,14 @@ export interface PendingPontoExit {
    *  confirma e a base do dia civil para a hora indicada. */
   presumedAt: string;
   presumedEntryId: string;
-  /** Id da mensagem-pergunta tal como o canal a devolveu no envio
-   *  (key.id da Evolution, wamid da Meta) — a citação de uma resposta
-   *  WhatsApp (reply-quote) só conta se apontar para ESTA mensagem;
-   *  citar um lembrete mais antigo não confirma a presumida do novo.
-   *  Ausente quando o canal não devolve id (SMS, relay cloud). */
-  sentMessageId?: string;
+  /** Ids das mensagens-pergunta desta pendência tal como o canal os
+   *  devolveu no envio (key.id da Evolution, wamid da Meta): o lembrete
+   *  inicial e cada repetição/pergunta de clarificação — a citação de
+   *  uma resposta WhatsApp (reply-quote) conta quando aponta para
+   *  QUALQUER destas mensagens; citar um lembrete mais antigo não
+   *  confirma a presumida do turno novo. Ausente quando o canal não
+   *  devolve ids (SMS, relay cloud sem wamid). */
+  sentMessageIds?: string[];
   /** ISO da última abertura do turno (ENTRADA/VOLTEI efetiva) no
    *  instante do lembrete — limite inferior da hora de saída
    *  declarada: uma resposta depois da meia-noite ("00:15") resolve o

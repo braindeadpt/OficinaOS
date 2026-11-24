@@ -282,7 +282,7 @@ describe("lembrete de saída (Esquecimentos)", () => {
     // se apontar para esta pergunta.
     expect(getPendingPontoExit("user-1", NOW_AFTER.getTime())).toMatchObject({
       presumedEntryId: "presumed-1",
-      sentMessageId: "evo-msg-1",
+      sentMessageIds: ["evo-msg-1"],
     });
   });
 
@@ -427,6 +427,92 @@ describe("lembrete de saída (Esquecimentos)", () => {
       presumedAt: "2026-01-10T23:30:00.000Z",
       presumedEntryId: "presumed-1",
     });
+  });
+
+  it("retoma depois da meia-noite → abertura gravada na presumida veda saídas antes da entrada", async () => {
+    // O turno abriu às 16:00 de ontem e o lembrete das 23:30 ficou
+    // adiado: na retoma de hoje (00:10) a ENTRADA já não está nas
+    // marcações do dia — a abertura gravada nos proofs da presumida
+    // é que vai no pending, senão uma resposta «1:15» era lida como
+    // 13:15 de ontem e gravada ANTES da própria entrada.
+    mocks.resolveWhatsAppChannel.mockReturnValue(EVOLUTION_CHANNEL);
+    const presumed = entry({
+      at: new Date("2026-01-10T23:30:00.000Z"),
+      id: "presumed-1",
+      proofs: {
+        exitReminderPresumed: true,
+        exitReminderShiftOpenAt: "2026-01-10T16:00:00.000Z",
+      },
+      status: "POR_VALIDAR",
+      transport: "MANUAL",
+      type: "SAIDA",
+    });
+    // Sem marcações hoje: a lista de SAIDA (ontem+hoje) traz a
+    // presumida aberta; a de entries do dia está vazia.
+    const prisma = makePrisma([], [presumed]);
+    const afterMidnight = new Date("2026-01-11T00:10:00.000Z");
+
+    await processPontoReminders(prisma, log, undefined, afterMidnight);
+
+    expect(mocks.sendWhatsAppText).toHaveBeenCalledTimes(1);
+    expect(
+      getPendingPontoExit("user-1", afterMidnight.getTime())
+    ).toMatchObject({
+      presumedEntryId: "presumed-1",
+      sentMessageIds: ["evo-msg-1"],
+      shiftOpenAt: "2026-01-10T16:00:00.000Z",
+    });
+  });
+
+  it("presumida grava a abertura do turno nos proofs", async () => {
+    const prisma = makePrisma([entry({ type: "ENTRADA" })]);
+
+    await processPontoReminders(prisma, log, undefined, NOW_AFTER);
+
+    const input = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect(input.proofs).toMatchObject({
+      exitReminderPresumed: true,
+      exitReminderShiftOpenAt: "2026-01-10T08:00:00.000Z",
+    });
+  });
+
+  it("varrimento de ontem respeita o dia civil em mudança de hora (23 h e 25 h)", async () => {
+    // A varredura de SAIDA cobre o dia anterior — o limite é o INÍCIO
+    // do dia civil anterior, não `start − 24 h` (que erra nos dias de
+    // 23/25 h da mudança de hora).
+    const saidaGte = () => {
+      const call = mocks.timeEntryFindMany.mock.calls
+        .map((c) => c[0] as { where?: { type?: string; at?: { gte?: Date } } })
+        .find((a) => a.where?.type === "SAIDA");
+      return call?.where?.at?.gte?.toISOString();
+    };
+
+    // Segunda 30-03-2026 00:15 Lisboa: ontem (domingo) teve 23 h — o
+    // relógio saltou 01:00→02:00. O limite correto é a meia-noite de
+    // domingo (2026-03-29T00:00Z); com −24 h seria sábado 23:00.
+    await processPontoReminders(
+      makePrisma([], []),
+      log,
+      undefined,
+      new Date("2026-03-30T00:15:00.000Z")
+    );
+    expect(saidaGte()).toBe("2026-03-29T00:00:00.000Z");
+
+    mocks.timeEntryFindMany.mockClear();
+
+    // Segunda 26-10-2026 00:15 Lisboa: ontem teve 25 h (02:00→01:00).
+    // O limite correto é a meia-noite de domingo (2026-10-24T23:00Z);
+    // com −24 h seria domingo 00:00Z — a primeira hora ficava de fora.
+    await processPontoReminders(
+      makePrisma([], []),
+      log,
+      undefined,
+      new Date("2026-10-26T00:15:00.000Z")
+    );
+    expect(saidaGte()).toBe("2026-10-24T23:00:00.000Z");
   });
 
   it("saída de um turno anterior não bloqueia o lembrete do turno aberto", async () => {

@@ -29,6 +29,9 @@
 // pontuação FORTE (vírgula, ponto e vírgula, "!", "?", travessão,
 // fim de linha) — o "." só separa quando não pode ser o separador
 // Horas.minutos ("18.05", "18. 30" inteiros; "18:20. Não" separa).
+// Exceção: os dois dígitos a seguir introduzem uma DURAÇÃO ("18. 20
+// minutos antes de fecharem") — aí o ponto é fim de frase: senão
+// "18. 20" lia-se como 18:20 em vez de 18:00 + duração.
 
 import { NEGATION_WORDS, normalizePontoText } from "./commands.js";
 
@@ -61,8 +64,11 @@ const BARE_HOUR_RE = /\b([01]?\d|2[0-3])\b/g;
 // separador Horas.minutos de EXPLICIT_TIME_RE (dígitos com espaços
 // opcionais dos dois lados: "18.05", "18. 30", "18 . 30") e separa
 // quando fecha uma frase ("18:20. Não" — senão a negação da segunda
-// frase apagava a hora declarada na primeira).
-const CLAUSE_SPLIT_RE = /[,;!?\n—–]|(?<!\d\s*)\.|\.(?!\s*\d{2}\b)/;
+// frase apagava a hora declarada na primeira) ou quando os dois
+// dígitos a seguir quantificam uma duração ("Saí às 18. 20 minutos
+// antes" = saída às 18:00 — não 18:20).
+const CLAUSE_SPLIT_RE =
+  /[,;!?\n—–]|(?<!\d\s*)\.|\.(?!\s*\d{2}\b(?!\s+(?:minutos?|mins?|horas?|hrs?|segundos?|segs?)\b))/i;
 
 /** "6" → 18, "18" → 18, "0" → 0 — saída assume-se depois do meio-dia. */
 function exitHour(raw: number): number | null {

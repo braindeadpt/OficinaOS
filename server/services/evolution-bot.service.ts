@@ -439,13 +439,18 @@ export async function handleEvolutionInbound(
  *  (presença "a escrever…" + atraso humano) mas SEM o suspendBot: uma
  *  sessão caída não pode calar o registo de ponto, e o teto diário do
  *  bot de clientes não se aplica a comandos de staff (o rateOk "ponto"
- *  limita o volume). */
+ *  limita o volume). Devolve o resultado completo (messageId incluído):
+ *  o caller adapta-o a `send`/`sendWithId` do transporte. */
 function makePontoSend(
   prisma: PrismaClient,
   log: FastifyBaseLogger,
   config: EvolutionConfig,
   phone: string
-): (text: string) => Promise<boolean> {
+): (text: string) => Promise<{
+  error?: string;
+  messageId?: string;
+  success: boolean;
+}> {
   return async (text) => {
     const delay = REPLY_DELAY_MIN_MS + Math.random() * REPLY_DELAY_SPREAD_MS;
     await sendEvolutionPresence(config, phone, delay).catch(() => null);
@@ -456,7 +461,7 @@ function makePontoSend(
     if (!res.success) {
       log.warn({ err: res.error, to: phone }, "evolution ponto reply failed");
     }
-    return res.success;
+    return res;
   };
 }
 
@@ -504,13 +509,17 @@ function tryPontoForEvolution(
         "a loja",
       timezone: settings.timezone ?? undefined,
     } satisfies BotReplyCtx);
+  // O envio devolve o key.id — `sendWithId` expõe-o às perguntas de
+  // seguimento do lembrete de saída (citação do trabalhador).
+  const pontoSend = makePontoSend(prisma, log, evoConfig, parsed.fromPhone);
   return tryHandlePontoStaff(
     pontoCtx,
     msg,
     {
       channelLabel: "WhatsApp",
       ponto: { transport: "whatsapp_evolution" },
-      send: makePontoSend(prisma, log, evoConfig, parsed.fromPhone),
+      send: async (text) => (await pontoSend(text)).success,
+      sendWithId: pontoSend,
     },
     { evolution: evoConfig, shopSettings: settings }
   ).catch((err) => {

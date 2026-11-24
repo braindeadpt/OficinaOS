@@ -112,7 +112,11 @@ interface BotCtx extends BotReplyCtx {
   token: string;
 }
 
-async function send(ctx: BotCtx, to: string, text: string): Promise<boolean> {
+async function sendResult(
+  ctx: BotCtx,
+  to: string,
+  text: string
+): Promise<{ error?: string; messageId?: string; success: boolean }> {
   const res = await sendWhatsAppText(
     ctx.prisma,
     ctx.channel,
@@ -127,7 +131,11 @@ async function send(ctx: BotCtx, to: string, text: string): Promise<boolean> {
       "whatsapp-bot send failed"
     );
   }
-  return res.success;
+  return res;
+}
+
+async function send(ctx: BotCtx, to: string, text: string): Promise<boolean> {
+  return (await sendResult(ctx, to, text)).success;
 }
 
 /** Interativo Meta para o livro de ponto — o `interactive` é o objeto
@@ -487,6 +495,12 @@ async function processInbound(
         stale || silent
           ? () => Promise.resolve(true)
           : (text) => send(ctx, msg.fromPhone, text),
+      // O relay devolve o wamid — `sendWithId` expõe-o às perguntas de
+      // seguimento do lembrete de saída (citação do trabalhador).
+      sendWithId:
+        stale || silent
+          ? undefined
+          : (text) => sendResult(ctx, msg.fromPhone, text),
       silentSend: stale || silent,
     });
     inboxPersistRetries.delete(msg.id);

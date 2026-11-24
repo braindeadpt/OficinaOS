@@ -72,7 +72,6 @@ import {
 
 /** >60 min sem correção → alerta aos gestores (spec item 5). */
 const EXIT_ALERT_AFTER_MS = 60 * 60 * 1000;
-const DAY_MS = 24 * 60 * 60 * 1000;
 const EXIT_TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 // Re-sync de templates Meta despoletado pelo lembrete — no máximo uma
 // vez por intervalo para não martelar a Graph a cada worker/tick
@@ -402,6 +401,33 @@ interface UserTickArgs {
   waChannel: ReturnType<typeof resolveWhatsAppChannel>;
 }
 
+/** Proofs da SAIDA presumida — a abertura do turno viaja na própria
+ *  linha porque a retoma depois da meia-noite já não tem a entrada nas
+ *  marcações de hoje (o pending precisa dela para vedar saídas
+ *  anteriores à entrada). */
+function presumedProofs(
+  shiftOpenAt: Date | undefined
+): Record<string, unknown> {
+  return {
+    exitReminderPresumed: true,
+    ...(shiftOpenAt
+      ? { exitReminderShiftOpenAt: shiftOpenAt.toISOString() }
+      : {}),
+  };
+}
+
+/** Abertura do turno gravada na presumida (proofs) — a retoma depois
+ *  da meia-noite não tem a entrada do turno nas marcações de hoje, por
+ *  isso o limite viaja na própria linha desde a criação. */
+function presumedShiftOpenAt(presumed: DayEntry): string | null {
+  const p = presumed.proofs;
+  const v =
+    typeof p === "object" && p !== null
+      ? (p as Record<string, unknown>).exitReminderShiftOpenAt
+      : null;
+  return typeof v === "string" ? v : null;
+}
+
 /** Retoma o envio de uma pergunta que ficou adiada (modelo Meta por
  *  aprovar, canal em falha, restart): reutiliza a presumida aberta do
  *  turno em curso e só abre a janela de resposta quando o envio pega. */
@@ -448,12 +474,17 @@ async function retryDeferredExitReminder(
   );
   if (result.sent) {
     exitAsked.add(presumed.id);
+    // A abertura gravada na presumida ganha ao turno de HOJE: na retoma
+    // depois da meia-noite o `shiftOpenAt` do tick é o turno novo (ou
+    // nada) — o pendente tem de vedar saídas anteriores à entrada do
+    // turno que a presumida fecha, que é o da própria presumida.
+    const openAt = presumedShiftOpenAt(presumed) ?? shiftOpenAt?.toISOString();
     setPendingPontoExit(user.id, {
       expiresAt: now.getTime() + PONTO_EXIT_PENDING_TTL_MS,
       presumedAt: presumed.at.toISOString(),
       presumedEntryId: presumed.id,
-      ...(result.messageId ? { sentMessageId: result.messageId } : {}),
-      ...(shiftOpenAt ? { shiftOpenAt: shiftOpenAt.toISOString() } : {}),
+      ...(result.messageId ? { sentMessageIds: [result.messageId] } : {}),
+      ...(openAt ? { shiftOpenAt: openAt } : {}),
       userId: user.id,
     });
   }
@@ -532,7 +563,7 @@ async function processExitReminder(a: UserTickArgs): Promise<void> {
     last.at.getTime() > reminderInstant.getTime() ? last.at : reminderInstant;
   const presumed = await recordPontoEntry(prisma, {
     at: presumedAt,
-    proofs: { exitReminderPresumed: true },
+    proofs: presumedProofs(shiftOpenAt),
     reason: "saída presumida — lembrete de saída",
     status: "POR_VALIDAR",
     transport: "MANUAL",
@@ -559,7 +590,7 @@ async function processExitReminder(a: UserTickArgs): Promise<void> {
         expiresAt: now.getTime() + PONTO_EXIT_PENDING_TTL_MS,
         presumedAt: presumedAt.toISOString(),
         presumedEntryId: presumed.id,
-        ...(result.messageId ? { sentMessageId: result.messageId } : {}),
+        ...(result.messageId ? { sentMessageIds: [result.messageId] } : {}),
         ...(shiftOpenAt ? { shiftOpenAt: shiftOpenAt.toISOString() } : {}),
         userId: user.id,
       });
@@ -672,6 +703,10 @@ export async function processPontoReminders(
     // ontem continua a precisar de retoma (envio adiado às 23:50 cuja
     // aprovação chega já depois da meia-noite) e do alerta ao gestor —
     // limitar ao dia civil corrente esquecia-a à passagem da meia-noite.
+    // O limite é o INÍCIO do dia civil anterior (dayRange do instante
+    // imediatamente antes do start) — subtrair 24 h ao instante erra na
+    // mudança de hora: num dia de 23 h incluía a última hora de
+    // anteontem; num de 25 h excluía a primeira hora de ontem.
     prisma.timeEntry.findMany({
       orderBy: [{ at: "asc" }, { createdAt: "asc" }],
       select: {
@@ -690,7 +725,7 @@ export async function processPontoReminders(
         },
       },
       where: {
-        at: { gte: new Date(start.getTime() - DAY_MS), lt: end },
+        at: { gte: dayRange(tz, new Date(start.getTime() - 1)).start, lt: end },
         type: "SAIDA",
       },
     }),

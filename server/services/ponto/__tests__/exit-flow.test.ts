@@ -99,6 +99,9 @@ function setup(opts: { smsAllowed?: boolean; transport?: string } = {}) {
     user: { findMany: vi.fn(() => Promise.resolve([staff])) },
   };
   const sent: string[] = [];
+  // ids determinísticos por envio — `sendWithId` é o que as perguntas
+  // de seguimento do lembrete usam para registar a mensagem real.
+  let sendSeq = 0;
   const t: InboundTransport = {
     channelLabel: "WhatsApp",
     ponto: {
@@ -108,6 +111,14 @@ function setup(opts: { smsAllowed?: boolean; transport?: string } = {}) {
     send: vi.fn((text: string) => {
       sent.push(text);
       return Promise.resolve(true);
+    }),
+    sendWithId: vi.fn((text: string) => {
+      sent.push(text);
+      sendSeq += 1;
+      return Promise.resolve({
+        messageId: `wamid-reply-${sendSeq}`,
+        success: true,
+      });
     }),
   } as InboundTransport;
   const ctx = {
@@ -136,13 +147,13 @@ function setup(opts: { smsAllowed?: boolean; transport?: string } = {}) {
 function armPending(
   userId = "user-1",
   shiftOpenAt?: string,
-  sentMessageId?: string
+  sentMessageIds?: string[]
 ) {
   setPendingPontoExit(userId, {
     expiresAt: Date.now() + PONTO_EXIT_PENDING_TTL_MS,
     presumedAt: PRESUMED_AT.toISOString(),
     presumedEntryId: "presumed-1",
-    ...(sentMessageId ? { sentMessageId } : {}),
+    ...(sentMessageIds ? { sentMessageIds } : {}),
     ...(shiftOpenAt ? { shiftOpenAt } : {}),
     userId,
   });
@@ -301,7 +312,7 @@ describe("resposta ao lembrete de saída", () => {
 
   it("SIM citando a pergunta ativa → confirma a presumida", async () => {
     const { ctx, message, t } = setup();
-    armPending("user-1", undefined, "wamid-pergunta-2");
+    armPending("user-1", undefined, ["wamid-pergunta-2"]);
 
     await tryHandlePontoStaff(
       ctx,
@@ -322,7 +333,7 @@ describe("resposta ao lembrete de saída", () => {
     // a citação aponta para a pergunta velha mas o pending só conhece
     // a ativa — a confirmação não se grava e a pergunta ativa repete-se.
     const { ctx, message, sent, t } = setup();
-    armPending("user-1", undefined, "wamid-pergunta-2");
+    armPending("user-1", undefined, ["wamid-pergunta-2"]);
 
     await tryHandlePontoStaff(
       ctx,
@@ -332,14 +343,41 @@ describe("resposta ao lembrete de saída", () => {
 
     expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
     expect(sent.at(-1)).toContain("Saiu às 18:00");
-    expect(getPendingPontoExit("user-1")).not.toBeNull();
+    const pending = getPendingPontoExit("user-1");
+    expect(pending).not.toBeNull();
+    // A repetição da pergunta foi enviada com sendWithId — o id novo
+    // associa-se à pendência para a próxima citação contar.
+    expect(pending?.sentMessageIds).toEqual([
+      "wamid-pergunta-2",
+      "wamid-reply-1",
+    ]);
+  });
+
+  it("SIM citando a repetição da pergunta → confirma a presumida", async () => {
+    // O trabalhador citou a REPETIÇÃO («Saiu às 18:00?» reenviada) —
+    // o pending já conhece o id dessa pergunta e a resposta conta.
+    const { ctx, message, t } = setup();
+    armPending("user-1", undefined, ["wamid-pergunta-2", "wamid-reply-1"]);
+
+    await tryHandlePontoStaff(
+      ctx,
+      { ...message("SIM"), quotedMessageId: "wamid-reply-1" },
+      t
+    );
+
+    const entry = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect(entry).toMatchObject({ status: "APROVADO", type: "SAIDA" });
+    expect(getPendingPontoExit("user-1")).toBeNull();
   });
 
   it("citação sem id de envio registado → resposta segue o fluxo normal", async () => {
     // Canal que não devolve o id da mensagem (SMS, relay cloud): a
     // citação não é verificável — a resposta aplica-se à pendente.
     const { ctx, message, t } = setup();
-    armPending(); // sem sentMessageId
+    armPending(); // sem sentMessageIds
 
     await tryHandlePontoStaff(
       ctx,
@@ -610,6 +648,48 @@ describe("resposta ao lembrete de saída", () => {
       unknown
     >;
     expect((entry.at as Date).toISOString()).toBe("2026-01-11T00:15:00.000Z");
+    expect(entry.status).toBe("POR_VALIDAR");
+    expect(getPendingPontoExit("user-1")).toBeNull();
+  });
+
+  it("«ONTEM» citando a pergunta de clarificação → grava no dia do lembrete", async () => {
+    // A pergunta ONTEM/HOJE saiu por sendWithId — o id vai para a
+    // pendência e a citação da resposta a essa mensagem conta (antes
+    // só o id do lembrete inicial era aceite e a escolha era rejeitada).
+    const { ctx, message, t } = setup();
+    setPendingPontoExit("user-1", {
+      expiresAt: Date.now() + PONTO_EXIT_PENDING_TTL_MS,
+      presumedAt: "2026-01-10T23:30:00.000Z",
+      presumedEntryId: "presumed-1",
+      sentMessageIds: ["wamid-pergunta-2"],
+      userId: "user-1",
+    });
+    const msg = {
+      ...message("00:15"),
+      createdAt: "2026-01-11T00:20:00.000Z",
+    };
+
+    await tryHandlePontoStaff(ctx, msg, t);
+
+    // Clarificação armada + a pergunta enviada registou o seu id.
+    const pending = getPendingPontoExit("user-1");
+    expect(pending?.clarifyDate?.hhmm).toBe("00:15");
+    expect(pending?.sentMessageIds).toEqual([
+      "wamid-pergunta-2",
+      "wamid-reply-1",
+    ]);
+
+    await tryHandlePontoStaff(
+      ctx,
+      { ...message("ONTEM"), quotedMessageId: "wamid-reply-1" },
+      t
+    );
+
+    const entry = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect((entry.at as Date).toISOString()).toBe("2026-01-10T00:15:00.000Z");
     expect(entry.status).toBe("POR_VALIDAR");
     expect(getPendingPontoExit("user-1")).toBeNull();
   });

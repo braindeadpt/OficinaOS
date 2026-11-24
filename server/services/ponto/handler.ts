@@ -68,6 +68,12 @@ import {
 type PontoMarkCommand = Exclude<PontoCommand, "ESTADO">;
 type Settings = Awaited<ReturnType<typeof getOrCreateShopSettings>>;
 type Say = (text: string) => Promise<boolean>;
+/** Como Say mas devolve o id da mensagem quando o canal o expõe — as
+ *  perguntas do fluxo de saída associam-no ao pending para a citação
+ *  do trabalhador apontar para a mensagem certa. */
+type SayWithId = (
+  text: string
+) => Promise<{ messageId?: string; success: boolean }>;
 type SayInteractive = (
   interactive: Record<string, unknown>,
   fallbackText: string
@@ -316,6 +322,7 @@ interface FlowEnv {
   phoneDigits: string;
   say: Say;
   sayInteractive: SayInteractive;
+  sayWithId: SayWithId;
   settings: Settings;
   staff: PontoStaffMatch;
   transport: PontoTransportKind;
@@ -339,6 +346,18 @@ function buildFlowEnv(
       return false;
     }
   };
+  // Canal sem `sendWithId` (SMS, envio suprimido): envia na mesma, o id
+  // fica ausente e a correlação de citação passa a fail-open.
+  const sayWithId: SayWithId = async (text) => {
+    if (!t.sendWithId) {
+      return { success: await say(text) };
+    }
+    try {
+      return await t.sendWithId(text);
+    } catch {
+      return { success: false };
+    }
+  };
   const sayInteractive: SayInteractive = async (interactive, fallbackText) => {
     if (channel.interactive) {
       const ok = await channel.interactive(interactive).catch(() => false);
@@ -357,6 +376,7 @@ function buildFlowEnv(
     phoneDigits: staff.phoneDigits,
     say,
     sayInteractive,
+    sayWithId,
     settings,
     staff,
     transport,
@@ -546,6 +566,25 @@ export async function tryHandlePontoStaff(
   return true;
 }
 
+/** Envia uma pergunta do fluxo de saída e associa o id devolvido pelo
+ *  canal à pendência — a citação (reply-quote) do trabalhador aponta
+ *  para a mensagem REAL a que respondeu, não só para o lembrete
+ *  inicial: sem isto uma resposta citada à repetição ou à pergunta
+ *  ONTEM/HOJE era rejeitada e a pergunta voltava a sair em ciclo. */
+async function askExitQuestion(env: FlowEnv, text: string): Promise<void> {
+  const res = await env.sayWithId(text);
+  if (!res.messageId) {
+    return;
+  }
+  const cur = getPendingPontoExit(env.staff.user.id);
+  if (cur) {
+    setPendingPontoExit(env.staff.user.id, {
+      ...cur,
+      sentMessageIds: [...(cur.sentMessageIds ?? []), res.messageId],
+    });
+  }
+}
+
 /**
  * Resposta ao lembrete de saída (item 5): "SIM" confirma a hora
  * presumida (correção APROVADO); uma hora indicada cria correção
@@ -558,17 +597,20 @@ async function onExitReminderAnswer(
   pending: PendingPontoExit
 ): Promise<void> {
   // Citação de mensagem (reply-quote do WhatsApp): só aplica a
-  // resposta quando a citação aponta para a pergunta ativa. Um "SIM"
-  // citando um lembrete mais antigo (dois turnos no dia) não pode
-  // confirmar a presumida do lembrete novo — a pergunta ativa repete-
-  // se para o trabalhador responder sobre a saída certa. Sem id dos
-  // dois lados (SMS, relay cloud sem wamid) não há como verificar.
+  // resposta quando a citação aponta para uma pergunta desta pendência
+  // (o lembrete inicial ou qualquer repetição/clarificação — cada uma
+  // regista o seu id ao sair). Um "SIM" citando um lembrete mais
+  // antigo (dois turnos no dia) não pode confirmar a presumida do
+  // lembrete novo — a pergunta ativa repete-se para o trabalhador
+  // responder sobre a saída certa. Sem ids conhecidos (SMS, relay
+  // cloud sem wamid) não há como verificar — fail-open.
   if (
     env.msg.quotedMessageId &&
-    pending.sentMessageId &&
-    env.msg.quotedMessageId !== pending.sentMessageId
+    pending.sentMessageIds?.length &&
+    !pending.sentMessageIds.includes(env.msg.quotedMessageId)
   ) {
-    await env.say(
+    await askExitQuestion(
+      env,
       pontoExitReminderText(hhmm(new Date(pending.presumedAt), env.tz))
     );
     return;
@@ -583,7 +625,7 @@ async function onExitReminderAnswer(
     return;
   }
   if (!answer) {
-    await env.say(PONTO_TEXT.exitReminderReprompt);
+    await askExitQuestion(env, PONTO_TEXT.exitReminderReprompt);
     return;
   }
   // A presumida pode ter sido corrigida entretanto (SAIDA por comando,
@@ -634,7 +676,7 @@ async function onExitReminderAnswer(
     if (candidates.length === 0) {
       // Impossível (futuro, anterior ao turno) — repete a pergunta
       // com o pending vivo: a resposta seguinte re-tenta.
-      await env.say(PONTO_TEXT.exitReminderReprompt);
+      await askExitQuestion(env, PONTO_TEXT.exitReminderReprompt);
       return;
     }
     if (candidates.length > 1) {
@@ -646,7 +688,10 @@ async function onExitReminderAnswer(
         ...pending,
         clarifyDate: { hhmm: answer.hhmm, ymdReply, ymdReminder },
       });
-      await env.say(pontoExitDateQuestion(answer.hhmm, ymdReminder, ymdReply));
+      await askExitQuestion(
+        env,
+        pontoExitDateQuestion(answer.hhmm, ymdReminder, ymdReply)
+      );
       return;
     }
     at = candidates[0];
@@ -700,7 +745,7 @@ async function onExitDateClarification(
 ): Promise<void> {
   const clarify = pending.clarifyDate;
   if (!clarify) {
-    await env.say(PONTO_TEXT.exitReminderReprompt);
+    await askExitQuestion(env, PONTO_TEXT.exitReminderReprompt);
     return;
   }
   const normalized = normalizePontoText(env.msg.text ?? "");
@@ -714,7 +759,7 @@ async function onExitDateClarification(
     ymd = clarify.ymdReminder;
   }
   if (!ymd) {
-    await env.say(PONTO_TEXT.exitDateClarifyReprompt);
+    await askExitQuestion(env, PONTO_TEXT.exitDateClarifyReprompt);
     return;
   }
   const stillOpen = await env.ctx.prisma.timeEntry
@@ -730,7 +775,7 @@ async function onExitDateClarification(
   }
   const at = zonedDateTimeToUtc(env.tz, ymd, clarify.hhmm);
   if (!at) {
-    await env.say(PONTO_TEXT.exitReminderReprompt);
+    await askExitQuestion(env, PONTO_TEXT.exitReminderReprompt);
     return;
   }
   await recordExitCorrection(

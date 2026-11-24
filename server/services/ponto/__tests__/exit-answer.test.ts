@@ -71,3 +71,26 @@ describe("parsePontoExitAnswer — ambíguo", () => {
     expect(parsePontoExitAnswer(null)).toBeNull();
   });
 });
+
+describe("parsePontoExitAnswer — ponto antes de duração", () => {
+  it("«Saí às 18. 20 minutos antes de fecharem» → null (não 18:20)", () => {
+    // O "." fecha a frase quando os dígitos a seguir quantificam uma
+    // duração — «18» e «20 minutos» ficam em orações separadas, duas
+    // horas candidatas é ambíguo e a resposta pede-se de novo em vez
+    // de gravar 18:20 por engano.
+    expect(
+      parsePontoExitAnswer("Saí às 18. 20 minutos antes de fecharem")
+    ).toBeNull();
+  });
+
+  it("«Saí às 18. 30» continua a ler 18:30", () => {
+    expect(parsePontoExitAnswer("Saí às 18. 30")).toEqual({
+      hhmm: "18:30",
+      kind: "time",
+    });
+    expect(parsePontoExitAnswer("saí às 18. 30 da noite")).toEqual({
+      hhmm: "18:30",
+      kind: "time",
+    });
+  });
+});
