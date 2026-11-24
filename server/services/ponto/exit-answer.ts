@@ -192,17 +192,27 @@ const RANGE_QTY_RE = /\b\d{1,3}\s+a\s+\d{1,3}\b/gi;
 const WORKED_DURATION_RE =
   /\b(?:depois|apos|antes|trabalhei|trabalhar|trabalhou|trabalhava|trabalhando|estive|esteve|fiz|fez|fiquei|ficou|aguardei|esperei|levei|levou|demorei|demorou|completei|passei|passou|durei|durou)\s+(?:(?:mais\s+de|de|cerca\s+de|quase|perto\s+de|por|umas?|ao\s+todo|no\s+total)\s+)*\d{1,3}\s*horas?\b/gi;
 // Limite de hora — «depois das 19 horas», «antes das 8», «até às
-// duas»: o trabalhador diz que saiu DEPOIS/ANTES dessa hora, não a
-// essa hora — sozinho não é resposta válida. Mas conta para a
-// ambiguidade: «18:05 ou depois das 19 horas» tem duas candidatas.
+// duas», «depois das 18 horas e meia»: o trabalhador diz que saiu
+// DEPOIS/ANTES dessa hora, não a essa hora — sozinho não é
+// resposta válida. Mas conta para a ambiguidade: «18:05 ou depois
+// das 19 horas» tem duas candidatas. Os minutos por extenso («e
+// meia», «e 30», «e 15 minutos») fazem parte do limite — «depois
+// das 18 horas e meia» é 18:30, não 18:00; dígitos seguidos de
+// unidade de duração não são minutos («depois das 18 horas e 1
+// hora depois»).
 const BOUND_HOUR_RE =
-  /\b(depois|apos|antes|ate)\s+(?:das?|as)\s+(\d{1,2})\s*horas?(?:\s+da\s+(manha|tarde|noite)\b)?/gi;
+  /\b(depois|apos|antes|ate)\s+(?:das?|as)\s+(\d{1,2})\s*horas?(?:\s+e\s+(?:(\d{1,2})\s*(?:minutos?|mins?)\b|(\d{1,2})(?!\s+(?:horas?|hrs?|minutos?|mins?|segundos?|segs?|depois|apos|antes|atras)\b)|(meia))\b)?(?:\s+da\s+(manha|tarde|noite)\b)?/gi;
 // A oração volta a afirmar a saída — o limite descreve-a, não
 // outro acontecimento: «ou saí depois das 19» é alternativa mesmo
-// depois dum contexto de turno. Só formas afirmadas: «sair»
-// infinito («autorização para sair depois das 17») e «saía»
-// habitual são permissão ou horário, não a saída de hoje.
-const CLAIMS_EXIT_RE = /\bsai(?:d[ao]|mos|ndo)?\b/i;
+// depois dum contexto de turno. Só formas afirmadas: o pretérito
+// («saí», «saiu», «saímos», «saído», «a saída foi», «saindo») e
+// o infinito com auxiliar aspectual («acabei/acabou por sair»,
+// «terminei por sair», «consegui sair», «voltei a sair», «fui
+// sair»). O infinito solto («autorização para sair depois das
+// 17», «podia sair») e o imperfeito «saía» são permissão ou
+// horário, não a saída de hoje.
+const CLAIMS_EXIT_RE =
+  /\bsai(?:d[ao]|mos|ndo|u)?\b|\b(?:acab(?:ei|ou)|termin(?:ei|ou)|cheg(?:uei|ou)|consegui|voltei|fui)\s+(?:por\s+|a\s+|de\s+)?sair\b/i;
 // Reformulação «ou seja …» no fim do texto antes do limite.
 const OU_SEJA_END_RE = /(?:^|\s)ou\s+seja$/;
 // «ou» a ligar o limite à hora, com advérbios comuns pelo meio —
@@ -424,14 +434,28 @@ function boundConsistent(
  *  nas horas soltas, e «da manhã/tarde/noite» sobrepõe-se («depois
  *  das 6 horas da manhã» é depois das 06:00, não das 18:00). */
 function boundHourValue(m: RegExpMatchArray): number {
+  // Minutos por extenso — «e meia»/«e 30»/«e 15 minutos». Um
+  // minuto impossível («e 75») invalida a leitura como um
+  // qualificador impossível: fica NaN e ambigúa.
+  let minutes = 0;
+  if (m[5]) {
+    minutes = 30;
+  } else if (m[3] || m[4]) {
+    minutes = Number(m[3] ?? m[4]);
+  }
+  if (minutes > 59) {
+    return Number.NaN;
+  }
   const raw = m[2];
-  if (m[3]) {
-    return hourWithPeriod(Number(raw), m[3]) ?? Number.NaN;
+  let hour: number;
+  if (m[6]) {
+    hour = hourWithPeriod(Number(raw), m[6]) ?? Number.NaN;
+  } else if (zeroPadded(raw)) {
+    hour = Number(raw);
+  } else {
+    hour = exitHour(Number(raw)) ?? Number.NaN;
   }
-  if (zeroPadded(raw)) {
-    return Number(raw);
-  }
-  return exitHour(Number(raw)) ?? Number.NaN;
+  return hour + minutes / 60;
 }
 
 /** Veredicto «ou seja»: coerente ignora-se, contraditória é

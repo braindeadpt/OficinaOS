@@ -562,6 +562,24 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
     expect(
       parsePontoExitAnswer("Saí às 18:05. Saía sempre depois das 19 horas.")
     ).toEqual({ hhmm: "18:05", kind: "time" });
+    // …e o infinito com auxiliar aspectual volta a ser afirmação:
+    // «acabei por sair», «consegui sair», «saiu» — o trabalhador
+    // corrige a hora declarada e a resposta ambigúa.
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 18:05. Afinal acabei por sair depois das 19 horas."
+      )
+    ).toEqual({ kind: "ambiguous" });
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 18:05. Só consegui sair depois das 19 horas."
+      )
+    ).toEqual({ kind: "ambiguous" });
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 18:05. O meu registo só saiu depois das 19 horas."
+      )
+    ).toEqual({ kind: "ambiguous" });
     // Repetir o limite de contexto (já deduplicado) não muda o
     // papel da oração — «ou» a seguir continua o horário.
     expect(
@@ -581,6 +599,22 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
     ).toEqual({ hhmm: "06:30", kind: "time" });
     expect(
       parsePontoExitAnswer("Saí às 06:30, ou seja após as 8 horas da manhã")
+    ).toEqual({ kind: "ambiguous" });
+    // Minutos por extenso no limite — «depois das 18 horas e meia»
+    // é depois das 18:30, não das 18:00.
+    expect(
+      parsePontoExitAnswer("Saí às 18:20, ou seja depois das 18 horas e meia")
+    ).toEqual({ kind: "ambiguous" });
+    expect(
+      parsePontoExitAnswer("Saí às 18:45, ou seja depois das 18 horas e meia")
+    ).toEqual({ hhmm: "18:45", kind: "time" });
+    expect(
+      parsePontoExitAnswer("Saí às 18:45, ou seja antes das 18 horas e meia")
+    ).toEqual({ kind: "ambiguous" });
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 18:20, ou seja depois das 18 horas e 30 minutos"
+      )
     ).toEqual({ kind: "ambiguous" });
     expect(
       parsePontoExitAnswer("Saí às 06:30, ou seja antes das 6 horas da manhã")
