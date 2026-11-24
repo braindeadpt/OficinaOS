@@ -662,6 +662,66 @@ describe("buildQuoteSuggestion — device-aware part priority", () => {
     expect(part?.catalogId).toBe("part-pro");
   });
 
+  it("keeps model priority when the name joins model tokens with underscores", () => {
+    // BUG #166 r17: o underscore é separador para o normalizeKey — a
+    // leitura do travessão no bruto tem de usar as mesmas fronteiras.
+    const parts: QuotePartInput[] = [
+      {
+        category: "BATTERY",
+        defaultPrice: 20,
+        id: "part-generic",
+        name: "Bateria",
+        stockQuantity: 5,
+      },
+      {
+        category: "BATTERY",
+        defaultPrice: 35,
+        id: "part-pro-us",
+        name: "Bateria iPhone_15 Pro – Max 4000 mAh",
+        stockQuantity: 0,
+      },
+    ];
+    const s = build(
+      diag(
+        { "battery.health": { Status: "fail" } },
+        { device: { brand: "Apple", model: "iPhone 15 Pro" } }
+      ),
+      { parts }
+    );
+    const part = s.lines.find((l) => l.kind === "part");
+    expect(part?.catalogId).toBe("part-pro-us");
+  });
+
+  it("reads the dash of each model mention, not only the first", () => {
+    // BUG #166 r18: «Pro Max» primeiro e «Pro – Max 4000 mAh» depois —
+    // a segunda menção é descritor comercial e dá o deviceHit.
+    const parts: QuotePartInput[] = [
+      {
+        category: "BATTERY",
+        defaultPrice: 20,
+        id: "part-generic",
+        name: "Bateria",
+        stockQuantity: 5,
+      },
+      {
+        category: "BATTERY",
+        defaultPrice: 35,
+        id: "part-double",
+        name: "Bateria iPhone 15 Pro Max / iPhone 15 Pro – Max 4000 mAh",
+        stockQuantity: 2,
+      },
+    ];
+    const s = build(
+      diag(
+        { "battery.health": { Status: "fail" } },
+        { device: { brand: "Apple", model: "iPhone 15 Pro" } }
+      ),
+      { parts }
+    );
+    const part = s.lines.find((l) => l.kind === "part");
+    expect(part?.catalogId).toBe("part-double");
+  });
+
   it("rejects a variant followed by a generic descriptor (Pro OEM)", () => {
     // BUG #166 r10: «iPhone 15 Pro OEM» é a variante Pro — a peça do
     // modelo certo esgotada ganha à Pro em stock.

@@ -407,76 +407,83 @@ const COMMERCIAL_VARIANT_PHRASES = new Set(["max capacity"]);
 // Pro Max (BUG #166 r11/r13); storage («max 256 gb») continua a ser
 // variante — a unidade distingue (BUG #166 r12).
 const COMMERCIAL_VARIANT_SPEC = /^max \d+(?: \d+)?\s*(?:mah|wh)\b/;
-// O separador entre o fim da menção ao modelo e o «max» seguinte,
-// lido no nome BRUTO (o normalizeKey perde a pontuação): « » ou
-// «-»/«–» colado = variante contígua; travessão ESPAÇADO = descritor
-// comercial separado («Bateria iPhone 15 Pro – Max 4000 mAh»).
-// Só conta o separador da ocorrência encontrada — um travessão noutro
-// ponto do nome não absolve a variante (BUG #166 r15/r16).
 const SPACED_DASH_SEP = /\s+[-–—]\s+/;
-function spacedDashBeforeMax(rawHaystack: string, needle: string): boolean {
-  const words = needle
-    .trim()
-    .split(" ")
-    .filter((w) => w.length > 0);
-  if (words.length === 0) {
-    return false;
+
+interface ModelToken {
+  /** Separador bruto ANTES do token ("" no primeiro). */
+  sep: string;
+  text: string;
+}
+
+// Tokeniza com as MESMAS fronteiras do normalizeKey ([^a-z0-9]+ separa,
+// underscore incluído) e guarda o separador original de cada token — é
+// ele que distingue «Pro – Max» (descritor comercial) de «Pro Max» /
+// «Pro-Max» (variante) depois de o normalizeKey perder a pontuação
+// (BUG #166 r15/r16).
+function modelTokens(raw: string): ModelToken[] {
+  const cleaned = raw.normalize("NFD").replace(DIACRITICS, "").toLowerCase();
+  const tokens: ModelToken[] = [];
+  const re = /[a-z0-9]+/g;
+  let prevEnd = 0;
+  for (let m = re.exec(cleaned); m; m = re.exec(cleaned)) {
+    tokens.push({ sep: cleaned.slice(prevEnd, m.index), text: m[0] });
+    prevEnd = m.index + m[0].length;
   }
-  const re = new RegExp(`${words.join("\\W+")}([\\s\\W]*?)max\\b`, "i");
-  const sep = re.exec(rawHaystack)?.[1] ?? null;
-  return sep !== null && SPACED_DASH_SEP.test(sep);
+  return tokens;
 }
 
 /**
  * Contains por palavra inteira com rejeição de variantes: devolve true se
- * `needle` ocorre em `haystack` (ambos normalizados) e a palavra seguinte
- * à ocorrência não estende o modelo com uma variante («iphone 15 pro»).
- * A variante conta no fim da menção, antes de outra variante ou antes
- * de um descritor («…15 Pro OEM») — só uma frase comercial conhecida
- * («max capacity») mantém a correspondência com o modelo base
- * (BUG #166 r9/r10).
+ * `needle` ocorre em `haystack` e a palavra seguinte à ocorrência não
+ * estende o modelo com uma variante («iphone 15 pro»). A variante conta
+ * no fim da menção, antes de outra variante ou antes de um descritor
+ * («…15 Pro OEM») — só uma frase comercial conhecida («max capacity»)
+ * mantém a correspondência com o modelo base (BUG #166 r9/r10).
+ * Quando há `rawHaystack` (nome bruto da peça), o separador entre a
+ * menção ao modelo e a variante lê-se token a token — cada ocorrência
+ * usa o SEU separador: «Pro – Max» com travessão espaçado é descritor
+ * comercial, «Pro Max»/«Pro-Max» contíguo é a variante (r14–r17).
  */
 function deviceModelContained(
   haystack: string,
   needle: string,
   rawHaystack?: string
 ): boolean {
-  const hay = ` ${haystack} `;
-  const ned = ` ${needle} `;
-  let from = 0;
-  for (;;) {
-    const idx = hay.indexOf(ned, from);
-    if (idx === -1) {
-      return false;
+  const needleWords = needle
+    .trim()
+    .split(" ")
+    .filter((w) => w.length > 0);
+  if (needleWords.length === 0) {
+    return false;
+  }
+  const tokens = rawHaystack
+    ? modelTokens(rawHaystack)
+    : haystack
+        .trim()
+        .split(" ")
+        .filter((w) => w.length > 0)
+        .map((text, i) => ({ sep: i === 0 ? "" : " ", text }));
+  const prevWord = needleWords.at(-1) ?? "";
+  for (let i = 0; i + needleWords.length <= tokens.length; i++) {
+    const isMatch = needleWords.every((w, k) => tokens[i + k]?.text === w);
+    if (!isMatch) {
+      continue;
     }
-    const words = hay
-      .slice(idx + ned.length)
-      .trimStart()
-      .split(" ")
-      .filter((w) => w.length > 0);
-    const next = words[0] ?? "";
-    if (!MODEL_VARIANT_TOKENS.has(next)) {
+    const next = tokens[i + needleWords.length];
+    const nextText = next?.text ?? "";
+    if (!MODEL_VARIANT_TOKENS.has(nextText)) {
       return true;
     }
-    // «…15 – Max Capacity» é descrição comercial (BUG #166 r9); «…15 Pro
-    // OEM» continua a ser variante (BUG #166 r10) — descritor genérico
-    // não salva a correspondência, só a frase comercial conhecida.
-    // «Pro Max» contíguo é a variante, mesmo com spec de capacidade a
-    // seguir («iPhone 15 Pro Max 17,1 Wh» — a capacidade é da peça, não
-    // um descritor comercial): a palavra anterior ao token decide
-    // (BUG #166 r14).
-    const before = hay
-      .slice(0, idx + ned.length)
-      .trimEnd()
-      .split(" ")
-      .filter((w) => w.length > 0);
-    const prevWord = before.at(-1) ?? "";
+    const phrase =
+      `${nextText} ${tokens[i + needleWords.length + 1]?.text ?? ""}`.trim();
+    const spec = `${nextText} ${tokens
+      .slice(i + needleWords.length + 1, i + needleWords.length + 4)
+      .map((t) => t.text)
+      .join(" ")}`.trim();
     const contiguousVariant =
-      next === "max" &&
+      nextText === "max" &&
       prevWord === "pro" &&
-      !(rawHaystack && spacedDashBeforeMax(rawHaystack, needle));
-    const phrase = `${next} ${words[1] ?? ""}`.trim();
-    const spec = `${next} ${words.slice(1, 4).join(" ")}`.trim();
+      !(next && SPACED_DASH_SEP.test(next.sep));
     if (
       !contiguousVariant &&
       (COMMERCIAL_VARIANT_PHRASES.has(phrase) ||
@@ -484,8 +491,8 @@ function deviceModelContained(
     ) {
       return true;
     }
-    from = idx + 1;
   }
+  return false;
 }
 
 /**
