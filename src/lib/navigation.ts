@@ -144,6 +144,12 @@ export const NAV_ITEMS: NavItem[] = [
     perm: { reports: ["viewSelf"] },
   },
   {
+    icon: "punch_clock",
+    labelKey: "ponto.nav_label",
+    to: "/ponto",
+    perm: { reports: ["viewShop"] },
+  },
+  {
     icon: "auto_awesome",
     labelKey: "ai_agent_title",
     to: "/ai-analyst",

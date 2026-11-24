@@ -16,6 +16,14 @@ export const USER_SELECT: UserSelect = {
   isActive: true,
   mustChangePassword: true,
   image: true,
+  // Livro de ponto — campos do funcionário expostos no GET (gestão no
+  // painel Pro); USER_SELECT_MINIMAL (pickers de técnico) fica sem eles.
+  phoneE164: true,
+  pontoEnabled: true,
+  externalWork: true,
+  pontoSmsAllowed: true,
+  pontoScheduleStart: true,
+  pontoScheduleEnd: true,
   createdAt: true,
 };
 
@@ -37,6 +45,12 @@ export const USER_SELECT_NO_IMAGE: UserSelect = {
   role: true,
   isActive: true,
   mustChangePassword: true,
+  phoneE164: true,
+  pontoEnabled: true,
+  externalWork: true,
+  pontoSmsAllowed: true,
+  pontoScheduleStart: true,
+  pontoScheduleEnd: true,
   createdAt: true,
 };
 

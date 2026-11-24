@@ -265,10 +265,36 @@ export const usersRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
+      // Campos do livro de ponto são configuração de staff (gestão), não
+      // self-service: um técnico a editar o próprio perfil não pode ligar
+      // pontoEnabled/externalWork/pontoSmsAllowed a si mesmo — externalWork
+      // auto-aprova registos e smsAllowed abre o canal SMS.
+      let profileData = parsed.data;
+      if (getUserId(request) === id) {
+        const canManage = await app.auth.api.userHasPermission({
+          body: {
+            role: getRole(request),
+            permissions: { user: ["update"] },
+          },
+        });
+        if (!canManage?.success) {
+          const {
+            phoneE164: _p1,
+            pontoEnabled: _p2,
+            externalWork: _p3,
+            pontoSmsAllowed: _p4,
+            pontoScheduleStart: _p5,
+            pontoScheduleEnd: _p6,
+            ...rest
+          } = parsed.data;
+          profileData = rest;
+        }
+      }
+
       const updated = await updateUserProfileService(
         app.prisma,
         id,
-        parsed.data
+        profileData
       );
       return reply.send(updated);
     }
