@@ -96,6 +96,8 @@ interface RecordBase {
   at?: Date;
   channel: string;
   customerId?: string | null;
+  /** RECEIVED por defeito; FAILED na reconciliação de falha de persistência. */
+  deliveryStatus?: string;
   /** Id do gateway/Cloud para dedup — null grava sempre. */
   externalId?: string | null;
   phone: string;
@@ -183,7 +185,7 @@ export async function recordInboundMessage(
           conversationKey: key,
           correspondent: intlPhone,
           customerId,
-          deliveryStatus: "RECEIVED",
+          deliveryStatus: opts.deliveryStatus ?? "RECEIVED",
           direction: "INBOUND",
           externalId: opts.externalId ?? null,
           subject: subjectFor(opts.channel),
@@ -383,7 +385,9 @@ export async function getConversationHistory(
     },
   });
   return rows.reverse().map((r) => ({
-    content: r.body,
+    // URLs (links de assinatura, portal) nunca vão para o fornecedor de
+    // IA — o histórico é contexto de conversa, não um arquivo de links.
+    content: r.body.replace(/https?:\/\/\S+|www\.\S+/gi, "[link]"),
     role: (r.direction === "INBOUND" ? "user" : "assistant") as
       | "assistant"
       | "user",

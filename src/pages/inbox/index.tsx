@@ -198,6 +198,10 @@ export default function InboxPage() {
   // aparecia no compositor da conversa B ao trocar de seleção.
   const [draftsByConv, setDraftsByConv] = useState<Record<string, string>>({});
   const [sending, setSending] = useState(false);
+  // Ref (não state): dois Enter no mesmo tick liam sending=false — o
+  // servidor criava um rascunho por pedido e o cliente recebia a
+  // resposta em duplicado (BUG #164 r8).
+  const sendingRef = useRef(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [notEnabled, setNotEnabled] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
@@ -323,9 +327,10 @@ export default function InboxPage() {
   }
 
   async function sendReply() {
-    if (!(selectedId && replyText.trim())) {
+    if (!(selectedId && replyText.trim()) || sendingRef.current) {
       return;
     }
+    sendingRef.current = true;
     setSending(true);
     try {
       await api.post(`/inbox/conversations/${selectedId}/reply`, {
@@ -341,6 +346,7 @@ export default function InboxPage() {
     } catch (err) {
       toast.error(getErrorMessage(err, t("inbox.send_error")));
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   }
