@@ -48,6 +48,10 @@ interface SettingsLike {
 
 export interface SendResult {
   error?: string;
+  /** Id da mensagem aceite quando o provider o devolve (key.id da
+   *  Evolution, wamid da Meta direta ou via relay cloud) — o livro de
+   *  ponto correlaciona a resposta citada com a pergunta enviada. */
+  messageId?: string;
   success: boolean;
 }
 
@@ -149,7 +153,11 @@ async function sendViaCloud(
   if (!res.ok) {
     return { error: cloudError(res.status, res.body), success: false };
   }
-  return { success: true };
+  const messageId = (res.body as { messageId?: unknown } | null)?.messageId;
+  return {
+    ...(typeof messageId === "string" ? { messageId } : {}),
+    success: true,
+  };
 }
 
 /**

@@ -133,11 +133,16 @@ function setup(opts: { smsAllowed?: boolean; transport?: string } = {}) {
   return { ctx, message, phone, prisma, sent, staff, t };
 }
 
-function armPending(userId = "user-1", shiftOpenAt?: string) {
+function armPending(
+  userId = "user-1",
+  shiftOpenAt?: string,
+  sentMessageId?: string
+) {
   setPendingPontoExit(userId, {
     expiresAt: Date.now() + PONTO_EXIT_PENDING_TTL_MS,
     presumedAt: PRESUMED_AT.toISOString(),
     presumedEntryId: "presumed-1",
+    ...(sentMessageId ? { sentMessageId } : {}),
     ...(shiftOpenAt ? { shiftOpenAt } : {}),
     userId,
   });
@@ -276,6 +281,73 @@ describe("resposta ao lembrete de saída", () => {
     >;
     expect(entry).toMatchObject({ status: "POR_VALIDAR", type: "SAIDA" });
     expect((entry.at as Date).toISOString()).toBe("2026-01-10T18:20:00.000Z");
+  });
+
+  it('minutos separados por espaço depois do ponto ("18. 30") → 18:30', async () => {
+    // O "." é o separador Horas.minutos de EXPLICIT_TIME_RE com
+    // espaços — "18. 30" não pode ser partido como fim de frase.
+    const { ctx, message, t } = setup();
+    armPending();
+
+    await tryHandlePontoStaff(ctx, message("Saí às 18. 30"), t);
+
+    const entry = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect(entry).toMatchObject({ status: "POR_VALIDAR", type: "SAIDA" });
+    expect((entry.at as Date).toISOString()).toBe("2026-01-10T18:30:00.000Z");
+  });
+
+  it("SIM citando a pergunta ativa → confirma a presumida", async () => {
+    const { ctx, message, t } = setup();
+    armPending("user-1", undefined, "wamid-pergunta-2");
+
+    await tryHandlePontoStaff(
+      ctx,
+      { ...message("SIM"), quotedMessageId: "wamid-pergunta-2" },
+      t
+    );
+
+    const entry = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect(entry).toMatchObject({ status: "APROVADO", type: "SAIDA" });
+    expect(getPendingPontoExit("user-1")).toBeNull();
+  });
+
+  it("SIM citando um lembrete antigo → não confirma a saída do turno errado", async () => {
+    // Dois lembretes no mesmo chat (saiu 18:00, voltou a entrar 19:00):
+    // a citação aponta para a pergunta velha mas o pending só conhece
+    // a ativa — a confirmação não se grava e a pergunta ativa repete-se.
+    const { ctx, message, sent, t } = setup();
+    armPending("user-1", undefined, "wamid-pergunta-2");
+
+    await tryHandlePontoStaff(
+      ctx,
+      { ...message("SIM"), quotedMessageId: "wamid-pergunta-1" },
+      t
+    );
+
+    expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
+    expect(sent.at(-1)).toContain("Saiu às 18:00");
+    expect(getPendingPontoExit("user-1")).not.toBeNull();
+  });
+
+  it("citação sem id de envio registado → resposta segue o fluxo normal", async () => {
+    // Canal que não devolve o id da mensagem (SMS, relay cloud): a
+    // citação não é verificável — a resposta aplica-se à pendente.
+    const { ctx, message, t } = setup();
+    armPending(); // sem sentMessageId
+
+    await tryHandlePontoStaff(
+      ctx,
+      { ...message("SIM"), quotedMessageId: "qualquer-id" },
+      t
+    );
+
+    expect(mocks.recordPontoEntry).toHaveBeenCalledTimes(1);
   });
 
   it("negação noutra frase não apaga a hora afirmada", async () => {

@@ -6,7 +6,8 @@
 // Regras:
 // - "SIM" e afirmativos curtos (match EXATO no texto normalizado —
 //   "ainda não" ou "não saí" nunca confirmam).
-// - Hora indicada: "18:05", "18h05", "18.05" ou uma hora solta
+// - Hora indicada: "18:05", "18h05", "18.05" (também "18. 30") ou
+//   uma hora solta
 //   ("6", "saí às 6" → 18:00). A saída presume-se em hora de tarde/
 //   noite: horas 1–7 passam a +12 ("6" → 18:00, "6:30" → 18:30) —
 //   a alternativa (manhã) é implausível à hora do lembrete; a
@@ -26,8 +27,8 @@
 // por espaços ("18:05" → "18 05"), o que destruiria o padrão —
 // a hora solta usa o texto normalizado. As orações partem-se por
 // pontuação FORTE (vírgula, ponto e vírgula, "!", "?", travessão,
-// fim de linha) — o "." só separa quando não está entre dígitos, para
-// não partir "18.05".
+// fim de linha) — o "." só separa quando não pode ser o separador
+// Horas.minutos ("18.05", "18. 30" inteiros; "18:20. Não" separa).
 
 import { NEGATION_WORDS, normalizePontoText } from "./commands.js";
 
@@ -56,10 +57,12 @@ const AFFIRMATIVE_WORDS = new Set([
 const EXPLICIT_TIME_RE = /\b(\d{1,2})\s*[:hH.]\s*(\d{2})\b/g;
 // Hora solta — "6", "18". Só conta quando é a única candidata.
 const BARE_HOUR_RE = /\b([01]?\d|2[0-3])\b/g;
-// Pontuação que fecha uma oração — o "." só quando liga dígitos fica
-// ("18.05" inteiro; "18:20. Não" separa, senão a negação da segunda
+// Pontuação que fecha uma oração — o "." fica quando pode ser o
+// separador Horas.minutos de EXPLICIT_TIME_RE (dígitos com espaços
+// opcionais dos dois lados: "18.05", "18. 30", "18 . 30") e separa
+// quando fecha uma frase ("18:20. Não" — senão a negação da segunda
 // frase apagava a hora declarada na primeira).
-const CLAUSE_SPLIT_RE = /[,;!?\n—–]|(?<!\d)\.|\.(?!\d)/;
+const CLAUSE_SPLIT_RE = /[,;!?\n—–]|(?<!\d\s*)\.|\.(?!\s*\d{2}\b)/;
 
 /** "6" → 18, "18" → 18, "0" → 0 — saída assume-se depois do meio-dia. */
 function exitHour(raw: number): number | null {

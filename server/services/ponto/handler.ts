@@ -57,6 +57,7 @@ import {
 import {
   PONTO_TEXT,
   pontoExitDateQuestion,
+  pontoExitReminderText,
   pontoLocationRequestInteractive,
   pontoNextButtons,
   pontoNextHintText,
@@ -552,6 +553,22 @@ async function onExitReminderAnswer(
   env: FlowEnv,
   pending: PendingPontoExit
 ): Promise<void> {
+  // Citação de mensagem (reply-quote do WhatsApp): só aplica a
+  // resposta quando a citação aponta para a pergunta ativa. Um "SIM"
+  // citando um lembrete mais antigo (dois turnos no dia) não pode
+  // confirmar a presumida do lembrete novo — a pergunta ativa repete-
+  // se para o trabalhador responder sobre a saída certa. Sem id dos
+  // dois lados (SMS, relay cloud sem wamid) não há como verificar.
+  if (
+    env.msg.quotedMessageId &&
+    pending.sentMessageId &&
+    env.msg.quotedMessageId !== pending.sentMessageId
+  ) {
+    await env.say(
+      pontoExitReminderText(hhmm(new Date(pending.presumedAt), env.tz))
+    );
+    return;
+  }
   const answer = parsePontoExitAnswer(env.msg.text);
   if (!answer) {
     // Com clarificação de data pendente, ONTEM/HOJE resolve o dia —

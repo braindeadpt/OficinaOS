@@ -66,7 +66,12 @@ interface EvolutionUpsertData {
       selectedDisplayText?: string;
     };
     conversation?: string;
-    extendedTextMessage?: { text?: string };
+    extendedTextMessage?: {
+      // reply-quote: stanzaId é o key.id da mensagem citada — o livro
+      // de ponto correlaciona a resposta com o lembrete enviado.
+      contextInfo?: { stanzaId?: string };
+      text?: string;
+    };
     imageMessage?: { mimetype?: string; url?: string };
     listResponseMessage?: {
       singleSelectReply?: {
@@ -102,15 +107,18 @@ interface ParsedInbound {
   interactiveId?: string | null;
   /** Localização partilhada (locationMessage) — livro de ponto. */
   location?: InboundMessage["location"];
+  /** stanzaId da mensagem citada (reply-quote) — livro de ponto. */
+  quotedMessageId?: string;
   text: string | null;
 }
 
 /** Campos normalizados de uma mensagem Evolution (texto, localização,
- *  imagem, botão interativo). */
+ *  imagem, botão interativo, citação). */
 function messageFields(data: EvolutionUpsertData): {
   imageRef?: InboundMessage["imageRef"];
   interactiveId?: string | null;
   location?: InboundMessage["location"];
+  quotedMessageId?: string;
   text: string | null;
 } {
   const msg = data.message;
@@ -140,10 +148,12 @@ function messageFields(data: EvolutionUpsertData): {
     msg?.buttonsResponseMessage?.selectedButtonId ??
     msg?.listResponseMessage?.singleSelectReply?.selectedRowId ??
     null;
+  const quotedMessageId = msg?.extendedTextMessage?.contextInfo?.stanzaId;
   return {
     ...(imageRef ? { imageRef } : {}),
     ...(interactiveId ? { interactiveId } : {}),
     ...(location ? { location } : {}),
+    ...(quotedMessageId ? { quotedMessageId } : {}),
     text,
   };
 }
@@ -533,6 +543,9 @@ async function processParsed(
     ...(parsed.location ? { location: parsed.location } : {}),
     ...(parsed.imageRef ? { imageRef: parsed.imageRef } : {}),
     ...(parsed.interactiveId ? { interactiveId: parsed.interactiveId } : {}),
+    ...(parsed.quotedMessageId
+      ? { quotedMessageId: parsed.quotedMessageId }
+      : {}),
   };
 
   if (evoConfig && isModuleEnabled(settings, "whatsapp-bot")) {

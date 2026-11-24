@@ -41,7 +41,7 @@ const mocks = vi.hoisted(() => ({
   ),
   sendWhatsAppText: vi.fn(
     (_prisma: unknown, _channel: unknown, _to: string, _msg: string) =>
-      Promise.resolve({ success: true })
+      Promise.resolve({ messageId: "evo-msg-1", success: true })
   ),
   syncWhatsAppTemplates: vi.fn(() => Promise.resolve({})),
   templateStatusOf: vi.fn(
@@ -156,14 +156,30 @@ function entry(over: Record<string, unknown>) {
   };
 }
 
-/** dayRows = entries do staff (1.º findMany); saidaRows = SAIDA do dia
- *  (2.º findMany, where.type==="SAIDA"). timeEntry.findFirst emula a
- *  re-leitura anti-duplicado: SAIDA do user, sem correções nem
- *  RECUSADO e POSTERIOR ao gt do turno em aberto quando presente. */
+/** dayRows = entries do staff (1.º findMany); saidaRows = SAIDA
+ *  (2.º findMany, where.type==="SAIDA" — cobre hoje E ontem, para a
+ *  retoma de envios adiados atravessar a meia-noite). Ambas respeitam
+ *  o at.gte/lt do where. timeEntry.findFirst emula a re-leitura
+ *  anti-duplicado: SAIDA do user, sem correções nem RECUSADO e
+ *  POSTERIOR ao gt do turno em aberto quando presente. */
 function makePrisma(dayRows: unknown[], saidaRows: unknown[] = []) {
   mocks.timeEntryFindMany.mockImplementation(
-    (args?: { where?: { type?: string } }) =>
-      Promise.resolve(args?.where?.type === "SAIDA" ? saidaRows : dayRows)
+    (args?: { where?: { at?: { gte?: Date; lt?: Date }; type?: string } }) => {
+      const w = args?.where;
+      const rows = (w?.type === "SAIDA" ? saidaRows : dayRows) as Record<
+        string,
+        unknown
+      >[];
+      const gte = w?.at?.gte?.getTime();
+      const lt = w?.at?.lt?.getTime();
+      return Promise.resolve(
+        rows.filter(
+          (r) =>
+            (gte === undefined || (r.at as Date).getTime() >= gte) &&
+            (lt === undefined || (r.at as Date).getTime() < lt)
+        )
+      );
+    }
   );
   mocks.timeEntryFindFirst.mockImplementation(
     (args?: {
@@ -261,9 +277,12 @@ describe("lembrete de saída (Esquecimentos)", () => {
     expect(text).toContain("Responda SIM");
     expect(mocks.sendWhatsAppTemplateVia).not.toHaveBeenCalled();
     // Pending awaitingExit armado (~2 h) para a resposta SIM/hora —
-    // a validade conta do `now` injetado do tick.
+    // a validade conta do `now` injetado do tick. O id da mensagem
+    // enviada vai junto: uma resposta citada (reply-quote) só confirma
+    // se apontar para esta pergunta.
     expect(getPendingPontoExit("user-1", NOW_AFTER.getTime())).toMatchObject({
       presumedEntryId: "presumed-1",
+      sentMessageId: "evo-msg-1",
     });
   });
 
@@ -327,6 +346,85 @@ describe("lembrete de saída (Esquecimentos)", () => {
     expect(mocks.recordPontoEntry).toHaveBeenCalledTimes(1);
     expect(mocks.sendWhatsAppTemplateVia).toHaveBeenCalledTimes(1);
     expect(getPendingPontoExit("user-1", later.getTime())).toMatchObject({
+      presumedEntryId: "presumed-1",
+    });
+  });
+
+  it("lembrete desligado entre ciclos → retoma não entrega a pergunta adiada", async () => {
+    // 1.º tick: modelo Meta em revisão — a presumida grava-se e o
+    // envio fica adiado.
+    mocks.resolveWhatsAppChannel.mockReturnValue(CLOUD_CHANNEL);
+    mocks.templateStatusOf.mockReturnValue(null);
+    const entrada = entry({ type: "ENTRADA" });
+    const prisma1 = makePrisma([entrada]);
+
+    await processPontoReminders(prisma1, log, undefined, NOW_AFTER);
+
+    expect(mocks.sendWhatsAppTemplateVia).not.toHaveBeenCalled();
+
+    // O gestor apaga a hora nas definições (null = lembrete
+    // desligado) e a Meta aprova o modelo entretanto — a retoma não
+    // pode entregar a pergunta a um lembrete desativado.
+    mocks.templateStatusOf.mockReturnValue("APPROVED");
+    mocks.findShopSettingsUnique.mockResolvedValue(
+      makeSettings({ pontoExitReminderTime: null })
+    );
+    const presumed = entry({
+      at: REMINDER_AT,
+      id: "presumed-1",
+      proofs: { exitReminderPresumed: true },
+      status: "POR_VALIDAR",
+      transport: "MANUAL",
+      type: "SAIDA",
+    });
+    const prisma2 = makePrisma([entrada, presumed], [presumed]);
+    const later = new Date("2026-01-10T18:15:00.000Z");
+
+    await processPontoReminders(prisma2, log, undefined, later);
+
+    expect(mocks.sendWhatsAppTemplateVia).not.toHaveBeenCalled();
+    expect(mocks.sendWhatsAppText).not.toHaveBeenCalled();
+    expect(getPendingPontoExit("user-1", later.getTime())).toBeNull();
+  });
+
+  it("envio adiado às 23:50 → retoma no tick depois da meia-noite", async () => {
+    // Lembrete tardio: a presumida das 23:30 fica adiada com o modelo
+    // em revisão e a aprovação chega já no dia civil seguinte.
+    mocks.findShopSettingsUnique.mockResolvedValue(
+      makeSettings({ pontoExitReminderTime: "23:30" })
+    );
+    mocks.resolveWhatsAppChannel.mockReturnValue(CLOUD_CHANNEL);
+    mocks.templateStatusOf.mockReturnValue(null);
+    const entrada = entry({ type: "ENTRADA" });
+    const late = new Date("2026-01-10T23:50:00.000Z"); // 23:50 Lisboa
+
+    await processPontoReminders(makePrisma([entrada]), log, undefined, late);
+
+    expect(mocks.sendWhatsAppTemplateVia).not.toHaveBeenCalled();
+
+    // Aprovado às 00:10 — a varredura das SAIDA inclui o dia anterior,
+    // por isso a retoma encontra a presumida aberta e entrega-a.
+    mocks.templateStatusOf.mockReturnValue("APPROVED");
+    const presumed = entry({
+      at: new Date("2026-01-10T23:30:00.000Z"),
+      id: "presumed-1",
+      proofs: { exitReminderPresumed: true },
+      status: "POR_VALIDAR",
+      transport: "MANUAL",
+      type: "SAIDA",
+    });
+    const prisma2 = makePrisma([entrada, presumed], [presumed]);
+    const afterMidnight = new Date("2026-01-11T00:10:00.000Z");
+
+    await processPontoReminders(prisma2, log, undefined, afterMidnight);
+
+    expect(mocks.sendWhatsAppTemplateVia).toHaveBeenCalledTimes(1);
+    // Uma só presumida — a retoma reutiliza a gravada no 1.º tick.
+    expect(mocks.recordPontoEntry).toHaveBeenCalledTimes(1);
+    expect(
+      getPendingPontoExit("user-1", afterMidnight.getTime())
+    ).toMatchObject({
+      presumedAt: "2026-01-10T23:30:00.000Z",
       presumedEntryId: "presumed-1",
     });
   });

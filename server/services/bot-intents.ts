@@ -104,6 +104,11 @@ export interface InboundMessage {
    *  locationMessage da Evolution). Coordenadas WGS84. */
   location?: { accuracy?: number; lat: number; lng: number };
   messageType: string;
+  /** Id da mensagem citada (reply-quote do WhatsApp): stanzaId da
+   *  Evolution ou context.id da Meta quando a fila cloud o expõe —
+   *  o livro de ponto correlaciona a resposta ao lembrete de saída
+   *  com a pergunta enviada. */
+  quotedMessageId?: string;
   /** Hora de ENVIO segundo o canal (sentAt da Meta na fila oficial) —
    *  o livro de ponto mede a validade do código e a frescura do
    *  registo a partir daqui; ausente → createdAt (hora de receção). */

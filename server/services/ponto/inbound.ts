@@ -46,6 +46,15 @@ function interactiveFields(
   return id ? { interactiveId: id } : {};
 }
 
+function quotedFields(
+  payload: Record<string, unknown> | null
+): Pick<InboundMessage, "quotedMessageId"> {
+  // Resposta citada (reply): a Meta envia context.id = wamid da
+  // mensagem citada — a Cloud só o reencaminha se o guardar na row.
+  const ctx = asRecord(payload?.context);
+  return typeof ctx?.id === "string" ? { quotedMessageId: ctx.id } : {};
+}
+
 function imageFields(
   payload: Record<string, unknown> | null
 ): Pick<InboundMessage, "imageRef"> {
@@ -64,13 +73,17 @@ function imageFields(
 }
 
 /**
- * Extrai location/imageRef/interactiveId de uma row da fila oficial.
- * Campos ausentes (payload ainda não exposto pelo poll, ou tipo de
- * mensagem sem equivalente) devolvem-se undefined — o handler decide.
+ * Extrai location/imageRef/interactiveId/quotedMessageId de uma row da
+ * fila oficial. Campos ausentes (payload ainda não exposto pelo poll,
+ * ou tipo de mensagem sem equivalente) devolvem-se undefined — o
+ * handler decide.
  */
 export function pontoFieldsFromCloudRow(
   row: CloudInboundRow
-): Pick<InboundMessage, "imageRef" | "interactiveId" | "location"> {
+): Pick<
+  InboundMessage,
+  "imageRef" | "interactiveId" | "location" | "quotedMessageId"
+> {
   const payload = asRecord(row.payload);
   const isLocation = row.messageType === "location";
   const isInteractive = row.messageType === "interactive";
@@ -79,5 +92,6 @@ export function pontoFieldsFromCloudRow(
     ...(isLocation ? locationFields(payload) : {}),
     ...(isInteractive ? interactiveFields(row, payload) : {}),
     ...(isImage ? imageFields(payload) : {}),
+    ...quotedFields(payload),
   };
 }

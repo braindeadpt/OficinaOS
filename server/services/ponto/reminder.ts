@@ -72,6 +72,7 @@ import {
 
 /** >60 min sem correção → alerta aos gestores (spec item 5). */
 const EXIT_ALERT_AFTER_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 const EXIT_TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 // Re-sync de templates Meta despoletado pelo lembrete — no máximo uma
 // vez por intervalo para não martelar a Graph a cada worker/tick
@@ -232,9 +233,11 @@ async function sendPontoText(
  *  (única via fora da janela de 24 h). SMS quando pontoSmsAllowed.
  *  `exitTime` é a hora presumida perguntada ao trabalhador (a hora
  *  configurada, ou a última marcação se esta for posterior).
- *  Devolve true quando a pergunta saiu — false quando ficou adiada
+ *  `sent` true quando a pergunta saiu — false quando ficou adiada
  *  (sem telefone/canal, modelo Meta por aprovar): o chamador re-tenta
- *  no próximo tick com a mesma presumida. */
+ *  no próximo tick com a mesma presumida. `messageId` é o id da
+ *  mensagem enviada quando o canal o devolve — vai no pending para a
+ *  resposta citada se correlacionar com a pergunta ativa. */
 async function sendExitReminder(
   prisma: DbClient,
   settings: ShopSettings,
@@ -244,10 +247,10 @@ async function sendExitReminder(
   exitTime: string,
   log: FastifyBaseLogger,
   dedupeId: string
-): Promise<boolean> {
+): Promise<{ messageId?: string; sent: boolean }> {
   const phone = user.phoneE164;
   if (!phone) {
-    return false;
+    return { sent: false };
   }
   const countryCode = settings.countryCode;
   if (user.pontoSmsAllowed) {
@@ -260,10 +263,10 @@ async function sendExitReminder(
       pontoExitReminderText(exitTime),
       dedupeId
     );
-    return true;
+    return { sent: true };
   }
   if (!waChannel) {
-    return false;
+    return { sent: false };
   }
   if (waChannel.mode === "evolution") {
     const result = await sendWhatsAppText(
@@ -277,7 +280,7 @@ async function sendExitReminder(
     if (!result.success) {
       throw new Error(result.error ?? "WhatsApp falhou");
     }
-    return true;
+    return { messageId: result.messageId, sent: true };
   }
   // Oficial Meta (local ou relay cloud): o nome resolve-se na BD —
   // a loja pode ter renomeado o modelo nas Definições antes da
@@ -303,7 +306,7 @@ async function sendExitReminder(
         "ponto: lembrete adiado — template Meta por aprovar"
       );
       maybeSyncPontoTemplate(prisma, log);
-      return false;
+      return { sent: false };
     }
   }
   // Modo oficial local: a app não gere modelos na Meta — a loja cria o
@@ -337,7 +340,7 @@ async function sendExitReminder(
   if (!result.success) {
     throw new Error(result.error ?? "template WhatsApp falhou");
   }
-  return true;
+  return { messageId: result.messageId, sent: true };
 }
 
 /** Alerta aos gestores: notify() IN_APP (ponto_saida_pendente) —
@@ -410,6 +413,7 @@ async function retryDeferredExitReminder(
     log,
     now,
     prisma,
+    reminderInstant,
     settings,
     shiftOpenAt,
     smsChannels,
@@ -417,6 +421,12 @@ async function retryDeferredExitReminder(
     user,
     waChannel,
   } = a;
+  // Lembrete desligado nas definições (hora apagada → null): uma
+  // pergunta adiada já não deve sair — a presumida fica POR_VALIDAR
+  // para o painel e o alerta ao gestor continua independente.
+  if (!reminderInstant) {
+    return;
+  }
   if (
     user.externalWork ||
     exitAsked.has(presumed.id) ||
@@ -426,7 +436,7 @@ async function retryDeferredExitReminder(
   ) {
     return;
   }
-  const sent = await sendExitReminder(
+  const result = await sendExitReminder(
     prisma,
     settings,
     waChannel,
@@ -436,12 +446,13 @@ async function retryDeferredExitReminder(
     log,
     `ponto-exit-${presumed.id}`
   );
-  if (sent) {
+  if (result.sent) {
     exitAsked.add(presumed.id);
     setPendingPontoExit(user.id, {
       expiresAt: now.getTime() + PONTO_EXIT_PENDING_TTL_MS,
       presumedAt: presumed.at.toISOString(),
       presumedEntryId: presumed.id,
+      ...(result.messageId ? { sentMessageId: result.messageId } : {}),
       ...(shiftOpenAt ? { shiftOpenAt: shiftOpenAt.toISOString() } : {}),
       userId: user.id,
     });
@@ -532,7 +543,7 @@ async function processExitReminder(a: UserTickArgs): Promise<void> {
     // A pergunta usa a hora presumida real — o SIM confirma
     // exatamente o instante gravado. Envio adiado (modelo por
     // aprovar) não abre a janela — o próximo tick re-tenta.
-    const sent = await sendExitReminder(
+    const result = await sendExitReminder(
       prisma,
       settings,
       waChannel,
@@ -542,12 +553,13 @@ async function processExitReminder(a: UserTickArgs): Promise<void> {
       log,
       `ponto-exit-${presumed.id}`
     );
-    if (sent) {
+    if (result.sent) {
       exitAsked.add(presumed.id);
       setPendingPontoExit(user.id, {
         expiresAt: now.getTime() + PONTO_EXIT_PENDING_TTL_MS,
         presumedAt: presumedAt.toISOString(),
         presumedEntryId: presumed.id,
+        ...(result.messageId ? { sentMessageId: result.messageId } : {}),
         ...(shiftOpenAt ? { shiftOpenAt: shiftOpenAt.toISOString() } : {}),
         userId: user.id,
       });
@@ -656,6 +668,10 @@ export async function processPontoReminders(
           where: { at: { gte: start, lt: end }, userId: { in: staffIds } },
         })
       : Promise.resolve([]),
+    // As SAIDA cobrem também o dia anterior: uma presumida aberta de
+    // ontem continua a precisar de retoma (envio adiado às 23:50 cuja
+    // aprovação chega já depois da meia-noite) e do alerta ao gestor —
+    // limitar ao dia civil corrente esquecia-a à passagem da meia-noite.
     prisma.timeEntry.findMany({
       orderBy: [{ at: "asc" }, { createdAt: "asc" }],
       select: {
@@ -673,7 +689,10 @@ export async function processPontoReminders(
           take: 1,
         },
       },
-      where: { at: { gte: start, lt: end }, type: "SAIDA" },
+      where: {
+        at: { gte: new Date(start.getTime() - DAY_MS), lt: end },
+        type: "SAIDA",
+      },
     }),
   ]);
 
@@ -685,10 +704,10 @@ export async function processPontoReminders(
   }
   const staffById = new Map(staff.map((u) => [u.id, u]));
 
-  // Presumidas abertas do dia (todas as SAIDA com a marca e sem
-  // correção) — servem de dedupe do lembrete, de retoma de um envio
-  // adiado e de fonte do alerta. O mapa guarda a mais recente por
-  // utilizador (a lista vem por at+createdAt asc).
+  // Presumidas abertas de hoje e ontem (todas as SAIDA com a marca e
+  // sem correção) — servem de dedupe do lembrete, de retoma de um
+  // envio adiado e de fonte do alerta. O mapa guarda a mais recente
+  // por utilizador (a lista vem por at+createdAt asc).
   const openPresumed = (saidaEntries as DayEntry[]).filter(
     (e) => isPresumed(e) && e.corrections.length === 0
   );
