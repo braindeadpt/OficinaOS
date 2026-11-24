@@ -675,4 +675,58 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
       parsePontoExitAnswer("Saí às 18:05. Ele só sai depois das 19 horas.")
     ).toEqual({ hhmm: "18:05", kind: "time" });
   });
+
+  it("mede a afirmação de saída no trecho antes do limite, não na oração toda", () => {
+    // «saímos» depois do limite explica outro acontecimento — o
+    // horário do gerente fica contexto e a hora declarada vale.
+    expect(
+      parsePontoExitAnswer(
+        "Saímos às 18:05. O gerente saiu depois das 19 horas porque lhe deixámos mais trabalho quando saímos."
+      )
+    ).toEqual({ hhmm: "18:05", kind: "time" });
+    // …mas «saí» antes do limite continua a reivindicá-lo.
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 18:05. Afinal saí depois das 19 horas porque fiquei a ajudar."
+      )
+    ).toEqual({ kind: "ambiguous" });
+  });
+
+  it("mantém o antecedente de «que saiu» e o possessivo de «saída»", () => {
+    // «com o colega que saiu» — o colega é o sujeito da relativa.
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 18:05. Falei com o colega que saiu depois das 19 horas."
+      )
+    ).toEqual({ hhmm: "18:05", kind: "time" });
+    // «a saída da encomenda» — o possessivo é o dono da saída.
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 18:05. A saída da encomenda foi depois das 19 horas."
+      )
+    ).toEqual({ hhmm: "18:05", kind: "time" });
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 18:05. A saída do colega foi depois das 19 horas."
+      )
+    ).toEqual({ hhmm: "18:05", kind: "time" });
+  });
+
+  it("só «saí»/«saímos» inteiros afirmam — «saída», «saía», «saíram», «saído» não", () => {
+    expect(
+      parsePontoExitAnswer("Saí às 18:05. Saía sempre depois das 19 horas.")
+    ).toEqual({ hhmm: "18:05", kind: "time" });
+    expect(
+      parsePontoExitAnswer("Saí às 18:05. Saíram depois das 19 horas.")
+    ).toEqual({ hhmm: "18:05", kind: "time" });
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 18:05. A encomenda saída depois das 19 horas era urgente."
+      )
+    ).toEqual({ hhmm: "18:05", kind: "time" });
+    // «saímos» antes do limite afirma.
+    expect(
+      parsePontoExitAnswer("Saímos depois das 19 horas, as 18:05.")
+    ).toEqual({ kind: "ambiguous" });
+  });
 });

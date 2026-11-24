@@ -223,14 +223,25 @@ const THIRD_PERSON_RE =
   /\b(?:colegas?|ele|ela|eles|elas|encomendas?|pedidos?|clientes?|chefe|patrao|gerente|motorista|autocarro|comboio)\b/;
 // …mas só em posição de sujeito — depois de preposição é
 // complemento («saí com o meu colega», «para o cliente»), não
-// outro sujeito.
+// outro sujeito. Seguido de «que» o complemento é o antecedente
+// duma oração relativa («falei com o colega que saiu») — o
+// sujeito do verbo é ele e conta.
 const THIRD_PERSON_COMPLEMENT_RE =
-  /\b(?:com|para|de|do|da|dos|das|ao|aos|no|na|nos|nas|pelo|pela|pelos|pelas|como|sem|sobre|contra|entre|apos|antes)\s+(?:(?:o|a|os|as|um|uma|uns|umas|meu|minha|meus|minhas|seu|sua|seus|suas|este|esta|esse|essa|aquele|aquela|outro|outra|cada|toda?|todas|primeira|primeiro|ultima|ultimo)\s+)*(?:colegas?|ele|ela|eles|elas|encomendas?|pedidos?|clientes?|chefe|patrao|gerente|motorista|autocarro|comboio)\b/gi;
+  /\b(?:com|para|de|do|da|dos|das|ao|aos|no|na|nos|nas|pelo|pela|pelos|pelas|como|sem|sobre|contra|entre|apos|antes)\s+(?:(?:o|a|os|as|um|uma|uns|umas|meu|minha|meus|minhas|seu|sua|seus|suas|este|esta|esse|essa|aquele|aquela|outro|outra|cada|toda?|todas|primeira|primeiro|ultima|ultimo)\s+)*(?:colegas?|ele|ela|eles|elas|encomendas?|pedidos?|clientes?|chefe|patrao|gerente|motorista|autocarro|comboio)\b(?!\s+que\b)/gi;
 const SELF_EXIT_RE = /\b(?:eu|minh[ao]s?)\b/;
-// No texto cru (antes de tirar os acentos) «saí» é 1.ª pessoa
-// inequívoca — «sai» normalizado é ambíguo com a 3.ª pessoa do
-// presente («ele sai depois das 19»).
-const CLAIMS_EXIT_ACCENT_RE = /\bsaí(?:mos|do)?\b/;
+// O possessivo de «saída» é o dono da saída, não complemento a
+// ignorar — «a saída da encomenda», «a saída do colega» falam
+// doutro, não do trabalhador.
+const THIRD_PERSON_SAIDA_RE =
+  /\bsaida\s+(?:de|do|da|dos|das)\s+(?:(?:o|a|os|as|um|uma|uns|umas|meu|minha|meus|minhas|seu|sua|seus|suas|este|esta|esse|essa|aquele|aquela|outro|outra|cada|toda?|todas|primeira|primeiro|ultima|ultimo)\s+)*(?:colegas?|ele|ela|eles|elas|encomendas?|pedidos?|clientes?|chefe|patrao|gerente|motorista|autocarro|comboio)\b/i;
+// No texto cru (antes de tirar os acentos) «saí»/«saímos» são
+// 1.ª pessoa inequívoca — «sai» normalizado é ambíguo com a 3.ª
+// pessoa do presente («ele sai depois das 19»). \b não trata «í»
+// como letra (casava dentro de «saída»): usam-se fronteiras
+// explícitas por letras Unicode — «saída», «saía», «saíram» e o
+// particípio «saído» ficam de fora.
+const CLAIMS_EXIT_ACCENT_RE =
+  /(?:^|[^\p{L}\p{M}])saí(?:mos)?(?![\p{L}\p{M}])/iu;
 // Reformulação «ou seja …» no fim do texto antes do limite.
 const OU_SEJA_END_RE = /(?:^|\s)ou\s+seja$/;
 // «ou» a ligar o limite à hora, com advérbios comuns pelo meio —
@@ -510,6 +521,9 @@ function claimsExit(before: string): boolean {
   if (SELF_EXIT_RE.test(before)) {
     return true;
   }
+  if (THIRD_PERSON_SAIDA_RE.test(before)) {
+    return false;
+  }
   const subjects = before.replace(THIRD_PERSON_COMPLEMENT_RE, " ");
   return !THIRD_PERSON_RE.test(subjects);
 }
@@ -537,11 +551,11 @@ function boundIsAlternative(
 
 function classifyBoundHours(
   clauseBoundMatches: RegExpMatchArray[],
+  rawBoundBefore: string[],
   withoutRelatives: string,
   normalizedClause: string,
   hourKind: "new" | "repeat" | "none",
   prevRole: ClauseRole | null,
-  firstPersonClaim: boolean,
   explicit: Set<string>,
   bare: Set<string>,
   bound: Set<string>,
@@ -564,9 +578,17 @@ function classifyBoundHours(
   let first = true;
   let addedAlt = false;
   let addedLoose = false;
+  let boundIndex = 0;
   for (const m of clauseBoundMatches) {
     const before = withoutRelatives.slice(0, m.index).trimEnd();
     const boundHour = boundHourValue(m);
+    // A afirmação de 1.ª pessoa mede-se no trecho cru ANTES do
+    // limite — um «saímos» depois dele («porque lhe deixámos mais
+    // trabalho quando saímos») explica outro acontecimento.
+    const firstPersonClaim = CLAIMS_EXIT_ACCENT_RE.test(
+      rawBoundBefore[boundIndex] ?? ""
+    );
+    boundIndex += 1;
     if (OU_SEJA_END_RE.test(before)) {
       // «ou seja» reformula a hora declarada: coerente ignora-se,
       // contraditória conta como alternativa; sem hora declarada
@@ -647,6 +669,24 @@ function collectClause(
   // limite uma segunda vez («após as 6 horas da manhã» daria um
   // 06:00 solto além do limite).
   const clauseBoundMatches = [...withoutRelatives.matchAll(BOUND_HOUR_RE)];
+  // O mesmo limite no texto cru — a versão sem acentos mantém o
+  // comprimento (NFC «í»→NFD i+marca→i é 1:1), logo os índices dos
+  // matches alinham com os da oração normalizada e cada limite
+  // sabe o trecho cru que o precede (para «saí» acentuado).
+  const clauseNfc = clause.normalize("NFC");
+  const rawStripped = clauseNfc
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  const rawBoundPrefixes = [...rawStripped.matchAll(BOUND_HOUR_RE)].map((m) =>
+    clauseNfc.slice(0, m.index)
+  );
+  // Se as contagens divergirem (um limite só legível numa das
+  // versões) volta-se à oração inteira como antes.
+  const rawBoundBefore =
+    rawBoundPrefixes.length === clauseBoundMatches.length
+      ? rawBoundPrefixes
+      : clauseBoundMatches.map(() => clauseNfc);
   const hourKind = collectClauseHours(
     clause,
     withoutRelatives.replace(BOUND_HOUR_RE, " "),
@@ -655,11 +695,11 @@ function collectClause(
   );
   const added = classifyBoundHours(
     clauseBoundMatches,
+    rawBoundBefore,
     withoutRelatives,
     normalizedClause,
     hourKind,
     prevRole,
-    CLAIMS_EXIT_ACCENT_RE.test(clause.normalize("NFC")),
     explicit,
     bare,
     bound,
