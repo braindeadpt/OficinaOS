@@ -24,10 +24,23 @@
  * a server); the CI `check` job always provides one.
  */
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { renderTemplate } from "../services/notification-renderer.js";
+
+// Extrai o padrão do regexp_replace da migração meta-safe — fonte única,
+// para o teste não validar uma cópia que possa divergir da migração.
+const MIGRATION_REPAIR_PATTERN_RE =
+  /regexp_replace\(\s*body\s*,\s*'((?:[^']|'')*)'/s;
+
+import {
+  deriveMetaTemplate,
+  expandConditionals,
+  isMetaBodySubmittable,
+} from "../services/whatsapp-templates.service.js";
 
 // Dispatch context exactly as each emitter passes it to notify() — see
 // the call sites in server/services and server/routes.
@@ -318,6 +331,83 @@ describe.skipIf(!serverReachable)(
       expect(problems).toEqual([]);
     });
 
+    it("produces Meta-submittable bodies from every seeded WHATSAPP template", async () => {
+      // Meta rejects a BODY that starts or ends with a positional
+      // parameter — the seeded bodies once closed trailing {{if}} blocks
+      // in a bare variable, which expanded to a terminal {{n}} and was
+      // refused at submission. Assert the REAL seeded rows expand to a
+      // submittable shape under every conditional-kept combination.
+      const res = await getDb().query(
+        `SELECT name, body FROM notification_templates WHERE channel = 'WHATSAPP'`
+      );
+      const keepVariants = [
+        { reviewUrl: true, shopName: true, trackingUrl: true },
+        { reviewUrl: false, shopName: true, trackingUrl: false },
+      ];
+      const problems: string[] = [];
+      for (const row of res.rows) {
+        for (const keep of keepVariants) {
+          const spec = deriveMetaTemplate(
+            row.name,
+            expandConditionals(row.body, keep)
+          );
+          if (!isMetaBodySubmittable(spec.body)) {
+            problems.push(`[${row.name}] ${spec.body}`);
+          }
+        }
+      }
+      expect(problems).toEqual([]);
+    });
+
+    it("PostgreSQL: o repair meta-safe não engole texto literal entre blocos", async () => {
+      // Regressão Devin: o padrão da migração 20261228000000 podia tratar
+      // texto fixo entre blocos {{if}} como parte da cadeia terminal e
+      // inserir "." a seguir a {{trackingUrl}} — dentro de um URL de
+      // seguimento (?phone4=NNNN&utm_…) isso corrompia a ligação. O
+      // padrão é lido da própria migração de convergência 20261230000000
+      // (e não copiado à mão): se a regex mudar lá, este teste muda com
+      // ela. O loop é replicado aqui — duas passadas bastam para cadeias
+      // de dois blocos.
+      const migrationSql = readFileSync(
+        fileURLToPath(
+          new URL(
+            "../../prisma/migrations/20261230000000_meta_safe_trailing_template_blocks/migration.sql",
+            import.meta.url
+          )
+        ),
+        "utf8"
+      );
+      const patternMatch = migrationSql.match(MIGRATION_REPAIR_PATTERN_RE);
+      if (!patternMatch) {
+        throw new Error("padrão regexp_replace não encontrado na migração");
+      }
+      const pattern = patternMatch[1].replace(/''/g, "'");
+      const urlBody =
+        "{{if shopName}}Oficina {{shopName}}{{endif}}{{if trackingUrl}} Consulte {{trackingUrl}}{{endif}}{{if trackingUrl}}&utm_source=whatsapp{{endif}}&utm_medium=mensagem{{if reviewUrl}} Avalie-nos em {{reviewUrl}}.{{endif}}";
+      const res = await getDb().query(
+        "SELECT regexp_replace($1, $2, '\\1.\\2\\3', 'g') AS body",
+        [urlBody, pattern]
+      );
+      expect(res.rows[0].body).toBe(urlBody);
+
+      // Cadeia terminal legítima: cada passada pontua mais um bloco —
+      // duas passadas chegam para dois blocos.
+      const chain =
+        "Olá {{a}}.{{if shopName}} — {{shopName}}{{endif}}{{if trackingUrl}}: {{trackingUrl}}{{endif}}";
+      let cur = chain;
+      for (let pass = 0; pass < 3; pass += 1) {
+        cur = (
+          await getDb().query(
+            "SELECT regexp_replace($1, $2, '\\1.\\2\\3', 'g') AS body",
+            [cur, pattern]
+          )
+        ).rows[0].body;
+      }
+      expect(cur).toBe(
+        "Olá {{a}}.{{if shopName}} — {{shopName}}.{{endif}}{{if trackingUrl}}: {{trackingUrl}}.{{endif}}"
+      );
+    });
+
     it("renders IN_APP templates without leftover placeholders", async () => {
       const res = await getDb().query(
         `SELECT name, body FROM notification_templates WHERE channel = 'IN_APP'`
@@ -376,6 +466,39 @@ describe.skipIf(!serverReachable)(
       );
       expect(res.rows[0].body).toContain("foi cancelada");
       expect(res.rows[1].body).toBe("Texto da loja {{jobCode}}");
+    });
+
+    it("upgrades pre-Meta-fix PT bodies (param at end) to the safe version", async () => {
+      const db = getDb();
+      // The pre-fix PT default ended the trailing conditional in a bare
+      // variable — the shape Meta rejects. Installs that seeded it and
+      // never customized must be upgraded; a body already carrying the
+      // "." fix must also count as untouched (migration output).
+      await db.query(
+        `UPDATE notification_templates SET body = $1
+         WHERE name = 'job_returned' AND channel = 'WHATSAPP'`,
+        [
+          "Olá {{customerName}}, o seu aparelho {{jobCode}} foi devolvido.{{if shopName}} — {{shopName}}{{endif}}",
+        ]
+      );
+      await db.query(
+        `UPDATE notification_templates SET body = $1
+         WHERE name = 'job_cancelled' AND channel = 'WHATSAPP'`,
+        [
+          "Hello {{customerName}}, your repair {{jobCode}} has been cancelled.{{if shopName}} — {{shopName}}.{{endif}}",
+        ]
+      );
+
+      const rerun = await run("bun", ["run", "prisma/seed.ts"]);
+      expect(rerun.code).toBe(0);
+
+      const res = await db.query(
+        `SELECT name, body FROM notification_templates
+         WHERE channel = 'WHATSAPP' AND name IN ('job_cancelled', 'job_returned')
+         ORDER BY name`
+      );
+      expect(res.rows[0].body).toContain("foi cancelada");
+      expect(res.rows[1].body).toContain("foi devolvido");
     });
   }
 );

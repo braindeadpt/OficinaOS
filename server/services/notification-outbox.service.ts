@@ -1,5 +1,6 @@
 import { OutboxStatus } from "@generated/client";
 import { AppError } from "@shared/errors/app-error.js";
+import { decryptSecret } from "../lib/crypto.js";
 import { findCustomerByPhone } from "../repositories/customer.repository.js";
 import {
   createOutboxEntry,
@@ -11,13 +12,36 @@ import {
 import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import { logger } from "../utils/logger.js";
+import { isModuleEnabled } from "../utils/modules.js";
+import {
+  INBOX_CHANNEL_EVOLUTION,
+  INBOX_CHANNEL_SMS,
+  INBOX_CHANNEL_WHATSAPP,
+  INBOX_HANDLED_SYSTEM,
+  recordOutboundMessage,
+} from "./inbox.service.js";
 import { renderTemplate } from "./notification-renderer.js";
-import { decryptSmsConfig, sendSms } from "./sms.service.js";
+import { formatPhone } from "./notification-sender.js";
+import { decryptSmsConfig, type SendResult, sendSms } from "./sms.service.js";
+import {
+  type CloudCredentials,
+  isDefinitiveCloudError,
+  sendSmsViaCloud,
+} from "./sms-cloud.service.js";
 import {
   resolveWhatsAppChannel,
+  sendWhatsAppTemplateVia,
   sendWhatsAppText,
   type WhatsAppChannel,
 } from "./whatsapp-channel.js";
+import {
+  approvedTemplateBodyOf,
+  metaConditionalVars,
+  orderedTemplateParams,
+  syncWhatsAppTemplates,
+  TEMPLATE_LANG,
+  templateStatusOf,
+} from "./whatsapp-templates.service.js";
 
 /**
  * Events a staff member fires by hand for a specific customer — not
@@ -31,6 +55,33 @@ import {
 export const STAFF_INITIATED_TEMPLATES: ReadonlySet<string> = new Set([
   "signature_link",
 ]);
+
+// Adiamento de entries cujo template Meta ainda não está APPROVED —
+// re-tenta de meia em meia hora até a revisão resolver ou o deliverBy
+// cortar (cancelIfExpired).
+const TEMPLATE_DEFER_MS = 30 * 60 * 1000;
+
+// Re-sync de estados Meta despoletado por entradas deferidas — no máximo
+// uma vez por TEMPLATE_RESYNC_MIN_MS para não martelar a Graph a cada
+// ciclo do poller.
+const TEMPLATE_RESYNC_MIN_MS = 10 * 60 * 1000;
+let lastTemplateResyncAt = 0;
+const TRAILING_SLASHES_RE = /\/+$/;
+const TEMPLATE_VAR_RE = /\{\{(\w+)\}\}/g;
+const URLISH_VAR_RE = /url$/i;
+
+function maybeResyncTemplates(prisma: DbClient): void {
+  const now = Date.now();
+  if (now - lastTemplateResyncAt < TEMPLATE_RESYNC_MIN_MS) {
+    return;
+  }
+  lastTemplateResyncAt = now;
+  // O expedite de entradas adiadas corre dentro do próprio sync — todas
+  // as persistências de aprovação (incl. o botão manual) antecipam a fila.
+  syncWhatsAppTemplates(prisma).catch((err) =>
+    logger.warn({ err }, "outbox: template re-sync failed")
+  );
+}
 
 /**
  * WhatsApp consent gate. Only customers who opted in may receive messages;
@@ -68,6 +119,7 @@ interface OutboxEntry {
   retryCount: number | null;
   status: OutboxStatus;
   templateName: string;
+  templateParams: unknown;
 }
 
 const POLL_INTERVAL_MS = 5000;
@@ -85,6 +137,8 @@ export async function queueNotification(
   data: {
     deliverBy?: Date;
     jobId?: string;
+    /** Vars de {{if}} garantidas pela config — mesmas usadas no sync Meta. */
+    metaKeep?: Record<string, boolean>;
     templateName: string;
     channel: "WHATSAPP" | "SMS";
     recipientPhone: string;
@@ -101,6 +155,24 @@ export async function queueNotification(
     renderedBody,
     status: OutboxStatus.QUEUED,
     templateName: data.templateName,
+    // Meta exige template fora da janela de 24h — grava os params na
+    // ordem dos {{var}} do corpo (a mesma ordem que o sync usa para
+    // criar o template na conta da loja) E os valores por variável: se
+    // o corpo for editado (reordenou {{vars}}) antes da entrega, o
+    // processamento recalcula a ordem contra o corpo atual; `params`
+    // fica para entradas cujo modelo foi renomeado — o remoto ainda
+    // aprovado corresponde ao corpo antigo.
+    templateParams:
+      data.channel === "WHATSAPP"
+        ? {
+            params: orderedTemplateParams(
+              data.templateBody,
+              data.templateVars,
+              data.metaKeep
+            ),
+            vars: data.templateVars,
+          }
+        : undefined,
   });
 }
 
@@ -206,6 +278,97 @@ async function cancelIfConsentMissing(
   return true;
 }
 
+/**
+ * Pro/cloud apenas: template registado como pendente/em revisão/
+ * rejeitado → adiar sem gastar tentativas: enviar agora falharia na
+ * Meta e a aprovação posterior não recupera mensagens já marcadas
+ * FAILED. Sem registo (modelo novo ainda não submetido) adia na mesma
+ * e o re-sync cria-o. O deliverBy limita a espera — adiar para lá do
+ * prazo cancela já com o motivo visível no balcão em vez de morrer em
+ * silêncio na fila.
+ * No modo local (Meta direto, Pro) a app não consulta nem confia em
+ * estado de templates — envia pelo nome e a Meta rejeita o que faltar
+ * ou não estiver aprovado, como erro de envio normal (retry/FAILED).
+ * Devolve true quando a entrada foi adiada/cancelada (nada mais a fazer).
+ */
+async function deferForTemplateStatus(
+  prisma: DbClient,
+  entry: OutboxEntry,
+  settings: ShopSettingsRow | null
+): Promise<boolean> {
+  const st = templateStatusOf(settings, entry.templateName);
+  if (st === "APPROVED") {
+    return false;
+  }
+  const nextRetry = new Date(Date.now() + TEMPLATE_DEFER_MS);
+  if (entry.deliverBy && nextRetry.getTime() >= entry.deliverBy.getTime()) {
+    await transitionOutboxEntry(prisma, entry.id, OutboxStatus.QUEUED, {
+      error: `Template ${entry.templateName}: ${st?.toLowerCase() ?? "unsynced"} — prazo de entrega esgotado`,
+      nextRetryAt: null,
+      status: OutboxStatus.CANCELLED,
+    });
+    return true;
+  }
+  await transitionOutboxEntry(prisma, entry.id, OutboxStatus.QUEUED, {
+    error: `Template ${entry.templateName}: ${st?.toLowerCase() ?? "unsynced"}`,
+    nextRetryAt: nextRetry,
+    status: OutboxStatus.QUEUED,
+  });
+  // O estado guardado pode estar velho — a Meta aprova templates sem
+  // avisar. Re-sincroniza em background (throttled) para desbloquear
+  // a fila sem precisar de ação manual nas Definições.
+  maybeResyncTemplates(prisma);
+  return true;
+}
+
+/**
+ * Params posicionais para a Meta. Reordena pelos {{var}} da versão
+ * APROVADA quando há vars gravadas — a aprovação está ligada ao corpo
+ * da primeira submissão (a Cloud nunca edita um modelo existente), por
+ * isso uma edição local posterior não pode trocar a ordem posicional:
+ * os params seguem o corpo que a Meta tem aprovado, não o corpo atual
+ * da loja. Sem registo (entrada antiga/modo local) cai no corpo atual —
+ * a loja é que gere o modelo à mão e vê-o nas definições.
+ */
+async function resolveMetaParams(
+  prisma: DbClient,
+  entry: OutboxEntry,
+  channel: WhatsAppChannel,
+  settings: ShopSettingsRow | null
+): Promise<string[] | null> {
+  const storedParams = entry.templateParams as
+    | string[] // formato antigo — só posicional
+    | { params?: string[]; vars?: Record<string, string> }
+    | null;
+  const metaParams: string[] | null = Array.isArray(storedParams)
+    ? storedParams
+    : (storedParams?.params ?? null);
+  if (
+    metaParams === null ||
+    channel.mode === "evolution" ||
+    Array.isArray(storedParams) ||
+    !storedParams?.vars
+  ) {
+    return metaParams;
+  }
+  const tpl = await prisma.notificationTemplate.findFirst({
+    select: { body: true },
+    where: { channel: "WHATSAPP", name: entry.templateName },
+  });
+  const orderBody =
+    (channel.mode === "cloud"
+      ? approvedTemplateBodyOf(settings, entry.templateName)
+      : null) ?? tpl?.body;
+  if (!orderBody) {
+    return metaParams;
+  }
+  return orderedTemplateParams(
+    orderBody,
+    storedParams.vars,
+    metaConditionalVars(settings ?? {})
+  );
+}
+
 async function processWhatsAppEntry(
   prisma: DbClient,
   entry: OutboxEntry,
@@ -223,16 +386,73 @@ async function processWhatsAppEntry(
   if (blocked) {
     return;
   }
-  const result = await sendWhatsAppText(
+  // Meta: mensagens iniciadas pela loja saem sempre como template —
+  // texto livre fora da janela de 24h é rejeitado. Evolution não tem
+  // templates e SMS não passa por aqui; nesses casos o corpo renderizado
+  // continua a ser o transporte.
+  const metaParams = await resolveMetaParams(prisma, entry, channel, settings);
+  // Pro/cloud apenas: template registado como pendente/em revisão/
+  // rejeitado → adiar sem gastar tentativas: enviar agora falharia na
+  // Meta e a aprovação posterior não recupera mensagens já marcadas
+  // FAILED. Sem registo (modelo novo ainda não submetido) adia na mesma
+  // e o re-sync cria-o. cancelIfExpired (deliverBy) limita a espera.
+  // No modo local (Meta direto, Pro) a app não consulta nem confia em
+  // estado de templates — envia pelo nome e a Meta rejeita o que faltar
+  // ou não estiver aprovado, como erro de envio normal (retry/FAILED).
+  if (channel.mode === "cloud" && metaParams !== null) {
+    const deferred = await deferForTemplateStatus(prisma, entry, settings);
+    if (deferred) {
+      return;
+    }
+  }
+  await sendWhatsAppAndSettle(
     prisma,
+    entry,
     channel,
-    entry.recipientPhone,
-    entry.renderedBody,
+    metaParams,
     countryCode,
     settings
   );
+}
+
+/** Envia (template Meta ou texto livre) e acerta o estado do outbox. */
+async function sendWhatsAppAndSettle(
+  prisma: DbClient,
+  entry: OutboxEntry,
+  channel: WhatsAppChannel,
+  metaParams: string[] | null,
+  countryCode: string,
+  settings: ShopSettingsRow | null
+): Promise<void> {
+  const result =
+    channel.mode !== "evolution" && metaParams !== null
+      ? await sendWhatsAppTemplateVia(
+          prisma,
+          channel,
+          entry.recipientPhone,
+          entry.templateName,
+          TEMPLATE_LANG,
+          metaParams,
+          countryCode,
+          settings
+        )
+      : await sendWhatsAppText(
+          prisma,
+          channel,
+          entry.recipientPhone,
+          entry.renderedBody,
+          countryCode,
+          settings
+        );
   if (result.success) {
     await markSent(prisma, entry.id);
+    await recordSystemSend(prisma, settings, {
+      channel:
+        channel.mode === "evolution"
+          ? INBOX_CHANNEL_EVOLUTION
+          : INBOX_CHANNEL_WHATSAPP,
+      entry,
+    });
     return;
   }
   try {
@@ -250,12 +470,33 @@ async function processWhatsAppEntry(
   }
 }
 
+/** §G — notificações automáticas também entram na conversa da inbox
+ * (handledBy SYSTEM): o staff vê o que a loja enviou ao cliente. */
+async function recordSystemSend(
+  prisma: DbClient,
+  settings: ShopSettingsRow | null,
+  input: { channel: string; entry: OutboxEntry }
+): Promise<void> {
+  if (!isModuleEnabled(settings, "ai-inbox")) {
+    return;
+  }
+  await recordOutboundMessage(prisma, logger, {
+    channel: input.channel,
+    deliveryStatus: "SENT",
+    externalId: `outbox:${input.entry.id}`,
+    handledBy: INBOX_HANDLED_SYSTEM,
+    phone: input.entry.recipientPhone,
+    text: input.entry.renderedBody,
+  }).catch((err) => logger.warn({ err }, "inbox: system send record falhou"));
+}
+
 async function processSmsEntry(
   prisma: DbClient,
   entry: OutboxEntry,
-  config: { password: string; url: string; user: string },
+  channels: SmsChannels,
   countryCode: string,
-  shopPhone: string | null
+  shopPhone: string | null,
+  settings: ShopSettingsRow | null
 ): Promise<void> {
   if (await cancelIfExpired(prisma, entry)) {
     return;
@@ -264,14 +505,52 @@ async function processSmsEntry(
   if (blocked) {
     return;
   }
-  const result = await sendSms(
-    config,
-    entry.recipientPhone,
-    entry.renderedBody,
-    countryCode
-  );
+  // Pro: envia pela Cloud (device da loja ou pool) — o id do outbox é o
+  // dedupeId para a Cloud não repetir um envio já aceite. O gateway LAN
+  // (se configurado) é fallback SÓ em erro definitivo (sem device, sem
+  // entitlement): erro de rede/5xx pode significar envio aceite cuja
+  // confirmação se perdeu — cair para LAN duplicava o SMS, porque o
+  // dedupeId só protege o caminho Cloud. Relatórios de entrega voltam
+  // como REPORT na fila inbound.
+  let result: SendResult | null = null;
+  if (channels.cloud) {
+    const jobCode = entry.jobId
+      ? (
+          await prisma.job.findUnique({
+            select: { jobCode: true },
+            where: { id: entry.jobId },
+          })
+        )?.jobCode
+      : undefined;
+    result = await sendSmsViaCloud(channels.cloud, {
+      dedupeId: entry.id,
+      jobCode,
+      text: entry.renderedBody,
+      to: formatPhone(entry.recipientPhone, countryCode),
+    }).catch((err) => ({
+      error: err instanceof Error ? err.message : "CLOUD_UNREACHABLE",
+      success: false,
+    }));
+  }
+  if (
+    !result?.success &&
+    channels.local &&
+    (result === null || isDefinitiveCloudError(result.error))
+  ) {
+    result = await sendSms(
+      channels.local,
+      entry.recipientPhone,
+      entry.renderedBody,
+      countryCode
+    );
+  }
+  result ??= { error: "SMS channel unavailable", success: false };
   if (result.success) {
     await markSent(prisma, entry.id);
+    await recordSystemSend(prisma, settings, {
+      channel: INBOX_CHANNEL_SMS,
+      entry,
+    });
     return;
   }
   try {
@@ -289,8 +568,14 @@ async function processSmsEntry(
   }
 }
 
+interface SmsChannels {
+  /** Credenciais cloud — só preenchidas com o entitlement "sms" ativo. */
+  cloud: CloudCredentials | null;
+  local: { password: string; url: string; user: string } | null;
+}
+
 interface ChannelConfigs {
-  sms: { password: string; url: string; user: string } | null;
+  sms: SmsChannels | null;
   whatsapp: WhatsAppChannel | null;
 }
 
@@ -313,12 +598,22 @@ async function processEntry(
         shopSettings
       );
     } else if (entry.channel === "SMS" && configs.sms) {
-      await processSmsEntry(prisma, entry, configs.sms, countryCode, shopPhone);
+      await processSmsEntry(
+        prisma,
+        entry,
+        configs.sms,
+        countryCode,
+        shopPhone,
+        shopSettings
+      );
     } else if (entry.channel === "WHATSAPP" || entry.channel === "SMS") {
-      // Channel not configured — cancel now. Leaving it QUEUED would
-      // re-select it on every 5s poll and starve the batch of 10.
+      // Channel unavailable — not configured, or the Pro module was
+      // revoked since the entry was queued (resolve/getSmsConfig
+      // re-check the entitlement on every poll). Cancel now: leaving it
+      // QUEUED would re-select it on every 5s poll and starve the
+      // batch of 10.
       await transitionOutboxEntry(prisma, entry.id, OutboxStatus.QUEUED, {
-        error: `Channel ${entry.channel} is not configured`,
+        error: `Channel ${entry.channel} unavailable (not configured or module not entitled)`,
         status: OutboxStatus.CANCELLED,
       });
       return;
@@ -377,9 +672,10 @@ export async function processOutbox(prisma: DbClient): Promise<void> {
       sms: getSmsConfig(shopSettings),
       whatsapp: shopSettings ? resolveWhatsAppChannel(shopSettings) : null,
     };
-    if (!(configs.whatsapp || configs.sms)) {
-      return;
-    }
+    // Sem canal disponível (não configurado OU sem entitlement) não há
+    // early return: as entradas passam pelo processEntry e são
+    // canceladas definitivamente — re-selecioná-las QUEUED a cada poll
+    // mantinha-as vivas para sempre após uma revogação do módulo.
     const countryCode = shopSettings?.countryCode ?? "PT";
 
     for (const entry of pending) {
@@ -418,22 +714,30 @@ type ShopSettingsRow = NonNullable<
   Awaited<ReturnType<typeof findShopSettingsUnique>>
 >;
 
-function getSmsConfig(row: ShopSettingsRow | null): {
-  password: string;
-  url: string;
-  user: string;
-} | null {
-  // SMS local (gateway Android) é free; o entitlement "sms" gateia só
-  // transportes geridos — um provider cloud futuro resolve-se aqui à
-  // parte, com a sua própria verificação de entitlement.
-  if (!row?.smsEnabled) {
+function getSmsConfig(row: ShopSettingsRow | null): SmsChannels | null {
+  // Decisão 2026-11-23: todo o SMS é Pro — ambos os transportes
+  // (Cloud/pool e gateway LAN como fallback) exigem o módulo "sms" com
+  // cache fresco. Sem ele resolvem null e os entries são cancelados.
+  const smsModule = isModuleEnabled(row, "sms");
+  const cloud =
+    smsModule && row?.cloudApiUrl && row?.cloudShopTokenEncrypted
+      ? {
+          apiUrl: row.cloudApiUrl,
+          token: decryptSecret(row.cloudShopTokenEncrypted),
+        }
+      : null;
+  const local =
+    smsModule && row?.smsEnabled
+      ? decryptSmsConfig({
+          gatewayPasswordEncrypted: row.smsGatewayPasswordEncrypted,
+          gatewayUrl: row.smsGatewayUrl,
+          gatewayUser: row.smsGatewayUser,
+        })
+      : null;
+  if (!(cloud || local)) {
     return null;
   }
-  return decryptSmsConfig({
-    gatewayPasswordEncrypted: row.smsGatewayPasswordEncrypted,
-    gatewayUrl: row.smsGatewayUrl,
-    gatewayUser: row.smsGatewayUser,
-  });
+  return { cloud, local };
 }
 
 export async function getOutboxLogs(
@@ -459,6 +763,7 @@ export async function getOutboxLogs(
     retryCount: e.retryCount,
     status: e.status,
     templateName: e.templateName,
+    templateParams: e.templateParams,
   }));
 }
 
@@ -490,19 +795,49 @@ export async function testNotification(prisma: DbClient, templateId: string) {
     throw new AppError("TEMPLATE_NOT_FOUND");
   }
   const shop = await findShopSettingsUnique(prisma);
+  // Mensagens de teste são mensagens reais — mesmo gate Pro do envio
+  // normal (WHATSAPP → "whatsapp-bot", SMS → "sms").
+  const requiredModule =
+    template.channel === "WHATSAPP" ? "whatsapp-bot" : "sms";
+  if (!isModuleEnabled(shop, requiredModule)) {
+    throw new AppError("CLOUD_MODULE_REQUIRED");
+  }
   const phone = shop?.phone;
   if (!phone) {
     throw new AppError("NO_SHOP_PHONE");
   }
+  const templateVars: Record<string, string> = {
+    customerName: "Test",
+    jobCode: "TEST-001",
+    shopName: shop?.shopName ?? "OficinaOS",
+  };
+  // O modelo aprovado na Meta inclui os links {{if}} configurados — um
+  // parâmetro vazio é rejeitado, por isso cada var do corpo precisa de
+  // um valor (reais os links configurados, placeholder o resto).
+  if (shop?.trackingBaseUrl) {
+    templateVars.trackingUrl = `${shop.trackingBaseUrl.replace(
+      TRAILING_SLASHES_RE,
+      ""
+    )}/tracking/TEST-001`;
+  }
+  if (shop?.reviewUrl) {
+    templateVars.reviewUrl = shop.reviewUrl;
+  }
+  for (const m of template.body.matchAll(TEMPLATE_VAR_RE)) {
+    const name = m[1];
+    if (name === "if" || name === "else" || name === "endif") {
+      continue;
+    }
+    templateVars[name] ??= URLISH_VAR_RE.test(name)
+      ? "https://oficinaos.app"
+      : "demo";
+  }
   await queueNotification(prisma, {
     channel: template.channel,
+    metaKeep: metaConditionalVars(shop ?? {}),
     recipientPhone: phone,
     templateBody: template.body,
     templateName: template.name,
-    templateVars: {
-      customerName: "Test",
-      jobCode: "TEST-001",
-      shopName: shop?.shopName ?? "OficinaOS",
-    },
+    templateVars,
   });
 }

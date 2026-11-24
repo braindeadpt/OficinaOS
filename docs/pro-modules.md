@@ -52,10 +52,29 @@ falar com ela. Nunca código pago compilado na app pública.
 | `whatsapp-bot` | Pergunta "está pronto?" no WhatsApp da loja e recebe resposta automática; aprova orçamento com SIM/NÃO | Notificações → Setup → WhatsApp |
 | `diag-intake` | Recebe diagnósticos do `oficinaos-diag` enviados por clientes | Fila de intake na app |
 | `ai-reports` | Relatórios de diagnóstico gerados por IA | Anexado a trabalhos/diag |
-| `remarketing` | Recontacto automático de clientes inativos via template WhatsApp aprovado | Notificações → Setup → WhatsApp |
+| `remarketing` | Recontacto automático de clientes inativos via template WhatsApp aprovado — **requer também `whatsapp-bot`** (o envio usa o canal WhatsApp da loja) | Notificações → Setup → WhatsApp |
+| `sms` | SMS pelo Android da loja — ligado **à Cloud** (sms-gate modo servidor, multi-loja, funciona com o PC desligado) **ou na LAN** como fallback | Notificações → Setup → SMS |
+| `ai-inbox` ⚠️ *em desenvolvimento — ainda não vendido/ativável em produção* | Caixa de entrada unificada de WhatsApp/SMS + assistente de IA para a equipa (qualquer LLM, chat na app ou MCP) — **contratável sozinho** | Mensagens + Definições → IA |
 
-(O `sms` já não é módulo — o canal SMS via gateway Android local é grátis no
-core, porque não depende da Cloud para nada.)
+(Desde 2026-11-23 **todo o SMS é Pro** — inclusive o gateway Android na
+LAN, que passou de "core grátis" a transporte Pro/fallback. O grátis
+não envia nem recebe mensagem nenhuma.)
+
+## Tabela grátis/Pro — canais de mensagens
+
+> **Decisão do dono (2026-11-23): o grátis não envia NADA.** Toda a
+> mensagem — SMS e WhatsApp, todos os transportes e direções — é Pro.
+> Na app os cards/botões ficam visíveis mas locked ("Esta opção existe
+> apenas no OficinaOS Pro."); opt-out "PARAR" fica 100% manual;
+> `POST /api/public/quote-respond` continua grátis por ser a página
+> pública de resposta a orçamento, não um canal de mensagens.
+
+| | Grátis | Pro |
+|---|---|---|
+| **SMS** | nada | `sms`: Android ligado à Cloud (`SmsDevice`/`SmsRoute`) — multi-loja, inbound/outbound com PC desligado, respostas automáticas + IA — ou gateway LAN como fallback |
+| **WhatsApp oficial** | nada | `whatsapp-bot`: Meta Cloud API — envio `POST /whatsapp/send` ou direto app→Meta, templates auto-sincronizados, janela de 24 h, IA |
+| **WhatsApp Evolution** | nada | `whatsapp-bot`: transporte local (não-oficial, disclaimer) + bot inbound com termo próprio + proteções anti-ban (10/h por número, teto diário, dedupe, atraso 3–8 s) |
+| **Caixa de entrada + IA de staff** | nada | `ai-inbox` *(em desenvolvimento)*: caixa unificada WhatsApp/SMS, ferramentas na app, chat IA na app (`/ai/staff-reply`) e MCP na Cloud (`/mcp`) — envio sempre com aprovação humana |
 
 ## Portal do cliente (`portal`)
 
@@ -126,10 +145,53 @@ Feito na Meta App "OficinaOS" (developers.facebook.com):
 
 ### Limites conhecidos
 
-- Resposta do bot demora até ~2 min (ciclo de polling)
+- Resposta do bot chega em ~10–15 s (poller rápido de mensagens); o resto
+  da sincronização mantém o ciclo de ~2 min
 - Notificações proativas ("está pronta") fora da janela de 24h do cliente
-  precisam de **templates aprovados** na Meta (e custam cêntimos)
+  saem como **templates** — a app submete-os automaticamente à Meta e a UI
+  mostra o estado (aprovado/em revisão/rejeitado + "Voltar a submeter");
+  mensagens de template têm custo Meta por conversa
 - Número de teste: máx. 5 destinatários verificados — chega para demos
+- "Loja fechada": inbound não consumido há >5 min recebe a resposta de
+  fallback da Cloud ("Recebemos a sua mensagem. A loja responde assim que
+  abrir."), máx. 1 por número/12 h
+
+## Caixa de entrada + IA de staff (`ai-inbox`)
+
+> **Em desenvolvimento — ainda não está disponível em produção** (a app
+> que corre nas lojas ainda não tem a caixa de entrada nem o MCP).
+> **Pendente de decisão do dono:** o nome comercial e o preço ainda não
+> estão fechados — nos textos visíveis usa-se o marcador
+> `{{AI_INBOX_NOME}}` / `{{AI_INBOX_PRECO}}` até lá. No código fica só o
+> identificador técnico `ai-inbox`.
+
+Módulo próprio, **contratável sozinho** (não obriga a `whatsapp-bot`
+nem `sms`). Duas peças:
+
+- **Caixa de entrada unificada (app):** todas as mensagens de WhatsApp
+  (oficial + Evolution) e SMS — incluindo as do bot — em
+  `BusinessMessage`, com conversas, filtros, atribuição e resposta
+  manual na UI "Mensagens".
+- **IA para a equipa:** um único conjunto de ferramentas
+  (`staffInboxTools`) corre **na app**, sobre a BD local e com as
+  permissões do funcionário. O "cérebro" fica na Cloud (system
+  prompt + esquemas + ciclo de ferramentas, entitlement `ai-inbox` →
+  402 sem módulo) e é servido por duas portas:
+  - **chat na app** — `POST /ai/staff-reply`: a loja escolhe qualquer
+    API compatível com OpenAI; a chave da loja fica cifrada na Cloud
+    (AES-256-GCM, nunca devolvida) ou usa o modelo incluído com
+    medição de uso;
+  - **MCP na Cloud** — `cloud.oficinaos.app/mcp` (Streamable HTTP):
+    Claude, ChatGPT, Cursor, LM Studio e outros clientes ligam com um
+    **token pessoal por utilizador** (a Cloud guarda só o hash).
+    As chamadas chegam à app por uma ligação permanente
+    (`/ai-inbox/link`, iniciada pela app — sem portas abertas na
+    loja).
+
+Envio sempre em dois passos: a IA cria um rascunho e um humano aprova
+na app. Precisa de um canal que receba mensagens: a Evolution na LAN
+funciona só com este módulo (grava na caixa de entrada, sem resposta
+automática), ou `whatsapp-bot`/`sms` para os canais oficiais.
 
 ## Emparelhamento com a Cloud
 
@@ -162,6 +224,8 @@ endpoint "pesquisar por telefone/email" — vazaria a existência de reparaçõe
 
 **Possível futuro**: MCP server na Cloud (`mcp.oficinaos.app`) expondo tools
 `get_status` / `get_quote` / `respond_quote` com o portal token como
-credencial, no entitlement `portal`. Construir só se as lojas beta confirmarem
+credencial, no entitlement `portal` — distinto do `/mcp` do `ai-inbox`
+(secção acima), que é para **staff** com as ferramentas da caixa de entrada.
+Construir só se as lojas beta confirmarem
 procura — hoje o WhatsApp bot cobre o mesmo caso de uso no canal que os
 clientes realmente usam.

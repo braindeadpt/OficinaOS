@@ -9,8 +9,10 @@ import {
 import { resolveRemoteSignUrl } from "../lib/remote-sign-url.js";
 import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
+import { isModuleEnabled } from "../utils/modules.js";
 import { createAuditLog } from "./audit.service.js";
 import { notify } from "./notification-dispatch.js";
+import { getSmsDeviceStatus } from "./sms-cloud.service.js";
 
 // Sending a signing link is a staff-initiated action: the employee at the
 // counter would otherwise copy the URL into the shop's own WhatsApp or an
@@ -36,6 +38,49 @@ const NON_DIGIT_RE = /\D/g;
 
 const maskPhone = (phone: string) =>
   `•••${phone.replace(NON_DIGIT_RE, "").slice(-4)}`;
+
+/**
+ * Canal utilizável para o link — do canal do PRÓPRIO template. O
+ * dispatch só enfileira pelos canais dos modelos `signature_link`:
+ * ter WhatsApp ligado não chega quando a loja moveu o modelo para
+ * SMS sem transporte SMS (e vice-versa) — a confirmação saía sem
+ * mensagem nenhuma na fila. O corpo WhatsApp serve também o fallback
+ * SMS do dispatch quando não há modelo SMS específico.
+ */
+async function signatureChannelReady(
+  prisma: DbClient,
+  settings: Awaited<ReturnType<typeof findShopSettingsUnique>>
+): Promise<boolean> {
+  const templates = await prisma.notificationTemplate.findMany({
+    select: { channel: true },
+    where: { name: SIGNATURE_LINK_EVENT },
+  });
+  const hasWa = templates.some((t) => t.channel === "WHATSAPP");
+  // Decisão 2026-11-23: toda a mensagem é Pro — o canal só conta como
+  // utilizável com o módulo correspondente ativo (cache <24h). Sem ele
+  // o diálogo falha com SIGNATURE_LINK_NO_CHANNEL em vez de confirmar
+  // um envio que ficaria para sempre na fila.
+  if (
+    hasWa &&
+    settings?.whatsappEnabled &&
+    isModuleEnabled(settings, "whatsapp-bot")
+  ) {
+    return true;
+  }
+  const hasSms = templates.some((t) => t.channel === "SMS");
+  if (!(hasSms || hasWa)) {
+    return false;
+  }
+  if (!isModuleEnabled(settings, "sms")) {
+    return false;
+  }
+  if (settings?.smsEnabled) {
+    return true;
+  }
+  // Subscrição Pro sem device enabled na Cloud devolvia DEVICE_MISSING
+  // depois de o diálogo confirmar o envio.
+  return (await getSmsDeviceStatus(prisma)).sendable;
+}
 
 /**
  * Staff clicks "send the link": the live session's frozen document carries
@@ -122,10 +167,7 @@ export async function sendSignatureLink(
   }
 
   const settings = await findShopSettingsUnique(app.prisma);
-  // SMS local (gateway Android) é free — o módulo "sms" gateia só os
-  // transportes geridos futuros, não o gateway da loja.
-  const smsReady = Boolean(settings?.smsEnabled);
-  if (!(settings?.whatsappEnabled || smsReady)) {
+  if (!(await signatureChannelReady(app.prisma, settings))) {
     throw new AppError("SIGNATURE_LINK_NO_CHANNEL");
   }
 

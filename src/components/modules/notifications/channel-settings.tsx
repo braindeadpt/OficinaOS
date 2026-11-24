@@ -14,13 +14,12 @@ type Store = ReturnType<typeof useSettingsStore.getState>;
 
 interface ChannelSettingsProps {
   onFetchWhatsAppSettings: () => Promise<void>;
-  onRegisterSmsWebhook: () => Promise<{ ok: boolean; message?: string }>;
   onSaveSmsSettings: (data: {
     enabled?: boolean;
     gatewayPassword?: string;
     gatewayUrl?: string;
     gatewayUser?: string;
-  }) => Promise<{ webhookRegistered: boolean }>;
+  }) => Promise<void>;
   onSaveWhatsAppSettings: (data: {
     apiToken?: string;
     businessId?: string;
@@ -47,9 +46,7 @@ function SmsCard({
   smsSettings,
   onSave,
   onSendTest,
-  onRegisterWebhook,
 }: {
-  onRegisterWebhook: () => Promise<{ ok: boolean; message?: string }>;
   onSave: ChannelSettingsProps["onSaveSmsSettings"];
   onSendTest: ChannelSettingsProps["onSendSmsTest"];
   smsSettings: Store["smsSettings"];
@@ -63,6 +60,12 @@ function SmsCard({
   });
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const smsCloudDevice = useSettingsStore((s) => s.smsCloudDevice);
+  const fetchSmsCloudDevice = useSettingsStore((s) => s.fetchSmsCloudDevice);
+
+  useEffect(() => {
+    fetchSmsCloudDevice();
+  }, [fetchSmsCloudDevice]);
 
   useEffect(() => {
     if (smsSettings && !loaded) {
@@ -76,49 +79,45 @@ function SmsCard({
     }
   }, [smsSettings, loaded]);
 
+  const locked = !smsSettings?.moduleEnabled;
+
   const handleSave = useCallback(async () => {
+    if (locked) {
+      toast.info(t("pro_only_upsell"));
+      return;
+    }
     setSaving(true);
     try {
-      const { webhookRegistered } = await onSave({
+      await onSave({
         enabled: form.enabled,
         gatewayPassword: form.gatewayPassword || undefined,
         gatewayUrl: form.gatewayUrl,
         gatewayUser: form.gatewayUser,
       });
-      if (form.enabled && !webhookRegistered) {
-        toast.warning(t("sms_webhook_not_registered"));
-      }
       setForm((f) => ({ ...f, gatewayPassword: "" }));
     } catch {
       // Error is stored in Zustand state
     } finally {
       setSaving(false);
     }
-  }, [form, onSave, t]);
+  }, [form, locked, onSave, t]);
 
   const handleTest = useCallback(async () => {
+    if (locked) {
+      toast.info(t("pro_only_upsell"));
+      return;
+    }
     const res = await onSendTest();
     if (res.ok) {
       toast.success(t("sms_test_sent"));
     } else if (res.message) {
       toast.error(res.message);
     }
-  }, [onSendTest, t]);
+  }, [locked, onSendTest, t]);
 
-  const handleRegister = useCallback(async () => {
-    const res = await onRegisterWebhook();
-    if (res.ok) {
-      toast.success(t("sms_webhook_registered"));
-    } else {
-      toast.error(res.message ?? t("sms_webhook_not_registered"));
-    }
-  }, [onRegisterWebhook, t]);
-
-  const inboundUrl = smsSettings?.inboundPath
-    ? `${window.location.origin}${smsSettings.inboundPath}`
-    : null;
-  // O gateway Android local é free — o módulo "sms" gateia apenas os
-  // transportes geridos futuros, por isso nunca bloqueia este card.
+  // Todo o SMS é Pro (decisão 2026-11-23): o card fica visível mas
+  // locked — o switch, a gravação e o teste só informam que a opção
+  // existe no Pro em vez de agir.
   return (
     <div className="mt-6">
       <h3 className="font-extrabold font-headline text-lg text-on-surface tracking-tight">
@@ -129,7 +128,13 @@ function SmsCard({
           <Switch
             ariaLabelledBy="sms-enabled-label"
             checked={form.enabled}
-            onChange={(checked) => setForm((f) => ({ ...f, enabled: checked }))}
+            onChange={(checked) => {
+              if (checked && locked) {
+                toast.info(t("pro_only_upsell"));
+                return;
+              }
+              setForm((f) => ({ ...f, enabled: checked }));
+            }}
           />
           <span
             className="font-medium text-on-surface text-sm"
@@ -139,6 +144,11 @@ function SmsCard({
           </span>
         </div>
         <p className="mt-2 text-on-surface-variant text-xs">{t("sms_desc")}</p>
+        {locked && (
+          <p className="mt-2 rounded-xl bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
+            {t("pro_only_upsell")}
+          </p>
+        )}
 
         <div className="mt-3 rounded-xl bg-surface-container px-3 py-2.5">
           <p className="font-medium text-on-surface text-xs">
@@ -153,6 +163,9 @@ function SmsCard({
           </ol>
           <p className="mt-2 text-on-surface-variant text-xs italic">
             {t("sms_setup_tip")}
+          </p>
+          <p className="mt-2 text-on-surface-variant text-xs">
+            {t("sms_sim_terms")}
           </p>
         </div>
 
@@ -195,15 +208,6 @@ function SmsCard({
               />
             </Field>
 
-            {inboundUrl && (
-              <Field
-                hint={t("sms_inbound_url_hint")}
-                label={t("sms_inbound_url")}
-              >
-                <Input readOnly value={inboundUrl} />
-              </Field>
-            )}
-
             <div className="flex flex-wrap gap-2">
               <Button
                 className="flex min-h-11"
@@ -222,15 +226,38 @@ function SmsCard({
               >
                 {t("sms_send_test")}
               </Button>
-              <Button
-                className="flex min-h-11"
-                onClick={handleRegister}
-                size="sm"
-                variant="secondary"
-              >
-                {t("sms_register_webhook")}
-              </Button>
             </div>
+          </div>
+        )}
+
+        {smsCloudDevice?.entitled && (
+          <div className="mt-5 rounded-xl bg-surface-container px-3 py-2.5">
+            <p className="font-medium text-on-surface text-xs">
+              {t("sms_pro_title")}
+            </p>
+            {smsCloudDevice.configured && smsCloudDevice.device ? (
+              <div className="mt-1.5 space-y-1 text-on-surface-variant text-xs">
+                <p>
+                  {smsCloudDevice.device.label}
+                  {smsCloudDevice.device.phoneE164
+                    ? ` · ${smsCloudDevice.device.phoneE164}`
+                    : ""}
+                  {" — "}
+                  {smsCloudDevice.device.offline
+                    ? t("sms_pro_offline")
+                    : t("sms_pro_online")}
+                </p>
+                <p className="break-all">
+                  {t("sms_pro_webhook")}: {smsCloudDevice.device.webhookUrl}
+                </p>
+              </div>
+            ) : (
+              <p className="mt-1.5 text-on-surface-variant text-xs">
+                {smsCloudDevice.reachable
+                  ? t("sms_pro_not_configured")
+                  : t("sms_pro_unreachable")}
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -442,12 +469,163 @@ function MetaWhatsAppFields({
           value={form.pickupReminderTemplate}
         />
       </Field>
+      <WaTemplatesBlock
+        isCloud={Boolean(settings?.credentialsAtCloud)}
+        locked={!settings?.whatsappModule}
+      />
     </>
+  );
+}
+
+const WA_TPL_STATUS_KEYS: Record<string, string> = {
+  APPROVED: "wa_tpl_status_approved",
+  IN_REVIEW: "wa_tpl_status_in_review",
+  MISSING: "wa_tpl_status_missing",
+  PENDING: "wa_tpl_status_pending",
+  REJECTED: "wa_tpl_status_rejected",
+};
+
+const WA_TPL_CHIP_CLASS: Record<string, string> = {
+  APPROVED: "bg-success-container text-on-success-container",
+  MISSING: "bg-error-container text-on-error-container",
+  REJECTED: "bg-error-container text-on-error-container",
+};
+
+// Razões geradas pela app/Cloud chegam como códigos estáveis → chave
+// i18n. Razões da Meta (rejected_reason, erros 132xxx) vêm verbatim e
+// mostram-se cruas — não há tradução para diagnósticos da Meta.
+const WA_TPL_REASON_KEYS: Record<string, string> = {
+  GRAPH_UNREACHABLE: "wa_tpl_reason_graph_unreachable",
+  INVALID_BODY_EDGES: "wa_tpl_reason_invalid_body_edges",
+  INVALID_NAME: "wa_tpl_reason_invalid_name",
+};
+
+function waTplDesc(
+  isCloud: boolean,
+  locked: boolean,
+  t: (key: string) => string
+): string {
+  if (locked) {
+    return t("pro_only_upsell");
+  }
+  return isCloud ? t("wa_tpl_desc") : t("wa_tpl_free_desc");
+}
+
+/**
+ * Templates Meta (§5.6). Pro/cloud: um chip por template com o estado
+ * que a Cloud devolveu e o botão "Voltar a submeter" que corre o sync.
+ * Sem o módulo "whatsapp-bot" (decisão 2026-11-23 — grátis não envia
+ * nada) o bloco fica locked: a lista de cópia manual deixou de fazer
+ * sentido e mostra-se só o aviso Pro.
+ */
+function WaTemplatesBlock({
+  isCloud,
+  locked,
+}: {
+  isCloud: boolean;
+  locked: boolean;
+}) {
+  const { t } = useTranslation();
+  const waTemplates = useSettingsStore((s) => s.waTemplates);
+  const fetchWaTemplates = useSettingsStore((s) => s.fetchWaTemplates);
+  const syncWaTemplates = useSettingsStore((s) => s.syncWaTemplates);
+  const [syncing, setSyncing] = useState(false);
+
+  const tplReasonTitle = (reason: string | null | undefined) => {
+    if (!reason) {
+      return;
+    }
+    const key = WA_TPL_REASON_KEYS[reason];
+    return key ? t(key) : reason;
+  };
+
+  useEffect(() => {
+    fetchWaTemplates();
+  }, [fetchWaTemplates]);
+
+  const handleResync = async () => {
+    setSyncing(true);
+    try {
+      const res = await syncWaTemplates();
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success(
+          t("wa_tpl_sync_done", {
+            ready: res.ready,
+            total: res.total,
+          })
+        );
+      }
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl bg-surface-container p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-medium text-on-surface text-sm">
+          {t("wa_tpl_title")}
+        </p>
+        {isCloud && !locked && (
+          <Button loading={syncing} onClick={handleResync} size="sm">
+            {t("wa_tpl_resubmit")}
+          </Button>
+        )}
+      </div>
+      <p className="mt-1 text-on-surface-variant text-xs">
+        {waTplDesc(isCloud, locked, t)}
+      </p>
+      {!locked && waTemplates.length > 0 && (
+        <ul className="mt-3 space-y-3">
+          {waTemplates.map((tpl) =>
+            isCloud ? (
+              <li
+                className="flex items-center justify-between gap-2 text-xs"
+                key={tpl.name}
+              >
+                <span className="truncate font-mono text-on-surface">
+                  {tpl.name}
+                </span>
+                <span
+                  className={`shrink-0 rounded-full px-2 py-0.5 ${
+                    WA_TPL_CHIP_CLASS[tpl.status] ??
+                    "bg-surface-container-high text-on-surface-variant"
+                  }`}
+                  title={tplReasonTitle(tpl.reason)}
+                >
+                  {t(WA_TPL_STATUS_KEYS[tpl.status] ?? "wa_tpl_status_pending")}
+                </span>
+              </li>
+            ) : (
+              <li className="text-xs" key={tpl.name}>
+                <div className="flex items-center gap-2">
+                  <span className="truncate font-mono text-on-surface">
+                    {tpl.name}
+                  </span>
+                  <span className="shrink-0 text-on-surface-variant">
+                    {tpl.category ?? "UTILITY"} · {tpl.language ?? "pt_PT"}
+                  </span>
+                </div>
+                {tpl.body && (
+                  <p className="mt-0.5 whitespace-pre-wrap font-mono text-on-surface-variant">
+                    {tpl.body}
+                  </p>
+                )}
+              </li>
+            )
+          )}
+        </ul>
+      )}
+    </div>
   );
 }
 
 interface WhatsAppFormState {
   apiToken: string;
+  botDailyCap: string;
+  botDisclaimerAccepted: boolean;
   businessId: string;
   disclaimerAccepted: boolean;
   enabled: boolean;
@@ -468,11 +646,21 @@ interface WhatsAppFormState {
  * "O que o bot pode dizer" — ficha da loja para o bot de IA (Pro).
  * Feeds POST /ai/bot-reply's shopCard; kept in shop settings (not the
  * WhatsApp settings object) because all channels share it.
+ * Sem qualquer módulo que use o bot (sms / whatsapp-bot / ai-inbox) o
+ * card fica visível mas locked — o switch e a gravação só informam que
+ * a opção existe no Pro.
  */
 function BotCard() {
   const { t } = useTranslation();
   const shopSettings = useSettingsStore((s) => s.shopSettings);
   const saveShopSettings = useSettingsStore((s) => s.saveShopSettings);
+  const whatsAppSettings = useSettingsStore((s) => s.whatsAppSettings);
+  const smsSettings = useSettingsStore((s) => s.smsSettings);
+  const smsCloudDevice = useSettingsStore((s) => s.smsCloudDevice);
+  const anyBotModule =
+    Boolean(whatsAppSettings?.whatsappModule) ||
+    Boolean(smsSettings?.moduleEnabled) ||
+    Boolean(smsCloudDevice?.entitled);
   const [form, setForm] = useState({
     avgDays: "1",
     enabled: false,
@@ -494,7 +682,13 @@ function BotCard() {
     }
   }, [shopSettings, loaded]);
 
+  const locked = !anyBotModule;
+
   const handleSave = useCallback(async () => {
+    if (locked) {
+      toast.info(t("pro_only_upsell"));
+      return;
+    }
     setSaving(true);
     try {
       await saveShopSettings({
@@ -509,7 +703,7 @@ function BotCard() {
     } finally {
       setSaving(false);
     }
-  }, [form, saveShopSettings]);
+  }, [form, locked, saveShopSettings, t]);
 
   return (
     <div className="mt-4 rounded-2xl bg-surface-container-low p-5">
@@ -517,7 +711,13 @@ function BotCard() {
         <Switch
           ariaLabel={t("bot_ai_enabled")}
           checked={form.enabled}
-          onChange={(enabled) => setForm((f) => ({ ...f, enabled }))}
+          onChange={(enabled) => {
+            if (enabled && locked) {
+              toast.info(t("pro_only_upsell"));
+              return;
+            }
+            setForm((f) => ({ ...f, enabled }));
+          }}
         />
         <span className="font-medium text-on-surface text-sm">
           {t("bot_ai_enabled")}
@@ -526,49 +726,59 @@ function BotCard() {
       <p className="mt-1 text-on-surface-variant text-xs">
         {t("bot_ai_enabled_help")}
       </p>
+      {locked && (
+        <p className="mt-2 rounded-xl bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
+          {t("pro_only_upsell")}
+        </p>
+      )}
 
-      <div className="mt-4 space-y-4">
-        <Field hint={t("bot_info_text_help")} label={t("bot_info_text_label")}>
-          <Textarea
-            onChange={(e) => setForm((f) => ({ ...f, info: e.target.value }))}
-            placeholder={t("bot_info_text_placeholder")}
-            rows={4}
-            value={form.info}
-          />
-        </Field>
-        <Field hint={t("bot_avg_days_help")} label={t("bot_avg_days_label")}>
-          <Input
-            min={0}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, avgDays: e.target.value }))
-            }
-            type="number"
-            value={form.avgDays}
-          />
-        </Field>
-        <Field
-          hint={t("bot_fallback_text_help")}
-          label={t("bot_fallback_text_label")}
-        >
-          <Textarea
-            onChange={(e) =>
-              setForm((f) => ({ ...f, fallback: e.target.value }))
-            }
-            placeholder={t("bot_fallback_text_placeholder")}
-            rows={2}
-            value={form.fallback}
-          />
-        </Field>
-        <Button
-          className="flex min-h-11"
-          disabled={saving}
-          loading={saving}
-          onClick={handleSave}
-          size="sm"
-        >
-          {saving ? t("settings_saving") : t("save_changes")}
-        </Button>
-      </div>
+      {!locked && (
+        <div className="mt-4 space-y-4">
+          <Field
+            hint={t("bot_info_text_help")}
+            label={t("bot_info_text_label")}
+          >
+            <Textarea
+              onChange={(e) => setForm((f) => ({ ...f, info: e.target.value }))}
+              placeholder={t("bot_info_text_placeholder")}
+              rows={4}
+              value={form.info}
+            />
+          </Field>
+          <Field hint={t("bot_avg_days_help")} label={t("bot_avg_days_label")}>
+            <Input
+              min={0}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, avgDays: e.target.value }))
+              }
+              type="number"
+              value={form.avgDays}
+            />
+          </Field>
+          <Field
+            hint={t("bot_fallback_text_help")}
+            label={t("bot_fallback_text_label")}
+          >
+            <Textarea
+              onChange={(e) =>
+                setForm((f) => ({ ...f, fallback: e.target.value }))
+              }
+              placeholder={t("bot_fallback_text_placeholder")}
+              rows={2}
+              value={form.fallback}
+            />
+          </Field>
+          <Button
+            className="flex min-h-11"
+            disabled={saving}
+            loading={saving}
+            onClick={handleSave}
+            size="sm"
+          >
+            {saving ? t("settings_saving") : t("save_changes")}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -577,7 +787,6 @@ export default function ChannelSettings({
   smsSettings,
   whatsAppSettings,
   onFetchWhatsAppSettings,
-  onRegisterSmsWebhook,
   onSaveSmsSettings,
   onSaveWhatsAppSettings,
   onSendSmsTest,
@@ -599,10 +808,16 @@ export default function ChannelSettings({
     evolutionInstance: "",
     evolutionApiKey: "",
     disclaimerAccepted: false,
+    botDisclaimerAccepted: false,
+    botDailyCap: "200",
   });
   const [whatsAppSaving, setWhatsAppSaving] = useState(false);
   const [whatsAppLoaded, setWhatsAppLoaded] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  // Decisão 2026-11-23: todo o WhatsApp é Pro — sem o módulo o card
+  // fica visível mas locked; clicar nas ações informa que é Pro-only.
+  const waLocked = !whatsAppSettings?.whatsappModule;
+  const fetchWaTemplates = useSettingsStore((s) => s.fetchWaTemplates);
 
   useEffect(() => {
     if (!whatsAppLoaded) {
@@ -637,11 +852,17 @@ export default function ChannelSettings({
         evolutionInstance: whatsAppSettings.evolutionInstance ?? "",
         evolutionApiKey: prev.evolutionApiKey || "",
         disclaimerAccepted: false,
+        botDisclaimerAccepted: false,
+        botDailyCap: String(whatsAppSettings.botDailyCap ?? 200),
       }));
     }
   }, [whatsAppSettings, whatsAppSaving]);
 
   const handleWhatsAppSave = useCallback(async () => {
+    if (waLocked && whatsAppForm.enabled) {
+      toast.info(t("pro_only_upsell"));
+      return;
+    }
     setWhatsAppSaving(true);
     try {
       await onSaveWhatsAppSettings({
@@ -669,9 +890,22 @@ export default function ChannelSettings({
               evolutionInstance: whatsAppForm.evolutionInstance,
               evolutionApiKey: whatsAppForm.evolutionApiKey || undefined,
               disclaimerAccepted: whatsAppForm.disclaimerAccepted,
+              ...(whatsAppForm.botDisclaimerAccepted
+                ? { botDisclaimerAccepted: true }
+                : {}),
+              botDailyCap:
+                Number.parseInt(whatsAppForm.botDailyCap, 10) || undefined,
             }
           : {}),
       });
+      // O trackingBaseUrl muda os blocos {{if}} dos corpos a submeter —
+      // sem refetch a lista continuava a mostrar os specs antigos como
+      // "prontos" enquanto o backend re-sincronizava em background. Um
+      // segundo fetch apanha o resultado persistido desse sync.
+      fetchWaTemplates().catch(() => null);
+      setTimeout(() => {
+        fetchWaTemplates().catch(() => null);
+      }, 4000);
     } catch {
       // Error is stored in Zustand state
     } finally {
@@ -681,6 +915,9 @@ export default function ChannelSettings({
     whatsAppForm,
     onSaveWhatsAppSettings,
     whatsAppSettings?.remarketingModule,
+    waLocked,
+    fetchWaTemplates,
+    t,
   ]);
 
   return (
@@ -694,9 +931,13 @@ export default function ChannelSettings({
           <input
             checked={whatsAppForm.enabled}
             className="sr-only"
-            onChange={(e) =>
-              setWhatsAppForm((f) => ({ ...f, enabled: e.target.checked }))
-            }
+            onChange={(e) => {
+              if (e.target.checked && waLocked) {
+                toast.info(t("pro_only_upsell"));
+                return;
+              }
+              setWhatsAppForm((f) => ({ ...f, enabled: e.target.checked }));
+            }}
             type="checkbox"
           />
           <span
@@ -718,6 +959,11 @@ export default function ChannelSettings({
             {t("whatsapp_enabled")}
           </span>
         </label>
+        {waLocked && (
+          <p className="mt-2 rounded-xl bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
+            {t("pro_only_upsell")}
+          </p>
+        )}
 
         {whatsAppForm.enabled && (
           <div className="mt-5 space-y-4">
@@ -758,6 +1004,10 @@ export default function ChannelSettings({
             </Field>
             {whatsAppForm.transport === "evolution" ? (
               <EvolutionSection
+                botDisclaimerStored={
+                  whatsAppSettings?.botDisclaimerAccepted ?? false
+                }
+                botSuspended={Boolean(whatsAppSettings?.botSuspendedAt)}
                 disclaimerStored={whatsAppSettings?.disclaimerAccepted ?? false}
                 form={whatsAppForm}
                 hasApiKey={whatsAppSettings?.hasEvolutionApiKey ?? false}
@@ -766,6 +1016,7 @@ export default function ChannelSettings({
                 }
                 savedInstance={whatsAppSettings?.evolutionInstance ?? null}
                 savedUrl={whatsAppSettings?.evolutionUrl ?? null}
+                whatsappModule={whatsAppSettings?.whatsappModule ?? false}
               />
             ) : (
               <MetaWhatsAppFields
@@ -796,7 +1047,6 @@ export default function ChannelSettings({
       </div>
 
       <SmsCard
-        onRegisterWebhook={onRegisterSmsWebhook}
         onSave={onSaveSmsSettings}
         onSendTest={onSendSmsTest}
         smsSettings={smsSettings}

@@ -5,22 +5,29 @@ import type { FastifyBaseLogger } from "fastify";
 import { decryptSecret, isEncrypted } from "../lib/crypto.js";
 import { assertNotDemoMode } from "../lib/demo.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
-import { type BotReplyCtx, handleInboundMessage } from "./bot-intents.js";
+import { isModuleEnabled } from "../utils/modules.js";
+import {
+  type BotReplyCtx,
+  handleInboundMessage,
+  isStopText,
+  revokeConsentForPhone,
+} from "./bot-intents.js";
+import { recordInboundMessage } from "./inbox.service.js";
 import type { NotifyContext } from "./job.service.js";
 import { formatPhone } from "./notification-sender.js";
 
 /**
- * Canal SMS local (free) via SMS Gateway for Android em modo Local
- * Server (sms-gate.app / capcom6). O telemóvel da loja expõe uma API HTTP
- * na LAN: a app envia com POST /message (Basic auth) e recebe inbound
- * através de um webhook que regista no próprio aparelho. Nada passa pela
- * cloud — o único "sair da loja" é o SMS na rede móvel. O módulo Pro
- * "sms" gateia apenas transportes geridos (provider comercial via
- * cloud), nunca este gateway.
+ * Canal SMS local via SMS Gateway for Android em modo Local Server
+ * (sms-gate.app / capcom6). O telemóvel da loja expõe uma API HTTP na
+ * LAN: a app envia com POST /message (Basic auth) e recebe inbound
+ * através de um webhook que regista no próprio aparelho. Nada passa
+ * pela cloud — o único "sair da loja" é o SMS na rede móvel.
+ * Decisão 2026-11-23: todo o SMS é Pro — este gateway fica como
+ * fallback LAN do caminho Cloud e exige o módulo "sms" fresco, na
+ * resolução da config (outbox) e nas rotas.
  */
 
 const TRAILING_SLASH_RE = /\/+$/;
-const WEBHOOK_ID = "oficinaos-inbound";
 
 export interface SmsConfig {
   password: string;
@@ -28,7 +35,7 @@ export interface SmsConfig {
   user: string;
 }
 
-interface SendResult {
+export interface SendResult {
   error?: string;
   success: boolean;
 }
@@ -130,63 +137,6 @@ export async function checkSmsGateway(config: SmsConfig): Promise<SendResult> {
   }
 }
 
-/**
- * Regista o webhook sms:received no telemóvel para o callbackUrl indicado.
- * Remove primeiro um registo "oficinaos-inbound" anterior — o registo é
- * idempotente e sobrevive a re-saves das settings.
- */
-export async function registerSmsWebhook(
-  config: SmsConfig,
-  callbackUrl: string
-): Promise<SendResult> {
-  assertNotDemoMode();
-  try {
-    const listRes = await fetch(`${config.url}/webhooks`, {
-      headers: { Authorization: authHeader(config) },
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (listRes.ok) {
-      const hooks = (await listRes.json()) as { id: string }[];
-      for (const hook of Array.isArray(hooks) ? hooks : []) {
-        if (hook.id === WEBHOOK_ID) {
-          await fetch(`${config.url}/webhooks/${hook.id}`, {
-            headers: { Authorization: authHeader(config) },
-            method: "DELETE",
-            signal: AbortSignal.timeout(10_000),
-          }).catch(() => null);
-        }
-      }
-    }
-
-    const response = await fetch(`${config.url}/webhooks`, {
-      body: JSON.stringify({
-        event: "sms:received",
-        id: WEBHOOK_ID,
-        url: callbackUrl,
-      }),
-      headers: {
-        Authorization: authHeader(config),
-        "Content-Type": "application/json",
-      },
-      method: "POST",
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (response.ok) {
-      return { success: true };
-    }
-    const body = await response.text();
-    return {
-      success: false,
-      error: `SMS gateway ${response.status}: ${body.slice(0, 200)}`,
-    };
-  } catch (err) {
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : "Unknown error",
-    };
-  }
-}
-
 export function generateSmsWebhookToken(): string {
   return randomBytes(24).toString("hex");
 }
@@ -205,7 +155,36 @@ export async function handleInboundSms(
   text: string
 ): Promise<void> {
   const settings = await getOrCreateShopSettings(prisma);
-  if (!settings.smsEnabled) {
+  // Defesa em profundidade: a rota já gateia, mas uma resposta do bot
+  // é um envio — grátis não envia nada (decisão 2026-11-23). "ai-inbox"
+  // sem "sms" entra: só grava na caixa de entrada, nunca responde.
+  if (
+    !(
+      settings.smsEnabled &&
+      (isModuleEnabled(settings, "sms") ||
+        isModuleEnabled(settings, "ai-inbox"))
+    )
+  ) {
+    return;
+  }
+  const modules = Array.isArray(settings.cloudEntitlements)
+    ? (settings.cloudEntitlements as string[]).filter(
+        (m): m is string => typeof m === "string"
+      )
+    : [];
+  const inboxEnabled = isModuleEnabled(settings, "ai-inbox");
+  // §G.7 (paralelo SMS): com "ai-inbox" mas sem o módulo "sms" o inbound
+  // grava-se na caixa de entrada — o bot não responde. PARAR/STOP é a
+  // exceção legal: revoga consentimento mesmo sem módulo.
+  if (inboxEnabled && !isModuleEnabled(settings, "sms")) {
+    await recordInboundMessage(prisma, log, {
+      channel: "sms",
+      phone: fromPhone,
+      text,
+    }).catch((err) => log.warn({ err }, "sms: inbox record falhou"));
+    if (isStopText(text)) {
+      await revokeConsentForPhone(prisma, fromPhone).catch(() => undefined);
+    }
     return;
   }
   const config = decryptSmsConfig({
@@ -217,11 +196,6 @@ export async function handleInboundSms(
     return;
   }
 
-  const modules = Array.isArray(settings.cloudEntitlements)
-    ? (settings.cloudEntitlements as string[]).filter(
-        (m): m is string => typeof m === "string"
-      )
-    : [];
   const cloudToken = settings.cloudShopTokenEncrypted
     ? decryptSecret(settings.cloudShopTokenEncrypted)
     : null;
@@ -241,6 +215,7 @@ export async function handleInboundSms(
           }
         : undefined,
     currency: settings.currency ?? "EUR",
+    inbox: { channel: "sms", enabled: inboxEnabled },
     log,
     notifyCtx,
     portalApiUrl: settings.cloudApiUrl,

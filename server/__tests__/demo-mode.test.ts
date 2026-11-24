@@ -397,8 +397,10 @@ describe("route classification — every /api route is decided", () => {
     "GET /api/settings/invoicing",
     "GET /api/settings/shop",
     "GET /api/settings/sms",
+    "GET /api/settings/sms-cloud-device",
     "GET /api/settings/update-check",
     "GET /api/settings/whatsapp",
+    "GET /api/settings/whatsapp/templates",
     "GET /api/setup/status",
     "GET /api/sign-sessions/:token",
     "GET /api/supplier-rmas",
@@ -498,8 +500,10 @@ describe("route classification — every /api route is decided", () => {
     "HEAD /api/settings/invoicing",
     "HEAD /api/settings/shop",
     "HEAD /api/settings/sms",
+    "HEAD /api/settings/sms-cloud-device",
     "HEAD /api/settings/update-check",
     "HEAD /api/settings/whatsapp",
+    "HEAD /api/settings/whatsapp/templates",
     "HEAD /api/setup/status",
     "HEAD /api/sign-sessions/:token",
     "HEAD /api/supplier-rmas",
@@ -580,6 +584,7 @@ describe("route classification — every /api route is decided", () => {
     "POST /api/public/quote-respond",
     "POST /api/public/sign/:token",
     "POST /api/public/sms/inbound/:token",
+    "POST /api/public/whatsapp/evolution/inbound/:token",
     "POST /api/purchase-orders",
     "POST /api/receipts/:id/print",
     "POST /api/repairs",
@@ -942,14 +947,6 @@ describe("outbound choke points — no fetch is ever reached", () => {
         ),
     ],
     [
-      "registerSmsWebhook",
-      async () =>
-        (await import("../services/sms.service.js")).registerSmsWebhook(
-          { url: "http://x", user: "u", password: "p" },
-          "http://cb"
-        ),
-    ],
-    [
       "checkSmsGateway",
       async () =>
         (await import("../services/sms.service.js")).checkSmsGateway({
@@ -972,7 +969,8 @@ describe("outbound choke points — no fetch is ever reached", () => {
         (await import("../services/evolution.service.js")).sendEvolutionText(
           { apiKey: "k", baseUrl: "http://x", instance: "i" },
           "910000001",
-          "hi"
+          "hi",
+          null
         ),
     ],
     [

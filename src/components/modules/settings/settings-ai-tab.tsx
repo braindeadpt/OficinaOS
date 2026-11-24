@@ -10,6 +10,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import SettingsAiInboxSection from "@/components/modules/settings/settings-ai-inbox-section";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -914,6 +915,10 @@ export default function SettingsAiTab({
           />
         </div>
       )}
+
+      {/* «Ligar a outra IA» — módulo Pro ai-inbox (§G.9): escondido sem
+          entitlement; tokens MCP e preferências vivem na Cloud/app. */}
+      <SettingsAiInboxSection />
 
       {deleteTarget && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-overlay">

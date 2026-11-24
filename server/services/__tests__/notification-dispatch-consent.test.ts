@@ -36,11 +36,19 @@ import { notify } from "../notification-dispatch.js";
 
 const app = { prisma: {} as any };
 
+// Decisão 2026-11-23: todo o envio é Pro — as shops de teste precisam
+// dos entitlements frescos para o dispatch enfileirar WA/SMS.
+const PRO_SHOP = {
+  cloudEntitlements: ["sms", "whatsapp-bot"],
+  cloudSyncedAt: new Date(),
+};
+
 describe("notify: WHATSAPP enqueue consent gate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.createManyAndReturnInAppNotifications.mockResolvedValue([]);
     mocks.findShopSettingsUnique.mockResolvedValue({
+      ...PRO_SHOP,
       shopName: "Loja Teste",
       whatsappEnabled: true,
     });
@@ -129,7 +137,10 @@ describe("notify: WHATSAPP enqueue consent gate", () => {
       phone: "+351910000001",
       whatsappConsent: true,
     });
-    mocks.findShopSettingsUnique.mockResolvedValue({ whatsappEnabled: true });
+    mocks.findShopSettingsUnique.mockResolvedValue({
+      ...PRO_SHOP,
+      whatsappEnabled: true,
+    });
 
     await notify(app, {
       context: { customerName: "Ana", recipientPhone: "+351910000001" },
@@ -164,11 +175,69 @@ describe("notify: WHATSAPP enqueue consent gate", () => {
     expect(call[1].templateVars.shopName).toBe("Override");
   });
 
+  it("does not enqueue WhatsApp without the whatsapp-bot module", async () => {
+    // Canal ligado e consentido, mas sem entitlement — grátis não envia.
+    mocks.findManyNotificationTemplatesByName.mockResolvedValue([
+      { body: "hi {{customerName}}", channel: "WHATSAPP" },
+    ]);
+    mocks.findShopSettingsUnique.mockResolvedValue({
+      cloudEntitlements: [],
+      cloudSyncedAt: new Date(),
+      shopName: "Loja Teste",
+      whatsappEnabled: true,
+    });
+    mocks.findCustomerByPhone.mockResolvedValue({
+      phone: "+351910000001",
+      whatsappConsent: true,
+    });
+
+    await notify(app, {
+      context: { customerName: "Ana", recipientPhone: "+351910000001" },
+      eventName: "job_done",
+      recipients: {},
+    });
+
+    expect(mocks.queueNotification).not.toHaveBeenCalled();
+  });
+
+  it("does not enqueue SMS without the sms module (fallback included)", async () => {
+    mocks.findManyNotificationTemplatesByName.mockResolvedValue([
+      { body: "hi {{customerName}}", channel: "WHATSAPP" },
+    ]);
+    mocks.findShopSettingsUnique.mockResolvedValue({
+      cloudEntitlements: ["whatsapp-bot"],
+      cloudSyncedAt: new Date(),
+      shopName: "Loja Teste",
+      smsEnabled: true,
+      whatsappEnabled: true,
+    });
+    mocks.findCustomerByPhone.mockResolvedValue({
+      phone: "+351910000001",
+      whatsappConsent: true,
+    });
+
+    await notify(app, {
+      context: { customerName: "Ana", recipientPhone: "+351910000001" },
+      eventName: "job_done",
+      recipients: {},
+    });
+
+    // WHATSAPP enfileira (módulo ativo) — SMS e o fallback não.
+    const channels = mocks.queueNotification.mock.calls.map(
+      (c) => c[1].channel
+    );
+    expect(channels).toEqual(["WHATSAPP"]);
+  });
+
   it("does not enqueue WhatsApp when the channel is disabled", async () => {
     mocks.findManyNotificationTemplatesByName.mockResolvedValue([
       { body: "hi {{customerName}}", channel: "WHATSAPP" },
     ]);
     mocks.findShopSettingsUnique.mockResolvedValue({
+      ...PRO_SHOP,
+      // Só whatsapp-bot — sem o módulo "sms" o fallback SMS não corre,
+      // senão o teste media o fallback e não o toggle WhatsApp.
+      cloudEntitlements: ["whatsapp-bot"],
       shopName: "Loja Teste",
       whatsappEnabled: false,
     });
@@ -191,6 +260,7 @@ describe("notify: WHATSAPP enqueue consent gate", () => {
       { body: "hi {{customerName}}", channel: "WHATSAPP" },
     ]);
     mocks.findShopSettingsUnique.mockResolvedValue({
+      ...PRO_SHOP,
       shopName: "Loja Teste",
       trackingBaseUrl: "https://loja.example.com/",
       whatsappEnabled: true,
@@ -249,6 +319,7 @@ describe("notify: WHATSAPP enqueue consent gate", () => {
       { body: "hi {{customerName}}", channel: "WHATSAPP" },
     ]);
     mocks.findShopSettingsUnique.mockResolvedValue({
+      ...PRO_SHOP,
       reviewUrl: "https://g.page/r/abc123/review",
       shopName: "Loja Teste",
       whatsappEnabled: true,

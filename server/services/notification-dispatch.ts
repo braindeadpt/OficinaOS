@@ -9,11 +9,13 @@ import {
 import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import { logger } from "../utils/logger.js";
+import { isModuleEnabled } from "../utils/modules.js";
 import {
   queueNotification,
   STAFF_INITIATED_TEMPLATES,
 } from "./notification-outbox.service.js";
 import { renderTemplate } from "./notification-renderer.js";
+import { metaConditionalVars } from "./whatsapp-templates.service.js";
 
 interface NotifyEvent {
   context: {
@@ -39,6 +41,8 @@ interface NotifyEvent {
 
 interface ChannelHandlerContext {
   jobId?: string;
+  /** Vars de {{if}} garantidas pela config — mantêm-se no template Meta. */
+  metaKeep?: Record<string, boolean>;
   smsEnabled: boolean;
   templateBody: string;
   templateVars: Record<string, string>;
@@ -153,6 +157,7 @@ const whatsAppHandler: ChannelHandler = {
       channel: "WHATSAPP",
       deliverBy: event.deliverBy,
       jobId: event.jobId,
+      metaKeep: context.metaKeep,
       recipientPhone: phone,
       templateBody: context.templateBody,
       templateName: event.eventName,
@@ -229,16 +234,30 @@ async function resolveShopNotificationConfig(prisma: DbClient): Promise<{
 }> {
   try {
     const shop = await findShopSettingsUnique(prisma);
+    // Decisão 2026-11-23: toda a mensagem é Pro — sem o módulo fresco
+    // ("whatsapp-bot"/"sms") o handler não cria outbox entries, mesmo
+    // com o toggle e o transporte configurados.
+    const waModule = isModuleEnabled(shop, "whatsapp-bot");
+    const smsModule = isModuleEnabled(shop, "sms");
+    if (shop?.whatsappEnabled && !waModule) {
+      logger.info(
+        '[notify] WHATSAPP channel unavailable — module "whatsapp-bot" not entitled; outbound suppressed'
+      );
+    }
+    if (shop?.smsEnabled && !smsModule) {
+      logger.info(
+        '[notify] SMS channel unavailable — module "sms" not entitled; outbound suppressed'
+      );
+    }
     return {
       currency: shop?.currency ?? "EUR",
       reviewUrl: shop?.reviewUrl ?? null,
       shopName: shop?.shopName ?? "",
-      // SMS local (gateway Android na LAN) é free — o módulo Pro "sms"
-      // gateia apenas transportes geridos (provider via cloud), que se
-      // resolvem pela configuração, não pelo toggle do gateway.
-      smsEnabled: Boolean(shop?.smsEnabled),
+      // Com o módulo "sms" a loja envia pela Cloud/device mesmo sem
+      // gateway LAN ligado; sem módulo não há SMS em modo nenhum.
+      smsEnabled: smsModule,
       trackingBaseUrl: shop?.trackingBaseUrl ?? null,
-      whatsappEnabled: shop?.whatsappEnabled ?? false,
+      whatsappEnabled: Boolean(shop?.whatsappEnabled) && waModule,
     };
   } catch (err) {
     // Notifications are best-effort: never block dispatch on a
@@ -364,6 +383,7 @@ export async function notify(
     }
     await handler.handle(app.prisma, app, event, {
       jobId: event.jobId,
+      metaKeep: metaConditionalVars(shop),
       smsEnabled: shop.smsEnabled,
       templateBody: template.body,
       templateVars,

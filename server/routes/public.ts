@@ -6,6 +6,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { loadEnv } from "../config/env.js";
 import { accessUrls } from "../lib/mdns.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
+import { handleEvolutionInbound } from "../services/evolution-bot.service.js";
 import { submitPreCheckRequest } from "../services/intake-request.service.js";
 import { respondToQuote } from "../services/job-quote.service.js";
 import {
@@ -14,6 +15,7 @@ import {
 } from "../services/signature-session.service.js";
 import { handleInboundSms } from "../services/sms.service.js";
 import { createCodeLockout } from "../utils/code-lockout.js";
+import { isModuleEnabled } from "../utils/modules.js";
 import { parseImageDataUrl, toPublicShop } from "../utils/public-shop.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
@@ -286,10 +288,24 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
         event?: string;
         payload?: { message?: string; phoneNumber?: string; sender?: string };
       };
+      // Grátis não envia nada (decisão 2026-11-23): inbound responde
+      // sempre 200 sem processar (sem bot, sem gravar) — incluindo
+      // PARAR/STOP.
+      // Pro processa aqui quando o device posta à LAN — em modo servidor
+      // é a Cloud que fila e o poller da app trata. isModuleEnabled
+      // exige cloudSyncedAt fresco (<24h): sem ele uma loja desligada da
+      // Cloud respondia para sempre com a lista velha.
       if (body.event === "sms:received") {
         const from = body.payload?.sender ?? body.payload?.phoneNumber;
         const text = body.payload?.message;
-        if (from && text) {
+        // "ai-inbox" sem "sms" entra também: handleInboundSms grava a
+        // mensagem na caixa de entrada e devolve sem responder (§G.7).
+        if (
+          from &&
+          text &&
+          (isModuleEnabled(settings, "sms") ||
+            isModuleEnabled(settings, "ai-inbox"))
+        ) {
           await handleInboundSms(
             app.prisma,
             app.log,
@@ -311,6 +327,48 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
         type: "object",
       },
       summary: "Inbound SMS webhook from the local sms-gate device",
+      tags: ["public"],
+    },
+  });
+
+  /**
+   * Webhook inbound da Evolution API (LAN) — MESSAGES_UPSERT. O segredo é
+   * o path (o webhook não manda auth) — `evolutionWebhookToken`, próprio e
+   * separado do SMS: quem lê a config do webhook na Evolution não pode
+   * usar a credencial para chamar a rota SMS (decisões de orçamento).
+   * A app regista este callback na instância ao ligar o bot (§5.7).
+   */
+  app.post("/whatsapp/evolution/inbound/:token", {
+    handler: async (req, reply) => {
+      const { token } = req.params as { token: string };
+      const settings = await getOrCreateShopSettings(app.prisma);
+      if (
+        !(
+          settings.whatsappEnabled &&
+          settings.whatsappTransport === "evolution" &&
+          settings.evolutionWebhookToken &&
+          tokenMatches(settings.evolutionWebhookToken, token)
+        )
+      ) {
+        throw new AppError("NOT_FOUND");
+      }
+      await handleEvolutionInbound(
+        app.prisma,
+        app.log,
+        { prisma: app.prisma, wsBroadcast: app.wsBroadcast },
+        (req.body ?? {}) as Parameters<typeof handleEvolutionInbound>[3]
+      );
+      // Idem SMS: 200 sempre — não revelar parsing/auth a quem chama.
+      return reply.send({ ok: true });
+    },
+    schema: {
+      body: { type: "object", additionalProperties: true },
+      params: {
+        properties: { token: { type: "string" } },
+        required: ["token"],
+        type: "object",
+      },
+      summary: "Inbound WhatsApp webhook from the local Evolution instance",
       tags: ["public"],
     },
   });

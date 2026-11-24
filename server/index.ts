@@ -7,8 +7,10 @@ import swaggerUi from "@fastify/swagger-ui";
 import websocket from "@fastify/websocket";
 import Fastify, { LogController } from "fastify";
 import { loadEnv } from "./config/env.js";
+import { startAiInboxLink } from "./jobs/ai-inbox-link.js";
 import { setAppInstance } from "./jobs/app-registry.js";
 import { startCloudPoller } from "./jobs/cloud-poller.js";
+import { startMessagingPoller } from "./jobs/messaging-poller.js";
 import { startOverdueScheduler } from "./jobs/overdue-scheduler.js";
 import { startPickupReminderScheduler } from "./jobs/pickup-reminder-scheduler.js";
 import { startMdnsResponder } from "./lib/mdns.js";
@@ -150,9 +152,13 @@ const noop = () => undefined;
 const stopOverdue = startOverdueScheduler(app);
 const stopPickupReminder = startPickupReminderScheduler(app);
 const stopCloudPoller = env.DEMO_MODE ? noop : startCloudPoller(app);
+const stopMessagingPoller = env.DEMO_MODE ? noop : startMessagingPoller(app);
 const stopLowStock = startLowStockScheduler(app);
 const stopRemarketing = env.DEMO_MODE ? noop : startRemarketingScheduler(app);
 const stopOutboxWorker = env.DEMO_MODE ? noop : startOutboxWorker(app.prisma);
+// Ligação permanente app→Cloud do módulo "ai-inbox" (§G.6): supervisor
+// interno — só abre o SSE quando o entitlement está ativo.
+const stopAiInboxLink = env.DEMO_MODE ? noop : startAiInboxLink(app);
 // Bundled device catalog (brands/models) — version-gated, upserts once
 // per catalog release, never deletes. Safe in DEMO_MODE: local DB only.
 syncDeviceCatalogIfStale(app.prisma).catch((err) => {
@@ -265,9 +271,11 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
     stopOverdue();
     stopPickupReminder();
     stopCloudPoller();
+    stopMessagingPoller();
     stopLowStock();
     stopRemarketing();
     stopOutboxWorker();
+    stopAiInboxLink();
     clearInterval(cleanupHandle);
     mdns?.close();
     await app.close();

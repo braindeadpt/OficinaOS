@@ -1,10 +1,10 @@
 /**
- * Evolution API (v2) — transporte WhatsApp local e free (não requer
- * entitlement). Corre num container na LAN da loja (Baileys /
- * WhatsApp Web multi-device); não é a API oficial Meta e pode resultar
- * em ban do número — daí o disclaimer obrigatório antes de ativar.
- * O módulo Pro "whatsapp-bot" gateia apenas as funções oficiais
- * (relay Meta na cloud + bot inbound), nunca este transporte.
+ * Evolution API (v2) — transporte WhatsApp local Pro. Corre num
+ * container na LAN da loja (Baileys / WhatsApp Web multi-device); não é
+ * a API oficial Meta e pode resultar em ban do número — daí o
+ * disclaimer obrigatório antes de ativar. Decisão 2026-11-23: toda a
+ * mensagem WhatsApp é Pro — este transporte exige o módulo
+ * "whatsapp-bot" como os restantes (Meta local + relay cloud).
  *
  * Contrato validado com evoapicloud/evolution-api:v2.3.6:
  *   POST /instance/create            → cria instância (qrcode, hash)
@@ -16,6 +16,7 @@
  * instância). syncFullHistory=false — nunca guardamos histórico.
  */
 import { assertNotDemoMode } from "../lib/demo.js";
+import { isModuleEnabled } from "../utils/modules.js";
 
 export interface EvolutionConfig {
   apiKey: string;
@@ -71,8 +72,23 @@ function toDigits(phone: string): string {
 export async function sendEvolutionText(
   config: EvolutionConfig,
   to: string,
-  text: string
+  text: string,
+  settings: {
+    cloudEntitlements?: unknown;
+    cloudSyncedAt?: Date | null;
+  } | null
 ): Promise<{ error?: string; success: boolean }> {
+  // Demo bloqueia qualquer saída antes de se olhar para o entitlement.
+  assertNotDemoMode();
+  // Defesa em profundidade: o resolve já gateia o canal, mas uma
+  // revogação entre a resolução e o envio não passa — sem o módulo
+  // "whatsapp-bot" fresco não sai texto pela Evolution.
+  if (!isModuleEnabled(settings, "whatsapp-bot")) {
+    return {
+      error: "Módulo whatsapp-bot não está ativo (OficinaOS Pro)",
+      success: false,
+    };
+  }
   const res = await evoFetch(
     config.baseUrl,
     config.apiKey,
@@ -90,6 +106,58 @@ export async function sendEvolutionText(
       (res.body as { response?: { message?: string[] } } | null)?.response
         ?.message?.[0] ?? (res.body as { message?: string } | null)?.message;
     return { error: msg ?? `Evolution API ${res.status}`, success: false };
+  }
+  return { success: true };
+}
+
+/** Presença "a escrever…" antes da resposta do bot (§5.7) — best-effort. */
+export async function sendEvolutionPresence(
+  config: EvolutionConfig,
+  to: string,
+  delayMs: number
+): Promise<void> {
+  await evoFetch(
+    config.baseUrl,
+    config.apiKey,
+    `/chat/sendPresence/${config.instance}`,
+    {
+      body: {
+        number: toDigits(to),
+        options: { delay: delayMs, presence: "composing" },
+      },
+      method: "POST",
+    }
+  );
+}
+
+/**
+ * Regista o webhook inbound na instância — a Evolution passa a POSTar
+ * MESSAGES_UPSERT ao callback (§5.7). webhookByEvents: false porque a
+ * rota recebe o envelope completo e filtra o evento.
+ */
+export async function setEvolutionWebhook(
+  config: EvolutionConfig,
+  callbackUrl: string
+): Promise<{ error?: string; success: boolean }> {
+  const res = await evoFetch(
+    config.baseUrl,
+    config.apiKey,
+    `/webhook/set/${config.instance}`,
+    {
+      body: {
+        webhook: {
+          enabled: true,
+          events: ["MESSAGES_UPSERT"],
+          url: callbackUrl,
+          webhookBase64: false,
+          webhookByEvents: false,
+        },
+      },
+      method: "POST",
+    }
+  );
+  if (!res?.ok) {
+    return { error: "Evolution recusou o webhook", success: false };
   }
   return { success: true };
 }

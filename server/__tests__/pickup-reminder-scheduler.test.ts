@@ -1,20 +1,43 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  decryptSmsConfig: vi.fn(() => null),
+  getSmsDeviceStatus: vi.fn(
+    async (): Promise<{ sendable: boolean } | null> => null
+  ),
   notify: vi.fn().mockResolvedValue(undefined),
+  resolveWhatsAppChannel: vi.fn((): { mode: "meta" } | null => ({
+    mode: "meta" as const,
+  })),
+  sendWhatsAppTemplateVia: vi.fn(async () => ({ success: true })),
 }));
 
 vi.mock("../services/notification-dispatch.js", () => ({
   notify: mocks.notify,
 }));
 
+vi.mock("../services/whatsapp-channel.js", () => ({
+  resolveWhatsAppChannel: mocks.resolveWhatsAppChannel,
+  sendWhatsAppTemplateVia: mocks.sendWhatsAppTemplateVia,
+}));
+
+vi.mock("../services/sms.service.js", () => ({
+  decryptSmsConfig: mocks.decryptSmsConfig,
+}));
+
+vi.mock("../services/sms-cloud.service.js", () => ({
+  getSmsDeviceStatus: mocks.getSmsDeviceStatus,
+}));
+
 vi.useFakeTimers();
 
 const mockQueryRaw = vi.fn();
 const mockExecuteRaw = vi.fn().mockResolvedValue(1);
-const mockFindShopSettings = vi
-  .fn()
-  .mockResolvedValue({ whatsappEnabled: true });
+const mockFindShopSettings = vi.fn().mockResolvedValue({
+  cloudEntitlements: ["whatsapp-bot"],
+  cloudSyncedAt: new Date(),
+  whatsappEnabled: true,
+});
 const mockLog = { error: vi.fn(), warn: vi.fn() };
 
 const mockApp = {
@@ -35,7 +58,11 @@ describe("startPickupReminderScheduler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockExecuteRaw.mockResolvedValue(1);
-    mockFindShopSettings.mockResolvedValue({ whatsappEnabled: true });
+    mockFindShopSettings.mockResolvedValue({
+      cloudEntitlements: ["whatsapp-bot"],
+      cloudSyncedAt: new Date(),
+      whatsappEnabled: true,
+    });
   });
 
   it("selects only jobs still in DONE status (delivered/returned/cancelled are excluded by the status predicate)", async () => {
@@ -245,6 +272,29 @@ describe("startPickupReminderScheduler", () => {
       smsEnabled: false,
       whatsappEnabled: false,
     });
+
+    const stop = startPickupReminderScheduler(mockApp);
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(mockQueryRaw).not.toHaveBeenCalled();
+    expect(mocks.notify).not.toHaveBeenCalled();
+
+    stop();
+  });
+
+  it("skips the tick when the module is fresh but no transport resolves", async () => {
+    // "whatsapp-bot" ativo + toggle ligado ≠ canal usável: sem
+    // credenciais o resolve devolve null e o claim marcava a reparação
+    // 72 h sem entregar nada.
+    mockFindShopSettings.mockResolvedValue({
+      cloudApiUrl: "https://cloud",
+      cloudEntitlements: ["whatsapp-bot", "sms"],
+      cloudShopTokenEncrypted: "x",
+      cloudSyncedAt: new Date(),
+      whatsappEnabled: true,
+    });
+    mocks.resolveWhatsAppChannel.mockReturnValueOnce(null);
+    mocks.getSmsDeviceStatus.mockResolvedValueOnce({ sendable: false });
 
     const stop = startPickupReminderScheduler(mockApp);
     await vi.advanceTimersByTimeAsync(50);

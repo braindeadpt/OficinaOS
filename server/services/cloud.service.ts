@@ -156,6 +156,17 @@ export async function pairWithCloud(
     },
   });
 
+  // O texto "loja fechada" configurado na loja é publicado no pairing —
+  // sem isto a Cloud respondia com o default até o dono voltar a gravar
+  // as settings. Best-effort como o primeiro sync de entitlements.
+  await cloudFetch(input.apiUrl, "/shops/bot-settings", {
+    body: {
+      closedFallbackText: settings.botClosedFallbackText?.trim() || null,
+    },
+    method: "PUT",
+    token: payload.shopToken,
+  }).catch(() => null);
+
   // Best-effort first sync — pairing already succeeded even if this fails.
   await syncCloudEntitlements(prisma, log).catch(() => null);
 
@@ -389,6 +400,23 @@ export async function syncCloudEntitlements(
     launch("whatsapp-bot", () =>
       import("./whatsapp-bot.service.js").then(({ syncWhatsAppBot }) =>
         syncWhatsAppBot(
+          prisma,
+          settings.cloudApiUrl ?? "",
+          token,
+          log,
+          notifyCtx,
+          modules
+        )
+      )
+    );
+  }
+
+  // SMS Pro: esvazia a fila inbound — o poller rápido (12 s) é o
+  // caminho principal; isto é a rede de segurança no ciclo lento.
+  if (modules.includes("sms")) {
+    launch("sms", () =>
+      import("./sms-cloud.service.js").then(({ syncSmsInbound }) =>
+        syncSmsInbound(
           prisma,
           settings.cloudApiUrl ?? "",
           token,

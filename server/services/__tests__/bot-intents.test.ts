@@ -18,7 +18,7 @@ vi.mock("../job-quote.service.js", () => ({
 }));
 
 import type { BotReplyCtx } from "../bot-intents.js";
-import { composeReply } from "../bot-intents.js";
+import { composeReply, handleInboundMessage } from "../bot-intents.js";
 
 const PHONE = "351912345678";
 
@@ -101,6 +101,147 @@ describe("composeReply — deterministic rules before AI", () => {
     expect(out.text).toContain("aceite");
   });
 
+  it("stale sim (allowQuoteDecision=false) never decides a quote", async () => {
+    // Mensagem >23h na Meta oficial: o orçamento pendente pode ser mais
+    // recente que a mensagem — decidir registava a resposta no errado.
+    const { ctx } = makeCtx({ ai: aiCfg, customers: [cust], jobs: [job()] });
+    const out = await composeReply(ctx, msg("sim"), false, {
+      allowQuoteDecision: false,
+    });
+    expect(mocks.respondToQuote).not.toHaveBeenCalled();
+    expect(out.text).toBe("");
+  });
+
+  it("sim mais antigo que o orçamento pendente não decide — escala ao staff", async () => {
+    // Fila Cloud: o SIM chegou à Cloud antes do orçamento sair (ficou
+    // horas à espera) — refere-se a outro, nunca ao mais recente.
+    const { ctx } = makeCtx({
+      ai: aiCfg,
+      customers: [cust],
+      jobs: [
+        job({
+          quotes: [
+            {
+              amount: { toNumber: () => 100 },
+              id: "q1",
+              note: null,
+              sentAt: new Date(),
+              status: "SENT",
+              version: 2,
+            },
+          ],
+        }),
+      ],
+    });
+    const out = await composeReply(ctx, {
+      createdAt: new Date(Date.now() - 10 * 60_000).toISOString(),
+      fromPhone: PHONE,
+      id: "m-stale",
+      messageType: "text",
+      text: "sim",
+    });
+    expect(mocks.respondToQuote).not.toHaveBeenCalled();
+    expect(out.text).toBe("");
+    expect(out.escalate).toBe(true);
+  });
+
+  it("sim depois do orçamento sair continua a decidir", async () => {
+    const { ctx } = makeCtx({
+      ai: aiCfg,
+      customers: [cust],
+      jobs: [
+        job({
+          quotes: [
+            {
+              amount: { toNumber: () => 100 },
+              id: "q1",
+              note: null,
+              sentAt: new Date(Date.now() - 60 * 60_000),
+              status: "SENT",
+              version: 1,
+            },
+          ],
+        }),
+      ],
+    });
+    const out = await composeReply(ctx, msg("sim"));
+    expect(mocks.respondToQuote).toHaveBeenCalledOnce();
+    expect(out.text).toContain("aceite");
+  });
+
+  it("sim retry on an already-approved quote re-confirms (idempotent)", async () => {
+    // A resposta à primeira decisão não saiu (falha de envio); o cliente
+    // reenviou SIM. O orçamento está APPROVED — confirmar de novo em vez
+    // de "não tens orçamentos" nem chamar respondToQuote outra vez.
+    const { ctx } = makeCtx({
+      ai: aiCfg,
+      customers: [cust],
+      jobs: [
+        job({
+          quotes: [
+            {
+              amount: { toNumber: () => 100 },
+              id: "q1",
+              note: null,
+              status: "APPROVED",
+              version: 1,
+            },
+          ],
+        }),
+      ],
+    });
+    const out = await composeReply(ctx, msg("sim"));
+    expect(mocks.respondToQuote).not.toHaveBeenCalled();
+    expect(out.text).toContain("aceite");
+    expect(out.text).toContain("100");
+  });
+
+  it("não retry on a rejected quote re-confirms the rejection", async () => {
+    const { ctx } = makeCtx({
+      ai: aiCfg,
+      customers: [cust],
+      jobs: [
+        job({
+          quotes: [
+            {
+              amount: { toNumber: () => 100 },
+              id: "q1",
+              note: null,
+              status: "REJECTED",
+              version: 1,
+            },
+          ],
+        }),
+      ],
+    });
+    const out = await composeReply(ctx, msg("não"));
+    expect(mocks.respondToQuote).not.toHaveBeenCalled();
+    expect(out.text).toContain("recusado");
+  });
+
+  it("não on an already-approved quote reports it was answered", async () => {
+    const { ctx } = makeCtx({
+      ai: aiCfg,
+      customers: [cust],
+      jobs: [
+        job({
+          quotes: [
+            {
+              amount: { toNumber: () => 100 },
+              id: "q1",
+              note: null,
+              status: "APPROVED",
+              version: 1,
+            },
+          ],
+        }),
+      ],
+    });
+    const out = await composeReply(ctx, msg("não"));
+    expect(mocks.respondToQuote).not.toHaveBeenCalled();
+    expect(out.text).toContain("já foi respondido");
+  });
+
   it("PARAR disables consent and replies without AI", async () => {
     const { ctx, prisma } = makeCtx({
       ai: aiCfg,
@@ -150,6 +291,23 @@ describe("composeReply — deterministic rules before AI", () => {
       createdAt: new Date().toISOString(),
       fromPhone: "34912345678",
       id: "m2",
+      messageType: "text",
+      text: "estado da minha reparação",
+    });
+    expect(out.text).toContain("Não encontrei reparações");
+  });
+
+  it("remetente PT não casa ficha estrangeira com os mesmos 9 dígitos", async () => {
+    // Ficha guardada com indicativo espanhol; remetente PT com o mesmo
+    // sufixo — o fallback por últimos-9 só vale entre números PT.
+    const { ctx } = makeCtx({
+      customers: [{ ...cust, phone: "+34912345678" }],
+      jobs: [job()],
+    });
+    const out = await composeReply(ctx, {
+      createdAt: new Date().toISOString(),
+      fromPhone: "+351912345678",
+      id: "m2b",
       messageType: "text",
       text: "estado da minha reparação",
     });
@@ -420,6 +578,45 @@ describe("composeReply — deterministic rules before AI", () => {
     const out = await composeReply(ctx, msg("tens previsão de preço?"));
     expect(mocks.askBotAi).not.toHaveBeenCalled();
     expect(out.text).toContain("orçamento");
+  });
+
+  it("PARAR bypasses the hourly flood limit — opt-out is compliance", async () => {
+    const { ctx, prisma } = makeCtx({ customers: [cust], jobs: [job()] });
+    const send = vi.fn(async () => true);
+    // rateLimitPerHour=0 → bucket rejects everything; PARAR must bypass.
+    const out = await handleInboundMessage(ctx, msg("PARAR"), {
+      channelLabel: "SMS",
+      rateLimitPerHour: 0,
+      send,
+    });
+    expect(out).not.toBeNull();
+    expect(prisma.customer.update).toHaveBeenCalledWith({
+      data: { whatsappConsent: false },
+      where: { id: "cust-1" },
+    });
+    // A confirmação conta para o limite anti-ban — acima do teto a
+    // revogação grava-se mas a resposta não sai.
+    expect(send).not.toHaveBeenCalled();
+    // Ordinary messages in the same window stay discarded.
+    const dropped = await handleInboundMessage(ctx, msg("estado"), {
+      channelLabel: "SMS",
+      rateLimitPerHour: 0,
+      send,
+    });
+    expect(dropped).toBeNull();
+  });
+
+  it("stale SIM does not decide but escalates to staff", async () => {
+    const { ctx } = makeCtx({ customers: [cust], jobs: [job()] });
+    const out = await composeReply(ctx, msg("sim"), false, {
+      allowQuoteDecision: false,
+    });
+    expect(mocks.respondToQuote).not.toHaveBeenCalled();
+    expect(out.escalate).toBe(true);
+    // Sem jobId — com várias reparações não se sabe a que orçamento o
+    // SIM se refere; ligar a mais recente abria a reparação errada.
+    expect(out.jobId).toBeNull();
+    expect(out.text).toBe("");
   });
 
   it("«quando está aberta a loja» não é prazo — chega à IA", async () => {
