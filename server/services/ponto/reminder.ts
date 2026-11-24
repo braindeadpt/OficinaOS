@@ -182,9 +182,13 @@ function prevYmd(ymd: string): string {
   return new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10);
 }
 
-/** Envia texto livre pelo canal do ponto: SMS se permitido, senão
- *  WhatsApp (Evolution texto; Meta oficial também aceita freeform
- *  dentro da janela de 24 h — a pausa implica mensagem recente). */
+/** Envia texto livre pelo canal do ponto: SMS se permitido E
+ *  configurado, senão WhatsApp (Evolution texto; Meta oficial também
+ *  aceita freeform dentro da janela de 24 h — a pausa implica mensagem
+ *  recente). «Permitir SMS» sem canal SMS na loja cai no WhatsApp em
+ *  vez de perder o envio. Devolve false quando nenhum canal aceitou —
+ *  o chamador não marca a pergunta como enviada e re-tenta no tick
+ *  seguinte. */
 async function sendPontoText(
   prisma: DbClient,
   settings: ShopSettings,
@@ -193,16 +197,13 @@ async function sendPontoText(
   user: StaffUser,
   text: string,
   dedupeId: string
-): Promise<void> {
+): Promise<boolean> {
   const phone = user.phoneE164;
   if (!phone) {
-    return;
+    return false;
   }
   const countryCode = settings.countryCode;
-  if (user.pontoSmsAllowed) {
-    if (!smsChannels) {
-      return;
-    }
+  if (user.pontoSmsAllowed && smsChannels) {
     const to = formatPhone(phone, countryCode);
     let result = smsChannels.cloud
       ? await sendSmsViaCloud(smsChannels.cloud, {
@@ -221,10 +222,10 @@ async function sendPontoText(
     if (!result?.success) {
       throw new Error(result?.error ?? "SMS falhou");
     }
-    return;
+    return true;
   }
   if (!waChannel) {
-    return;
+    return false;
   }
   const result = await sendWhatsAppText(
     prisma,
@@ -237,6 +238,7 @@ async function sendPontoText(
   if (!result.success) {
     throw new Error(result.error ?? "WhatsApp falhou");
   }
+  return true;
 }
 
 /** Lembrete de saída: business-initiated — Evolution recebe texto
@@ -265,7 +267,7 @@ async function sendExitReminder(
   }
   const countryCode = settings.countryCode;
   if (user.pontoSmsAllowed) {
-    await sendPontoText(
+    const sent = await sendPontoText(
       prisma,
       settings,
       waChannel,
@@ -274,7 +276,7 @@ async function sendExitReminder(
       pontoExitReminderText(exitTime),
       dedupeId
     );
-    return { sent: true };
+    return { sent };
   }
   if (!waChannel) {
     return { sent: false };

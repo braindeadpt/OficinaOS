@@ -714,6 +714,25 @@ describe("roteamento do lembrete por canal", () => {
     expect(mocks.sendWhatsAppText).not.toHaveBeenCalled();
   });
 
+  it("pontoSmsAllowed sem canal SMS na loja → cai no WhatsApp", async () => {
+    // Loja só com Evolution ativa: «Permitir SMS» ligado no
+    // trabalhador não pode impedir o lembrete — a pergunta sai por
+    // WhatsApp e o pending de resposta abre (envio real).
+    mocks.userFindMany.mockResolvedValue([
+      staffUser({ pontoSmsAllowed: true }),
+    ]);
+    mocks.getSmsConfig.mockReturnValue(null);
+    const prisma = makePrisma([entry({ type: "ENTRADA" })]);
+
+    await processPontoReminders(prisma, log, undefined, NOW_AFTER);
+
+    expect(mocks.sendSmsViaCloud).not.toHaveBeenCalled();
+    expect(mocks.sendWhatsAppText).toHaveBeenCalledTimes(1);
+    const text = mocks.sendWhatsAppText.mock.calls[0]?.[3] ?? "";
+    expect(text).toContain("Saiu às 18:00");
+    expect(getPendingPontoExit("user-1", NOW_AFTER.getTime())).not.toBeNull();
+  });
+
   it("modelo renomeado nas definições → envio usa o nome atual", async () => {
     mocks.resolveWhatsAppChannel.mockReturnValue(OFFICIAL_CHANNEL);
     mocks.notificationTemplateFindFirst.mockResolvedValue({
