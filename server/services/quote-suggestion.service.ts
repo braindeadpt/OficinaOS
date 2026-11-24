@@ -438,11 +438,23 @@ function deviceModelContained(haystack: string, needle: string): boolean {
     // «…15 – Max Capacity» é descrição comercial (BUG #166 r9); «…15 Pro
     // OEM» continua a ser variante (BUG #166 r10) — descritor genérico
     // não salva a correspondência, só a frase comercial conhecida.
+    // «Pro Max» contíguo é a variante, mesmo com spec de capacidade a
+    // seguir («iPhone 15 Pro Max 17,1 Wh» — a capacidade é da peça, não
+    // um descritor comercial): a palavra anterior ao token decide
+    // (BUG #166 r14).
+    const before = hay
+      .slice(0, idx + ned.length)
+      .trimEnd()
+      .split(" ")
+      .filter((w) => w.length > 0);
+    const prevWord = before.at(-1) ?? "";
+    const contiguousVariant = next === "max" && prevWord === "pro";
     const phrase = `${next} ${words[1] ?? ""}`.trim();
     const spec = `${next} ${words.slice(1, 4).join(" ")}`.trim();
     if (
-      COMMERCIAL_VARIANT_PHRASES.has(phrase) ||
-      COMMERCIAL_VARIANT_SPEC.test(spec)
+      !contiguousVariant &&
+      (COMMERCIAL_VARIANT_PHRASES.has(phrase) ||
+        COMMERCIAL_VARIANT_SPEC.test(spec))
     ) {
       return true;
     }
