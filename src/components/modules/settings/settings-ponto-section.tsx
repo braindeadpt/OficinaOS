@@ -36,6 +36,11 @@ const num = (v: string) => (v.trim() === "" ? null : Number(v));
 const int = (v: string) =>
   v.trim() === "" ? undefined : Number.parseInt(v, 10);
 
+// Mesmo visual dos links «Abrir folha…» — extraído para aplicar o estado
+// desativado enquanto houver alterações por guardar.
+const SHEET_LINK_CLS =
+  "inline-flex min-h-8 pointer-coarse:min-h-11 items-center justify-center gap-1.5 rounded-md border border-outline bg-surface-container-lowest px-3 py-1.5 font-sans font-semibold text-on-surface text-sm transition-colors";
+
 export default function SettingsPontoSection({
   onDirtyChange,
   onToast,
@@ -57,6 +62,9 @@ export default function SettingsPontoSection({
   const [infoText, setInfoText] = useState("");
   const [waNumber, setWaNumber] = useState("");
   const [smsNumber, setSmsNumber] = useState("");
+  // Espelho local do dirty do formulário — as folhas /ponto/* leem apenas
+  // a versão guardada, por isso ficam bloqueadas enquanto houver rascunho.
+  const [dirty, setDirty] = useState(false);
 
   const refresh = useCallback(async () => {
     const [st, shop, cfg] = await Promise.allSettled([
@@ -90,6 +98,7 @@ export default function SettingsPontoSection({
   }, [refresh]);
 
   function markDirty() {
+    setDirty(true);
     onDirtyChange?.(true);
   }
 
@@ -118,6 +127,7 @@ export default function SettingsPontoSection({
         synced = false;
       }
       await refresh();
+      setDirty(false);
       onDirtyChange?.(false);
       onToast(
         t(synced ? "ponto.saved" : "ponto.saved_sync_failed"),
@@ -313,21 +323,40 @@ export default function SettingsPontoSection({
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-on-surface-variant text-xs">
-          {config?.slug
-            ? t("ponto.qr_configured", { slug: config.slug })
-            : t("ponto.qr_hint")}
-        </p>
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-1">
+          <p className="text-on-surface-variant text-xs">
+            {config?.slug
+              ? t("ponto.qr_configured", { slug: config.slug })
+              : t("ponto.qr_hint")}
+          </p>
+          {dirty && (
+            <p className="text-on-surface-variant text-xs">
+              {t("ponto.sheets_save_first")}
+            </p>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
           <Link
-            className="inline-flex min-h-8 pointer-coarse:min-h-11 items-center justify-center gap-1.5 rounded-md border border-outline bg-surface-container-lowest px-3 py-1.5 font-sans font-semibold text-on-surface text-sm transition-colors hover:bg-surface-container"
+            aria-disabled={dirty}
+            className={
+              dirty
+                ? `${SHEET_LINK_CLS} cursor-not-allowed opacity-50`
+                : `${SHEET_LINK_CLS} hover:bg-surface-container`
+            }
+            onClick={dirty ? (e) => e.preventDefault() : undefined}
             to="/ponto/info"
           >
             {t("ponto.info_open")}
           </Link>
           <Link
-            className="inline-flex min-h-8 pointer-coarse:min-h-11 items-center justify-center gap-1.5 rounded-md border border-outline bg-surface-container-lowest px-3 py-1.5 font-sans font-semibold text-on-surface text-sm transition-colors hover:bg-surface-container"
+            aria-disabled={dirty}
+            className={
+              dirty
+                ? `${SHEET_LINK_CLS} cursor-not-allowed opacity-50`
+                : `${SHEET_LINK_CLS} hover:bg-surface-container`
+            }
+            onClick={dirty ? (e) => e.preventDefault() : undefined}
             to="/ponto/qr"
           >
             {t("ponto.qr_open")}

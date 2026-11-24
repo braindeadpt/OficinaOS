@@ -18,65 +18,48 @@ type PontoInfoState =
 
 const SIGNATURE_ROWS = 4;
 
-// Folha A4 «Informação aos trabalhadores» — o documento impresso é sempre
-// em PT-PT (público-alvo: trabalhadores da loja; os comandos do ponto são
-// eles próprios PT). Só o chrome do ecrã (voltar/imprimir/indisponível)
-// segue o idioma da app.
-const INFO_TITLE = "Informação sobre o registo de ponto";
-const DATE_LABEL = "Data";
-const SIGNATURE_HEADING = "Declaração de receção da informação";
-
 interface InfoBlock {
   bullets?: string[];
   heading?: string;
   paragraphs?: string[];
 }
 
-// Modelo RGPD base (PT-PT) — usado quando ShopSettings.pontoInfoText está
-// vazio. Tom informativo: diz o que se regista, porquê e que direitos tem
-// o trabalhador, sem ameaças. O nome do responsável é interpolado.
+// Modelo RGPD base — usado quando ShopSettings.pontoInfoText está vazio.
+// Só a estrutura vive aqui: os textos estão no catálogo i18n
+// (ponto.info_doc_*) e são sempre renderizados em PT-PT — ver docT no
+// componente. O {{controller}} do primeiro parágrafo é interpolado com o
+// nome do responsável.
 const DEFAULT_INFO_MODEL: InfoBlock[] = [
   {
-    paragraphs: [
-      "{controller} utiliza um sistema eletrónico de registo de ponto para documentar o tempo de trabalho dos seus trabalhadores, nos termos do Código do Trabalho (art. 202.º).",
-    ],
+    paragraphs: ["ponto.info_doc_intro"],
   },
   {
     bullets: [
-      "Entradas, pausas, regresso de pausas e saídas, com a hora do servidor no momento em que cada registo é efetuado — a hora escrita na mensagem não é tida em conta.",
-      "A localização é solicitada apenas no momento do registo, para confirmar que este foi efetuado dentro da área da loja ou do local de trabalho. Não existe localização contínua nem vigilância.",
-      "Trabalhadores externos podem ser convidados a anexar uma fotografia como prova da visita. As fotografias são eliminadas automaticamente ao fim de 90 dias; o respetivo registo mantém-se.",
+      "ponto.info_doc_what_1",
+      "ponto.info_doc_what_2",
+      "ponto.info_doc_what_3",
     ],
-    heading: "O que é registado",
+    heading: "ponto.info_doc_what",
+  },
+  {
+    bullets: ["ponto.info_doc_how_1", "ponto.info_doc_how_2"],
+    heading: "ponto.info_doc_how",
+  },
+  {
+    bullets: ["ponto.info_doc_purpose_1", "ponto.info_doc_purpose_2"],
+    heading: "ponto.info_doc_purpose",
   },
   {
     bullets: [
-      "Ler o código QR afixado na loja e seguir as instruções da página que abre.",
-      "Enviar a mensagem indicada (WhatsApp ou SMS) e partilhar a localização quando solicitado.",
+      "ponto.info_doc_retention_1",
+      "ponto.info_doc_retention_2",
+      "ponto.info_doc_retention_3",
     ],
-    heading: "Como registar o ponto",
+    heading: "ponto.info_doc_retention",
   },
   {
-    bullets: [
-      "O registo de ponto é obrigatório por lei (Código do Trabalho, art. 202.º) e destina-se a documentar as horas de trabalho de cada trabalhador.",
-      "O tratamento apoia-se na obrigação legal de registo de ponto e no legítimo interesse da loja em dispor de registos fiáveis e imputáveis.",
-    ],
-    heading: "Finalidade e base legal",
-  },
-  {
-    bullets: [
-      "Os registos de ponto são conservados durante 5 anos, nos termos da lei.",
-      "As fotografias de prova são eliminadas ao fim de 90 dias.",
-      "Não são recolhidos nem utilizados dados biométricos.",
-    ],
-    heading: "Conservação dos dados",
-  },
-  {
-    bullets: [
-      "Pode consultar os seus registos de ponto e pedir a retificação ou a limitação do tratamento, contactando a loja.",
-      "Em caso de dúvida sobre este tratamento, fale com a gerência.",
-    ],
-    heading: "Os seus direitos",
+    bullets: ["ponto.info_doc_rights_1", "ponto.info_doc_rights_2"],
+    heading: "ponto.info_doc_rights",
   },
 ];
 
@@ -104,12 +87,16 @@ function SignatureField({ label, tall }: { label: string; tall?: boolean }) {
   );
 }
 
-function SignatureRow() {
+function SignatureRow({
+  labels,
+}: {
+  labels: { date: string; name: string; signature: string };
+}) {
   return (
     <div className="grid grid-cols-[1fr_1.6fr_0.5fr] items-end gap-x-5">
-      <SignatureField label="Nome" />
-      <SignatureField label="Assinatura" tall />
-      <SignatureField label="Data" />
+      <SignatureField label={labels.name} />
+      <SignatureField label={labels.signature} tall />
+      <SignatureField label={labels.date} />
     </div>
   );
 }
@@ -151,8 +138,20 @@ export default function PontoInfoPage() {
   const controller =
     state.kind === "ready" && state.shopName ? `A ${state.shopName}` : "A loja";
 
+  // Folha A4 «Informação aos trabalhadores» — o documento impresso é
+  // sempre em PT-PT (público-alvo: trabalhadores da loja; os comandos do
+  // ponto são eles próprios PT), independentemente do idioma da
+  // interface. Só o chrome do ecrã (voltar/imprimir/indisponível) segue o
+  // idioma da app.
+  const docT = (key: string) => t(key, { controller, lng: "pt" });
+  const signatureLabels = {
+    date: docT("ponto.info_doc_date"),
+    name: docT("ponto.info_doc_sig_name"),
+    signature: docT("ponto.info_doc_sig_signature"),
+  };
+
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col gap-6 bg-surface p-6 print:max-w-none print:bg-white print:p-0">
+    <div className="print-ponto-info mx-auto flex min-h-dvh w-full max-w-2xl flex-col gap-6 bg-surface p-6 print:max-w-none print:bg-white print:p-0">
       <div className="flex items-center justify-between print:hidden">
         <Link
           className="inline-flex items-center gap-1.5 font-semibold text-on-surface-variant text-sm"
@@ -171,7 +170,9 @@ export default function PontoInfoPage() {
 
       {state.kind === "unavailable" && (
         <div className="rounded-2xl bg-surface-container-low p-6 text-center">
-          <p className="font-semibold text-on-surface">{INFO_TITLE}</p>
+          <p className="font-semibold text-on-surface">
+            {docT("ponto.info_doc_title")}
+          </p>
           <p className="mt-2 text-on-surface-variant text-sm">
             {t("ponto.info_unavailable")}
           </p>
@@ -182,13 +183,13 @@ export default function PontoInfoPage() {
         <article className="flex flex-col gap-5 rounded-2xl bg-white p-8 text-neutral-900 print:rounded-none print:p-0">
           <header className="flex flex-col gap-1">
             <h1 className="font-extrabold font-headline text-2xl">
-              {INFO_TITLE}
+              {docT("ponto.info_doc_title")}
             </h1>
             {state.shopName && (
               <p className="font-semibold text-lg">{state.shopName}</p>
             )}
             <p className="text-neutral-500 text-sm">
-              {DATE_LABEL}: {today}
+              {docT("ponto.info_doc_date")}: {today}
             </p>
           </header>
 
@@ -201,17 +202,17 @@ export default function PontoInfoPage() {
               {DEFAULT_INFO_MODEL.map((block) => (
                 <section key={block.heading ?? "intro"}>
                   {block.heading && (
-                    <h2 className="mb-1.5 font-bold">{block.heading}</h2>
+                    <h2 className="mb-1.5 font-bold">{docT(block.heading)}</h2>
                   )}
                   {block.paragraphs?.map((p) => (
                     <p className="mb-1.5" key={p}>
-                      {p.replace("{controller}", controller)}
+                      {docT(p)}
                     </p>
                   ))}
                   {block.bullets && (
                     <ul className="flex list-disc flex-col gap-1 pl-5">
                       {block.bullets.map((b) => (
-                        <li key={b}>{b}</li>
+                        <li key={b}>{docT(b)}</li>
                       ))}
                     </ul>
                   )}
@@ -222,11 +223,14 @@ export default function PontoInfoPage() {
 
           <section className="mt-4">
             <p className="mb-4 font-semibold text-neutral-800 text-sm">
-              {SIGNATURE_HEADING}
+              {docT("ponto.info_doc_sig_heading")}
             </p>
             <div className="flex flex-col gap-6">
               {Array.from({ length: SIGNATURE_ROWS }, (_, i) => (
-                <SignatureRow key={`sig-${String(i)}`} />
+                <SignatureRow
+                  key={`sig-${String(i)}`}
+                  labels={signatureLabels}
+                />
               ))}
             </div>
           </section>
