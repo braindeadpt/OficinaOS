@@ -53,12 +53,19 @@ export function recordPontoEntry(prisma: DbClient, input: PontoTimeEntryInput) {
 
 export interface PontoTodayEntry {
   at: Date;
+  /** A correção aponta para a linha que substitui — o `at` dela é o dia
+   *  civil do turno a que a correção pertence (uma saída corrigida para
+   *  depois da meia-noite continua a fechar o turno do dia em que
+   *  abriu). */
+  corrects?: { at: Date } | null;
   status: string;
   type: TimeEntryType;
 }
 
 /** Registos do dia civil da loja (fuso das definições) para um user —
- *  usado pelo gate "entrada hoje" e pelo resumo do ESTADO. */
+ *  usado pelo gate "entrada hoje" e pelo resumo do ESTADO. Desempate
+ *  por createdAt: uma PAUSA e a SAIDA presumida ao mesmo instante ficam
+ *  com ordem determinística (a escrita mais recente decide o "último"). */
 export function todayPontoEntries(
   prisma: DbClient,
   userId: string,
@@ -67,7 +74,7 @@ export function todayPontoEntries(
 ): Promise<PontoTodayEntry[]> {
   const { start, end } = todayRange(tz, now);
   return prisma.timeEntry.findMany({
-    orderBy: { at: "asc" },
+    orderBy: [{ at: "asc" }, { createdAt: "asc" }],
     select: { at: true, status: true, type: true },
     where: { at: { gte: start, lt: end }, userId },
   });
@@ -109,8 +116,13 @@ export function pontoEntriesSince(
   since: Date
 ): Promise<PontoTodayEntry[]> {
   return prisma.timeEntry.findMany({
-    orderBy: { at: "asc" },
-    select: { at: true, status: true, type: true },
+    orderBy: [{ at: "asc" }, { createdAt: "asc" }],
+    select: {
+      at: true,
+      corrects: { select: { at: true } },
+      status: true,
+      type: true,
+    },
     where: { at: { gte: since }, corrections: { none: {} }, userId },
   });
 }

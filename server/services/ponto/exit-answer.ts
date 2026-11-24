@@ -10,7 +10,9 @@
 //   ("6", "saí às 6" → 18:00). A saída presume-se em hora de tarde/
 //   noite: horas 1–7 passam a +12 ("6" → 18:00, "6:30" → 18:30) —
 //   a alternativa (manhã) é implausível à hora do lembrete; a
-//   divergência real fica POR_VALIDAR na mesma.
+//   divergência real fica POR_VALIDAR na mesma. Exceção: o zero
+//   inicial ("01:15", "07") é formato 24 h inequívoco e fica como
+//   está — respostas depois da meia-noite declaram madrugada.
 // - Negação governa só a oração onde aparece: "não saí às 18:00" não
 //   declara saída nenhuma (a hora nega a pergunta, repete-se); já
 //   "não, saí às 18:20" nega a hora presumida e afirma outra — a
@@ -54,9 +56,10 @@ const AFFIRMATIVE_WORDS = new Set([
 const EXPLICIT_TIME_RE = /\b(\d{1,2})\s*[:hH.]\s*(\d{2})\b/g;
 // Hora solta — "6", "18". Só conta quando é a única candidata.
 const BARE_HOUR_RE = /\b([01]?\d|2[0-3])\b/g;
-// Pontuação que fecha uma oração — o "." só quando não liga dígitos
-// ("18.05" fica inteiro; "Sai. Saí às 18:20" separa).
-const CLAUSE_SPLIT_RE = /[,;!?\n—–]|(?<!\d)\.(?!\d)/;
+// Pontuação que fecha uma oração — o "." só quando liga dígitos fica
+// ("18.05" inteiro; "18:20. Não" separa, senão a negação da segunda
+// frase apagava a hora declarada na primeira).
+const CLAUSE_SPLIT_RE = /[,;!?\n—–]|(?<!\d)\.|\.(?!\d)/;
 
 /** "6" → 18, "18" → 18, "0" → 0 — saída assume-se depois do meio-dia. */
 function exitHour(raw: number): number | null {
@@ -66,21 +69,32 @@ function exitHour(raw: number): number | null {
   return raw >= 1 && raw <= 7 ? raw + 12 : raw;
 }
 
-function hhmmOf(hour: number, minute: number): string | null {
+function hhmmOf(
+  hour: number,
+  minute: number,
+  zeroPadded = false
+): string | null {
   if (minute > 59) {
     return null;
   }
-  const h = exitHour(hour);
+  // Zero inicial ("01:15") é formato 24 h inequívoco — a heurística da
+  // tarde só se aplica às formas ambíguas ("1:15", "6", "saí às 7").
+  const h = zeroPadded ? hour : exitHour(hour);
   return h === null
     ? null
     : `${String(h).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+/** Hora escrita com zero inicial ("01:15", "07") — 24 h explícita. */
+function zeroPadded(raw: string): boolean {
+  return raw.length > 1 && raw.startsWith("0");
 }
 
 /** Horas:Minutos explícitas distintas no texto cru. */
 function explicitTimes(raw: string): Set<string> {
   const found = new Set<string>();
   for (const m of raw.matchAll(EXPLICIT_TIME_RE)) {
-    const hhmm = hhmmOf(Number(m[1]), Number(m[2]));
+    const hhmm = hhmmOf(Number(m[1]), Number(m[2]), zeroPadded(m[1]));
     if (hhmm) {
       found.add(hhmm);
     }
@@ -88,11 +102,12 @@ function explicitTimes(raw: string): Set<string> {
   return found;
 }
 
-/** Horas soltas distintas no texto normalizado — "6" ou "18" a sós. */
-function bareHours(normalized: string): Set<number> {
-  const hours = new Set<number>();
+/** Horas soltas distintas no texto normalizado — "6" ou "18" a sós
+ *  (guarda o texto cru para distinguir "07" de "7"). */
+function bareHours(normalized: string): Set<string> {
+  const hours = new Set<string>();
   for (const m of normalized.matchAll(BARE_HOUR_RE)) {
-    hours.add(Number(m[1]));
+    hours.add(m[1]);
   }
   return hours;
 }
@@ -113,7 +128,7 @@ export function parsePontoExitAnswer(
   //    oração: "não, saí às 18:20" afirma 18:20; "não saí às 18:00,
   //    ainda estou a trabalhar" não declara nada.
   const explicit = new Set<string>();
-  const bare = new Set<number>();
+  const bare = new Set<string>();
   for (const clause of text.split(CLAUSE_SPLIT_RE)) {
     const normalizedClause = normalizePontoText(clause);
     if (!normalizedClause || negated(normalizedClause)) {
@@ -149,7 +164,8 @@ export function parsePontoExitAnswer(
   // 3) Hora solta única — "6", "saí às 18". "entre as 18 e as 19"
   //    (duas horas) é ambíguo → repete a pergunta.
   if (bare.size === 1) {
-    const hhmm = hhmmOf([...bare][0], 0);
+    const raw = [...bare][0];
+    const hhmm = hhmmOf(Number(raw), 0, zeroPadded(raw));
     if (hhmm) {
       return { hhmm, kind: "time" };
     }

@@ -64,7 +64,7 @@ import type {
   InboundMessage,
   InboundTransport,
 } from "../../bot-intents.js";
-import { tryHandlePontoStaff } from "../handler.js";
+import { tryHandlePontoStaff, workedMs } from "../handler.js";
 import {
   clearAllPendingPonto,
   getPendingPontoExit,
@@ -274,6 +274,27 @@ describe("resposta ao lembrete de saída", () => {
     expect((entry.at as Date).toISOString()).toBe("2026-01-10T18:20:00.000Z");
   });
 
+  it("negação noutra frase não apaga a hora afirmada", async () => {
+    // "Saí às 18:20. Não consegui responder antes" — o ponto a seguir a
+    // um dígito separa as frases na mesma; a negação governa só a
+    // segunda e as 18:20 gravam-se.
+    const { ctx, message, t } = setup();
+    armPending();
+
+    await tryHandlePontoStaff(
+      ctx,
+      message("Saí às 18:20. Não consegui responder antes"),
+      t
+    );
+
+    const entry = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect(entry).toMatchObject({ status: "POR_VALIDAR", type: "SAIDA" });
+    expect((entry.at as Date).toISOString()).toBe("2026-01-10T18:20:00.000Z");
+  });
+
   it("resposta depois da meia-noite → hora declarada fica no dia da resposta", async () => {
     const { ctx, message, t } = setup();
     // Lembrete das 23:30, entrada às 16:00 — resposta «00:15» às 00:20
@@ -298,6 +319,59 @@ describe("resposta ao lembrete de saída", () => {
     >;
     expect(entry).toMatchObject({ status: "POR_VALIDAR", type: "SAIDA" });
     expect((entry.at as Date).toISOString()).toBe("2026-01-11T00:15:00.000Z");
+  });
+
+  it("hora com zero inicial ('01:15') depois da meia-noite fica na madrugada", async () => {
+    // "01:15" é 24 h inequívoca — a heurística da tarde só cobre as
+    // formas ambíguas ("1:15", "saí às 7").
+    const { ctx, message, t } = setup();
+    setPendingPontoExit("user-1", {
+      expiresAt: Date.now() + PONTO_EXIT_PENDING_TTL_MS,
+      presumedAt: "2026-01-10T23:45:00.000Z",
+      presumedEntryId: "presumed-1",
+      shiftOpenAt: "2026-01-10T16:00:00.000Z",
+      userId: "user-1",
+    });
+    const msg = {
+      ...message("01:15"),
+      createdAt: "2026-01-11T01:20:00.000Z",
+    };
+
+    await tryHandlePontoStaff(ctx, msg, t);
+
+    const entry = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect(entry).toMatchObject({ status: "POR_VALIDAR", type: "SAIDA" });
+    expect((entry.at as Date).toISOString()).toBe("2026-01-11T01:15:00.000Z");
+  });
+
+  it("resposta pós-meia-noite na véspera da hora de verão grava no dia seguinte", async () => {
+    // Lisboa, 29-03-2026: o relógio salta 01:00→02:00 — o dia civil tem
+    // 23 h. Somar 24 h à presumida saltava para 30-03; o dia seguinte
+    // real é o início do dia civil seguinte.
+    const { ctx, message, t } = setup();
+    setPendingPontoExit("user-1", {
+      expiresAt: Date.now() + PONTO_EXIT_PENDING_TTL_MS,
+      presumedAt: "2026-03-28T23:30:00.000Z",
+      presumedEntryId: "presumed-1",
+      shiftOpenAt: "2026-03-28T16:00:00.000Z",
+      userId: "user-1",
+    });
+    const msg = {
+      ...message("00:15"),
+      createdAt: "2026-03-29T00:20:00.000Z",
+    };
+
+    await tryHandlePontoStaff(ctx, msg, t);
+
+    const entry = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect(entry).toMatchObject({ status: "POR_VALIDAR", type: "SAIDA" });
+    expect((entry.at as Date).toISOString()).toBe("2026-03-29T00:15:00.000Z");
   });
 
   it("dois dias plausíveis → repete a pergunta em vez de gravar data arbitrária", async () => {
@@ -381,5 +455,39 @@ describe("SAIDA normal após presumida", () => {
       reason: "saída registada pelo trabalhador",
       type: "SAIDA",
     });
+  });
+});
+
+describe("workedMs — saída corrigida depois da meia-noite", () => {
+  it("correção ligada à presumida conta as horas no dia do turno", () => {
+    // Entrada 16:00 sexta · resposta «00:15» sábado — a correção herda
+    // o dia civil da presumida das 23:30 e fecha as 8h15 do turno.
+    const ms = workedMs(
+      [
+        { at: new Date("2026-01-09T16:00:00.000Z"), type: "ENTRADA" },
+        {
+          at: new Date("2026-01-10T00:15:00.000Z"),
+          corrects: { at: new Date("2026-01-09T23:30:00.000Z") },
+          type: "SAIDA",
+        },
+      ],
+      TZ
+    );
+
+    expect(ms).toBe(8 * 3_600_000 + 15 * 60_000);
+  });
+
+  it("sem ligação à linha substituída, a separação por dia mantém-se", () => {
+    // Entrada sem saída no dia + saída sem entrada no dia seguinte —
+    // turnos independentes não se unem.
+    const ms = workedMs(
+      [
+        { at: new Date("2026-01-09T16:00:00.000Z"), type: "ENTRADA" },
+        { at: new Date("2026-01-10T00:15:00.000Z"), type: "SAIDA" },
+      ],
+      TZ
+    );
+
+    expect(ms).toBe(0);
   });
 });

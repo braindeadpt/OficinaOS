@@ -156,11 +156,18 @@ function workedIntervalsMs(entries: { at: Date; type: string }[]): number {
  *  saída não atravessa a meia-noite: sem o agrupamento, a entrada de
  *  terça era absorvida pelo turno de segunda e a saída de terça fechava
  *  um intervalo de ~32 h (a regra "entrada no próprio dia" já impede
- *  turnos overnight — §2.2). */
-function workedMs(entries: { at: Date; type: string }[], tz: string): number {
+ *  turnos overnight — §2.2). Exceção com ligação: uma CORREÇÃO herda o
+ *  dia civil da linha que substitui — a saída corrigida para depois da
+ *  meia-noite continua a fechar o turno do dia em que abriu (o `at` da
+ *  presumida é a âncora), senão entrada e saída caíam em grupos
+ *  separados e as horas sumiam. Exportada para testes. */
+export function workedMs(
+  entries: { at: Date; corrects?: { at: Date } | null; type: string }[],
+  tz: string
+): number {
   const byDay = new Map<string, { at: Date; type: string }[]>();
   for (const e of entries) {
-    const day = dayRange(tz, e.at).date;
+    const day = dayRange(tz, e.corrects?.at ?? e.at).date;
     const list = byDay.get(day);
     if (list) {
       list.push(e);
@@ -558,9 +565,13 @@ async function onExitReminderAnswer(
     // pending) e não esteja no futuro — zero ou dois plausíveis volta
     // a perguntar em vez de gravar uma data arbitrária.
     const answerAt = new Date(env.msg.sentAt ?? env.msg.createdAt);
+    // O dia seguinte é o dia civil a seguir — somar 24 h ao instante
+    // salta o dia inteiro na transição para a hora de verão (o dia civil
+    // tem 23 h, não 24).
+    const presumedDay = dayRange(env.tz, presumedDate);
     const ymds = new Set([
-      dayRange(env.tz, presumedDate).date,
-      dayRange(env.tz, new Date(presumedDate.getTime() + DAY_MS)).date,
+      presumedDay.date,
+      dayRange(env.tz, presumedDay.end).date,
     ]);
     const openAt = pending.shiftOpenAt ? Date.parse(pending.shiftOpenAt) : null;
     const candidates = [...ymds]

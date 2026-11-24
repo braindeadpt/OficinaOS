@@ -1,0 +1,168 @@
+================================================================================
+PRRT_kwDOUwilEs67ZzGB | resolved: false | server/services/ponto/reminder.ts:285
+<!-- devin-review-comment {"id": "BUG_pr-review-job-afd3ae3b05424090b3050b49d67f2d44_0001", "file_path": "server/services/ponto/reminder.ts", "start_line": 278, "end_line": 285, "side": "RIGHT", "based_on_repo_rules": false, "kind": "bug"} -->
+
+🔴 **Lembretes de saída adiados nunca são enviados**
+
+Se o modelo WhatsApp Cloud estiver por aprovar, o agendador grava a saída presumida sem enviar a pergunta. Essa saída bloqueia o envio nos ciclos seguintes, mesmo após a aprovação do modelo.
+
+<details>
+<summary>Learn more</summary>
+
+[processExitReminder](https://github.com/braindeadpt/oficinaos/blob/9c224a34b14f11037f60c98f4bde6c3b931fae7c/server/services/ponto/reminder.ts#L433-L463 "server/services/ponto/reminder.ts:433-463") grava a saída presumida e abre a janela de resposta antes de tentar enviar a pergunta. Se o modelo ainda estiver em revisão, o envio retorna sem agendar nova tentativa. No ciclo seguinte, [processPontoReminders](https://github.com/braindeadpt/oficinaos/blob/9c224a34b14f11037f60c98f4bde6c3b931fae7c/server/services/ponto/reminder.ts#L595-L600 "server/services/ponto/reminder.ts:595-600") inclui essa saída nas presumidas já processadas; a [condição de envio](https://github.com/braindeadpt/oficinaos/blob/9c224a34b14f11037f60c98f4bde6c3b931fae7c/server/services/ponto/reminder.ts#L400-L409 "server/services/ponto/reminder.ts:400-409") impede chegar ao envio outra vez.
+
+**Exemplo:** Às 18:00, o modelo está em revisão. Às 18:15 já está aprovado, mas a saída presumida das 18:00 continua aberta e o trabalhador não recebe nada.
+
+**Recommended fix:** Separe a criação da saída presumida da entrega do lembrete. Reutilize a saída quando o envio for adiado e abra a janela de resposta quando o envio for aceite. Teste dois ciclos consecutivos, um com o modelo em revisão e outro com o modelo aprovado, verificando uma só saída e um só envio.
+
+</details>
+
+<!-- devin-review-badge-begin -->
+<a href="https://app.devin.ai/review/braindeadpt/oficinaos/pull/172" target="_blank"><picture><source media="(prefers-color-scheme: dark)" srcset="https://static.devin.ai/assets/gh-devin-review-dark.svg?v=4"><img src="https://static.devin.ai/assets/gh-devin-review-light.svg?v=4" alt="Devin Review"></picture></a>
+<!-- devin-review-badge-end -->
+
+---
+*Was this helpful? React with 👍 or 👎 to provide feedback.*
+================================================================================
+PRRT_kwDOUwilEs67ZzIZ | resolved: false | server/services/ponto/entries.ts:114
+<!-- devin-review-comment {"id": "BUG_pr-review-job-afd3ae3b05424090b3050b49d67f2d44_0002", "file_path": "server/services/ponto/entries.ts", "start_line": 114, "end_line": 114, "side": "RIGHT", "based_on_repo_rules": false, "kind": "bug"} -->
+
+🔴 **Horas de trabalho omitidas quando a saída é depois da meia-noite**
+
+Ao corrigir a saída para depois da meia-noite, o [resumo do ponto](https://github.com/braindeadpt/oficinaos/blob/9c224a34b14f11037f60c98f4bde6c3b931fae7c/server/services/ponto/handler.ts#L997-L1015 "server/services/ponto/handler.ts:997-1015") retira a presumida e separa entrada e saída por dia. Nenhuma fecha o turno, e as horas desaparecem do total semanal.
+
+<details>
+<summary>Learn more</summary>
+
+[onExitReminderAnswer](https://github.com/braindeadpt/oficinaos/blob/9c224a34b14f11037f60c98f4bde6c3b931fae7c/server/services/ponto/handler.ts#L560-L595 "server/services/ponto/handler.ts:560-595") pode gravar a saída no dia seguinte e ligá-la à presumida que substituiu. A consulta remove a presumida. [workedMs](https://github.com/braindeadpt/oficinaos/blob/9c224a34b14f11037f60c98f4bde6c3b931fae7c/server/services/ponto/handler.ts#L155-L175 "server/services/ponto/handler.ts:155-175") agrupa as marcações por dia civil e só conta pares de abertura e fecho dentro de cada grupo. A entrada fica num grupo sem saída; a saída fica noutro sem entrada.
+
+**Exemplo:** O trabalhador entra na sexta-feira às 16:00, recebe o lembrete às 23:30 e declara às 00:20 que saiu às 00:15. O total semanal não conta as 8h15 desse turno.
+
+**Recommended fix:** Use a ligação à saída presumida para associar a correção ao turno de origem e calcular o intervalo com a hora efetiva. Preserve a separação entre dias para marcações sem essa ligação, para não unir turnos independentes.
+
+</details>
+
+<!-- devin-review-badge-begin -->
+<a href="https://app.devin.ai/review/braindeadpt/oficinaos/pull/172" target="_blank"><picture><source media="(prefers-color-scheme: dark)" srcset="https://static.devin.ai/assets/gh-devin-review-dark.svg?v=4"><img src="https://static.devin.ai/assets/gh-devin-review-light.svg?v=4" alt="Devin Review"></picture></a>
+<!-- devin-review-badge-end -->
+
+---
+*Was this helpful? React with 👍 or 👎 to provide feedback.*
+================================================================================
+PRRT_kwDOUwilEs67ZzKN | resolved: false | server/services/ponto/reminder.ts:428
+<!-- devin-review-comment {"id": "BUG_pr-review-job-afd3ae3b05424090b3050b49d67f2d44_0003", "file_path": "server/services/ponto/reminder.ts", "start_line": 417, "end_line": 428, "side": "RIGHT", "based_on_repo_rules": false, "kind": "bug"} -->
+
+🔴 **Uma saída anterior bloqueia o lembrete de um novo turno**
+
+Quando um trabalhador sai e volta a entrar no mesmo dia, a verificação encontra a saída do turno anterior. O agendador não cria a saída presumida nem envia o lembrete para o turno que ficou aberto.
+
+<details>
+<summary>Learn more</summary>
+
+[dispatchCommand](https://github.com/braindeadpt/oficinaos/blob/9c224a34b14f11037f60c98f4bde6c3b931fae7c/server/services/ponto/handler.ts#L662-L709 "server/services/ponto/handler.ts:662-709") permite uma nova entrada depois de uma saída. O agendador [usa a última marcação efetiva](https://github.com/braindeadpt/oficinaos/blob/9c224a34b14f11037f60c98f4bde6c3b931fae7c/server/services/ponto/reminder.ts#L615-L622 "server/services/ponto/reminder.ts:615-622") para identificar o turno aberto, mas a consulta antes de gravar procura qualquer saída no mesmo dia. Basta uma saída de um turno anterior para cancelar o lembrete.
+
+**Exemplo:** Uma trabalhadora regista entrada às 08:00, saída às 12:00 e nova entrada às 14:00. Às 18:00, a saída das 12:00 impede o lembrete do segundo turno.
+
+**Recommended fix:** Releia a última marcação efetiva para confirmar o estado atual ou limite a verificação a saídas que possam fechar o turno em aberto. Cubra tanto a sequência entrada/saída/entrada como uma saída que chega depois da leitura em lote.
+
+</details>
+
+<!-- devin-review-badge-begin -->
+<a href="https://app.devin.ai/review/braindeadpt/oficinaos/pull/172" target="_blank"><picture><source media="(prefers-color-scheme: dark)" srcset="https://static.devin.ai/assets/gh-devin-review-dark.svg?v=4"><img src="https://static.devin.ai/assets/gh-devin-review-light.svg?v=4" alt="Devin Review"></picture></a>
+<!-- devin-review-badge-end -->
+
+---
+*Was this helpful? React with 👍 or 👎 to provide feedback.*
+================================================================================
+PRRT_kwDOUwilEs67ZzMY | resolved: false | server/services/ponto/exit-answer.ts:59
+<!-- devin-review-comment {"id": "BUG_pr-review-job-afd3ae3b05424090b3050b49d67f2d44_0005", "file_path": "server/services/ponto/exit-answer.ts", "start_line": 59, "end_line": 59, "side": "RIGHT", "based_on_repo_rules": false, "kind": "bug"} -->
+
+🟡 **A negação noutra frase apaga uma hora de saída válida**
+
+Em «Saí às 18:20. Não consegui responder antes», o ponto após o dígito não separa as frases. A negação da segunda descarta as 18:20, e o assistente repete a pergunta sem gravar a saída.
+
+```suggestion
+const CLAUSE_SPLIT_RE = /[,;!?\n—–]|(?<!\d)\.|\.(?!\d)/;
+```
+
+<!-- devin-review-badge-begin -->
+<a href="https://app.devin.ai/review/braindeadpt/oficinaos/pull/172" target="_blank"><picture><source media="(prefers-color-scheme: dark)" srcset="https://static.devin.ai/assets/gh-devin-review-dark.svg?v=4"><img src="https://static.devin.ai/assets/gh-devin-review-light.svg?v=4" alt="Devin Review"></picture></a>
+<!-- devin-review-badge-end -->
+
+---
+*Was this helpful? React with 👍 or 👎 to provide feedback.*
+================================================================================
+PRRT_kwDOUwilEs67ZzOV | resolved: false | server/services/ponto/handler.ts:564
+<!-- devin-review-comment {"id": "BUG_pr-review-job-afd3ae3b05424090b3050b49d67f2d44_0006", "file_path": "server/services/ponto/handler.ts", "start_line": 561, "end_line": 564, "side": "RIGHT", "based_on_repo_rules": false, "kind": "bug"} -->
+
+🟡 **Saída após a meia-noite rejeitada na mudança para a hora de verão**
+
+Em Lisboa, somar 24 horas a um lembrete das 23:30 na véspera da mudança salta o dia civil seguinte. Uma saída válida às 00:15 desse dia fica fora dos candidatos e não é gravada.
+
+```suggestion
+    const presumedDay = dayRange(env.tz, presumedDate);
+    const ymds = new Set([
+      presumedDay.date,
+      dayRange(env.tz, presumedDay.end).date,
+    ]);
+```
+
+<!-- devin-review-badge-begin -->
+<a href="https://app.devin.ai/review/braindeadpt/oficinaos/pull/172" target="_blank"><picture><source media="(prefers-color-scheme: dark)" srcset="https://static.devin.ai/assets/gh-devin-review-dark.svg?v=4"><img src="https://static.devin.ai/assets/gh-devin-review-light.svg?v=4" alt="Devin Review"></picture></a>
+<!-- devin-review-badge-end -->
+
+---
+*Was this helpful? React with 👍 or 👎 to provide feedback.*
+================================================================================
+PRRT_kwDOUwilEs67ZzRQ | resolved: false | server/services/ponto/handler.ts:573
+<!-- devin-review-comment {"id": "BUG_pr-review-job-afd3ae3b05424090b3050b49d67f2d44_0007", "file_path": "server/services/ponto/handler.ts", "start_line": 565, "end_line": 573, "side": "RIGHT", "based_on_repo_rules": false, "kind": "bug"} -->
+
+🟡 **Uma saída declarada às 01:15 é lida como 13:15**
+
+Numa resposta depois da meia-noite, o [parsing da hora](https://github.com/braindeadpt/oficinaos/blob/9c224a34b14f11037f60c98f4bde6c3b931fae7c/server/services/ponto/exit-answer.ts#L61-L76 "server/services/ponto/exit-answer.ts:61-76") converte «01:15» em «13:15» antes de escolher o dia. Se o turno abriu à tarde, o assistente rejeita a resposta e não grava a saída.
+
+<details>
+<summary>Learn more</summary>
+
+[parsePontoExitAnswer](https://github.com/braindeadpt/oficinaos/blob/9c224a34b14f11037f60c98f4bde6c3b931fae7c/server/services/ponto/exit-answer.ts#L61-L87 "server/services/ponto/exit-answer.ts:61-87") converte as horas de 1 a 7 para a tarde para interpretar respostas informais como «6:30». A escolha do dia recebe apenas a hora convertida, mesmo quando o trabalhador escreve uma hora inequívoca no formato de 24 horas. Por isso não chega a testar a saída às 01:15 no dia da resposta.
+
+**Exemplo:** Uma pessoa entra às 16:00, recebe o lembrete às 23:45 e responde «01:15» às 01:20. As 13:15 do dia do lembrete são anteriores à entrada e as do dia da resposta estão no futuro. A saída não fica registada.
+
+**Recommended fix:** Preserve as horas explícitas com zero inicial e limite a heurística da tarde às formas de facto ambíguas. Cubra uma resposta «01:15» depois da meia-noite e uma resposta informal «6:30» num turno da tarde.
+
+</details>
+
+<!-- devin-review-badge-begin -->
+<a href="https://app.devin.ai/review/braindeadpt/oficinaos/pull/172" target="_blank"><picture><source media="(prefers-color-scheme: dark)" srcset="https://static.devin.ai/assets/gh-devin-review-dark.svg?v=4"><img src="https://static.devin.ai/assets/gh-devin-review-light.svg?v=4" alt="Devin Review"></picture></a>
+<!-- devin-review-badge-end -->
+
+---
+*Was this helpful? React with 👍 or 👎 to provide feedback.*
+================================================================================
+PRRT_kwDOUwilEs67ZzUP | resolved: false | server/services/ponto/reminder.ts:436
+<!-- devin-review-comment {"id": "ANALYSIS_pr-review-job-afd3ae3b05424090b3050b49d67f2d44_0001", "file_path": "server/services/ponto/reminder.ts", "start_line": 433, "end_line": 436, "side": "RIGHT", "kind": "analysis"} -->
+
+🔍 **Desempate entre a pausa e a saída presumida**
+
+Se a pausa começar depois da hora do lembrete, a saída presumida fica com a mesma hora. [todayPontoEntries](https://github.com/braindeadpt/oficinaos/blob/9c224a34b14f11037f60c98f4bde6c3b931fae7c/server/services/ponto/entries.ts#L62-L73 "server/services/ponto/entries.ts:62-73") não define um desempate, mas [dispatchCommand](https://github.com/braindeadpt/oficinaos/blob/9c224a34b14f11037f60c98f4bde6c3b931fae7c/server/services/ponto/handler.ts#L662-L677 "server/services/ponto/handler.ts:662-677") usa a última linha para distinguir uma entrada de um regresso. Convém testar essa sequência com a base de dados.
+
+<!-- devin-review-badge-begin -->
+<a href="https://app.devin.ai/review/braindeadpt/oficinaos/pull/172" target="_blank"><picture><source media="(prefers-color-scheme: dark)" srcset="https://static.devin.ai/assets/gh-devin-review-dark.svg?v=4"><img src="https://static.devin.ai/assets/gh-devin-review-light.svg?v=4" alt="Devin Review"></picture></a>
+<!-- devin-review-badge-end -->
+
+---
+*Was this helpful? React with 👍 or 👎 to provide feedback.*
+================================================================================
+PRRT_kwDOUwilEs67ZzW7 | resolved: false | server/services/ponto/__tests__/reminder.test.ts:437
+<!-- devin-review-comment {"id": "ANALYSIS_pr-review-job-afd3ae3b05424090b3050b49d67f2d44_0002", "file_path": "server/services/ponto/__tests__/reminder.test.ts", "start_line": 429, "end_line": 437, "side": "RIGHT", "kind": "analysis"} -->
+
+🔍 **O teste Cloud não distingue o corpo aprovado do corpo editado**
+
+O teste usa um só parâmetro e não fornece um corpo aprovado. Um caso com `shopName` e `exitTime` em ordens diferentes verificaria se o [envio](https://github.com/braindeadpt/oficinaos/blob/9c224a34b14f11037f60c98f4bde6c3b931fae7c/server/services/ponto/reminder.ts#L292-L312 "server/services/ponto/reminder.ts:292-312") respeita a ordem aprovada pela Meta.
+
+<!-- devin-review-badge-begin -->
+<a href="https://app.devin.ai/review/braindeadpt/oficinaos/pull/172" target="_blank"><picture><source media="(prefers-color-scheme: dark)" srcset="https://static.devin.ai/assets/gh-devin-review-dark.svg?v=4"><img src="https://static.devin.ai/assets/gh-devin-review-light.svg?v=4" alt="Devin Review"></picture></a>
+<!-- devin-review-badge-end -->
+
+---
+*Was this helpful? React with 👍 or 👎 to provide feedback.*
