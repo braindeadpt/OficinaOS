@@ -499,7 +499,11 @@ function pickBest<T extends { id: string; name: string }>(
         .reduce((acc, ex) => acc.split(ex).join(" "), norm)
         .replace(/\s+/g, " ")
         .trim();
+      // stripped vazio = o nome É a expressão do outro componente
+      // («Altifalante superior» para a regra da coluna): matchConfidence
+      // aceitaria a cadeia vazia (todo hint a contém) — rejeita já.
       if (
+        !stripped ||
         matchConfidence(stripped, normalizedHints, strictMultiWord) === null
       ) {
         continue;

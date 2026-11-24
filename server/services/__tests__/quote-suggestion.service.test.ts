@@ -784,6 +784,32 @@ describe("buildQuoteSuggestion — speaker vs earpiece disambiguation", () => {
   });
 });
 
+describe("excludeHints — nome que é só a expressão do outro componente", () => {
+  it("does not suggest the earpiece-only part for a failed speaker", () => {
+    // BUG #166 r5: «Altifalante superior» é só earpiece; sem a rejeição do
+    // stripped vazio, a cadeia vazia casava com qualquer hint e a peça do
+    // auricular saía como sugestão da coluna.
+    const parts: QuotePartInput[] = [
+      {
+        category: "SPEAKER",
+        defaultPrice: 20,
+        id: "part-alt-superior-only",
+        name: "Altifalante superior",
+        stockQuantity: 2,
+      },
+    ];
+    const s = build(
+      diag({
+        "checklist.earpiece": { Status: "pass" },
+        "checklist.speaker": { Status: "fail" },
+      }),
+      { parts, repairs: [] }
+    );
+    expect(s.lines).toHaveLength(0);
+    expect(s.unmatchedChecks).toEqual(["checklist.speaker"]);
+  });
+});
+
 describe("excludeHints — serviços combinados de som", () => {
   it("keeps a combined repair matched to both speaker and earpiece", () => {
     // BUG #166 r4: «Troca de coluna e altifalante superior» serve as duas
