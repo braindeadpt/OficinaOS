@@ -796,13 +796,16 @@ async function onExitDateClarification(
   // Citação a uma pergunta de OUTRA clarificação (a hora ambígua foi
   // substituída entretanto e a citação aponta para a pergunta antiga):
   // gravar ONTEM/HOJE aplicaria a hora da clarificação ativa à pergunta
-  // citada — reenvia-se a pergunta atual sem gravar. Citações às
-  // repetições DESTA clarificação continuam a contar; sem ids (SMS)
-  // segue como antes — fail-open.
+  // citada — reenvia-se a pergunta atual sem gravar. O mesmo vale para
+  // a janela em que a pergunta substituta ainda vai a caminho: enquanto
+  // o id não chega, `questionMessageIds` está vazio e nenhuma citação é
+  // verificável. A verificação só acontece quando o canal devolve ids
+  // (`sentMessageIds` não vazio) — sem ids (SMS) segue como antes,
+  // fail-open.
   if (
     env.msg.quotedMessageId &&
-    clarify.questionMessageIds?.length &&
-    !clarify.questionMessageIds.includes(env.msg.quotedMessageId)
+    pending.sentMessageIds?.length &&
+    !clarify.questionMessageIds?.includes(env.msg.quotedMessageId)
   ) {
     await askExitQuestion(
       env,

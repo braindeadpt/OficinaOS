@@ -813,6 +813,68 @@ describe("resposta ao lembrete de saída", () => {
     expect(sent.at(-1)).toContain("00:20");
   });
 
+  it("«ONTEM» citada antes da pergunta substituta ter id → reenvia", async () => {
+    // Janela de receção: «00:20» já substituiu a clarificação mas o
+    // envio da pergunta nova ainda não devolveu o id —
+    // `questionMessageIds` está vazio e a citação «ONTEM» não se pode
+    // verificar. Reenvia-se a pergunta atual; gravar aqui aplicava
+    // 00:20 à pergunta citada das 00:15.
+    const { ctx, message, sent, t } = setup();
+    armPending();
+    const at = (text: string) => ({
+      ...message(text),
+      createdAt: "2026-01-11T00:25:00.000Z",
+    });
+
+    await tryHandlePontoStaff(ctx, at("00:15"), t);
+    expect(
+      getPendingPontoExit("user-1")?.clarifyDate?.questionMessageIds
+    ).toEqual(["wamid-reply-1"]);
+
+    // A 2.ª clarificação fica criada mas com a pergunta em voo (sem id).
+    let resolveSend:
+      | ((r: { messageId?: string; success: boolean }) => void)
+      | undefined;
+    const sendWithId = t.sendWithId as ReturnType<typeof vi.fn>;
+    sendWithId.mockImplementationOnce((text: string) => {
+      sent.push(text);
+      return new Promise<{ messageId?: string; success: boolean }>(
+        (resolve) => {
+          resolveSend = resolve;
+        }
+      );
+    });
+    const second = tryHandlePontoStaff(ctx, at("00:20"), t);
+    // Um tick macrotarefa deixa o handler armar a clarificação das
+    // 00:20 e bloquear no envio diferido da pergunta.
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    const mid = getPendingPontoExit("user-1");
+    expect(mid?.clarifyDate?.hhmm).toBe("00:20");
+    expect(mid?.clarifyDate?.questionMessageIds).toBeUndefined();
+
+    // «ONTEM» citando a pergunta das 00:15 nessa janela: reenvia a
+    // pergunta das 00:20 — não grava a hora nova na pergunta antiga.
+    await tryHandlePontoStaff(
+      ctx,
+      { ...at("ONTEM"), quotedMessageId: "wamid-reply-1" },
+      t
+    );
+    expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
+    expect(sent.at(-1)).toContain("00:20");
+
+    resolveSend?.({ messageId: "wamid-reply-tardio", success: true });
+    await second;
+    // O id tardio é da pergunta das 00:20 — liga-se à clarificação das
+    // 00:20 (a citação a ele passa a contar); o das 00:15 fica fora.
+    const after = getPendingPontoExit("user-1");
+    expect(after?.clarifyDate?.questionMessageIds).not.toContain(
+      "wamid-reply-1"
+    );
+    expect(after?.sentMessageIds).toContain("wamid-reply-tardio");
+  });
+
   it("comando ponto normal mata o pending de saída", async () => {
     const { ctx, message, t } = setup();
     armPending();

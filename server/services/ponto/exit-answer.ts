@@ -78,12 +78,16 @@ const RELATIVE_DURATION_RE =
 const COMPOUND_DURATION_RE =
   /\b\d{1,3}\s*horas?\s+e\s+(?:\d{1,3}\s*(?:minutos?|mins?)?|meia)\b/gi;
 // Hora por extenso — «às 18 horas e 15 minutos» = 18:15, «às 6 horas
-// e 30» = 18:30, «às 6 horas e meia» = 18:30 («e» liga os minutos à
-// hora; sem «e» fica «18 horas» como hora solta = 18:00). A
-// preposição «as»/«às» é obrigatória — «trabalhei 8 horas e 30
-// minutos» é duração (COMPOUND_DURATION_RE), não 20:30.
+// e 30» = 18:30, «às 6 horas e meia» = 18:30, «à 1 hora e 15» =
+// 13:15, «pelas 18 horas e 15» = 18:15 («e» liga os minutos à hora;
+// sem «e» fica «18 horas» como hora solta = 18:00). Marcador
+// obrigatório — «trabalhei 8 horas e 30 minutos» é duração
+// (COMPOUND_DURATION_RE), não 20:30. Minutos sem unidade só contam
+// quando não são eles próprios uma duração nem a abrem uma: «às 18
+// horas e 1 hora depois» não é 18:01 — a leitura fica ambígua e a
+// pergunta repete-se.
 const EXTENSO_TIME_RE =
-  /\bas\s+(\d{1,2})\s+horas?\s+e\s+(?:(\d{1,2})\s*(?:minutos?|mins?)?|meia)\b/gi;
+  /\b(?:as|a|pelas?)\s+(\d{1,2})\s+horas?\s+e\s+(?:(\d{1,2})\s*(?:minutos?|mins?)\b|(\d{1,2})(?!\s+(?:horas?|hrs?|minutos?|mins?|segundos?|segs?|dias?|semanas?|meses?|anos?|depois|apos|antes)\b)|meia)\b/gi;
 // Pontuação que fecha uma oração — o "." fica quando pode ser o
 // separador Horas.minutos de EXPLICIT_TIME_RE. Junto a dígitos a
 // notação compacta ganha sempre ("18.30", "18. 30", "18 . 30" —
@@ -172,7 +176,8 @@ function collectClause(
   const times = explicitTimes(clause);
   const withoutRelatives = normalizedClause.replace(RELATIVE_DURATION_RE, " ");
   for (const m of withoutRelatives.matchAll(EXTENSO_TIME_RE)) {
-    const minute = m[2] === undefined ? 30 : Number(m[2]);
+    const minutes = m[2] ?? m[3];
+    const minute = minutes === undefined ? 30 : Number(minutes);
     const hhmm = hhmmOf(Number(m[1]), minute, zeroPadded(m[1]));
     if (hhmm) {
       times.add(hhmm);

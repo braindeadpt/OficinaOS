@@ -155,4 +155,27 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
     expect(parsePontoExitAnswer("trabalhei 8 horas e 30 minutos")).toBeNull();
     expect(parsePontoExitAnswer("fiquei 2 horas e meia")).toBeNull();
   });
+
+  it("«à» e «pelas» também marcam hora por extenso", () => {
+    expect(parsePontoExitAnswer("Saí à 1 hora e 15 minutos da tarde")).toEqual({
+      hhmm: "13:15",
+      kind: "time",
+    });
+    expect(parsePontoExitAnswer("saí pelas 18 horas e 15 minutos")).toEqual({
+      hhmm: "18:15",
+      kind: "time",
+    });
+  });
+
+  it("«às 18 horas e 1 hora depois» → null — a 2.ª unidade é duração", () => {
+    // O número a seguir a «horas e» não pode virar minutos quando é
+    // ele próprio uma quantidade de duração («1 hora depois») — a
+    // leitura fica ambígua e a pergunta repete-se (nunca 18:01).
+    expect(
+      parsePontoExitAnswer("saí às 18 horas e 1 hora depois cheguei a casa")
+    ).toBeNull();
+    expect(
+      parsePontoExitAnswer("saí às 18:05 horas e 15 minutos depois")
+    ).toEqual({ hhmm: "18:05", kind: "time" });
+  });
 });
