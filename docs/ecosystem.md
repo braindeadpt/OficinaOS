@@ -143,7 +143,10 @@ risco de ban do número fica documentado no disclaimer do UI.
 **Bot Pro sobre Evolution** (§5.7): com entitlement `whatsapp-bot` +
 termo do bot aceite (`whatsappBotDisclaimerAt`/`UserId` — separado do
 disclaimer do transporte), a Evolution posta `MESSAGES_UPSERT` em
-`POST /api/public/whatsapp/evolution/inbound/:token` e a app responde
+`POST /api/public/whatsapp/evolution/inbound` com o segredo no header
+`x-oficinaos-webhook-token` (a variante legada `/inbound/:token` no
+path continua aceite para webhooks já registados; hosts públicos são
+registados em HTTPS) e a app responde
 pelo pipeline partilhado com proteções anti-ban: ignora
 fromMe/grupos/broadcast/newsletters, não-texto e números sem ficha de
 cliente escalam ao staff, dedupe por id, presença "a escrever…" + atraso

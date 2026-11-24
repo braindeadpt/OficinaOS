@@ -864,6 +864,87 @@ describe("externos (externalWork)", () => {
     expect(mocks.recordPontoEntry).toHaveBeenCalledTimes(1);
   });
 
+  it("foto não chega → messageAt é o fecho da janela da foto, não o comando", async () => {
+    // Regressão ronda 2: messageAt=commandAt fazia now-messageAt>5 min
+    // na Cloud (comando + espera de foto ≥ TTL) → "registo recebido com
+    // atraso" em vez de "foto em falta"/APROVADO. A marcação fica final
+    // quando a janela da foto fecha — é daí que a frescura se mede.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-10T09:00:00Z"));
+    const { ctx, phone, t } = setup({
+      staffOver: { externalWork: true },
+    });
+    mocks.todayPontoEntries.mockResolvedValue([]);
+    const commandAt = "2026-01-10T09:00:00.000Z";
+    await tryHandlePontoStaff(
+      ctx,
+      msg({ createdAt: commandAt, fromPhone: phone, text: "ENTRADA" }),
+      t
+    );
+    await tryHandlePontoStaff(
+      ctx,
+      msg({
+        createdAt: commandAt,
+        fromPhone: phone,
+        location: { lat: 41.1, lng: -8.6 },
+        messageType: "location",
+      }),
+      t
+    );
+    await vi.advanceTimersByTimeAsync(PONTO_PHOTO_TTL_MS + 1000);
+    const body = evaluateBody();
+    expect(body).toMatchObject({ hasPhoto: false, type: "ENTRADA" });
+    const messageAt = Date.parse(body.messageAt as string);
+    expect(Number.isFinite(messageAt)).toBe(true);
+    expect(body.messageAt).not.toBe(commandAt);
+    // Fresca para a janela de 5 min da Cloud (≈1 s depois do fecho).
+    expect(Date.now() - messageAt).toBeLessThanOrEqual(5000);
+    expect(mocks.recordPontoEntry).toHaveBeenCalledTimes(1);
+  });
+
+  it("foto pendente expira e o funcionário só aparece horas depois → messageAt velho (atraso real)", async () => {
+    // O fecho da janela é o messageAt — se a prova é genuinamente velha
+    // (o funcionário desapareceu), a Cloud continua a ver o atraso.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-10T09:00:00Z"));
+    const { ctx, phone, t } = setup({
+      staffOver: { externalWork: true },
+    });
+    mocks.todayPontoEntries.mockResolvedValue([]);
+    await tryHandlePontoStaff(
+      ctx,
+      msg({
+        createdAt: "2026-01-10T09:00:00.000Z",
+        fromPhone: phone,
+        text: "ENTRADA",
+      }),
+      t
+    );
+    await tryHandlePontoStaff(
+      ctx,
+      msg({
+        createdAt: "2026-01-10T09:00:00.000Z",
+        fromPhone: phone,
+        location: { lat: 41.1, lng: -8.6 },
+        messageType: "location",
+      }),
+      t
+    );
+    // 3 h depois uma mensagem nova encontra o pendente expirado — a
+    // janela da foto fechou às 09:05:00 e é esse o instante reportado.
+    vi.setSystemTime(new Date("2026-01-10T12:00:00Z"));
+    await tryHandlePontoStaff(
+      ctx,
+      msg({
+        createdAt: "2026-01-10T12:00:00.000Z",
+        fromPhone: phone,
+        text: "obrigado",
+      }),
+      t
+    );
+    expect(evaluateBody().messageAt).toBe("2026-01-10T09:05:00.000Z");
+  });
+
   it("foto que não grava (imagem inválida) → hasPhoto=false, sem photoId", async () => {
     const { ctx, phone, t } = setup({
       staffOver: { externalWork: true },

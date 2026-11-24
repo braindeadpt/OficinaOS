@@ -163,13 +163,24 @@ export async function downloadEvolutionMedia(
 }
 
 /**
+ * Header que transporta o segredo do webhook inbound — a Evolution
+ * aceita `headers` custom no /webhook/set e reenvia-os em cada POST.
+ * O token nunca vai no path: em HTTP remoto (domínio público) um path
+ * com segredo é sniffável em trânsito; o header mantém-se igual de
+ * exposto em claro, por isso hosts públicos são sempre registados em
+ * HTTPS (ver tryRegisterEvolutionWebhook). A rota legada
+ * /inbound/:token continua aceite para webhooks já registados.
+ */
+export const EVOLUTION_WEBHOOK_TOKEN_HEADER = "x-oficinaos-webhook-token";
+
+/**
  * Regista o webhook inbound na instância — a Evolution passa a POSTar
  * MESSAGES_UPSERT ao callback (§5.7). webhookByEvents: false porque a
  * rota recebe o envelope completo e filtra o evento.
  */
 export async function setEvolutionWebhook(
   config: EvolutionConfig,
-  callbackUrl: string
+  callback: { headers?: Record<string, string>; url: string }
 ): Promise<{ error?: string; success: boolean }> {
   const res = await evoFetch(
     config.baseUrl,
@@ -180,9 +191,10 @@ export async function setEvolutionWebhook(
         webhook: {
           enabled: true,
           events: ["MESSAGES_UPSERT"],
-          url: callbackUrl,
+          url: callback.url,
           webhookBase64: false,
           webhookByEvents: false,
+          ...(callback.headers ? { headers: callback.headers } : {}),
         },
       },
       method: "POST",

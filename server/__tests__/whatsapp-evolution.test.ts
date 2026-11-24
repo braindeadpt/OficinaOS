@@ -9,15 +9,23 @@ const mocks = vi.hoisted(() => ({
   ),
   disconnectEvolutionInstance: vi.fn(async () => ({ success: true })),
   getEvolutionState: vi.fn(async () => "open"),
+  hasIsolatedNetNs: vi.fn(() => false),
   isEncrypted: vi.fn(() => true),
   pairEvolutionInstance: vi.fn(async () => ({
     pairingCode: "1234-5678",
     qrBase64: "data:image/png;base64,AAA",
   })),
+  primaryLanIpv4: vi.fn((): string | null => null),
   pushCredentialsToCloud: vi.fn(async () => false),
   setEvolutionWebhook: vi.fn(async () => ({ success: true })),
   syncWhatsAppTemplates: vi.fn(async () => ({})),
   upsertWhatsAppSettings: vi.fn(async (p: unknown) => p),
+}));
+
+vi.mock("../lib/mdns.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/mdns.js")>()),
+  hasIsolatedNetNs: mocks.hasIsolatedNetNs,
+  primaryLanIpv4: mocks.primaryLanIpv4,
 }));
 
 vi.mock("../lib/crypto.js", () => ({
@@ -28,6 +36,7 @@ vi.mock("../lib/crypto.js", () => ({
 
 vi.mock("../services/evolution.service.js", () => ({
   disconnectEvolutionInstance: mocks.disconnectEvolutionInstance,
+  EVOLUTION_WEBHOOK_TOKEN_HEADER: "x-oficinaos-webhook-token",
   getEvolutionState: mocks.getEvolutionState,
   pairEvolutionInstance: mocks.pairEvolutionInstance,
   sendEvolutionText: vi.fn(async () => ({ success: true })),
@@ -83,6 +92,7 @@ vi.mock("../services/update.service.js", () => ({
   startUpdate: vi.fn(async () => ({})),
 }));
 
+import { resetEnvForTests } from "../config/env.js";
 import { resolveWhatsAppChannel } from "../services/whatsapp-channel.js";
 
 const EVO_ROW = {
@@ -161,6 +171,10 @@ function buildApp(prisma: unknown) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.hasIsolatedNetNs.mockReturnValue(false);
+  mocks.primaryLanIpv4.mockReturnValue(null);
+  delete process.env.APP_URL;
+  resetEnvForTests();
 });
 
 describe("resolveWhatsAppChannel — transporte evolution", () => {
@@ -441,20 +455,34 @@ describe("Evolution inbound webhook registration (MESSAGES_UPSERT)", () => {
     whatsappBotDisclaimerAt: new Date("2026-01-01"),
   };
 
-  it("registers the webhook when whatsapp-bot is entitled", async () => {
-    const app = buildApp(
-      fakePrisma({
-        ...BOT_ROW,
-        cloudEntitlements: ["whatsapp-bot"],
-        cloudSyncedAt: new Date(),
-      })
-    );
-    const res = await app.inject({
-      headers: { host: "192.168.1.10:4000" },
+  const PRO_BOT_ROW = {
+    ...BOT_ROW,
+    cloudEntitlements: ["whatsapp-bot"],
+    cloudSyncedAt: new Date(),
+  };
+
+  /** PUT /settings/whatsapp com transporte evolution — dispara o registo
+   *  do webhook (botDisclaimerAccepted ou transport=evolution). */
+  async function saveWhatsApp(host: string) {
+    const app = buildApp(fakePrisma(PRO_BOT_ROW));
+    return await app.inject({
+      headers: { host },
       method: "PUT",
       payload: { botDisclaimerAccepted: true, transport: "evolution" },
       url: "/api/settings/whatsapp",
     });
+  }
+
+  const lastWebhookCall = () =>
+    mocks.setEvolutionWebhook.mock.calls.at(-1) as
+      | [
+          { apiKey: string; baseUrl: string; instance: string },
+          { headers?: Record<string, string>; url: string },
+        ]
+      | undefined;
+
+  it("registers the webhook when whatsapp-bot is entitled", async () => {
+    const res = await saveWhatsApp("192.168.1.10:4000");
     expect(res.statusCode).toBe(200);
     expect(mocks.setEvolutionWebhook).toHaveBeenCalledWith(
       {
@@ -462,7 +490,79 @@ describe("Evolution inbound webhook registration (MESSAGES_UPSERT)", () => {
         baseUrl: "http://evolution:8080",
         instance: "oficinaos",
       },
-      "http://192.168.1.10:4000/api/public/whatsapp/evolution/inbound/evo-tok"
+      {
+        // O segredo vai no header — nunca no path (Finding ronda 2).
+        headers: { "x-oficinaos-webhook-token": "evo-tok" },
+        url: "http://192.168.1.10:4000/api/public/whatsapp/evolution/inbound",
+      }
+    );
+  });
+
+  it("localhost com IP LAN → callback no IP LAN real (porta do pedido)", async () => {
+    // Single-PC: o staff abre localhost mas a Evolution noutro PC da
+    // LAN não resolve esse nome — o IPv4 LAN é o endereço alcançável.
+    mocks.primaryLanIpv4.mockReturnValue("192.168.1.20");
+    const res = await saveWhatsApp("localhost:4000");
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "http://192.168.1.20:4000/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("localhost sem IP LAN + APP_URL → callback na APP_URL configurada", async () => {
+    // Contentor com netns isolado (Docker): nem localhost nem IP LAN
+    // servem — a APP_URL pública é a única morada alcançável.
+    mocks.primaryLanIpv4.mockReturnValue(null);
+    process.env.APP_URL = "https://oficinaos.example.com";
+    resetEnvForTests();
+    const res = await saveWhatsApp("localhost:4000");
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "https://oficinaos.example.com/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("localhost sem IP LAN nem APP_URL em netns isolado → fallback docker app:PORT", async () => {
+    // wa-local: app e Evolution na mesma network do compose — o nome do
+    // serviço é alcançável mesmo sem IP LAN nem domínio configurado.
+    mocks.primaryLanIpv4.mockReturnValue(null);
+    mocks.hasIsolatedNetNs.mockReturnValue(true);
+    const res = await saveWhatsApp("localhost:4000");
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "http://app:4000/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("localhost sem rede nenhuma → não regista (sem URL alcançável)", async () => {
+    mocks.primaryLanIpv4.mockReturnValue(null);
+    mocks.hasIsolatedNetNs.mockReturnValue(false);
+    const res = await saveWhatsApp("localhost:4000");
+    expect(res.statusCode).toBe(200);
+    expect(mocks.setEvolutionWebhook).not.toHaveBeenCalled();
+  });
+
+  it("host público → callback em HTTPS (token não viaja em claro)", async () => {
+    const res = await saveWhatsApp("oficinaos.example.com");
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "https://oficinaos.example.com/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("host público com porta → HTTPS preserva a porta explícita", async () => {
+    const res = await saveWhatsApp("oficinaos.example.com:8443");
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "https://oficinaos.example.com:8443/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("host .local (mDNS) → HTTP — continua LAN/trusted", async () => {
+    const res = await saveWhatsApp("oficinaos.local:4000");
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "http://oficinaos.local:4000/api/public/whatsapp/evolution/inbound"
     );
   });
 
