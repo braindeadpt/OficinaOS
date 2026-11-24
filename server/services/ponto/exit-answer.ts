@@ -38,7 +38,14 @@ import { NEGATION_WORDS, normalizePontoText } from "./commands.js";
 export type PontoExitAnswer =
   | { kind: "ambiguous" }
   | { kind: "confirmed" }
-  | { hhmm: string; kind: "time" }
+  | {
+      /** Data declarada na resposta («23/11») — se existir, tem de
+       *  bater num dos dias candidatos do turno; sem coincidência o
+       *  handler repete a pergunta em vez de gravar no dia errado. */
+      date?: { day: number; month: number; year: number | null };
+      hhmm: string;
+      kind: "time";
+    }
   | null;
 
 const AFFIRMATIVE_WORDS = new Set([
@@ -160,7 +167,13 @@ const DATE_REF_RE =
 // texto cru antes da normalização («/» e «-» viram espaços e os
 // números fingiam ser horas soltas). O «.» fica de fora de propósito
 // — colidiria com as horas compactas («18.30»).
-const DATE_SLASH_RE = /\b\d{1,2}\s*[/-]\s*\d{1,2}(?:\s*[/-]\s*\d{2,4})?\b/g;
+// Os olhares laterais impedem comer a ponta dum intervalo horário —
+// «18:00-19» não é a data «00-19» nem «18-19:30» a data «18-19»: a
+// frase fica inteira e as duas horas tornam a resposta ambígua. Os
+// grupos capturados servem para devolver a data declarada na
+// resposta.
+const DATE_SLASH_RE =
+  /(?<![\d:.])\b(\d{1,2})\s*[/-]\s*(\d{1,2})(?:\s*[/-]\s*(\d{2,4}))?\b(?![\d:.])/g;
 // Intervalo «de 7 a 8 horas» — os dois números são as pontas duma
 // duração ou faixa («de 1 a 2 horas e meia»), não horas soltas.
 const RANGE_QTY_RE = /\b\d{1,3}\s+a\s+\d{1,3}\b/gi;
@@ -360,12 +373,47 @@ function collectClause(
   }
 }
 
+/** Primeira data «23/11[/2026]» do texto — valida dia/mês, normaliza
+ *  ano de 2 dígitos. `ambiguous` quando há datas distintas declaradas
+ *  («23/11 ou 24/11») — tal como duas horas, nunca se escolhe uma. */
+function statedDate(text: string): {
+  ambiguous: boolean;
+  date?: { day: number; month: number; year: number | null };
+} {
+  const keys = new Set<string>();
+  let date: { day: number; month: number; year: number | null } | undefined;
+  for (const m of text.matchAll(DATE_SLASH_RE)) {
+    const day = Number(m[1]);
+    const month = Number(m[2]);
+    if (day < 1 || day > 31 || month < 1 || month > 12) {
+      continue;
+    }
+    let year: number | null = null;
+    if (m[3] !== undefined) {
+      const y = Number(m[3]);
+      year = y < 100 ? y + 2000 : y;
+    }
+    keys.add(`${year ?? "*"}/${month}/${day}`);
+    date ??= { day, month, year };
+  }
+  return { ambiguous: keys.size > 1, date };
+}
+
 export function parsePontoExitAnswer(
   text: string | null | undefined
 ): PontoExitAnswer {
   if (!text) {
     return null;
   }
+  // Data declarada («23/11») — sai do texto dos dígitos mas fica
+  // registada na resposta: o handler só grava se bater num dos dias
+  // candidatos do turno, senão repete a pergunta. Duas datas
+  // distintas («23/11 ou 24/11») são ambíguas como duas horas.
+  const stated = statedDate(text);
+  if (stated.ambiguous) {
+    return { kind: "ambiguous" };
+  }
+  const date = stated.date;
   // 1) Horas por oração — uma negação só descarta a hora da própria
   //    oração: "não, saí às 18:20" afirma 18:20; "não saí às 18:00,
   //    ainda estou a trabalhar" não declara nada.
@@ -377,7 +425,7 @@ export function parsePontoExitAnswer(
     collectClause(clause, explicit, bare, bound, looseBound);
   }
   if (explicit.size === 1 && bound.size === 0) {
-    return { hhmm: [...explicit][0], kind: "time" };
+    return { date, hhmm: [...explicit][0], kind: "time" };
   }
   if (explicit.size > 1 || (explicit.size === 1 && bound.size > 0)) {
     // Ambíguo — duas ou mais horas declaradas (uma hora mais um
@@ -414,7 +462,7 @@ export function parsePontoExitAnswer(
     const raw = [...bare][0];
     const hhmm = hhmmOf(Number(raw), 0, zeroPadded(raw));
     if (hhmm) {
-      return { hhmm, kind: "time" };
+      return { date, hhmm, kind: "time" };
     }
   }
   if (bare.size > 1) {

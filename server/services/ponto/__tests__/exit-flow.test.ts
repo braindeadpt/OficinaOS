@@ -64,6 +64,7 @@ import type {
   InboundMessage,
   InboundTransport,
 } from "../../bot-intents.js";
+import { parsePontoExitAnswer } from "../exit-answer.js";
 import { tryHandlePontoStaff, workedMs } from "../handler.js";
 import {
   clearAllPendingPonto,
@@ -444,6 +445,11 @@ describe("resposta ao lembrete de saída", () => {
       transport: "sms",
     });
     armPending();
+    // O parser devolve mesmo «ambiguous» — o desvio não depende só
+    // de haver dígitos (senão testaria-se a rota errada).
+    expect(parsePontoExitAnswer("Saí 18:05-19")).toEqual({
+      kind: "ambiguous",
+    });
 
     await tryHandlePontoStaff(ctx, message("Saí 18:05-19"), t);
 
@@ -480,17 +486,34 @@ describe("resposta ao lembrete de saída", () => {
     expect(entry.reason).toBe("saída registada pelo trabalhador");
   });
 
-  it("«Saí 23/11 18:05» por SMS com pending → a data sai do texto e grava 18:05", async () => {
-    // «23/11» é data com barras — sai do texto cru antes do parse e
-    // a hora única 18:05 grava-se como correção declarada. Sem o
-    // desvio, o comando SAÍDA gravava a hora de receção (18:30).
-    const { ctx, message, t } = setup({
+  it("«Saí 23/11 18:05» por SMS com pending → data de outro dia repete a pergunta", async () => {
+    // A data declarada (23 de novembro) não é nenhum dos dias
+    // candidatos do turno (10 e 11 de janeiro): a resposta não é
+    // sobre este lembrete — repete-se a pergunta sem gravar 18:05
+    // no dia errado nem limpar o pending.
+    const { ctx, message, sent, t } = setup({
       smsAllowed: true,
       transport: "sms",
     });
     armPending();
 
     await tryHandlePontoStaff(ctx, message("Saí 23/11 18:05"), t);
+
+    expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
+    expect(sent.at(-1)).toContain("escreva a hora de saída");
+    expect(getPendingPontoExit("user-1")).not.toBeNull();
+  });
+
+  it("«Saí 10/1 18:05» com pending → data bate no turno e grava 18:05", async () => {
+    // O mesmo formato com a data do próprio turno: «10/1» é o dia
+    // da presumida — a hora declarada grava-se nesse dia.
+    const { ctx, message, t } = setup({
+      smsAllowed: true,
+      transport: "sms",
+    });
+    armPending();
+
+    await tryHandlePontoStaff(ctx, message("Saí 10/1 18:05"), t);
 
     expect(mocks.recordPontoEntry).toHaveBeenCalledTimes(1);
     const entry = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<

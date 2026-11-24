@@ -315,13 +315,27 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
       hhmm: "20:00",
       kind: "time",
     });
-    // «23/11» — data com barras sai do texto; fica só a hora.
+    // «23/11» — data com barras sai do texto e fica declarada na
+    // resposta: o handler só grava se coincidir com o dia do turno.
     expect(parsePontoExitAnswer("Saí 23/11 18:05")).toEqual({
+      date: { day: 23, month: 11, year: null },
       hhmm: "18:05",
       kind: "time",
     });
-    // Intervalo abreviado — duas horas candidatas: ambíguo.
+    // Intervalo abreviado — duas horas candidatas: ambíguo. A ponta
+    // com hífen não é data («00-19» colada a «:» fica no texto e o
+    // «18-19» de «18-19:30» também).
     expect(parsePontoExitAnswer("Saí 18:05-19")).toEqual({
+      kind: "ambiguous",
+    });
+    expect(parsePontoExitAnswer("Saí 18:00-19")).toEqual({
+      kind: "ambiguous",
+    });
+    expect(parsePontoExitAnswer("Saí 18-19:30")).toEqual({
+      kind: "ambiguous",
+    });
+    // Duas datas distintas declaradas — ambíguo como duas horas.
+    expect(parsePontoExitAnswer("Saí 23/11 ou 24/11 às 18:05")).toEqual({
       kind: "ambiguous",
     });
   });

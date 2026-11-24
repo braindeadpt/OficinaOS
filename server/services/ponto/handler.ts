@@ -718,8 +718,29 @@ async function onExitReminderAnswer(
       presumedDay.date,
       dayRange(env.tz, presumedDay.end).date,
     ]);
+    // Data declarada («saí 23/11 às 18:05») — só serve quando bate num
+    // dos dias candidatos. Se aponta para outro dia, a resposta não é
+    // sobre este turno: repete-se a pergunta com o pending vivo em vez
+    // de gravar a hora no dia errado.
+    const stated = answer.date;
+    const wanted = stated
+      ? new Set(
+          [...ymds].filter((ymd) => {
+            const [y, mo, d] = ymd.split("-").map(Number);
+            return (
+              d === stated.day &&
+              mo === stated.month &&
+              (stated.year === null || y === stated.year)
+            );
+          })
+        )
+      : ymds;
+    if (wanted.size === 0) {
+      await askExitQuestion(env, PONTO_TEXT.exitReminderReprompt);
+      return;
+    }
     const openAt = pending.shiftOpenAt ? Date.parse(pending.shiftOpenAt) : null;
-    const candidates = [...ymds]
+    const candidates = [...wanted]
       .map((ymd) => zonedDateTimeToUtc(env.tz, ymd, answer.hhmm))
       .filter(
         (d): d is Date =>
@@ -736,8 +757,8 @@ async function onExitReminderAnswer(
     if (candidates.length > 1) {
       // Dois dias plausíveis — nunca se assume: pergunta-se ONTEM/HOJE
       // com o pending vivo (clarifyDate) em vez de gravar ao acaso.
-      // ymds tem exatamente os dois dias candidatos por ordem.
-      const [ymdReminder, ymdReply] = [...ymds].sort();
+      // wanted tem exatamente os dois dias candidatos por ordem.
+      const [ymdReminder, ymdReply] = [...wanted].sort();
       const clarify = { hhmm: answer.hhmm, ymdReminder, ymdReply };
       setPendingPontoExit(env.staff.user.id, {
         ...pending,
