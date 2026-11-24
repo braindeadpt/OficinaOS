@@ -641,3 +641,58 @@ describe("buildQuoteSuggestion — service.template", () => {
     expect(s.lines.every((l) => l.reasonCheck === "battery.health")).toBe(true);
   });
 });
+
+describe("buildQuoteSuggestion — speaker vs earpiece disambiguation", () => {
+  it("does not suggest the loudspeaker for a failed earpiece check", () => {
+    // «Speaker» é a coluna — está contido em «speaker de chamadas» mas não
+    // É um auricular: expressões multi-palavra só contam num sentido
+    // (o nome da peça tem de conter a expressão, não o inverso).
+    const parts: QuotePartInput[] = [
+      {
+        category: "SPEAKER",
+        defaultPrice: 15,
+        id: "part-coluna",
+        name: "Coluna",
+        stockQuantity: 2,
+      },
+      {
+        category: "SPEAKER",
+        defaultPrice: 12,
+        id: "part-speaker",
+        name: "Speaker",
+        stockQuantity: 2,
+      },
+    ];
+    const s = build(
+      diag({
+        "checklist.earpiece": { Status: "fail" },
+        "checklist.speaker": { Status: "fail" },
+      }),
+      { parts }
+    );
+    const partLines = s.lines.filter((l) => l.kind === "part");
+    expect(partLines).toHaveLength(1);
+    expect(partLines[0].catalogId).toBe("part-coluna");
+    expect(s.unmatchedChecks).toEqual(["checklist.earpiece"]);
+  });
+
+  it("recognises 'Altifalante superior' as the earpiece", () => {
+    // Posição do auricular sem a palavra «chamadas» — sem o hint próprio a
+    // avaria ficava sem sugestão mesmo com a peça certa em stock.
+    const parts: QuotePartInput[] = [
+      {
+        category: "SPEAKER",
+        defaultPrice: 20,
+        id: "part-alt-superior",
+        name: "Altifalante superior iPhone 15",
+        stockQuantity: 1,
+      },
+    ];
+    const s = build(diag({ "checklist.earpiece": { Status: "fail" } }), {
+      parts,
+    });
+    const part = s.lines.find((l) => l.kind === "part");
+    expect(part?.catalogId).toBe("part-alt-superior");
+    expect(s.unmatchedChecks).toEqual([]);
+  });
+});

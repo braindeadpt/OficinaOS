@@ -188,6 +188,7 @@ const RULE_EARPIECE: CheckRule = {
     "earpiece",
     "receiver",
     "altifalante de chamadas",
+    "altifalante superior",
     "speaker de chamadas",
   ],
   partCategory: "SPEAKER",
@@ -329,8 +330,16 @@ interface ScoredCandidate<T> {
 
 /**
  * Confiança do nome do item face a um conjunto de hints normalizados:
- * equals → "high" (match exato), contains em qualquer direção → "low".
- * Um equals em qualquer hint ganha sempre.
+ * equals → "high" (match exato), contains → "low". Um equals em qualquer
+ * hint ganha sempre.
+ *
+ * A direcção do contains depende da especificidade do hint: palavras
+ * simples («bateria», «coluna») aceitam os dois sentidos — «Bateria
+ * iPhone 15» contém «bateria» e «bateria» contém-se a si. Expressões
+ * multi-palavra («speaker de chamadas», «altifalante superior») identificam
+ * um componente concreto e só contam quando o NOME DO ITEM as contém —
+ * aceitar o inverso («Speaker» contido em «speaker de chamadas») sugeria
+ * a coluna como auricular (BUG #166 r2).
  */
 function matchConfidence(
   norm: string,
@@ -341,7 +350,8 @@ function matchConfidence(
     if (norm === hint) {
       return "high";
     }
-    if (norm.includes(hint) || hint.includes(norm)) {
+    const specific = hint.includes(" ");
+    if (norm.includes(hint) || (!specific && hint.includes(norm))) {
       confidence = "low";
     }
   }
