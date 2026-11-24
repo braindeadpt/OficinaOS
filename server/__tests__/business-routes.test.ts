@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { businessRoutes } from "../routes/business.js";
 import { purchaseOrdersRoutes } from "../routes/purchase-orders.js";
 
-function build({ admin = true, cost = true } = {}) {
+function build({ admin = true, aiInbox = true, cost = true } = {}) {
   const order = {
     id: "o1",
     title: "Parts",
@@ -44,6 +44,13 @@ function build({ admin = true, cost = true } = {}) {
     businessMessageLink: {
       upsert: vi.fn(async ({ create }) => create),
       deleteMany: vi.fn(async () => ({ count: 0 })),
+    },
+    shopSettings: {
+      findUnique: vi.fn(async () => ({
+        cloudEntitlements: aiInbox ? ["ai-inbox"] : [],
+        cloudSyncedAt: new Date(),
+      })),
+      upsert: vi.fn(async ({ create }) => create),
     },
     commercialAgreement: {
       findMany: vi.fn(async () => []),
@@ -211,6 +218,51 @@ describe("business authorization and linkage", () => {
         },
       })
     );
+    await app.close();
+  });
+  it("hides inbox messages from manual capture once ai-inbox is revoked", async () => {
+    // SEC #164 — revogado o módulo, a captura manual já não lê mensagens
+    // da caixa de entrada (conversationId preenchido).
+    const { app, prisma } = build({ aiInbox: false });
+    expect((await app.inject({ url: "/business/messages" })).statusCode).toBe(
+      200
+    );
+    expect(prisma.businessMessage.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          conversationId: { equals: null },
+        }),
+      })
+    );
+    await app.close();
+  });
+  it("keeps inbox messages in manual capture while ai-inbox is active", async () => {
+    const { app, prisma } = build();
+    expect((await app.inject({ url: "/business/messages" })).statusCode).toBe(
+      200
+    );
+    const arg = (prisma.businessMessage.findMany as ReturnType<typeof vi.fn>)
+      .mock.calls[0][0] as { where: Record<string, unknown> };
+    expect(arg.where.conversationId).toBeUndefined();
+    await app.close();
+  });
+  it("refuses to edit an inbox message from manual capture once ai-inbox is revoked", async () => {
+    const { app, prisma } = build({ aiInbox: false });
+    (
+      prisma.businessMessage.findUnique as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({ conversationId: "conv-1" });
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/business/messages/m1",
+      payload: {
+        body: "alterado",
+        channel: "WHATSAPP",
+        deliveryStatus: "CAPTURED",
+        direction: "INBOUND",
+        subject: "assunto",
+      },
+    });
+    expect(res.statusCode).toBe(404);
     await app.close();
   });
   it("calculates commission server-side rather than trusting the submitted total", async () => {
