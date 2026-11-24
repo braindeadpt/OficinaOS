@@ -544,19 +544,26 @@ function pairWorkIntervals(
   now: Date
 ): WorkInterval[] {
   const intervals: WorkInterval[] = [];
-  let open: { atMs: number; dayEndMs: number } | null = null;
+  let open: { atMs: number; entry: ComputeRow } | null = null;
   for (const e of usable) {
     if (e.type === "ENTRADA" || e.type === "VOLTEI") {
-      if (open && e.at.getTime() >= open.dayEndMs) {
-        intervals.push({ endMs: open.dayEndMs, startMs: open.atMs });
-        open = null;
+      if (open) {
+        // Abertura noutro dia civil com o turno ainda aberto. As
+        // fronteiras de dia só se calculam nesta via — fechada por
+        // PAUSA/SAIDA ou no rabo final, a comparação de dias civis
+        // (formatador em cache) chega para detetar a mudança.
+        const openDay = localDateKey(tz, open.entry.at);
+        if (localDateKey(tz, e.at) !== openDay) {
+          intervals.push({
+            endMs: localDayRange(tz, openDay).end.getTime(),
+            startMs: open.atMs,
+          });
+          open = null;
+        }
       }
       // A primeira abertura ganha; entradas/voltas duplicadas no mesmo
       // dia civil não reiniciam o intervalo.
-      open ??= {
-        atMs: e.at.getTime(),
-        dayEndMs: localDayRange(tz, localDateKey(tz, e.at)).end.getTime(),
-      };
+      open ??= { atMs: e.at.getTime(), entry: e };
       continue;
     }
     // PAUSA e SAIDA fecham o intervalo aberto — inclusive no dia civil
@@ -568,7 +575,10 @@ function pairWorkIntervals(
   }
   if (open) {
     intervals.push({
-      endMs: Math.min(now.getTime(), open.dayEndMs),
+      endMs: Math.min(
+        now.getTime(),
+        localDayRange(tz, localDateKey(tz, open.entry.at)).end.getTime()
+      ),
       startMs: open.atMs,
     });
   }
