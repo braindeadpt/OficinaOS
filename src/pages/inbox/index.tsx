@@ -441,8 +441,15 @@ export default function InboxPage() {
                     <button
                       className="rounded-lg bg-surface-container px-3 py-1.5 font-semibold text-on-surface-variant text-xs"
                       onClick={() =>
-                        act(api.post(`/inbox/drafts/${d.id}/reject`)).then(() =>
-                          loadDrafts()
+                        act(
+                          api
+                            .post(`/inbox/drafts/${d.id}/reject`)
+                            .then((res) => {
+                              if (res.data?.reconciled) {
+                                toast.info(t("inbox.draft_already_sent"));
+                              }
+                              return loadDrafts();
+                            })
                         )
                       }
                       type="button"

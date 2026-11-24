@@ -297,6 +297,41 @@ describe("rascunhar_resposta / enviar_rascunho — §G.5", () => {
     );
   });
 
+  it("SENDING stale com mensagem já gravada reconcilia para SENT sem reenviar", async () => {
+    // Regressão Devin: restart entre recordOutboundMessage (externalId
+    // "draft:<id>") e finalizar o rascunho — o retry não pode enviar uma
+    // segunda vez nem o Reject um cancelamento falso.
+    const update = vi.fn(async () => ({}));
+    const prisma = fakePrisma({
+      businessMessage: {
+        findFirst: vi.fn(async () => ({
+          id: "m-sent-1",
+          receivedAt: new Date("2026-01-01T10:00:00Z"),
+        })),
+        findMany: vi.fn(async () => []),
+      },
+      inboxDraft: {
+        findUnique: vi.fn(async () => ({
+          approvedAt: new Date(),
+          conversation: {
+            channel: "whatsapp",
+            id: "conv-1",
+            lastInboundAt: new Date(),
+            phone: "351912345678",
+          },
+          id: "draft-1",
+          status: "SENDING",
+          text: "x",
+        })),
+        update,
+        updateMany: vi.fn(async () => ({ count: 1 })),
+      },
+    });
+    const out = await sendApprovedDraft(prisma, log, "draft-1", "u-owner");
+    expect(out.error).toBeUndefined();
+    expect(mocks.sendWhatsAppText).not.toHaveBeenCalled();
+  });
+
   it("enviar_rascunho sem aprovação e sem mcpDirectSend → aguarda aprovação", async () => {
     const prisma = fakePrisma({
       inboxDraft: {

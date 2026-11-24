@@ -912,6 +912,7 @@
     "by_system": "Automático",
     "channel_all": "Todos los canales",
     "channel_filter": "Canal",
+    "draft_already_sent": "El mensaje ya había sido enviado: el borrador fue conciliado en lugar de rechazado.",
     "draft_approve": "Aprobar y enviar",
     "draft_reject": "Rechazar",
     "drafts_pending": "{{count}} borradores de IA en espera de aprobación",

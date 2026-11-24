@@ -912,6 +912,7 @@
     "by_system": "Automatic",
     "channel_all": "All channels",
     "channel_filter": "Channel",
+    "draft_already_sent": "The message had already been sent — the draft was reconciled instead of rejected.",
     "draft_approve": "Approve & send",
     "draft_reject": "Reject",
     "drafts_pending": "{{count}} AI drafts awaiting approval",

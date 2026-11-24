@@ -912,6 +912,7 @@
     "by_system": "Automatique",
     "channel_all": "Toutes les chaînes",
     "channel_filter": "Canal",
+    "draft_already_sent": "Le message avait déjà été envoyé : le projet a été réconcilié au lieu d’être rejeté.",
     "draft_approve": "Approuver et envoyer",
     "draft_reject": "Rejeter",
     "drafts_pending": "{{count}} brouillons d'IA en attente d'approbation",

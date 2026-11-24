@@ -912,6 +912,7 @@
     "by_system": "Automático",
     "channel_all": "Todos os canais",
     "channel_filter": "Canal",
+    "draft_already_sent": "A mensagem já tinha sido enviada – o rascunho foi reconciliado em vez de rejeitado.",
     "draft_approve": "Aprovar e enviar",
     "draft_reject": "Rejeitar",
     "drafts_pending": "{{count}} rascunhos de IA a aguardar aprovação",
