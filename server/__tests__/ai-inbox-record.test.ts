@@ -116,20 +116,19 @@ function fakePrisma() {
           { equals?: null; lt?: Date }
         >[];
         const match = clauses.some((clause) =>
-          Object.entries(clause).some(([f, cond]) => {
-            if (f === "id") {
-              return false;
-            }
-            const current = conv[f] as Date | null | undefined;
-            if ("equals" in cond) {
-              return current === null || current === undefined;
-            }
-            return (
-              current !== null &&
-              current !== undefined &&
-              current < (cond.lt as Date)
-            );
-          })
+          Object.entries(clause)
+            .filter(([f]) => f !== "id")
+            .every(([f, cond]) => {
+              const current = conv[f] as Date | null | undefined;
+              if ("equals" in cond) {
+                return current === null || current === undefined;
+              }
+              return (
+                current !== null &&
+                current !== undefined &&
+                current < (cond.lt as Date)
+              );
+            })
         );
         if (match) {
           const field = Object.keys(data)[0] as string;
