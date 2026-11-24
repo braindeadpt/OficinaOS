@@ -322,6 +322,12 @@ export default function SettingsPontoSection({
         <div className="flex items-center gap-2">
           <Link
             className="inline-flex min-h-8 pointer-coarse:min-h-11 items-center justify-center gap-1.5 rounded-md border border-outline bg-surface-container-lowest px-3 py-1.5 font-sans font-semibold text-on-surface text-sm transition-colors hover:bg-surface-container"
+            to="/ponto/info"
+          >
+            {t("ponto.info_open")}
+          </Link>
+          <Link
+            className="inline-flex min-h-8 pointer-coarse:min-h-11 items-center justify-center gap-1.5 rounded-md border border-outline bg-surface-container-lowest px-3 py-1.5 font-sans font-semibold text-on-surface text-sm transition-colors hover:bg-surface-container"
             to="/ponto/qr"
           >
             {t("ponto.qr_open")}
