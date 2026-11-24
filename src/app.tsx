@@ -41,6 +41,7 @@ const TasksPage = lazy(() => import("@/pages/tasks"));
 const JobDetailPage = lazy(() => import("@/pages/jobs/detail"));
 const NotificationsPage = lazy(() => import("@/pages/notifications"));
 const PartsCatalogPage = lazy(() => import("@/pages/parts"));
+const PontoPage = lazy(() => import("@/pages/ponto"));
 const PontoQrPage = lazy(() => import("@/pages/ponto/qr"));
 const PosPage = lazy(() => import("@/pages/pos"));
 const PreCheckPage = lazy(() => import("@/pages/pre-check"));
@@ -433,6 +434,18 @@ export default function App() {
                   </DashboardLayout>
                 }
                 path="/customers/:id"
+              />
+            </Route>
+            <Route
+              element={<RequirePermission perm={{ reports: ["viewShop"] }} />}
+            >
+              <Route
+                element={
+                  <DashboardLayout>
+                    <PontoPage />
+                  </DashboardLayout>
+                }
+                path="/ponto"
               />
             </Route>
             <Route
