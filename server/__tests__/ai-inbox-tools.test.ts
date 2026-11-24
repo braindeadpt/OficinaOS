@@ -302,6 +302,7 @@ describe("rascunhar_resposta / enviar_rascunho — §G.5", () => {
     // "draft:<id>") e finalizar o rascunho — o retry não pode enviar uma
     // segunda vez nem o Reject um cancelamento falso.
     const update = vi.fn(async () => ({}));
+    const updateMany = vi.fn(async () => ({ count: 1 }));
     const prisma = fakePrisma({
       businessMessage: {
         findFirst: vi.fn(async () => ({
@@ -324,12 +325,22 @@ describe("rascunhar_resposta / enviar_rascunho — §G.5", () => {
           text: "x",
         })),
         update,
-        updateMany: vi.fn(async () => ({ count: 1 })),
+        updateMany,
       },
     });
     const out = await sendApprovedDraft(prisma, log, "draft-1", "u-owner");
     expect(out.error).toBeUndefined();
     expect(mocks.sendWhatsAppText).not.toHaveBeenCalled();
+    // Sem isto o teste passava mesmo que a reconciliação não gravasse nada:
+    // verifica a transição SENDING → SENT com o id e a data da mensagem.
+    expect(updateMany).toHaveBeenCalledWith({
+      data: {
+        messageId: "m-sent-1",
+        sentAt: new Date("2026-01-01T10:00:00Z"),
+        status: "SENT",
+      },
+      where: { id: "draft-1", status: "SENDING" },
+    });
   });
 
   it("enviar_rascunho sem aprovação e sem mcpDirectSend → aguarda aprovação", async () => {
