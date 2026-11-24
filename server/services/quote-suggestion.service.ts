@@ -454,6 +454,35 @@ function isPreferredPart<T extends { id: string; name: string }>(
 }
 
 /**
+ * excludeHints identificam OUTRO componente (ex.: o earpiece para a regra
+ * da coluna). Um nome que fala SÓ dele é ignorado; um serviço combinado
+ * («Troca de coluna e altifalante superior») serve às duas avarias — se,
+ * removida a expressão alheia, o nome ainda casa com os hints da regra,
+ * o candidato mantém-se (BUG #166 r4). stripped vazio = o nome É a
+ * expressão alheia («Altifalante superior» para a coluna): rejeita —
+ * matchConfidence aceitaria a cadeia vazia, que todo hint contém
+ * (BUG #166 r5).
+ */
+function excludedByOtherComponent(
+  norm: string,
+  normalizedExclude: string[],
+  normalizedHints: string[],
+  strictMultiWord: boolean
+): boolean {
+  if (!normalizedExclude.some((ex) => norm.includes(ex))) {
+    return false;
+  }
+  const stripped = normalizedExclude
+    .reduce((acc, ex) => acc.split(ex).join(" "), norm)
+    .replace(/\s+/g, " ")
+    .trim();
+  return (
+    !stripped ||
+    matchConfidence(stripped, normalizedHints, strictMultiWord) === null
+  );
+}
+
+/**
  * Melhor candidato de um pool para os hints dados. Empates desempatados por
  * isPreferredPart (peças — forParts) ou isPreferredRepair (reparações) —
  * determinístico.
@@ -487,27 +516,16 @@ function pickBest<T extends { id: string; name: string }>(
 
   for (const item of pool) {
     const norm = normalizeKey(item.name);
-    if (!norm) {
+    if (
+      !norm ||
+      excludedByOtherComponent(
+        norm,
+        normalizedExclude,
+        normalizedHints,
+        strictMultiWord
+      )
+    ) {
       continue;
-    }
-    if (normalizedExclude.some((ex) => norm.includes(ex))) {
-      // Nome que fala SÓ do outro componente é ignorado; um serviço
-      // combinado («Troca de coluna e altifalante superior») serve às duas
-      // avarias — se, removida a expressão alheia, o nome ainda casa com
-      // os hints da regra, o candidato mantém-se (BUG #166 r4).
-      const stripped = normalizedExclude
-        .reduce((acc, ex) => acc.split(ex).join(" "), norm)
-        .replace(/\s+/g, " ")
-        .trim();
-      // stripped vazio = o nome É a expressão do outro componente
-      // («Altifalante superior» para a regra da coluna): matchConfidence
-      // aceitaria a cadeia vazia (todo hint a contém) — rejeita já.
-      if (
-        !stripped ||
-        matchConfidence(stripped, normalizedHints, strictMultiWord) === null
-      ) {
-        continue;
-      }
     }
     const matched = matchConfidence(norm, normalizedHints, strictMultiWord);
     if (!matched) {
