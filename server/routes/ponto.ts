@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@generated/client";
 import { AppError } from "@shared/errors/app-error.js";
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginCallback } from "fastify";
 import { decryptSecret } from "../lib/crypto.js";
 import { requirePermission } from "../middlewares/rbac.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
@@ -43,8 +43,8 @@ async function requirePonto(prisma: PrismaClient): Promise<PontoAuth> {
   };
 }
 
-// biome-ignore lint/suspicious/useAwait: FastifyPluginAsync requires async
-export const pontoRoutes: FastifyPluginAsync = async (app) => {
+// Registo síncrono — a variante callback evita o async sem await.
+export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
   app.get(
     "/status",
     {
@@ -120,4 +120,6 @@ export const pontoRoutes: FastifyPluginAsync = async (app) => {
       );
     }
   );
+
+  done();
 };
