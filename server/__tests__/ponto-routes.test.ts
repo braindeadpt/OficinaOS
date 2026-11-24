@@ -2,6 +2,7 @@ import { isAppError } from "@shared/errors/app-error.js";
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { encryptSecret } from "../lib/crypto.js";
+import { __resetTzCache } from "../middlewares/dashboard-scope.js";
 import { pontoRoutes } from "../routes/ponto.js";
 
 const CLOUD_URL = "https://cloud.test";
@@ -27,6 +28,8 @@ function fakePrisma(overrides: Partial<SettingsRow> = {}) {
   };
   return {
     shopSettings: {
+      // dashboardScope lê o fuso da loja via findFirst (cache 60s).
+      findFirst: vi.fn(async () => ({ timezone: "Europe/Lisbon" })),
       findUnique: vi.fn(async () => ({ ...row })),
     },
   };
@@ -75,10 +78,12 @@ function buildApp(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  __resetTzCache();
 });
 
 afterEach(() => {
   vi.clearAllMocks();
+  __resetTzCache();
 });
 
 describe("ponto — GET /status", () => {
@@ -93,7 +98,8 @@ describe("ponto — GET /status", () => {
     const app = buildApp(fakePrisma());
     const res = await app.inject({ method: "GET", url: "/api/ponto/status" });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ enabled: true });
+    // tz é o fuso efetivo da loja — a UI formata as horas nele.
+    expect(res.json()).toEqual({ enabled: true, tz: "Europe/Lisbon" });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -101,7 +107,7 @@ describe("ponto — GET /status", () => {
     const app = buildApp(fakePrisma({ cloudEntitlements: ["portal"] }));
     const res = await app.inject({ method: "GET", url: "/api/ponto/status" });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ enabled: false });
+    expect(res.json()).toEqual({ enabled: false, tz: "Europe/Lisbon" });
   });
 });
 

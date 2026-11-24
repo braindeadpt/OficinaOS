@@ -409,7 +409,15 @@ async function finalizeExpiredPhoto(
       command: expired.command,
       hasPhoto: false,
       location: expired.location,
-      messageAt: expired.commandAt,
+      // A espera da foto é janela da APP, não atraso de transporte: a
+      // Cloud mede a frescura (≤5 min) sobre messageAt. Com o commandAt
+      // original (comando + espera de localização + TTL da foto ≥5 min)
+      // toda a marcação sem foto caía em "registo recebido com atraso"
+      // — e um externo com auto-aprovação perdia o APROVADO. A hora em
+      // que a janela da foto fechou é o instante em que a marcação
+      // ficou final: fresco agora, e continua velho se o funcionário
+      // só aparecer horas depois (o atraso real preserva-se).
+      messageAt: new Date(expired.expiresAt).toISOString(),
       pauseMinutes: pauseMinutesOf(expired.pauseSinceAt, at),
       phoneDigits: env.phoneDigits,
       todayHasEntry: expired.todayHasEntry,

@@ -161,6 +161,24 @@ export function dayRange(
   return { start, end, date: `${year}-${mm}-${dd}` };
 }
 
+/**
+ * Bounds [start, end) of a shop-local calendar day given as "YYYY-MM-DD".
+ * Unlike dayRange (which takes an instant and finds its local day), this
+ * starts from the civil date itself — the label the user picked.
+ */
+export function localDayRange(tz: string, ymd: string): DateRange {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const start = utcFromZonedYmd(tz, y, m, d);
+  const next = new Date(Date.UTC(y, m - 1, d + 1));
+  const end = utcFromZonedYmd(
+    tz,
+    next.getUTCFullYear(),
+    next.getUTCMonth() + 1,
+    next.getUTCDate()
+  );
+  return { start, end };
+}
+
 export function monthRange(tz: string, now: Date = new Date()): DateRange {
   const { year, month } = zonedParts(tz, now);
   const start = utcFromZonedYmd(tz, year, month, 1);

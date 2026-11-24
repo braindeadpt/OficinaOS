@@ -7,10 +7,20 @@ import {
   updateSmsSettingsSchema,
   updateWhatsAppSettingsSchema,
 } from "@shared/schemas/settings.schema";
+import {
+  ipv4Octets,
+  isPublicIpv4Octets,
+  isPublicIpv6,
+} from "@shared/utils/ip-address.js";
 import type { FastifyPluginAsync } from "fastify";
+import { loadEnv } from "../config/env.js";
 import { decryptSecret } from "../lib/crypto.js";
 import { assertNotDemoMode } from "../lib/demo.js";
-import { primaryLanIpv4 } from "../lib/mdns.js";
+import {
+  hasIsolatedNetNs,
+  isDialableUrl,
+  primaryLanIpv4,
+} from "../lib/mdns.js";
 import { requirePermission } from "../middlewares/rbac.js";
 import {
   findShopSettingsUnique,
@@ -32,6 +42,7 @@ import {
 } from "../services/escpos.service.js";
 import {
   disconnectEvolutionInstance,
+  EVOLUTION_WEBHOOK_TOKEN_HEADER,
   type EvolutionConfig,
   getEvolutionState,
   pairEvolutionInstance,
@@ -812,6 +823,108 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
 
 const LOCALHOST_RE = /^(localhost|127\.|::1|\[::1\])/i;
 const PORT_SUFFIX_RE = /:(\d+)$/;
+const TRAILING_DOT_RE = /\.$/;
+// Endereços internos do Docker Desktop — HTTP na mesma é seguro (a
+// interface só existe dentro do host).
+const DOCKER_INTERNAL_HOSTS = new Set([
+  "gateway.docker.internal",
+  "host.docker.internal",
+]);
+
+/**
+ * True quando o host do callback é LAN/interno — HTTP é aceitável
+ * (a exceção trusted-LAN de security.ts). Qualquer host público
+ * (domínio ou IP roteável) exige HTTPS: o token do webhook viaja num
+ * header e em HTTP remoto seria sniffável em trânsito.
+ */
+function isPrivateCallbackHost(host: string): boolean {
+  // Ponto final DNS ("192.168.1.10.") é a mesma máquina — tira-o antes
+  // das comparações para não cair no ramo "hostname com ponto" → https.
+  const h = host.toLowerCase().replace(TRAILING_DOT_RE, "");
+  if (
+    LOCALHOST_RE.test(h) ||
+    h.endsWith(".localhost") ||
+    h.endsWith(".local") ||
+    h === "0.0.0.0" ||
+    h === "::" ||
+    h === "[::]" ||
+    DOCKER_INTERNAL_HOSTS.has(h)
+  ) {
+    return true;
+  }
+  const octets = ipv4Octets(h);
+  if (octets) {
+    return !isPublicIpv4Octets(octets);
+  }
+  if (h.startsWith("[")) {
+    return !isPublicIpv6(h);
+  }
+  // Hostname sem ponto ("app", "oficinaos", NetBIOS/mDNS) — nome interno.
+  return !h.includes(".");
+}
+
+/** scheme://host[:port] a partir de um host[:port] de pedido. O host
+ *  decide o scheme: privado/LAN fica em http (a exceção trusted-LAN de
+ *  security.ts), público sobe a https — o token do webhook viaja num
+ *  header e em HTTP remoto seria sniffável em trânsito. `url.host`
+ *  normaliza (sem userinfo, porta default do http fora) — a porta
+ *  explícita não-80 mantém-se. */
+function callbackBaseForHost(hostPort: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(`http://${hostPort}`);
+  } catch {
+    return null;
+  }
+  if (!url.hostname) {
+    return null;
+  }
+  const scheme = isPrivateCallbackHost(url.hostname) ? "http" : "https";
+  return `${scheme}://${url.host}`;
+}
+
+/**
+ * Base (scheme://host[:port]) que a Evolution consegue alcançar para o
+ * callback do webhook. O Host do pedido é a primeira escolha — o staff
+ * chegou à app por ele. Em localhost num contentor com netns isolado
+ * (Docker padrão) esse nome não serve e a máquina nem expõe IPv4 LAN:
+ * caem-se para a APP_URL configurada (obrigatória em produção, valida-
+ * da não-localhost) e, em último recurso, para o nome do serviço na
+ * rede docker (`app:PORT` — o perfil wa-local põe app e Evolution na
+ * mesma network do compose).
+ */
+function resolveEvolutionCallbackBase(requestHost: string): string | null {
+  const host = requestHost.trim();
+  if (!host) {
+    return null;
+  }
+  if (!LOCALHOST_RE.test(host)) {
+    return callbackBaseForHost(host);
+  }
+  const ip = primaryLanIpv4();
+  if (ip) {
+    const port = PORT_SUFFIX_RE.exec(host)?.[1];
+    return callbackBaseForHost(`${ip}${port ? `:${port}` : ""}`);
+  }
+  // APP_URL configurada — em produção é obrigatória e validada
+  // não-localhost; isDialableUrl rejeita loopback/wildcard (a Evolution
+  // também não os alcança — seria o mesmo beco sem saída do pedido).
+  const appUrl = loadEnv().APP_URL;
+  if (appUrl && isDialableUrl(appUrl)) {
+    try {
+      const url = new URL(appUrl);
+      if (url.protocol === "http:" || url.protocol === "https:") {
+        return callbackBaseForHost(url.host);
+      }
+    } catch {
+      // APP_URL malformada — segue para o fallback docker.
+    }
+  }
+  if (hasIsolatedNetNs()) {
+    return callbackBaseForHost(`app:${loadEnv().PORT}`);
+  }
+  return null;
+}
 
 /**
  * §5.7 — regista o webhook MESSAGES_UPSERT na instância Evolution.
@@ -820,26 +933,16 @@ const PORT_SUFFIX_RE = /:(\d+)$/;
  * ele, um termo aceite em tempos não pode continuar a registar após o
  * módulo expirar) ou livro de ponto (módulo "ponto" + o mesmo
  * entitlement de transporte, sem exigir o termo do bot). O callback
- * usa `evolutionWebhookToken` — segredo próprio, separado do SMS — e
- * o Host do pedido.
+ * usa `evolutionWebhookToken` num header próprio — o path não leva
+ * segredo (ver public.ts) — e o host resolvido por
+ * resolveEvolutionCallbackBase.
  */
 export async function tryRegisterEvolutionWebhook(
   prisma: Parameters<typeof getSmsSettings>[0],
   requestHost: string
 ): Promise<boolean> {
-  let host = requestHost;
-  // Setup de um só PC: o staff abre localhost e a Evolution (mesmo PC
-  // ou outra máquina da LAN) nunca alcança esse nome — o IPv4 real da
-  // máquina sim. Sem IPv4 LAN (ex.: namespace isolado) fica por registar.
-  if (host && LOCALHOST_RE.test(host)) {
-    const ip = primaryLanIpv4();
-    if (!ip) {
-      return false;
-    }
-    const port = PORT_SUFFIX_RE.exec(host)?.[1];
-    host = `${ip}${port ? `:${port}` : ""}`;
-  }
-  if (!host) {
+  const base = resolveEvolutionCallbackBase(requestHost);
+  if (!base) {
     return false;
   }
   let row = await getOrCreateShopSettings(prisma);
@@ -880,14 +983,19 @@ export async function tryRegisterEvolutionWebhook(
   if (!apiKey) {
     return false;
   }
-  const callbackUrl = `http://${host}/api/public/whatsapp/evolution/inbound/${row.evolutionWebhookToken}`;
+  const callbackUrl = `${base}/api/public/whatsapp/evolution/inbound`;
   const result = await setEvolutionWebhook(
     {
       apiKey,
       baseUrl: row.evolutionUrl,
       instance: row.evolutionInstance ?? "oficinaos",
     },
-    callbackUrl
+    {
+      headers: {
+        [EVOLUTION_WEBHOOK_TOKEN_HEADER]: row.evolutionWebhookToken,
+      },
+      url: callbackUrl,
+    }
   );
   return result.success;
 }

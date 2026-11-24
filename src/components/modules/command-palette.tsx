@@ -24,6 +24,7 @@ import {
 } from "@/lib/global-search";
 import { useAuthStore } from "@/stores/auth";
 import { useCommandPaletteStore } from "@/stores/command-palette";
+import { usePontoStore } from "@/stores/ponto";
 import { useUiStore } from "@/stores/ui";
 
 const DEBOUNCE_MS = 200;
@@ -91,6 +92,10 @@ export default function CommandPalette() {
   // they are not allowed to see.
   const canSeeParts = can(role, { parts: ["viewCatalog"] });
   const canSeeRepairs = can(role, { repairs: ["viewCatalog"] });
+  // /ponto é gated por entitlement — a paleta usa o mesmo estado que a
+  // sidebar/bottom-nav para não oferecer uma página trancada.
+  const pontoEnabled = usePontoStore((s) => s.enabled);
+  const fetchPontoStatus = usePontoStore((s) => s.fetchStatus);
 
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -124,6 +129,12 @@ export default function CommandPalette() {
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (pontoEnabled === null) {
+      fetchPontoStatus().catch(() => undefined);
+    }
+  }, [pontoEnabled, fetchPontoStatus]);
+
   /**
    * Two-step sign out, mirroring the sidebar: the first press arms it and the
    * second acts. Without this, a stray Enter in a palette full of one-key
@@ -149,8 +160,16 @@ export default function CommandPalette() {
   );
 
   const commands = useMemo(
-    () => buildCommands({ logout, navigate, openIntakeModal, role, signOut }),
-    [logout, navigate, openIntakeModal, role, signOut]
+    () =>
+      buildCommands({
+        logout,
+        navigate,
+        openIntakeModal,
+        pontoEnabled: pontoEnabled === true,
+        role,
+        signOut,
+      }),
+    [logout, navigate, openIntakeModal, pontoEnabled, role, signOut]
   );
 
   const matched = useMemo(
