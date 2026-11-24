@@ -503,6 +503,41 @@ describe("buildQuoteSuggestion — device-aware part priority", () => {
     expect(part?.catalogId).toBe("part-maxmah");
   });
 
+  it("keeps model priority with a decimal capacity spec (15,4 Wh)", () => {
+    // BUG #166 r13: a normalização separa o decimal («15,4 wh» →
+    // «15 4 wh») — a unidade tem de ser lida até ao fim do spec.
+    for (const name of [
+      "Bateria iPhone 15 – Max 15,4 Wh",
+      "Bateria iPhone 15 – Max 15.4Wh",
+    ]) {
+      const parts: QuotePartInput[] = [
+        {
+          category: "BATTERY",
+          defaultPrice: 20,
+          id: "part-generic",
+          name: "Bateria",
+          stockQuantity: 5,
+        },
+        {
+          category: "BATTERY",
+          defaultPrice: 35,
+          id: "part-decimal",
+          name,
+          stockQuantity: 2,
+        },
+      ];
+      const s = build(
+        diag(
+          { "battery.health": { Status: "fail" } },
+          { device: { brand: "Apple", model: "iPhone 15" } }
+        ),
+        { parts }
+      );
+      const part = s.lines.find((l) => l.kind === "part");
+      expect(part?.catalogId).toBe("part-decimal");
+    }
+  });
+
   it("rejects a Max variant with a storage spec for a Pro device", () => {
     // BUG #166 r12: «Pro Max 256GB» é variante a sério — a excepção de
     // capacidade (mAh/Wh) não pode aceitá-la; a bateria Pro ganha à
