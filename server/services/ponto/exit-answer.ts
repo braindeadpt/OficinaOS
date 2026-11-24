@@ -60,15 +60,20 @@ const AFFIRMATIVE_WORDS = new Set([
 const EXPLICIT_TIME_RE = /\b(\d{1,2})\s*[:hH.]\s*(\d{2})\b/g;
 // Hora solta — "6", "18". Só conta quando é a única candidata.
 const BARE_HOUR_RE = /\b([01]?\d|2[0-3])\b/g;
+// Quantidade de duração — "15 minutos", "2 mins", "30 segundos" — não
+// é hora solta ("Saí às 18. 15 minutos depois" não declara as 15:00).
+// «horas»/«hrs» ficam de fora de propósito: «às 18 horas» = 18:00.
+const DURATION_QTY_RE = /\b\d{1,3}\s*(?:minutos?|mins?|segundos?|segs?)\b/gi;
 // Pontuação que fecha uma oração — o "." fica quando pode ser o
-// separador Horas.minutos de EXPLICIT_TIME_RE (dígitos com espaços
-// opcionais dos dois lados: "18.05", "18. 30", "18 . 30") e separa
+// separador Horas.minutos de EXPLICIT_TIME_RE. Junto a dígitos a
+// notação compacta ganha sempre ("18.30", "18. 30", "18 . 30" —
+// mesmo seguida de «horas»: "18.30 horas" = 18:30); o "." só separa
 // quando fecha uma frase ("18:20. Não" — senão a negação da segunda
-// frase apagava a hora declarada na primeira) ou quando os dois
-// dígitos a seguir quantificam uma duração ("Saí às 18. 20 minutos
-// antes" = saída às 18:00 — não 18:20).
+// frase apagava a hora declarada na primeira) ou quando um ESPAÇO o
+// afasta dos dígitos que quantificam uma duração ("Saí às 18. 20
+// minutos antes" = saída às 18:00 — não 18:20).
 const CLAUSE_SPLIT_RE =
-  /[,;!?\n—–]|(?<!\d\s*)\.|\.(?!\s*\d{2}\b(?!\s+(?:minutos?|mins?|horas?|hrs?|segundos?|segs?)\b))/i;
+  /[,;!?\n—–]|(?<!\d\s*)\.|\.(?!\d{2})(?!\s+\d{2}\b(?!\s+(?:minutos?|mins?|horas?|hrs?|segundos?|segs?)\b))/i;
 
 /** "6" → 18, "18" → 18, "0" → 0 — saída assume-se depois do meio-dia. */
 function exitHour(raw: number): number | null {
@@ -112,10 +117,12 @@ function explicitTimes(raw: string): Set<string> {
 }
 
 /** Horas soltas distintas no texto normalizado — "6" ou "18" a sós
- *  (guarda o texto cru para distinguir "07" de "7"). */
+ *  (guarda o texto cru para distinguir "07" de "7"). Quantidades de
+ *  duração são retiradas antes: "15 minutos depois" não é a hora 15. */
 function bareHours(normalized: string): Set<string> {
   const hours = new Set<string>();
-  for (const m of normalized.matchAll(BARE_HOUR_RE)) {
+  const withoutDurations = normalized.replace(DURATION_QTY_RE, " ");
+  for (const m of withoutDurations.matchAll(BARE_HOUR_RE)) {
     hours.add(m[1]);
   }
   return hours;

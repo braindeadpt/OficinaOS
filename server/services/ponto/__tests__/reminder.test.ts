@@ -513,6 +513,25 @@ describe("lembrete de saída (Esquecimentos)", () => {
       new Date("2026-10-26T00:15:00.000Z")
     );
     expect(saidaGte()).toBe("2026-10-24T23:00:00.000Z");
+
+    // Atlantic/Azores, domingo 25-10-2026 00:30 local na 2.ª passagem
+    // (01:30Z): a meia-noite local ocorre duas vezes (00:00Z e 01:00Z —
+    // no recuo o relógio salta 01:00→00:00, verão = UTC+0, inverno =
+    // UTC−1) e a conversão do início do dia escolhe a segunda — recuar
+    // um instante antes do start continua em 25/10 e esqueceria
+    // sábado. O limite certo é a meia-noite local de sábado 24/10 —
+    // 00:00Z, offset de verão — que só sai da DATA civil menos um dia.
+    mocks.findShopSettingsUnique.mockResolvedValue(
+      makeSettings({ timezone: "Atlantic/Azores" })
+    );
+    mocks.timeEntryFindMany.mockClear();
+    await processPontoReminders(
+      makePrisma([], []),
+      log,
+      undefined,
+      new Date("2026-10-25T01:30:00.000Z")
+    );
+    expect(saidaGte()).toBe("2026-10-24T00:00:00.000Z");
   });
 
   it("saída de um turno anterior não bloqueia o lembrete do turno aberto", async () => {

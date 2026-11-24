@@ -73,14 +73,27 @@ describe("parsePontoExitAnswer — ambíguo", () => {
 });
 
 describe("parsePontoExitAnswer — ponto antes de duração", () => {
-  it("«Saí às 18. 20 minutos antes de fecharem» → null (não 18:20)", () => {
-    // O "." fecha a frase quando os dígitos a seguir quantificam uma
-    // duração — «18» e «20 minutos» ficam em orações separadas, duas
-    // horas candidatas é ambíguo e a resposta pede-se de novo em vez
-    // de gravar 18:20 por engano.
+  it("«Saí às 18. 20 minutos antes de fecharem» → 18:00 (não 18:20)", () => {
+    // O "." fecha a frase quando um espaço o separa dos dígitos que
+    // quantificam uma duração — «18» e «20 minutos» ficam em orações
+    // separadas e a quantidade de duração não é hora candidata: fica
+    // só a hora solta da primeira oração.
     expect(
       parsePontoExitAnswer("Saí às 18. 20 minutos antes de fecharem")
-    ).toBeNull();
+    ).toEqual({ hhmm: "18:00", kind: "time" });
+  });
+
+  it("«Saí às 18.30 horas» → 18:30 — HH.MM compacto ganha ao sufixo", () => {
+    // Sem espaço depois do ponto é sempre Horas.minutos — mesmo antes
+    // de «horas»/«minutos» («18.30 horas» não é frase + duração).
+    expect(parsePontoExitAnswer("Saí às 18.30 horas")).toEqual({
+      hhmm: "18:30",
+      kind: "time",
+    });
+    expect(parsePontoExitAnswer("saí às 18.05 horas")).toEqual({
+      hhmm: "18:05",
+      kind: "time",
+    });
   });
 
   it("«Saí às 18. 30» continua a ler 18:30", () => {
@@ -92,5 +105,13 @@ describe("parsePontoExitAnswer — ponto antes de duração", () => {
       hhmm: "18:30",
       kind: "time",
     });
+  });
+
+  it("«Não saí às 18. 15 minutos depois» → null — a duração não é hora", () => {
+    // A primeira oração nega-se; a segunda só tem a quantidade de uma
+    // duração — «15» não pode virar a única hora candidata (registava
+    // 15:00 por engano). Sem hora nenhuma, repete-se a pergunta.
+    expect(parsePontoExitAnswer("Não saí às 18. 15 minutos depois")).toBeNull();
+    expect(parsePontoExitAnswer("saí há 20 minutos")).toBeNull();
   });
 });

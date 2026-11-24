@@ -36,7 +36,11 @@ import { findManyUsers } from "../../repositories/notification.repository.js";
 import { findShopSettingsUnique } from "../../repositories/settings.repository.js";
 import type { DbClient } from "../../repositories/types.js";
 import { isModuleEnabled } from "../../utils/modules.js";
-import { dayRange, zonedDateTimeToUtc } from "../../utils/time-range.js";
+import {
+  dayRange,
+  localDayRange,
+  zonedDateTimeToUtc,
+} from "../../utils/time-range.js";
 import { notify } from "../notification-dispatch.js";
 import { getSmsConfig } from "../notification-outbox.service.js";
 import { formatPhone } from "../notification-sender.js";
@@ -168,6 +172,14 @@ function hhmmAt(tz: string, at: Date): string {
     minute: "2-digit",
     timeZone: tz,
   }).format(at);
+}
+
+/** "YYYY-MM-DD" do dia civil anterior — aritmética sobre a data,
+ *  nunca sobre instantes: um dia de 23/25 h na mudança de hora ou
+ *  uma meia-noite local repetida não perturbam a conta. */
+function prevYmd(ymd: string): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10);
 }
 
 /** Envia texto livre pelo canal do ponto: SMS se permitido, senão
@@ -703,10 +715,12 @@ export async function processPontoReminders(
     // ontem continua a precisar de retoma (envio adiado às 23:50 cuja
     // aprovação chega já depois da meia-noite) e do alerta ao gestor —
     // limitar ao dia civil corrente esquecia-a à passagem da meia-noite.
-    // O limite é o INÍCIO do dia civil anterior (dayRange do instante
-    // imediatamente antes do start) — subtrair 24 h ao instante erra na
-    // mudança de hora: num dia de 23 h incluía a última hora de
-    // anteontem; num de 25 h excluía a primeira hora de ontem.
+    // O limite é o INÍCIO do dia civil anterior — calculado sobre a
+    // DATA CIVIL de hoje menos um dia (localDayRange), nunca sobre o
+    // instante: recuar milissegundos antes do start falha quando a
+    // meia-noite local se repete (recuo de hora — em Atlantic/Azores
+    // a 2.ª meia-noite de 25/10/2026 é 01:00Z e start−1ms ainda cai
+    // em 25/10); subtrair 24 h também erra nos dias de 23/25 h.
     prisma.timeEntry.findMany({
       orderBy: [{ at: "asc" }, { createdAt: "asc" }],
       select: {
@@ -725,7 +739,7 @@ export async function processPontoReminders(
         },
       },
       where: {
-        at: { gte: dayRange(tz, new Date(start.getTime() - 1)).start, lt: end },
+        at: { gte: localDayRange(tz, prevYmd(range.date)).start, lt: end },
         type: "SAIDA",
       },
     }),

@@ -588,6 +588,19 @@ async function askExitQuestion(env: FlowEnv, text: string): Promise<void> {
   if (cur) {
     setPendingPontoExit(env.staff.user.id, {
       ...cur,
+      // Com clarificação de data ativa, a pergunta enviada serve ESSA
+      // clarificação — o id junta-se aos da pergunta ONTEM/HOJE para
+      // que uma resposta citada a uma clarificação já substituída não
+      // grave a hora da pergunta errada.
+      clarifyDate: cur.clarifyDate
+        ? {
+            ...cur.clarifyDate,
+            questionMessageIds: [
+              ...(cur.clarifyDate.questionMessageIds ?? []),
+              res.messageId,
+            ],
+          }
+        : cur.clarifyDate,
       sentMessageIds: [...(cur.sentMessageIds ?? []), res.messageId],
     });
   }
@@ -754,6 +767,23 @@ async function onExitDateClarification(
   const clarify = pending.clarifyDate;
   if (!clarify) {
     await askExitQuestion(env, PONTO_TEXT.exitReminderReprompt);
+    return;
+  }
+  // Citação a uma pergunta de OUTRA clarificação (a hora ambígua foi
+  // substituída entretanto e a citação aponta para a pergunta antiga):
+  // gravar ONTEM/HOJE aplicaria a hora da clarificação ativa à pergunta
+  // citada — reenvia-se a pergunta atual sem gravar. Citações às
+  // repetições DESTA clarificação continuam a contar; sem ids (SMS)
+  // segue como antes — fail-open.
+  if (
+    env.msg.quotedMessageId &&
+    clarify.questionMessageIds?.length &&
+    !clarify.questionMessageIds.includes(env.msg.quotedMessageId)
+  ) {
+    await askExitQuestion(
+      env,
+      pontoExitDateQuestion(clarify.hhmm, clarify.ymdReminder, clarify.ymdReply)
+    );
     return;
   }
   const normalized = normalizePontoText(env.msg.text ?? "");

@@ -694,6 +694,62 @@ describe("resposta ao lembrete de saída", () => {
     expect(getPendingPontoExit("user-1")).toBeNull();
   });
 
+  it("«ONTEM» citando uma pergunta substituída reenvia a atual sem gravar", async () => {
+    // Duas horas ambíguas seguidas — a 2.ª clarificação substitui a
+    // 1.ª e a pergunta nova ganha id próprio. A resposta citada à
+    // pergunta das 00:15 não pode gravar a hora das 00:20: reenvia-se
+    // a pergunta atual (que mostra 00:20) sem gravar nada.
+    const { ctx, message, sent, t } = setup();
+    setPendingPontoExit("user-1", {
+      expiresAt: Date.now() + PONTO_EXIT_PENDING_TTL_MS,
+      presumedAt: "2026-01-10T23:30:00.000Z",
+      presumedEntryId: "presumed-1",
+      userId: "user-1",
+    });
+    const at = (text: string) => ({
+      ...message(text),
+      createdAt: "2026-01-11T00:25:00.000Z",
+    });
+
+    await tryHandlePontoStaff(ctx, at("00:15"), t);
+    await tryHandlePontoStaff(ctx, at("00:20"), t);
+
+    const pending = getPendingPontoExit("user-1");
+    // A clarificação ativa é a das 00:20 e já conhece os dois ids das
+    // suas perguntas (a pergunta inicial e a da substituição ficaram
+    // ligadas à 1.ª clarificação — a lista da ativa só tem a sua).
+    expect(pending?.clarifyDate?.hhmm).toBe("00:20");
+    expect(pending?.clarifyDate?.questionMessageIds).toEqual(["wamid-reply-2"]);
+
+    // Citação à pergunta das 00:15 (substituída): repete a pergunta
+    // atual com 00:20 — NÃO grava 00:20 em nome da pergunta das 00:15.
+    await tryHandlePontoStaff(
+      ctx,
+      { ...at("ONTEM"), quotedMessageId: "wamid-reply-1" },
+      t
+    );
+
+    expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
+    expect(sent.at(-1)).toContain("ONTEM ou HOJE");
+    expect(sent.at(-1)).toContain("00:20");
+    expect(getPendingPontoExit("user-1")?.clarifyDate?.hhmm).toBe("00:20");
+
+    // Citação à pergunta atual (00:20) → grava essa hora em ONTEM.
+    await tryHandlePontoStaff(
+      ctx,
+      { ...at("ONTEM"), quotedMessageId: "wamid-reply-2" },
+      t
+    );
+
+    const entry = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect((entry.at as Date).toISOString()).toBe("2026-01-10T00:20:00.000Z");
+    expect(entry.status).toBe("POR_VALIDAR");
+    expect(getPendingPontoExit("user-1")).toBeNull();
+  });
+
   it("comando ponto normal mata o pending de saída", async () => {
     const { ctx, message, t } = setup();
     armPending();

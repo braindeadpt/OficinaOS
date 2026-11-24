@@ -1,10 +1,9 @@
--- Livro de ponto — item 5 (lembrete de saída): a SAIDA presumida que o
--- sistema cria à hora do lembrete não chega por mensagem nenhuma —
--- precisa de proveniência própria no enum (o painel usa MANUAL para
--- registos manuais do responsável; aqui é o sistema).
+-- Livro de ponto — item 4 (painel): registos manuais feitos pelo
+-- responsável no painel precisam de proveniência própria. Sem MANUAL no
+-- enum, um lançamento manual teria de fingir um transporte de mensagem.
 --
--- IDEMPOTENTE: ADD VALUE IF NOT EXISTS tolera bases que já o tenham —
--- a branch do painel (feat/ponto-panel) traz a mesma alteração com outra
--- timestamp; quem aplicar as duas fica com um no-op.
+-- IDEMPOTENTE: ADD VALUE IF NOT EXISTS tolera bases que já o tenham
+-- (Postgres não permite usar o valor novo na mesma transação, mas
+-- migrações correm fora de transação — seguro).
 
 ALTER TYPE "TimeEntryTransport" ADD VALUE IF NOT EXISTS 'MANUAL';
