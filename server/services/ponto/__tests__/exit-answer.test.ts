@@ -540,5 +540,32 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
         "Saí às 18:05, ou depois das 19 horas, ou antes das 17 horas"
       )
     ).toEqual({ kind: "ambiguous" });
+    // …e a herança não esconde uma nova reivindicação da saída —
+    // «ou saí depois das 19» descreve a saída, não o horário.
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 18:05. O meu turno era até às 18 horas, ou saí depois das 19 horas"
+      )
+    ).toEqual({ kind: "ambiguous" });
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 18:05. O meu turno era até às 18 horas, ou a minha saída foi depois das 19 horas"
+      )
+    ).toEqual({ kind: "ambiguous" });
+    // Repetir o limite de contexto (já deduplicado) não muda o
+    // papel da oração — «ou» a seguir continua o horário.
+    expect(
+      parsePontoExitAnswer(
+        "Saí às 18:05. O meu turno era até às 18 horas. Continuava a ser até às 18 horas, ou até às 19 horas às sextas."
+      )
+    ).toEqual({ hhmm: "18:05", kind: "time" });
+    // O limite com período compara-se com a hora certa — «depois
+    // das 6 horas da manhã» é depois das 06:00, não das 18:00.
+    expect(
+      parsePontoExitAnswer("Saí às 06:30, ou seja depois das 6 horas da manhã")
+    ).toEqual({ hhmm: "06:30", kind: "time" });
+    expect(
+      parsePontoExitAnswer("Saí às 06:30, ou seja antes das 6 horas da manhã")
+    ).toEqual({ kind: "ambiguous" });
   });
 });
