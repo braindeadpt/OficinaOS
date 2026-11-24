@@ -12,6 +12,7 @@ import {
   decryptWhatsAppConfig,
   formatPhone,
   sendWhatsApp,
+  sendWhatsAppInteractiveMessage,
   sendWhatsAppTemplate,
   type WhatsAppConfig,
 } from "./notification-sender.js";
@@ -203,6 +204,50 @@ export async function sendWhatsAppText(
   }
   const res = await sendViaCloud(channel, {
     text: message,
+    to: formatPhone(to, countryCode),
+  });
+  if (res.success) {
+    await clearMigratedLocalToken(prisma, settings);
+  }
+  return res;
+}
+
+/**
+ * Interactive Meta message — só o livro de ponto usa (pedido de
+ * localização, botões de resposta). Evolution não tem equivalente →
+ * falha explícita; o handler cai sempre em texto simples.
+ */
+export async function sendWhatsAppInteractive(
+  prisma: DbClient,
+  channel: WhatsAppChannel,
+  to: string,
+  interactive: Record<string, unknown>,
+  countryCode: string | undefined,
+  settings: SettingsLike | null
+): Promise<SendResult> {
+  assertNotDemoMode();
+  if (!isModuleEnabled(settings, "whatsapp-bot")) {
+    return {
+      error: "Módulo whatsapp-bot não está ativo (OficinaOS Pro)",
+      success: false,
+    };
+  }
+  if (channel.mode === "local") {
+    return sendWhatsAppInteractiveMessage(
+      channel.config,
+      to,
+      interactive,
+      countryCode
+    );
+  }
+  if (channel.mode === "evolution") {
+    return {
+      error: "Mensagens interativas indisponíveis no transporte Evolution",
+      success: false,
+    };
+  }
+  const res = await sendViaCloud(channel, {
+    interactive,
     to: formatPhone(to, countryCode),
   });
   if (res.success) {

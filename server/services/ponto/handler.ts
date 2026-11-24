@@ -1,0 +1,860 @@
+// Handler do livro de ponto — máquina de estados dos fluxos do plano
+// §2. Chamado no TOPO de handleInboundMessage (antes da inbox de
+// clientes) e no processParsed da Evolution (antes do gate de clientes):
+// um telefone de funcionário com pontoEnabled NUNCA chega ao bot de
+// clientes, à IA nem à caixa de entrada.
+//
+// Devolve true quando o remetente é staff ponto — mesmo que a mensagem
+// não tenha gerado comando (PARAR, lixo, foto fora de tempo): o
+// funcionário nunca "cai" no pipeline de clientes.
+
+import type { TimeEntryTransport, TimeEntryType } from "@generated/client";
+import { getOrCreateShopSettings } from "../../repositories/settings.repository.js";
+import { isModuleEnabled } from "../../utils/modules.js";
+import { dayRange } from "../../utils/time-range.js";
+import type {
+  BotReplyCtx,
+  InboundMessage,
+  InboundTransport,
+} from "../bot-intents.js";
+import {
+  downloadEvolutionMedia,
+  type EvolutionConfig,
+} from "../evolution.service.js";
+import { rateOk } from "../rate-limit.js";
+import { type PontoCommand, parsePontoCommand } from "./commands.js";
+import {
+  deletePontoPhoto,
+  linkPontoPhoto,
+  pontoEntriesSince,
+  recordPontoEntry,
+  savePontoPhotoFile,
+  todayPontoEntries,
+} from "./entries.js";
+import { evaluatePontoMark } from "./evaluate.js";
+import { findPontoStaff, type PontoStaffMatch } from "./staff.js";
+import {
+  clearPendingPonto,
+  getPendingPonto,
+  type PendingPonto,
+  PONTO_LOCATION_TTL_MS,
+  PONTO_PHOTO_TTL_MS,
+  pontoPendingKey,
+  setPendingPonto,
+  takeExpiredPonto,
+} from "./state.js";
+import {
+  PONTO_TEXT,
+  pontoLocationRequestInteractive,
+  pontoNextButtons,
+  pontoNextHintText,
+  pontoReplyButtonsInteractive,
+} from "./transport.js";
+
+type PontoMarkCommand = Exclude<PontoCommand, "ESTADO">;
+type Settings = Awaited<ReturnType<typeof getOrCreateShopSettings>>;
+type Say = (text: string) => Promise<boolean>;
+type SayInteractive = (
+  interactive: Record<string, unknown>,
+  fallbackText: string
+) => Promise<void>;
+
+const ENTRY_TYPE_PT: Record<PontoMarkCommand, string> = {
+  ENTRADA: "Entrada",
+  PAUSA: "Pausa",
+  SAIDA: "Saída",
+  VOLTEI: "Regresso",
+};
+
+const NAME_WS_RE = /\s+/;
+
+const ENTRY_ICON: Record<PontoMarkCommand, string> = {
+  ENTRADA: "✅",
+  PAUSA: "⏸️",
+  SAIDA: "👋",
+  VOLTEI: "▶️",
+};
+
+const TRANSPORT_ENUM: Record<
+  NonNullable<InboundTransport["ponto"]>["transport"],
+  TimeEntryTransport
+> = {
+  sms: "SMS",
+  whatsapp_evolution: "WHATSAPP_EVOLUTION",
+  whatsapp_meta: "WHATSAPP_META",
+};
+
+export interface PontoHandlerOpts {
+  /** Config Evolution para download de foto (só canal evolution). */
+  evolution?: EvolutionConfig;
+  /** Download da foto — por omissão: getBase64FromMediaMessage na
+   *  Evolution (raw) ou GET direto no url. Injetável em testes. */
+  fetchPhoto?: (
+    ref: NonNullable<InboundMessage["imageRef"]>
+  ) => Promise<{ buffer: Buffer; mimetype?: string | null } | null>;
+  /** Settings já carregadas pelo caller (o caminho Evolution já as tem). */
+  shopSettings?: Settings;
+}
+
+interface PhotoData {
+  buffer: Buffer;
+  mimetype?: string | null;
+}
+
+function firstNameOf(user: PontoStaffMatch["user"]): string {
+  const name = user.name?.trim();
+  if (name) {
+    return name.split(NAME_WS_RE)[0];
+  }
+  return user.username || "";
+}
+
+function hhmm(at: Date, tz: string): string {
+  return new Intl.DateTimeFormat("pt-PT", {
+    hour: "2-digit",
+    hour12: false,
+    minute: "2-digit",
+    timeZone: tz,
+  }).format(at);
+}
+
+function fmtHours(ms: number): string {
+  const minutes = Math.round(ms / 60_000);
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${h}h${String(m).padStart(2, "0")}`;
+}
+
+/** Soma dos intervalos trabalhados: ENTRADA/VOLTEI abrem (o primeiro
+ *  marca ganha se houver duplicados), PAUSA/SAIDA fecham. Um turno ainda
+ *  aberto não conta — "horas trabalhadas" exclui o presente. */
+function workedMs(entries: { at: Date; type: string }[]): number {
+  let total = 0;
+  let open: number | null = null;
+  for (const e of entries) {
+    const t = e.at.getTime();
+    if (e.type === "ENTRADA" || e.type === "VOLTEI") {
+      if (open === null) {
+        open = t;
+      }
+    } else if (open !== null) {
+      total += t - open;
+      open = null;
+    }
+  }
+  return total;
+}
+
+const DAY_MS = 86_400_000;
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+/** ymd ("YYYY-MM-DD") da data UTC — usada para comparar dias civis da
+ *  loja independentemente do instante. */
+function utcYmd(d: Date): string {
+  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
+}
+
+/** Segunda-feira 00:00 do fuso da loja — base do "horas da semana".
+ *  O dia civil local não tem 24 h exatas (DST), por isso retrocede-se
+ *  por instantes e valida-se a data local até cair na segunda. */
+function weekStart(tz: string, now: Date): Date {
+  const { date } = dayRange(tz, now);
+  const [y, m, d] = date.split("-").map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  const back = (dow + 6) % 7;
+  const targetYmd = utcYmd(new Date(Date.UTC(y, m - 1, d - back)));
+  let candidate = new Date(now.getTime() - back * DAY_MS);
+  for (let i = 0; i < 3; i++) {
+    const r = dayRange(tz, candidate);
+    if (r.date === targetYmd) {
+      return r.start;
+    }
+    candidate = new Date(candidate.getTime() - DAY_MS);
+  }
+  return dayRange(tz, candidate).start;
+}
+
+function pauseMinutesOf(
+  pauseSinceAt: string | undefined,
+  at: Date
+): number | null {
+  if (!pauseSinceAt) {
+    return null;
+  }
+  const ms = at.getTime() - Date.parse(pauseSinceAt);
+  return ms >= 0 ? Math.round(ms / 60_000) : null;
+}
+
+function confirmationText(
+  command: PontoMarkCommand,
+  at: Date,
+  tz: string,
+  firstName: string,
+  pauseMinutes: number | null,
+  status: "APROVADO" | "POR_VALIDAR",
+  reason?: string
+): string {
+  if (status === "POR_VALIDAR") {
+    return `⚠️ Registado — pendente de validação${reason ? ` (${reason})` : ""}.`;
+  }
+  const pauseSuffix =
+    command === "VOLTEI" && pauseMinutes !== null
+      ? ` (pausa de ${pauseMinutes} min)`
+      : "";
+  const who = firstName ? `, ${firstName}` : "";
+  return `${ENTRY_ICON[command]} ${ENTRY_TYPE_PT[command]} às ${hhmm(at, tz)}${pauseSuffix}${who}.`;
+}
+
+function recusadoText(reason?: string): string {
+  return reason
+    ? `Não consegui registar o ponto — ${reason}.`
+    : "Não consegui registar o ponto — tente outra vez ou leia o QR.";
+}
+
+async function defaultFetchPhoto(
+  ref: NonNullable<InboundMessage["imageRef"]>,
+  opts?: PontoHandlerOpts
+): Promise<PhotoData | null> {
+  if (opts?.evolution && ref.raw) {
+    const media = await downloadEvolutionMedia(opts.evolution, ref.raw).catch(
+      () => null
+    );
+    if (media) {
+      return {
+        buffer: Buffer.from(media.base64, "base64"),
+        mimetype: media.mimetype ?? ref.mimetype ?? null,
+      };
+    }
+  }
+  if (ref.url) {
+    const res = await fetch(ref.url, {
+      signal: AbortSignal.timeout(15_000),
+    }).catch(() => null);
+    if (res?.ok) {
+      const buffer = Buffer.from(await res.arrayBuffer());
+      return {
+        buffer,
+        mimetype: res.headers.get("content-type") ?? ref.mimetype ?? null,
+      };
+    }
+  }
+  return null;
+}
+
+function fetchPhotoForEntry(
+  ref: NonNullable<InboundMessage["imageRef"]>,
+  opts?: PontoHandlerOpts
+): Promise<PhotoData | null> {
+  if (opts?.fetchPhoto) {
+    return opts.fetchPhoto(ref).catch(() => null);
+  }
+  return defaultFetchPhoto(ref, opts);
+}
+
+type PontoChannel = NonNullable<InboundTransport["ponto"]>;
+type PontoTransportKind = PontoChannel["transport"];
+
+/** Contexto partilhado por todos os passos do fluxo — evita passar
+ *  10 parâmetros a cada handler de etapa. */
+interface FlowEnv {
+  channel: PontoChannel;
+  ctx: BotReplyCtx;
+  key: string;
+  msg: InboundMessage;
+  opts?: PontoHandlerOpts;
+  phoneDigits: string;
+  say: Say;
+  sayInteractive: SayInteractive;
+  settings: Settings;
+  staff: PontoStaffMatch;
+  transport: PontoTransportKind;
+  tz: string;
+}
+
+function buildFlowEnv(
+  ctx: BotReplyCtx,
+  msg: InboundMessage,
+  t: InboundTransport,
+  channel: PontoChannel,
+  staff: PontoStaffMatch,
+  settings: Settings,
+  opts?: PontoHandlerOpts
+): FlowEnv {
+  const transport = channel.transport;
+  const say: Say = async (text) => {
+    try {
+      return await t.send(text);
+    } catch {
+      return false;
+    }
+  };
+  const sayInteractive: SayInteractive = async (interactive, fallbackText) => {
+    if (channel.interactive) {
+      const ok = await channel.interactive(interactive).catch(() => false);
+      if (ok) {
+        return;
+      }
+    }
+    await say(fallbackText);
+  };
+  return {
+    channel,
+    ctx,
+    key: pontoPendingKey(transport, staff.phoneDigits),
+    msg,
+    opts,
+    phoneDigits: staff.phoneDigits,
+    say,
+    sayInteractive,
+    settings,
+    staff,
+    transport,
+    tz: settings.timezone ?? process.env.TZ ?? "UTC",
+  };
+}
+
+/** Pendência expirada: foto tardia finaliza com hasPhoto=false (o
+ *  registo não se perde — a Cloud decide); localização tardia morre
+ *  aqui e o pedido novo recomeça. Devolve o pendente para o branch de
+ *  localização distinguir "expirou" de "nunca houve". */
+async function finalizeExpiredPhoto(
+  env: FlowEnv
+): Promise<PendingPonto | null> {
+  const expired = takeExpiredPonto(env.key);
+  if (expired?.stage !== "photo") {
+    return expired ?? null;
+  }
+  const at = new Date(expired.locationAt ?? expired.commandAt);
+  await finalizePonto(
+    env.ctx,
+    env.say,
+    env.sayInteractive,
+    env.settings,
+    env.staff,
+    env.transport,
+    {
+      at,
+      code: expired.command === "ENTRADA" ? expired.code : undefined,
+      command: expired.command,
+      hasPhoto: false,
+      location: expired.location,
+      messageAt: expired.commandAt,
+      pauseMinutes: pauseMinutesOf(expired.pauseSinceAt, at),
+      phoneDigits: env.phoneDigits,
+      todayHasEntry: expired.todayHasEntry,
+    }
+  );
+  return expired;
+}
+
+/** Localização sem pedido pendente: a resposta certa depende do que
+ *  estava à espera (foto), do que acabou de expirar ou de nada. */
+function orphanLocationReply(
+  pending: PendingPonto | null,
+  expired: PendingPonto | null
+): string {
+  if (pending?.stage === "photo") {
+    return PONTO_TEXT.photoPrompt;
+  }
+  if (expired?.stage === "location") {
+    return PONTO_TEXT.locationExpired;
+  }
+  return PONTO_TEXT.noPendingLocation;
+}
+
+async function routeLocation(
+  env: FlowEnv,
+  expired: PendingPonto | null
+): Promise<void> {
+  const pending = getPendingPonto(env.key);
+  if (pending?.stage === "location") {
+    await onLocation(
+      env.ctx,
+      env.say,
+      env.sayInteractive,
+      env.settings,
+      env.staff,
+      pending,
+      env.msg,
+      env.transport,
+      env.phoneDigits,
+      env.key
+    );
+    return;
+  }
+  await env.say(orphanLocationReply(pending, expired));
+}
+
+async function routePhoto(env: FlowEnv): Promise<void> {
+  const pending = getPendingPonto(env.key);
+  if (pending?.stage === "photo") {
+    await onPhoto(
+      env.ctx,
+      env.say,
+      env.sayInteractive,
+      env.settings,
+      env.staff,
+      pending,
+      env.msg,
+      env.transport,
+      env.phoneDigits,
+      env.key,
+      env.opts
+    );
+    return;
+  }
+  await env.say(PONTO_TEXT.noPendingPhoto);
+}
+
+async function routeText(env: FlowEnv): Promise<void> {
+  const parsed = parsePontoCommand(env.msg.text, env.msg.interactiveId);
+  const pending = getPendingPonto(env.key);
+  if (pending?.stage === "photo" && !parsed) {
+    await env.say(PONTO_TEXT.photoPrompt);
+    return;
+  }
+  if (pending?.stage === "location" && !parsed) {
+    await askLocation(env.say, env.sayInteractive, env.channel);
+    return;
+  }
+  if (!parsed) {
+    await env.say(PONTO_TEXT.commands);
+    return;
+  }
+  clearPendingPonto(env.key);
+  await dispatchCommand({
+    channel: env.channel,
+    ctx: env.ctx,
+    key: env.key,
+    msg: env.msg,
+    parsed,
+    phoneDigits: env.phoneDigits,
+    say: env.say,
+    sayInteractive: env.sayInteractive,
+    settings: env.settings,
+    staff: env.staff,
+    transport: env.transport,
+    tz: env.tz,
+  });
+}
+
+/**
+ * Ponto handler — ver docstring do módulo. `t.ponto` ausente → o canal
+ * não fala ponto → false (pipeline normal). Erros internos propagam
+ * para o catch do caller (bot-intents loga e segue o pipeline normal).
+ */
+export async function tryHandlePontoStaff(
+  ctx: BotReplyCtx,
+  msg: InboundMessage,
+  t: InboundTransport,
+  opts?: PontoHandlerOpts
+): Promise<boolean> {
+  const channel = t.ponto;
+  if (!channel) {
+    return false;
+  }
+  const staff = await findPontoStaff(ctx.prisma, msg.fromPhone);
+  if (!staff) {
+    return false;
+  }
+  const settings =
+    opts?.shopSettings ?? (await getOrCreateShopSettings(ctx.prisma));
+  if (!isModuleEnabled(settings, "ponto")) {
+    return false;
+  }
+  // Flood de um telefone de staff: consome a mensagem na mesma —
+  // nunca cai no bot de clientes por rate limit.
+  if (!rateOk(msg.fromPhone, 30, "ponto")) {
+    return true;
+  }
+
+  const env = buildFlowEnv(ctx, msg, t, channel, staff, settings, opts);
+
+  // SMS sem permissão: resposta fixa, sem registo — antes de qualquer
+  // outra interpretação (o SMS nunca tem localização/foto).
+  if (env.transport === "sms" && !staff.user.pontoSmsAllowed) {
+    await env.say("Use o WhatsApp para registar o ponto.");
+    return true;
+  }
+
+  const expired = await finalizeExpiredPhoto(env);
+  if (msg.location) {
+    await routeLocation(env, expired);
+    return true;
+  }
+  if (msg.imageRef) {
+    await routePhoto(env);
+    return true;
+  }
+  await routeText(env);
+  return true;
+}
+
+async function askLocation(
+  say: Say,
+  sayInteractive: SayInteractive,
+  channel: NonNullable<InboundTransport["ponto"]>
+): Promise<void> {
+  if (channel.interactive) {
+    await sayInteractive(
+      pontoLocationRequestInteractive(PONTO_TEXT.locationPromptInteractive),
+      PONTO_TEXT.locationPromptText
+    );
+    return;
+  }
+  await say(PONTO_TEXT.locationPromptText);
+}
+
+interface DispatchArgs {
+  channel: NonNullable<InboundTransport["ponto"]>;
+  ctx: BotReplyCtx;
+  key: string;
+  msg: InboundMessage;
+  parsed: { code?: string; command: PontoCommand };
+  phoneDigits: string;
+  say: Say;
+  sayInteractive: SayInteractive;
+  settings: Settings;
+  staff: PontoStaffMatch;
+  transport: NonNullable<InboundTransport["ponto"]>["transport"];
+  tz: string;
+}
+
+async function dispatchCommand(a: DispatchArgs): Promise<void> {
+  const {
+    channel,
+    ctx,
+    key,
+    msg,
+    parsed,
+    phoneDigits,
+    say,
+    sayInteractive,
+    settings,
+    staff,
+    transport,
+    tz,
+  } = a;
+  let command = parsed.command;
+
+  if (command === "ESTADO") {
+    await replyEstado(ctx, say, staff.user.id, tz);
+    return;
+  }
+
+  const markCommand = command as PontoMarkCommand;
+  const entries = await todayPontoEntries(ctx.prisma, staff.user.id, tz);
+  const hasEntrada = entries.some((e) => e.type === "ENTRADA");
+  const onPause = entries.at(-1)?.type === "PAUSA";
+  const pauseSinceAt = onPause
+    ? [...entries]
+        .reverse()
+        .find((e) => e.type === "PAUSA")
+        ?.at.toISOString()
+    : undefined;
+
+  // Durante uma pausa contam como regresso VOLTEI… e também ENTRADA
+  // (reler o QR) — §2.2b. O código do QR fica por usar e expira.
+  if (markCommand === "ENTRADA" && onPause) {
+    command = "VOLTEI";
+  }
+  const effective = command as PontoMarkCommand;
+
+  // PAUSA/VOLTEI/SAIDA exigem entrada registada hoje (§2.2).
+  if (effective !== "ENTRADA" && !hasEntrada) {
+    await say(PONTO_TEXT.noEntryToday);
+    return;
+  }
+
+  // SMS: evaluate direto — nunca há localização nem foto; a Cloud
+  // devolve sempre POR_VALIDAR para este transporte (§2.3).
+  if (transport === "sms") {
+    await finalizePonto(ctx, say, sayInteractive, settings, staff, transport, {
+      at: new Date(msg.createdAt),
+      code:
+        effective === "ENTRADA" && !staff.user.externalWork
+          ? parsed.code
+          : undefined,
+      command: effective,
+      hasPhoto: false,
+      messageAt: msg.createdAt,
+      pauseMinutes: pauseMinutesOf(pauseSinceAt, new Date(msg.createdAt)),
+      phoneDigits,
+      todayHasEntry: hasEntrada,
+    });
+    return;
+  }
+
+  // Staff de loja: ENTRADA exige o código do QR (o texto do wa.me traz
+  // "ENTRADA <slug> #<code>"). Externo entra sem código (§2.4).
+  if (!staff.user.externalWork && effective === "ENTRADA" && !parsed.code) {
+    await say(PONTO_TEXT.entradaNeedsCode);
+    return;
+  }
+
+  const wantPhoto = staff.user.externalWork && effective === "ENTRADA";
+  const pending: PendingPonto = {
+    command: effective,
+    commandAt: msg.createdAt,
+    ...(effective === "ENTRADA" && !staff.user.externalWork && parsed.code
+      ? { code: parsed.code }
+      : {}),
+    expiresAt: Date.now() + PONTO_LOCATION_TTL_MS,
+    externalWork: staff.user.externalWork,
+    pauseSinceAt,
+    stage: "location",
+    todayHasEntry: hasEntrada,
+    userId: staff.user.id,
+    userName: firstNameOf(staff.user),
+    wantPhoto,
+  };
+  setPendingPonto(key, pending);
+  await askLocation(say, sayInteractive, channel);
+}
+
+interface FinalizeArgs {
+  at: Date;
+  code?: string;
+  command: PontoMarkCommand;
+  hasPhoto: boolean;
+  location?: PendingPonto["location"];
+  messageAt: string;
+  pauseMinutes?: number | null;
+  phoneDigits: string;
+  photoId?: string | null;
+  todayHasEntry: boolean;
+}
+
+async function onLocation(
+  ctx: BotReplyCtx,
+  say: Say,
+  sayInteractive: SayInteractive,
+  settings: Settings,
+  staff: PontoStaffMatch,
+  pending: PendingPonto,
+  msg: InboundMessage,
+  transport: NonNullable<InboundTransport["ponto"]>["transport"],
+  phoneDigits: string,
+  key: string
+): Promise<void> {
+  const loc = msg.location;
+  if (!(loc && Number.isFinite(loc.lat) && Number.isFinite(loc.lng))) {
+    await say(PONTO_TEXT.locationPromptText);
+    return;
+  }
+  pending.location = {
+    lat: loc.lat,
+    lng: loc.lng,
+    ...(loc.accuracy === undefined ? {} : { accuracy: loc.accuracy }),
+  };
+  pending.locationAt = msg.createdAt;
+  if (pending.wantPhoto) {
+    pending.stage = "photo";
+    pending.expiresAt = Date.now() + PONTO_PHOTO_TTL_MS;
+    setPendingPonto(key, pending);
+    await say(PONTO_TEXT.photoPrompt);
+    return;
+  }
+  await finalizePonto(ctx, say, sayInteractive, settings, staff, transport, {
+    at: new Date(pending.locationAt),
+    code: pending.command === "ENTRADA" ? pending.code : undefined,
+    command: pending.command,
+    hasPhoto: false,
+    location: pending.location,
+    messageAt: pending.commandAt,
+    pauseMinutes: pauseMinutesOf(
+      pending.pauseSinceAt,
+      new Date(pending.locationAt)
+    ),
+    phoneDigits,
+    todayHasEntry: pending.todayHasEntry,
+  });
+}
+
+async function onPhoto(
+  ctx: BotReplyCtx,
+  say: Say,
+  sayInteractive: SayInteractive,
+  settings: Settings,
+  staff: PontoStaffMatch,
+  pending: PendingPonto,
+  msg: InboundMessage,
+  transport: NonNullable<InboundTransport["ponto"]>["transport"],
+  phoneDigits: string,
+  key: string,
+  opts?: PontoHandlerOpts
+): Promise<void> {
+  clearPendingPonto(key);
+  const ref = msg.imageRef;
+  const photo = ref ? await fetchPhotoForEntry(ref, opts) : null;
+  let photoId: string | null = null;
+  if (photo) {
+    const saved = await savePontoPhotoFile(
+      ctx.prisma,
+      pending.userId,
+      photo.buffer,
+      photo.mimetype
+    ).catch(() => null);
+    photoId = saved?.id ?? null;
+  }
+  // hasPhoto = a foto chegou (a presença é prova); photoId só quando o
+  // ficheiro validou e gravou.
+  await finalizePonto(ctx, say, sayInteractive, settings, staff, transport, {
+    at: new Date(pending.locationAt ?? pending.commandAt),
+    code: pending.command === "ENTRADA" ? pending.code : undefined,
+    command: pending.command,
+    hasPhoto: true,
+    location: pending.location,
+    messageAt: pending.commandAt,
+    pauseMinutes: pauseMinutesOf(
+      pending.pauseSinceAt,
+      new Date(pending.locationAt ?? pending.commandAt)
+    ),
+    phoneDigits,
+    photoId,
+    todayHasEntry: pending.todayHasEntry,
+  });
+}
+
+/**
+ * Evaluate na Cloud → grava TimeEntry (+liga foto) → confirmação com os
+ * botões do passo seguinte. RECUSADO não regista; falha de rede/Cloud
+ * também não — o funcionário tenta de novo.
+ */
+async function finalizePonto(
+  ctx: BotReplyCtx,
+  say: Say,
+  sayInteractive: SayInteractive,
+  settings: Settings,
+  staff: PontoStaffMatch,
+  transport: NonNullable<InboundTransport["ponto"]>["transport"],
+  args: FinalizeArgs
+): Promise<void> {
+  const geoLat = settings.pontoGeoLat;
+  const geoLng = settings.pontoGeoLng;
+  if (
+    geoLat === null ||
+    geoLat === undefined ||
+    geoLng === null ||
+    geoLng === undefined
+  ) {
+    ctx.log.warn("ponto: shopGeo por configurar — registo ignorado");
+    await say(PONTO_TEXT.configMissing);
+    return;
+  }
+
+  const result = await evaluatePontoMark(ctx.prisma, ctx.log, {
+    type: args.command,
+    transport,
+    ...(args.command === "ENTRADA" && args.code ? { code: args.code } : {}),
+    phone: args.phoneDigits,
+    messageAt: args.messageAt,
+    ...(args.location ? { location: args.location } : {}),
+    hasPhoto: args.hasPhoto,
+    photoRequired: settings.pontoExternalPhotoRequired,
+    shopGeo: {
+      lat: geoLat,
+      lng: geoLng,
+      radiusM: settings.pontoRadiusM,
+    },
+    user: {
+      externalWork: staff.user.externalWork,
+      smsAllowed: staff.user.pontoSmsAllowed,
+    },
+    externalAutoApprove: settings.pontoExternalAutoApprove,
+    todayHasEntry: args.todayHasEntry,
+  });
+
+  if (!result) {
+    await say(PONTO_TEXT.evaluateFailed);
+    return;
+  }
+  if (result.status === "RECUSADO") {
+    if (args.photoId) {
+      await deletePontoPhoto(ctx.prisma, args.photoId).catch(() => undefined);
+    }
+    await say(recusadoText(result.reason));
+    return;
+  }
+
+  const proofs: Record<string, unknown> = {
+    ...result.proofs,
+    hasPhoto: args.hasPhoto,
+    ...(args.location
+      ? {
+          accuracy: args.location.accuracy ?? null,
+          lat: args.location.lat,
+          lng: args.location.lng,
+        }
+      : {}),
+    ...(args.photoId ? { photoId: args.photoId } : {}),
+  };
+  const entry = await recordPontoEntry(ctx.prisma, {
+    at: args.at,
+    proofs,
+    reason: result.reason ?? null,
+    status: result.status,
+    transport: TRANSPORT_ENUM[transport],
+    type: args.command as TimeEntryType,
+    userId: staff.user.id,
+  });
+  if (args.photoId && entry?.id) {
+    await linkPontoPhoto(ctx.prisma, args.photoId, entry.id).catch(
+      () => undefined
+    );
+  }
+
+  const firstName = firstNameOf(staff.user);
+  const text = confirmationText(
+    args.command,
+    args.at,
+    tzOf(settings),
+    firstName,
+    args.pauseMinutes ?? null,
+    result.status,
+    result.reason
+  );
+  const buttons = pontoNextButtons(args.command);
+  const hint = pontoNextHintText(args.command);
+  if (buttons.length > 0) {
+    await sayInteractive(
+      pontoReplyButtonsInteractive(text, buttons),
+      `${text}${hint}`
+    );
+    return;
+  }
+  await say(`${text}${hint}`);
+}
+
+function tzOf(settings: Settings): string {
+  return settings.timezone ?? process.env.TZ ?? "UTC";
+}
+
+/** ESTADO (§2.5): horas de hoje e da semana + registos por validar. */
+async function replyEstado(
+  ctx: BotReplyCtx,
+  say: Say,
+  userId: string,
+  tz: string
+): Promise<void> {
+  const now = new Date();
+  const wStart = weekStart(tz, now);
+  const { start: todayStart } = dayRange(tz, now);
+  const entries = await pontoEntriesSince(ctx.prisma, userId, wStart);
+  const today = entries.filter((e) => e.at >= todayStart);
+  const pendingCount = today.filter((e) => e.status === "POR_VALIDAR").length;
+  const marks = today
+    .map((e) => `${ENTRY_TYPE_PT[e.type] ?? e.type} ${hhmm(e.at, tz)}`)
+    .join(" · ");
+  const lines = [
+    `Hoje: ${fmtHours(workedMs(today))}${marks ? ` — ${marks}` : ""}`,
+    `Semana: ${fmtHours(workedMs(entries))}`,
+  ];
+  if (pendingCount > 0) {
+    lines.push(`${pendingCount} por validar.`);
+  }
+  await say(lines.join("\n"));
+}

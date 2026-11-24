@@ -12,10 +12,12 @@ import {
 import { cloudFetch } from "./cloud.service.js";
 import { recordInboundMessage } from "./inbox.service.js";
 import type { NotifyContext } from "./job.service.js";
+import { pontoFieldsFromCloudRow } from "./ponto/inbound.js";
 import {
   maskPhone,
   pushCredentialsToCloud,
   resolveWhatsAppChannel,
+  sendWhatsAppInteractive,
   sendWhatsAppText,
   type WhatsAppChannel,
 } from "./whatsapp-channel.js";
@@ -123,6 +125,31 @@ async function send(ctx: BotCtx, to: string, text: string): Promise<boolean> {
     ctx.log.warn(
       { err: res.error, to: maskPhone(to) },
       "whatsapp-bot send failed"
+    );
+  }
+  return res.success;
+}
+
+/** Interativo Meta para o livro de ponto — o `interactive` é o objeto
+ *  Graph tal qual (location_request_message, button); a cloud faz o
+ *  passthrough e o modo local fala direto com a Graph API. */
+async function sendInteractive(
+  ctx: BotCtx,
+  to: string,
+  interactive: Record<string, unknown>
+): Promise<boolean> {
+  const res = await sendWhatsAppInteractive(
+    ctx.prisma,
+    ctx.channel,
+    `+${to}`,
+    interactive,
+    undefined,
+    ctx.settings
+  );
+  if (!res.success) {
+    ctx.log.warn(
+      { err: res.error, to: maskPhone(to) },
+      "whatsapp-bot interactive send failed"
     );
   }
   return res.success;
@@ -430,12 +457,29 @@ async function processInbound(
     );
   }
   try {
-    const out = await handleInboundMessage(ctx, msg, {
+    // Livro de ponto: a fila pode trazer campos estruturados (location
+    // coords, button_reply id) que o tipo InboundMessage não declara —
+    // o mapper extrai-os sem tocar no resto do pipeline.
+    const pontoMsg: InboundMessage = {
+      ...msg,
+      ...pontoFieldsFromCloudRow(msg as InboundMessage & { payload?: unknown }),
+    };
+    const out = await handleInboundMessage(ctx, pontoMsg, {
       // Fora da janela: SIM/NÃO não decide — o orçamento pendente pode
       // ter sido enviado depois desta mensagem e a decisão ficaria
       // registada no errado sem confirmação ao cliente.
       allowQuoteDecision: !(stale || silent),
       channelLabel: "WhatsApp",
+      // Livro de ponto: transport=whatsapp_meta (a marcação chegou pelo
+      // número oficial). Interativo só fora da janela de 24 h — lá fora
+      // a Meta rejeita business-initiated e o handler cai em texto.
+      ponto: {
+        interactive:
+          stale || silent || ctx.channel.mode === "evolution"
+            ? undefined
+            : (interactive) => sendInteractive(ctx, msg.fromPhone, interactive),
+        transport: "whatsapp_meta",
+      },
       requireInboxPersist: true,
       // Fora da janela ou bot bloqueado: nunca envia — corre o pipeline
       // (PARAR/SIM/NÃO/escalada) com envio suprimido.

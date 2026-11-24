@@ -131,6 +131,38 @@ export async function sendEvolutionPresence(
 }
 
 /**
+ * Download de média recebida (ponto — foto de prova): a Evolution serve
+ * a mensagem original em `message` e devolve base64 + mimetype. Usado só
+ * pelo handler do livro de ponto; o pipeline de clientes nunca baixa
+ * anexos.
+ */
+export async function downloadEvolutionMedia(
+  config: EvolutionConfig,
+  message: unknown
+): Promise<{ base64: string; mimetype?: string } | null> {
+  const res = await evoFetch(
+    config.baseUrl,
+    config.apiKey,
+    `/chat/getBase64FromMediaMessage/${config.instance}`,
+    {
+      body: { convertToMp4: false, message },
+      method: "POST",
+    }
+  );
+  if (!res?.ok) {
+    return null;
+  }
+  const body = res.body as { base64?: unknown; mimetype?: unknown } | null;
+  if (typeof body?.base64 !== "string" || body.base64.length === 0) {
+    return null;
+  }
+  return {
+    base64: body.base64,
+    mimetype: typeof body.mimetype === "string" ? body.mimetype : undefined,
+  };
+}
+
+/**
  * Regista o webhook inbound na instância — a Evolution passa a POSTar
  * MESSAGES_UPSERT ao callback (§5.7). webhookByEvents: false porque a
  * rota recebe o envelope completo e filtra o evento.

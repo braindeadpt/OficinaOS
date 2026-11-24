@@ -60,6 +60,54 @@ export async function sendWhatsApp(
 }
 
 /**
+ * Interactive Meta message (ponto: pedido de localização, botões de
+ * resposta). `interactive` é o objeto Graph tal qual — a app constrói
+ * location_request_message/button/list; aqui passa direto.
+ */
+export async function sendWhatsAppInteractiveMessage(
+  config: WhatsAppConfig,
+  to: string,
+  interactive: Record<string, unknown>,
+  countryCode?: string
+): Promise<SendResult> {
+  assertNotDemoMode();
+  const url = `https://graph.facebook.com/v21.0/${config.phoneNumberId}/messages`;
+  const payload = {
+    interactive,
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to: formatPhone(to, countryCode),
+    type: "interactive",
+  };
+
+  try {
+    const response = await fetch(url, {
+      body: JSON.stringify(payload),
+      headers: {
+        Authorization: `Bearer ${config.apiToken}`,
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+      signal: AbortSignal.timeout(15_000),
+    });
+
+    if (response.ok) {
+      return { success: true };
+    }
+    const body = await response.text();
+    return {
+      success: false,
+      error: `WhatsApp API ${response.status}: ${body.slice(0, 200)}`,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Unknown error",
+    };
+  }
+}
+
+/**
  * Business-initiated WhatsApp outside the 24h window must be a Meta
  * template message — freeform text is rejected by the Graph API.
  * `params` map to the template's positional body variables ({{1}}, {{2}}…).

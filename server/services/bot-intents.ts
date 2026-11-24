@@ -21,6 +21,8 @@ import {
 } from "./inbox.service.js";
 import type { NotifyContext } from "./job.service.js";
 import { respondToQuote } from "./job-quote.service.js";
+import { tryHandlePontoStaff } from "./ponto/handler.js";
+import { rateOk } from "./rate-limit.js";
 
 /**
  * Intents de resposta automática partilhados pelos bots WhatsApp e SMS:
@@ -83,16 +85,24 @@ const HUMAN_RE = /ajuda|humano|atendimento|operador|pessoa|urgente/i;
 const DIGITS_RE = /\D/g;
 const WA_BOLD_RE = /\*/g;
 
-const MSG_LIMIT_PER_HOUR = 20;
-
-// In-memory flood limiter — reset on restart, which is fine: worst case
-// a flood source gets one extra window. Shared by both channels.
-const rateBuckets = new Map<string, { n: number; resetAt: number }>();
-
 export interface InboundMessage {
   createdAt: string;
   fromPhone: string;
   id: string;
+  /** Referência a imagem recebida — hoje só a Evolution expõe a mensagem
+   *  crua (download via getBase64FromMediaMessage); `raw` leva a message
+   *  completa para esse endpoint. */
+  imageRef?: {
+    mimetype?: string | null;
+    raw?: unknown;
+    url?: string | null;
+  };
+  /** Id de botão interativo respondido (Meta button_reply/list_reply ou
+   *  Evolution buttonsResponse/listResponse). */
+  interactiveId?: string | null;
+  /** Localização partilhada — módulo ponto (payload WhatsApp oficial ou
+   *  locationMessage da Evolution). Coordenadas WGS84. */
+  location?: { accuracy?: number; lat: number; lng: number };
   messageType: string;
   text: string | null;
 }
@@ -130,27 +140,6 @@ export interface BotReplyCtx {
   /** IANA timezone da loja — datas apresentadas ao cliente (previsões,
    *  chegadas de peças) renderizam-se aqui, não no fuso do servidor. */
   timezone?: string;
-}
-
-export function rateOk(
-  phone: string,
-  limit = MSG_LIMIT_PER_HOUR,
-  scope?: string
-): boolean {
-  const now = Date.now();
-  // Normalize — WhatsApp delivers "351912…" while sms-gate may send
-  // "+351912…" or "0912…"; the same sender must share one bucket.
-  // `scope` separa quotas independentes no mesmo número: os alertas ao
-  // staff (media/sem cliente) têm o seu contador e não esgotam a janela
-  // das respostas automáticas (e vice-versa).
-  const digits = phone.replace(DIGITS_RE, "").slice(-9);
-  const key = scope ? `${scope}:${digits}` : digits;
-  let b = rateBuckets.get(key);
-  if (!b || b.resetAt < now) {
-    b = { n: 0, resetAt: now + 3_600_000 };
-    rateBuckets.set(key, b);
-  }
-  return ++b.n <= limit;
 }
 
 function eur(
@@ -797,6 +786,14 @@ export interface InboundTransport {
   allowQuoteDecision?: boolean;
   channelLabel: string;
   plainText?: boolean;
+  /** Livro de ponto (Pro "ponto"): presente só nos canais que falam
+   *  ponto — transport diz à Cloud por onde a marcação chegou e
+   *  `interactive` envia mensagens interativas Meta (só oficial; a
+   *  Evolution e o SMS não a suportam → o handler cai em texto). */
+  ponto?: {
+    interactive?: (interactive: Record<string, unknown>) => Promise<boolean>;
+    transport: "sms" | "whatsapp_evolution" | "whatsapp_meta";
+  };
   /** Evolution usa 10/h; oficial e SMS ficam no default de 20/h. */
   rateLimitPerHour?: number;
   /** Filas (Cloud): se o registo inbox falhar, lança InboxPersistError
@@ -808,11 +805,41 @@ export interface InboundTransport {
   silentSend?: boolean;
 }
 
+/** Livro de ponto (Pro "ponto") — PRIMEIRO passo de qualquer mensagem:
+ *  telefone de funcionário com pontoEnabled nunca chega ao bot de
+ *  clientes, à IA nem à caixa de entrada (as mensagens de ponto não são
+ *  conversa de cliente). O handler responde pelo mesmo transporte e
+ *  devolve true mesmo quando a mensagem não gerou comando — um
+ *  funcionário nunca "cai" no pipeline de clientes. Falha do módulo não
+ *  pode engolir a mensagem — cai no pipeline normal (melhor um alerta
+ *  ao staff do que perder um PARAR). */
+async function tryHandlePonto(
+  ctx: BotReplyCtx,
+  msg: InboundMessage,
+  t: InboundTransport
+): Promise<boolean> {
+  if (!t.ponto) {
+    return false;
+  }
+  try {
+    return await tryHandlePontoStaff(ctx, msg, t);
+  } catch (err) {
+    ctx.log.warn({ err }, `${t.channelLabel}: ponto handler falhou`);
+    return false;
+  }
+}
+
 export async function handleInboundMessage(
   ctx: BotReplyCtx,
   msg: InboundMessage,
   t: InboundTransport
 ): Promise<{ reply: BotReply; sent: boolean } | null> {
+  if (await tryHandlePonto(ctx, msg, t)) {
+    return {
+      reply: { customerName: null, escalate: false, jobId: null, text: "" },
+      sent: true,
+    };
+  }
   // Opt-out legal: PARAR/STOP nunca morre no rate limiter — a revogação
   // do consentimento tem de correr mesmo quando o número esgotou a
   // janela horária (senão o cliente continua a receber avisos). A
