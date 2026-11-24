@@ -1228,8 +1228,25 @@ async function finalizePonto(
       tzOf(settings)
     ).catch(() => null);
     if (presumed) {
-      correctsId = presumed.id;
-      entryReason = "saída registada pelo trabalhador";
+      // A presumida pertence ao turno que ficou por fechar: uma
+      // entrada depois dela abriu turno novo e esta SAIDA fecha-o —
+      // a presumida do turno anterior continua por validar em vez
+      // de ser substituída (o apuramento separa os dois turnos).
+      const reentry = await ctx.prisma.timeEntry
+        .findFirst({
+          select: { id: true },
+          where: {
+            at: { gt: presumed.at },
+            corrections: { none: {} },
+            type: "ENTRADA",
+            userId: staff.user.id,
+          },
+        })
+        .catch(() => null);
+      if (!reentry) {
+        correctsId = presumed.id;
+        entryReason = "saída registada pelo trabalhador";
+      }
     }
   }
   const proofs: Record<string, unknown> = {

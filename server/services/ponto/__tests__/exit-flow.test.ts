@@ -1070,6 +1070,25 @@ describe("SAIDA normal após presumida", () => {
       type: "SAIDA",
     });
   });
+
+  it("entrada depois da presumida → SAIDA fecha o turno novo, presumida fica por validar", async () => {
+    const { ctx, message, t } = setup({ smsAllowed: true, transport: "sms" });
+    mocks.findOpenPresumedExit.mockResolvedValue({
+      at: PRESUMED_AT,
+      id: "presumed-1",
+    });
+    // Reentrada às 18:04 — depois da presumida das 18:00.
+    mocks.timeEntryFindFirst.mockResolvedValue({ id: "entrada-2" });
+
+    await tryHandlePontoStaff(ctx, message("SAIDA"), t);
+
+    const entry = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect(entry.correctsId).toBeNull();
+    expect(entry.type).toBe("SAIDA");
+  });
 });
 
 describe("workedMs — saída corrigida depois da meia-noite", () => {
