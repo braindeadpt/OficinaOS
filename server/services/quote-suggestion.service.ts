@@ -390,15 +390,15 @@ function termContained(haystack: string, needle: string): boolean {
 }
 
 /**
- * Ordem de preferência entre dois candidatos — sempre determinístico:
+ * Ordem de preferência entre REPARAÇÕES — sempre determinístico:
  *  1. rank: igualdade EXATA de hint (equals) > contains. O deviceHit NÃO
  *     promove um contains a equals — ex.: "Troca de bateria" (exato do
  *     template) ganha a "Troca de bateria iPhone 15" (contains+deviceHit).
  *  2. deviceHit: entre não-exatos, o item que menciona o modelo do
  *     aparelho ganha (compatibilidade por nome — ver pickBest).
- *  3. stock>0 (peças), depois nome normalizado, depois id.
+ *  3. nome normalizado, depois id. (stock é sempre 0 — não desdobra.)
  */
-function isPreferred<T extends { id: string; name: string }>(
+function isPreferredRepair<T extends { id: string; name: string }>(
   next: ScoredCandidate<T>,
   best: ScoredCandidate<T>
 ): boolean {
@@ -419,8 +419,44 @@ function isPreferred<T extends { id: string; name: string }>(
 }
 
 /**
+ * Ordem de preferência entre PEÇAS — de bancada, diferente das
+ * reparações porque uma peça errada ou indisponível trava o serviço:
+ *  1. stock>0: disponibilidade — uma peça exata mas esgotada não resolve
+ *     hoje; a que está em stock ganha mesmo sendo contains/deviceHit.
+ *     Consequência deliberada: "Bateria" (equals, sem stock) PERDE para
+ *     "Bateria iPhone 15" (contains+deviceHit, em stock) — a peça certa
+ *     em stock ganha à genérica exata mas indisponível (BUG #166 r3).
+ *  2. rank: equals > contains — entre peças igualmente disponíveis, a
+ *     exatidão do nome decide ("Bateria" ganha a "Bateria iPhone 15"
+ *     quando ambas estão em stock — prioridade aprovada na r2).
+ *  3. deviceHit: entre não-exatos e com o mesmo rank, a que menciona o
+ *     modelo ganha.
+ *  4. nome normalizado, depois id.
+ */
+function isPreferredPart<T extends { id: string; name: string }>(
+  next: ScoredCandidate<T>,
+  best: ScoredCandidate<T>
+): boolean {
+  if (next.stock !== best.stock) {
+    return next.stock > best.stock;
+  }
+  if (next.rank !== best.rank) {
+    return next.rank > best.rank;
+  }
+  if (next.deviceHit !== best.deviceHit) {
+    return next.deviceHit;
+  }
+  const byNorm = compareStr(next.norm, best.norm);
+  if (byNorm !== 0) {
+    return byNorm < 0;
+  }
+  return next.item.id < best.item.id;
+}
+
+/**
  * Melhor candidato de um pool para os hints dados. Empates desempatados por
- * isPreferred — determinístico.
+ * isPreferredPart (peças — forParts) ou isPreferredRepair (reparações) —
+ * determinístico.
  *
  * deviceHints (nomes normalizados do modelo/nome comercial do aparelho
  * matched) não são gate de match — são desempate: entre candidatos com o
@@ -436,7 +472,8 @@ function pickBest<T extends { id: string; name: string }>(
   stockOf?: (item: T) => number,
   deviceHints: string[] = [],
   strictMultiWord = false,
-  excludeHints: string[] = []
+  excludeHints: string[] = [],
+  forParts = false
 ): ScoredCandidate<T> | null {
   const normalizedHints = hints
     .map((h) => normalizeKey(h))
@@ -445,6 +482,7 @@ function pickBest<T extends { id: string; name: string }>(
   const normalizedExclude = excludeHints
     .map((h) => normalizeKey(h))
     .filter((h) => h.length > 0);
+  const prefer = forParts ? isPreferredPart : isPreferredRepair;
   let best: ScoredCandidate<T> | null = null;
 
   for (const item of pool) {
@@ -477,7 +515,7 @@ function pickBest<T extends { id: string; name: string }>(
     const candidate: ScoredCandidate<T> = {
       // confidence de exibição: exact ou deviceHit → "high". O rank, em
       // contraste, reflete SÓ a igualdade exata — deviceHit nunca promove
-      // um contains a equals na ordenação (isPreferred).
+      // um contains a equals na ordenação (isPreferredPart/Repair).
       confidence: deviceHit ? "high" : matched,
       deviceHit,
       item,
@@ -485,7 +523,7 @@ function pickBest<T extends { id: string; name: string }>(
       rank: matched === "high" ? 2 : 1,
       stock: stockOf ? stockOf(item) : 0,
     };
-    if (!best || isPreferred(candidate, best)) {
+    if (!best || prefer(candidate, best)) {
       best = candidate;
     }
   }
@@ -707,7 +745,8 @@ function emitRuleLines(
         (p) => (p.stockQuantity > 0 ? 1 : 0),
         ctx.deviceHints,
         rule.strictMultiWord ?? false,
-        rule.excludeHints ?? []
+        rule.excludeHints ?? [],
+        true
       )
     );
     if (best) {

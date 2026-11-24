@@ -383,6 +383,58 @@ describe("buildQuoteSuggestion — device-aware part priority", () => {
       "part-generic"
     );
   });
+
+  it("prefers an in-stock part over an exact-name out-of-stock one", () => {
+    // BUG #166 r3: com equals>contains primeiro, "Bateria" (hint exato,
+    // sem stock) ganhava a "Bateria iPhone 15" (contains+deviceHit, em
+    // stock). Para peças a disponibilidade vem primeiro — a peça certa
+    // em stock ganha à genérica exata mas esgotada.
+    const parts: QuotePartInput[] = [
+      {
+        category: "BATTERY",
+        defaultPrice: 20,
+        id: "part-generic-oos",
+        name: "Bateria",
+        stockQuantity: 0,
+      },
+      {
+        category: "BATTERY",
+        defaultPrice: 28,
+        id: "part-iphone",
+        name: "Bateria iPhone 15",
+        stockQuantity: 4,
+      },
+    ];
+    const s = build(diag({ "battery.health": { Status: "fail" } }), { parts });
+    const part = s.lines.find((l) => l.kind === "part");
+    expect(part?.catalogId).toBe("part-iphone");
+    expect(part?.inStock).toBe(true);
+  });
+
+  it("keeps exact-match priority between equally stocked parts", () => {
+    // stock>0 empata quando ambas têm stock: o equals continua a ganhar
+    // ao contains sem deviceHit — prioridade da r2 preservada.
+    const parts: QuotePartInput[] = [
+      {
+        category: "BATTERY",
+        defaultPrice: 20,
+        id: "part-generic",
+        name: "Bateria",
+        stockQuantity: 3,
+      },
+      {
+        category: "BATTERY",
+        defaultPrice: 24,
+        id: "part-universal",
+        name: "Bateria universal",
+        stockQuantity: 3,
+      },
+    ];
+    const s = build(diag({ "battery.health": { Status: "fail" } }), { parts });
+    expect(s.lines.find((l) => l.kind === "part")?.catalogId).toBe(
+      "part-generic"
+    );
+  });
 });
 
 describe("buildQuoteSuggestion — device gating", () => {
