@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import api from "@/lib/api";
-import { formatClock, TYPE_LABEL } from "./shared";
+import { formatClock, TYPE_LABEL, useShopTz } from "./shared";
 
 const STATE_STYLE: Record<PontoNowUserDTO["state"], string> = {
   a_trabalhar: "bg-success/10 text-success",
@@ -14,6 +14,8 @@ const STATE_STYLE: Record<PontoNowUserDTO["state"], string> = {
 
 export default function NowTab() {
   const { i18n, t } = useTranslation();
+  const shopTz = useShopTz();
+  const tz = shopTz ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   const [items, setItems] = useState<PontoNowUserDTO[] | null>(null);
   const [error, setError] = useState(false);
 
@@ -88,7 +90,7 @@ export default function NowTab() {
                 </div>
                 <p className="mt-1.5 text-on-surface-variant text-xs">
                   {u.lastAt
-                    ? `${u.lastType ? t(TYPE_LABEL[u.lastType]) : ""} · ${formatClock(u.lastAt, i18n.language)}`
+                    ? `${u.lastType ? t(TYPE_LABEL[u.lastType]) : ""} · ${formatClock(u.lastAt, i18n.language, tz)}`
                     : t("ponto.no_entries_today")}
                 </p>
               </div>

@@ -43,17 +43,20 @@ export default function TeamTab() {
   const { t } = useTranslation();
   const users = useUsersStore((s) => s.users);
   const isLoading = useUsersStore((s) => s.isLoading);
-  const fetchUsers = useUsersStore((s) => s.fetchUsers);
+  const allUsersLoaded = useUsersStore((s) => s.allUsersLoaded);
+  // fetchAllUsers: GET /users é paginado (20/pág por defeito) e a aba
+  // equipa precisa de toda a gente — sem isto só apareciam 20.
+  const fetchAllUsers = useUsersStore((s) => s.fetchAllUsers);
   const updateUserProfile = useUsersStore((s) => s.updateUserProfile);
   const [editing, setEditing] = useState<EditState | null>(null);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (users.length === 0) {
-      fetchUsers().catch(() => undefined);
+    if (!allUsersLoaded) {
+      fetchAllUsers().catch(() => undefined);
     }
-  }, [users.length, fetchUsers]);
+  }, [allUsersLoaded, fetchAllUsers]);
 
   const openEdit = (u: (typeof users)[number]) => {
     setFormError(null);

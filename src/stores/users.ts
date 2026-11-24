@@ -33,6 +33,8 @@ export interface PontoUserPayload {
 }
 
 interface UsersState {
+  /** true quando `users` veio de fetchAllUsers (lista completa, não 1 página). */
+  allUsersLoaded: boolean;
   clearError: () => void;
   createUser: (
     data: {
@@ -44,6 +46,8 @@ interface UsersState {
   ) => Promise<UserRow>;
   error: string | null;
 
+  /** GET /users sem paginação — percorre o cursor até ao fim (máx. 100/pág). */
+  fetchAllUsers: () => Promise<void>;
   fetchUsers: () => Promise<void>;
   isLoading: boolean;
   resetUserPassword: (id: string, password: string) => Promise<void>;
@@ -59,6 +63,7 @@ interface UsersState {
 
 export const useUsersStore = create<UsersState>((set) => ({
   users: [],
+  allUsersLoaded: false,
   isLoading: false,
   error: null,
 
@@ -69,8 +74,40 @@ export const useUsersStore = create<UsersState>((set) => ({
       const data = res.data;
       set({
         users: Array.isArray(data) ? data : (data.users ?? []),
+        allUsersLoaded: false,
         isLoading: false,
       });
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, i18n.t("errors.fetch_users"));
+      set({ isLoading: false, error: message });
+    }
+  },
+
+  fetchAllUsers: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const all: UserRow[] = [];
+      let cursor: string | null = null;
+      // GET /users é paginado por cursor (default 20, máx. 100) — o
+      // painel de ponto precisa da equipa completa para os filtros.
+      // O teto de 20 páginas (2000 utilizadores) é só proteção.
+      for (let page = 0; page < 20; page++) {
+        const params = new URLSearchParams({ limit: "100" });
+        if (cursor) {
+          params.set("cursor", cursor);
+        }
+        const res = await api.get(`/users?${params}`);
+        const data = res.data as
+          | UserRow[]
+          | { nextCursor?: string | null; users?: UserRow[] };
+        const rows = Array.isArray(data) ? data : (data.users ?? []);
+        all.push(...rows);
+        cursor = Array.isArray(data) ? null : (data.nextCursor ?? null);
+        if (!cursor) {
+          break;
+        }
+      }
+      set({ users: all, allUsersLoaded: true, isLoading: false });
     } catch (err: unknown) {
       const message = getErrorMessage(err, i18n.t("errors.fetch_users"));
       set({ isLoading: false, error: message });

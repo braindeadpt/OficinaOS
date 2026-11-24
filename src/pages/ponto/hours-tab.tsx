@@ -8,12 +8,16 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import api from "@/lib/api";
 import { useUsersStore } from "@/stores/users";
-import { formatDay, formatMinutes, hoursFlags } from "./shared";
+import {
+  formatClock,
+  formatDay,
+  formatMinutes,
+  hoursFlags,
+  useShopTz,
+  ymdDaysAgo,
+} from "./shared";
 
-function ymdDaysAgo(n: number): string {
-  const d = new Date(Date.now() - n * 86_400_000);
-  return d.toISOString().slice(0, 10);
-}
+const YMD = /^\d{4}-\d{2}-\d{2}$/;
 
 const FLAG_STYLE: Record<string, string> = {
   correction: "bg-surface-container text-on-surface-variant",
@@ -56,27 +60,28 @@ function FlagBadge({ flag, t }: { flag: string; t: TFunction }) {
   );
 }
 
-function timeOrDash(iso: string | null, locale: string): string {
-  if (!iso) {
-    return "—";
-  }
-  return new Date(iso).toLocaleTimeString(locale, {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 export default function HoursTab() {
   const { i18n, t } = useTranslation();
-  const [from, setFrom] = useState(ymdDaysAgo(13));
-  const [to, setTo] = useState(ymdDaysAgo(0));
+  const shopTz = useShopTz();
+  const tz = shopTz ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const [from, setFrom] = useState(() => ymdDaysAgo(13, tz));
+  const [to, setTo] = useState(() => ymdDaysAgo(0, tz));
   const [userId, setUserId] = useState("");
   const [data, setData] = useState<PontoHoursResponse | null>(null);
   const [error, setError] = useState(false);
   const storeUsers = useUsersStore((s) => s.users);
-  const fetchUsers = useUsersStore((s) => s.fetchUsers);
+  const fetchAllUsers = useUsersStore((s) => s.fetchAllUsers);
+  const allUsersLoaded = useUsersStore((s) => s.allUsersLoaded);
+
+  const datesValid = useMemo(
+    () => YMD.test(from) && YMD.test(to) && from <= to,
+    [from, to]
+  );
 
   const load = useCallback(async () => {
+    if (!datesValid) {
+      return;
+    }
     try {
       const params = new URLSearchParams({ from, to });
       if (userId) {
@@ -88,14 +93,16 @@ export default function HoursTab() {
     } catch {
       setError(true);
     }
-  }, [from, to, userId]);
+  }, [datesValid, from, to, userId]);
 
   useEffect(() => {
     load().catch(() => undefined);
-    if (storeUsers.length === 0) {
-      fetchUsers().catch(() => undefined);
+    // allUsersLoaded distingue "fetchUsers trouxe 1 página" de "lista
+    // completa" — sem isto o filtro só mostrava os primeiros 20.
+    if (!allUsersLoaded) {
+      fetchAllUsers().catch(() => undefined);
     }
-  }, [load, storeUsers.length, fetchUsers]);
+  }, [load, allUsersLoaded, fetchAllUsers]);
 
   const users = useMemo(
     () => storeUsers.map((u) => ({ id: u.id, name: u.name || u.username })),
@@ -107,17 +114,6 @@ export default function HoursTab() {
     () => [{ id: "", name: t("ponto.all_users") }, ...users],
     [users, t]
   );
-
-  if (error) {
-    return (
-      <div className="rounded-2xl bg-error-container p-4 text-center text-on-error-container text-sm">
-        {t("ponto.load_failed")}
-        <Button className="ms-3" onClick={load} size="sm" variant="secondary">
-          {t("retry")}
-        </Button>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-4">
@@ -145,20 +141,39 @@ export default function HoursTab() {
             ))}
           </Select>
         </Field>
-        <Button icon="refresh" onClick={load} size="sm" variant="secondary">
+        <Button
+          disabled={!datesValid}
+          icon="refresh"
+          onClick={load}
+          size="sm"
+          variant="secondary"
+        >
           {t("refresh")}
         </Button>
       </div>
 
-      {!(data || error) && (
+      {!datesValid && (
+        <p className="text-on-surface-variant text-sm">
+          {t("ponto.dates_invalid")}
+        </p>
+      )}
+      {datesValid && error && (
+        <div className="rounded-2xl bg-error-container p-4 text-center text-on-error-container text-sm">
+          {t("ponto.load_failed")}
+          <Button className="ms-3" onClick={load} size="sm" variant="secondary">
+            {t("retry")}
+          </Button>
+        </div>
+      )}
+      {datesValid && !(error || data) && (
         <div className="h-48 animate-pulse rounded-xl bg-surface-container-low" />
       )}
-      {data && data.days.length === 0 && (
+      {datesValid && data && data.days.length === 0 && (
         <div className="rounded-2xl bg-surface-container-low p-8 text-center text-on-surface-variant text-sm">
           {t("ponto.hours_empty")}
         </div>
       )}
-      {data && data.days.length > 0 && (
+      {datesValid && data && data.days.length > 0 && (
         <div className="overflow-x-auto rounded-2xl bg-surface-container-lowest">
           <table className="w-full text-sm">
             <thead>
@@ -197,10 +212,10 @@ export default function HoursTab() {
                     {formatMinutes(d.hours.workedMinutes)}
                   </td>
                   <td className="px-4 py-2.5 text-on-surface-variant">
-                    {timeOrDash(d.hours.firstEntradaAt, i18n.language)}
+                    {formatClock(d.hours.firstEntradaAt, i18n.language, tz)}
                   </td>
                   <td className="px-4 py-2.5 text-on-surface-variant">
-                    {timeOrDash(d.hours.lastSaidaAt, i18n.language)}
+                    {formatClock(d.hours.lastSaidaAt, i18n.language, tz)}
                   </td>
                   <td className="px-4 py-2.5">
                     <div className="flex flex-wrap gap-1">

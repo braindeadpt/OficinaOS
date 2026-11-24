@@ -21,6 +21,7 @@ import {
   USER_SELECT,
   USER_SELECT_MINIMAL,
   USER_SELECT_NO_IMAGE,
+  USER_SELECT_NO_PONTO,
   updateCredentialPassword as updateCredentialPasswordRepo,
   updateMustChangePassword as updateMustChangePasswordRepo,
   count as userCount,
@@ -112,8 +113,15 @@ export async function list(
   return { users, nextCursor, totalCount };
 }
 
-export async function getById(prisma: DbClient, id: string) {
-  const user = await userFindUniqueById(prisma, id, USER_SELECT);
+export async function getById(prisma: DbClient, id: string, nonOwner = false) {
+  // nonOwner=true: sem campos do livro de ponto — user:get é permissão de
+  // TECHNICIAN/FRONT_DESK e telefone/horário/flags de ponto são dados
+  // laborais do OWNER.
+  const user = await userFindUniqueById(
+    prisma,
+    id,
+    nonOwner ? USER_SELECT_NO_PONTO : USER_SELECT
+  );
   if (!user) {
     throw new AppError("USER_NOT_FOUND");
   }

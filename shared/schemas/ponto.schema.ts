@@ -8,7 +8,9 @@ const isoDate = z.iso.date();
 const isoDateTime = z.iso.datetime({ offset: true });
 
 const ENTRY_TYPES = ["ENTRADA", "PAUSA", "VOLTEI", "SAIDA"] as const;
-const STATUSES = ["APROVADO", "POR_VALIDAR"] as const;
+// O filtro é pelo status EFETIVO — o mesmo conjunto que listEntries
+// devolve (validação mais recente pode ter recusado a picagem).
+const STATUSES = ["APROVADO", "POR_VALIDAR", "RECUSADO"] as const;
 const DECISIONS = ["APROVADO", "RECUSADO"] as const;
 
 export const pontoEntriesQuerySchema = z.object({

@@ -8,6 +8,7 @@ import { pontoRoutes } from "../routes/ponto.js";
 import {
   effectiveStatusOf,
   isSuperseded,
+  localDateKey,
   resolvePontoPhotoPath,
   resolvePontoRange,
   usableEntries,
@@ -460,6 +461,74 @@ describe("ponto panel — GET /hours + /missing-exits", () => {
     expect(body).toHaveLength(1);
     expect(body[0].userId).toBe("u1");
     expect(body[0].lastType).toBe("ENTRADA");
+  });
+
+  it("keeps overnight-shift hours: intervals pair before civil-day split", async () => {
+    // Turno 22:00 → 07:00 do dia seguinte (UTC; Lisboa em junho = UTC+1,
+    // o que só desloca as horas de cada dia civil, não o total).
+    const nightIn = entryRow({
+      at: new Date("2025-06-10T22:00:00Z"),
+      id: "n1",
+      type: "ENTRADA",
+    });
+    const nightOut = entryRow({
+      at: new Date("2025-06-11T07:00:00Z"),
+      id: "n2",
+      type: "SAIDA",
+    });
+    const prisma = fakePrisma({ entries: [nightIn, nightOut] });
+    const app = buildApp(prisma);
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/ponto/hours?from=2025-06-10&to=2025-06-11",
+    });
+    expect(res.statusCode).toBe(200);
+    const days = res.json().days;
+    expect(days).toHaveLength(2);
+    // 9h de intervalo repartidas pelos dois dias civis — antes da
+    // correção o dia da saída não encontrava a entrada e perdia tudo.
+    const total = days.reduce(
+      (acc: number, d: { hours: { workedMinutes: number } }) =>
+        acc + d.hours.workedMinutes,
+      0
+    );
+    expect(total).toBe(540);
+    for (const d of days) {
+      expect(d.hours.workedMinutes).toBeGreaterThan(0);
+      expect(d.hours.missingExit).toBe(false);
+    }
+    // E nenhum dos dois dias aparece como saída em falta.
+    const miss = await app.inject({
+      method: "GET",
+      url: "/api/ponto/missing-exits?from=2025-06-10&to=2025-06-11",
+    });
+    expect(miss.json()).toHaveLength(0);
+  });
+
+  it("does not flag the current civil day as a missing exit", async () => {
+    const prisma = fakePrisma({
+      entries: [
+        entryRow({
+          at: new Date(),
+          id: "today-in",
+          type: "ENTRADA",
+        }),
+      ],
+    });
+    const app = buildApp(prisma);
+    const todayKey = localDateKey("Europe/Lisbon", new Date());
+    const ymd = (offsetDays: number) =>
+      new Date(Date.parse(`${todayKey}T00:00:00Z`) + offsetDays * 86_400_000)
+        .toISOString()
+        .slice(0, 10);
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/ponto/missing-exits?from=${ymd(-1)}&to=${ymd(1)}`,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(
+      res.json().filter((m: { date: string }) => m.date === todayKey)
+    ).toHaveLength(0);
   });
 });
 

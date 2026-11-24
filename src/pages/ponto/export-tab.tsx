@@ -1,18 +1,20 @@
 import type { PontoHoursResponse } from "@shared/types/ponto";
+import type { TFunction } from "i18next";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import api from "@/lib/api";
-import { formatMinutes } from "./shared";
+import { formatClock, formatMinutes, useShopTz, ymdDaysAgo } from "./shared";
 
-function ymdDaysAgo(n: number): string {
-  const d = new Date(Date.now() - n * 86_400_000);
-  return d.toISOString().slice(0, 10);
-}
-
-async function downloadPdf(data: PontoHoursResponse, title: string) {
+async function downloadPdf(
+  data: PontoHoursResponse,
+  title: string,
+  timeZone: string | undefined,
+  locale: string,
+  t: TFunction
+) {
   const { default: jsPDF } = await import("jspdf");
   const { default: autoTable } = await import("jspdf-autotable");
 
@@ -21,35 +23,41 @@ async function downloadPdf(data: PontoHoursResponse, title: string) {
   doc.text(title, 14, 16);
   doc.setFontSize(9);
   doc.text(`${data.from} → ${data.to}`, 14, 23);
+  doc.text(
+    `${t("ponto.pdf_corrected_legend")} ${t("ponto.pdf_missing_legend")}`,
+    14,
+    28
+  );
+
+  const time = (iso: string | null) =>
+    iso ? formatClock(iso, locale, timeZone) : "—";
 
   autoTable(doc, {
     body: data.days.map((d) => [
       d.date,
       d.userName,
       formatMinutes(d.hours.workedMinutes),
-      d.hours.firstEntradaAt
-        ? new Date(d.hours.firstEntradaAt).toLocaleTimeString()
-        : "—",
-      d.hours.lastSaidaAt
-        ? new Date(d.hours.lastSaidaAt).toLocaleTimeString()
-        : "—",
+      time(d.hours.firstEntradaAt),
+      time(d.hours.lastSaidaAt),
       d.hours.missingExit ? "!" : "",
       d.hours.lateMinutes > 0 ? `${d.hours.lateMinutes}m` : "",
       d.hours.earlyExitMinutes > 0 ? `${d.hours.earlyExitMinutes}m` : "",
+      d.hours.hasCorrection || d.hours.recusadoCount > 0 ? "✓" : "",
     ]),
     head: [
       [
-        "Data",
-        "Funcionário",
-        "Trabalhado",
-        "Entrada",
-        "Saída",
-        "Saída em falta",
-        "Atraso",
-        "Saída cedo",
+        t("ponto.pdf_col_date"),
+        t("ponto.pdf_col_user"),
+        t("ponto.pdf_col_worked"),
+        t("ponto.pdf_col_first"),
+        t("ponto.pdf_col_last"),
+        t("ponto.pdf_col_missing_exit"),
+        t("ponto.pdf_col_late"),
+        t("ponto.pdf_col_early"),
+        t("ponto.pdf_col_corrected"),
       ],
     ],
-    startY: 30,
+    startY: 33,
     styles: { fontSize: 8 },
   });
 
@@ -57,9 +65,11 @@ async function downloadPdf(data: PontoHoursResponse, title: string) {
 }
 
 export default function ExportTab() {
-  const { t } = useTranslation();
-  const [from, setFrom] = useState(ymdDaysAgo(30));
-  const [to, setTo] = useState(ymdDaysAgo(0));
+  const { i18n, t } = useTranslation();
+  const shopTz = useShopTz();
+  const tz = shopTz ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const [from, setFrom] = useState(() => ymdDaysAgo(30, tz));
+  const [to, setTo] = useState(() => ymdDaysAgo(0, tz));
   const [data, setData] = useState<PontoHoursResponse | null>(null);
   const [error, setError] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -85,7 +95,13 @@ export default function ExportTab() {
     }
     setBusy(true);
     try {
-      await downloadPdf(data, t("ponto.export_title"));
+      await downloadPdf(
+        data,
+        t("ponto.export_title"),
+        shopTz,
+        i18n.language,
+        t
+      );
     } finally {
       setBusy(false);
     }

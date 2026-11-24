@@ -100,7 +100,13 @@ export const usersRoutes: FastifyPluginAsync = async (app) => {
     },
     async (request, reply) => {
       const { id } = request.params as { id: string };
-      const user = await getById(app.prisma, id);
+      // Tal como na listagem: não-OWNER recebe a projeção sem campos do
+      // livro de ponto (telefone, horário, flags são dados do OWNER).
+      const user = await getById(
+        app.prisma,
+        id,
+        getRole(request) !== Role.OWNER // nonOwner → sem campos de ponto
+      );
       return reply.send(user);
     }
   );

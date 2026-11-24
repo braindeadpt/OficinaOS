@@ -39,6 +39,7 @@ function deps() {
     logout: vi.fn(),
     navigate: vi.fn(),
     openIntakeModal: vi.fn(),
+    pontoEnabled: true,
     role: "OWNER",
     signOut: vi.fn(),
   };
@@ -84,6 +85,13 @@ describe("buildCommands", () => {
     expect(commands.some((c) => c.labelKey === "auth_sign_out_instead")).toBe(
       true
     );
+  });
+
+  it("hides /ponto when the module entitlement is off", () => {
+    const on = buildCommands(deps());
+    expect(on.some((c) => c.to === "/ponto")).toBe(true);
+    const off = buildCommands({ ...deps(), pontoEnabled: false });
+    expect(off.some((c) => c.to === "/ponto")).toBe(false);
   });
 
   it("runs the injected callbacks rather than importing them", () => {

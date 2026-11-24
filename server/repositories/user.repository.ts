@@ -54,6 +54,22 @@ export const USER_SELECT_NO_IMAGE: UserSelect = {
   createdAt: true,
 };
 
+// USER_SELECT sem os campos do livro de ponto — GET /users/:id é
+// alcançável por TECHNICIAN/FRONT_DESK (user:get) e telefone, horário e
+// flags de ponto são dados laborais reservados ao OWNER. Tal como
+// USER_SELECT_MINIMAL, é a projeção "segura" para não-proprietários.
+export const USER_SELECT_NO_PONTO: UserSelect = {
+  id: true,
+  username: true,
+  name: true,
+  email: true,
+  role: true,
+  isActive: true,
+  mustChangePassword: true,
+  image: true,
+  createdAt: true,
+};
+
 export async function findMany(
   prisma: DbClient,
   where: UserWhereInput,

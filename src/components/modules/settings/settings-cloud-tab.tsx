@@ -7,6 +7,7 @@ import { Field } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import api, { getErrorMessage } from "@/lib/api";
+import { usePontoStore } from "@/stores/ponto";
 import SettingsInvoicingSection from "./settings-invoicing-section";
 import SettingsPontoSection from "./settings-ponto-section";
 import SettingsStorefrontSection from "./settings-storefront-section";
@@ -160,8 +161,13 @@ export default function SettingsCloudTab({
     try {
       const res = await api.post<CloudStatus>("/settings/cloud/sync");
       setStatus(res.data);
-      // A sync pode ter ativado módulos — as secções abaixo recarregam.
+      // A sync pode ter ativado módulos — as secções abaixo recarregam e
+      // o store do ponto (gate da sidebar/nav/paleta) é reposto também.
       setSyncNonce((n) => n + 1);
+      usePontoStore
+        .getState()
+        .fetchStatus()
+        .catch(() => undefined);
       onToast(t("cloud_sync_success"), "success");
     } catch (err) {
       onToast(getErrorMessage(err, t("cloud_sync_failed")), "error");
@@ -185,6 +191,11 @@ export default function SettingsCloudTab({
         syncedAt: null,
         reachable: null,
       });
+      // Desemparelhar corta os entitlements — repõe o gate do ponto.
+      usePontoStore
+        .getState()
+        .fetchStatus()
+        .catch(() => undefined);
       onToast(
         t(
           res.cloudDeleted === false

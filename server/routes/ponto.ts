@@ -10,7 +10,7 @@ import {
   pontoMissingExitsQuerySchema,
   pontoValidateSchema,
 } from "@shared/schemas/ponto.schema.js";
-import type { FastifyPluginCallback } from "fastify";
+import type { FastifyPluginCallback, FastifyRequest } from "fastify";
 import { loadEnv } from "../config/env.js";
 import { decryptSecret } from "../lib/crypto.js";
 import { dashboardScope } from "../middlewares/dashboard-scope.js";
@@ -33,6 +33,19 @@ import { getUserId } from "../utils/request.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
 const MODULE = "ponto";
+
+/**
+ * Fuso da loja garantido pelo middleware dashboardScope (preHandler das
+ * rotas de leitura). Se estiver ausente é erro de wiring da rota, não de
+ * pedido — falha alto em vez de assumir UTC e agrupar dias ao lado.
+ */
+function shopTz(req: FastifyRequest): string {
+  const scope = req.dashboardScope;
+  if (!scope) {
+    throw new AppError("INTERNAL_ERROR");
+  }
+  return scope.shopTz;
+}
 
 interface PontoAuth {
   apiUrl: string;
@@ -73,15 +86,21 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
   app.get(
     "/status",
     {
-      preHandler: [requirePermission({ settings: ["view"] })],
+      // dashboardScope resolve o fuso efetivo da loja (ShopSettings.timezone
+      // com fallback env TZ) — a UI formata horas no mesmo fuso do servidor
+      // em vez de adivinhar pelo relógio do dispositivo.
+      preHandler: [requirePermission({ settings: ["view"] }), dashboardScope],
       schema: {
         summary: "Whether the ponto (time clock) Pro module is enabled",
         tags: ["ponto"],
       },
     },
-    async (_req, reply) => {
+    async (req, reply) => {
       const settings = await getOrCreateShopSettings(app.prisma);
-      return reply.send({ enabled: isModuleEnabled(settings, MODULE) });
+      return reply.send({
+        enabled: isModuleEnabled(settings, MODULE),
+        tz: shopTz(req),
+      });
     }
   );
 
@@ -168,8 +187,7 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
       },
     },
     async (req, reply) => {
-      // biome-ignore lint/style/noNonNullAssertion: set by dashboardScope preHandler
-      const tz = req.dashboardScope!.shopTz;
+      const tz = shopTz(req);
       return reply.send(await listNow(app.prisma, tz));
     }
   );
@@ -197,8 +215,7 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
           ),
         });
       }
-      // biome-ignore lint/style/noNonNullAssertion: set by dashboardScope preHandler
-      const tz = req.dashboardScope!.shopTz;
+      const tz = shopTz(req);
       const range = resolvePontoRange(parsed.data.from, parsed.data.to, tz);
       return reply.send(
         await listEntries(app.prisma, range, {
@@ -324,8 +341,7 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
           ),
         });
       }
-      // biome-ignore lint/style/noNonNullAssertion: set by dashboardScope preHandler
-      const tz = req.dashboardScope!.shopTz;
+      const tz = shopTz(req);
       const range = resolvePontoRange(parsed.data.from, parsed.data.to, tz);
       return reply.send(
         await getHours(app.prisma, tz, range, parsed.data.userId)
@@ -356,8 +372,7 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
           ),
         });
       }
-      // biome-ignore lint/style/noNonNullAssertion: set by dashboardScope preHandler
-      const tz = req.dashboardScope!.shopTz;
+      const tz = shopTz(req);
       const range = resolvePontoRange(parsed.data.from, parsed.data.to, tz);
       return reply.send(await getMissingExits(app.prisma, tz, range));
     }

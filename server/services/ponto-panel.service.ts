@@ -7,7 +7,6 @@ import type {
 } from "@generated/client";
 import { AppError } from "@shared/errors/app-error.js";
 import type {
-  PontoDayHoursDTO,
   PontoEffectiveStatus,
   PontoEntriesResponse,
   PontoEntryDTO,
@@ -448,124 +447,290 @@ export async function createManualEntry(
 }
 
 // ── Agregação por utilizador×dia (horas / esquecimentos / exportar) ─────
+//
+// Os eventos são primeiro emparelhados em intervalos trabalhados
+// (ENTRADA/VOLTEI → PAUSA/SAIDA) e só depois repartidos pelas fronteiras
+// dos dias civis da loja. Dividir os eventos por dia ANTES de emparelhar
+// perdia as horas de turnos que atravessam a meia-noite: a saída do dia
+// seguinte não encontrava a entrada aberta do dia anterior.
 
-interface DayComputation {
-  day: PontoDayHoursDTO;
-  entries: EntryRow[];
+/**
+ * Projeção leve para os cálculos — chega para o status efetivo e para
+ * detectar correções, sem os joins de user/createdBy/corrects que o DTO
+ * precisa. O histórico completo por trabalhador é lido, porque o estado
+ * "turno aberto" no início do período depende de eventos anteriores.
+ */
+const COMPUTE_INCLUDE = {
+  corrections: { select: { id: true }, take: 1 },
+  validations: {
+    orderBy: [{ at: "desc" }, { id: "desc" }],
+    select: { decision: true },
+    take: 1,
+  },
+} satisfies Prisma.TimeEntryInclude;
+
+type ComputeRow = Prisma.TimeEntryGetPayload<{
+  include: typeof COMPUTE_INCLUDE;
+}>;
+
+async function findComputeEntries(
+  prisma: DbClient,
+  where: Prisma.TimeEntryWhereInput
+): Promise<ComputeRow[]> {
+  return await prisma.timeEntry.findMany({
+    include: COMPUTE_INCLUDE,
+    orderBy: [{ at: "asc" }, { id: "asc" }],
+    where,
+  });
 }
 
-interface DayWalk {
-  firstEntradaAt: Date | null;
-  lastSaidaAt: Date | null;
-  lastType: PontoEntryType | null;
-  workedMs: number;
+/** distinct userId com eventos em [start,end) — barato, sem joins. */
+async function findUserIdsInRange(
+  prisma: DbClient,
+  range: PontoRange,
+  userId: string | undefined
+): Promise<string[]> {
+  const rows = await prisma.timeEntry.findMany({
+    distinct: ["userId"],
+    select: { userId: true },
+    where: {
+      at: { gte: range.start, lt: range.end },
+      ...(userId ? { userId } : {}),
+    },
+  });
+  return rows.map((r) => r.userId);
+}
+
+interface WorkInterval {
+  endMs: number;
+  startMs: number;
 }
 
 /**
- * Percorre os eventos do dia acumulando intervalos trabalhados.
- * ENTRADA/VOLTEI abrem; PAUSA/SAIDA fecham. Intervalo aberto no fim conta
- * até openCap (agora ou meia-noite local).
+ * Emparelha os eventos utilizáveis de UM trabalhador em intervalos
+ * [abertura → fecho). Um intervalo ainda aberto conta só até ao fim do
+ * dia civil em que abriu (ou até agora, se esse dia ainda não acabou):
+ * uma saída esquecida não pode inflar todos os dias seguintes até que
+ * alguém registe a correção — os dias intermédios sem eventos continuam
+ * sem linha, como antes.
  */
-function walkDay(entries: EntryRow[], openCap: number): DayWalk {
-  let workedMs = 0;
-  let openSince: number | null = null;
-  const walk: DayWalk = {
+function pairWorkIntervals(
+  usable: ComputeRow[],
+  tz: string,
+  now: Date
+): WorkInterval[] {
+  const intervals: WorkInterval[] = [];
+  let open: { atMs: number; entry: ComputeRow } | null = null;
+  for (const e of usable) {
+    if (e.type === "ENTRADA" || e.type === "VOLTEI") {
+      // A primeira abertura ganha; entradas/voltas duplicadas não
+      // reiniciam o intervalo.
+      open ??= { atMs: e.at.getTime(), entry: e };
+      continue;
+    }
+    // PAUSA e SAIDA fecham o intervalo aberto.
+    if (open) {
+      intervals.push({ endMs: e.at.getTime(), startMs: open.atMs });
+      open = null;
+    }
+  }
+  if (open) {
+    const openerDayEnd = localDayRange(
+      tz,
+      localDateKey(tz, open.entry.at)
+    ).end.getTime();
+    intervals.push({
+      endMs: Math.min(now.getTime(), openerDayEnd),
+      startMs: open.atMs,
+    });
+  }
+  return intervals;
+}
+
+/** Minutos de [dayStart,dayEnd) cobertos pelos intervalos (já em ms). */
+function overlapMinutes(
+  intervals: WorkInterval[],
+  dayStartMs: number,
+  dayEndMs: number
+): number {
+  let ms = 0;
+  for (const i of intervals) {
+    if (i.startMs >= dayEndMs) {
+      break; // intervalos vêm ordenados por startMs
+    }
+    const s = Math.max(i.startMs, dayStartMs);
+    const e = Math.min(i.endMs, dayEndMs);
+    if (e > s) {
+      ms += e - s;
+    }
+  }
+  return Math.round(ms / 60_000);
+}
+
+interface DayScan {
+  firstEntradaAt: Date | null;
+  lastEntry: ComputeRow | null;
+  lastSaidaAt: Date | null;
+  lastType: PontoEntryType | null;
+}
+
+/** Campos do dia derivados dos eventos DO dia (ordem = cronológica). */
+function scanDay(entries: ComputeRow[]): DayScan {
+  const scan: DayScan = {
     firstEntradaAt: null,
+    lastEntry: null,
     lastSaidaAt: null,
     lastType: null,
-    workedMs: 0,
   };
-
   for (const e of entries) {
-    walk.lastType = e.type;
+    scan.lastType = e.type;
+    scan.lastEntry = e;
     if (e.type === "ENTRADA" || e.type === "VOLTEI") {
-      openSince ??= e.at.getTime();
-      if (e.type === "ENTRADA" && !walk.firstEntradaAt) {
-        walk.firstEntradaAt = e.at;
+      if (e.type === "ENTRADA" && !scan.firstEntradaAt) {
+        scan.firstEntradaAt = e.at;
       }
       continue;
     }
-    if (openSince !== null) {
-      workedMs += e.at.getTime() - openSince;
-      openSince = null;
-    }
     if (e.type === "SAIDA") {
-      walk.lastSaidaAt = e.at;
+      scan.lastSaidaAt = e.at;
     }
   }
-  if (openSince !== null) {
-    workedMs += Math.max(0, openCap - openSince);
-  }
-  walk.workedMs = workedMs;
-  return walk;
+  return scan;
 }
 
-function computeDay(
-  entries: EntryRow[],
-  tz: string,
-  scheduleStart: string | null,
-  scheduleEnd: string | null,
-  now: Date
-): DayComputation {
-  const usable = usableEntries(entries);
-  const recusadoCount = entries.filter(
-    (e) => effectiveStatusOf(e) === "RECUSADO"
-  ).length;
+function groupByDay(entries: ComputeRow[], tz: string) {
+  const map = new Map<string, ComputeRow[]>();
+  for (const e of entries) {
+    const date = localDateKey(tz, e.at);
+    const list = map.get(date) ?? [];
+    list.push(e);
+    map.set(date, list);
+  }
+  return map;
+}
 
-  const ymd = localDateKey(tz, entries[0]?.at ?? now);
-  const openCap = Math.min(now.getTime(), localDayRange(tz, ymd).end.getTime());
-  const { firstEntradaAt, lastSaidaAt, lastType, workedMs } = walkDay(
-    usable,
-    openCap
+function inRange(ymd: string, fromDate: string, toDate: string): boolean {
+  return ymd >= fromDate && ymd <= toDate;
+}
+
+/**
+ * O turno do dia fica "resolvido" quando o evento útil SEGUINTE já fecha
+ * o intervalo (PAUSA/SAIDA — típico de turno overnight que termina no dia
+ * civil seguinte). Sem isso, o dia anterior ao fecho parecia esquecido.
+ */
+function resolvedByFollowingClose(
+  allUsable: ComputeRow[],
+  usablePos: Map<ComputeRow, number>,
+  entry: ComputeRow
+): boolean {
+  const pos = usablePos.get(entry);
+  const next = pos === undefined ? undefined : allUsable[pos + 1];
+  return next !== undefined && (next.type === "PAUSA" || next.type === "SAIDA");
+}
+
+function pushDayHours(
+  days: PontoUserDayHoursDTO[],
+  args: {
+    allUsable: ComputeRow[];
+    date: string;
+    dayUsable: ComputeRow[];
+    intervals: WorkInterval[];
+    rawEntries: ComputeRow[];
+    scheduleEnd: string | null;
+    scheduleStart: string | null;
+    todayKey: string;
+    tz: string;
+    usablePos: Map<ComputeRow, number>;
+    userId: string;
+    userName: string;
+  }
+) {
+  const {
+    allUsable,
+    date,
+    dayUsable,
+    intervals,
+    rawEntries,
+    scheduleEnd,
+    scheduleStart,
+    todayKey,
+    tz,
+    usablePos,
+    userId,
+    userName,
+  } = args;
+
+  const scan = scanDay(dayUsable);
+  const { end: dayEnd, start: dayStart } = localDayRange(tz, date);
+  const workedMinutes = overlapMinutes(
+    intervals,
+    dayStart.getTime(),
+    dayEnd.getTime()
   );
 
   const startMin = scheduleMinutes(scheduleStart);
   const endMin = scheduleMinutes(scheduleEnd);
   const lateMinutes =
-    firstEntradaAt && startMin !== null
-      ? Math.max(0, localMinutesOfDay(tz, firstEntradaAt) - startMin)
+    scan.firstEntradaAt && startMin !== null
+      ? Math.max(0, localMinutesOfDay(tz, scan.firstEntradaAt) - startMin)
       : 0;
   const earlyExitMinutes =
-    lastSaidaAt && endMin !== null
-      ? Math.max(0, endMin - localMinutesOfDay(tz, lastSaidaAt))
+    scan.lastSaidaAt && endMin !== null
+      ? Math.max(0, endMin - localMinutesOfDay(tz, scan.lastSaidaAt))
       : 0;
 
-  return {
-    day: {
-      workedMinutes: Math.round(workedMs / 60_000),
-      firstEntradaAt: firstEntradaAt?.toISOString() ?? null,
-      lastSaidaAt: lastSaidaAt?.toISOString() ?? null,
+  // "Saída em falta" = o dia acaba sem SAIDA e o turno aberto não é
+  // resolvido pelo evento útil seguinte (uma PAUSA/SAIDA no dia seguinte
+  // — típico de turno overnight — já conta como fecho). O dia civil atual
+  // fica de fora: um turno em curso não é um esquecimento.
+  const missingExit =
+    scan.lastType !== null &&
+    scan.lastType !== "SAIDA" &&
+    scan.lastEntry !== null &&
+    !resolvedByFollowingClose(allUsable, usablePos, scan.lastEntry) &&
+    date !== todayKey;
+
+  days.push({
+    date,
+    hours: {
+      workedMinutes,
+      firstEntradaAt: scan.firstEntradaAt?.toISOString() ?? null,
+      lastSaidaAt: scan.lastSaidaAt?.toISOString() ?? null,
       lateMinutes,
       earlyExitMinutes,
-      missingExit: lastType !== null && lastType !== "SAIDA",
-      hasCorrection: entries.some(
+      missingExit,
+      hasCorrection: rawEntries.some(
         (e) => isSuperseded(e) || e.correctsId !== null
       ),
-      recusadoCount,
+      recusadoCount: rawEntries.filter(
+        (e) => effectiveStatusOf(e) === "RECUSADO"
+      ).length,
     },
-    entries: usable,
-  };
+    userId,
+    userName,
+  });
 }
 
-interface DayGroup {
-  date: string;
-  entries: EntryRow[];
-  userId: string;
-}
-
-function groupByUserDay(
-  entries: EntryRow[],
-  tz: string
-): Map<string, DayGroup> {
-  const map = new Map<string, DayGroup>();
-  for (const e of entries) {
-    const date = localDateKey(tz, e.at);
-    const key = `${e.userId}${date}`;
-    const g = map.get(key) ?? { date, entries: [], userId: e.userId };
-    g.entries.push(e);
-    map.set(key, g);
+/**
+ * Histórico completo dos trabalhadores com eventos no período — os
+ * intervalos são path-dependent (um turno aberto no início do período só
+ * se calcula vendo os eventos anteriores), por isso a leitura não é
+ * limitada às datas pedidas.
+ */
+async function loadUserHistories(
+  prisma: DbClient,
+  userIds: string[]
+): Promise<Map<string, ComputeRow[]>> {
+  const rows = await findComputeEntries(prisma, {
+    userId: { in: userIds },
+  });
+  const byUser = new Map<string, ComputeRow[]>();
+  for (const e of rows) {
+    const list = byUser.get(e.userId) ?? [];
+    list.push(e);
+    byUser.set(e.userId, list);
   }
-  return map;
+  return byUser;
 }
 
 // ── GET /hours ──────────────────────────────────────────────────────────
@@ -576,11 +741,16 @@ export async function getHours(
   range: PontoRange,
   userId: string | undefined
 ): Promise<PontoHoursResponse> {
-  const [entries, users] = await Promise.all([
-    findEntries(prisma, {
-      at: { gte: range.start, lt: range.end },
-      ...(userId ? { userId } : {}),
-    }),
+  const now = new Date();
+  const todayKey = localDateKey(tz, now);
+
+  const userIds = await findUserIdsInRange(prisma, range, userId);
+  if (userIds.length === 0) {
+    return { days: [], from: range.fromDate, to: range.toDate };
+  }
+
+  const [byUser, users] = await Promise.all([
+    loadUserHistories(prisma, userIds),
     prisma.user.findMany({
       select: {
         id: true,
@@ -594,30 +764,41 @@ export async function getHours(
   ]);
   const userById = new Map(users.map((u) => [u.id, u]));
 
-  const groups = groupByUserDay(entries, tz);
-  const now = new Date();
-  const days: PontoUserDayHoursDTO[] = [...groups.values()]
-    .map((g) => {
-      const u = userById.get(g.userId);
-      const { day } = computeDay(
-        g.entries,
-        tz,
-        u?.pontoScheduleStart ?? null,
-        u?.pontoScheduleEnd ?? null,
-        now
-      );
-      return {
-        date: g.date,
-        hours: day,
-        userId: g.userId,
-        userName: u?.name || u?.username || g.userId,
-      };
-    })
-    .sort(
-      (a, b) =>
-        b.date.localeCompare(a.date) || a.userName.localeCompare(b.userName)
-    );
+  const days: PontoUserDayHoursDTO[] = [];
+  for (const [uid, rows] of byUser) {
+    const u = userById.get(uid);
+    const allUsable = usableEntries(rows);
+    const usablePos = new Map(allUsable.map((e, i) => [e, i]));
+    const intervals = pairWorkIntervals(allUsable, tz, now);
+    const rawByDay = groupByDay(rows, tz);
+    const usableByDay = groupByDay(allUsable, tz);
+    const userName = u?.name || u?.username || uid;
 
+    for (const [date, rawEntries] of rawByDay) {
+      if (!inRange(date, range.fromDate, range.toDate)) {
+        continue;
+      }
+      pushDayHours(days, {
+        allUsable,
+        date,
+        dayUsable: usableByDay.get(date) ?? [],
+        intervals,
+        rawEntries,
+        scheduleEnd: u?.pontoScheduleEnd ?? null,
+        scheduleStart: u?.pontoScheduleStart ?? null,
+        todayKey,
+        tz,
+        usablePos,
+        userId: uid,
+        userName,
+      });
+    }
+  }
+
+  days.sort(
+    (a, b) =>
+      b.date.localeCompare(a.date) || a.userName.localeCompare(b.userName)
+  );
   return { days, from: range.fromDate, to: range.toDate };
 }
 
@@ -628,34 +809,52 @@ export async function getMissingExits(
   tz: string,
   range: PontoRange
 ): Promise<PontoMissingExitDTO[]> {
-  const entries = await findEntries(prisma, {
-    at: { gte: range.start, lt: range.end },
-  });
-  const groups = groupByUserDay(entries, tz);
+  const now = new Date();
+  const todayKey = localDateKey(tz, now);
 
-  const userIds = [...new Set([...groups.values()].map((g) => g.userId))];
-  const users = userIds.length
-    ? await prisma.user.findMany({
-        select: { id: true, name: true, username: true },
-        where: { id: { in: userIds } },
-      })
-    : [];
+  const userIds = await findUserIdsInRange(prisma, range, undefined);
+  if (userIds.length === 0) {
+    return [];
+  }
+
+  const [byUser, users] = await Promise.all([
+    loadUserHistories(prisma, userIds),
+    prisma.user.findMany({
+      select: { id: true, name: true, username: true },
+      where: { id: { in: userIds } },
+    }),
+  ]);
   const nameById = new Map(users.map((u) => [u.id, u.name || u.username]));
 
   const items: PontoMissingExitDTO[] = [];
-  for (const g of groups.values()) {
-    const usable = usableEntries(g.entries);
-    const last = usable.at(-1);
-    if (!last || last.type === "SAIDA") {
-      continue;
+  for (const [uid, rows] of byUser) {
+    const allUsable = usableEntries(rows);
+    const usablePos = new Map(allUsable.map((e, i) => [e, i]));
+    const usableByDay = groupByDay(allUsable, tz);
+
+    for (const [date, dayUsable] of usableByDay) {
+      if (!inRange(date, range.fromDate, range.toDate)) {
+        continue;
+      }
+      const last = dayUsable.at(-1);
+      if (
+        !last ||
+        last.type === "SAIDA" ||
+        resolvedByFollowingClose(allUsable, usablePos, last) ||
+        // O dia civil atual fica de fora — um turno em curso não é uma
+        // saída esquecida.
+        date === todayKey
+      ) {
+        continue;
+      }
+      items.push({
+        date,
+        lastAt: last.at.toISOString(),
+        lastType: last.type,
+        userId: uid,
+        userName: nameById.get(uid) ?? uid,
+      });
     }
-    items.push({
-      date: g.date,
-      lastAt: last.at.toISOString(),
-      lastType: last.type,
-      userId: g.userId,
-      userName: nameById.get(g.userId) ?? g.userId,
-    });
   }
 
   return items.sort(

@@ -6,7 +6,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Field } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import api from "@/lib/api";
-import { formatClock, proofSummary, TYPE_LABEL } from "./shared";
+import { formatClock, proofSummary, TYPE_LABEL, useShopTz } from "./shared";
 
 interface ShopGeo {
   lat: number | null;
@@ -150,6 +150,8 @@ function PendingMap({
 
 export default function PendingTab() {
   const { i18n, t } = useTranslation();
+  const shopTz = useShopTz();
+  const tz = shopTz ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   const [entries, setEntries] = useState<PontoPendingEntryDTO[] | null>(null);
   const [geo, setGeo] = useState<ShopGeo | null>(null);
   const [error, setError] = useState(false);
@@ -225,7 +227,7 @@ export default function PendingTab() {
       <PendingMap entries={entries} geo={geo} />
       <div className="space-y-3">
         {entries.map((e) => {
-          const summary = proofSummary(e.proofs);
+          const summary = proofSummary(e.proofs, t);
           return (
             <article
               className="rounded-2xl bg-surface-container-low p-4"
@@ -237,10 +239,12 @@ export default function PendingTab() {
                     {e.user.name || e.user.username}
                   </p>
                   <p className="text-on-surface-variant text-xs">
-                    {t(TYPE_LABEL[e.type])} · {formatClock(e.at, i18n.language)}{" "}
-                    · {e.transport}
+                    {t(TYPE_LABEL[e.type])} ·{" "}
+                    {formatClock(e.at, i18n.language, tz)}
+                    {" · "}
+                    {e.transport}
                     {e.corrects
-                      ? ` · ${t("ponto.corrects_prefix")} ${t(TYPE_LABEL[e.corrects.type])} ${formatClock(e.corrects.at, i18n.language)}`
+                      ? ` · ${t("ponto.corrects_prefix")} ${t(TYPE_LABEL[e.corrects.type])} ${formatClock(e.corrects.at, i18n.language, tz)}`
                       : ""}
                   </p>
                 </div>
@@ -280,7 +284,6 @@ export default function PendingTab() {
                 <div className="mt-3 flex gap-2 overflow-x-auto">
                   {e.photos.map((p) => (
                     <a href={p.url} key={p.id} rel="noreferrer" target="_blank">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         alt={t("ponto.photo_alt")}
                         className="h-20 w-20 rounded-lg border border-outline-variant object-cover"
