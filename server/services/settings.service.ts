@@ -164,6 +164,47 @@ const botUpdate = (input: UpdateShopSettingsInput) => ({
       : input.botInfoText?.trim() || null,
 });
 
+// Livro de ponto (Pro "ponto") — geolocalização da loja, raio do registo e
+// opções de externos/lembretes. Tal como botCreate/botUpdate, mantido
+// fora do shopCreate/shopUpdate para não disparar a complexidade.
+const pontoCreate = (input: UpdateShopSettingsInput) => ({
+  pontoGeoLat: input.pontoGeoLat ?? null,
+  pontoGeoLng: input.pontoGeoLng ?? null,
+  pontoRadiusM: input.pontoRadiusM ?? 100,
+  pontoExternalAutoApprove: input.pontoExternalAutoApprove ?? true,
+  pontoExternalPhotoRequired: input.pontoExternalPhotoRequired ?? false,
+  pontoExitReminderTime: input.pontoExitReminderTime?.trim() || null,
+  pontoPauseReminderMinutes: input.pontoPauseReminderMinutes ?? 20,
+  pontoInfoText: input.pontoInfoText?.trim() || null,
+  pontoWaNumber: input.pontoWaNumber?.trim() || null,
+  pontoSmsNumber: input.pontoSmsNumber?.trim() || null,
+});
+
+const pontoUpdate = (input: UpdateShopSettingsInput) => ({
+  pontoGeoLat: input.pontoGeoLat,
+  pontoGeoLng: input.pontoGeoLng,
+  pontoRadiusM: input.pontoRadiusM,
+  pontoExternalAutoApprove: input.pontoExternalAutoApprove,
+  pontoExternalPhotoRequired: input.pontoExternalPhotoRequired,
+  pontoExitReminderTime:
+    input.pontoExitReminderTime === undefined
+      ? undefined
+      : input.pontoExitReminderTime?.trim() || null,
+  pontoPauseReminderMinutes: input.pontoPauseReminderMinutes,
+  pontoInfoText:
+    input.pontoInfoText === undefined
+      ? undefined
+      : input.pontoInfoText?.trim() || null,
+  pontoWaNumber:
+    input.pontoWaNumber === undefined
+      ? undefined
+      : input.pontoWaNumber?.trim() || null,
+  pontoSmsNumber:
+    input.pontoSmsNumber === undefined
+      ? undefined
+      : input.pontoSmsNumber?.trim() || null,
+});
+
 const shopCreate = (input: UpdateShopSettingsInput) => ({
   address: input.address ?? null,
   countryCode: input.countryCode ?? "PT",
@@ -188,6 +229,7 @@ const shopCreate = (input: UpdateShopSettingsInput) => ({
   monthlyRevenueGoal: input.monthlyRevenueGoal ?? null,
   reviewUrl: input.reviewUrl?.trim() || null,
   embedAllowedOrigins: normalizeOriginList(input.embedAllowedOrigins),
+  ...pontoCreate(input),
   shopName: input.shopName,
 });
 
@@ -224,6 +266,7 @@ const shopUpdate = (input: UpdateShopSettingsInput) => ({
     input.embedAllowedOrigins === undefined
       ? undefined
       : normalizeOriginList(input.embedAllowedOrigins),
+  ...pontoUpdate(input),
   shopName: input.shopName,
 });
 

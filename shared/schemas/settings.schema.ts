@@ -96,7 +96,56 @@ export const updateShopSettingsSchema = z
       .refine(isOriginList, { error: "validations.invalid_url" })
       .nullable()
       .optional(),
+    // Livro de ponto (Pro "ponto") — geolocalização da loja (par
+    // lat+lng), raio do registo e opções de externos/lembretes.
+    pontoGeoLat: z.number().min(-90).max(90).nullable().optional(),
+    pontoGeoLng: z.number().min(-180).max(180).nullable().optional(),
+    pontoRadiusM: z.number().int().min(10).max(2000).optional(),
+    pontoExternalAutoApprove: z.boolean().optional(),
+    pontoExternalPhotoRequired: z.boolean().optional(),
+    // Hora do lembrete de saída (HH:MM) — null/vazio desliga.
+    pontoExitReminderTime: z
+      .union([
+        z.literal(""),
+        z.null(),
+        z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+      ])
+      .optional(),
+    pontoPauseReminderMinutes: z.number().int().min(5).max(120).optional(),
+    pontoInfoText: z.string().max(4000).nullable().optional(),
+    // Números de WhatsApp/SMS que o QR do livro de ponto divulga —
+    // E.164-ish, opcional +.
+    pontoWaNumber: z
+      .union([
+        z.literal(""),
+        z.null(),
+        z
+          .string()
+          .trim()
+          .regex(/^\+?\d{8,15}$/),
+      ])
+      .optional(),
+    pontoSmsNumber: z
+      .union([
+        z.literal(""),
+        z.null(),
+        z
+          .string()
+          .trim()
+          .regex(/^\+?\d{8,15}$/),
+      ])
+      .optional(),
   })
+  .refine(
+    // A geolocalização é um par — meia-configuração não serve para o
+    // raio. Quem toca num dos campos tem de enviar os dois (null+null
+    // limpa; número+número define; misto é rejeitado).
+    (data) =>
+      (data.pontoGeoLat === undefined && data.pontoGeoLng === undefined) ||
+      ((data.pontoGeoLat === undefined) === (data.pontoGeoLng === undefined) &&
+        (data.pontoGeoLat == null) === (data.pontoGeoLng == null)),
+    { error: "validations.incomplete_point" }
+  )
   .refine(
     (data) =>
       data.shopName !== undefined ||
@@ -125,7 +174,17 @@ export const updateShopSettingsSchema = z
       data.timezone !== undefined ||
       data.monthlyRevenueGoal !== undefined ||
       data.reviewUrl !== undefined ||
-      data.embedAllowedOrigins !== undefined,
+      data.embedAllowedOrigins !== undefined ||
+      data.pontoGeoLat !== undefined ||
+      data.pontoGeoLng !== undefined ||
+      data.pontoRadiusM !== undefined ||
+      data.pontoExternalAutoApprove !== undefined ||
+      data.pontoExternalPhotoRequired !== undefined ||
+      data.pontoExitReminderTime !== undefined ||
+      data.pontoPauseReminderMinutes !== undefined ||
+      data.pontoInfoText !== undefined ||
+      data.pontoWaNumber !== undefined ||
+      data.pontoSmsNumber !== undefined,
     { message: "validations.at_least_one_field" }
   );
 
