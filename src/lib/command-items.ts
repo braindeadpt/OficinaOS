@@ -56,10 +56,16 @@ export function buildCommands(deps: {
   logout: () => void;
   navigate: (to: string) => void;
   openIntakeModal: () => void;
+  /** Entitlement do módulo Pro "ponto" — sem ele /ponto não aparece. */
+  pontoEnabled: boolean;
   role: string;
   signOut: () => boolean | undefined;
 }): Command[] {
-  const pages: Command[] = NAV_ITEMS.map((item) => ({
+  // /ponto é gated por entitlement Cloud, não só por permissão — o mesmo
+  // filtro que sidebar e bottom-nav aplicam via usePontoStore.
+  const pages: Command[] = NAV_ITEMS.filter(
+    (item) => item.to !== "/ponto" || deps.pontoEnabled
+  ).map((item) => ({
     keywords: PAGE_KEYWORDS[item.to] ?? [],
     kind: "page",
     labelKey: item.labelKey,

@@ -13,6 +13,35 @@ export const signInSchema = z.object({
   password: z.string().min(1, { error: "validations.required" }),
 });
 
+// Campos do livro de ponto (Pro "ponto") — inertes sem o módulo; a UI
+// esconde-os. phoneE164 é a identidade das mensagens; os horários são
+// "HH:MM" civis da loja (atrasos/saída cedo no painel de horas).
+const pontoScheduleField = z
+  .union([
+    z.literal(""),
+    z.null(),
+    z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+  ])
+  .optional();
+
+const pontoUserFields = {
+  phoneE164: z
+    .union([
+      z.literal(""),
+      z.null(),
+      z
+        .string()
+        .trim()
+        .regex(/^\+?[1-9]\d{7,14}$/),
+    ])
+    .optional(),
+  pontoEnabled: z.boolean().optional(),
+  externalWork: z.boolean().optional(),
+  pontoSmsAllowed: z.boolean().optional(),
+  pontoScheduleStart: pontoScheduleField,
+  pontoScheduleEnd: pontoScheduleField,
+};
+
 export const createUserSchema = z.object({
   username: z
     .string()
@@ -22,6 +51,7 @@ export const createUserSchema = z.object({
   email: z.string().email({ error: "validations.email" }),
   password: passwordPolicy,
   role: z.enum(["OWNER", "TECHNICIAN", "FRONT_DESK"]),
+  ...pontoUserFields,
 });
 
 export const changePasswordSchema = z.object({
@@ -48,6 +78,7 @@ export const updateProfileSchema = z.object({
     .max(50)
     .regex(/^[a-zA-Z0-9_]+$/, { error: "validations.username_pattern" })
     .optional(),
+  ...pontoUserFields,
 });
 
 export const resetPasswordSchema = z.object({

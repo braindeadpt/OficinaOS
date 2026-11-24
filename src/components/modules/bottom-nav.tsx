@@ -7,6 +7,7 @@ import { can, useCan } from "@/hooks/use-can";
 import { BOTTOM_NAV_PRIMARY, NAV_ITEMS } from "@/lib/navigation";
 import { getInitials } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth";
+import { usePontoStore } from "@/stores/ponto";
 import { useUiStore } from "@/stores/ui";
 
 const ACTIVE_FONT_SETTINGS = '"FILL" 1, "wght" 700, "GRAD" 0, "opsz" 24';
@@ -186,6 +187,13 @@ export default function BottomNav() {
   const { t } = useTranslation();
   const role = useAuthStore((s) => s.role);
   const canCreateJob = useCan({ jobs: ["create"] });
+  const pontoEnabled = usePontoStore((s) => s.enabled);
+  const fetchPonto = usePontoStore((s) => s.fetchStatus);
+  useEffect(() => {
+    if (pontoEnabled === null) {
+      fetchPonto().catch(() => undefined);
+    }
+  }, [pontoEnabled, fetchPonto]);
   const openIntakeModal = useUiStore((s) => s.openIntakeModal);
   const moreSheetOpen = useUiStore((s) => s.moreSheetOpen);
   const openMoreSheet = useUiStore((s) => s.openMoreSheet);
@@ -193,7 +201,10 @@ export default function BottomNav() {
   const location = useLocation();
 
   const visibleItems = NAV_ITEMS.filter(
-    (item) => item.perm && can(role, item.perm)
+    (item) =>
+      item.perm &&
+      can(role, item.perm) &&
+      (item.to !== "/ponto" || pontoEnabled)
   );
   // Everything the registry knows that is not pinned to the bottom bar.
   const visibleMoreItems = visibleItems.filter(
