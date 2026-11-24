@@ -78,16 +78,21 @@ const RELATIVE_DURATION_RE =
 const COMPOUND_DURATION_RE =
   /\b\d{1,3}\s*horas?\s+e\s+(?:\d{1,3}\s*(?:minutos?|mins?)?|meia)\b/gi;
 // Hora por extenso — «às 18 horas e 15 minutos» = 18:15, «às 6 horas
-// e 30» = 18:30, «às 6 horas e meia» = 18:30, «à 1 hora e 15» =
-// 13:15, «pelas 18 horas e 15» = 18:15 («e» liga os minutos à hora;
-// sem «e» fica «18 horas» como hora solta = 18:00). Marcador
-// obrigatório — «trabalhei 8 horas e 30 minutos» é duração
-// (COMPOUND_DURATION_RE), não 20:30. Minutos sem unidade só contam
-// quando não são eles próprios uma duração nem a abrem uma: «às 18
-// horas e 1 hora depois» não é 18:01 — a leitura fica ambígua e a
-// pergunta repete-se.
+// e 30» = 18:30, «às 6 horas e meia» = 18:30, «pelas 8 horas e 15
+// da noite» = 20:15 («e» liga os minutos à hora; sem «e» fica «18
+// horas» como hora solta = 18:00). Marcador obrigatório — «trabalhei
+// 8 horas e 30 minutos» é duração (COMPOUND_DURATION_RE), não 20:30.
+// O «à» com acento é reescrito para «ás» antes da normalização —
+// continua a marcar; o «a» conector de intervalo («de 1 a 2 horas
+// e meia») não é marcador. Minutos — com ou sem unidade — não podem
+// ser a cabeça de outra duração: «às 18 horas e 1 hora depois» e «às
+// 18 horas e 15 minutos depois» não são 18:01/18:15 — a leitura fica
+// ambígua e a pergunta repete-se.
 const EXTENSO_TIME_RE =
-  /\b(?:as|a|pelas?)\s+(\d{1,2})\s+horas?\s+e\s+(?:(\d{1,2})\s*(?:minutos?|mins?)\b|(\d{1,2})(?!\s+(?:horas?|hrs?|minutos?|mins?|segundos?|segs?|dias?|semanas?|meses?|anos?|depois|apos|antes)\b)|meia)\b/gi;
+  /\b(?:as|pelas?)\s+(\d{1,2})\s+horas?\s+e\s+(?:(\d{1,2})\s*(?:minutos?|mins?)\b|(\d{1,2})(?!\s+(?:horas?|hrs?|minutos?|mins?|segundos?|segs?|dias?|semanas?|meses?|anos?|depois|apos|antes)\b)|meia)\b(?!\s+(?:depois|apos|antes|mais|seguida)\b)(?:\s+da\s+(manha|tarde|noite)\b)?/gi;
+// «pelas 8 horas da noite» = 20:00 — período sem «e N minutos».
+const QUALIFIED_HOUR_RE =
+  /\b(?:as|pelas?)\s+(\d{1,2})\s+horas?\s+da\s+(manha|tarde|noite)\b/gi;
 // Pontuação que fecha uma oração — o "." fica quando pode ser o
 // separador Horas.minutos de EXPLICIT_TIME_RE. Junto a dígitos a
 // notação compacta ganha sempre ("18.30", "18. 30", "18 . 30" —
@@ -154,6 +159,16 @@ function bareHours(normalized: string): Set<string> {
   return hours;
 }
 
+/** «da manhã»/«da tarde»/«da noite» sobrepõe-se à heurística da
+ *  tarde: «8 da noite» = 20, «1 da manhã» = 01. Qualificador
+ *  impossível («18 da manhã») devolve null — leitura ambígua. */
+function hourWithPeriod(hour: number, period: string): number | null {
+  if (period === "manha") {
+    return hour >= 0 && hour <= 12 ? hour : null;
+  }
+  return hour < 12 ? hour + 12 : hour;
+}
+
 /** A oração é negada ("não saí", "nunca") — a hora dentro dela nega a
  *  pergunta original em vez de declarar uma saída. */
 function negated(normalizedClause: string): boolean {
@@ -169,26 +184,61 @@ function collectClause(
   explicit: Set<string>,
   bare: Set<string>
 ): void {
-  const normalizedClause = normalizePontoText(clause);
+  // «à» com acento marca hora como «às» — reescreve-se para «ás» no
+  // texto cru (a normalização apagava a diferença) para o separar do
+  // «a» conector de intervalo («de 1 a 2 horas e meia»), que não é
+  // marcador de hora.
+  const normalizedClause = normalizePontoText(
+    clause.replace(/à(?=\s*\d)/gi, "ás")
+  );
   if (!normalizedClause || negated(normalizedClause)) {
     return;
   }
   const times = explicitTimes(clause);
   const withoutRelatives = normalizedClause.replace(RELATIVE_DURATION_RE, " ");
+  // Qualificador impossível («às 18 horas da manhã»): a oração não
+  // baixa para horas soltas — fica ambígua e a pergunta repete-se.
+  let spelledInvalid = false;
+  const addSpelled = (
+    hourRaw: string,
+    minute: number,
+    period: string | undefined
+  ): void => {
+    if (minute > 59) {
+      return;
+    }
+    const hour = Number(hourRaw);
+    if (period === undefined) {
+      const hhmm = hhmmOf(hour, minute, zeroPadded(hourRaw));
+      if (hhmm) {
+        times.add(hhmm);
+      }
+      return;
+    }
+    const h = hourWithPeriod(hour, period);
+    if (h === null) {
+      spelledInvalid = true;
+      return;
+    }
+    times.add(
+      `${String(h).padStart(2, "0")}:${String(minute).padStart(2, "0")}`
+    );
+  };
   for (const m of withoutRelatives.matchAll(EXTENSO_TIME_RE)) {
     const minutes = m[2] ?? m[3];
-    const minute = minutes === undefined ? 30 : Number(minutes);
-    const hhmm = hhmmOf(Number(m[1]), minute, zeroPadded(m[1]));
-    if (hhmm) {
-      times.add(hhmm);
-    }
+    addSpelled(m[1], minutes === undefined ? 30 : Number(minutes), m[4]);
+  }
+  for (const m of withoutRelatives.matchAll(QUALIFIED_HOUR_RE)) {
+    addSpelled(m[1], 0, m[2]);
   }
   for (const hhmm of times) {
     explicit.add(hhmm);
   }
   // Numa oração com hora explícita os dígitos soltos são os minutos
-  // ("18 30") — as horas soltas só contam nas orações sem HH:MM.
-  if (times.size === 0) {
+  // ("18 30") — as horas soltas só contam nas orações sem HH:MM e sem
+  // qualificador impossível («às 18 horas da manhã» é ambíguo, não
+  // baixa para «18» solto).
+  if (times.size === 0 && !spelledInvalid) {
     for (const h of bareHours(withoutRelatives)) {
       bare.add(h);
     }

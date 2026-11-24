@@ -869,10 +869,26 @@ describe("resposta ao lembrete de saída", () => {
     // O id tardio é da pergunta das 00:20 — liga-se à clarificação das
     // 00:20 (a citação a ele passa a contar); o das 00:15 fica fora.
     const after = getPendingPontoExit("user-1");
+    expect(after?.clarifyDate?.questionMessageIds).toContain(
+      "wamid-reply-tardio"
+    );
     expect(after?.clarifyDate?.questionMessageIds).not.toContain(
       "wamid-reply-1"
     );
     expect(after?.sentMessageIds).toContain("wamid-reply-tardio");
+
+    // Citação ao id tardio — a pergunta era mesmo a das 00:20: grava.
+    await tryHandlePontoStaff(
+      ctx,
+      { ...at("ONTEM"), quotedMessageId: "wamid-reply-tardio" },
+      t
+    );
+    const entry = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect((entry.at as Date).toISOString()).toBe("2026-01-10T00:20:00.000Z");
+    expect(getPendingPontoExit("user-1")).toBeNull();
   });
 
   it("comando ponto normal mata o pending de saída", async () => {

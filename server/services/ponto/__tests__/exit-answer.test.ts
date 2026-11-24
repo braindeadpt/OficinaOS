@@ -165,6 +165,39 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
       hhmm: "18:15",
       kind: "time",
     });
+    // O «a» conector (sem acento) não é marcador — a duração composta
+    // sai inteira e a pergunta repete-se em vez de gravar 13:15.
+    expect(parsePontoExitAnswer("sai a 1 hora e 15 minutos")).toBeNull();
+  });
+
+  it("«da manhã»/«da noite» sobrepõe-se à heurística da tarde", () => {
+    expect(
+      parsePontoExitAnswer("Saí pelas 8 horas e 15 minutos da noite")
+    ).toEqual({ hhmm: "20:15", kind: "time" });
+    expect(parsePontoExitAnswer("Saí à 1 hora e 15 minutos da manhã")).toEqual({
+      hhmm: "01:15",
+      kind: "time",
+    });
+    expect(parsePontoExitAnswer("saí pelas 8 horas da noite")).toEqual({
+      hhmm: "20:00",
+      kind: "time",
+    });
+    // Qualificador impossível — ambíguo, repete-se a pergunta.
+    expect(parsePontoExitAnswer("saí às 18 horas da manhã")).toBeNull();
+  });
+
+  it("«a» conector de intervalo não é marcador de hora", () => {
+    // «de 1 a 2 horas e meia» é um intervalo de duração, não «à 2
+    // horas e 30 minutos» — sem hora lida com segurança, repete-se.
+    expect(
+      parsePontoExitAnswer(
+        "Fiquei 1 hora e meia a 2 horas e 30 minutos à espera"
+      )
+    ).toBeNull();
+    // O intervalo também não pode fazer uma hora válida parecer ambígua.
+    expect(
+      parsePontoExitAnswer("Saí às 18:05 após um turno de 7 a 8 horas e meia")
+    ).toEqual({ hhmm: "18:05", kind: "time" });
   });
 
   it("«às 18 horas e 1 hora depois» → null — a 2.ª unidade é duração", () => {
@@ -173,6 +206,13 @@ describe("parsePontoExitAnswer — horas por extenso e durações", () => {
     // leitura fica ambígua e a pergunta repete-se (nunca 18:01).
     expect(
       parsePontoExitAnswer("saí às 18 horas e 1 hora depois cheguei a casa")
+    ).toBeNull();
+    // O guarda vale também para os minutos com unidade: «15 minutos
+    // depois» pode descrever outra ação — ambíguo, repete-se.
+    expect(
+      parsePontoExitAnswer(
+        "Saí pelas 18 horas e 15 minutos depois cheguei a casa"
+      )
     ).toBeNull();
     expect(
       parsePontoExitAnswer("saí às 18:05 horas e 15 minutos depois")
