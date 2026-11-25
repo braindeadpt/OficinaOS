@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  canReplayStaffInboxTool,
   runStaffInboxTool,
   sendApprovedDraft,
 } from "../services/staff-inbox-tools.js";
@@ -240,6 +241,21 @@ describe("rascunhar_resposta / enviar_rascunho — §G.5", () => {
       userId: "u-tech",
     });
     expect(out.error).toBe("conta desativada");
+  });
+
+  it("replay em cache só para conta ativa com permissão", async () => {
+    const findUnique = vi.fn(async () => ({ ...TECH, active: false }));
+    const prisma = fakePrisma({ user: { findUnique } });
+    await expect(
+      canReplayStaffInboxTool(prisma, "listar_conversas", "u-tech")
+    ).resolves.toBe(false);
+    findUnique.mockResolvedValueOnce({ ...TECH, active: true });
+    await expect(
+      canReplayStaffInboxTool(prisma, "listar_conversas", "u-tech")
+    ).resolves.toBe(true);
+    await expect(
+      canReplayStaffInboxTool(prisma, "ferramenta_x", "u-tech")
+    ).resolves.toBe(false);
   });
 
   it("envio concorrente perde a claim — não há segundo transporte", async () => {

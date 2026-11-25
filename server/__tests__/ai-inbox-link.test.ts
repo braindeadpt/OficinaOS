@@ -8,6 +8,9 @@ const mocks = vi.hoisted(() => ({
       _init: { body?: unknown; method?: string; token?: string }
     ) => ({ body: {}, ok: true, status: 200 })
   ),
+  canReplayStaffInboxTool: vi.fn(
+    async (_prisma: unknown, _tool: string, _userId: string) => true
+  ),
   runStaffInboxTool: vi.fn(
     async (
       _prisma: unknown,
@@ -22,6 +25,7 @@ vi.mock("../services/cloud.service.js", () => ({
 }));
 
 vi.mock("../services/staff-inbox-tools.js", () => ({
+  canReplayStaffInboxTool: mocks.canReplayStaffInboxTool,
   runStaffInboxTool: mocks.runStaffInboxTool,
 }));
 
@@ -174,5 +178,58 @@ describe("ai-inbox link — idempotência e cancelamento", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("resultado concluído repete-se sem re-executar enquanto a conta continua ativa", async () => {
+    const frame = {
+      args: { q: "ana" },
+      idempotencyKey: "test-key-replay-ok",
+      tool: "procurar",
+      userId: "u-owner",
+    };
+    await handleCall(app, "https://cloud.example", "tok", {
+      ...frame,
+      callId: "replay-ok-1",
+    });
+    await handleCall(app, "https://cloud.example", "tok", {
+      ...frame,
+      callId: "replay-ok-2",
+    });
+    expect(mocks.runStaffInboxTool).toHaveBeenCalledTimes(1);
+    expect(mocks.canReplayStaffInboxTool).toHaveBeenCalledWith(
+      {},
+      "procurar",
+      "u-owner"
+    );
+    expect(responseBodies()).toEqual([
+      { callId: "replay-ok-1", result: { ok: true } },
+      { callId: "replay-ok-2", result: { ok: true } },
+    ]);
+  });
+
+  it("conta desativada depois da 1.ª chamada não recebe o resultado em cache", async () => {
+    const frame = {
+      args: { q: "ana" },
+      idempotencyKey: "test-key-replay-deactivated",
+      tool: "procurar",
+      userId: "u-gone",
+    };
+    await handleCall(app, "https://cloud.example", "tok", {
+      ...frame,
+      callId: "deact-1",
+    });
+    mocks.canReplayStaffInboxTool.mockResolvedValueOnce(false);
+    mocks.runStaffInboxTool.mockResolvedValueOnce({
+      error: "conta desativada",
+    } as never);
+    await handleCall(app, "https://cloud.example", "tok", {
+      ...frame,
+      callId: "deact-2",
+    });
+    expect(mocks.runStaffInboxTool).toHaveBeenCalledTimes(2);
+    expect(responseBodies()[1]).toEqual({
+      callId: "deact-2",
+      error: "conta desativada",
+    });
   });
 });

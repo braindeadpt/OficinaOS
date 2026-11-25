@@ -3,7 +3,10 @@ import { decryptSecret } from "../lib/crypto.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import { cloudFetch } from "../services/cloud.service.js";
 import { cleanupInboxRetention } from "../services/inbox.service.js";
-import { runStaffInboxTool } from "../services/staff-inbox-tools.js";
+import {
+  canReplayStaffInboxTool,
+  runStaffInboxTool,
+} from "../services/staff-inbox-tools.js";
 import { isModuleEnabled } from "../utils/modules.js";
 
 /**
@@ -120,18 +123,32 @@ function pruneIdempotentCalls(): void {
  * execução real — não o race do timeout — porque uma chamada que já
  * respondeu timeout pode ainda assim terminar e ser replayed ao retry.
  */
-function executionFor(
+async function executionFor(
   app: FastifyInstance,
   raw: LinkCall,
   tool: string,
   userId: string,
   idempotencyKey: string | null
-): IdempotentExecution {
+): Promise<IdempotentExecution> {
   if (idempotencyKey) {
     pruneIdempotentCalls();
     const existing = idempotentCalls.get(idempotencyKey);
-    if (existing) {
+    if (existing && !existing.settled) {
       return existing;
+    }
+    if (existing) {
+      // Replay de um resultado já concluído: revalida conta/permissão —
+      // se falhar, executa de novo e o runStaffInboxTool recusa e audita.
+      const allowed = await canReplayStaffInboxTool(
+        app.prisma,
+        tool,
+        userId
+      ).catch(() => false);
+      const current = idempotentCalls.get(idempotencyKey);
+      if (current && (allowed || current !== existing)) {
+        return current;
+      }
+      idempotentCalls.delete(idempotencyKey);
     }
   }
   const controller = new AbortController();
@@ -197,8 +214,14 @@ export async function handleCall(
     raw.idempotencyKey.length <= IDEMPOTENCY_KEY_MAX_LEN
       ? raw.idempotencyKey
       : null;
-  const execution = executionFor(app, raw, tool, userId, idempotencyKey);
   try {
+    const execution = await executionFor(
+      app,
+      raw,
+      tool,
+      userId,
+      idempotencyKey
+    );
     const out = await withTimeout(execution.promise, CALL_TIMEOUT_MS, () =>
       execution.controller.abort()
     );

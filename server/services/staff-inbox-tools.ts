@@ -231,6 +231,32 @@ export async function runStaffInboxTool(
   return outcome;
 }
 
+/**
+ * Replay de um resultado em cache (idempotência da ligação 2b): a conta
+ * tem de continuar ativa e com permissão — um token MCP de quem foi
+ * desativado entretanto não pode repetir dados já lidos.
+ */
+export async function canReplayStaffInboxTool(
+  prisma: PrismaClient,
+  tool: string,
+  userId: string
+): Promise<boolean> {
+  if (!STAFF_INBOX_TOOLS.includes(tool as StaffInboxTool)) {
+    return false;
+  }
+  const user = await prisma.user.findUnique({
+    select: {
+      active: true,
+      id: true,
+      mcpDirectSend: true,
+      name: true,
+      role: true,
+    },
+    where: { id: userId },
+  });
+  return Boolean(user?.active && can(user, permFor(tool as StaffInboxTool)));
+}
+
 function permFor(tool: StaffInboxTool): "manage" | "send" | "view" {
   switch (tool) {
     case "atribuir":
