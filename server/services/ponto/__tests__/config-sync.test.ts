@@ -1,8 +1,12 @@
 // buildPontoConfigPayload — o payload que a app empurra para a Cloud
 // (PUT /ponto/config, contrato WP0.1). Puro: testa-se diretamente.
 
-import { describe, expect, it } from "vitest";
-import { buildPontoConfigPayload } from "../config-sync.js";
+import { describe, expect, it, vi } from "vitest";
+import { encryptSecret } from "../../../lib/crypto.js";
+import {
+  buildPontoConfigPayload,
+  pushPontoCloudConfig,
+} from "../config-sync.js";
 
 function settings(over: Record<string, unknown> = {}) {
   return {
@@ -103,5 +107,81 @@ describe("buildPontoConfigPayload", () => {
         smsAllowed: true,
       },
     ]);
+  });
+});
+
+describe("pushPontoCloudConfig", () => {
+  it("serializa pushes completos — o segundo lê a escala já atualizada", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    let resolveFirst: ((response: Response) => void) | undefined;
+    const firstResponse = new Promise<Response>((resolve) => {
+      resolveFirst = resolve;
+    });
+    fetchMock
+      .mockImplementationOnce(() => firstResponse)
+      .mockImplementationOnce(() =>
+        Promise.resolve(Response.json({ ok: true }))
+      );
+    const staffUsers = [
+      {
+        externalWork: false,
+        id: "u-ana",
+        phoneE164: "+351911111111",
+        pontoSmsAllowed: true,
+      },
+    ];
+    const prisma = {
+      shopSettings: {
+        findUnique: vi.fn(async () => ({
+          cloudApiUrl: "https://cloud.test",
+          cloudEntitlements: ["ponto"],
+          cloudShopTokenEncrypted: encryptSecret("shop-token"),
+          cloudSyncedAt: new Date(),
+          pontoExternalAutoApprove: true,
+          pontoExternalPhotoRequired: false,
+          pontoGeoLat: 38.7,
+          pontoGeoLng: -9.1,
+          pontoRadiusM: 100,
+          pontoSmsNumber: null,
+          pontoWaNumber: null,
+          timezone: "Europe/Lisbon",
+        })),
+      },
+      timeEntry: { findMany: vi.fn(async () => []) },
+      user: {
+        findMany: vi.fn(async () => staffUsers.map((user) => ({ ...user }))),
+      },
+    };
+    const log = { warn: vi.fn() } as never;
+
+    try {
+      const first = pushPontoCloudConfig(prisma as never, log);
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      staffUsers.push({
+        externalWork: false,
+        id: "u-bruno",
+        phoneE164: "+351922222222",
+        pontoSmsAllowed: true,
+      });
+
+      const second = pushPontoCloudConfig(prisma as never, log);
+      await new Promise((resolve) => {
+        setImmediate(resolve);
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      resolveFirst?.(Response.json({ ok: true }));
+      await first;
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+      await second;
+
+      const init = fetchMock.mock.calls[1][1] as { body: string };
+      expect(
+        JSON.parse(init.body).staff.map((row: { phone: string }) => row.phone)
+      ).toEqual(["+351911111111", "+351922222222"]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

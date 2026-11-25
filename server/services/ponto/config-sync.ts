@@ -226,13 +226,33 @@ export interface PontoConfigPushResult {
   status: number;
 }
 
+// O PUT envia a configuração COMPLETA. Sem fila, duas mutações locais
+// seguidas podiam ser aplicadas fora de ordem na Cloud e a escrita mais
+// antiga (lida antes da segunda mutação) apagava staff novo. A fila é
+// process-wide: cada push só lê a BD depois de o anterior terminar.
+let pontoConfigPushQueue: Promise<void> = Promise.resolve();
+
 /**
  * PUT /ponto/config na Cloud com a configuração completa. Devolve null
  * quando não há pairing ou a Cloud/rede falhou — o chamador decide se o
  * erro é para o utilizador (gravação de definições) ou só para o log
  * (pairing/arranque). Nunca lança por falha de rede.
  */
-export async function pushPontoCloudConfig(
+export function pushPontoCloudConfig(
+  prisma: DbClient,
+  log: FastifyBaseLogger
+): Promise<PontoConfigPushResult | null> {
+  const push = pontoConfigPushQueue.then(() =>
+    pushPontoCloudConfigNow(prisma, log)
+  );
+  pontoConfigPushQueue = push.then(
+    () => undefined,
+    () => undefined
+  );
+  return push;
+}
+
+async function pushPontoCloudConfigNow(
   prisma: DbClient,
   log: FastifyBaseLogger
 ): Promise<PontoConfigPushResult | null> {
