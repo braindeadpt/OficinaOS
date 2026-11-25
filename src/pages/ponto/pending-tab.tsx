@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Field } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
+import { usePontoT } from "@/hooks/use-ponto-t";
 import api from "@/lib/api";
 import { usePontoStore } from "@/stores/ponto";
 import {
@@ -52,6 +53,7 @@ function PendingMap({
   geo: ShopGeo | null;
 }) {
   const { t } = useTranslation();
+  const pt = usePontoT();
   const size = 260;
   const c = size / 2;
   const maxR = Math.max(
@@ -94,7 +96,7 @@ function PendingMap({
   if (!(geo?.lat && geo?.lng)) {
     return (
       <div className="rounded-2xl bg-surface-container-low p-6 text-center text-on-surface-variant text-sm">
-        {t("ponto.map_no_geo")}
+        {pt("ponto.map_no_geo")}
       </div>
     );
   }
@@ -102,7 +104,7 @@ function PendingMap({
   return (
     <div className="rounded-2xl bg-surface-container-lowest p-4">
       <svg
-        aria-label={t("ponto.pending_map_aria")}
+        aria-label={pt("ponto.pending_map_aria")}
         className="mx-auto block"
         role="img"
         style={{ maxWidth: size, width: "100%" }}
@@ -126,7 +128,7 @@ function PendingMap({
           x={c}
           y={c + 18}
         >
-          {t("ponto.map_shop")}
+          {pt("ponto.map_shop")}
         </text>
         {markers.map((m) => (
           <g key={m.id}>

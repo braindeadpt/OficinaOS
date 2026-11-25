@@ -7,6 +7,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { usePontoT } from "@/hooks/use-ponto-t";
 import api from "@/lib/api";
 import { usePontoStore } from "@/stores/ponto";
 import {
@@ -25,6 +26,7 @@ const YMD = /^\d{4}-\d{2}-\d{2}$/;
 
 export default function MissingTab() {
   const { i18n, t } = useTranslation();
+  const pt = usePontoT();
   const readOnly = usePontoStore((s) => s.enabled) === false;
   const shopTz = useShopTz();
   const tz = shopTz ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -108,7 +110,7 @@ export default function MissingTab() {
     // vem do item, não do relógio do dispositivo.
     const exitDay = shopDateKey(tz, instant);
     if (exitDay !== modalFor.date && exitDay !== ymdAddDays(modalFor.date, 1)) {
-      setFormError(t("ponto.err_exit_day"));
+      setFormError(pt("ponto.err_exit_day"));
       return;
     }
     if (instant.getTime() > Date.now()) {
@@ -256,7 +258,7 @@ export default function MissingTab() {
             />
           </Field>
           <p className="text-on-surface-variant text-xs">
-            {t("ponto.exit_at_hint", { date: modalFor?.date ?? "" })}
+            {pt("ponto.exit_at_hint", { date: modalFor?.date ?? "" })}
           </p>
           {candidates.length > 1 && (
             <Field

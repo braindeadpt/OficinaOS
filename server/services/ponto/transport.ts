@@ -29,6 +29,8 @@ export const PONTO_TEXT = {
     "Comandos do livro de ponto: ENTRADA (leia o QR), PAUSA, VOLTEI, SAIDA, ESTADO.",
   configMissing:
     "A loja ainda não configurou a localização do livro de ponto — avise o responsável.",
+  configMissingCompany:
+    "A empresa ainda não configurou a localização do livro de ponto — avise o responsável.",
   entradaNeedsCode:
     "Para registar a entrada precisa do código do QR — aponte a câmara para o QR do livro de ponto.",
   evaluateFailed:
@@ -61,6 +63,12 @@ export const PONTO_TEXT = {
   pauseReminder:
     "OficinaOS: ainda está em pausa? Quando regressar, responda VOLTEI.",
 } as const;
+
+export function pontoConfigMissingText(shopMode?: string | null): string {
+  return shopMode === "ponto_only"
+    ? PONTO_TEXT.configMissingCompany
+    : PONTO_TEXT.configMissing;
+}
 
 /** Texto livre do lembrete de saída — o mesmo corpo do template Meta
  *  `ponto_lembrete` ({{exitTime}} ← pontoExitReminderTime). */

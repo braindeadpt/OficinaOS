@@ -9,6 +9,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { usePontoT } from "@/hooks/use-ponto-t";
 import api, { getErrorMessage } from "@/lib/api";
 
 interface PontoStatus {
@@ -193,6 +194,7 @@ export default function SettingsPontoSection({
   refreshNonce?: number;
 }) {
   const { t } = useTranslation();
+  const pt = usePontoT();
   const navigate = useNavigate();
   const [status, setStatus] = useState<PontoStatus | null>(null);
   const [config, setConfig] = useState<PontoConfig | null>(null);
@@ -348,7 +350,7 @@ export default function SettingsPontoSection({
 
       <div>
         <p className="mb-2 font-medium text-on-surface text-sm">
-          {t("ponto.location_title")}
+          {pt("ponto.location_title")}
         </p>
         <p className="mb-3 text-on-surface-variant text-xs">
           {t("ponto.location_help")}
@@ -625,7 +627,7 @@ export default function SettingsPontoSection({
       {confirmRegenerate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay">
           <ConfirmDiscardDialog
-            description={t("ponto.qr_regenerate_desc")}
+            description={pt("ponto.qr_regenerate_desc")}
             discardLabel={t("ponto.qr_regenerate_confirm")}
             keepLabel={t("cancel")}
             onDiscard={() => {

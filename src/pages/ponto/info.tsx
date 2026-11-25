@@ -3,7 +3,9 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
+import { usePontoT } from "@/hooks/use-ponto-t";
 import api from "@/lib/api";
+import { useShopModeStore } from "@/stores/shop-mode";
 
 interface PontoStatus {
   enabled: boolean;
@@ -110,6 +112,8 @@ function SignatureRow({
  */
 export default function PontoInfoPage() {
   const { t } = useTranslation();
+  const pt = usePontoT();
+  const shopMode = useShopModeStore((s) => s.shopMode);
   const [state, setState] = useState<PontoInfoState>({ kind: "loading" });
 
   useEffect(() => {
@@ -135,15 +139,17 @@ export default function PontoInfoPage() {
     month: "long",
     year: "numeric",
   });
-  const controller =
-    state.kind === "ready" && state.shopName ? `A ${state.shopName}` : "A loja";
+  let controller = shopMode === "ponto_only" ? "A empresa" : "A loja";
+  if (state.kind === "ready" && state.shopName) {
+    controller = `A ${state.shopName}`;
+  }
 
   // Folha A4 «Informação aos trabalhadores» — o documento impresso é
   // sempre em PT-PT (público-alvo: trabalhadores da loja; os comandos do
   // ponto são eles próprios PT), independentemente do idioma da
   // interface. Só o chrome do ecrã (voltar/imprimir/indisponível) segue o
   // idioma da app.
-  const docT = (key: string) => t(key, { controller, lng: "pt" });
+  const docT = (key: string) => pt(key, { controller, lng: "pt" });
   const signatureLabels = {
     date: docT("ponto.info_doc_date"),
     name: docT("ponto.info_doc_sig_name"),
