@@ -207,6 +207,8 @@ const pontoUpdate = (input: UpdateShopSettingsInput) => ({
 
 const shopCreate = (input: UpdateShopSettingsInput) => ({
   address: input.address ?? null,
+  // `undefined` é omitido pelo Prisma e cai no default "repair_shop".
+  shopMode: input.shopMode,
   countryCode: input.countryCode ?? "PT",
   currency: input.currency ?? "EUR",
   id: "default",
@@ -235,6 +237,7 @@ const shopCreate = (input: UpdateShopSettingsInput) => ({
 
 const shopUpdate = (input: UpdateShopSettingsInput) => ({
   address: input.address,
+  shopMode: input.shopMode,
   countryCode: input.countryCode,
   currency: input.currency,
   phone: input.phone,

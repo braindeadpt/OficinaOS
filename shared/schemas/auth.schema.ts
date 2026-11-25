@@ -145,6 +145,9 @@ export const setupSchema = z
       ),
     password: passwordPolicy,
     confirmPassword: z.string().min(1, { error: "validations.required" }),
+    // Instalador: instâncias alojadas de ponto nascem já em modo só ponto.
+    // Omitido = repair_shop; clientes normais nem veem este campo na UI.
+    shopMode: z.enum(["repair_shop", "ponto_only"]).optional(),
     token: z.string().max(256).optional(),
   })
   .refine((v) => v.password === v.confirmPassword, {

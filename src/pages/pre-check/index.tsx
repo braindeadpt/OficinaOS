@@ -1,5 +1,5 @@
 import { LANGUAGES } from "@shared/constants";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ShopBrand } from "@/components/modules/shop-brand";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -61,6 +61,18 @@ export default function PreCheckPage({ embed = false }: { embed?: boolean }) {
   const [submitting, setSubmitting] = useState(false);
   const [submittedCode, setSubmittedCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [shopMode, setShopMode] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .get("/public/shop")
+      .then((res) => {
+        setShopMode(
+          res.data?.shopMode === "ponto_only" ? "ponto_only" : "repair_shop"
+        );
+      })
+      .catch(() => setShopMode("repair_shop"));
+  }, []);
 
   const set = (patch: Partial<FormState>) =>
     setForm((prev) => ({ ...prev, ...patch }));
@@ -105,6 +117,35 @@ export default function PreCheckPage({ embed = false }: { embed?: boolean }) {
       setSubmitting(false);
     }
   };
+
+  if (!submittedCode && shopMode === null) {
+    return (
+      <div className="flex min-h-dvh flex-col bg-background">
+        {!embed && (
+          <nav className="sticky top-0 z-50 w-full bg-background">
+            <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4">
+              <div className="flex items-center gap-2.5">
+                <ShopBrand />
+              </div>
+              <LanguageSwitcher />
+            </div>
+          </nav>
+        )}
+      </div>
+    );
+  }
+  if (!submittedCode && shopMode === "ponto_only") {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-background px-6">
+        <div className="max-w-md rounded-xl bg-surface-container-low p-8 text-center">
+          <ShopBrand />
+          <p className="mt-6 text-on-surface-variant">
+            {t("pre_check_unavailable")}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">

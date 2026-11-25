@@ -21,6 +21,7 @@ export function toPublicShop(s: {
   defaultWarrantyDays: number;
   logoPath: string | null;
   phone: string | null;
+  shopMode?: string | null;
   shopName: string;
   storeLogoData: string | null;
 }) {
@@ -35,6 +36,7 @@ export function toPublicShop(s: {
     logoUrl,
     name: s.shopName.trim() || null,
     phone: s.phone?.trim() || null,
+    shopMode: s.shopMode === "ponto_only" ? "ponto_only" : "repair_shop",
     warrantyDays: s.defaultWarrantyDays,
   };
 }

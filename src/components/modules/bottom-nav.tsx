@@ -5,9 +5,11 @@ import { NavLink, useLocation } from "react-router";
 import { Icon } from "@/components/ui/icon";
 import { can, useCan } from "@/hooks/use-can";
 import { BOTTOM_NAV_PRIMARY, NAV_ITEMS } from "@/lib/navigation";
+import { navItemVisibleInPontoOnly } from "@/lib/ponto-only";
 import { getInitials } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth";
 import { usePontoStore } from "@/stores/ponto";
+import { useShopModeStore } from "@/stores/shop-mode";
 import { useUiStore } from "@/stores/ui";
 
 const ACTIVE_FONT_SETTINGS = '"FILL" 1, "wght" 700, "GRAD" 0, "opsz" 24';
@@ -200,15 +202,24 @@ export default function BottomNav() {
   const closeMoreSheet = useUiStore((s) => s.closeMoreSheet);
   const location = useLocation();
 
+  const isPontoOnly = useShopModeStore((s) => s.shopMode === "ponto_only");
   const visibleItems = NAV_ITEMS.filter(
     (item) =>
       item.perm &&
       can(role, item.perm) &&
-      (item.to !== "/ponto" || pontoEnabled)
+      (item.to !== "/ponto" || pontoEnabled) &&
+      navItemVisibleInPontoOnly(
+        item,
+        isPontoOnly,
+        can(role, { reports: ["viewShop"] })
+      )
   );
+  const primaryPaths = isPontoOnly
+    ? ["/ponto", "/settings"]
+    : BOTTOM_NAV_PRIMARY;
   // Everything the registry knows that is not pinned to the bottom bar.
   const visibleMoreItems = visibleItems.filter(
-    (item) => !BOTTOM_NAV_PRIMARY.includes(item.to)
+    (item) => !primaryPaths.includes(item.to)
   );
   const isMoreActive = visibleMoreItems.some(
     (item) => item.to === location.pathname
@@ -248,6 +259,9 @@ export default function BottomNav() {
   const dashboardItem = visibleNavItemsByPath.get("/");
   const jobsItem = visibleNavItemsByPath.get("/jobs");
   const settingsItem = visibleNavItemsByPath.get("/settings");
+  const primaryItems = primaryPaths
+    .map((path) => visibleNavItemsByPath.get(path))
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
 
   const moreButton = (
     <button
@@ -340,27 +354,40 @@ export default function BottomNav() {
         aria-label={t("navigation")}
         className="fixed right-0 bottom-0 left-0 z-50 flex items-center bg-surface-container-low px-1 pt-1 pb-[env(safe-area-inset-bottom)] shadow-[0_-1px_0_var(--color-outline-variant)] backdrop-blur-sm lg:hidden"
       >
-        {dashboardItem && (
-          <NavTab
-            icon={dashboardItem.icon}
-            labelKey={dashboardItem.labelKey}
-            to={dashboardItem.to}
-          />
-        )}
-        {jobsItem && (
-          <NavTab
-            icon={jobsItem.icon}
-            labelKey={jobsItem.labelKey}
-            to={jobsItem.to}
-          />
-        )}
-        <FabButton disabled={!canCreateJob} onClick={openIntakeModal} />
-        {settingsItem && (
-          <NavTab
-            icon={settingsItem.icon}
-            labelKey={settingsItem.labelKey}
-            to={settingsItem.to}
-          />
+        {isPontoOnly ? (
+          primaryItems.map((item) => (
+            <NavTab
+              icon={item.icon}
+              key={item.to}
+              labelKey={item.labelKey}
+              to={item.to}
+            />
+          ))
+        ) : (
+          <>
+            {dashboardItem && (
+              <NavTab
+                icon={dashboardItem.icon}
+                labelKey={dashboardItem.labelKey}
+                to={dashboardItem.to}
+              />
+            )}
+            {jobsItem && (
+              <NavTab
+                icon={jobsItem.icon}
+                labelKey={jobsItem.labelKey}
+                to={jobsItem.to}
+              />
+            )}
+            <FabButton disabled={!canCreateJob} onClick={openIntakeModal} />
+            {settingsItem && (
+              <NavTab
+                icon={settingsItem.icon}
+                labelKey={settingsItem.labelKey}
+                to={settingsItem.to}
+              />
+            )}
+          </>
         )}
         {moreButton}
       </nav>

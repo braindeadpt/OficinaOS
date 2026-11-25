@@ -8,6 +8,7 @@ import { useShortcutLabel } from "@/hooks/use-shortcut-label";
 import { useWs } from "@/hooks/use-ws";
 import { useAlertsStore } from "@/stores/alerts";
 import { useCommandPaletteStore } from "@/stores/command-palette";
+import { useShopModeStore } from "@/stores/shop-mode";
 import { useUiStore } from "@/stores/ui";
 import ReportProblemModal from "./feedback/report-problem-modal";
 import LanguageToggle from "./language-toggle";
@@ -16,6 +17,7 @@ export default function TopBar() {
   const { t } = useTranslation();
   const [showAlerts, setShowAlerts] = useState(false);
   const canCreateJob = useCan({ jobs: ["create"] });
+  const isPontoOnly = useShopModeStore((s) => s.shopMode === "ponto_only");
   const openIntakeModal = useUiStore((s) => s.openIntakeModal);
   const reportModalOpen = useUiStore((s) => s.reportModalOpen);
   const openReportModal = useUiStore((s) => s.openReportModal);
@@ -159,15 +161,17 @@ export default function TopBar() {
             )}
           </div>
           <div className="hidden h-8 w-px bg-outline-variant md:block" />
-          <Button
-            className="max-md:hidden"
-            disabled={!canCreateJob}
-            icon="add_circle"
-            onClick={() => openIntakeModal()}
-            size="sm"
-          >
-            {t("new_checkin")}
-          </Button>
+          {!isPontoOnly && (
+            <Button
+              className="max-md:hidden"
+              disabled={!canCreateJob}
+              icon="add_circle"
+              onClick={() => openIntakeModal()}
+              size="sm"
+            >
+              {t("new_checkin")}
+            </Button>
+          )}
         </div>
       </header>
       {/* Rendered outside <header> — its backdrop-filter would trap the

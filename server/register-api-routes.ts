@@ -39,6 +39,7 @@ import { tasksRoutes } from "./routes/tasks.js";
 import { tradeInsRoutes } from "./routes/trade-ins.js";
 import { usersRoutes } from "./routes/users.js";
 import { workflowRoutes } from "./routes/workflow.js";
+import { registerPontoOnlyApiGuard } from "./services/shop-mode.js";
 
 /**
  * Every /api route the server mounts — shared between server/index.ts
@@ -52,6 +53,8 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
   await app.register(authRoutes);
   await app.register(demoRoutes);
   await app.register(setupRoutes);
+
+  registerPontoOnlyApiGuard(app);
 
   app.register(healthRoutes);
   app.register(publicRoutes, { prefix: "/api/public" });

@@ -11,6 +11,7 @@ import {
   type InboundMessage,
   isStopText,
   revokeConsentForPhone,
+  revokeConsentForStop,
 } from "./bot-intents.js";
 import {
   type EvolutionConfig,
@@ -395,6 +396,7 @@ function buildCtx(
     notifyCtx,
     portalApiUrl: settings.cloudApiUrl,
     portalEnabled: modules.includes("portal"),
+    pontoOnly: settings.shopMode === "ponto_only",
     prisma,
     shopLabel:
       [settings.shopName, settings.phone].filter(Boolean).join(" · ") ||
@@ -637,6 +639,13 @@ async function processParsed(
     }
   }
 
+  if (settings.shopMode === "ponto_only") {
+    // Mensagens que não foram reclamadas pelo ponto são de clientes: no
+    // modo standalone não há bot nem registo de clientes. STOP ainda
+    // revoga consentimento legado, sem resposta.
+    await revokeConsentForStop(prisma, parsed.fromPhone, parsed.text);
+    return;
+  }
   if (inboxEnabled) {
     await recordInboundMessage(prisma, log, {
       at: new Date(msg.createdAt),
@@ -649,11 +658,7 @@ async function processParsed(
   if (!botOpen) {
     // Modo só-inbox: nada de respostas — mas PARAR/STOP é legal e
     // revoga consentimento mesmo sem o módulo do bot.
-    if (parsed.text && isStopText(parsed.text)) {
-      await revokeConsentForPhone(prisma, parsed.fromPhone).catch(
-        () => undefined
-      );
-    }
+    await revokeConsentForStop(prisma, parsed.fromPhone, parsed.text);
     return;
   }
   await processOne(

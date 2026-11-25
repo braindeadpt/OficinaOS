@@ -100,6 +100,21 @@ async function requirePontoModule(prisma: PrismaClient): Promise<void> {
 // Registo síncrono — a variante callback evita o async sem await.
 export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
   app.get(
+    "/mode",
+    {
+      schema: {
+        summary:
+          "Instance mode for every authenticated user (no settings data)",
+        tags: ["ponto"],
+      },
+    },
+    async (_req, reply) => {
+      const settings = await getOrCreateShopSettings(app.prisma);
+      return reply.send({ shopMode: settings.shopMode ?? "repair_shop" });
+    }
+  );
+
+  app.get(
     "/status",
     {
       // dashboardScope resolve o fuso efetivo da loja (ShopSettings.timezone

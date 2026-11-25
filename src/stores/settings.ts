@@ -6,6 +6,7 @@ import type {
 import { create } from "zustand";
 import i18n from "@/i18n";
 import api, { getErrorMessage } from "@/lib/api";
+import { useShopModeStore } from "@/stores/shop-mode";
 
 interface OutboxLog {
   channel: string;
@@ -139,6 +140,7 @@ interface SettingsState {
   }) => Promise<void>;
   saveShopSettings: (data: {
     shopName?: string;
+    shopMode?: "repair_shop" | "ponto_only";
     address?: string;
     phone?: string;
     countryCode?: string;
@@ -312,6 +314,10 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       const res = await api.put("/settings/shop", data);
       const updated = res.data as ShopSettings;
       set({ shopSettings: updated });
+      useShopModeStore.setState({
+        shopMode:
+          updated.shopMode === "ponto_only" ? "ponto_only" : "repair_shop",
+      });
       return updated;
     } catch (err: unknown) {
       const message = getErrorMessage(err, i18n.t("errors.save_shop_settings"));

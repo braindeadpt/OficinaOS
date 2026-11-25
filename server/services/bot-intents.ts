@@ -108,6 +108,9 @@ export interface BotReplyCtx {
   inbox?: { channel: string; enabled: boolean };
   log: FastifyBaseLogger;
   notifyCtx: NotifyContext | undefined;
+  /** Modo só ponto: funcionários passam primeiro pelo handler do ponto;
+   *  todo o resto fica sem resposta automática e sem registo de cliente. */
+  pontoOnly?: boolean;
   /** Cloud API base para o link do portal na vistaCliente (null → sem link). */
   portalApiUrl?: string | null;
   /** true quando o módulo "portal" está ativo nos entitlements. */
@@ -681,6 +684,17 @@ async function pontoClaimedReply(
   };
 }
 
+export async function revokeConsentForStop(
+  prisma: PrismaClient,
+  phone: string,
+  text: string | null | undefined
+): Promise<void> {
+  if (!(text && isStopText(text))) {
+    return;
+  }
+  await revokeConsentForPhone(prisma, phone).catch(() => undefined);
+}
+
 export async function handleInboundMessage(
   ctx: BotReplyCtx,
   msg: InboundMessage,
@@ -689,6 +703,13 @@ export async function handleInboundMessage(
   const pontoReply = await pontoClaimedReply(ctx, msg, t);
   if (pontoReply) {
     return pontoReply;
+  }
+  if (ctx.pontoOnly) {
+    // O bot de clientes não responde nem regista neste modo, mas STOP/PARAR
+    // continua a ser uma revogação legal de consentimento de contactos já
+    // existentes — nunca pode ser engolido pela mudança de modo.
+    await revokeConsentForStop(ctx.prisma, msg.fromPhone, msg.text);
+    return null;
   }
   // Opt-out legal: PARAR/STOP nunca morre no rate limiter — a revogação
   // do consentimento tem de correr mesmo quando o número esgotou a

@@ -168,6 +168,7 @@ async function syncSmsInboundCycle(
     notifyCtx,
     portalApiUrl: apiUrl,
     portalEnabled: modules.includes("portal"),
+    pontoOnly: settings.shopMode === "ponto_only",
     prisma,
     shopLabel:
       [settings.shopName, settings.phone].filter(Boolean).join(" · ") ||

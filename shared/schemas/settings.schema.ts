@@ -46,6 +46,9 @@ export const updateShopSettingsSchema = z
       .min(1, { error: "validations.shop_name_required" })
       .max(120)
       .optional(),
+    // Modo da instância — a rota já exige settings.edit (OWNER-only),
+    // por isso não fica ao alcance de técnicos/front-desk.
+    shopMode: z.enum(["repair_shop", "ponto_only"]).optional(),
     address: z.string().max(255).optional(),
     phone: z.string().max(32).optional(),
     currency: z.string().max(8).optional(),
@@ -149,6 +152,7 @@ export const updateShopSettingsSchema = z
   .refine(
     (data) =>
       data.shopName !== undefined ||
+      data.shopMode !== undefined ||
       data.address !== undefined ||
       data.phone !== undefined ||
       data.currency !== undefined ||

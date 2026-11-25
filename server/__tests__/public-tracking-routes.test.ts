@@ -71,6 +71,9 @@ function buildApp() {
   });
 
   (app.decorate as (name: string, value: unknown) => void)("prisma", {
+    shopSettings: {
+      findUnique: vi.fn().mockResolvedValue({ shopMode: "repair_shop" }),
+    },
     codeLockout: {
       findUnique: vi.fn().mockResolvedValue(null),
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),

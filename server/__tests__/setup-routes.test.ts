@@ -137,8 +137,27 @@ describe("first-run setup routes", () => {
       expect(mocks.txShopUpsert).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: "default" },
-          create: { id: "default", shopName: "TecFix Benfica" },
-          update: { shopName: "TecFix Benfica" },
+          create: {
+            id: "default",
+            shopMode: "repair_shop",
+            shopName: "TecFix Benfica",
+          },
+          update: { shopMode: "repair_shop", shopName: "TecFix Benfica" },
+        })
+      );
+    });
+
+    it("cria a instância em modo só ponto quando o instalador o pede", async () => {
+      const res = await post(buildApp(), {
+        ...VALID_BODY,
+        shopMode: "ponto_only",
+      });
+
+      expect(res.statusCode).toBe(201);
+      expect(mocks.txShopUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({ shopMode: "ponto_only" }),
+          update: expect.objectContaining({ shopMode: "ponto_only" }),
         })
       );
     });
