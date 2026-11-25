@@ -143,7 +143,10 @@ risco de ban do número fica documentado no disclaimer do UI.
 **Bot Pro sobre Evolution** (§5.7): com entitlement `whatsapp-bot` +
 termo do bot aceite (`whatsappBotDisclaimerAt`/`UserId` — separado do
 disclaimer do transporte), a Evolution posta `MESSAGES_UPSERT` em
-`POST /api/public/whatsapp/evolution/inbound/:token` e a app responde
+`POST /api/public/whatsapp/evolution/inbound` com o segredo no header
+`x-oficinaos-webhook-token` (a variante legada `/inbound/:token` no
+path continua aceite para webhooks já registados; hosts públicos são
+registados em HTTPS) e a app responde
 pelo pipeline partilhado com proteções anti-ban: ignora
 fromMe/grupos/broadcast/newsletters, não-texto e números sem ficha de
 cliente escalam ao staff, dedupe por id, presença "a escrever…" + atraso
@@ -385,6 +388,7 @@ linguagem simples gerado na Cloud.
 | `invoicing` | Faturação InvoiceXpress | app: `invoicing.service.ts` (FR/FS, IVA incluído→líquido) | Live, validado conta demo |
 | `multi-shop` | Dashboard multi-loja | app: `shop-metrics.service.ts` (snapshot diário); cloud: `src/routes/metrics.ts` + `ShopMetric`, UI no dashboard do dono | Live |
 | `ai-inbox` | Caixa de entrada + IA de staff | app: `staffInboxTools` + ligação permanente; cloud: `/ai/staff-reply`, `/ai-inbox/link`, `/mcp` (tokens pessoais, só hash) | Em desenvolvimento — nome/preço por decidir |
+| `ponto` | Livro de ponto por WhatsApp/SMS | app: `server/services/ponto/` + `server/routes/ponto.ts` (proxy Cloud); cloud: `src/routes/ponto.ts` — `POST /ponto/evaluate` corre na Cloud, `PontoToken` ~24 h, página pública `/ponto/:slug`; os registos `TimeEntry` ficam na app | Em beta — nome/preço por decidir |
 
 (O canal `sms` voltou a ser módulo Pro em 2026-11-23 — inclusive o
 gateway LAN, que fica como fallback do caminho Cloud. Ver secção acima.)

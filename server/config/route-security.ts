@@ -312,7 +312,9 @@ export const routeSecurity: [string, RouteSecurityOverride][] = [
     },
   ],
   // Evolution inbound webhook — como o SMS: a Evolution não tem sessão
-  // nem CSRF token; o segredo é o path. Budget por IP idêntico.
+  // nem CSRF token; o segredo viaja no header x-oficinaos-webhook-token
+  // (a variante legada /inbound/:token também cai neste prefixo).
+  // Budget por IP idêntico.
   [
     "/api/public/whatsapp/evolution/inbound",
     {

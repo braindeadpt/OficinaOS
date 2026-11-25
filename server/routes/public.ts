@@ -2,10 +2,11 @@ import { timingSafeEqual } from "node:crypto";
 import { AppError } from "@shared/errors/app-error.js";
 import { preCheckSubmitSchema } from "@shared/schemas/intake-request.schema";
 import { quoteRespondSchema } from "@shared/schemas/quote.schema";
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { loadEnv } from "../config/env.js";
 import { accessUrls } from "../lib/mdns.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
+import { EVOLUTION_WEBHOOK_TOKEN_HEADER } from "../services/evolution.service.js";
 import { handleEvolutionInbound } from "../services/evolution-bot.service.js";
 import { submitPreCheckRequest } from "../services/intake-request.service.js";
 import { respondToQuote } from "../services/job-quote.service.js";
@@ -26,6 +27,10 @@ function tokenMatches(stored: string, provided: string): boolean {
   const a = Buffer.from(stored);
   const b = Buffer.from(provided);
   return a.length === b.length && timingSafeEqual(a, b);
+}
+
+function firstHeader(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
 }
 
 function parseQuoteRespondBody(body: unknown) {
@@ -332,35 +337,65 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
   });
 
   /**
-   * Webhook inbound da Evolution API (LAN) — MESSAGES_UPSERT. O segredo é
-   * o path (o webhook não manda auth) — `evolutionWebhookToken`, próprio e
-   * separado do SMS: quem lê a config do webhook na Evolution não pode
-   * usar a credencial para chamar a rota SMS (decisões de orçamento).
-   * A app regista este callback na instância ao ligar o bot (§5.7).
+   * Webhook inbound da Evolution API (LAN) — MESSAGES_UPSERT. O segredo
+   * viaja no header `x-oficinaos-webhook-token` (a app regista-o no
+   * /webhook/set da instância): o path fica sem credencial para não a
+   * expor em URLs — proxies e logs de acesso guardam-nas. `evolution-
+   * WebhookToken`, próprio e separado do SMS: quem lê a config do
+   * webhook na Evolution não pode usar a credencial para chamar a rota
+   * SMS (decisões de orçamento). A variante /:token no path continua
+   * aceite — webhooks registados por versões anteriores só mudam de
+   * URL na próxima gravação de definições/pair.
    */
-  app.post("/whatsapp/evolution/inbound/:token", {
-    handler: async (req, reply) => {
-      const { token } = req.params as { token: string };
-      const settings = await getOrCreateShopSettings(app.prisma);
-      if (
-        !(
-          settings.whatsappEnabled &&
-          settings.whatsappTransport === "evolution" &&
-          settings.evolutionWebhookToken &&
-          tokenMatches(settings.evolutionWebhookToken, token)
-        )
-      ) {
-        throw new AppError("NOT_FOUND");
-      }
-      await handleEvolutionInbound(
-        app.prisma,
-        app.log,
-        { prisma: app.prisma, wsBroadcast: app.wsBroadcast },
-        (req.body ?? {}) as Parameters<typeof handleEvolutionInbound>[3]
-      );
-      // Idem SMS: 200 sempre — não revelar parsing/auth a quem chama.
-      return reply.send({ ok: true });
+  const handleEvolutionWebhook = async (
+    req: FastifyRequest,
+    reply: FastifyReply,
+    token: string | undefined
+  ) => {
+    const settings = await getOrCreateShopSettings(app.prisma);
+    if (
+      !(
+        settings.whatsappEnabled &&
+        settings.whatsappTransport === "evolution" &&
+        settings.evolutionWebhookToken &&
+        token &&
+        tokenMatches(settings.evolutionWebhookToken, token)
+      )
+    ) {
+      throw new AppError("NOT_FOUND");
+    }
+    await handleEvolutionInbound(
+      app.prisma,
+      app.log,
+      { prisma: app.prisma, wsBroadcast: app.wsBroadcast },
+      (req.body ?? {}) as Parameters<typeof handleEvolutionInbound>[3]
+    );
+    // Idem SMS: 200 sempre — não revelar parsing/auth a quem chama.
+    return reply.send({ ok: true });
+  };
+
+  app.post("/whatsapp/evolution/inbound", {
+    handler: (req, reply) =>
+      handleEvolutionWebhook(
+        req,
+        reply,
+        firstHeader(req.headers[EVOLUTION_WEBHOOK_TOKEN_HEADER])
+      ),
+    schema: {
+      body: { type: "object", additionalProperties: true },
+      summary:
+        "Inbound WhatsApp webhook from the local Evolution instance (token header)",
+      tags: ["public"],
     },
+  });
+
+  app.post("/whatsapp/evolution/inbound/:token", {
+    handler: (req, reply) =>
+      handleEvolutionWebhook(
+        req,
+        reply,
+        (req.params as { token: string }).token
+      ),
     schema: {
       body: { type: "object", additionalProperties: true },
       params: {
@@ -368,7 +403,8 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
         required: ["token"],
         type: "object",
       },
-      summary: "Inbound WhatsApp webhook from the local Evolution instance",
+      summary:
+        "Inbound WhatsApp webhook from the local Evolution instance (legacy path token)",
       tags: ["public"],
     },
   });

@@ -26,8 +26,11 @@ vi.mock("../services/bot-intents.js", () => ({
   findCustomersByPhone: vi.fn(async () => [{ id: "c1", name: "Ana" }]),
   handleInboundMessage: mocks.handleInboundMessage,
   isStopText: (t: string) => ["parar", "stop"].includes(t.trim().toLowerCase()),
-  rateOk: vi.fn(() => true),
   revokeConsentForPhone: mocks.revokeConsentForPhone,
+}));
+
+vi.mock("../services/rate-limit.js", () => ({
+  rateOk: vi.fn(() => true),
 }));
 
 vi.mock("../services/inbox.service.js", () => ({

@@ -2025,7 +2025,8 @@ enum TimeEntryTransport {
   WHATSAPP_META
   WHATSAPP_EVOLUTION
   SMS
-  // Registo manual criado pelo responsável no painel (nunca pelo bot).
+  // Registo presumido criado pelo sistema (lembrete de saída) ou manual
+  // do responsável no painel — nunca uma mensagem do trabalhador.
   MANUAL
 }
 

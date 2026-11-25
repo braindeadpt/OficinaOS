@@ -253,3 +253,44 @@ describe("pollWhatsAppInbound — ai-inbox sem canal WhatsApp resolvido", () => 
     );
   });
 });
+
+describe("pollWhatsAppInbound — contrato da fila oficial", () => {
+  it("sentAt ISO da row chega intacto ao handler (messageAt do ponto)", async () => {
+    // GET /whatsapp/inbound devolve sentAt por row — o poller passa a
+    // row inteira e o ponto usa-a como messageAt no /ponto/evaluate
+    // (a validade do código mede-se ao ENVIO na Meta, não à receção).
+    mocks.getOrCreateShopSettings.mockResolvedValue({
+      whatsappEnabled: true,
+      whatsappTransport: "meta",
+    });
+    mocks.resolveWhatsAppChannel.mockReturnValue({
+      apiUrl: "https://cloud",
+      mode: "cloud",
+      shopToken: "tok",
+    });
+    const sentAt = "2026-01-10T08:00:00.000Z";
+    mocks.cloudFetch
+      .mockResolvedValueOnce({
+        body: {
+          messages: [
+            {
+              createdAt: "2026-01-10T08:05:00.000Z",
+              fromPhone: "351900000001",
+              id: "m-sent",
+              messageType: "text",
+              sentAt,
+              text: "ENTRADA",
+            },
+          ],
+        },
+        ok: true,
+      })
+      .mockResolvedValueOnce({ body: {}, ok: true }); // ack
+
+    await pollWhatsAppInbound(prisma, "https://cloud", "tok", log, undefined);
+    expect(mocks.handleInboundMessage).toHaveBeenCalledTimes(1);
+    expect(mocks.handleInboundMessage.mock.calls[0]?.[1]).toMatchObject({
+      sentAt,
+    });
+  });
+});

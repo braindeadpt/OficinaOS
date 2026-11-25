@@ -329,9 +329,15 @@ export async function listPending(
 ): Promise<PontoPendingEntryDTO[]> {
   // status POR_VALIDAR na máquina e ainda sem qualquer validação —
   // uma vez validada (aprovada ou recusada) deixa de estar pendente.
+  // Linha já corrigida (a correção é outra entrada — aprovada ou ela
+  // própria na fila) também sai: validá-la já não muda o apuramento.
   const rows = await findEntries(
     prisma,
-    { status: "POR_VALIDAR", validations: { none: {} } },
+    {
+      corrections: { none: {} },
+      status: "POR_VALIDAR",
+      validations: { none: {} },
+    },
     [{ at: "asc" }, { id: "asc" }]
   );
 
