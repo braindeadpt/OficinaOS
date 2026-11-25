@@ -25,6 +25,9 @@ export function startPontoPurgeScheduler(app: FastifyInstance): () => void {
   };
 
   const handle = setInterval(tick, INTERVAL_MS);
+  if (handle.unref) {
+    handle.unref();
+  }
   tick().catch((err) =>
     app.log.warn({ err }, "ponto purge scheduler initial tick failed")
   );

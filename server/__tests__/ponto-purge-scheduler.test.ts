@@ -84,4 +84,34 @@ describe("startPontoPurgeScheduler", () => {
 
     stop();
   });
+
+  it("marca o intervalo como unref — não segura um processo já parado", () => {
+    vi.useRealTimers();
+    const originalSetInterval = globalThis.setInterval;
+    let timer: NodeJS.Timeout | undefined;
+    const intervalSpy = vi
+      .spyOn(globalThis, "setInterval")
+      .mockImplementation(((
+        callback: Parameters<typeof setInterval>[0],
+        ms?: number,
+        ...args: unknown[]
+      ) => {
+        timer = originalSetInterval(
+          callback as never,
+          ms,
+          ...(args as never[])
+        ) as unknown as NodeJS.Timeout;
+        return timer;
+      }) as typeof setInterval);
+    const queryRaw = vi.fn().mockResolvedValue([]);
+    const { app } = makeApp(queryRaw);
+
+    const stop = startPontoPurgeScheduler(app);
+    try {
+      expect(timer?.hasRef()).toBe(false);
+    } finally {
+      stop();
+      intervalSpy.mockRestore();
+    }
+  });
 });
