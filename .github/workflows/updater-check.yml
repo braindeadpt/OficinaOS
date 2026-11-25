@@ -36,4 +36,24 @@ jobs:
           $s = "installer\stage-ci"
           New-Item -ItemType Directory -Force "$s\app", "$s\bun", "$s\pgsql", "$s\tools", "dist" | Out-Null
           Set-Content "$s\app\stub", "$s\bun\stub", "$s\pgsql\stub", "$s\tools\stub" x
+          Set-Content "$s\tools\setup-service.ps1" "param([switch]`$Stop, [switch]`$Uninstall); exit 0"
           .\installer\build-windows.ps1 -Version "v1.2.3-ci" -SourceDir "stage-ci"
+
+      - name: Smoke test rewritten OficinaOS-Setup.exe (install → verify → uninstall)
+        # Prova que a normalizacao in-place de VS_VERSION_INFO nao corrompe o
+        # loader nem o payload LZMA2 do Inno Setup: instala silenciosamente,
+        # confirma os ficheiros extraidos e desinstala.
+        run: |
+          $installDir = Join-Path $env:RUNNER_TEMP "oficinaos-install-smoke"
+          $p = Start-Process -FilePath (Resolve-Path "dist\OficinaOS-Setup.exe").Path `
+            -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/NOICONS", "/DIR=`"$installDir`"" `
+            -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "OficinaOS-Setup.exe falhou na instalacao: exit $($p.ExitCode)" }
+          foreach ($rel in @("app\stub", "bun\stub", "pgsql\stub", "tools\OficinaOSTray.exe", "OficinaOS.ico", "unins000.exe")) {
+            $full = Join-Path $installDir $rel
+            if (-not (Test-Path $full)) { throw "Ficheiro em falta apos instalacao: $full" }
+          }
+          $u = Start-Process -FilePath (Join-Path $installDir "unins000.exe") `
+            -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" `
+            -Wait -PassThru
+          if ($u.ExitCode -ne 0) { throw "unins000.exe falhou: exit $($u.ExitCode)" }
