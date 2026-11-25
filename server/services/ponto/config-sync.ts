@@ -3,9 +3,10 @@
 // de externos e a escala de staff vivem lá, não no corpo do evaluate).
 //
 // Gatilhos: gravação das definições do ponto (PUT /api/ponto/config),
-// pairing com a Cloud e arranque do servidor — todos best-effort: uma
-// Cloud em baixo nunca impede a operação local, e o arranque seguinte
-// torna a tentativa.
+// pairing com a Cloud, arranque do servidor, mudanças de staff nos
+// utilizadores e validações/correções do painel — todos best-effort:
+// uma Cloud em baixo nunca impede a operação local, e o arranque
+// seguinte torna a tentativa.
 //
 // A lista staff é a completa (internos E externos): o evaluate da Cloud
 // recusa telefones não registados, por isso omitir um funcionário interno
@@ -20,10 +21,15 @@ import { cloudFetch } from "../cloud.service.js";
 
 export interface PontoStaffConfigRow {
   externalWork: boolean;
-  /** Última ENTRADA efetiva local — a Cloud usa-a para validar
-   *  pausa/saída após entrada manual ou corrigida. */
-  lastEntryAt: string | null;
+  /** Última ENTRADA efetiva do livro local — na Cloud conta como estado
+   *  manual/corrigido para a sequência do dia, nunca como prova da marcação. */
+  manualEntryAt: string | null;
   phone: string;
+  revokedBy?: string;
+  /** Instantâneo da prova de ENTRADA a revogar (dono recusou a marcação).
+   *  A Cloud só limpa a prova se coincidir com a que derivou — nunca a
+   *  cria nem substitui por este campo. */
+  revokeEntryAt?: string;
   smsAllowed: boolean;
 }
 
@@ -54,9 +60,11 @@ export function buildPontoConfigPayload(
   settings: PontoSettingsRow,
   staffUsers: {
     externalWork: boolean;
-    lastEntryAt?: Date | null;
+    manualEntryAt?: Date | null;
     phoneE164: string | null;
     pontoSmsAllowed: boolean;
+    revokeEntryAt?: Date | null;
+    revokedBy?: string | null;
   }[]
 ): PontoCloudConfigPayload {
   const hasGeo = settings.pontoGeoLat !== null && settings.pontoGeoLng !== null;
@@ -76,8 +84,14 @@ export function buildPontoConfigPayload(
       .filter((u) => u.phoneE164)
       .map((u) => ({
         externalWork: u.externalWork,
-        lastEntryAt: u.lastEntryAt ? u.lastEntryAt.toISOString() : null,
+        manualEntryAt: u.manualEntryAt ? u.manualEntryAt.toISOString() : null,
         phone: u.phoneE164 as string,
+        ...(u.revokeEntryAt
+          ? {
+              revokeEntryAt: u.revokeEntryAt.toISOString(),
+              ...(u.revokedBy ? { revokedBy: u.revokedBy.slice(0, 80) } : {}),
+            }
+          : {}),
         smsAllowed: u.pontoSmsAllowed,
       })),
     // A timezone efetiva — mesma resolução do dashboardScope
@@ -86,6 +100,41 @@ export function buildPontoConfigPayload(
     timezone: settings.timezone ?? process.env.TZ ?? "UTC",
     waNumber: settings.pontoWaNumber,
   };
+}
+
+interface StaffEntryState {
+  cloudEntry?: {
+    createdAt: Date;
+    proofs: unknown;
+    validations: {
+      byUser: { name: string; username: string };
+      decision: string;
+    }[];
+  };
+  manualEntryAt: Date | null;
+}
+
+/**
+ * Instantâneo que a Cloud gravou como prova da ENTRADA. O contrato novo
+ * devolve-o em entryRecordedAt; instalações/entradas anteriores caem para
+ * o createdAt local, gravado logo após o evaluate e dentro da tolerância
+ * de revogação da Cloud em operação normal (relógios UTC sincronizados).
+ */
+function entryProofRecordedAt(entry: {
+  createdAt: Date;
+  proofs: unknown;
+}): Date {
+  const proofs = entry.proofs;
+  if (proofs && typeof proofs === "object" && !Array.isArray(proofs)) {
+    const raw = (proofs as Record<string, unknown>).entryRecordedAt;
+    if (typeof raw === "string") {
+      const parsed = new Date(raw);
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed;
+      }
+    }
+  }
+  return entry.createdAt;
 }
 
 /** Escala completa: Users ativos com pontoEnabled e telefone registado. */
@@ -102,13 +151,19 @@ async function fetchPontoStaffUsers(prisma: DbClient) {
   const ids = users.map((u) => u.id);
   const entries = ids.length
     ? await prisma.timeEntry.findMany({
-        orderBy: { at: "desc" },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         select: {
           at: true,
+          createdAt: true,
+          proofs: true,
+          transport: true,
           userId: true,
           validations: {
             orderBy: { at: "desc" as const },
-            select: { decision: true },
+            select: {
+              byUser: { select: { name: true, username: true } },
+              decision: true,
+            },
             take: 1,
           },
         },
@@ -119,18 +174,50 @@ async function fetchPontoStaffUsers(prisma: DbClient) {
         },
       })
     : [];
-  const latest = new Map<string, Date>();
+  const states = new Map<string, StaffEntryState>(
+    users.map((u) => [u.id, { manualEntryAt: null }])
+  );
   for (const entry of entries) {
-    // Linhas substituídas ficam fora pela query; recusadas pela decisão
-    // mais recente também não podem valer como entrada do dia.
-    if (entry.validations[0]?.decision === "RECUSADO") {
+    const state = states.get(entry.userId);
+    if (!state) {
       continue;
     }
-    if (!latest.has(entry.userId)) {
-      latest.set(entry.userId, entry.at);
+    const rejected = entry.validations[0]?.decision === "RECUSADO";
+    // Linhas substituídas ficam fora pela query. manualEntryAt é o estado
+    // efetivo do livro local (inclui validações humanas e correções): na
+    // Cloud nunca vira prova de marcação, mas preserva a sequência quando
+    // a prova foi revogada ou vem de uma versão anterior. Recusadas pela
+    // decisão mais recente não contam.
+    if (
+      !rejected &&
+      (!state.manualEntryAt ||
+        entry.at.getTime() > state.manualEntryAt.getTime())
+    ) {
+      state.manualEntryAt = entry.at;
+    }
+    // A prova na Cloud é a da ÚLTIMA entrada avaliada/gravada. Se essa
+    // linha está recusada, o sync tem de pedir a revogação; uma entrada
+    // não-manual anterior já foi substituída na Cloud e não interessa.
+    if (entry.transport !== "MANUAL" && !state.cloudEntry) {
+      state.cloudEntry = entry;
     }
   }
-  return users.map((u) => ({ ...u, lastEntryAt: latest.get(u.id) ?? null }));
+  return users.map((u) => {
+    const state = states.get(u.id);
+    const cloudEntry = state?.cloudEntry;
+    const validation = cloudEntry?.validations[0];
+    const revokedBy = validation?.byUser.username || validation?.byUser.name;
+    return {
+      ...u,
+      manualEntryAt: state?.manualEntryAt ?? null,
+      ...(cloudEntry && validation?.decision === "RECUSADO"
+        ? {
+            revokeEntryAt: entryProofRecordedAt(cloudEntry),
+            ...(revokedBy ? { revokedBy } : {}),
+          }
+        : {}),
+    };
+  });
 }
 
 export interface PontoConfigPushResult {

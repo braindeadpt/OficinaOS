@@ -66,15 +66,41 @@ describe("buildPontoConfigPayload", () => {
     expect(payload.staff).toEqual([
       {
         externalWork: false,
-        lastEntryAt: null,
+        manualEntryAt: null,
         phone: "+351911111111",
         smsAllowed: true,
       },
       {
         externalWork: true,
-        lastEntryAt: null,
+        manualEntryAt: null,
         phone: "+351922222222",
         smsAllowed: false,
+      },
+    ]);
+  });
+
+  it("serializa manualEntryAt e a revogação explícita no contrato da Cloud", () => {
+    const manualAt = new Date("2026-01-10T09:00:00.000Z");
+    const revokeAt = new Date("2026-01-10T09:00:01.500Z");
+    const payload = buildPontoConfigPayload(settings(), [
+      {
+        externalWork: false,
+        manualEntryAt: manualAt,
+        phoneE164: "+351911111111",
+        pontoSmsAllowed: true,
+        revokeEntryAt: revokeAt,
+        revokedBy: "dono",
+      },
+    ]);
+
+    expect(payload.staff).toEqual([
+      {
+        externalWork: false,
+        manualEntryAt: manualAt.toISOString(),
+        phone: "+351911111111",
+        revokeEntryAt: revokeAt.toISOString(),
+        revokedBy: "dono",
+        smsAllowed: true,
       },
     ]);
   });

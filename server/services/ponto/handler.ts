@@ -1292,6 +1292,13 @@ async function presumedCorrectionFor(
   return reentry ? null : presumed.id;
 }
 
+function entryRecordedAtProof(entryRecordedAt: string | undefined) {
+  if (!entryRecordedAt) {
+    return {};
+  }
+  return { entryRecordedAt };
+}
+
 async function finalizePonto(
   ctx: BotReplyCtx,
   say: Say,
@@ -1354,6 +1361,7 @@ async function finalizePonto(
   }
   const proofs: Record<string, unknown> = {
     ...result.proofs,
+    ...entryRecordedAtProof(result.entryRecordedAt),
     hasPhoto: args.hasPhoto,
     ...(args.location
       ? {
