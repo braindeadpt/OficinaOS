@@ -30,9 +30,7 @@ vi.mock("../services/bot-intents.js", () => ({
   handleInboundMessage: mocks.handleInboundMessage,
   isStopText: (t: string) => ["parar", "stop"].includes(t.trim().toLowerCase()),
   revokeConsentForPhone: mocks.revokeConsentForPhone,
-  revokeConsentForStop: vi.fn(async (prisma: unknown, phone: string) =>
-    mocks.revokeConsentForPhone(prisma, phone)
-  ),
+  revokeConsentForStop: mocks.revokeConsentForPhone,
 }));
 
 vi.mock("../services/rate-limit.js", () => ({
