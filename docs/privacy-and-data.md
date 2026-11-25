@@ -1,193 +1,177 @@
-# Privacidade e dados (RGPD)
+# Privacy and data (GDPR)
 
-Guia simples sobre onde ficam os dados quando usas o OficinaOS — pensado
-para donos de loja e para quem trata da conformidade RGPD.
+A plain-language guide to where data lives when you use OficinaOS — written
+for shop owners and whoever handles GDPR compliance.
 
-## A regra de ouro
+## The golden rule
 
-**O OficinaOS corre no computador da tua loja.** Clientes, reparações,
-stock, caixa e fotos ficam nesse computador por defeito — o core não
-envia nada para servidores nossos.
+**OficinaOS runs on your shop's computer.** Customers, repairs,
+stock, the till and photos stay on that computer by default — the core
+sends nothing to our servers.
 
-Na prática, para o RGPD isto significa:
+In practice, for GDPR this means:
 
-- A loja é a **responsável pelo tratamento** dos dados (como sempre foi,
-  mesmo com papel e caneta)
-- **Sem módulos Pro ligados, não somos subcontratantes** — não há cloud,
-  conta nossa nem telemetria, e não é preciso acordo de processamento
-  (Art. 28) connosco
-- **Se emparelhares a OficinaOS Cloud** (módulos Pro como o portal ou o
-  bot WhatsApp), passamos a ser subcontratante *apenas* desses fluxos —
-  a tabela abaixo diz exatamente o que transita. Os dados completos da
-  loja continuam no teu PC.
+- The shop is the **data controller** (as it always was, even with pen
+  and paper)
+- **With no Pro modules enabled, we are not a processor** — there is no
+  cloud, no account of ours and no telemetry, and no processing
+  agreement (Art. 28) with us is needed
+- **If you pair OficinaOS Cloud** (Pro modules like the portal or the
+  WhatsApp bot), we become a processor *only* for those flows — the
+  table below says exactly what transits. The shop's full data stays on
+  your PC.
 
-Isto não te dispensa das obrigações normais (registar o tratamento,
-proteger o acesso, responder a pedidos de clientes), mas simplifica-as
-bastante: o tratamento acontece quase todo dentro da tua loja, no teu
-equipamento.
+This doesn't exempt you from the normal obligations (recording processing,
+protecting access, answering customer requests), but it simplifies them
+considerably: the processing happens almost entirely inside your shop, on
+your equipment.
 
-## O que pode sair da loja — só se ligares
+## What can leave the shop — only if you enable it
 
-Algumas funcionalidades opcionais falam com serviços externos. Cada uma
-é escolha tua e pode ficar desligada. Esta tabela serve para o teu
-registo de atividades de tratamento (Art. 30):
+Some optional features talk to external services. Each one is your choice
+and can stay off. This table is meant for your record of processing
+activities (Art. 30):
 
-| Funcionalidade | Quem recebe | O que sai | Como desligar |
+| Feature | Who receives | What leaves | How to turn off |
 |---|---|---|---|
-| Acesso remoto (Cloudflare Tunnel) | Cloudflare, Inc. (EUA, com cláusulas UE) | O tráfego que passa pelo túnel: páginas e dados consultados por quem usa o acesso remoto ou os links públicos | Não ligues o profile `tunnel` |
-| Links públicos ao cliente (tracking, orçamentos, recibos, pré-check) | Cloudflare, Inc. | Os dados mostrados nessas páginas públicas | Sem túnel, os links só funcionam dentro da loja |
-| Notificações e bot WhatsApp | OficinaOS Cloud (relay) → Meta (WhatsApp Business) | O número de telefone do cliente e o texto da mensagem transitam pela nossa Cloud para chegar à Meta — **a Cloud não guarda nem regista o conteúdo** (logs só com id, estado e telefone mascarado). Guardamos o teu token Meta cifrado para poder enviar por ti | Definições → WhatsApp → desligar; desemparelhar a Cloud apaga o token guardado |
-| Bot de clientes (regras + IA, SMS/WhatsApp) | OficinaOS Cloud → fornecedor LLM configurado | Ver a lista exata em [«Bot de clientes (`/ai/bot-reply`)»](#bot-de-clientes-aibot-reply) abaixo. Em resumo: a mensagem/conversa necessária, a ficha da loja e a projeção `vistaCliente` das reparações ativas do número — sem ids internos de clientes/reparações, sem estados crus, sem IMEI, `holdReason`, fornecedores nem todos os nomes casados ao número. A Cloud **não regista o conteúdo** — só contadores de uso (`AiBotUsage`) e as filas temporárias com a retenção atual. A Cloud nunca lê a base de dados da loja | Desligar o módulo do canal ou desemparelhar a Cloud |
-| Caixa de entrada + IA de staff (`ai-inbox`) | OficinaOS Cloud → fornecedor LLM que a loja escolher | Quando um funcionário usa a IA ou um cliente MCP: os resultados das ferramentas da caixa de entrada (`staffInboxTools` – conversas, resumo de clientes, rascunhos) passam pela Cloud **em trânsito** na ligação app→Cloud e nunca ficam guardados nem registados. O **token pessoal MCP** de cada utilizador fica na Cloud só como **hash**; a **chave de IA da loja** fica cifrada (AES-256-GCM) e nunca é devolvida à app. Com um modelo local via MCP (LM Studio/Open WebUI), o modelo é local mas os dados continuam a passar pela Cloud em trânsito. A Cloud nunca lê a base de dados da loja | Definições → IA: desligar ou revogar o token MCP de cada utilizador |
-| SMS via Cloud (Pro) | OficinaOS Cloud → SMS Gateway (device Android) | O telefone e o texto transitam pela Cloud para o device que envia; `SmsRoute` guarda só o mapeamento telefone→loja para encaminhar respostas | Definições → SMS → o fallback LAN continua a funcionar |
-| Portal do cliente / montra online | OficinaOS Cloud | Snapshot redigido da reparação ou dos produtos que publicares (sem custos internos nem notas privadas) | Remove o link público / despublica a montra |
-| Analista IA | O fornecedor que configurares (ex.: OpenAI) | O conteúdo das perguntas que fizeres à IA | Definições → IA → desligar (vem desligado) |
-| Reviews Google | Google | Apenas o link de review — nenhum dado do cliente sai, o cliente abre a página dele | Definições → Reviews → desligar |
-| Livro de ponto (`ponto`, Pro) | OficinaOS Cloud → canais Pro (WhatsApp/SMS) | Os comandos e a **localização só no momento do registo** (nunca tracking) transitam pelos canais até à app; as fotos de prova viajam como media do próprio canal. O pedido de avaliação à Cloud (`POST /ponto/evaluate`) leva o telefone, a localização e um indicador de existe/não-existe foto — **nunca a imagem**. A Cloud **não guarda** registos — só `PontoToken` 24 h para auditoria | Não ativar o módulo `ponto`; sem ele nada é recolhido |
+| Remote access (Cloudflare Tunnel) | Cloudflare, Inc. (US, with EU clauses) | The traffic passing through the tunnel: pages and data consulted by whoever uses remote access or the public links | Don't enable the `tunnel` profile |
+| Public customer links (tracking, quotes, receipts, pre-check) | Cloudflare, Inc. | The data shown on those public pages | Without a tunnel, the links only work inside the shop |
+| WhatsApp notifications and bot | OficinaOS Cloud (relay) → Meta (WhatsApp Business) | The customer's phone number and the message text transit through our Cloud to reach Meta — **the Cloud neither stores nor logs the content** (logs carry only id, state and masked phone). We store your Meta token encrypted so we can send on your behalf | Settings → WhatsApp → disable; unpairing the Cloud deletes the stored token |
+| Customer bot (rules + AI, SMS/WhatsApp) | OficinaOS Cloud → configured LLM provider | See the exact list in ["Customer bot (`/ai/bot-reply`)"](#customer-bot-aibot-reply) below. In short: the necessary message/conversation, the shop card and the `vistaCliente` projection of the number's active repairs — no internal customer/repair ids, no raw states, no IMEI, `holdReason`, suppliers or all names matched to the number. The Cloud **does not log content** — only usage counters (`AiBotUsage`) and the temporary queues with current retention. The Cloud never reads the shop's database | Disable the channel module or unpair the Cloud |
+| Inbox + staff AI (`ai-inbox`) | OficinaOS Cloud → LLM provider the shop chooses | When a staff member uses the AI or an MCP client: the inbox tool results (`staffInboxTools` – conversations, customer summaries, drafts) pass through the Cloud **in transit** on the app→Cloud connection and are never stored or logged. Each user's **personal MCP token** is stored on the Cloud only as a **hash**; the shop's **AI key** is encrypted (AES-256-GCM) and never returned to the app. With a local model via MCP (LM Studio/Open WebUI), the model is local but the data still passes through the Cloud in transit. The Cloud never reads the shop's database | Settings → AI: disable or revoke each user's MCP token |
+| SMS via Cloud (Pro) | OficinaOS Cloud → SMS Gateway (Android device) | Phone and text transit through the Cloud to the sending device; `SmsRoute` stores only the phone→shop mapping to route replies | Settings → SMS → the LAN fallback keeps working |
+| Customer portal / online storefront | OficinaOS Cloud | Redacted snapshot of the repair or of the products you publish (no internal costs or private notes) | Remove the public link / unpublish the storefront |
+| AI analyst | The provider you configure (e.g. OpenAI) | The content of the questions you ask the AI | Settings → AI → disable (off by default) |
+| Google reviews | Google | Only the review link — no customer data leaves, the customer opens their own page | Settings → Reviews → disable |
+| Time tracking (`ponto`, Pro) | OficinaOS Cloud → Pro channels (WhatsApp/SMS) | The commands and the **location only at clock-in time** (never tracking) transit through the channels to the app; proof photos travel as the channel's own media. The evaluation request to the Cloud (`POST /ponto/evaluate`) carries the phone, the location and a photo-exists flag — **never the image**. The Cloud **stores no** records — only `PontoToken` 24 h for auditing | Don't activate the `ponto` module; without it nothing is collected |
 
-## Bot de clientes (`/ai/bot-reply`)
+## Customer bot (`/ai/bot-reply`)
 
-As respostas automáticas do bot — primeiro as regras (estado, código REP,
-SIM/NÃO a orçamento) e só depois a IA — são compostas na Cloud. A app
-envia, na **primeira ronda** de cada mensagem:
+The bot's automatic replies — first the rules (status, REP code,
+YES/NO to a quote) and only then AI — are composed on the Cloud. The app
+sends, in the **first round** of each message:
 
-- `channel` (`sms`, `whatsapp` ou `evolution`) em todas as rondas, e —
-  só na primeira — `messageType` e `messageCreatedAt` da mensagem
-  recebida;
-- a mensagem atual do cliente; com a caixa de entrada ativa, até 6
-  mensagens anteriores **dessa conversa**; nas rondas seguintes a mesma
-  conversa volta a ir, acrescida dos resultados das ferramentas
-  executadas localmente nessa interação (a Cloud é stateless) e do
-  `continuationToken` — só quando a Cloud o emitiu na ronda contada:
-  um HMAC opaco válido por 2 minutos, que prova às rondas de
-  ferramentas que a mensagem já contou para a quota de conversas da
-  conta (não contém dados do cliente nem da conversa);
-- `shopLabel` e `shopCard` (o texto público «o que o bot pode dizer» e a
-  média de dias de reparação após a peça chegar), `currency`, `timezone`,
-  `aiEnabled` e `allowQuoteDecision`;
-- `customerFirstName` — só o primeiro nome do cliente casado pelo
-  número, necessário às saudações. Nunca vai a lista de clientes que
-  partilham esse número;
-- `jobs`: as reparações ativas desse número projetadas pela
-  `vistaCliente`: `aparelho`, `codigo`, `dataPrevista`, `diasAtraso`,
-  `emPausa`, `emprestimo`, `estado` legível, `garantia`, `linkPortal`,
+- `channel` (`sms`, `whatsapp` or `evolution`) in every round, and —
+  only in the first — `messageType` and `messageCreatedAt` of the
+  received message;
+- the customer's current message; with the inbox active, up to 6
+  previous messages **of that conversation**; in later rounds the same
+  conversation goes again, plus the results of the tools executed
+  locally in that interaction (the Cloud is stateless) and the
+  `continuationToken` — only when the Cloud issued it in the counted
+  round: an opaque HMAC valid for 2 minutes, which proves to tool
+  rounds that the message already counted towards the account's
+  conversation quota (it contains no customer or conversation data);
+- `shopLabel` and `shopCard` (the public "what the bot can say" text and
+  the average repair days after the part arrives), `currency`,
+  `timezone`, `aiEnabled` and `allowQuoteDecision`;
+- `customerFirstName` — only the first name of the customer matched by
+  the number, needed for greetings. The list of customers sharing that
+  number never goes;
+- `jobs`: that number's active repairs projected by `vistaCliente`:
+  `aparelho`, `codigo`, `dataPrevista`, `diasAtraso`, `emPausa`,
+  `emprestimo`, human-readable `estado`, `garantia`, `linkPortal`,
   `notasVisiveis`, `pecasEmEspera` (`nome`, `chegadaPrevista`),
   `reparacaoExterna.regressoPrevisto`, `valores` (`estimado`, `sinal`,
-  `pago`, `emFalta`) e `orcamento` (`valor`, `estado` legível, `nota`,
-  `enviadoEm`, `validade`, `versao`).
+  `pago`, `emFalta`) and `orcamento` (`valor`).
 
-O único identificador interno no contexto é `orcamento.id`, e apenas
-quando esse orçamento está por responder e a interação pode decidi-lo
-(fora da janela de decisão nem ele atravessa) — é indispensável para a
-Cloud devolver a ação SIM/NÃO que a app valida e aplica localmente. Não
-vão ids de clientes nem de reparações, estados crus da base de dados,
-telefone como campo próprio, IMEI, códigos de desbloqueio, `holdReason`,
-`accessCode` em bruto (o `linkPortal` é o link público que o próprio
-cliente recebe), fornecedores, custos internos, notas privadas nem dados
-de outros clientes.
+## Time tracking (`ponto`) in detail
 
-A Cloud não guarda nem regista estes conteúdos; persistem apenas
-contadores de uso e as filas temporárias de mensagens com a retenção
-atual.
+**Stays in the shop (server PC):**
 
-## Livro de ponto (Pro `ponto`)
+- `TimeEntry` — each record (type, server time, transport, state,
+  proofs) is **append-only**: the app blocks UPDATE/DELETE and a
+  correction is always a new row (`correctsId`). **5-year** retention
+  (Labour Code, art. 202 — legal retention, not profiling).
+- External workers' proof photos: kept in `UPLOAD_DIR/ponto-photos`
+  and **deleted at 90 days**; the record remains with "photo expired".
 
-Módulo que regista entradas, pausas e saídas dos **trabalhadores** por
-WhatsApp/SMS a partir de um QR fixo. O que sai da loja e o que fica:
+**Leaves the shop (only with the module active and a Pro receiving
+channel):**
 
-**Fica na loja (PC do servidor):**
+- The worker's message — text and **location at clock-in time** —
+  reaches the app through the active channel: on the Evolution channel
+  the webhook delivers directly to the app, **without passing through
+  OficinaOS Cloud** (on the Cloud relay the message transits through it;
+  on official WhatsApp it arrives via Meta's webhook). The trip to the
+  Cloud is a separate step and only happens on clock events (ENTRADA,
+  PAUSA, VOLTEI, SAIDA): the app calls `POST /ponto/evaluate`, which
+  validates code, radius and precision — the request carries the phone
+  and a photo-exists flag, **never the image** (the photo travels as the
+  channel's own media). ESTADO is a local records query and **makes no
+  request to the Cloud** — but the **reply** (the records summary)
+  leaves through the active channel and, if that channel is the
+  WhatsApp Cloud relay or Cloud SMS, **transits through OficinaOS
+  Cloud** like any sent message. The Cloud **stores no** location,
+  photos or records — only the 4-digit `PontoToken`s for ~24 h, for
+  single-use auditing.
+- Corrections recorded by the app itself — the exit presumed by the
+  exit reminder and the exit time declared by the worker replying to
+  that reminder — stay **only in the shop**: they don't pass through
+  the Cloud evaluation.
+- Bot replies and reminders follow the active Pro channel (official
+  WhatsApp, Evolution or SMS).
 
-- `TimeEntry` — cada registo (tipo, hora do servidor, transporte, estado,
-  provas) é **append-only**: a app bloqueia UPDATE/DELETE e uma correção
-  é sempre uma linha nova (`correctsId`). Retenção de **5 anos**
-  (Código do Trabalho, art. 202.º — é guarda legal, não profiling).
-- Fotos de prova de trabalhadores externos: ficam em
-  `UPLOAD_DIR/ponto-photos` e são **apagadas aos 90 dias**; o respetivo
-  registo mantém-se com "foto expirada".
+**Worker rights** (written information is mandatory — the module
+generates the printable `/ponto/info` sheet with the
+`ShopSettings.pontoInfoText` text or the base GDPR template):
 
-**Sai da loja (só com o módulo ativo e um canal Pro de receção):**
+- they are informed in writing about the processing;
+- they can consult their time records;
+- the processing uses neither biometrics nor continuous location;
+- as it processes location, the shop should perform (or review) a
+  **data protection impact assessment (DPIA)** — internal
+  recommendation, not a guarantee.
 
-- A mensagem do trabalhador — texto e **localização no momento do
-  registo** — chega à app pelo canal ativo: no canal Evolution o webhook
-  entrega diretamente à aplicação, **sem passar pela OficinaOS Cloud**
-  (no relay Cloud a mensagem transita por ela; no WhatsApp oficial
-  chega pelo webhook da Meta). A ida à Cloud é um passo separado e só
-  acontece nas marcações (ENTRADA, PAUSA, VOLTEI, SAIDA): a app chama
-  `POST /ponto/evaluate`, que valida código, raio e precisão — o pedido
-  leva o telefone e um indicador da existência de foto, **nunca a
-  imagem** (a foto viaja como media do próprio canal). O ESTADO é uma
-  consulta local de registos e **não faz pedido nenhum à Cloud** — mas
-  a **resposta** (o resumo de registos) sai pelo canal ativo e, se esse
-  canal for o relay Cloud do WhatsApp ou o SMS Cloud, **transita pela
-  OficinaOS Cloud** como qualquer mensagem enviada. A
-  Cloud **não guarda** localização, fotos nem registos — apenas os
-  `PontoToken` de 4 dígitos por ~24 h, para auditoria de uso único.
-- As correções gravadas pela própria app — a saída presumida pelo
-  lembrete de saída e a hora de saída declarada pelo trabalhador em
-  resposta a esse lembrete — ficam **só na loja**: não passam pela
-  avaliação da Cloud.
-- As respostas do bot e os lembretes seguem o canal Pro ativo
-  (WhatsApp oficial, Evolution ou SMS).
+This **is not a promise of "guaranteed compliance"**: the module supports
+the Labour Code obligation, but responsibility for the processing always
+lies with the shop.
 
-**Direitos do trabalhador** (a informação escrita é obrigatória — o
-módulo gera a folha imprimível `/ponto/info` com o texto de
-`ShopSettings.pontoInfoText` ou o modelo RGPD base):
+## Technical calls (always active, no customer data)
 
-- é informado por escrito do tratamento;
-- pode consultar os seus registos de ponto;
-- o tratamento não usa biometria nem localização contínua;
-- como trata de localização, a loja deve fazer (ou rever) uma
-  **avaliação de impacto (AIPD)** — recomendação interna, não garantia.
+There are two internet connections the app makes by itself, with no
+personal data — listed here for full transparency:
 
-Isto **não é uma promessa de «conformidade garantida»**: o módulo apoia
-a obrigação do Código do Trabalho, mas a responsabilidade do tratamento
-é sempre da loja.
-
-## Chamadas técnicas (sempre ativas, sem dados de clientes)
-
-Há duas ligações à internet que a app faz por si, sem dados pessoais —
-ficam aqui para transparência total:
-
-| Chamada | Para onde vai | O que sai | Nota |
+| Call | Where it goes | What leaves | Note |
 |---|---|---|---|
-| Verificação de nova versão | GitHub | O IP do PC da loja ao consultar a versão mais recente | Só serve para avisar que há update |
-| Reportar problema | GitHub | O texto que escreveres no relatório + página atual/versão | Só quando carregas em "Reportar" — nunca automático |
+| New-version check | GitHub | The shop PC's IP when querying the latest version | Only serves to warn there's an update |
+| Report a problem | GitHub | The text you write in the report + current page/version | Only when you click "Report" — never automatic |
 
-Até as fontes da interface (letra e ícones) estão embutidas na app — a
-página abre sem falar com a Google nem nenhum CDN, e funciona igual com
-a internet em baixo.
+Even the interface fonts (typeface and icons) are embedded in the app —
+the page opens without talking to Google or any CDN, and works the same
+with the internet down.
 
-## O que nunca sai
+## What never leaves
 
-Independentemente das opções ligadas:
+Regardless of enabled options:
 
-- Base de dados completa, fotos de reparações, relatórios financeiros —
-  ficam no disco do PC da loja
-- Palavras-passe e sessões dos funcionários
-- Documentos e anexos guardados na app
+- The full database, repair photos, financial reports — stay on the
+  shop PC's disk
+- Staff passwords and sessions
+- Documents and attachments stored in the app
 
-## Recomendações práticas para a loja
+## Practical recommendations for the shop
 
-1. **O PC-servidor é o cofre.** Ativa a password do Windows, mantém o PC
-   atualizado, e usa o backup integrado (Definições → Backups).
-2. **Contas individuais.** Cada funcionário com a sua conta — não
-   partilhem passwords. Os perfis (dono, técnico, balcão) já limitam o
-   que cada um vê.
-3. **Consentimento WhatsApp.** A app só envia WhatsApp a clientes que
-   deram consentimento — guarda esse consentimento na ficha do cliente.
-4. **Pedidos do cliente (RGPD).** Se um cliente pedir os seus dados ou o
-   apagamento, consegues exportar/editar na ficha do cliente. Fala com o
-   teu contabilista ou consultor RGPD para o procedimento formal.
-5. **Se ligares o acesso remoto**, indica a Cloudflare como
-   subcontratante no teu registo (tabela acima já tem o que precisas).
-6. **Se usares módulos Pro** (Cloud emparelhada), indica também o
-   OficinaOS como subcontratante para esses fluxos — o portal, o relay
-   WhatsApp e a montra processam dados por tua conta.
+1. **The server PC is the vault.** Enable the Windows password, keep
+   the PC updated, and use the built-in backup (Settings → Backups).
+2. **Individual accounts.** Each staff member with their own account —
+   don't share passwords. The profiles (owner, technician, front desk)
+   already limit what each one sees.
+3. **WhatsApp consent.** The app only sends WhatsApp to customers who
+   gave consent — keep that consent on the customer record.
+4. **Customer requests (GDPR).** If a customer asks for their data or
+   erasure, you can export/edit on the customer record. Talk to your
+   accountant or GDPR consultant for the formal procedure.
+5. **If you enable remote access**, list Cloudflare as a processor in
+   your record (the table above has what you need).
+6. **If you use Pro modules** (paired Cloud), also list OficinaOS as a
+   processor for those flows — the portal, the WhatsApp relay and the
+   storefront process data on your behalf.
 
-## Nota técnica
+## Technical note
 
-Este documento descreve o comportamento do código tal como está no
-repositório — podes verificar tu mesmo: não há chamadas de rede "escondidas"
-na app; todas as ligações externas correspondem às funcionalidades da
-tabela. Para detalhes de segurança (headers, cookies, rate limits) vê
+This document describes the behavior of the code as it is in the
+repository — you can verify it yourself: there are no "hidden" network
+calls in the app; every external connection matches a feature in the
+table. For security details (headers, cookies, rate limits) see
 `server/plugins/security.ts`.

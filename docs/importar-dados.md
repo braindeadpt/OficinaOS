@@ -1,97 +1,95 @@
-# Importar e exportar dados
+# Importing and exporting data
 
-Definições → **Dados**. Só o perfil **OWNER** (`settings:edit`) tem acesso às
-rotas `/api/export/*` e `/api/import/*` — a receção e os técnicos recebem 403,
-porque estas operações movem dados pessoais em massa (nome, telefone, email dos
-clientes).
+Settings → **Data**. Only the **OWNER** profile (`settings:edit`) has access to
+the `/api/export/*` and `/api/import/*` routes — front desk and technicians get
+403, because these operations move personal data in bulk (customer name,
+phone, email).
 
-## Formatos suportados
+## Supported formats
 
-| Formato | Notas |
+| Format | Notes |
 |---|---|
-| `.csv` | UTF-8; se a decodificação UTF-8 falhar, assume **Windows-1252** (o que o Excel português produz) |
-| `.xlsx` | Excel moderno, lido pelo `read-excel-file` |
-| `.xls` | **Não suportado** — o binário antigo do Excel não é lido; guarda como `.xlsx` ou `.csv` |
+| `.csv` | UTF-8; if UTF-8 decoding fails, falls back to **Windows-1252** (what Portuguese Excel produces) |
+| `.xlsx` | Modern Excel, read by `read-excel-file` |
+| `.xls` | **Not supported** — the old Excel binary isn't read; save as `.xlsx` or `.csv` |
 
-## Limites
+## Limits
 
-- Ficheiro: **10 MB** no máximo.
-- Linhas: **20 000** por ficheiro.
-- `.xlsx` é verificado antes de abrir: o tamanho descomprimido declarado no ZIP
-  não pode exceder **50 MB** (proteção contra zip bombs).
-- O POST ao servidor aceita **5 MB** por pedido; o cliente envia automaticamente
-  em blocos de **500 linhas**.
+- File: **10 MB** max.
+- Rows: **20,000** per file.
+- `.xlsx` is checked before opening: the declared uncompressed size in the ZIP
+  cannot exceed **50 MB** (zip-bomb protection).
+- The server POST accepts **5 MB** per request; the client automatically sends
+  in blocks of **500 rows**.
 
-## Separador e números
+## Separator and numbers
 
-O separador é **detetado uma vez a partir do cabeçalho** — conta-se `;`, `,` e
-TAB fora de aspas e usa-se o mais frequente (em empate, `;`). Todas as linhas
-são divididas só por esse separador, por isso vírgulas dentro de um campo
-(aspas ou não) não partem colunas quando o ficheiro é `;`.
+The separator is **detected once from the header** — `;`, `,` and TAB are
+counted outside quotes and the most frequent wins (on tie, `;`). All rows are
+split only on that separator, so commas inside a field (quoted or not) don't
+break columns when the file is `;`.
 
-Números no formato português: a vírgula é o separador decimal e o ponto é o
-separador de milhares.
+Numbers in Portuguese format: comma is the decimal separator and dot is the
+thousands separator.
 
-| Escrito | Importado |
+| Written | Imported |
 |---|---|
 | `12,50` | `12.5` |
 | `1.234,56` | `1234.56` |
 | `1.000` | `1000` |
 | `89.9` | `89.9` |
 
-Uma célula vazia é simplesmente ignorada (o campo não é alterado). Um valor que
-não é número **nunca vira `0`** — passa a erro de linha.
+An empty cell is simply ignored (the field isn't changed). A non-numeric value
+**never becomes `0`** — it becomes a row error.
 
-## Erros por linha
+## Per-row errors
 
-Cada linha é validada individualmente (`safeParse`): uma linha inválida não
-aborta o lote. O resumo devolve `created`, `updated`, `skipped` e
-`errors: [{ row, field, message }]`, onde `row` é a linha da folha (a primeira
-linha de dados é a 2, porque a 1 é o cabeçalho). As mensagens são traduzidas —
-nunca texto cru do Prisma. No ecrã de importação podes **descarregar um CSV
-com os erros** (`row;field;error`).
+Each row is validated individually (`safeParse`): an invalid row doesn't abort
+the batch. The summary returns `created`, `updated`, `skipped` and
+`errors: [{ row, field, message }]`, where `row` is the sheet row (the first
+data row is 2, because 1 is the header). Messages are translated — never raw
+Prisma text. On the import screen you can **download a CSV with the errors**
+(`row;field;error`).
 
-## Semântica por entidade
+## Semantics per entity
 
-### Peças e serviços
+### Parts and services
 
-- Correspondência por nome **case-insensitive**. Um nome que exista mais de
-  uma vez no catálogo gera um erro de conflito — nunca se atualiza um ao
-  calhas.
-- `category` **só muda se a coluna vier no ficheiro**; valores inválidos são
-  erro de linha.
-- Alterações de stock geram um `StockMovement` do tipo `ADJUSTMENT` com o
-  delta (`novo − antigo`), dentro de uma transação por linha — o livro de
-  stock mantém o rasto de quem/quando/porquê.
+- **Case-insensitive** name matching. A name existing more than once in the
+  catalog produces a conflict error — one is never updated at random.
+- `category` **only changes if the column is in the file**; invalid values are
+  row errors.
+- Stock changes generate an `ADJUSTMENT` `StockMovement` with the delta
+  (`new − old`), inside a per-row transaction — the stock ledger keeps the
+  who/when/why trail.
 
-### Fichas (jobs) — importação histórica
+### Jobs — historical import
 
-- O cliente é encontrado por **telefone normalizado** (`normalizePhone` +
-  `findByNormalizedPhone`, igual ao `customers.service.create`); se não
-  existir, é criado.
-- A marca é procurada case-insensitive; se não existir, é criada.
-- `jobCode` e `ref`/`externalRef` servem para **deduplicar reimportações**:
-  uma linha cuja referência já existe é contada como `skipped`, nunca
-  duplicada.
-- `status`, `createdAt` e `deliveredAt` são opcionais. Importação histórica
-  assume `DELIVERED` por defeito. Datas aceitam ISO (`2025-12-01`,
-  `2025-12-01T10:30:00Z`) e formato PT (`01/12/2025`).
-- Cada ficha importada regista `JOB_CREATED` no audit log (e
-  `STATUS_CHANGED → DELIVERED` carimbado em `deliveredAt` quando aplicável, de
-  modo a que o export volte a mostrar a data de entrega).
+- The customer is found by **normalized phone** (`normalizePhone` +
+  `findByNormalizedPhone`, same as `customers.service.create`); if missing,
+  created.
+- The brand is looked up case-insensitive; if missing, created.
+- `jobCode` and `ref`/`externalRef` serve to **deduplicate reimports**: a row
+  whose reference already exists counts as `skipped`, never duplicated.
+- `status`, `createdAt` and `deliveredAt` are optional. Historical import
+  assumes `DELIVERED` by default. Dates accept ISO (`2025-12-01`,
+  `2025-12-01T10:30:00Z`) and PT format (`01/12/2025`).
+- Each imported job records `JOB_CREATED` in the audit log (and
+  `STATUS_CHANGED → DELIVERED` stamped at `deliveredAt` when applicable, so
+  the export shows the delivery date again).
 
-## Exportação
+## Export
 
-- CSV `;`, UTF-8 com BOM; para Excel é gerado `.xlsx` no cliente com colunas
-  numéricas como `Number` real.
-- **Proteção contra injeção de fórmulas**: células que comecem por `=`, `+`,
-  `-`, `@`, TAB ou CR são prefixadas com `'` — o pré-check público grava texto
-  de terceiros na BD, e isso não pode tornar-se fórmulas ao abrir no Excel.
-- A exportação é **paginada** (blocos de 1000) em vez de ler 50 000 linhas de
-  uma vez.
+- CSV `;`, UTF-8 with BOM; for Excel an `.xlsx` is generated client-side with
+  numeric columns as real `Number`.
+- **Formula-injection protection**: cells starting with `=`, `+`, `-`, `@`,
+  TAB or CR are prefixed with `'` — the public pre-check stores third-party
+  text in the DB, and that must not become formulas when opened in Excel.
+- Export is **paginated** (blocks of 1000) instead of reading 50,000 rows at
+  once.
 
-## Auditoria
+## Auditing
 
-Cada operação grava `DATA_EXPORTED` / `DATA_IMPORTED` no audit log com apenas
-`{ entity, rows }` — sem nomes, telefones, emails ou conteúdo das linhas
-(denylist do #81).
+Each operation records `DATA_EXPORTED` / `DATA_IMPORTED` in the audit log with
+only `{ entity, rows }` — no names, phones, emails or row content
+(the #81 denylist).

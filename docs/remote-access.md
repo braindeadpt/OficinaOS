@@ -1,117 +1,112 @@
-# Usar o OficinaOS fora da loja (acesso remoto)
+# Using OficinaOS outside the shop (remote access)
 
-Guia passo a passo para ligar o acesso pela internet — para a equipa usar
-o telemóvel fora da loja e para os **links dos clientes** (tracking,
-orçamentos, garantia) funcionarem em qualquer lado.
+Step-by-step guide to enable internet access — for the team to use
+their phones outside the shop and for the **customer links** (tracking,
+quotes, warranty) to work anywhere.
 
-É **grátis**, demora uns **15 minutos** e só se faz **uma vez**.
+It's **free**, takes about **15 minutes** and only needs doing **once**.
 
-## O que vais precisar
+## What you'll need
 
-| Coisa | O que é | Custo |
+| Thing | What it is | Cost |
 |---|---|---|
-| **Conta Cloudflare** | O serviço que liga a internet ao PC da loja em segurança | Grátis |
-| **Um domínio** | O "nome" da loja na internet, ex.: `minhaloja.pt` — compra-se na Cloudflare, Porkbun, Namecheap… | ~10 €/ano |
-| **OficinaOS instalado** | A app já a correr no PC da loja com Docker | — |
+| **Cloudflare account** | The service that securely connects the internet to the shop PC | Free |
+| **A domain** | The shop's "name" on the internet, e.g. `minhaloja.pt` — buy at Cloudflare, Porkbun, Namecheap… | ~€10/year |
+| **OficinaOS installed** | The app already running on the shop PC with Docker | — |
 
-> **Como funciona (em linguagem simples):** o PC da loja liga-se à
-> Cloudflare e fica "à escuta". Quando alguém abre o endereço da loja na
-> internet, a Cloudflare passa o pedido por esse canal até ao PC. **Não
-> precisas de abrir portas no router** nem de IP fixo — funciona mesmo
-> com as internet móveis dos operadores portugueses (CGNAT).
+> **How it works (in plain language):** the shop PC connects to
+> Cloudflare and stays "listening". When someone opens the shop's address
+> on the internet, Cloudflare passes the request through that channel to
+> the PC. **You don't need to open router ports** or a fixed IP — it works
+> even with Portuguese carriers' mobile internet (CGNAT).
 
-## Passo 1 — Conta Cloudflare e domínio
+## Step 1 — Cloudflare account and domain
 
-1. Vai a [dash.cloudflare.com](https://dash.cloudflare.com) → **Sign up**,
-   cria a conta gratuita
-2. **Add a domain** → escreve o teu domínio
-3. A Cloudflare pede para mudar os "nameservers" no site onde compraste o
-   domínio — ela mostra exatamente quais são e onde mudar (passo guiado)
-4. Espera que fique verde "Active" (pode demorar alguns minutos a horas)
+1. Go to [dash.cloudflare.com](https://dash.cloudflare.com) → **Sign up**,
+   create the free account
+2. **Add a domain** → type your domain
+3. Cloudflare asks you to change the "nameservers" where you bought the
+   domain — it shows exactly which ones and where to change them (guided step)
+4. Wait until it turns green "Active" (can take minutes to hours)
 
-## Passo 2 — Criar o túnel
+## Step 2 — Create the tunnel
 
-1. Entra em [one.dash.cloudflare.com](https://one.dash.cloudflare.com)
-   (o painel "Zero Trust" — mesma conta)
-2. No menu: **Networks → Tunnels → Add a tunnel** → escolhe **Cloudflared**
-3. Dá um nome ao túnel, ex.: `oficina` → **Save**
-4. A Cloudflare mostra instruções para vários sistemas — escolhe **Docker**.
-   Aparece um comando longo; dele só te interessa o **token**: a string que
-   começa por `eyJ` (copia-a, é a "chave" do túnel)
-5. Continua para **Public Hostname** e cria o endereço público:
-   - **Subdomain:** `oficina` (ou `app`, como preferires)
-   - **Domain:** o teu domínio
+1. Enter [one.dash.cloudflare.com](https://one.dash.cloudflare.com)
+   (the "Zero Trust" dashboard — same account)
+2. In the menu: **Networks → Tunnels → Add a tunnel** → choose **Cloudflared**
+3. Name the tunnel, e.g. `oficina` → **Save**
+4. Cloudflare shows instructions for several systems — pick **Docker**.
+   A long command appears; the only thing you need is the **token**: the
+   string starting with `eyJ` (copy it — it's the tunnel "key")
+5. Continue to **Public Hostname** and create the public address:
+   - **Subdomain:** `oficina` (or `app`, as you prefer)
+   - **Domain:** your domain
    - **Service:** Type `HTTP` · URL `app:4000`
-   - ⚠️ é mesmo `app:4000` — é o nome interno do contentor Docker, não o IP do PC
-6. Guarda. O túnel está criado.
+   - ⚠️ it really is `app:4000` — that's the Docker container's internal name, not the PC's IP
+6. Save. The tunnel is created.
 
-## Passo 3 — Ligar na app
+## Step 3 — Connect it in the app
 
-Abre o ficheiro **`.env`** na pasta onde instalaste o OficinaOS (com o
-Bloco de Notas ou VS Code) e adiciona/edita estas duas linhas:
+Open the **`.env`** file in the folder where you installed OficinaOS
+(Notepad or VS Code) and add/edit these lines:
 
 ```bash
-TUNNEL_TOKEN=eyJhIjoixxxxx…        # cola aqui o token do passo 2
-EXTRA_TRUSTED_ORIGINS=https://oficina.minhaloja.pt   # o teu endereço público
-TRUST_PROXY=true                   # o túnel é um proxy — sem isto os
-                                   # limites de taxa aplicam-se a todos
-                                   # os visitantes em conjunto
+TUNNEL_TOKEN=eyJhIjoixxxxx…        # paste the token from step 2
+EXTRA_TRUSTED_ORIGINS=https://oficina.minhaloja.pt   # your public address
+TRUST_PROXY=true                   # the tunnel is a proxy — without this
+                                   # rate limits apply to all visitors
+                                   # collectively
 ```
 
-> O `APP_URL` fica como está (`http://192.168…:4000`) — assim a loja
-> continua a funcionar **mesmo se a internet falhar**, e o acesso remoto
-> fica disponível em cima.
+> `APP_URL` stays as is (`http://192.168…:4000`) — so the shop keeps
+> working **even if the internet fails**, with remote access on top.
 
-Arranca de novo com o túnel:
+Restart with the tunnel:
 
-- **Se instalaste com o INSTALAR.bat** (a maioria) — no `.env` põe também:
+- **If you installed with INSTALAR.bat** (most people) — also set in `.env`:
 
   ```bash
   COMPOSE_PROFILES=tunnel
   ```
 
-  e depois abre o `INICIAR.bat` (ou corre `docker compose -f docker-compose.app.yml up -d`).
+  then open `INICIAR.bat` (or run `docker compose -f docker-compose.app.yml up -d`).
 
-- **Se instalaste pelo código-fonte:**
+- **If you installed from source:**
 
   ```bash
   docker compose --profile tunnel up -d
   ```
 
-**Testar:** abre `https://oficina.minhaloja.pt` no telemóvel — se aparecer
-o login, está feito. ✅
+**Test:** open `https://oficina.minhaloja.pt` on your phone — if the login
+appears, it's done. ✅
 
-## Passo 4 — Ativar os links para clientes
+## Step 4 — Enable customer links
 
-Para que os links que a app envia (tracking, orçamento, pedido de
-avaliação, QR de garantia) abram fora da loja:
+**Settings → Shop → Tracking base URL** → type
+`https://oficina.minhaloja.pt` → Save.
 
-**Definições → Loja → URL base de tracking** → escreve o endereço público
-`https://oficina.minhaloja.pt` → Guardar.
+## Quick questions
 
-## Perguntas rápidas
+**If the shop internet fails, does the shop stop?**
+No. Inside the shop everyone keeps using `http://192.168…:4000` —
+only remote access pauses until the internet returns.
 
-**Se a internet da loja falhar, a loja para?**
-Não. Dentro da loja toda a gente continua a usar `http://192.168…:4000` —
-só o acesso remoto é que fica em pausa até a internet voltar.
+**If the shop PC turns off?**
+Remote access stops with it. When the PC turns on, Docker and the tunnel
+start by themselves and everything returns.
 
-**Se o PC da loja desligar?**
-O acesso remoto para com ele. Quando o PC ligar, o Docker e o túnel
-arrancam sozinhos e tudo volta.
+**Is it safe?**
+Yes: encrypted HTTPS, zero open router ports, and login attempt limits
+keep working per visitor. If you want an extra barrier, **Cloudflare
+Access** (free, same dashboard → Access → Applications) can ask for
+email + code before login — remember to leave the public paths out
+(`/tracking*`, `/pre-check*`) so customers don't hit the barrier.
 
-**É seguro?**
-Sim: HTTPS encriptado, zero portas abertas no router, e os limites de
-tentativas de login continuam a funcionar por visitante. Se quiseres uma
-barreira extra, o **Cloudflare Access** (grátis, mesmo painel → Access →
-Applications) pode pedir email + código antes do login — lembra-te de
-deixar de fora os caminhos públicos (`/tracking*`, `/pre-check*`) para os
-clientes não baterem na barreira.
+**Maximum-security alternative:** if you prefer that **everyone** uses
+the HTTPS address (including inside the shop), set
+`APP_URL=https://oficina.minhaloja.pt` instead of the IP — safer
+(hardened cookies), but the shop then needs internet to log in.
+Recommended only if the shop internet is very stable.
 
-**Alternativa máxima segurança:** se preferires que **toda** a gente use o
-endereço HTTPS (incluindo dentro da loja), põe `APP_URL=https://oficina.minhaloja.pt`
-em vez do IP — mais seguro (cookies endurecidos), mas a loja passa a
-precisar de internet para fazer login. Recomendado só se a net da loja for
-muito estável.
-
-**Custa alguma coisa?**
-O túnel é grátis. O único custo é o domínio (~10 €/ano).
+**Does it cost anything?**
+The tunnel is free. The only cost is the domain (~€10/year).

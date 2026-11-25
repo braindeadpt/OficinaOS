@@ -2,234 +2,270 @@
   <img src="public/logo.svg" alt="OficinaOS" width="280" />
 </p>
 
-# OficinaOS
+<h1 align="center">OficinaOS</h1>
 
-Sistema de gestão para oficinas de reparação de telemóveis — loja única, self-hosted. Regista a receção do equipamento, acompanha a reparação e entrega ao cliente, tudo numa única app acessível pelo browser. Faturação certificada opcional via InvoiceXpress (módulo Pro).
+<p align="center">
+  <b>Repair shop management for single-location phone repair shops — self-hosted, MIT-licensed, free forever.</b>
+</p>
 
-**Quatro idiomas incluídos: Português (PT-PT), English, Français, Español.**
+<p align="center">
+  <a href="https://github.com/braindeadpt/OficinaOS/actions/workflows/ci.yml"><img src="https://github.com/braindeadpt/OficinaOS/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/braindeadpt/OficinaOS/releases/latest"><img src="https://img.shields.io/github/v/release/braindeadpt/OficinaOS" alt="Latest release" /></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license" /></a>
+</p>
 
-> **Fork de [Reparilo](https://github.com/cranknet/reparilo)** por Bechar Gherbi — adaptado para o público português, com português europeu completo e deployment Docker pronto para rede local. O nome foi alterado conforme exigido pela licença do projeto original.
+<p align="center">
+  <a href="https://demo.oficinaos.app">Live demo</a> ·
+  <a href="https://github.com/braindeadpt/OficinaOS/releases/latest">Download for Windows</a> ·
+  <a href="./INSTALL.md">Install guide</a> ·
+  <a href="./docs/ecosystem.md">Ecosystem</a>
+</p>
 
-> **Estado:** projeto jovem, mantido por um único autor upstream. API e esquema de base de dados podem mudar. Issues e PRs bem-vindos.
+---
 
-## Funcionalidades
+**English** | [Português (PT-PT)](./docs/i18n/readme-pt.md)
 
-- **Fluxo completo de reparação** — receção → diagnóstico → reparação → entrega, com fotos, linha temporal de estados e notificações ao cliente
-- **Receção completa** — checklist funcional, código/padrão de desbloqueio e assinatura digital do cliente no talão
-- **Talões e tracking por QR** — o cliente lê um QR code e vê o estado da reparação no telemóvel, sem instalar nada
-- **Pré-check público** — formulário para o cliente pedir orçamento/diagnóstico online; os pedidos entram na fila da app
-- **Orçamentos** — versões com resposta aceite/recusada registada
-- **POS de balcão** — venda de peças e acessórios, sessões de caixa e pagamentos
-- **Devoluções e garantias** — fluxo separado para retrabalho e reclamações de garantia
-- **Compra de usados (trade-in)** — registo com dados legais do vendedor e grading do equipamento
-- **Gestão de peças e stock** — inventário com alertas de stock baixo e sugestões de reposição
-- **Impressão** — talões e etiquetas em térmicas ESC/POS de rede (58/80 mm) ou A4
-- **Relatórios e exportações** — vendas, reparações e margens por período; exportação CSV; objetivo mensal de faturação
-- **OficinaDiag** — app Windows grátis que lê o telemóvel por USB (bateria, ecrã, sensores) e envia o diagnóstico para a loja
-- **Assistente IA** (opcional) — traz a tua chave OpenAI; encriptada em AES-256 em repouso
-- **Notificações WhatsApp/email** (opcional) — templates editáveis nas definições
-- **Módulos Pro** (opcionais, via OficinaOS Cloud) — portal do cliente público, bot de WhatsApp, canal SMS, relatórios IA e faturação InvoiceXpress
-- **PWA + Android (Capacitor)** — instalável no ecrã principal em iOS/Android ou APK nativo para tablets da loja
-- **Single-tenant por design** — feito para uma loja, não é SaaS
+Register the device intake, track the repair, deliver it back to the customer — all in one app that runs on a machine in your shop and is reachable from any browser on the shop network. Certified invoicing optionally available via InvoiceXpress (Pro module).
 
-## Como funciona
+**Four UI languages included: Portuguese (PT-PT), English, French, Spanish.**
+
+> **Fork of [Reparilo](https://github.com/cranknet/reparilo)** by Bechar Gherbi — adapted for the Portuguese market, with a complete European Portuguese locale and LAN-ready Docker deployment. Renamed as required by the original project's license; the "Reparilo" name is not covered by the MIT license.
+
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/01-dashboard.png" alt="Dashboard — active jobs, daily revenue, repair status board" width="800" />
+</p>
+
+| Intake with digital signature | Job detail & timeline |
+| :---: | :---: |
+| <img src="docs/screenshots/03-intake.png" alt="Intake form" width="390" /> | <img src="docs/screenshots/09-job-detail.png" alt="Job detail" width="390" /> |
+| **Counter POS** | **Parts inventory** |
+| <img src="docs/screenshots/04-pos.png" alt="Point of sale" width="390" /> | <img src="docs/screenshots/05-inventory.png" alt="Inventory" width="390" /> |
+
+<p align="center">
+  <b>Customer-facing tracking page</b> — the customer scans a QR code on the receipt and follows the repair on their phone, no app to install:<br/><br/>
+  <img src="docs/screenshots/10-customer-tracking.png" alt="Public tracking page" width="600" />
+</p>
+
+## Features
+
+- **Complete repair workflow** — intake → diagnosis → repair → delivery, with photos, status timeline and customer notifications
+- **Full intake record** — functional checklist, unlock code/pattern and the customer's digital signature on the receipt
+- **QR receipts & tracking** — the customer scans a QR code and follows the repair status on their phone, nothing to install
+- **Public pre-check** — a form customers use to request a quote/diagnosis online; requests land in the shop queue
+- **Quotes** — versioned, with accepted/declined responses on record
+- **Counter POS** — sell parts and accessories, cash sessions and payments
+- **Returns & warranties** — separate flows for rework and warranty claims
+- **Trade-in (used devices)** — legally required seller details and device grading
+- **Parts & stock** — inventory with low-stock alerts and restock suggestions
+- **Printing** — receipts and labels on network ESC/POS thermal printers (58/80 mm) or A4
+- **Reports & exports** — sales, repairs and margins per period; CSV export; monthly revenue goal
+- **OficinaDiag** — free Windows app that reads a phone over USB (battery, screen, sensors) and sends the diagnostic to the shop
+- **AI assistant** (optional) — bring your own OpenAI key; stored encrypted with AES-256 at rest
+- **WhatsApp/email notifications** (optional) — editable templates in settings
+- **Pro modules** (optional, via OficinaOS Cloud) — public customer portal, WhatsApp bot, SMS channel, AI reports and InvoiceXpress invoicing
+- **PWA + Android (Capacitor)** — installable on the home screen on iOS/Android, or a native APK for shop tablets
+- **Single-tenant by design** — built for one shop, not a SaaS
+
+## How it works
 
 ```
-Browser (PC, tablet, telemóvel na rede da loja)
+Browser (PC, tablet, phone on the shop network)
         ↓
    OficinaOS (Fastify + React)
         ↓
    PostgreSQL
 ```
 
-Uma máquina corre o servidor e a base de dados; todos os outros dispositivos acedem pelo browser. Funciona sem internet para o uso principal — AI e WhatsApp são opcionais.
+One machine runs the server and database; every other device connects through the browser. The core workflows **run without internet** — AI and WhatsApp are optional extras.
 
-## Instalação
+## Installation
 
-### Instalação fácil (Windows) ⭐
+### Easy install (Windows) ⭐
 
-Descarrega o **[OficinaOS-Setup.exe](https://github.com/braindeadpt/OficinaOS/releases/latest)** — um instalador Windows normal: fica como serviço, arranca com o PC, ícone na bandeja, sem Docker nem janelas de consola. Pede administrador só na instalação.
+Download **[OficinaOS-Setup.exe](https://github.com/braindeadpt/OficinaOS/releases/latest)** — a normal Windows installer: runs as a service, starts with the PC, tray icon, no Docker or console windows. Administrator rights only for the install itself.
 
-Alternativas: **[oficinaos-portable.zip](https://github.com/braindeadpt/OficinaOS/releases/latest/download/oficinaos-portable.zip)** (~470 MB, Bun + PostgreSQL embutidos — sem admin, sem instalar nada) ou o **[instalador ZIP Docker](https://github.com/braindeadpt/OficinaOS/releases/latest/download/oficinaos-install.zip)** (`INSTALAR.bat` — para NAS/Linux e quem já usa Docker). Diferenças, backups e restauro: **[INSTALL.md → Instalação portátil](./INSTALL.md#instalação-portátil-sem-docker)**.
+Alternatives: **[oficinaos-portable.zip](https://github.com/braindeadpt/OficinaOS/releases/latest/download/oficinaos-portable.zip)** (~470 MB, Bun + PostgreSQL embedded — no admin, nothing to install) or the **[Docker ZIP installer](https://github.com/braindeadpt/OficinaOS/releases/latest/download/oficinaos-install.zip)** (`INSTALAR.bat` — for NAS/Linux and Docker users). Differences, backups and restore: **[INSTALL.md → Portable install](./INSTALL.md)**.
 
-> O ZIP da release contém só os ficheiros de instalação. Para o código completo: **Code → Download ZIP** (sempre a versão mais recente de `main`).
+> The release ZIP contains only the install files. For the full source: **Code → Download ZIP** (always the latest `main`).
 
-Guia passo a passo completo: **[INSTALL.md](./INSTALL.md)**
+Full step-by-step guide: **[INSTALL.md](./INSTALL.md)**
 
-### Docker manual (recomendado para Linux/Mac)
+### Manual Docker (recommended for Linux/Mac)
 
-Requisitos: [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows/Mac) ou Docker Engine (Linux). Nada mais precisa de ser instalado na máquina.
+Requirements: [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows/Mac) or Docker Engine (Linux). Nothing else needs installing.
 
 ```bash
 git clone https://github.com/braindeadpt/OficinaOS.git
 cd OficinaOS
 
 cp .env.example .env
-# Edita o .env — preenche BETTER_AUTH_SECRET, AI_ENCRYPTION_KEY,
-# COOKIE_SECRET, SETUP_TOKEN e APP_URL (o IP da máquina na rede local).
-# Gera segredos com:
+# Edit .env — fill in BETTER_AUTH_SECRET, AI_ENCRYPTION_KEY,
+# COOKIE_SECRET, SETUP_TOKEN and APP_URL (the machine IP on the LAN).
+# Generate secrets with:
 #   node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"
 
 docker compose up -d --build
-docker compose exec app bun run db:seed   # só na 1ª vez (dados iniciais)
+docker compose exec app bun run db:seed   # first time only (initial data)
 ```
 
-Depois abre `http://<IP-da-máquina>:4000/setup?token=<SETUP_TOKEN>` (o valor que puseste no `.env`) e cria a oficina no ecrã **«Criar a sua oficina»**: nome da loja, o teu nome, utilizador/email e palavra-passe. Não há credenciais pré-definidas. Em Docker o token é sempre preciso (o browser chega ao contentor pela rede do Docker, não como `127.0.0.1`); depois de criado o primeiro utilizador o ecrã deixa de existir.
+Then open `http://<machine-ip>:4000/setup?token=<SETUP_TOKEN>` (the value you set in `.env`) and create your shop on the **"Create your workshop"** screen: shop name, your name, username/email and password. There are no default credentials. Under Docker the token is always required (the browser reaches the container through the Docker network, not as `127.0.0.1`); once the first user exists the setup screen is gone.
 
-### Comandos Docker
+### Docker commands
 
 ```bash
-docker compose up -d        # ligar
-docker compose down         # desligar (os dados ficam nos volumes)
-docker compose logs -f app  # ver logs da app
-docker compose restart app  # reiniciar após mudanças de build
+docker compose up -d        # start
+docker compose down         # stop (data stays in the volumes)
+docker compose logs -f app  # app logs
+docker compose restart app  # restart after build changes
 ```
 
-### Notas de deployment em rede local (HTTP)
+### LAN deployment notes (HTTP)
 
-Este fork inclui patches para funcionar em HTTP simples dentro de uma rede local de confiança (sem TLS): cookies de sessão sem `Secure`, CSP sem `upgrade-insecure-requests`, HSTS desativado.
+This fork includes patches to run over plain HTTP inside a trusted LAN (no TLS): session cookies without `Secure`, CSP without `upgrade-insecure-requests`, HSTS disabled.
 
-- Acede sempre pelo **mesmo URL configurado em `APP_URL`** — misturar `localhost` e IP provoca erros de origem inválida
-- Se expuseres a app fora da rede da loja, **usa HTTPS** — a configuração HTTP é só para LAN privada. A forma mais simples: **[acesso remoto via Cloudflare Tunnel](docs/remote-access.md)**, sem abrir portas e sem IP público
-- Se o IP da máquina mudar, atualiza `APP_URL` no `.env` e corre `docker compose up -d`
+- Always access the app through the **same URL configured in `APP_URL`** — mixing `localhost` and the IP causes invalid-origin errors
+- If you expose the app outside the shop network, **use HTTPS** — the HTTP configuration is for private LANs only. The simplest path: **[remote access via Cloudflare Tunnel](docs/remote-access.md)**, no open ports, no public IP
+- If the machine IP changes, update `APP_URL` in `.env` and run `docker compose up -d`
 
-## Telemóveis e tablets
+## Phones and tablets
 
-A app é responsiva e instalável como **PWA** (ícone no ecrã principal, ecrã cheio) — iPhone, iPad e Android, na rede da loja ou remotamente. Também há configuração **Capacitor** pronta para gerar um APK Android nativo sem Play Store.
+The app is responsive and installable as a **PWA** (home-screen icon, full screen) — iPhone, iPad and Android, on the shop network or remotely. A **Capacitor** configuration is also ready to build a native Android APK without the Play Store.
 
-Guia completo: **[docs/mobile-access.md](docs/mobile-access.md)**
+Full guide: **[docs/mobile-access.md](docs/mobile-access.md)**
 
-## Acesso remoto (opcional)
+## Remote access (optional)
 
-Com o PC da loja ligado, um **Cloudflare Tunnel** gratuito expõe a app em HTTPS — para staff fora da loja e para os links de cliente (tracking, orçamentos, pré-check, recibo/QR de garantia). Sem port-forward, sem IP público, funciona com CGNAT.
+With the shop PC on, a free **Cloudflare Tunnel** exposes the app over HTTPS — for staff outside the shop and for customer links (tracking, quotes, pre-check, warranty receipt/QR). No port-forwarding, no public IP, works behind CGNAT.
 
 ```bash
 # .env
-TUNNEL_TOKEN=eyJh…        # token do túnel (Cloudflare Zero Trust)
-EXTRA_TRUSTED_ORIGINS=https://oficina.oteudominio.pt
+TUNNEL_TOKEN=eyJh…        # tunnel token (Cloudflare Zero Trust)
+EXTRA_TRUSTED_ORIGINS=https://oficina.yourdomain.pt
 ```
 
 ```bash
 docker compose --profile tunnel up -d
 ```
 
-Guia passo a passo: **[docs/remote-access.md](docs/remote-access.md)**
+Step-by-step guide: **[docs/remote-access.md](docs/remote-access.md)**
 
-## Backups e teste de restore (sidecar db-backup)
+## Backups and restore testing (db-backup sidecar)
 
-O compose traz um sidecar `db-backup` que faz dump diário do PostgreSQL (retenção de 14 dias, configurável com `RETENTION_DAYS`) e, com o destino remoto activo, copia cada dump para object storage e verifica o restore semanalmente. Estado visível em **Definições → Loja → Backups**.
+The compose file ships a `db-backup` sidecar that dumps PostgreSQL daily (14-day retention, configurable with `RETENTION_DAYS`) and, with a remote destination enabled, copies each dump to object storage and verifies the restore weekly. Status visible in **Settings → Shop → Backups**.
 
-### Teste de restore numa base de dados real (procedimento local)
+### Restore test on a real database (local procedure)
 
-O ciclo completo — dump → wipe → restore → dados intactos — pode ser reproduzido na tua máquina com Docker em ~5 minutos:
+The full cycle — dump → wipe → restore → data intact — can be reproduced on your machine with Docker in ~5 minutes:
 
 ```bash
 git clone https://github.com/braindeadpt/OficinaOS.git
 cd OficinaOS
-cp .env.example .env    # segredos não são necessários para este teste
+cp .env.example .env    # no secrets needed for this test
 
-# Sobe a base de dados e o sidecar de backups
-# (o sidecar faz um dump no arranque e depois a cada 24h)
+# Start the database and the backup sidecar
+# (the sidecar dumps on start and then every 24h)
 docker compose up -d db db-backup
 
-# Tabela de prova com dados conhecidos
+# Probe table with known data
 docker compose exec db psql -U reparilo -d reparilo \
   -c "CREATE TABLE restore_probe (id serial primary key, marker text);" \
-  -c "INSERT INTO restore_probe (marker) VALUES ('marcador-pre-backup');"
+  -c "INSERT INTO restore_probe (marker) VALUES ('pre-backup-marker');"
 
-# Backup que já inclui a tabela de prova
+# Backup that already includes the probe table
 docker compose exec db-backup /scripts/run-backup.sh
 
-# Destrói os dados (DROP SCHEMA) e restaura o dump
+# Destroy the data (DROP SCHEMA) and restore the dump
 docker compose exec db psql -U reparilo -d reparilo \
   -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
 docker compose exec db-backup /scripts/run-restore.sh \
   "$(docker compose exec -T db-backup sh -c 'ls -1t /backups/oficinaos-*.sql.gz | head -1')"
 
-# Confirma que o marcador sobreviveu ao ciclo
+# Confirm the marker survived the cycle
 docker compose exec db psql -U reparilo -d reparilo \
-  -c "SELECT count(*) FROM restore_probe WHERE marker = 'marcador-pre-backup';"
-# → deve devolver 1
+  -c "SELECT count(*) FROM restore_probe WHERE marker = 'pre-backup-marker';"
+# → must return 1
 ```
 
-> ⚠️ **Nunca apontes o restore para uma base de dados com dados reais** — `run-restore.sh` substitui tudo. O script pausa 10 s antes de destruir dados, a menos que `RESTORE_AUTO_CONFIRM=1` esteja definido (usado pela CI).
+> ⚠️ **Never point the restore at a database with real data** — `run-restore.sh` replaces everything. The script pauses 10 s before destroying data unless `RESTORE_AUTO_CONFIRM=1` is set (used by CI).
 
-### Cópia off-site (object storage via rclone)
+### Off-site copy (object storage via rclone)
 
-No `.env` da instalação, activa o segundo destino e configura o remote do rclone por env-vars (S3, B2, GCS, MinIO…):
+In the installation's `.env`, enable the second destination and configure the rclone remote through env vars (S3, B2, GCS, MinIO…):
 
 ```bash
 BACKUP_REMOTE_ENABLED=true
-BACKUP_RCLONE_REMOTE=s3:oficinaos-backups        # ou gcs:…, b2:…
+BACKUP_RCLONE_REMOTE=s3:oficinaos-backups        # or gcs:…, b2:…
 RCLONE_CONFIG_S3_TYPE=s3
 RCLONE_CONFIG_S3_ACCESS_KEY_ID=...
 RCLONE_CONFIG_S3_SECRET_ACCESS_KEY=...
-# RCLONE_CONFIG_S3_ENDPOINT=...                  # só para MinIO/R2
+# RCLONE_CONFIG_S3_ENDPOINT=...                  # only for MinIO/R2
 ```
 
-O que acontece no sidecar, por backup diário:
+What the sidecar does per daily backup:
 
-1. Dump local + retenção (como sempre);
-2. `rclone copyto` do dump para o bucket + heartbeat `last-remote-copy.txt`;
-3. Passa a retenção remota (`--min-age 14d`);
-4. Uma vez por semana (`RESTORE_CHECK_INTERVAL_DAYS`, default 7): descarrega o dump mais recente do bucket e restaura-o na base de dados descartável `restore_check` — **a base de dados live nunca é tocada**. O resultado fica no heartbeat `last-restore-check.txt`.
+1. Local dump + retention (as always);
+2. `rclone copyto` of the dump to the bucket + `last-remote-copy.txt` heartbeat;
+3. Remote retention (`--min-age 14d`);
+4. Once a week (`RESTORE_CHECK_INTERVAL_DAYS`, default 7): downloads the newest dump from the bucket and restores it into the disposable `restore_check` database — **the live database is never touched**. The result lands in the `last-restore-check.txt` heartbeat.
 
-Falha da cópia remota ou da verificação nunca invalida o dump local; os indicadores da UI (cópia remota / restore verificado) ficam "atrasados" a vermelho até a próxima execução bem-sucedida. O job **DB backup/restore round-trip** da CI exercita esta cadeia completa contra um endpoint S3 real em cada PR.
+A failing remote copy or verification never invalidates the local dump; the UI indicators (remote copy / verified restore) stay red "overdue" until the next successful run. The **DB backup/restore round-trip** CI job exercises this entire chain against a real S3 endpoint on every PR.
 
-### Restore manual (desastre)
+### Manual restore (disaster)
 
 ```bash
 docker compose exec -T db-backup /scripts/run-restore.sh oficinaos-<stamp>.sql.gz
 ```
 
-O script lista os ficheiros disponíveis com `docker compose exec db-backup ls -1t /backups`. Em produção, confirma sempre o nome do ficheiro antes do Enter — o restore substitui a base de dados inteira.
+The script lists available files with `docker compose exec db-backup ls -1t /backups`. In production, always confirm the file name before hitting Enter — the restore replaces the entire database.
 
-## Configuração
+## Configuration
 
-Todas as variáveis de ambiente estão documentadas no [`.env.example`](./.env.example). Em produção o servidor recusa arrancar se faltarem segredos obrigatórios.
+Every environment variable is documented in [`.env.example`](./.env.example). In production the server refuses to boot when mandatory secrets are missing.
 
-| Variável | Descrição |
+| Variable | Description |
 |---|---|
-| `APP_URL` | URL público da app (ex.: `http://192.168.1.33:4000`) |
-| `DATABASE_URL` | Ligação PostgreSQL (definida pelo compose) |
-| `BETTER_AUTH_SECRET` | Segredo de sessões (gerar aleatório) |
-| `SETUP_TOKEN` | Opcional — código de uso único para o ecrã «Criar a sua oficina» a partir de outro aparelho (Docker/servidor). Sem ele, só funciona em `localhost` |
-| `SEED_ADMIN_PASSWORD` | Só dev/CI/E2E — se definido, o `db:seed` cria o utilizador `admin` (com troca obrigatória) quando a base de dados não tem utilizadores |
-| `SEED_ADMIN_EMAIL` | Opcional, com o anterior — email do admin semeado (por omissão `admin@oficinaos.local`) |
-| `AI_ENCRYPTION_KEY` | Chave AES-256 para guardar a OpenAI key |
-| `OPENAI_API_KEY` | Opcional — assistente IA |
-| `WHATSAPP_*`, `EMAIL_*` | Opcional — notificações ao cliente |
-| `DEMO_MODE` | `true` ativa a demo pública (ver secção seguinte) — **nunca numa instalação real** |
+| `APP_URL` | Public app URL (e.g. `http://192.168.1.33:4000`) |
+| `DATABASE_URL` | PostgreSQL connection (set by compose) |
+| `BETTER_AUTH_SECRET` | Session secret (generate randomly) |
+| `SETUP_TOKEN` | Optional — one-time code for the "Create your workshop" screen from another device (Docker/server). Without it, only works on `localhost` |
+| `SEED_ADMIN_PASSWORD` | Dev/CI/E2E only — when set, `db:seed` creates the `admin` user (with forced password change) when the database has no users |
+| `SEED_ADMIN_EMAIL` | Optional, with the above — seeded admin email (defaults to `admin@oficinaos.local`) |
+| `AI_ENCRYPTION_KEY` | AES-256 key for storing the OpenAI key |
+| `OPENAI_API_KEY` | Optional — AI assistant |
+| `WHATSAPP_*`, `EMAIL_*` | Optional — customer notifications |
+| `DEMO_MODE` | `true` enables the public demo (next section) — **never on a real install** |
 
-## Demo pública (`demo.oficinaos.app`)
+## Public demo (`demo.oficinaos.app`)
 
-`DEMO_MODE=true` transforma a instalação numa demo pública: o visitante carrega em «Experimentar a demo», entra numa oficina fictícia já preenchida (clientes, reparações, stock, vendas — tudo inventado) e usa tudo sem instalar nada.
+`DEMO_MODE=true` turns the installation into a public demo: the visitor clicks "Try the demo", enters a pre-filled fictional shop (customers, repairs, stock, sales — all invented) and uses everything without installing anything.
 
-**O que muda com `DEMO_MODE=true`:**
+**What changes with `DEMO_MODE=true`:**
 
-- `POST /api/demo/login` cria uma sessão de dono de oficina sem password; `/setup` fica desativado e um banco vazio é semeado automaticamente no arranque
-- O servidor **recusa arrancar** se algum segredo real estiver definido — por prefixo (`OPENAI_`, `EMAIL_`, `WHATSAPP_`, `SMTP_`, `META_`, `EVOLUTION_`, `OFICINAOS_CLOUD_`, `CLOUD_`, `GITHUB_`, `INVOICEXPRESS_`, `IX_`, `TRADE_`, `MARKET_`, `S3_`, `R2_`, `AWS_`, `BACKUP_`, `SEED_ADMIN_`, `SETUP_TOKEN`) **ou por sufixo** (`*_TOKEN`, `*_SECRET`, `*_PASSWORD`, `*_PASS`, `*_KEY`, `*_API_KEY`, `*_APIKEY`, `*_CREDENTIALS`, `*_DSN`). Únicas exceções: `BETTER_AUTH_SECRET`, `COOKIE_SECRET` e `AI_ENCRYPTION_KEY`, que nunca saem do contentor
-- Tudo o que sai para fora fica desligado **no servidor** (não só na UI): email, WhatsApp/SMS, webhooks, assistente IA, pairing/sync com Cloud e Trade, InvoiceXpress, feedback→GitHub, self-update, impressora ESC/POS, exports
-- Bloqueados com 403: gestão de utilizadores/papéis, alteração de password/email, chaves e integrações, sign-in por credenciais (só `/api/demo/login` cria sessões — falhas nunca bloqueiam a conta demo), importações acima de 50 linhas
-- O guard corre sobre o caminho **descodificado** (variantes URL-encoded como `/api/%75sers/...` são rejeitadas antes do router)
-- Uploads: máximo 1 MB por ficheiro, só imagens (validação MIME + magic bytes), quota total de 200 MB
-- Rate limits mais apertados (login demo 20/15min por IP; escritas ≤60/min) — atrás do cloudflared a chave é `CF-Connecting-IP`, para que todos os visitantes não partilhem o IP do túnel. O header só é honrado quando o peer é privado/edge (o conector cloudflared ou o proxy) ou com `DEMO_TRUST_CF_CONNECTING_IP=true` — **a origem tem de estar acessível apenas via cloudflared** (ou o proxy da edge tem de sobrepor/remover o header), senão quem chegar direto à origem forja o header e ganha orçamento ilimitado
-- Os schedulers externos (Cloud poller, remarketing, outbox) nem arrancam
-- Uma faixa fixa no topo avisa «Demo — os dados são fictícios e apagados de hora a hora» com o CTA «Instalar na minha oficina»
+- `POST /api/demo/login` creates a shop-owner session with no password; `/setup` is disabled and an empty database is seeded automatically on boot
+- The server **refuses to boot** if any real secret is set — by prefix (`OPENAI_`, `EMAIL_`, `WHATSAPP_`, `SMTP_`, `META_`, `EVOLUTION_`, `OFICINAOS_CLOUD_`, `CLOUD_`, `GITHUB_`, `INVOICEXPRESS_`, `IX_`, `TRADE_`, `MARKET_`, `S3_`, `R2_`, `AWS_`, `BACKUP_`, `SEED_ADMIN_`, `SETUP_TOKEN`) **or by suffix** (`*_TOKEN`, `*_SECRET`, `*_PASSWORD`, `*_PASS`, `*_KEY`, `*_API_KEY`, `*_APIKEY`, `*_CREDENTIALS`, `*_DSN`). The only exceptions: `BETTER_AUTH_SECRET`, `COOKIE_SECRET` and `AI_ENCRYPTION_KEY`, which never leave the container
+- Everything outbound is disabled **on the server** (not just the UI): email, WhatsApp/SMS, webhooks, AI assistant, Cloud and Trade pairing/sync, InvoiceXpress, feedback→GitHub, self-update, ESC/POS printer, exports
+- Blocked with 403: user/role management, password/email change, keys and integrations, credential sign-in (only `/api/demo/login` creates sessions — failures never lock the demo account), imports above 50 rows
+- The guard runs on the **decoded** path (URL-encoded variants like `/api/%75sers/...` are rejected before the router)
+- Uploads: 1 MB max per file, images only (MIME + magic bytes validation), 200 MB total quota
+- Tighter rate limits (demo login 20/15min per IP; writes ≤60/min) — behind cloudflared the key is `CF-Connecting-IP`, so visitors don't all share the tunnel IP. The header is only honored when the peer is private/edge (the cloudflared connector or proxy) or with `DEMO_TRUST_CF_CONNECTING_IP=true` — **the origin must be reachable only through cloudflared** (or the edge proxy must overwrite/strip the header), otherwise direct clients forge the header and get unlimited budget
+- External schedulers (Cloud poller, remarketing, outbox) never start
+- A fixed banner at the top warns "Demo — the data is fictional and wiped every hour" with the "Install it in my shop" CTA
 
-**Seed:** `bun run db:seed:demo` gera o dataset determinístico (PRNG com seed fixa — mesma forma em cada execução, datas relativas a "agora") e grava o snapshot em `demo-snapshot.json` (ou `DEMO_DUMP_PATH`). Como segunda guarda, `seedDemo`/`demo:reset` recusam correr sobre uma BD cujo nome não contenha `demo`.
+**Seed:** `bun run db:seed:demo` generates the deterministic dataset (fixed-seed PRNG — same shape on every run, dates relative to "now") and writes the snapshot to `demo-snapshot.json` (or `DEMO_DUMP_PATH`). As a second guard, `seedDemo`/`demo:reset` refuse to run against a database whose name doesn't contain `demo`.
 
-**Reset horário:** o timer da infra corre `docker exec demo-web bun run demo:reset` — regenera o dump (datas sempre frescas), faz TRUNCATE+replay **numa única transação** (`lock_timeout=10s`, timeout 60s) e limpa o conteúdo dos uploads. A app continua a responder durante o reset — os leitores veem o estado antes ou depois, nunca uma base a meio; o comando é idempotente e corre inteiramente dentro do contentor.
+**Hourly reset:** the infra timer runs `docker exec demo-web bun run demo:reset` — regenerates the dump (always-fresh dates), TRUNCATE+replay **in a single transaction** (`lock_timeout=10s`, 60 s timeout) and wipes upload contents. The app keeps responding during the reset — readers see the before or after state, never a half-written database; the command is idempotent and runs entirely inside the container.
 
-**Deploy de exemplo:** [`compose.demo.yaml`](./compose.demo.yaml) — app + Postgres com imagem de tag fixa, `read_only` + `tmpfs /tmp`, `cap_drop ALL`, `no-new-privileges`, limites de memória/CPU/PIDs, rede `internal` selada e **nenhuma porta publicada** (só a rede `edge`), com [`.env.demo.example`](./.env.demo.example). O reverse proxy na edge aponta `demo.oficinaos.app` para `demo-web:4000`.
+**Example deployment:** [`compose.demo.yaml`](./compose.demo.yaml) — app + Postgres with pinned image tags, `read_only` + `tmpfs /tmp`, `cap_drop ALL`, `no-new-privileges`, memory/CPU/PID limits, sealed `internal` network and **no published ports** (only the `edge` network), with [`.env.demo.example`](./.env.demo.example). The reverse proxy on the edge points `demo.oficinaos.app` at `demo-web:4000`.
 
-## Desenvolvimento local (sem Docker)
+## Local development (no Docker)
 
-Requisitos: [Bun](https://bun.sh) `1.3.13` e PostgreSQL.
+Requirements: [Bun](https://bun.sh) `1.3.13` and PostgreSQL.
 
 ```bash
 bun install
-cp .env.example .env          # preencher segredos
+cp .env.example .env          # fill in secrets
 bun run db:migrate
 bun run db:seed
 bun run dev                   # http://localhost:5173
@@ -242,23 +278,36 @@ bun run fix          # auto-fix lint
 bun run db:studio    # Prisma Studio
 ```
 
-## Traduções e i18n
+## Translations and i18n
 
-Os locales ficam em `src/i18n/locales/` (`pt`, `en`, `fr`). Fluxo para strings novas:
+Locales live in `src/i18n/locales/` (`pt`, `en`, `fr`, `es`). Workflow for new strings:
 
-1. Adiciona a key em `src/i18n/locales/en.json`
-2. `bun run sync-locales` — sincroniza e auto-traduz os outros locales
-3. `python scripts/fix-pt-pt.py` — normaliza o português gerado para PT-PT (o Google tende para pt-BR)
+1. Add the key in `src/i18n/locales/en.json`
+2. `bun run sync-locales` — syncs and auto-translates the other locales
+3. `python scripts/fix-pt-pt.py` — normalizes the generated Portuguese to PT-PT (Google leans towards pt-BR)
 
-Strings hardcoded na UI são rejeitadas em review.
+Hardcoded UI strings are rejected in review.
 
-## Contribuir
+## The OficinaOS ecosystem
 
-Vê [CONTRIBUTING.md](./CONTRIBUTING.md). Resumindo: abre um issue antes de PRs grandes, corre `bun run check` e `bun run test`, e mantém cada PR focado numa só coisa.
+This repo is the shop app — one of **4 interconnected repositories**:
 
-## Segurança
+| Repo | What it is |
+|---|---|
+| **[OficinaOS](https://github.com/braindeadpt/OficinaOS)** (this one) | The shop app — MIT, self-hosted, free forever |
+| **[oficinaos-cloud](https://github.com/braindeadpt/oficinaos-cloud)** | Pro entitlement server — modules are gated server-side, nothing to crack client-side |
+| **[oficinaos-website](https://github.com/braindeadpt/oficinaos-website)** | Marketing site and user-facing documentation |
+| **[oficinaos-diag](https://github.com/braindeadpt/oficinaos-diag)** | Free Windows USB diagnostics tool for shops |
 
-Encontraste uma vulnerabilidade? Vê [SECURITY.md](./SECURITY.md) — **não** abras um issue público.
+The canonical map — data flows, module IDs, where everything lives — is [docs/ecosystem.md](./docs/ecosystem.md).
+
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md). In short: open an issue before large PRs, run `bun run check` and `bun run test`, and keep each PR focused on one thing.
+
+## Security
+
+Found a vulnerability? See [SECURITY.md](./SECURITY.md) — **do not** open a public issue.
 
 ## Code signing policy
 
@@ -270,12 +319,6 @@ Free code signing provided by [SignPath.io](https://signpath.io/), certificate b
   - **Approvers:** [@braindeadpt](https://github.com/braindeadpt) (every release signing request requires manual approval)
 - **Privacy:** This program will not transfer any user or shop data to other networked systems unless specifically requested by the user or the person installing or operating it. When an administrator opens the dashboard, the app performs a read-only update check against GitHub Releases (`api.github.com`, no telemetry or shop data sent). All other external integrations (remote access tunnel, WhatsApp/SMS notifications, AI assistant, OficinaOS Cloud) are optional, disabled by default, and documented in [docs/privacy-and-data.md](./docs/privacy-and-data.md).
 
-## Licença
+## License
 
-[MIT](./LICENSE) © 2026 Bechar Gherbi (projeto original), alterações © braindeadpt. O nome "Reparilo" pertence ao autor original e não está licenciado — este fork usa o nome **OficinaOS**.
-
----
-
-## English summary
-
-**OficinaOS** is a Portuguese-focused fork of [Reparilo](https://github.com/cranknet/reparilo): single-location phone repair shop management (intake → repair → return), QR customer tracking, parts inventory, optional AI/WhatsApp — no invoicing. This fork adds a full **pt-PT locale** and a **Docker Compose deployment for LAN use over HTTP**. See the sections above for setup; all commands are the same. MIT licensed; renamed per the upstream license terms.
+[MIT](./LICENSE) © 2026 Bechar Gherbi (original project), changes © braindeadpt. The "Reparilo" name belongs to the original author and is not licensed — this fork uses the name **OficinaOS**.
