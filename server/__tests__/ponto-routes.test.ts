@@ -12,18 +12,33 @@ interface SettingsRow {
   cloudEntitlements: unknown;
   cloudShopTokenEncrypted: string | null;
   cloudSyncedAt: Date | null;
+  pontoExternalAutoApprove: boolean;
+  pontoExternalPhotoRequired: boolean;
+  pontoGeoLat: number | null;
+  pontoGeoLng: number | null;
+  pontoRadiusM: number;
   pontoSmsNumber: string | null;
   pontoWaNumber: string | null;
+  timezone: string | null;
 }
 
-function fakePrisma(overrides: Partial<SettingsRow> = {}) {
+function fakePrisma(
+  overrides: Partial<SettingsRow> = {},
+  staffUsers: unknown[] = []
+) {
   const row: SettingsRow = {
     cloudApiUrl: CLOUD_URL,
     cloudEntitlements: ["ponto"],
     cloudShopTokenEncrypted: encryptSecret("shop-token-secret"),
     cloudSyncedAt: new Date(),
+    pontoExternalAutoApprove: true,
+    pontoExternalPhotoRequired: false,
+    pontoGeoLat: 38.72,
+    pontoGeoLng: -9.14,
+    pontoRadiusM: 100,
     pontoSmsNumber: "+351210000000",
     pontoWaNumber: "+351912345678",
+    timezone: "Europe/Lisbon",
     ...overrides,
   };
   return {
@@ -40,7 +55,7 @@ function fakePrisma(overrides: Partial<SettingsRow> = {}) {
     },
     timeEntryValidation: { create: vi.fn(async () => ({})) },
     user: {
-      findMany: vi.fn(async () => []),
+      findMany: vi.fn(async () => staffUsers),
       findUnique: vi.fn(async () => null),
     },
   };
@@ -175,7 +190,7 @@ describe("ponto — GET /config", () => {
 });
 
 describe("ponto — PUT /config", () => {
-  it("pushes the local wa/sms numbers to the cloud", async () => {
+  it("pushes the full config (numbers, geo, flags, timezone, staff) to the cloud", async () => {
     fetchMock.mockReturnValueOnce(cloudJson({ ok: true }));
     const app = buildApp(fakePrisma());
     const res = await app.inject({ method: "PUT", url: "/api/ponto/config" });
@@ -184,9 +199,59 @@ describe("ponto — PUT /config", () => {
     expect(url).toBe(`${CLOUD_URL}/ponto/config`);
     expect(init.method).toBe("PUT");
     expect(JSON.parse(init.body)).toEqual({
+      externalAutoApprove: true,
+      photoRequired: false,
+      shopGeo: { lat: 38.72, lng: -9.14, radiusM: 100 },
       smsNumber: "+351210000000",
+      staff: [],
+      timezone: "Europe/Lisbon",
       waNumber: "+351912345678",
     });
+  });
+
+  it("shopGeo segue null quando a geo não está configurada", async () => {
+    fetchMock.mockReturnValueOnce(cloudJson({ ok: true }));
+    const app = buildApp(fakePrisma({ pontoGeoLat: null, pontoGeoLng: null }));
+    const res = await app.inject({ method: "PUT", url: "/api/ponto/config" });
+    expect(res.statusCode).toBe(200);
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init.body).shopGeo).toBeNull();
+  });
+
+  it("staff inclui internos e externos com phoneE164 (a Cloud recusa telefones não registados)", async () => {
+    fetchMock.mockReturnValueOnce(cloudJson({ ok: true }));
+    const staff = [
+      {
+        externalWork: false,
+        phoneE164: "+351912345678",
+        pontoSmsAllowed: true,
+      },
+      {
+        externalWork: true,
+        phoneE164: "+351967654321",
+        pontoSmsAllowed: false,
+      },
+    ];
+    const app = buildApp(fakePrisma({}, staff));
+    const res = await app.inject({ method: "PUT", url: "/api/ponto/config" });
+    expect(res.statusCode).toBe(200);
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init.body).staff).toEqual([
+      { externalWork: false, phone: "+351912345678", smsAllowed: true },
+      { externalWork: true, phone: "+351967654321", smsAllowed: false },
+    ]);
+  });
+
+  it("funcionários sem phoneE164 ficam fora da lista staff", async () => {
+    fetchMock.mockReturnValueOnce(cloudJson({ ok: true }));
+    const staff = [
+      { externalWork: false, phoneE164: null, pontoSmsAllowed: false },
+    ];
+    const app = buildApp(fakePrisma({}, staff));
+    const res = await app.inject({ method: "PUT", url: "/api/ponto/config" });
+    expect(res.statusCode).toBe(200);
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init.body).staff).toEqual([]);
   });
 
   it("502 CLOUD_UNREACHABLE when the cloud does not answer", async () => {
@@ -211,6 +276,74 @@ describe("ponto — PUT /config", () => {
     const res = await app.inject({ method: "PUT", url: "/api/ponto/config" });
     expect(res.statusCode).toBe(502);
     expect(res.json().code).toBe("CLOUD_REQUEST_FAILED");
+  });
+});
+
+describe("ponto — POST /regenerate-qr", () => {
+  it("chama a Cloud e devolve o qrId novo", async () => {
+    fetchMock.mockReturnValueOnce(
+      cloudJson({ ok: true, qrId: "ab12cd34ef56ab12cd34ef56ab12cd34" })
+    );
+    const app = buildApp(fakePrisma());
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/ponto/regenerate-qr",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      ok: true,
+      qrId: "ab12cd34ef56ab12cd34ef56ab12cd34",
+    });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${CLOUD_URL}/ponto/regenerate-qr`);
+    expect(init.method).toBe("POST");
+    expect(init.headers.authorization).toBe("Bearer shop-token-secret");
+  });
+
+  it("502 CLOUD_UNREACHABLE quando a Cloud não responde", async () => {
+    fetchMock.mockRejectedValueOnce(new Error("net down"));
+    const app = buildApp(fakePrisma());
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/ponto/regenerate-qr",
+    });
+    expect(res.statusCode).toBe(502);
+    expect(res.json().code).toBe("CLOUD_UNREACHABLE");
+  });
+
+  it("402 CLOUD_MODULE_REQUIRED quando a Cloud recusa o entitlement", async () => {
+    fetchMock.mockReturnValueOnce(cloudJson({ error: "nf" }, 402));
+    const app = buildApp(fakePrisma());
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/ponto/regenerate-qr",
+    });
+    expect(res.statusCode).toBe(402);
+    expect(res.json().code).toBe("CLOUD_MODULE_REQUIRED");
+  });
+
+  it("falhas restantes mapeiam para CLOUD_REQUEST_FAILED", async () => {
+    fetchMock.mockReturnValueOnce(cloudJson({ error: "boom" }, 500));
+    const app = buildApp(fakePrisma());
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/ponto/regenerate-qr",
+    });
+    expect(res.statusCode).toBe(502);
+    expect(res.json().code).toBe("CLOUD_REQUEST_FAILED");
+  });
+
+  it("400 CLOUD_NOT_PAIRED sem token cloud", async () => {
+    const app = buildApp(
+      fakePrisma({ cloudApiUrl: null, cloudShopTokenEncrypted: null })
+    );
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/ponto/regenerate-qr",
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("CLOUD_NOT_PAIRED");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 

@@ -17,6 +17,7 @@ import { dashboardScope } from "../middlewares/dashboard-scope.js";
 import { requirePermission } from "../middlewares/rbac.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import { cloudFetch } from "../services/cloud.service.js";
+import { pushPontoCloudConfig } from "../services/ponto/config-sync.js";
 import {
   createManualEntry,
   createValidation,
@@ -51,10 +52,6 @@ function shopTz(req: FastifyRequest): string {
 
 interface PontoAuth {
   apiUrl: string;
-  settings: {
-    pontoSmsNumber: string | null;
-    pontoWaNumber: string | null;
-  };
   token: string;
 }
 
@@ -75,10 +72,6 @@ async function requirePonto(prisma: PrismaClient): Promise<PontoAuth> {
   }
   return {
     apiUrl: settings.cloudApiUrl,
-    settings: {
-      pontoSmsNumber: settings.pontoSmsNumber,
-      pontoWaNumber: settings.pontoWaNumber,
-    },
     token: decryptSecret(settings.cloudShopTokenEncrypted),
   };
 }
@@ -151,20 +144,14 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
     {
       preHandler: [requirePermission({ settings: ["edit"] })],
       schema: {
-        summary: "Push the local ponto WhatsApp/SMS numbers to the cloud",
+        summary:
+          "Push the full ponto config (numbers, geo, flags, timezone, staff) to the cloud",
         tags: ["ponto"],
       },
     },
     async (req, reply) => {
-      const { apiUrl, settings, token } = await requirePonto(app.prisma);
-      const res = await cloudFetch(apiUrl, "/ponto/config", {
-        body: {
-          smsNumber: settings.pontoSmsNumber,
-          waNumber: settings.pontoWaNumber,
-        },
-        method: "PUT",
-        token,
-      }).catch(() => null);
+      await requirePonto(app.prisma);
+      const res = await pushPontoCloudConfig(app.prisma, req.log);
       if (!res) {
         throw new AppError("CLOUD_UNREACHABLE");
       }
@@ -185,6 +172,39 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
       ).catch((err) =>
         req.log.warn({ err }, "evolution webhook register failed")
       );
+      return reply.send(
+        res.body && typeof res.body === "object" ? res.body : { ok: true }
+      );
+    }
+  );
+
+  // Regenera o QR aleatório na Cloud — invalida o QR impresso anterior,
+  // por isso a UI pede confirmação antes de chamar esta rota.
+  app.post(
+    "/regenerate-qr",
+    {
+      preHandler: [requirePermission({ settings: ["edit"] })],
+      schema: {
+        summary:
+          "Regenerate the random ponto QR id (invalidates the printed sheet)",
+        tags: ["ponto"],
+      },
+    },
+    async (_req, reply) => {
+      const { apiUrl, token } = await requirePonto(app.prisma);
+      const res = await cloudFetch(apiUrl, "/ponto/regenerate-qr", {
+        method: "POST",
+        token,
+      }).catch(() => null);
+      if (!res) {
+        throw new AppError("CLOUD_UNREACHABLE");
+      }
+      if (res.status === 402) {
+        throw new AppError("CLOUD_MODULE_REQUIRED");
+      }
+      if (!res.ok) {
+        throw new AppError("CLOUD_REQUEST_FAILED");
+      }
       return reply.send(
         res.body && typeof res.body === "object" ? res.body : { ok: true }
       );

@@ -1314,6 +1314,11 @@ async function finalizePonto(
     return;
   }
 
+  // Contrato WP0.1: a Cloud lê geo/raio, flags de externos e "tem
+  // entrada hoje" da configuração autoritativa (PUT /ponto/config) —
+  // esses campos deixaram de seguir no corpo do evaluate. O gate de geo
+  // acima mantém-se lógica local: sem geo configurada a marcação nem
+  // chega a ser avaliada.
   const result = await evaluatePontoMark(ctx.prisma, ctx.log, {
     type: args.command,
     transport,
@@ -1322,18 +1327,6 @@ async function finalizePonto(
     messageAt: args.messageAt,
     ...(args.location ? { location: args.location } : {}),
     hasPhoto: args.hasPhoto,
-    photoRequired: settings.pontoExternalPhotoRequired,
-    shopGeo: {
-      lat: geoLat,
-      lng: geoLng,
-      radiusM: settings.pontoRadiusM,
-    },
-    user: {
-      externalWork: staff.user.externalWork,
-      smsAllowed: staff.user.pontoSmsAllowed,
-    },
-    externalAutoApprove: settings.pontoExternalAutoApprove,
-    todayHasEntry: args.todayHasEntry,
   });
 
   if (!result) {

@@ -459,11 +459,13 @@ describe("fluxo ENTRADA staff (QR + localização)", () => {
       type: "ENTRADA",
     });
     expect(body.location).toMatchObject({ lat: 38.72, lng: -9.14 });
-    expect(body.shopGeo).toMatchObject({
-      lat: 38.72,
-      lng: -9.14,
-      radiusM: 100,
-    });
+    // Contrato WP0.1: geo/raio, flags e "tem entrada hoje" são lidos pela
+    // Cloud da configuração autoritativa — não seguem no payload.
+    expect(body.shopGeo).toBeUndefined();
+    expect(body.user).toBeUndefined();
+    expect(body.externalAutoApprove).toBeUndefined();
+    expect(body.photoRequired).toBeUndefined();
+    expect(body.todayHasEntry).toBeUndefined();
     expect(mocks.recordPontoEntry).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -569,8 +571,8 @@ describe("fluxo PAUSA/VOLTEI/SAIDA", () => {
     expect(evaluateBody()).toMatchObject({
       hasPhoto: false,
       type: "PAUSA",
-      todayHasEntry: true,
     });
+    expect(evaluateBody().todayHasEntry).toBeUndefined();
     expect(mocks.recordPontoEntry).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ status: "POR_VALIDAR", type: "PAUSA" })

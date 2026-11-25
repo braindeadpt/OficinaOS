@@ -12,6 +12,7 @@ interface PontoStatus {
 
 interface PontoConfig {
   configured?: boolean;
+  qrId?: string;
   slug?: string;
   smsNumber?: string | null;
   waNumber?: string | null;
@@ -50,15 +51,18 @@ async function loadPontoQr(): Promise<PontoQrState> {
   ]);
   const config = configRes.data;
   const shop = shopRes.data;
+  // qrId (aleatório, WP0.2) é o identificador público atual — o slug
+  // legado só serve de fallback para instalações ainda não migradas.
+  const qrKey = config.qrId ?? config.slug;
   if (
     !statusRes.data.enabled ||
     config.configured === false ||
-    !config.slug ||
+    !qrKey ||
     !shop.cloudApiUrl
   ) {
     return { kind: "unavailable" };
   }
-  const url = `${shop.cloudApiUrl.replace(TRAILING_SLASHES, "")}/ponto/${config.slug}`;
+  const url = `${shop.cloudApiUrl.replace(TRAILING_SLASHES, "")}/ponto/${qrKey}`;
   const qrUrl = await QRCode.toDataURL(url, {
     margin: 1,
     width: 640,
@@ -75,9 +79,10 @@ async function loadPontoQr(): Promise<PontoQrState> {
 
 /**
  * Folha A5 para imprimir o QR fixo do livro de ponto. O QR aponta para a
- * página pública da Cloud (`<apiUrl>/ponto/<slug>`) — o slug vem de
- * GET /api/ponto/config e os números exibidos são os que a Cloud guardou
- * (fallback para as definições locais se a Cloud ainda não os devolver).
+ * página pública da Cloud (`<apiUrl>/ponto/<qrId>`) — o qrId aleatório
+ * vem de GET /api/ponto/config (slug legado como fallback) e os números
+ * exibidos são os que a Cloud guardou (fallback para as definições
+ * locais se a Cloud ainda não os devolver).
  */
 export default function PontoQrPage() {
   const { t } = useTranslation();

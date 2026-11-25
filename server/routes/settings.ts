@@ -48,6 +48,7 @@ import {
   pairEvolutionInstance,
   setEvolutionWebhook,
 } from "../services/evolution.service.js";
+import { pushPontoCloudConfig } from "../services/ponto/config-sync.js";
 import {
   getAiSettings,
   getInvoicingSettings,
@@ -204,7 +205,15 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
           ),
         });
       }
-      return reply.send(await pairWithCloud(app.prisma, parsed.data, app.log));
+      const status = await pairWithCloud(app.prisma, parsed.data, app.log);
+      // Ponto: empurra a configuração completa logo no pairing — sem isto
+      // a Cloud só conhecia a escala de staff quando o dono voltasse a
+      // gravar as definições do ponto. Best-effort: o pairing já foi
+      // concluído e o arranque seguinte torna a tentar.
+      await pushPontoCloudConfig(app.prisma, app.log).catch((err) =>
+        app.log.warn({ err }, "ponto config sync no pairing falhou")
+      );
+      return reply.send(status);
     }
   );
 
