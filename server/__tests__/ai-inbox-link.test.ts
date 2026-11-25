@@ -235,9 +235,9 @@ describe("ai-inbox link — idempotência e cancelamento", () => {
 
   it("falha a revalidar a conta no replay mantém a cache e não re-executa", async () => {
     const frame = {
-      args: { texto: "olá" },
+      args: { conversaId: "conv-1", texto: "olá" },
       idempotencyKey: "test-key-replay-db-error",
-      tool: "criar_rascunho",
+      tool: "rascunhar_resposta",
       userId: "u-owner",
     };
     await handleCall(app, "https://cloud.example", "tok", {
