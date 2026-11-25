@@ -1185,6 +1185,18 @@ describe("SAIDA normal após presumida", () => {
       unknown
     >;
     expect(entry.correctsId).toBeNull();
+    // A query tem de pedir a decisão MAIS RECENTE (desc, take 1) —
+    // sem esta asserção o teste passava mesmo com ordenação errada.
+    const q = mocks.timeEntryFindMany.mock.calls[0]?.[0] as {
+      select: Record<string, unknown>;
+    };
+    expect(q.select).toMatchObject({
+      validations: {
+        orderBy: { at: "desc" },
+        select: { decision: true },
+        take: 1,
+      },
+    });
   });
 
   it("reentrada recusada (mais recente) não abre turno — SAIDA corrige a presumida", async () => {
