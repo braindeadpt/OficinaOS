@@ -161,9 +161,11 @@ Outbound: evento → notification-dispatch → outbox →
   POST http://<telemovel>:8080/message (Basic auth, LAN — sms-gate.app)
 Inbound:  cliente SMS → SMS Gateway for Android → webhook
   POST /api/public/sms/inbound/:token (route-security: CSRF off + rate limit)
-  → só processa com entitlement `sms` fresco (isModuleEnabled — grátis
-    responde 200 sem ler) → handleInboundSms → mesmos intents do bot
-    (bot-intents.ts partilhado com whatsapp-bot) → resposta automática
+  → só processa com `sms` ou `ai-inbox` fresco (isModuleEnabled — grátis
+    responde 200 sem ler, exceto PARAR/STOP) → handleInboundSms →
+    com `sms`: mesmos intents do bot (bot-intents.ts partilhado com
+    whatsapp-bot) → resposta automática; só `ai-inbox`: grava na caixa
+    de entrada, sem resposta
 ```
 
 100% LAN: nada passa pela Cloud nem pela Meta — só sai o SMS pela rede móvel.
