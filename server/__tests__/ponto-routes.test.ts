@@ -214,6 +214,60 @@ describe("ponto — PUT /config", () => {
   });
 });
 
+describe("ponto — POST /regenerate-qr", () => {
+  it("proxies the regeneration to the cloud with the shop token", async () => {
+    fetchMock.mockReturnValueOnce(
+      cloudJson({ ok: true, qrId: "ab".repeat(16) })
+    );
+    const app = buildApp(fakePrisma());
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/ponto/regenerate-qr",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ok: true, qrId: "ab".repeat(16) });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${CLOUD_URL}/ponto/regenerate-qr`);
+    expect(init.method).toBe("POST");
+    expect(init.headers.authorization).toBe("Bearer shop-token-secret");
+  });
+
+  it("502 CLOUD_UNREACHABLE when the cloud does not answer", async () => {
+    fetchMock.mockRejectedValueOnce(new Error("net down"));
+    const app = buildApp(fakePrisma());
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/ponto/regenerate-qr",
+    });
+    expect(res.statusCode).toBe(502);
+    expect(res.json().code).toBe("CLOUD_UNREACHABLE");
+  });
+
+  it("402 CLOUD_MODULE_REQUIRED when the cloud rejects the entitlement", async () => {
+    fetchMock.mockReturnValueOnce(cloudJson({ error: "nf" }, 402));
+    const app = buildApp(fakePrisma());
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/ponto/regenerate-qr",
+    });
+    expect(res.statusCode).toBe(402);
+    expect(res.json().code).toBe("CLOUD_MODULE_REQUIRED");
+  });
+
+  it("400 CLOUD_NOT_PAIRED when the shop has no cloud token", async () => {
+    const app = buildApp(
+      fakePrisma({ cloudApiUrl: null, cloudShopTokenEncrypted: null })
+    );
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/ponto/regenerate-qr",
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("CLOUD_NOT_PAIRED");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
 describe("ponto — gate de escrita sem módulo (WP0.5)", () => {
   const semModulo = { cloudEntitlements: ["portal"] };
 

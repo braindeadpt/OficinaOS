@@ -12,6 +12,7 @@ interface PontoStatus {
 
 interface PontoConfig {
   configured?: boolean;
+  qrId?: string;
   slug?: string;
   smsNumber?: string | null;
   waNumber?: string | null;
@@ -50,15 +51,18 @@ async function loadPontoQr(): Promise<PontoQrState> {
   ]);
   const config = configRes.data;
   const shop = shopRes.data;
+  // WP0.2 — o QR aponta para o qrId aleatório (128 bits); o slug só
+  // serve de fallback enquanto a Cloud deployada não devolver qrId.
+  const qrRef = config.qrId ?? config.slug;
   if (
     !statusRes.data.enabled ||
     config.configured === false ||
-    !config.slug ||
+    !qrRef ||
     !shop.cloudApiUrl
   ) {
     return { kind: "unavailable" };
   }
-  const url = `${shop.cloudApiUrl.replace(TRAILING_SLASHES, "")}/ponto/${config.slug}`;
+  const url = `${shop.cloudApiUrl.replace(TRAILING_SLASHES, "")}/ponto/${qrRef}`;
   const qrUrl = await QRCode.toDataURL(url, {
     margin: 1,
     width: 640,
@@ -82,6 +86,14 @@ async function loadPontoQr(): Promise<PontoQrState> {
 export default function PontoQrPage() {
   const { t } = useTranslation();
   const [state, setState] = useState<PontoQrState>({ kind: "loading" });
+  const [confirming, setConfirming] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  // "unchanged" = a rotação não chegou a acontecer (o QR impresso
+  // continua válido); "unknown" = nem a regeneração nem a releitura
+  // responderam — não se sabe se o QR impresso ainda abre.
+  const [regenError, setRegenError] = useState<"unchanged" | "unknown" | null>(
+    null
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -101,6 +113,46 @@ export default function PontoQrPage() {
     };
   }, []);
 
+  // WP0.2 — regenerar invalida o QR anterior de imediato: os impressos
+  // deixam de abrir a página e é preciso imprimir outra vez. Daí a
+  // confirmação em dois passos com o aviso explícito.
+  const regenerate = async () => {
+    setRegenerating(true);
+    setRegenError(null);
+    const previousUrl = state.kind === "ready" ? state.url : null;
+    // O QR sai da folha antes do POST: a partir deste momento o código
+    // antigo pode já estar revogado na Cloud e não pode ser impresso
+    // por engano durante a substituição.
+    setState({ kind: "loading" });
+    try {
+      await api.post("/ponto/regenerate-qr");
+      setConfirming(false);
+      setState(
+        await loadPontoQr().catch((): PontoQrState => ({ kind: "unavailable" }))
+      );
+    } catch {
+      // O POST falhou — mas a rotação pode ter acontecido na Cloud com
+      // a resposta perdida a meio. Reler a configuração é o que
+      // distingue os dois mundos: qrId inalterado → a rotação não
+      // aconteceu e o impresso continua válido; qrId novo → só se
+      // perdeu a resposta, a folha já mostra o substituto e não há
+      // erro nenhum a expor. Sem releitura (Cloud em baixo) não se
+      // sabe — a mensagem não pode afirmar que o impresso abre.
+      const reloaded = await loadPontoQr().catch(
+        (): PontoQrState => ({ kind: "unavailable" })
+      );
+      setState(reloaded);
+      if (reloaded.kind !== "ready") {
+        setRegenError("unknown");
+      } else if (reloaded.url === previousUrl) {
+        setRegenError("unchanged");
+      }
+      setConfirming(false);
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col gap-6 bg-surface p-6 print:max-w-none print:bg-white print:p-0">
       <style>{PRINT_CSS}</style>
@@ -111,9 +163,57 @@ export default function PontoQrPage() {
         >
           ← {t("ponto.qr_back")}
         </Link>
-        <Button icon="print" onClick={() => window.print()}>
-          {t("ponto.qr_print")}
-        </Button>
+        <div className="flex items-center gap-2">
+          {regenError && (
+            <span className="max-w-56 text-danger text-xs">
+              {t(
+                regenError === "unchanged"
+                  ? "ponto.qr_regenerate_error"
+                  : "ponto.qr_regenerate_unknown"
+              )}
+            </span>
+          )}
+          {state.kind === "ready" &&
+            (confirming ? (
+              <>
+                <span className="max-w-56 text-danger text-xs">
+                  {t("ponto.qr_regenerate_warning")}
+                </span>
+                <Button
+                  disabled={regenerating}
+                  onClick={regenerate}
+                  size="sm"
+                  variant="destructive"
+                >
+                  {t("ponto.qr_regenerate_confirm")}
+                </Button>
+                <Button
+                  disabled={regenerating}
+                  onClick={() => setConfirming(false)}
+                  size="sm"
+                  variant="ghost"
+                >
+                  {t("cancel")}
+                </Button>
+              </>
+            ) : (
+              <Button
+                onClick={() => {
+                  setRegenError(null);
+                  setConfirming(true);
+                }}
+                size="sm"
+                variant="destructive-soft"
+              >
+                {t("ponto.qr_regenerate")}
+              </Button>
+            ))}
+          {state.kind === "ready" && (
+            <Button icon="print" onClick={() => window.print()}>
+              {t("ponto.qr_print")}
+            </Button>
+          )}
+        </div>
       </div>
 
       {state.kind === "loading" && (

@@ -3084,5 +3084,10 @@
   "ponto.decision_approved": "Approved",
   "ponto.decision_rejected": "Rejected",
   "ponto.decided_by": "by",
-  "ponto.readonly_inactive": "Time clock module inactive — read-only mode: records stay available for viewing and export (5-year retention), but validating or registering entries requires the module."
+  "ponto.readonly_inactive": "Time clock module inactive — read-only mode: records stay available for viewing and export (5-year retention), but validating or registering entries requires the module.",
+  "ponto.qr_regenerate": "Regenerate QR",
+  "ponto.qr_regenerate_warning": "Printed QR codes stop working immediately — you will have to print this sheet again.",
+  "ponto.qr_regenerate_confirm": "Regenerate now",
+  "ponto.qr_regenerate_error": "Could not regenerate — the printed QR is still valid.",
+  "ponto.qr_regenerate_unknown": "Could not confirm the regeneration — check the connection and scan the printed QR before relying on it."
 }

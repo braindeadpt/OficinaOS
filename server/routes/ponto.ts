@@ -191,6 +191,37 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
     }
   );
 
+  app.post(
+    "/regenerate-qr",
+    {
+      preHandler: [requirePermission({ settings: ["edit"] })],
+      schema: {
+        summary:
+          "Regenerate the ponto QR id in the cloud (invalidates printed QRs)",
+        tags: ["ponto"],
+      },
+    },
+    async (_req, reply) => {
+      const { apiUrl, token } = await requirePonto(app.prisma);
+      const res = await cloudFetch(apiUrl, "/ponto/regenerate-qr", {
+        method: "POST",
+        token,
+      }).catch(() => null);
+      if (!res) {
+        throw new AppError("CLOUD_UNREACHABLE");
+      }
+      if (res.status === 402) {
+        throw new AppError("CLOUD_MODULE_REQUIRED");
+      }
+      if (!res.ok) {
+        throw new AppError("CLOUD_REQUEST_FAILED");
+      }
+      return reply.send(
+        res.body && typeof res.body === "object" ? res.body : { ok: true }
+      );
+    }
+  );
+
   // ── Painel "Livro de Ponto" (item 4) ──────────────────────────────────
   //
   // Permissões: leituras de dados laborais seguem a família reports
