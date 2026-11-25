@@ -9,10 +9,11 @@ import {
   userIdParamSchema,
   userListQuerySchema,
 } from "@shared/schemas/auth.schema";
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { assertNotDemoMode } from "../lib/demo.js";
 import { requirePermission } from "../middlewares/rbac.js";
 import { deleteAvatar, uploadAvatar } from "../services/avatar.service.js";
+import { pushPontoCloudConfig } from "../services/ponto/config-sync.js";
 import {
   createUser as createUserSvc,
   getActivity,
@@ -31,8 +32,27 @@ import {
   resolveZodErrors,
 } from "../utils/resolve-validation-messages.js";
 
+const PONTO_CLOUD_USER_FIELDS = [
+  "externalWork",
+  "phoneE164",
+  "pontoEnabled",
+  "pontoSmsAllowed",
+] as const;
+
+function touchesPontoCloudStaff(
+  data: Partial<Record<(typeof PONTO_CLOUD_USER_FIELDS)[number], unknown>>
+): boolean {
+  return PONTO_CLOUD_USER_FIELDS.some((field) => data[field] !== undefined);
+}
+
 // biome-ignore lint/suspicious/useAwait: FastifyPluginAsync requires async
 export const usersRoutes: FastifyPluginAsync = async (app) => {
+  function syncPontoCloudStaff(request: FastifyRequest): void {
+    // Best-effort e fora da resposta — a conta local é a autoridade e uma
+    // Cloud em baixo nunca pode impedir criar/editar/desativar utilizadores.
+    pushPontoCloudConfig(app.prisma, request.log).catch(() => null);
+  }
+
   async function canAccessUser(
     requestingUser: { id: string; role: string } | null,
     targetId: string,
@@ -152,6 +172,9 @@ export const usersRoutes: FastifyPluginAsync = async (app) => {
         getUserId(request),
         getRole(request)
       );
+      if (touchesPontoCloudStaff(parsed.data)) {
+        syncPontoCloudStaff(request);
+      }
 
       return reply.status(201).send(user);
     }
@@ -196,6 +219,9 @@ export const usersRoutes: FastifyPluginAsync = async (app) => {
         isActive,
         getRole(request)
       );
+      // Ativar/desativar entra diretamente no filtro da escala (isActive)
+      // mesmo quando mais nenhum campo do utilizador mudou.
+      syncPontoCloudStaff(request);
       return reply.send(user);
     }
   );
@@ -302,6 +328,9 @@ export const usersRoutes: FastifyPluginAsync = async (app) => {
         id,
         profileData
       );
+      if (touchesPontoCloudStaff(profileData)) {
+        syncPontoCloudStaff(request);
+      }
       return reply.send(updated);
     }
   );

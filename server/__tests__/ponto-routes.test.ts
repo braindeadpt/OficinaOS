@@ -207,7 +207,7 @@ describe("ponto — PUT /config", () => {
     });
   });
 
-  it("staff envia a última entrada efetiva e ignora entradas recusadas", async () => {
+  it("staff envia a última entrada efetiva como manualEntryAt e ignora recusadas", async () => {
     fetchMock.mockReturnValueOnce(cloudJson({ ok: true }));
     const prisma = fakePrisma();
     prisma.user.findMany.mockResolvedValue([
@@ -218,14 +218,37 @@ describe("ponto — PUT /config", () => {
         pontoSmsAllowed: true,
       },
     ] as never);
-    const validAt = new Date("2026-01-10T09:00:00.000Z");
+    const validAt = new Date("2026-01-10T10:00:00.000Z");
     prisma.timeEntry.findMany.mockResolvedValue([
       {
-        at: new Date("2026-01-10T10:00:00.000Z"),
+        at: validAt,
+        createdAt: new Date("2026-01-10T10:00:01.000Z"),
+        proofs: {},
+        transport: "WHATSAPP_META",
         userId: "u1",
-        validations: [{ decision: "RECUSADO" }],
+        validations: [],
       },
-      { at: validAt, userId: "u1", validations: [] },
+      {
+        at: new Date("2026-01-10T09:30:00.000Z"),
+        createdAt: new Date("2026-01-10T09:30:01.000Z"),
+        proofs: {},
+        transport: "MANUAL",
+        userId: "u1",
+        validations: [
+          {
+            byUser: { name: "Dono", username: "dono" },
+            decision: "RECUSADO",
+          },
+        ],
+      },
+      {
+        at: validAt,
+        createdAt: new Date("2026-01-10T09:00:01.000Z"),
+        proofs: {},
+        transport: "MANUAL",
+        userId: "u1",
+        validations: [],
+      },
     ] as never);
     const app = buildApp(prisma);
     const res = await app.inject({ method: "PUT", url: "/api/ponto/config" });
@@ -234,7 +257,7 @@ describe("ponto — PUT /config", () => {
     expect(JSON.parse(init.body).staff).toEqual([
       {
         externalWork: false,
-        lastEntryAt: validAt.toISOString(),
+        manualEntryAt: validAt.toISOString(),
         phone: "+351911111111",
         smsAllowed: true,
       },
@@ -322,6 +345,173 @@ describe("ponto — POST /regenerate-qr", () => {
     expect(res.statusCode).toBe(400);
     expect(res.json().code).toBe("CLOUD_NOT_PAIRED");
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("ponto — sync após validação do painel", () => {
+  function mockValidation(prisma: ReturnType<typeof fakePrisma>) {
+    prisma.timeEntry.findUnique.mockResolvedValue({ id: "entry-1" } as never);
+    prisma.timeEntryValidation.create.mockResolvedValue({
+      at: new Date("2026-01-10T12:00:00.000Z"),
+      byUser: { name: "Dono", username: "dono" },
+      decision: "RECUSADO",
+      id: "validation-1",
+      note: null,
+    } as never);
+  }
+
+  function mockPontoStaff(prisma: ReturnType<typeof fakePrisma>) {
+    prisma.user.findMany.mockResolvedValue([
+      {
+        externalWork: false,
+        id: "u1",
+        phoneE164: "+351911111111",
+        pontoSmsAllowed: true,
+      },
+    ] as never);
+  }
+
+  it("qualquer validação bem-sucedida dispara o push da config", async () => {
+    fetchMock.mockImplementation(() => cloudJson({ ok: true }));
+    const prisma = fakePrisma();
+    mockValidation(prisma);
+    mockPontoStaff(prisma);
+    prisma.timeEntryValidation.create.mockResolvedValue({
+      at: new Date("2026-01-10T12:00:00.000Z"),
+      byUser: { name: "Dono", username: "dono" },
+      decision: "APROVADO",
+      id: "validation-1",
+      note: null,
+    } as never);
+    const approvedEntryAt = new Date("2026-01-10T09:00:00.000Z");
+    prisma.timeEntry.findMany.mockResolvedValue([
+      {
+        at: approvedEntryAt,
+        createdAt: new Date("2026-01-10T09:00:01.000Z"),
+        proofs: {},
+        transport: "WHATSAPP_META",
+        userId: "u1",
+        validations: [
+          {
+            byUser: { name: "Dono", username: "dono" },
+            decision: "APROVADO",
+          },
+        ],
+      },
+    ] as never);
+    const app = buildApp(prisma);
+
+    const res = await app.inject({
+      method: "POST",
+      payload: { decision: "APROVADO" },
+      url: "/api/ponto/entries/entry-1/validate",
+    });
+
+    expect(res.statusCode).toBe(200);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${CLOUD_URL}/ponto/config`);
+    expect(init.method).toBe("PUT");
+    const staff = JSON.parse(init.body).staff[0];
+    expect(staff.manualEntryAt).toBe(approvedEntryAt.toISOString());
+    expect(staff).not.toHaveProperty("revokeEntryAt");
+  });
+
+  it("recusar uma ENTRADA envia revokeEntryAt e revokedBy no push", async () => {
+    fetchMock.mockImplementation(() => cloudJson({ ok: true }));
+    const prisma = fakePrisma();
+    mockValidation(prisma);
+    prisma.user.findMany.mockResolvedValue([
+      {
+        externalWork: false,
+        id: "u1",
+        phoneE164: "+351911111111",
+        pontoSmsAllowed: true,
+      },
+      {
+        externalWork: false,
+        id: "u2",
+        phoneE164: "+351922222222",
+        pontoSmsAllowed: false,
+      },
+    ] as never);
+    const proofRecordedAt = "2026-01-10T09:00:01.250Z";
+    const fallbackRecordedAt = new Date("2026-01-10T09:05:02.000Z");
+    prisma.timeEntry.findMany.mockResolvedValue([
+      {
+        at: new Date("2026-01-10T08:58:00.000Z"),
+        createdAt: new Date("2026-01-10T09:00:02.000Z"),
+        proofs: { entryRecordedAt: proofRecordedAt },
+        transport: "WHATSAPP_META",
+        userId: "u1",
+        validations: [
+          {
+            byUser: { name: "Dono", username: "dono" },
+            decision: "RECUSADO",
+          },
+        ],
+      },
+      {
+        at: new Date("2026-01-10T09:04:00.000Z"),
+        createdAt: fallbackRecordedAt,
+        proofs: {},
+        transport: "SMS",
+        userId: "u2",
+        validations: [
+          {
+            byUser: { name: "Dono", username: "dono" },
+            decision: "RECUSADO",
+          },
+        ],
+      },
+    ] as never);
+    const app = buildApp(prisma);
+
+    const res = await app.inject({
+      method: "POST",
+      payload: { decision: "RECUSADO", note: "foto inválida" },
+      url: "/api/ponto/entries/entry-1/validate",
+    });
+
+    expect(res.statusCode).toBe(200);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init.body).staff).toEqual([
+      {
+        externalWork: false,
+        manualEntryAt: null,
+        phone: "+351911111111",
+        revokeEntryAt: proofRecordedAt,
+        revokedBy: "Dono",
+        smsAllowed: true,
+      },
+      {
+        externalWork: false,
+        manualEntryAt: null,
+        phone: "+351922222222",
+        revokeEntryAt: fallbackRecordedAt.toISOString(),
+        revokedBy: "Dono",
+        smsAllowed: false,
+      },
+    ]);
+  });
+
+  it("Cloud em baixo não impede gravar a validação local", async () => {
+    fetchMock.mockRejectedValue(new Error("net down"));
+    const prisma = fakePrisma();
+    mockValidation(prisma);
+    mockPontoStaff(prisma);
+    const app = buildApp(prisma);
+
+    const res = await app.inject({
+      method: "POST",
+      payload: { decision: "RECUSADO" },
+      url: "/api/ponto/entries/entry-1/validate",
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(prisma.timeEntryValidation.create).toHaveBeenCalled();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
   });
 });
 

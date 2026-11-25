@@ -444,6 +444,8 @@ describe("fluxo ENTRADA staff (QR + localização)", () => {
   });
 
   it("localização completa → evaluate + TimeEntry + confirmação com botões", async () => {
+    const entryRecordedAt = "2026-01-10T09:00:01.250Z";
+    cloudOk("APROVADO", { entryRecordedAt });
     const { ctx, interactive, phone, sent, t } = setup();
     const at = new Date().toISOString();
     await tryHandlePontoStaff(
@@ -482,6 +484,7 @@ describe("fluxo ENTRADA staff (QR + localização)", () => {
     expect(mocks.recordPontoEntry).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
+        proofs: expect.objectContaining({ entryRecordedAt }),
         status: "APROVADO",
         transport: "WHATSAPP_META",
         type: "ENTRADA",

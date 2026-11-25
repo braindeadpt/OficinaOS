@@ -41,12 +41,16 @@ export interface PontoEvaluateInput {
 }
 
 export interface PontoEvaluateResult {
+  /** Instante da prova gravada pela Cloud — necessário para revogar uma
+   *  ENTRADA que o dono recuse depois. Clouds sem o campo novo omitem-no. */
+  entryRecordedAt?: string;
   proofs: Record<string, unknown>;
   reason?: string;
   status: PontoEvaluateStatus;
 }
 
 interface CloudEvaluateBody {
+  entryRecordedAt?: unknown;
   proofs?: unknown;
   reason?: unknown;
   status?: unknown;
@@ -96,7 +100,13 @@ export async function evaluatePontoMark(
     log.warn({ body: res.body }, "ponto evaluate: resposta inválida da cloud");
     return null;
   }
+  const entryRecordedAt =
+    typeof body?.entryRecordedAt === "string" &&
+    !Number.isNaN(Date.parse(body.entryRecordedAt))
+      ? body.entryRecordedAt
+      : undefined;
   return {
+    ...(entryRecordedAt ? { entryRecordedAt } : {}),
     proofs:
       body?.proofs && typeof body.proofs === "object"
         ? (body.proofs as Record<string, unknown>)

@@ -342,6 +342,11 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
         body.data.decision,
         body.data.note
       );
+      // Aprovar/recusar muda o estado efetivo que a Cloud usa para a
+      // sequência do dia; na recusa de uma ENTRADA o payload calculado pelo
+      // config-sync inclui revokeEntryAt. Best-effort e fora da resposta:
+      // a decisão local é legalmente válida mesmo com a Cloud em baixo.
+      pushPontoCloudConfig(app.prisma, req.log).catch(() => null);
       return reply.send({
         effectiveStatus: body.data.decision,
         validation: {
