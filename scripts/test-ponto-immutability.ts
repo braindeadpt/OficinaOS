@@ -153,6 +153,42 @@ try {
     kept.rows.length === 1 && kept.rows[0]?.correctsId === null
   );
 
+  // Um caller sem privilégio não executa a purga (REVOKE de PUBLIC) —
+  // e o papel operacional das migrações tem EXECUTE explícito.
+  await client.query("DROP ROLE IF EXISTS probe_purge_noperms").catch(() => {
+    // a primeira corrida ainda não tem o papel — ignora
+  });
+  await client.query("CREATE ROLE probe_purge_noperms NOLOGIN");
+  // USAGE no schema para a única barreira ser o EXECUTE — sem ele a
+  // função nem é visível e o erro não prova nada sobre o REVOKE.
+  await client.query("GRANT USAGE ON SCHEMA public TO probe_purge_noperms");
+  const probe = new pg.Client({ connectionString: url });
+  await probe.connect();
+  let denied = false;
+  try {
+    await probe.query("SET ROLE probe_purge_noperms");
+    await probe.query("SELECT ponto_purge_expired()");
+  } catch (err) {
+    denied = String(err).includes("permission denied");
+  } finally {
+    await probe.end().catch(() => {
+      // encerramento best-effort
+    });
+  }
+  await client.query(
+    "REVOKE USAGE ON SCHEMA public FROM probe_purge_noperms"
+  );
+  await client.query("DROP ROLE probe_purge_noperms");
+  ok("caller sem EXECUTE não corre a purga", denied);
+
+  const execGrant = await client.query<{ has: boolean }>(
+    "SELECT has_function_privilege(current_user, 'ponto_purge_expired()', 'EXECUTE') AS has"
+  );
+  ok(
+    "o papel operacional tem EXECUTE explícito na purga",
+    execGrant.rows[0]?.has === true
+  );
+
   const owner = await client.query<{ owner: string }>(
     `SELECT r.rolname AS owner
        FROM pg_proc p JOIN pg_roles r ON r.oid = p.proowner
