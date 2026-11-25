@@ -22,7 +22,9 @@ const mocks = vi.hoisted(() => ({
   savePontoPhotoFile: vi.fn(() =>
     Promise.resolve({ id: "photo-1", path: "ponto-photos/u1/p.jpg" })
   ),
-  timeEntryFindMany: vi.fn((): Promise<unknown[]> => Promise.resolve([])),
+  timeEntryFindMany: vi.fn(
+    (_args?: unknown): Promise<unknown[]> => Promise.resolve([])
+  ),
   timeEntryFindFirst: vi.fn(
     (): Promise<{ id: string } | null> => Promise.resolve(null)
   ),
@@ -1187,7 +1189,7 @@ describe("SAIDA normal após presumida", () => {
     expect(entry.correctsId).toBeNull();
     // A query tem de pedir a decisão MAIS RECENTE (desc, take 1) —
     // sem esta asserção o teste passava mesmo com ordenação errada.
-    const q = mocks.timeEntryFindMany.mock.calls[0]?.[0] as {
+    const q = mocks.timeEntryFindMany.mock.calls[0]?.[0] as unknown as {
       select: Record<string, unknown>;
     };
     expect(q.select).toMatchObject({
