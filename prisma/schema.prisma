@@ -2011,7 +2011,12 @@ model CodeLockout {
 // Registos de ponto dos funcionários via WhatsApp/SMS — append-only:
 // nunca UPDATE/DELETE (trigger ponto_timeentry_immutable na BD); correções
 // fazem-se com linhas novas que apontam para a original via correctsId.
-// Retenção legal: 5 anos (Código do Trabalho, art. 202).
+// Retenção legal: 5 anos (Código do Trabalho, art. 202). A purga corre só
+// pela função SECURITY DEFINER ponto_purge_expired() — e mesmo com o papel
+// da purga o trigger só passa DELETE fora da retenção e correctsId → NULL.
+// TRUNCATE tem guarda BEFORE TRUNCATE: exige SET LOCAL oficinaos.ponto_truncate
+// na transação (reset de demo, testes) — contra o dono da tabela não há
+// trigger que valha — a guarda é contra acidente e desvio casual.
 // ─────────────────────────────────────────────
 
 enum TimeEntryType {
@@ -2073,6 +2078,9 @@ model TimeEntry {
   @@map("time_entries")
 }
 
+// Também só-acrescento (trigger ponto_validation_immutable): uma decisão
+// não se apaga nem se altera — só desaparece em cascata com o registo pai
+// quando este é purgado fora da retenção.
 model TimeEntryValidation {
   id       String            @id @default(cuid())
   entryId  String

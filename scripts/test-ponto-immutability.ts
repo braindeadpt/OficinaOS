@@ -10,7 +10,17 @@
  *  3. o escape antigo (SET oficinaos.ponto_purge='on') já não abre nada;
  *  4. a purga SECURITY DEFINER apaga só registos com mais de 5 anos —
  *     os mais recentes sobrevivem;
- *  5. a função de purga pertence ao papel próprio oficinaos_ponto_purge.
+ *  5. a função de purga pertence ao papel próprio oficinaos_ponto_purge;
+ *  6. (A1) com SET ROLE oficinaos_ponto_purge: DELETE de um registo
+ *     dentro dos 5 anos falha, o de um expirado passa; UPDATE só passa
+ *     para correctsId → NULL com o alvo fora da retenção — anular o link
+ *     de uma correção a um registo dentro do prazo falha, como falha
+ *     qualquer outra escrita em correctsId;
+ *  7. (A2) TRUNCATE das tabelas do livro falha sem o GUC de intenção e
+ *     passa com SET LOCAL oficinaos.ponto_truncate='on' na transação;
+ *  8. (A3) time_entry_validations é só-acrescento: UPDATE/DELETE falham
+ *     como dono e como papel da purga; a validação só desaparece em
+ *     cascata com o delete fiscalizado do registo pai.
  */
 
 import pg from "pg";
@@ -19,8 +29,8 @@ const url = process.env.DATABASE_URL;
 if (!url) {
   throw new Error("DATABASE_URL em falta — o teste corre contra uma BD real");
 }
-// A limpeza faz TRUNCATE do livro inteiro (é imutável — não há DELETE):
-// recusa tudo o que não pareça uma base descartável de teste.
+// A limpeza faz TRUNCATE do livro inteiro: recusa tudo o que não pareça
+// uma base descartável de teste.
 const dbName = new URL(url).pathname.replace("/", "");
 // 'test' como palavra inteira — "oficina_latest" não pode passar.
 if (!/(^|_)test(_|$)/.test(dbName)) {
@@ -42,21 +52,41 @@ function ok(name: string, pass: boolean, detail = ""): void {
   }
 }
 
+/** Corre o SQL e devolve true se falhar com um erro que contenha needle. */
+async function expectDbError(
+  sql: string,
+  params: unknown[],
+  needle: string,
+  conn: pg.Client = client
+): Promise<boolean> {
+  try {
+    await conn.query(sql, params);
+    return false;
+  } catch (err) {
+    return String(err).includes(needle);
+  }
+}
+
 async function expectImmutableError(
   sql: string,
   params: unknown[] = []
 ): Promise<boolean> {
-  try {
-    await client.query(sql, params);
-    return false;
-  } catch (err) {
-    return String(err).includes("imutável");
-  }
+  return expectDbError(sql, params, "imutável");
 }
 
 const userId = `probe-immutable-${Date.now()}`;
 const entryId = `probe-entry-${Date.now()}`;
 const oldEntryId = `probe-entry-old-${Date.now()}`;
+
+/** Ligação descartável já com SET ROLE oficinaos_ponto_purge — reproduz
+ *  exatamente o cenário do A1 (a app em Docker é superuser e pode assumir
+ *  o papel em qualquer sessão). */
+async function asPurgeRole(): Promise<pg.Client> {
+  const conn = new pg.Client({ connectionString: url });
+  await conn.connect();
+  await conn.query("SET ROLE oficinaos_ponto_purge");
+  return conn;
+}
 
 try {
   await client.query(
@@ -153,6 +183,325 @@ try {
     kept.rows.length === 1 && kept.rows[0]?.correctsId === null
   );
 
+  // ── A1: SET ROLE oficinaos_ponto_purge — o trigger impõe a regra ─────
+  // Preparação: um registo expirado com validação e uma correção retida
+  // a apontar-lhe (para o delete), mais duas correções para os UPDATEs —
+  // uma a apontar para um expirado, outra para o registo recente.
+  const srOld = `${oldEntryId}-sr`;
+  const srCorrExpired = `${entryId}-sr-corr-exp`;
+  const srCorrRecent = `${entryId}-sr-corr-rec`;
+  await client.query(
+    `INSERT INTO time_entries (id, "userId", type, at, transport, status, proofs)
+     VALUES ($1, $2, 'ENTRADA', now() - interval '6 years', 'SMS', 'APROVADO', '{}')`,
+    [srOld, userId]
+  );
+  await client.query(
+    `INSERT INTO time_entry_validations (id, "entryId", decision, "byUserId", at)
+     VALUES ($1, $2, 'APROVADO', $3, now() - interval '6 years')`,
+    [`${srOld}-val`, srOld, userId]
+  );
+  await client.query(
+    `INSERT INTO time_entries (id, "userId", type, at, transport, status, proofs, "correctsId")
+     VALUES ($1, $2, 'SAIDA', now() - interval '2 hours', 'SMS', 'APROVADO', '{}', $3)`,
+    [srCorrExpired, userId, srOld]
+  );
+  await client.query(
+    `INSERT INTO time_entries (id, "userId", type, at, transport, status, proofs, "correctsId")
+     VALUES ($1, $2, 'SAIDA', now() - interval '1 hour', 'SMS', 'APROVADO', '{}', $3)`,
+    [srCorrRecent, userId, entryId]
+  );
+
+  const purgeConn = await asPurgeRole();
+  try {
+    // DELETE dentro da retenção falha mesmo com o papel da purga.
+    ok(
+      "A1: SET ROLE purga — DELETE de registo com 2 horas falha",
+      await expectDbError(
+        `DELETE FROM time_entries WHERE id = $1`,
+        [entryId],
+        "imutável",
+        purgeConn
+      )
+    );
+
+    // DELETE fora da retenção passa — e leva a validação em cascata,
+    // anulando o correctsId da correção retida pela cascata interna da
+    // FK (que corre como dono da tabela, não como o papel).
+    await purgeConn.query(`DELETE FROM time_entries WHERE id = $1`, [srOld]);
+    const casc = await client.query<{
+      entry: number;
+      validation: number;
+      correction: number;
+      link: string | null;
+    }>(
+      `SELECT (SELECT count(*)::int FROM time_entries WHERE id = $1) AS entry,
+              (SELECT count(*)::int FROM time_entry_validations WHERE "entryId" = $1) AS validation,
+              (SELECT count(*)::int FROM time_entries WHERE id = $2) AS correction,
+              (SELECT "correctsId" FROM time_entries WHERE id = $2) AS link`,
+      [srOld, srCorrExpired]
+    );
+    ok(
+      "A1: SET ROLE purga — DELETE de registo com 6 anos passa",
+      casc.rows[0]?.entry === 0
+    );
+    ok(
+      "A3: a validação caiu em cascata com o registo purgado",
+      casc.rows[0]?.validation === 0
+    );
+    ok(
+      "A1: a cascata da FK anulou correctsId e a correção retida sobreviveu",
+      casc.rows[0]?.correction === 1 && casc.rows[0]?.link === null
+    );
+
+    // UPDATE arbitrário de correctsId (valor não-nulo) falha.
+    ok(
+      "A1: SET ROLE purga — UPDATE correctsId para valor não-nulo falha",
+      await expectDbError(
+        `UPDATE time_entries SET "correctsId" = $2 WHERE id = $1`,
+        [srCorrRecent, srCorrExpired],
+        "imutável",
+        purgeConn
+      )
+    );
+
+    // correctsId → NULL a apontar para registo DENTRO do prazo falha:
+    // anular o link de uma correção a um registo vivo é mutar o livro.
+    ok(
+      "A1: SET ROLE purga — correctsId → NULL com alvo dentro dos 5 anos falha",
+      await expectDbError(
+        `UPDATE time_entries SET "correctsId" = NULL WHERE id = $1`,
+        [srCorrRecent],
+        "imutável",
+        purgeConn
+      )
+    );
+    const linkKept = await client.query<{ correctsId: string | null }>(
+      `SELECT "correctsId" FROM time_entries WHERE id = $1`,
+      [srCorrRecent]
+    );
+    ok(
+      "A1: o link da correção ao registo vivo sobreviveu",
+      linkKept.rows[0]?.correctsId === entryId
+    );
+
+    // correctsId → NULL com alvo expirado passa (é o passo da purga).
+    // Nota: srCorrExpired já perdeu o link pela cascata acima — usa-se
+    // uma correção nova a apontar para outro expirado ainda existente.
+    const srOld2 = `${oldEntryId}-sr2`;
+    const srCorr2 = `${entryId}-sr-corr2`;
+    await client.query(
+      `INSERT INTO time_entries (id, "userId", type, at, transport, status, proofs)
+       VALUES ($1, $2, 'ENTRADA', now() - interval '6 years', 'SMS', 'APROVADO', '{}')`,
+      [srOld2, userId]
+    );
+    await client.query(
+      `INSERT INTO time_entries (id, "userId", type, at, transport, status, proofs, "correctsId")
+       VALUES ($1, $2, 'SAIDA', now() - interval '2 hours', 'SMS', 'APROVADO', '{}', $3)`,
+      [srCorr2, userId, srOld2]
+    );
+    let unlinkPassed = false;
+    try {
+      await purgeConn.query(
+        `UPDATE time_entries SET "correctsId" = NULL WHERE id = $1`,
+        [srCorr2]
+      );
+      unlinkPassed = true;
+    } catch {
+      unlinkPassed = false;
+    }
+    const unlinked = await client.query<{ correctsId: string | null }>(
+      `SELECT "correctsId" FROM time_entries WHERE id = $1`,
+      [srCorr2]
+    );
+    ok(
+      "A1: SET ROLE purga — correctsId → NULL com alvo expirado passa",
+      unlinkPassed && unlinked.rows[0]?.correctsId === null
+    );
+
+    // ── A3: validações só-acrescento ─────────────────────────────────
+    // Uma validação num registo vivo não se apaga nem se altera — nem
+    // com o papel da purga.
+    const liveVal = `${entryId}-val`;
+    await client.query(
+      `INSERT INTO time_entry_validations (id, "entryId", decision, "byUserId")
+       VALUES ($1, $2, 'RECUSADO', $3)`,
+      [liveVal, entryId, userId]
+    );
+    ok(
+      "A3: SET ROLE purga — DELETE direto de validação falha",
+      await expectDbError(
+        `DELETE FROM time_entry_validations WHERE id = $1`,
+        [liveVal],
+        "só-acrescento",
+        purgeConn
+      )
+    );
+
+    // UPDATE com o papel da purga falha ainda antes de chegar ao trigger
+    // — o papel não tem UPDATE na tabela. Se um dia um provisioning lhe
+    // der esse privilégio por engano, passa a ser o trigger a responder:
+    // qualquer dos dois erros é falha fechada.
+    let updateDenied = false;
+    try {
+      await purgeConn.query(
+        `UPDATE time_entry_validations SET decision = 'APROVADO' WHERE id = $1`,
+        [liveVal]
+      );
+    } catch (err) {
+      const msg = String(err);
+      updateDenied =
+        msg.includes("permission denied") || msg.includes("só-acrescento");
+    }
+    ok(
+      "A3: SET ROLE purga — UPDATE de validação falha (permissão ou trigger)",
+      updateDenied
+    );
+
+    // ── SEC: search_path sombreado não esconde o livro real ──────────
+    // Antes da correção: um schema sombra com uma time_entries vazia +
+    // GRANT USAGE/SELECT ao papel da purga fazia o NOT EXISTS do trigger
+    // dar sempre verdade — validações apagáveis e links de correção
+    // anuláveis em registos vivos. Reproduzido em Postgres 16; aqui fica
+    // a regressão. O nome é único por corrida — nunca se apaga um schema
+    // que não se criou, mesmo numa base de testes reutilizada.
+    const evilSchema = `probe_evil_${Date.now()}`;
+    const evilConn = new pg.Client({ connectionString: url });
+    // A limpeza só corre se o CREATE passou — um CREATE falhado (nome já
+    // existente) significa que o schema é de outra corrida e não se toca.
+    let evilCreated = false;
+    try {
+      // A preparação inteira fica dentro do try: se um passo falhar a
+      // meio, o finally limpa o schema na mesma — não ficam restos numa
+      // base de testes reutilizada.
+      await client.query(`CREATE SCHEMA ${evilSchema}`);
+      evilCreated = true;
+      await client.query(`CREATE TABLE ${evilSchema}.time_entries (id text)`);
+      await client.query(
+        `GRANT USAGE ON SCHEMA ${evilSchema} TO oficinaos_ponto_purge`
+      );
+      await client.query(
+        `GRANT SELECT ON ${evilSchema}.time_entries TO oficinaos_ponto_purge`
+      );
+      await evilConn.connect();
+      await evilConn.query(`SET search_path = ${evilSchema}, public`);
+      await evilConn.query("SET ROLE oficinaos_ponto_purge");
+      ok(
+        "SEC: search_path sombreado não abre o DELETE de validações",
+        await expectDbError(
+          `DELETE FROM public.time_entry_validations WHERE id = $1`,
+          [liveVal],
+          "só-acrescento",
+          evilConn
+        )
+      );
+      ok(
+        "SEC: search_path sombreado não anula correctsId em registo vivo",
+        await expectDbError(
+          `UPDATE public.time_entries SET "correctsId" = NULL WHERE id = $1`,
+          [srCorrRecent],
+          "imutável",
+          evilConn
+        )
+      );
+    } finally {
+      await evilConn.end().catch(() => {
+        // encerramento best-effort
+      });
+      if (evilCreated) {
+        await client
+          .query(`DROP SCHEMA IF EXISTS ${evilSchema} CASCADE`)
+          .catch(() => {
+            // limpeza best-effort — base descartável
+          });
+      }
+    }
+  } finally {
+    await purgeConn.end().catch(() => {
+      // encerramento best-effort
+    });
+  }
+
+  // Como dono da tabela o resultado é o mesmo — e aqui é o próprio
+  // trigger que responde (não permissões de coluna).
+  const liveValId = `${entryId}-val`;
+  ok(
+    "A3: UPDATE de validação como dono falha",
+    await expectDbError(
+      `UPDATE time_entry_validations SET decision = 'APROVADO' WHERE id = $1`,
+      [liveValId],
+      "só-acrescento"
+    )
+  );
+  ok(
+    "A3: DELETE de validação como dono falha",
+    await expectDbError(
+      `DELETE FROM time_entry_validations WHERE id = $1`,
+      [liveValId],
+      "só-acrescento"
+    )
+  );
+  const valKept = await client.query<{ decision: string }>(
+    `SELECT decision::text FROM time_entry_validations WHERE id = $1`,
+    [liveValId]
+  );
+  ok(
+    "A3: o RECUSADO continua intacto",
+    valKept.rows.length === 1 && valKept.rows[0]?.decision === "RECUSADO"
+  );
+
+  // ── A2: TRUNCATE tem de declarar intenção ────────────────────────────
+  // Negativo: dentro de transação para o ROLLBACK desfazer se o guarda
+  // falhar — TRUNCATE em Postgres é transacional.
+  await client.query("BEGIN");
+  const truncEntriesBlocked = await expectDbError(
+    "TRUNCATE time_entries CASCADE",
+    [],
+    "não admite TRUNCATE"
+  );
+  await client.query("ROLLBACK");
+  ok("A2: TRUNCATE time_entries sem o GUC falha", truncEntriesBlocked);
+
+  await client.query("BEGIN");
+  const truncValsBlocked = await expectDbError(
+    "TRUNCATE time_entry_validations",
+    [],
+    "não admite TRUNCATE"
+  );
+  await client.query("ROLLBACK");
+  ok(
+    "A2: TRUNCATE time_entry_validations sem o GUC falha",
+    truncValsBlocked
+  );
+
+  // Positivo: com SET LOCAL dentro da transação o wipe passa — e o GUC
+  // morre com ela.
+  await client.query("BEGIN");
+  await client.query("SET LOCAL oficinaos.ponto_truncate = 'on'");
+  let truncWithGuc = true;
+  try {
+    await client.query("TRUNCATE time_entries, time_entry_validations");
+  } catch {
+    truncWithGuc = false;
+  }
+  await client.query("COMMIT");
+  ok("A2: TRUNCATE com SET LOCAL oficinaos.ponto_truncate passa", truncWithGuc);
+  const afterTrunc = await client.query<{ n: number }>(
+    "SELECT count(*)::int AS n FROM time_entries"
+  );
+  ok("A2: o wipe com GUC esvaziou mesmo o livro", afterTrunc.rows[0]?.n === 0);
+
+  await client.query("BEGIN");
+  const truncAfterCommitBlocked = await expectDbError(
+    "TRUNCATE time_entries CASCADE",
+    [],
+    "não admite TRUNCATE"
+  );
+  await client.query("ROLLBACK");
+  ok(
+    "A2: o GUC morre com a transação — TRUNCATE volta a falhar",
+    truncAfterCommitBlocked
+  );
+
   // Um caller sem privilégio não executa a purga (REVOKE de PUBLIC) —
   // e o papel operacional das migrações tem EXECUTE explícito.
   await client.query("DROP ROLE IF EXISTS probe_purge_noperms").catch(() => {
@@ -201,10 +550,22 @@ try {
   );
 } finally {
   // Limpeza best-effort: as linhas de teste não podem ser apagadas por
-  // DELETE (é esse o ponto) — TRUNCATE não dispara triggers de linha.
-  await client.query("TRUNCATE time_entries CASCADE").catch(() => {
+  // DELETE (é esse o ponto) — o TRUNCATE tem de declarar intenção com o
+  // GUC dentro da transação, como o reset de demo.
+  await client.query("BEGIN").catch(() => {
+    // limpeza best-effort
+  });
+  await client
+    .query("SET LOCAL oficinaos.ponto_truncate = 'on'")
+    .catch(() => {
       // limpeza best-effort
     });
+  await client.query("TRUNCATE time_entries CASCADE").catch(() => {
+    // limpeza best-effort
+  });
+  await client.query("COMMIT").catch(() => {
+    // limpeza best-effort
+  });
   await client
     .query("DELETE FROM users WHERE id = $1", [userId])
     .catch(() => {

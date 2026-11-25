@@ -1020,6 +1020,9 @@ export async function applyDemoDump(
   await prisma.$transaction(
     async (tx) => {
       await tx.$executeRawUnsafe(`SET LOCAL lock_timeout = '10s'`);
+      // The ponto ledger tables have a BEFORE TRUNCATE guard — the wipe
+      // must declare itself inside this transaction or the guard raises.
+      await tx.$executeRawUnsafe(`SET LOCAL oficinaos.ponto_truncate = 'on'`);
       // The hourly TRUNCATE would log every visitor out — preserve live
       // sessions and re-insert them after the replay (the demo user's id
       // is deterministic, so the FK still resolves).
