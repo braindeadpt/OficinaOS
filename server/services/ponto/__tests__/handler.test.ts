@@ -361,11 +361,14 @@ describe("comandos sem fluxo", () => {
       msg({ fromPhone: phone, text: "ESTADO" }),
       t
     );
-    expect(sent[0]).toContain("Semana: 8h00");
+    // Sem overnight: segunda corta à meia-noite (09:00→24:00 = 15 h
+    // provisórias, como no painel) + terça 8 h — nunca as ~32 h do
+    // emparelhamento entre dias.
+    expect(sent[0]).toContain("Semana: 23h00");
     expect(sent[0]).not.toContain("32h");
   });
 
-  it("ESTADO: saída corrigida depois da meia-noite lista-se no dia efetivo mas as horas contam no dia do turno", async () => {
+  it("ESTADO: saída corrigida depois da meia-noite conta no seu próprio dia civil (sem overnight)", async () => {
     vi.useFakeTimers();
     // Sábado 10/01/2026 00:20 Lisboa (UTC+0) — semana aberta segunda.
     vi.setSystemTime(new Date("2026-01-10T00:20:00Z"));
@@ -392,12 +395,11 @@ describe("comandos sem fluxo", () => {
       t
     );
 
-    // Divergência deliberada (workedMs): a marcação lista-se no dia
-    // civil da hora EFETIVA (sábado 00:15), mas as horas fecham o
-    // turno de sexta — o "Hoje" mostra a saída sem intervalo e a
-    // "Semana" soma as 8h15 completas.
+    // Alinhado com o painel (decisão 2026-11-25): a correção conta no
+    // SEU dia civil — sábado tem a saída sem entrada (0h00 hoje) e
+    // sexta corta à meia-noite: 16:00→24:00 = 8h00, não 8h15.
     expect(sent[0]).toContain("Hoje: 0h00 — Saída 00:15");
-    expect(sent[0]).toContain("Semana: 8h15");
+    expect(sent[0]).toContain("Semana: 8h00");
   });
 });
 

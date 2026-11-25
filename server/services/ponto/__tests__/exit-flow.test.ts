@@ -1246,10 +1246,13 @@ describe("SAIDA normal após presumida", () => {
   });
 });
 
-describe("workedMs — saída corrigida depois da meia-noite", () => {
-  it("correção ligada à presumida conta as horas no dia do turno", () => {
-    // Entrada 16:00 sexta · resposta «00:15» sábado — a correção herda
-    // o dia civil da presumida das 23:30 e fecha as 8h15 do turno.
+describe("workedMs — sem overnight (decisão do dono 2026-11-25)", () => {
+  const NOW = new Date("2026-01-10T00:20:00.000Z"); // sábado 00:20 UTC
+
+  it("fecho noutro dia civil nunca emparelha — corta no fim do dia da entrada", () => {
+    // Entrada 16:00 sexta · saída 00:15 sábado ligada à presumida das
+    // 23:30: a correção conta no SEU dia civil como qualquer registo —
+    // sexta fecha à meia-noite (8h), sábado tem saída sem entrada.
     const ms = workedMs(
       [
         { at: new Date("2026-01-09T16:00:00.000Z"), type: "ENTRADA" },
@@ -1259,23 +1262,43 @@ describe("workedMs — saída corrigida depois da meia-noite", () => {
           type: "SAIDA",
         },
       ],
-      TZ
+      TZ,
+      NOW
     );
 
-    expect(ms).toBe(8 * 3_600_000 + 15 * 60_000);
+    expect(ms).toBe(8 * 3_600_000);
   });
 
-  it("sem ligação à linha substituída, a separação por dia mantém-se", () => {
-    // Entrada sem saída no dia + saída sem entrada no dia seguinte —
-    // turnos independentes não se unem.
+  it("turno por fechar em dia passado conta até ao fim desse dia — como no painel", () => {
     const ms = workedMs(
-      [
-        { at: new Date("2026-01-09T16:00:00.000Z"), type: "ENTRADA" },
-        { at: new Date("2026-01-10T00:15:00.000Z"), type: "SAIDA" },
-      ],
-      TZ
+      [{ at: new Date("2026-01-09T16:00:00.000Z"), type: "ENTRADA" }],
+      TZ,
+      NOW
     );
 
-    expect(ms).toBe(0);
+    expect(ms).toBe(8 * 3_600_000);
+  });
+
+  it("turno em curso hoje conta até agora, nunca além", () => {
+    const ms = workedMs(
+      [{ at: new Date("2026-01-09T23:00:00.000Z"), type: "ENTRADA" }],
+      TZ,
+      new Date("2026-01-09T23:45:00.000Z")
+    );
+
+    expect(ms).toBe(45 * 60_000);
+  });
+
+  it("turno fechado no próprio dia conta o intervalo exato", () => {
+    const ms = workedMs(
+      [
+        { at: new Date("2026-01-09T09:00:00.000Z"), type: "ENTRADA" },
+        { at: new Date("2026-01-09T18:30:00.000Z"), type: "SAIDA" },
+      ],
+      TZ,
+      NOW
+    );
+
+    expect(ms).toBe(9 * 3_600_000 + 30 * 60_000);
   });
 });

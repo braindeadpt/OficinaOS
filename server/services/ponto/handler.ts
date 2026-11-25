@@ -148,11 +148,16 @@ function fmtHours(ms: number): string {
   return `${h}h${String(m).padStart(2, "0")}`;
 }
 
-/** Intervalos fechados dentro de um só conjunto de registos: ENTRADA/
- *  VOLTEI abrem (o primeiro marca ganha se houver duplicados),
- *  PAUSA/SAIDA fecham. Um turno ainda aberto não conta — "horas
- *  trabalhadas" exclui o presente. */
-function workedIntervalsMs(entries: { at: Date; type: string }[]): number {
+/** Intervalos dentro de um só dia civil: ENTRADA/VOLTEI abrem (o
+ *  primeiro marca ganha se houver duplicados), PAUSA/SAIDA fecham. Um
+ *  turno ainda aberto conta até `capMs` — o fim do dia civil nos dias
+ *  passados, "agora" no dia de hoje — tal como no painel: a saída
+ *  esquecida fica sinalizada para fecho manual, mas as horas
+ *  provisórias são iguais nos dois lados. */
+function workedIntervalsMs(
+  entries: { at: Date; type: string }[],
+  capMs: number
+): number {
   let total = 0;
   let open: number | null = null;
   for (const e of entries) {
@@ -166,35 +171,43 @@ function workedIntervalsMs(entries: { at: Date; type: string }[]): number {
       open = null;
     }
   }
+  if (open !== null && capMs > open) {
+    total += capMs - open;
+  }
   return total;
 }
 
-/** Soma os intervalos fechados POR DIA CIVIL da loja. Uma entrada sem
- *  saída não atravessa a meia-noite: sem o agrupamento, a entrada de
- *  terça era absorvida pelo turno de segunda e a saída de terça fechava
- *  um intervalo de ~32 h (a regra "entrada no próprio dia" já impede
- *  turnos overnight — §2.2). Exceção com ligação: uma CORREÇÃO herda o
- *  dia civil da linha que substitui — a saída corrigida para depois da
- *  meia-noite continua a fechar o turno do dia em que abriu (o `at` da
- *  presumida é a âncora), senão entrada e saída caíam em grupos
- *  separados e as horas sumiam. Exportada para testes. */
+/** Soma os intervalos POR DIA CIVIL da loja, alinhada com o painel
+ *  (decisão do dono 2026-11-25 — §2.2: uma entrada nunca atravessa a
+ *  meia-noite). Um fecho noutro dia civil não emparelha — cada dia é
+ *  independente — e uma correção conta no SEU dia civil como qualquer
+ *  outro registo: sem isto a correção datada depois da meia-noite
+ *  fechava o turno anterior no resumo e cortava à meia-noite no
+ *  painel, e os dois contadores divergiam. Exportada para testes. */
 export function workedMs(
   entries: { at: Date; corrects?: { at: Date } | null; type: string }[],
-  tz: string
+  tz: string,
+  now: Date = new Date()
 ): number {
-  const byDay = new Map<string, { at: Date; type: string }[]>();
+  const byDay = new Map<
+    string,
+    { endMs: number; list: { at: Date; type: string }[] }
+  >();
   for (const e of entries) {
-    const day = dayRange(tz, e.corrects?.at ?? e.at).date;
-    const list = byDay.get(day);
-    if (list) {
-      list.push(e);
+    const r = dayRange(tz, e.at);
+    const group = byDay.get(r.date);
+    if (group) {
+      group.list.push(e);
     } else {
-      byDay.set(day, [e]);
+      byDay.set(r.date, { endMs: r.end.getTime(), list: [e] });
     }
   }
   let total = 0;
-  for (const dayEntries of byDay.values()) {
-    total += workedIntervalsMs(dayEntries);
+  for (const group of byDay.values()) {
+    total += workedIntervalsMs(
+      group.list,
+      Math.min(now.getTime(), group.endMs)
+    );
   }
   return total;
 }
