@@ -245,6 +245,32 @@ describe("composeReply — transporte WP0.4 (regras na Cloud)", () => {
     expect(out.escalate).toBe(true);
   });
 
+  it("dataPrevista segue o fuso do contexto quando o dia da loja difere do dia UTC", async () => {
+    mocks.askBotAi.mockResolvedValue({ escalate: false, reply: "ok" });
+    // 01:30 UTC de 26/11 — em Lisboa já é dia 26, em Nova Iorque
+    // ainda é 25 ao fim da tarde. O fuso errado trocava o dia da
+    // previsão que a Cloud lê ao cliente.
+    const estimated = new Date("2026-11-26T01:30:00.000Z");
+    const base = {
+      ai: aiCfg,
+      customers: [cust],
+      jobs: [job({ estimatedDate: estimated })],
+    };
+    const ny = makeCtx(base);
+    ny.ctx.timezone = "America/New_York";
+    await composeReply(ny.ctx, msg("quando fica?"));
+    expect(mocks.askBotAi.mock.calls[0]?.[2].context.jobs[0].dataPrevista).toBe(
+      "2026-11-25"
+    );
+
+    mocks.askBotAi.mockClear();
+    const lisbon = makeCtx(base);
+    await composeReply(lisbon.ctx, msg("quando fica?"));
+    expect(mocks.askBotAi.mock.calls[0]?.[2].context.jobs[0].dataPrevista).toBe(
+      "2026-11-26"
+    );
+  });
+
   it("contexto usa a vistaCliente e o snapshot das chaves fica fechado", async () => {
     mocks.askBotAi.mockResolvedValueOnce({
       escalate: false,
