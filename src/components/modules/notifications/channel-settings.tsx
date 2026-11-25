@@ -268,6 +268,26 @@ function SmsCard({
   );
 }
 
+const DEPRECATION_TRANSITION_DAYS = 30;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+function whatsappLocalDeprecationDaysLeft(
+  startedAt: string | null | undefined
+) {
+  if (!startedAt) {
+    return DEPRECATION_TRANSITION_DAYS;
+  }
+  const startedAtMs = new Date(startedAt).getTime();
+  if (Number.isNaN(startedAtMs)) {
+    return DEPRECATION_TRANSITION_DAYS;
+  }
+  const elapsedDays = Math.max(
+    0,
+    Math.floor((Date.now() - startedAtMs) / MS_PER_DAY)
+  );
+  return Math.max(0, DEPRECATION_TRANSITION_DAYS - elapsedDays);
+}
+
 /** Campos do transporte oficial Meta (IDs, token, relay, remarketing). */
 function MetaWhatsAppFields({
   form,
@@ -287,6 +307,9 @@ function MetaWhatsAppFields({
     settings?.hasApiToken &&
       !settings?.credentialsAtCloud &&
       !cloudConsentStored
+  );
+  const migrationDaysLeft = whatsappLocalDeprecationDaysLeft(
+    settings?.localDeprecationStartedAt
   );
   return (
     <>
@@ -388,6 +411,10 @@ function MetaWhatsAppFields({
                 ? "whatsapp_cloud_migration_warning"
                 : "whatsapp_cloud_consent_help"
             )}
+            {legacyTokenMigration &&
+              ` ${t("whatsapp_cloud_migration_days_left", {
+                count: migrationDaysLeft,
+              })}`}
           </p>
           <div className="mt-3 flex items-center gap-1">
             <Checkbox

@@ -44,6 +44,7 @@ vi.mock("../services/whatsapp-templates.service.js", () => ({
 }));
 
 import { settingsRoutes } from "../routes/settings.js";
+import { stampWhatsAppLocalDeprecationStartedAtOnce } from "../services/settings.service.js";
 import { syncWhatsAppBot } from "../services/whatsapp-bot.service.js";
 
 interface TestSettingsRow extends Record<string, unknown> {
@@ -51,7 +52,7 @@ interface TestSettingsRow extends Record<string, unknown> {
   whatsappCloudConsentAt: Date | null;
   whatsappCredentialsAtCloud: boolean;
   whatsappEnabled: boolean;
-  whatsappLocalDeprecationWarnedAt: Date | null;
+  whatsappLocalDeprecationStartedAt: Date | null;
   whatsappPhoneNumberId: string | null;
   whatsappTransport: string;
 }
@@ -67,20 +68,22 @@ function baseRow(overrides: Partial<TestSettingsRow> = {}): TestSettingsRow {
     whatsappCloudConsentAt: null,
     whatsappCredentialsAtCloud: false,
     whatsappEnabled: true,
-    whatsappLocalDeprecationWarnedAt: null,
+    whatsappLocalDeprecationStartedAt: null,
     whatsappPhoneNumberId: null,
     whatsappTransport: "meta",
     ...overrides,
   };
 }
 
-function createStatefulPrisma(initial: TestSettingsRow) {
-  let row = { ...initial };
+function createStatefulPrisma(initial: TestSettingsRow | null) {
+  let row: TestSettingsRow | null = initial ? { ...initial } : null;
   const shopSettings = {
-    findUnique: vi.fn(() => Promise.resolve({ ...row })),
+    findUnique: vi.fn(() => Promise.resolve(row ? { ...row } : null)),
     update: vi.fn(({ data }: { data: Record<string, unknown> }) => {
-      row = { ...row, ...data } as TestSettingsRow;
-      return Promise.resolve({ ...row });
+      if (row) {
+        row = { ...row, ...data } as TestSettingsRow;
+      }
+      return Promise.resolve(row ? { ...row } : null);
     }),
     updateMany: vi.fn(
       ({
@@ -90,26 +93,40 @@ function createStatefulPrisma(initial: TestSettingsRow) {
         data: Record<string, unknown>;
         where?: Record<string, unknown>;
       }) => {
+        const current = row;
+        if (!current) {
+          return Promise.resolve({ count: 0 });
+        }
         const blocked = Object.entries(where ?? {}).some(
           ([key, value]) =>
             key !== "id" &&
             value === null &&
-            row[key] !== null &&
-            row[key] !== undefined
+            current[key] !== null &&
+            current[key] !== undefined
         );
         if (!blocked) {
-          row = { ...row, ...data } as TestSettingsRow;
+          row = { ...current, ...data } as TestSettingsRow;
         }
         return Promise.resolve({ count: blocked ? 0 : 1 });
       }
     ),
-    upsert: vi.fn(({ update }: { update: Record<string, unknown> }) => {
-      row = { ...row, ...update } as TestSettingsRow;
-      return Promise.resolve({ ...row });
-    }),
+    upsert: vi.fn(
+      ({
+        create,
+        update,
+      }: {
+        create?: Record<string, unknown>;
+        update: Record<string, unknown>;
+      }) => {
+        row = row
+          ? ({ ...row, ...update } as TestSettingsRow)
+          : ({ ...(create ?? {}), ...update } as TestSettingsRow);
+        return Promise.resolve({ ...row });
+      }
+    ),
   };
   return {
-    getRow: () => ({ ...row }),
+    getRow: () => (row ? { ...row } : null),
     prisma: { shopSettings },
     updateManyMock: shopSettings.updateMany,
   };
@@ -167,7 +184,32 @@ beforeEach(() => {
 });
 
 describe("WP0.6 — consentimento Cloud do token Meta", () => {
-  it("save sem consentimento não faz upload e grava o início da transição uma vez", async () => {
+  it("boot da versão nova grava a transição numa instalação fresh sem ninguém abrir as Definições", async () => {
+    const state = createStatefulPrisma(null);
+
+    const startedAt = await stampWhatsAppLocalDeprecationStartedAtOnce(
+      state.prisma as never
+    );
+
+    expect(startedAt).toBeInstanceOf(Date);
+    expect(state.getRow()?.whatsappLocalDeprecationStartedAt).toBeInstanceOf(
+      Date
+    );
+    expect(state.getRow()?.whatsappLocalDeprecationStartedAt?.getTime()).toBe(
+      startedAt.getTime()
+    );
+    expect(state.getRow()?.whatsappApiTokenEncrypted ?? null).toBeNull();
+
+    const second = await stampWhatsAppLocalDeprecationStartedAtOnce(
+      state.prisma as never
+    );
+    expect(second.getTime()).toBe(startedAt.getTime());
+    expect(state.getRow()?.whatsappLocalDeprecationStartedAt?.getTime()).toBe(
+      startedAt.getTime()
+    );
+  });
+
+  it("save sem consentimento não faz upload nem grava a transição — isso pertence ao boot", async () => {
     const state = createStatefulPrisma(baseRow());
     const app = buildApp(state.prisma);
 
@@ -184,10 +226,9 @@ describe("WP0.6 — consentimento Cloud do token Meta", () => {
     });
     expect(first.statusCode).toBe(200);
     expect(credentialsUploadCalls()).toHaveLength(0);
-    expect(state.getRow().whatsappCredentialsAtCloud).toBe(false);
+    expect(state.getRow()?.whatsappCredentialsAtCloud).toBe(false);
 
-    const warnedAt = state.getRow().whatsappLocalDeprecationWarnedAt;
-    expect(warnedAt).toBeInstanceOf(Date);
+    expect(state.getRow()?.whatsappLocalDeprecationStartedAt).toBeNull();
 
     const second = await app.inject({
       method: "PUT",
@@ -195,9 +236,7 @@ describe("WP0.6 — consentimento Cloud do token Meta", () => {
       url: "/api/settings/whatsapp",
     });
     expect(second.statusCode).toBe(200);
-    expect(state.getRow().whatsappLocalDeprecationWarnedAt?.getTime()).toBe(
-      warnedAt?.getTime()
-    );
+    expect(state.getRow()?.whatsappLocalDeprecationStartedAt).toBeNull();
     expect(credentialsUploadCalls()).toHaveLength(0);
   });
 
@@ -227,8 +266,8 @@ describe("WP0.6 — consentimento Cloud do token Meta", () => {
         method: "POST",
       })
     );
-    expect(state.getRow().whatsappCredentialsAtCloud).toBe(true);
-    expect(state.getRow().whatsappCloudConsentAt).toBeInstanceOf(Date);
+    expect(state.getRow()?.whatsappCredentialsAtCloud).toBe(true);
+    expect(state.getRow()?.whatsappCloudConsentAt).toBeInstanceOf(Date);
   });
 
   it("o consentimento é imutável num segundo save", async () => {
@@ -247,7 +286,7 @@ describe("WP0.6 — consentimento Cloud do token Meta", () => {
       payload,
       url: "/api/settings/whatsapp",
     });
-    const consentAt = state.getRow().whatsappCloudConsentAt;
+    const consentAt = state.getRow()?.whatsappCloudConsentAt;
     expect(consentAt).toBeInstanceOf(Date);
 
     await app.inject({
@@ -255,7 +294,7 @@ describe("WP0.6 — consentimento Cloud do token Meta", () => {
       payload,
       url: "/api/settings/whatsapp",
     });
-    expect(state.getRow().whatsappCloudConsentAt?.getTime()).toBe(
+    expect(state.getRow()?.whatsappCloudConsentAt?.getTime()).toBe(
       consentAt?.getTime()
     );
   });
@@ -277,7 +316,7 @@ describe("WP0.6 — consentimento Cloud do token Meta", () => {
     );
 
     expect(credentialsUploadCalls()).toHaveLength(0);
-    expect(state.getRow().whatsappCredentialsAtCloud).toBe(false);
+    expect(state.getRow()?.whatsappCredentialsAtCloud).toBe(false);
   });
 
   it("poller com consentimento faz upload e grava a flag", async () => {
@@ -298,14 +337,16 @@ describe("WP0.6 — consentimento Cloud do token Meta", () => {
     );
 
     expect(credentialsUploadCalls()).toHaveLength(1);
-    expect(state.getRow().whatsappCredentialsAtCloud).toBe(true);
+    expect(state.getRow()?.whatsappCredentialsAtCloud).toBe(true);
   });
 
-  it("GET das settings computa o aviso de depreciação uma vez para token legado", async () => {
+  it("GET das settings apenas lê a data de início da transição — nunca a grava", async () => {
+    const startedAt = new Date("2026-01-02T10:00:00.000Z");
     const state = createStatefulPrisma(
       baseRow({
         whatsappApiTokenEncrypted: "enc:meta-token",
         whatsappBusinessId: "business-1",
+        whatsappLocalDeprecationStartedAt: startedAt,
         whatsappPhoneNumberId: "1234",
       })
     );
@@ -316,10 +357,10 @@ describe("WP0.6 — consentimento Cloud do token Meta", () => {
       url: "/api/settings/whatsapp",
     });
     expect(first.statusCode).toBe(200);
-    const warnedAt = state.getRow().whatsappLocalDeprecationWarnedAt;
-    expect(warnedAt).toBeInstanceOf(Date);
     expect(first.json().cloudConsentAccepted).toBe(false);
-    expect(first.json().localDeprecationWarnedAt).toBe(warnedAt?.toISOString());
+    expect(first.json().localDeprecationStartedAt).toBe(
+      startedAt.toISOString()
+    );
 
     state.updateManyMock.mockClear();
     const second = await app.inject({
@@ -327,8 +368,8 @@ describe("WP0.6 — consentimento Cloud do token Meta", () => {
       url: "/api/settings/whatsapp",
     });
     expect(second.statusCode).toBe(200);
-    expect(state.getRow().whatsappLocalDeprecationWarnedAt?.getTime()).toBe(
-      warnedAt?.getTime()
+    expect(state.getRow()?.whatsappLocalDeprecationStartedAt?.getTime()).toBe(
+      startedAt.getTime()
     );
     expect(state.updateManyMock).not.toHaveBeenCalled();
   });

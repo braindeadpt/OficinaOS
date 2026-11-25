@@ -151,20 +151,37 @@ describe.skipIf(!serverReachable)("demo seed/reset (integration)", () => {
         )
       ).not.toThrow();
     } finally {
+      delete process.env.DEMO_MODE;
       process.env.DATABASE_URL = saved;
       resetEnvForTests();
     }
   });
 
   it("seed → mutate → reset restores the dump and keeps only the demo user", async () => {
+    // Importar o service antes de ativar DEMO_MODE: em CI as variáveis
+    // GITHUB_* do runner são proibidas em demo e o import carrega loadEnv().
+    const { stampWhatsAppLocalDeprecationStartedAtOnce } = await import(
+      "../services/settings.service.js"
+    );
     process.env.DEMO_MODE = "true";
     const saved = process.env.DATABASE_URL;
     process.env.DATABASE_URL = testDbUrl as string;
     resetEnvForTests();
     try {
       const db = getPrisma();
+      const bootStartedAt = await stampWhatsAppLocalDeprecationStartedAtOnce(
+        db as never
+      );
       const { seedDemo } = await import("../../prisma/seed-demo.js");
       const dump = await seedDemo(db as never);
+
+      // A data do sunset gravada no boot sobrevive ao seed inicial — mesmo
+      // na demo não recomeça a cada reposição do dataset ficcional.
+      expect(
+        (
+          await db.shopSettings.findUniqueOrThrow({ where: { id: "default" } })
+        ).whatsappLocalDeprecationStartedAt?.getTime()
+      ).toBe(bootStartedAt.getTime());
 
       // Sanity: the dataset is real — users, customers, jobs all present.
       expect(await db.user.count()).toBe(1);
@@ -216,6 +233,13 @@ describe.skipIf(!serverReachable)("demo seed/reset (integration)", () => {
       const { applyDemoDump } = await import("../../prisma/seed-demo.js");
       await applyDemoDump(db as never, dump);
 
+      // O reset horário também preserva o início canónico da transição.
+      expect(
+        (
+          await db.shopSettings.findUniqueOrThrow({ where: { id: "default" } })
+        ).whatsappLocalDeprecationStartedAt?.getTime()
+      ).toBe(bootStartedAt.getTime());
+
       const counts = {
         customers: await db.customer.count(),
         jobs: await db.job.count(),
@@ -244,6 +268,7 @@ describe.skipIf(!serverReachable)("demo seed/reset (integration)", () => {
       const sessions = await db.session.findMany();
       expect(sessions.map((s) => s.id)).toEqual([liveSession.id]);
     } finally {
+      delete process.env.DEMO_MODE;
       process.env.DATABASE_URL = saved;
       resetEnvForTests();
     }

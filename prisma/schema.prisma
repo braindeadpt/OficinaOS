@@ -1246,8 +1246,8 @@ model ShopSettings {
   // grandfathered; uploads novos exigem este timestamp.
   whatsappCloudConsentAt      DateTime? @db.Timestamptz
   // Início da transição de 30 dias do envio Meta direto/local — gravado
-  // uma vez, no primeiro aviso a uma instalação com token local por migrar.
-  whatsappLocalDeprecationWarnedAt DateTime? @db.Timestamptz
+  // uma vez, incondicionalmente, no primeiro arranque da versão nova.
+  whatsappLocalDeprecationStartedAt DateTime? @db.Timestamptz
   // Estado por template Meta após o último sync automático:
   // { [name]: { status, reason?, syncedAt } } — lido pela UI.
   whatsappTemplatesJson       Json?

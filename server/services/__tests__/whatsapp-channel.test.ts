@@ -31,10 +31,9 @@ vi.mock("../../repositories/settings.repository.js", () => ({
   getOrCreateShopSettings: mocks.getOrCreateShopSettings,
 }));
 
-const updateSettings = vi.fn();
 const updateManySettings = vi.fn();
 const prisma = {
-  shopSettings: { update: updateSettings, updateMany: updateManySettings },
+  shopSettings: { updateMany: updateManySettings },
 } as never;
 
 import {
@@ -369,7 +368,11 @@ describe("sendWhatsAppTemplateVia", () => {
 });
 
 describe("pushCredentialsToCloud", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    updateManySettings.mockReset();
+    updateManySettings.mockResolvedValue({ count: 1 });
+  });
 
   // §5.6 — a migração só corre com o entitlement whatsapp-bot FRESCO
   // (isModuleEnabled <24h); sem módulo a loja nunca envia credenciais.
@@ -400,10 +403,77 @@ describe("pushCredentialsToCloud", () => {
         method: "POST",
       })
     );
-    expect(updateSettings).toHaveBeenCalledWith({
+    expect(updateManySettings).toHaveBeenCalledWith({
       data: { whatsappCredentialsAtCloud: true },
-      where: { id: "default" },
+      where: {
+        id: "default",
+        whatsappApiTokenEncrypted: "enc:meta-token",
+        whatsappPhoneNumberId: "1234",
+      },
     });
+  });
+
+  it("does not flag the migration when the credentials changed during upload", async () => {
+    mocks.getOrCreateShopSettings.mockResolvedValue(settings);
+    mocks.cloudFetch.mockResolvedValue({
+      body: { ok: true },
+      ok: true,
+      status: 200,
+    });
+    // O updateMany condicional não encontrou o snapshot enviado — a loja
+    // substituiu o token/phone_number_id enquanto a Cloud processava.
+    updateManySettings.mockResolvedValue({ count: 0 });
+
+    expect(await pushCredentialsToCloud(prisma)).toBe(false);
+  });
+
+  it("serializes concurrent uploads so the cloud receives the replacement last", async () => {
+    let currentToken = "enc:meta-token";
+    let uploadCalls = 0;
+    let resolveFirst: (value: unknown) => void = () => undefined;
+    const firstResponse = new Promise<unknown>((resolve) => {
+      resolveFirst = resolve;
+    });
+    mocks.getOrCreateShopSettings.mockImplementation(() =>
+      Promise.resolve({
+        ...settings,
+        whatsappApiTokenEncrypted: currentToken,
+      })
+    );
+    mocks.cloudFetch.mockImplementation(() => {
+      uploadCalls += 1;
+      if (uploadCalls === 1) {
+        return firstResponse;
+      }
+      return Promise.resolve({ body: { ok: true }, ok: true, status: 200 });
+    });
+    updateManySettings.mockImplementation(({ where }) => {
+      const matches =
+        currentToken === where.whatsappApiTokenEncrypted &&
+        settings.whatsappPhoneNumberId === where.whatsappPhoneNumberId;
+      return Promise.resolve({ count: matches ? 1 : 0 });
+    });
+
+    const first = pushCredentialsToCloud(prisma);
+    await vi.waitFor(() => expect(mocks.cloudFetch).toHaveBeenCalledTimes(1));
+
+    // A loja substitui o token enquanto o primeiro upload está em voo; a
+    // segunda chamada só pode ler/enviar esse token depois da primeira acabar.
+    currentToken = "enc:replacement";
+    const second = pushCredentialsToCloud(prisma);
+    // Sem a fila o segundo upload partia imediatamente para a Cloud — este é
+    // o invariante que impede a substituição fora de ordem.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(mocks.cloudFetch).toHaveBeenCalledTimes(1);
+    resolveFirst({ body: { ok: true }, ok: true, status: 200 });
+    await vi.waitFor(() => expect(mocks.cloudFetch).toHaveBeenCalledTimes(2));
+
+    await expect(first).resolves.toBe(false);
+    await expect(second).resolves.toBe(true);
+    const uploadedTokens = mocks.cloudFetch.mock.calls.map(
+      (call) => (call[2] as { body: { accessToken: string } }).body.accessToken
+    );
+    expect(uploadedTokens).toEqual(["meta-token", "replacement"]);
   });
 
   it("never uploads without explicit cloud consent", async () => {
@@ -413,14 +483,14 @@ describe("pushCredentialsToCloud", () => {
     });
     expect(await pushCredentialsToCloud(prisma)).toBe(false);
     expect(mocks.cloudFetch).not.toHaveBeenCalled();
-    expect(updateSettings).not.toHaveBeenCalled();
+    expect(updateManySettings).not.toHaveBeenCalled();
   });
 
   it("returns false when the cloud rejects — local send keeps working", async () => {
     mocks.getOrCreateShopSettings.mockResolvedValue(settings);
     mocks.cloudFetch.mockResolvedValue({ body: null, ok: false, status: 402 });
     expect(await pushCredentialsToCloud(prisma)).toBe(false);
-    expect(updateSettings).not.toHaveBeenCalled();
+    expect(updateManySettings).not.toHaveBeenCalled();
   });
 
   it("never uploads without the whatsapp-bot entitlement — free stays local", async () => {
@@ -430,7 +500,7 @@ describe("pushCredentialsToCloud", () => {
     });
     expect(await pushCredentialsToCloud(prisma)).toBe(false);
     expect(mocks.cloudFetch).not.toHaveBeenCalled();
-    expect(updateSettings).not.toHaveBeenCalled();
+    expect(updateManySettings).not.toHaveBeenCalled();
   });
 
   it("is a grandfathered no-op once credentials are already at the cloud", async () => {

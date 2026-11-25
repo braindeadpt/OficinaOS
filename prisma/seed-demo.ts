@@ -1027,6 +1027,17 @@ export async function applyDemoDump(
       // sessions and re-insert them after the replay (the demo user's id
       // is deterministic, so the FK still resolves).
       const sessions = await tx.session.findMany();
+      // O sunset Meta não reinicia numa demo nova/reset: embora os dados
+      // sejam ficcionais, a data gravada no boot é a mesma transição imutável
+      // das instalações reais e sobrevive ao replay do snapshot.
+      const deprecationRows = await tx.$queryRawUnsafe<
+        { whatsappLocalDeprecationStartedAt: Date | null }[]
+      >(
+        'SELECT "whatsappLocalDeprecationStartedAt" FROM "shop_settings" WHERE id = $1',
+        "default"
+      );
+      const deprecationStartedAt =
+        deprecationRows[0]?.whatsappLocalDeprecationStartedAt ?? null;
       const tables = await tx.$queryRawUnsafe<{ tablename: string }[]>(
         `SELECT tablename FROM pg_tables
          WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'`
@@ -1041,6 +1052,13 @@ export async function applyDemoDump(
         if (rows.length > 0) {
           await tx[delegate].createMany({ data: rows });
         }
+      }
+      if (deprecationStartedAt) {
+        await tx.$executeRawUnsafe(
+          'UPDATE "shop_settings" SET "whatsappLocalDeprecationStartedAt" = $1 WHERE id = $2',
+          deprecationStartedAt,
+          "default"
+        );
       }
       if (sessions.length > 0) {
         const userIds = new Set(
