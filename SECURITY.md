@@ -55,8 +55,8 @@ Only the latest commit on `main` receives security updates. There are no LTS bra
 
 ## Code signing policy
 
-Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
+Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/) *(pending SignPath Foundation onboarding; releases prior to workflow integration are unsigned)*.
 
-- Only Windows release artifacts built from `main` by GitHub Actions ([`.github/workflows/release.yml`](./.github/workflows/release.yml)) are signed (`OficinaOS-Setup.exe` and `OficinaOSTray.exe`). Local developer builds are never signed.
+- Once enabled in GitHub Actions ([`.github/workflows/release.yml`](./.github/workflows/release.yml)), only Windows release artifacts built from `main` will be signed (`OficinaOS-Setup.exe` and `OficinaOSTray.exe`). Local developer builds are never signed.
 - **Roles:** Committers, reviewers, and approvers: [@braindeadpt](https://github.com/braindeadpt). All accounts with repository write or signing approval access enforce multi-factor authentication (MFA), and every release requires manual approval before signing and publishing.
-- **Privacy:** This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. See [docs/privacy-and-data.md](./docs/privacy-and-data.md) for details on optional third-party integrations.
+- **Privacy:** This program will not transfer any user or shop data to other networked systems unless specifically requested by the user or the person installing or operating it. On dashboard load by an administrator, the app performs a read-only update check against GitHub Releases (`api.github.com`, no telemetry or shop data sent). See [docs/privacy-and-data.md](./docs/privacy-and-data.md) for details on optional third-party integrations.

@@ -262,13 +262,13 @@ Encontraste uma vulnerabilidade? Vê [SECURITY.md](./SECURITY.md) — **não** a
 
 ## Code signing policy
 
-Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
+Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/) *(pending SignPath Foundation onboarding; releases prior to workflow integration are unsigned)*.
 
-- **Signed artifacts:** Windows release binaries built by this project (`OficinaOS-Setup.exe` and `OficinaOSTray.exe`), produced exclusively from tagged commits on `main` via [`.github/workflows/release.yml`](./.github/workflows/release.yml). Third-party open-source runtimes bundled inside the installer (Bun, PostgreSQL, WinSW) are included as distributed upstream and are not re-signed with the project certificate.
+- **Signed artifacts:** Once SignPath integration is enabled in [`.github/workflows/release.yml`](./.github/workflows/release.yml), Windows release binaries built by this project (`OficinaOS-Setup.exe` and `OficinaOSTray.exe`) will be signed exclusively from tagged commits on `main`. Third-party open-source runtimes bundled inside the installer (Bun, PostgreSQL, WinSW) are included as distributed upstream and are not re-signed with the project certificate.
 - **Team roles:**
   - **Committers and reviewers:** [@braindeadpt](https://github.com/braindeadpt)
   - **Approvers:** [@braindeadpt](https://github.com/braindeadpt) (every release signing request requires manual approval)
-- **Privacy:** This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. Optional integrations (remote access tunnel, WhatsApp/SMS notifications, AI assistant, OficinaOS Cloud) are disabled by default and documented in [docs/privacy-and-data.md](./docs/privacy-and-data.md).
+- **Privacy:** This program will not transfer any user or shop data to other networked systems unless specifically requested by the user or the person installing or operating it. When an administrator opens the dashboard, the app performs a read-only update check against GitHub Releases (`api.github.com`, no telemetry or shop data sent). All other external integrations (remote access tunnel, WhatsApp/SMS notifications, AI assistant, OficinaOS Cloud) are optional, disabled by default, and documented in [docs/privacy-and-data.md](./docs/privacy-and-data.md).
 
 ## Licença
 

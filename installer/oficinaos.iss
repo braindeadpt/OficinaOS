@@ -23,10 +23,10 @@ AppSupportURL=https://oficinaos.app/docs/
 VersionInfoCompany=OficinaOS
 VersionInfoDescription={#MyAppName} Installer
 VersionInfoProductName={#MyAppName}
-VersionInfoProductVersion={#MyAppVersion}
-VersionInfoTextVersion={#MyAppVersion}
+VersionInfoProductTextVersion={#MyAppVersion}
 #ifdef MyAppNumericVersion
 VersionInfoVersion={#MyAppNumericVersion}
+VersionInfoProductVersion={#MyAppNumericVersion}
 #endif
 DefaultDirName={autopf}\OficinaOS
 DefaultGroupName={#MyAppName}
