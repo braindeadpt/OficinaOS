@@ -362,20 +362,21 @@ try {
     // GRANT USAGE/SELECT ao papel da purga fazia o NOT EXISTS do trigger
     // dar sempre verdade — validações apagáveis e links de correção
     // anuláveis em registos vivos. Reproduzido em Postgres 16; aqui fica
-    // a regressão.
-    await client.query("DROP SCHEMA IF EXISTS probe_evil CASCADE");
-    await client.query("CREATE SCHEMA probe_evil");
-    await client.query("CREATE TABLE probe_evil.time_entries (id text)");
+    // a regressão. O nome é único por corrida — nunca se apaga um schema
+    // que não se criou, mesmo numa base de testes reutilizada.
+    const evilSchema = `probe_evil_${Date.now()}`;
+    await client.query(`CREATE SCHEMA ${evilSchema}`);
+    await client.query(`CREATE TABLE ${evilSchema}.time_entries (id text)`);
     await client.query(
-      "GRANT USAGE ON SCHEMA probe_evil TO oficinaos_ponto_purge"
+      `GRANT USAGE ON SCHEMA ${evilSchema} TO oficinaos_ponto_purge`
     );
     await client.query(
-      "GRANT SELECT ON probe_evil.time_entries TO oficinaos_ponto_purge"
+      `GRANT SELECT ON ${evilSchema}.time_entries TO oficinaos_ponto_purge`
     );
     const evilConn = new pg.Client({ connectionString: url });
     await evilConn.connect();
     try {
-      await evilConn.query("SET search_path = probe_evil, public");
+      await evilConn.query(`SET search_path = ${evilSchema}, public`);
       await evilConn.query("SET ROLE oficinaos_ponto_purge");
       ok(
         "SEC: search_path sombreado não abre o DELETE de validações",
@@ -399,7 +400,7 @@ try {
       await evilConn.end().catch(() => {
         // encerramento best-effort
       });
-      await client.query("DROP SCHEMA IF EXISTS probe_evil CASCADE");
+      await client.query(`DROP SCHEMA IF EXISTS ${evilSchema} CASCADE`);
     }
   } finally {
     await purgeConn.end().catch(() => {
