@@ -22,7 +22,8 @@ if (!url) {
 // A limpeza faz TRUNCATE do livro inteiro (é imutável — não há DELETE):
 // recusa tudo o que não pareça uma base descartável de teste.
 const dbName = new URL(url).pathname.replace("/", "");
-if (!dbName.includes("test")) {
+// 'test' como palavra inteira — "oficina_latest" não pode passar.
+if (!/(^|_)test(_|$)/.test(dbName)) {
   throw new Error(
     `DATABASE_URL aponta para '${dbName}' — o teste destrói os dados e só corre contra bases com 'test' no nome`
   );
