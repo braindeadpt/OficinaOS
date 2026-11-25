@@ -276,7 +276,7 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       // Ativação manual do módulo: sem este push o poller seguinte já
       // encontra o entitlement fresco e não voltaria a enviar a escala.
       if (status.modules.includes("ponto")) {
-        await pushPontoCloudConfig(app.prisma, app.log).catch((err) =>
+        pushPontoCloudConfig(app.prisma, app.log).catch((err) =>
           app.log.warn({ err }, "ponto config sync após sync manual falhou")
         );
       }
