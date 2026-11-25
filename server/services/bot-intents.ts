@@ -330,7 +330,10 @@ function resolveCloudJobId(
   if (res.jobId === null) {
     return null;
   }
-  return jobs[0]?.id ?? null;
+  // Cloud antiga sem nenhum dos campos: a reparação só se pode assumir
+  // quando há exatamente uma ativa — com 2+ seria adivinhação e o
+  // staff ligava a mensagem à reparação errada (null → sem vínculo).
+  return jobs.length === 1 ? (jobs[0]?.id ?? null) : null;
 }
 
 /** Executa a ação devolvida pelas regras da Cloud — a validação e os

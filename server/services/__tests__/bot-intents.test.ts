@@ -596,6 +596,32 @@ describe("composeReply — transporte WP0.4 (regras na Cloud)", () => {
     expect(out.jobId).toBe("job-1");
   });
 
+  it("Cloud legada sem jobCode/jobId assume a reparação quando só há uma", async () => {
+    mocks.askBotAi.mockResolvedValueOnce({
+      escalate: false,
+      reply: "está a correr bem",
+    });
+    const { ctx } = makeCtx({ ai: aiCfg, customers: [cust], jobs: [job()] });
+    const out = await composeReply(ctx, msg("olá"));
+    expect(out.jobId).toBe("job-1");
+  });
+
+  it("Cloud legada sem jobCode/jobId com 2+ reparações não adivinha — null", async () => {
+    mocks.askBotAi.mockResolvedValueOnce({
+      escalate: false,
+      reply: "está a correr bem",
+    });
+    // Sem referência explícita e com duas reparações ativas, ligar à
+    // primeira seria adivinhação — o staff abria a reparação errada.
+    const { ctx } = makeCtx({
+      ai: aiCfg,
+      customers: [cust],
+      jobs: [job(), job({ id: "job-2", jobCode: "REP-2024-000002-BBB" })],
+    });
+    const out = await composeReply(ctx, msg("olá"));
+    expect(out.jobId).toBeNull();
+  });
+
   it("PARAR bypasses the hourly flood limit — opt-out is compliance", async () => {
     mocks.askBotAi.mockResolvedValueOnce(null);
     const { ctx } = makeCtx({ ai: aiCfg, customers: [cust], jobs: [job()] });
