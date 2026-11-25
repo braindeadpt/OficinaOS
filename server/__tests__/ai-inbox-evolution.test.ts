@@ -189,4 +189,32 @@ describe("sendViaEvolutionAntiBan — cancelamento pré-commit", () => {
       vi.useRealTimers();
     }
   });
+
+  it("abort durante a leitura das definições cancela antes de enviar o texto", async () => {
+    vi.useFakeTimers();
+    try {
+      const controller = new AbortController();
+      getSettings.mockImplementationOnce(async () => {
+        controller.abort();
+        return settingsWith(["whatsapp-bot"]);
+      });
+      const promise = sendViaEvolutionAntiBan(
+        {} as never,
+        log,
+        { apiKey: "k", baseUrl: "http://evo", instance: "oficinaos" },
+        "351999000222",
+        "texto",
+        200,
+        controller.signal
+      );
+      await vi.advanceTimersByTimeAsync(10_000);
+      await expect(promise).resolves.toEqual({
+        error: "cancelado",
+        success: false,
+      });
+      expect(mocks.sendEvolutionText).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

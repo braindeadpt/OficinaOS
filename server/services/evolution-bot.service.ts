@@ -258,6 +258,11 @@ export async function sendViaEvolutionAntiBan(
     return { error: "cancelado", success: false };
   }
   const settings = await getOrCreateShopSettings(prisma);
+  // O prazo pode expirar durante a leitura — a Evolution ainda não tem o texto.
+  if (signal?.aborted) {
+    dayCount -= 1;
+    return { error: "cancelado", success: false };
+  }
   const res = await sendEvolutionText(config, phone, text, settings);
   if (!res.success) {
     dayCount -= 1;
