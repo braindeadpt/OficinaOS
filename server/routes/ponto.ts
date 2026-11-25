@@ -157,15 +157,8 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
       },
     },
     async (req, reply) => {
-      const { apiUrl, settings, token } = await requirePonto(app.prisma);
-      const res = await cloudFetch(apiUrl, "/ponto/config", {
-        body: {
-          smsNumber: settings.pontoSmsNumber,
-          waNumber: settings.pontoWaNumber,
-        },
-        method: "PUT",
-        token,
-      }).catch(() => null);
+      await requirePonto(app.prisma);
+      const res = await pushPontoCloudConfig(app.prisma, req.log);
       if (!res) {
         throw new AppError("CLOUD_UNREACHABLE");
       }

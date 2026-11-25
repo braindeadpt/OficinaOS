@@ -103,12 +103,29 @@ async function fetchPontoStaffUsers(prisma: DbClient) {
   const entries = ids.length
     ? await prisma.timeEntry.findMany({
         orderBy: { at: "desc" },
-        select: { at: true, userId: true },
-        where: { type: "ENTRADA", userId: { in: ids } },
+        select: {
+          at: true,
+          userId: true,
+          validations: {
+            orderBy: { at: "desc" as const },
+            select: { decision: true },
+            take: 1,
+          },
+        },
+        where: {
+          corrections: { none: {} },
+          type: "ENTRADA",
+          userId: { in: ids },
+        },
       })
     : [];
   const latest = new Map<string, Date>();
   for (const entry of entries) {
+    // Linhas substituídas ficam fora pela query; recusadas pela decisão
+    // mais recente também não podem valer como entrada do dia.
+    if (entry.validations[0]?.decision === "RECUSADO") {
+      continue;
+    }
     if (!latest.has(entry.userId)) {
       latest.set(entry.userId, entry.at);
     }

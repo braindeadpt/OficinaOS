@@ -12,8 +12,14 @@ interface SettingsRow {
   cloudEntitlements: unknown;
   cloudShopTokenEncrypted: string | null;
   cloudSyncedAt: Date | null;
+  pontoExternalAutoApprove: boolean;
+  pontoExternalPhotoRequired: boolean;
+  pontoGeoLat: number | null;
+  pontoGeoLng: number | null;
+  pontoRadiusM: number;
   pontoSmsNumber: string | null;
   pontoWaNumber: string | null;
+  timezone: string | null;
 }
 
 function fakePrisma(overrides: Partial<SettingsRow> = {}) {
@@ -22,8 +28,14 @@ function fakePrisma(overrides: Partial<SettingsRow> = {}) {
     cloudEntitlements: ["ponto"],
     cloudShopTokenEncrypted: encryptSecret("shop-token-secret"),
     cloudSyncedAt: new Date(),
+    pontoExternalAutoApprove: true,
+    pontoExternalPhotoRequired: false,
+    pontoGeoLat: 38.7,
+    pontoGeoLng: -9.1,
+    pontoRadiusM: 100,
     pontoSmsNumber: "+351210000000",
     pontoWaNumber: "+351912345678",
+    timezone: "Europe/Lisbon",
     ...overrides,
   };
   return {
@@ -175,7 +187,7 @@ describe("ponto — GET /config", () => {
 });
 
 describe("ponto — PUT /config", () => {
-  it("pushes the local wa/sms numbers to the cloud", async () => {
+  it("pushes the complete authoritative ponto config to the cloud", async () => {
     fetchMock.mockReturnValueOnce(cloudJson({ ok: true }));
     const app = buildApp(fakePrisma());
     const res = await app.inject({ method: "PUT", url: "/api/ponto/config" });
@@ -184,7 +196,13 @@ describe("ponto — PUT /config", () => {
     expect(url).toBe(`${CLOUD_URL}/ponto/config`);
     expect(init.method).toBe("PUT");
     expect(JSON.parse(init.body)).toEqual({
+      externalAutoApprove: true,
+      photoRequired: false,
+      pinSyncVersion: 1,
+      shopGeo: { lat: 38.7, lng: -9.1, radiusM: 100 },
       smsNumber: "+351210000000",
+      staff: [],
+      timezone: "Europe/Lisbon",
       waNumber: "+351912345678",
     });
   });
