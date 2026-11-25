@@ -152,7 +152,7 @@ describe("pollWhatsAppInbound — fila Meta com transporte Evolution", () => {
       undefined
     );
     expect(customerUpdate).toHaveBeenCalledWith({
-      data: { whatsappConsent: false },
+      data: { whatsappConsent: false, whatsappConsentAt: null },
       where: { id: "c1" },
     });
   });

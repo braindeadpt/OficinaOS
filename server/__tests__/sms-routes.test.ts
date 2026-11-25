@@ -376,7 +376,7 @@ describe("POST /api/public/sms/inbound/:token", () => {
     expect(mocks.handleInboundSms).not.toHaveBeenCalled();
     expect(prisma.customer.update).toHaveBeenCalledTimes(3);
     expect(prisma.customer.update).toHaveBeenCalledWith({
-      data: { whatsappConsent: false },
+      data: { whatsappConsent: false, whatsappConsentAt: null },
       where: { id: "c1" },
     });
   });

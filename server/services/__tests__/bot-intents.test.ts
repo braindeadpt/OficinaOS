@@ -22,6 +22,7 @@ import {
   composeReply,
   findCustomersByPhone,
   handleInboundMessage,
+  revokeConsentForPhone,
 } from "../bot-intents.js";
 
 const PHONE = "351912345678";
@@ -255,7 +256,7 @@ describe("composeReply — deterministic rules before AI", () => {
     const out = await composeReply(ctx, msg("PARAR"));
     expect(mocks.askBotAi).not.toHaveBeenCalled();
     expect(prisma.customer.update).toHaveBeenCalledWith({
-      data: { whatsappConsent: false },
+      data: { whatsappConsent: false, whatsappConsentAt: null },
       where: { id: "cust-1" },
     });
     expect(out.text).toContain("mensagens automáticas");
@@ -595,7 +596,7 @@ describe("composeReply — deterministic rules before AI", () => {
     });
     expect(out).not.toBeNull();
     expect(prisma.customer.update).toHaveBeenCalledWith({
-      data: { whatsappConsent: false },
+      data: { whatsappConsent: false, whatsappConsentAt: null },
       where: { id: "cust-1" },
     });
     // A confirmação conta para o limite anti-ban — acima do teto a
@@ -662,5 +663,14 @@ describe("findCustomersByPhone — ficha com separadores", () => {
     ]);
     const found = await findCustomersByPhone(prisma as never, "+351912345678");
     expect(found.map((c) => c.id)).toEqual(["c0", "c1"]);
+  });
+
+  it("PARAR revoga o consentimento e limpa a data de opt-in", async () => {
+    const prisma = phonePrisma(["+351 912 345 678"]);
+    await revokeConsentForPhone(prisma as never, "+351912345678");
+    expect(prisma.customer.update).toHaveBeenCalledWith({
+      data: { whatsappConsent: false, whatsappConsentAt: null },
+      where: { id: "c0" },
+    });
   });
 });

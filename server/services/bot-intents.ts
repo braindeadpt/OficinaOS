@@ -668,7 +668,7 @@ async function applyStopConsent(
 ): Promise<void> {
   for (const c of customers) {
     await ctx.prisma.customer.update({
-      data: { whatsappConsent: false },
+      data: { whatsappConsent: false, whatsappConsentAt: null },
       where: { id: c.id },
     });
   }
@@ -686,7 +686,7 @@ export async function revokeConsentForPhone(
   const customers = await findCustomersByPhone(prisma, phone);
   for (const c of customers) {
     await prisma.customer.update({
-      data: { whatsappConsent: false },
+      data: { whatsappConsent: false, whatsappConsentAt: null },
       where: { id: c.id },
     });
   }
