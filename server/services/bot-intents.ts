@@ -83,6 +83,7 @@ export function isStopText(text: string): boolean {
 }
 const HUMAN_RE = /ajuda|humano|atendimento|operador|pessoa|urgente/i;
 const DIGITS_RE = /\D/g;
+const PHONE_TRAILING_SEPARATORS = ["", ")", ".", "-"];
 const WA_BOLD_RE = /\*/g;
 
 export interface InboundMessage {
@@ -482,10 +483,16 @@ export async function findCustomersByPhone(
     return [];
   }
   // Pré-filtro só pelo último dígito: a ficha pode ter o número com
-  // separadores («+351 912 345 678») e um endsWith dos últimos 4 dígitos
-  // falhava — o casamento exato faz-se abaixo sobre os dígitos.
+  // separadores («+351 912 345 678», «(912 345 678)») e um endsWith dos
+  // últimos 4 dígitos falhava — o casamento exato faz-se abaixo sobre os
+  // dígitos. Os sufixos são os separadores que isValidPhone aceita.
+  const lastDigit = senderDigits.slice(-1);
   const candidates = await prisma.customer.findMany({
-    where: { phone: { endsWith: senderDigits.slice(-1) } },
+    where: {
+      OR: PHONE_TRAILING_SEPARATORS.map((sep) => ({
+        phone: { endsWith: `${lastDigit}${sep}` },
+      })),
+    },
     select: { id: true, name: true, phone: true },
   });
   return candidates

@@ -647,22 +647,25 @@ describe("findCustomersByPhone — ficha com separadores", () => {
     return {
       customer: {
         findMany: vi.fn(
-          async (args: { where: { phone: { endsWith: string } } }) =>
-            rows.filter((r) => r.phone.endsWith(args.where.phone.endsWith))
+          async (args: { where: { OR: { phone: { endsWith: string } }[] } }) =>
+            rows.filter((r) =>
+              args.where.OR.some((o) => r.phone.endsWith(o.phone.endsWith))
+            )
         ),
         update: vi.fn(async () => ({})),
       },
     };
   }
 
-  it("casa +351912345678 com «+351 912 345 678» e «912 345 678»", async () => {
+  it("casa +351912345678 com «+351 912 345 678», «912 345 678» e «(912 345 678)»", async () => {
     const prisma = phonePrisma([
       "+351 912 345 678",
       "912 345 678",
       "+34 912 345 678",
+      "(912 345 678)",
     ]);
     const found = await findCustomersByPhone(prisma as never, "+351912345678");
-    expect(found.map((c) => c.id)).toEqual(["c0", "c1"]);
+    expect(found.map((c) => c.id)).toEqual(["c0", "c1", "c3"]);
   });
 
   it("PARAR revoga o consentimento e limpa a data de opt-in", async () => {
