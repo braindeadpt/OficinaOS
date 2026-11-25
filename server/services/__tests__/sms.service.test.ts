@@ -13,6 +13,22 @@ vi.mock("../../repositories/notification.repository.js", () => ({
   findManyUsers: mocks.findManyUsers,
 }));
 
+vi.mock("../cloud.service.js", () => ({
+  cloudFetch: vi.fn(async (_url: string, path: string) => ({
+    body: path.includes("/ai/bot-reply")
+      ? {
+          escalate: true,
+          jobId: null,
+          reply:
+            "Olá! Não encontrei reparações associadas a este número. Se és cliente, confirma connosco — Loja Teste.",
+          type: "reply",
+        }
+      : {},
+    ok: true,
+    status: 200,
+  })),
+}));
+
 vi.mock("../job-quote.service.js", () => ({
   respondToQuote: mocks.respondToQuote,
 }));
@@ -54,7 +70,11 @@ function fakePrisma(row: Record<string, unknown>) {
 }
 
 const ENABLED_ROW = {
+  // WP0.4 — sem config de Cloud o bot não responde (regras na Cloud).
+  botAiEnabled: true,
+  cloudApiUrl: "http://cloud.test",
   cloudEntitlements: ["sms"],
+  cloudShopTokenEncrypted: encryptSecret("shop-tok"),
   cloudSyncedAt: new Date(),
   countryCode: "PT",
   currency: "EUR",

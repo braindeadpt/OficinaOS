@@ -1,10 +1,7 @@
 import type { PrismaClient } from "@generated/client";
 import { Role } from "@generated/client";
 import { effectiveDialCode } from "@shared/constants/countries.js";
-import {
-  ACTIVE_STATUSES,
-  COMPLETED_STATUSES,
-} from "@shared/constants/job-statuses.js";
+import { ACTIVE_STATUSES } from "@shared/constants/job-statuses.js";
 import type { FastifyBaseLogger } from "fastify";
 import {
   createManyAndReturnInAppNotifications,
@@ -26,63 +23,26 @@ import { tryHandlePontoStaff } from "./ponto/handler.js";
 import { rateOk } from "./rate-limit.js";
 
 /**
- * Intents de resposta automática partilhados pelos bots WhatsApp e SMS:
- * casa o remetente com um cliente (últimos 9 dígitos), compõe a resposta
- * (estado da reparação, orçamento, SIM/NÃO) e escala para staff quando
- * necessário. O envio é injectado por cada canal — whatsapp-bot.service
- * envia via Graph API, sms.service via gateway local na LAN.
+ * Transporte do bot de clientes — WP0.4 (enforcement). A lógica de
+ * regras (estado, orçamento SIM/NÃO, códigos REP) vive TODA na Cloud:
+ * aqui monta-se o contexto (clientes/jobs do remetente), chama-se
+ * /ai/bot-reply e executam-se as ações devolvidas (consentimento,
+ * decisão de orçamento) com validação local — a Cloud não toca na BD
+ * da loja. Cloud em baixo → escala para staff ("a loja responde-te já"),
+ * tradeoff aceite pelo dono: sem enforcement uma app alterada tinha o
+ * bot de graça.
+ *
+ * Exceção deliberada: PARAR/STOP exatos revogam o consentimento
+ * localmente ANTES de qualquer chamada — obrigação legal que tem de
+ * valer mesmo com a Cloud em baixo. É plumbing legal, não lógica do bot.
  */
-
-const STATUS_PT: Record<string, string> = {
-  INTAKE: "Recebido",
-  WAITING_FOR_PARTS: "À espera de peças",
-  IN_REPAIR: "Em reparação",
-  ON_HOLD: "Em espera",
-  DONE: "Pronto para levantar",
-  DELIVERED: "Entregue",
-  RETURNED: "Devolvido",
-  CANCELLED: "Cancelado",
-};
-
-const QUOTE_STATUS_PT: Record<string, string> = {
-  SENT: "por responder",
-  APPROVED: "aceite",
-  REJECTED: "recusado",
-  SUPERSEDED: "substituído",
-};
-
-const JOB_CODE_RE = /REP-\d{4}-\d{6}-[A-Z0-9]{3}/i;
-const INTL_PREFIX_RE = /^00/;
-const QUOTE_RE = /or[çc]amento|pre[çc]o|quanto(?!.{0,10}tempo)|custa/i;
-// "quanto tempo falta" / "quando fica pronto" — perguntas de prazo têm
-// resposta determinística própria, antes do ramo de orçamento ("quanto").
-// "previsão"/"prazo" só contam quando NÃO modificados por uma palavra de
-// preço ("previsão de preço" é orçamento, não prazo) — a exclusão exige o
-// conector de/do/da para não atravessar fronteiras de frase ("Qual é a
-// previsão? O preço já sei." é pergunta de prazo). "está"/"esta" soltos
-// ficam de fora: "Quando está aberta a loja?" não é prazo de reparação.
-const TIME_RE =
-  /quanto tempo|quando.{0,25}(pronto|fica|entrega)|demora|falta.{0,15}pront|previs[aã]o(?!\s+(?:de|do|da|dos|das|para)\s+(?:(?:o|a|os|as|um|uma)\s+)?pre[çc]o)|prazo(?!\s+(?:de|do|da|dos|das|para)\s+(?:(?:o|a|os|as|um|uma)\s+)?(?:pre[çc]o|custo|pagamento))/i;
-// A peça mencionada junto de chegada/previsão/entrega — pergunta pela peça
-// em falta ("quando chega a peça?", "previsão de chegada da peça"), não
-// pelo estado da reparação. Só a forma interrogada conta: uma menção à
-// peça noutra frase ("Já paguei a peça.") não desvia o prazo da reparação.
-const PART_ETA_RE =
-  /(pe[çc]a|encomenda|componente).{0,25}(chega|chegada|previs|pront|entrega|demora)|(chega|chegada|previs[aã]o).{0,20}(pe[çc]a|encomenda|componente)/i;
-// "ok" is deliberately absent — a bare "ok" in casual conversation
-// must not legally accept a quote.
-const YES_WORDS = new Set(["sim", "aceito", "confirmo", "aprovo"]);
-const NO_WORDS = new Set(["não", "nao", "recuso", "rejeito"]);
-// Opt-out transversal — desliga whatsappConsent no Customer e vale para
-// todos os canais automáticos. Exact-match como SIM/NÃO: frases com
-// "parar" embutido não tiram consentimento por acidente.
 const STOP_WORDS = new Set(["parar", "stop"]);
 
 /** Opt-out transversal — true para PARAR/STOP exatos (case-insensitive). */
 export function isStopText(text: string): boolean {
   return STOP_WORDS.has(text.trim().toLowerCase());
 }
-const HUMAN_RE = /ajuda|humano|atendimento|operador|pessoa|urgente/i;
+const INTL_PREFIX_RE = /^00/;
 const DIGITS_RE = /\D/g;
 const WA_BOLD_RE = /\*/g;
 
@@ -151,18 +111,6 @@ export interface BotReplyCtx {
    *  chegadas de peças) renderizam-se aqui, não no fuso do servidor. */
   timezone?: string;
 }
-
-function eur(
-  ctx: BotReplyCtx,
-  amount: { toNumber(): number } | number
-): string {
-  const n = typeof amount === "number" ? amount : amount.toNumber();
-  return new Intl.NumberFormat("pt-PT", {
-    currency: ctx.currency,
-    style: "currency",
-  }).format(n);
-}
-
 /** Notifica staff in-app e avisa o cliente que um humano responde. */
 export async function escalateToStaff(
   ctx: BotReplyCtx,
@@ -228,226 +176,6 @@ interface ActiveJob {
     status: string;
   }[];
   status: string;
-}
-
-function statusText(ctx: BotReplyCtx, job: ActiveJob): string {
-  const device = `${job.device.brand.name} ${job.device.model}`;
-  let text = `A tua reparação ${job.jobCode} (${device}) está: *${
-    STATUS_PT[job.status] ?? job.status
-  }*.`;
-  if (job.estimatedDate) {
-    text += ` Previsão: ${job.estimatedDate.toLocaleDateString("pt-PT", {
-      timeZone: ctx.timezone ?? process.env.TZ ?? "Europe/Lisbon",
-    })}.`;
-  }
-  // Registos de peças podem sobreviver à conclusão da reparação (o fluxo
-  // não exige removê-los) — numa reparação pronta/entregue "Peças em
-  // falta" seria contraditório, por isso a lista só aparece em estados
-  // ativos.
-  if (
-    (job.partsWaiting?.length ?? 0) > 0 &&
-    !(COMPLETED_STATUSES as string[]).includes(job.status)
-  ) {
-    text += ` Peças em falta: ${pendingPartsText(job)}.`;
-  }
-  const q = job.quotes[0];
-  if (q?.status === "SENT") {
-    text += ` Tens um orçamento de *${eur(
-      ctx,
-      q.amount
-    )}* por responder — responde SIM para aceitar ou NÃO para recusar.`;
-  } else {
-    text += " Responde ORÇAMENTO para detalhes ou AJUDA para falar connosco.";
-  }
-  return text;
-}
-
-/** Resposta a «quando chega a peça» — a data esperada da peça em falta,
- *  não o estado da reparação. */
-/** Partes em falta formatadas — cada uma com a data esperada ou
- *  "sem data prevista"; nunca esconde as que não têm data. */
-function pendingPartsText(job: ActiveJob): string {
-  // A previsão é um dia de calendário (meio-dia UTC no armazenamento) —
-  // formatar em UTC mostra o mesmo dia em todos os fusos; formatar no
-  // fuso da loja adiantava/atrasava um dia nos extremos (-12/+14).
-  return (job.partsWaiting ?? [])
-    .map((p) =>
-      p.expectedAt
-        ? `${p.partName} — chegada prevista: ${p.expectedAt.toLocaleDateString(
-            "pt-PT",
-            { timeZone: "UTC" }
-          )}`
-        : `${p.partName} — sem data prevista`
-    )
-    .join("; ");
-}
-
-/** Resposta a «quando chega a peça» — a data esperada da peça em falta,
- *  não o estado da reparação. */
-function partEtaText(ctx: BotReplyCtx, job: ActiveJob): string {
-  const device = `${job.device.brand.name} ${job.device.model}`;
-  const tz = ctx.timezone ?? process.env.TZ ?? "Europe/Lisbon";
-  let text = `Peças em falta para a tua reparação ${job.jobCode} (${device}): ${pendingPartsText(
-    job
-  )}.`;
-  if (job.estimatedDate) {
-    text += ` Previsão da reparação: ${job.estimatedDate.toLocaleDateString(
-      "pt-PT",
-      { timeZone: tz }
-    )}.`;
-  }
-  return text;
-}
-
-function quoteText(ctx: BotReplyCtx, job: ActiveJob): string {
-  const q = job.quotes[0];
-  if (!q) {
-    return `A reparação ${job.jobCode} ainda não tem orçamento — a loja envia em breve.`;
-  }
-  let text = `Orçamento ${job.jobCode} v${q.version}: *${eur(ctx, q.amount)}*`;
-  if (q.note) {
-    text += `\n${q.note}`;
-  }
-  text +=
-    q.status === "SENT"
-      ? "\nResponde SIM para aceitar ou NÃO para recusar."
-      : `\nEstado: ${QUOTE_STATUS_PT[q.status] ?? q.status}.`;
-  return text;
-}
-
-/** Retry de um SIM/NÃO já aplicado (a resposta anterior não chegou a
- * sair): o orçamento está decidido — devolve a confirmação da mesma
- * decisão em vez de "não tens orçamentos", que leria como se a decisão
- * se tivesse perdido. Decisão contrária → já respondido. */
-function repeatOrEmpty(
-  ctx: BotReplyCtx,
-  decidedJob: ActiveJob | undefined,
-  decision: "approve" | "reject"
-): string {
-  const last = decidedJob?.quotes[0];
-  if (decision === "approve" && last?.status === "APPROVED") {
-    return `Orçamento de ${eur(ctx, last.amount)} aceite ✅ Obrigado — a loja avança com a reparação ${decidedJob?.jobCode ?? ""}.`;
-  }
-  if (decision === "reject" && last?.status === "REJECTED") {
-    return `Orçamento de ${eur(ctx, last.amount)} recusado. A loja entra em contacto contigo sobre ${decidedJob?.jobCode ?? ""}.`;
-  }
-  if (last?.status === "APPROVED" || last?.status === "REJECTED") {
-    return "Esse orçamento já foi respondido ou substituído — a loja confirma contigo.";
-  }
-  return "Não tens orçamentos pendentes de resposta.";
-}
-
-// Tolerância para desfasamento de relógio Cloud↔DB: uma resposta só é
-// "anterior ao orçamento" quando a diferença ultrapassa este intervalo.
-const STALE_DECISION_GRACE_MS = 60_000;
-
-/** Aplica SIM/NÃO via respondToQuote — o mesmo serviço do portal/LAN.
- * `stale` = a resposta chegou antes deste orçamento sair (fila Cloud):
- * refere-se a outro, nunca se aplica ao mais recente por engano. */
-async function answerQuote(
-  ctx: BotReplyCtx,
-  msg: InboundMessage,
-  jobs: ActiveJob[],
-  direct: ActiveJob | undefined,
-  decision: "approve" | "reject"
-): Promise<{ stale: boolean; text: string }> {
-  const pending = jobs.filter((j) => j.quotes[0]?.status === "SENT");
-  let target: ActiveJob | undefined;
-  if (direct?.quotes[0]?.status === "SENT") {
-    target = direct;
-  } else if (pending.length === 1) {
-    target = pending[0];
-  }
-  if (!target) {
-    return {
-      stale: false,
-      text: repeatOrEmpty(
-        ctx,
-        direct ?? (jobs.length === 1 ? jobs[0] : undefined),
-        decision
-      ),
-    };
-  }
-  const quote = target.quotes[0];
-  if (!quote) {
-    return { stale: false, text: "Não tens orçamentos pendentes de resposta." };
-  }
-  const replyAt = Date.parse(msg.createdAt);
-  if (
-    Number.isFinite(replyAt) &&
-    quote.sentAt &&
-    replyAt < quote.sentAt.getTime() - STALE_DECISION_GRACE_MS
-  ) {
-    return { stale: true, text: "" };
-  }
-  const result = await respondToQuote(
-    ctx.prisma,
-    {
-      code: target.jobCode,
-      decision,
-      phone4: msg.fromPhone.slice(-4),
-      quoteId: quote.id,
-    },
-    ctx.notifyCtx ?? { prisma: ctx.prisma }
-  );
-  if (result.error) {
-    return {
-      stale: false,
-      text: "Esse orçamento já foi respondido ou substituído — a loja confirma contigo.",
-    };
-  }
-  return {
-    stale: false,
-    text:
-      decision === "approve"
-        ? `Orçamento de ${eur(ctx, quote.amount)} aceite ✅ Obrigado — a loja avança com a reparação ${target.jobCode}.`
-        : `Orçamento de ${eur(ctx, quote.amount)} recusado. A loja entra em contacto contigo sobre ${target.jobCode}.`,
-  };
-}
-
-export interface BotReply {
-  customerName: string | null;
-  escalate: boolean;
-  jobId: string | null;
-  text: string;
-}
-
-/** SIM/NÃO — decisão vinculativa de orçamento, sempre determinístico. */
-async function decideQuoteIntent(
-  ctx: BotReplyCtx,
-  msg: InboundMessage,
-  jobs: ActiveJob[],
-  direct: ActiveJob | undefined,
-  customerName: string | null,
-  targetJobId: string | null,
-  decision: "approve" | "reject",
-  opts: { allowQuoteDecision?: boolean }
-): Promise<BotReply> {
-  if (opts.allowQuoteDecision === false) {
-    return {
-      customerName,
-      // A decisão não se aplica, mas a equipa tem de a ver — um SIM
-      // fora da janela sem registo deixava o cliente à espera de uma
-      // resposta que nunca chega. Sem jobId: com várias reparações
-      // ativas não se sabe a que orçamento o SIM/NÃO se refere e
-      // ligar a mais recente abria a reparação errada.
-      escalate: true,
-      jobId: null,
-      text: "",
-    };
-  }
-  const out = await answerQuote(ctx, msg, jobs, direct, decision);
-  if (out.stale) {
-    // Resposta mais antiga que o orçamento pendente — refere-se a
-    // outro. A equipa vê-a (escalada) mas a decisão não se aplica.
-    return { customerName, escalate: true, jobId: null, text: "" };
-  }
-  return {
-    customerName,
-    escalate: false,
-    jobId: targetJobId,
-    text: out.text,
-  };
 }
 
 interface CustomerMatch {
@@ -564,15 +292,88 @@ async function findCustomerJobs(
   return { customers, jobs };
 }
 
-function listJobsText(customerName: string | null, jobs: ActiveJob[]): string {
-  return `Olá ${customerName}! Tens ${jobs.length} reparações em curso:\n${jobs
-    .map((j) => `• ${j.jobCode} — ${STATUS_PT[j.status] ?? j.status}`)
-    .join("\n")}\nResponde com o código para detalhes.`;
+export interface BotReply {
+  customerName: string | null;
+  escalate: boolean;
+  jobId: string | null;
+  text: string;
+}
+
+function serializeJobs(jobs: ActiveJob[]) {
+  return jobs.map((j) => ({
+    customerName: j.customer.name,
+    deviceName: `${j.device.brand.name} ${j.device.model}`,
+    estimatedDate: j.estimatedDate?.toISOString() ?? null,
+    id: j.id,
+    jobCode: j.jobCode,
+    partsWaiting: (j.partsWaiting ?? []).map((p) => ({
+      expectedAt: p.expectedAt?.toISOString() ?? null,
+      partName: p.partName,
+    })),
+    quotes: j.quotes.map((q) => ({
+      amount: q.amount.toNumber(),
+      id: q.id,
+      note: q.note,
+      sentAt: q.sentAt?.toISOString() ?? null,
+      status: q.status,
+      version: q.version,
+    })),
+    status: j.status,
+  }));
+}
+
+/** Executa a ação devolvida pelas regras da Cloud — a validação e os
+ *  efeitos na BD da loja são locais; a composição dos textos fica na
+ *  Cloud, a escolha aqui é plumbing. */
+async function executeCloudAction(
+  ctx: BotReplyCtx,
+  res: NonNullable<Awaited<ReturnType<typeof askBotAi>>>,
+  msg: InboundMessage,
+  customers: { id: string; name: string }[],
+  replyText: string
+): Promise<string> {
+  if (res.action?.kind === "stop_consent") {
+    // Belt-and-braces: o caminho normal já revogou acima; idempotente.
+    await applyStopConsent(ctx, customers);
+    return replyText;
+  }
+  if (res.action?.kind !== "quote_decision") {
+    return replyText;
+  }
+  let applied = false;
+  try {
+    const result = await respondToQuote(
+      ctx.prisma,
+      {
+        code: res.action.jobCode,
+        decision: res.action.decision,
+        phone4: msg.fromPhone.slice(-4),
+        quoteId: res.action.quoteId,
+      },
+      ctx.notifyCtx ?? { prisma: ctx.prisma }
+    );
+    // Recusas vêm como resultado, não exceção: SUPERSEDED /
+    // ALREADY_RESPONDED / PHONE_MISMATCH — confirmar o sucesso
+    // nesses casos mentia ao cliente sobre uma decisão que ficou
+    // por aplicar.
+    applied = !result.error && result.jobExists;
+  } catch {
+    applied = false;
+  }
+  if (applied) {
+    return res.actionSuccessText ?? replyText;
+  }
+  // Orçamento já respondido/substituído entretanto — a Cloud compôs
+  // o texto para esse caso.
+  return (
+    res.actionFailureText ??
+    "Esse orçamento já foi respondido ou substituído — a loja confirma contigo."
+  );
 }
 
 /**
- * Gera a resposta para uma mensagem inbound. `plainText` remove os marcadores
- * de negrito do WhatsApp — o SMS mostraria os asteriscos literalmente.
+ * Gera a resposta para uma mensagem inbound — transporte puro: monta o
+ * contexto, chama a Cloud (regras + IA) e executa as ações devolvidas.
  */
 export async function composeReply(
   ctx: BotReplyCtx,
@@ -586,36 +387,13 @@ export async function composeReply(
   } = {}
 ): Promise<BotReply> {
   const { customers, jobs } = await findCustomerJobs(ctx, msg.fromPhone);
-  if (customers.length === 0) {
-    return {
-      customerName: null,
-      escalate: true,
-      jobId: null,
-      text: `Olá! Não encontrei reparações associadas a este número. Se és cliente, confirma connosco — ${ctx.shopLabel}.`,
-    };
-  }
-
   const customerName = customers[0]?.name ?? null;
   const text = (msg.text ?? "").trim();
-  const lower = text.toLowerCase();
-  const codeMatch = text.match(JOB_CODE_RE);
-  const direct = codeMatch
-    ? jobs.find((j) => j.jobCode.toUpperCase() === codeMatch[0].toUpperCase())
-    : undefined;
-  const targetJobId = direct?.id ?? jobs[0]?.id ?? null;
 
-  // Não-texto ou pedido explícito de humano → escala para staff.
-  if (msg.messageType !== "text" || HUMAN_RE.test(lower)) {
-    return {
-      customerName,
-      escalate: true,
-      jobId: targetJobId,
-      text: `Recebemos a tua mensagem, ${customerName ?? ""} — a loja responde-te já.`,
-    };
-  }
-
-  // PARAR/STOP — opt-out transversal, sempre antes da IA (§E.9).
-  if (STOP_WORDS.has(lower)) {
+  // PARAR/STOP — opt-out transversal, revogado localmente SEMPRE, mesmo
+  // com a Cloud em baixo (obrigação legal). A confirmação é fixa aqui
+  // pelo mesmo motivo; a Cloud tem a mesma regra para outros caminhos.
+  if (isStopText(text)) {
     await applyStopConsent(ctx, customers);
     return {
       customerName,
@@ -625,60 +403,85 @@ export async function composeReply(
     };
   }
 
-  // SIM/NÃO — decisão vinculativa de orçamento: SEMPRE determinístico.
-  // Em mensagens velhas (>23h na Meta oficial) a decisão não se aplica —
-  // o cliente pode estar a responder a outro orçamento; nunca decidir
-  // sem poder confirmar na hora.
-  if (YES_WORDS.has(lower) || NO_WORDS.has(lower)) {
-    return decideQuoteIntent(
-      ctx,
-      msg,
-      jobs,
-      direct,
-      customerName,
-      targetJobId,
-      YES_WORDS.has(lower) ? "approve" : "reject",
-      opts
-    );
-  }
-
-  // IA (Pro, atrás de flag): só texto livre — mensagens com código REP ou
-  // pedido de orçamento ficam nas regras determinísticas. Falha/sem módulo
-  // → cai nas regras em vez de ficar em silêncio.
-  const aiReply = await tryBotAiReply(ctx, msg, {
-    codeMatch: !!codeMatch,
-    customerIds: customers.map((c) => c.id),
-    inboxRecord: opts.inboxRecord,
-    lower,
-    text,
+  const ai = ctx.ai;
+  const escalateFallback = (): BotReply => ({
+    customerName,
+    escalate: true,
+    jobId: jobs[0]?.id ?? null,
+    text: `Recebemos a tua mensagem, ${customerName ?? ""} — a loja responde-te já.`,
   });
-  if (aiReply) {
-    const reply: BotReply = {
-      customerName,
-      escalate: aiReply.escalate,
-      jobId: targetJobId,
-      text: aiReply.text,
-    };
-    if (plainText) {
-      reply.text = reply.text.replace(WA_BOLD_RE, "");
-    }
-    return reply;
+
+  // Sem configuração de canal/Cloud não há bot — enforcement: as regras
+  // vivem na Cloud, não há fallback local.
+  if (!ai) {
+    return escalateFallback();
   }
 
-  if (jobs.length === 0) {
-    return {
-      customerName,
-      escalate: false,
-      jobId: null,
-      text: `Olá ${customerName}! Não tens reparações em curso neste momento — ${ctx.shopLabel}.`,
-    };
+  const toolCtx: BotToolCtx = {
+    currency: ctx.currency,
+    customerIds: customers.map((c) => c.id),
+    log: ctx.log,
+    portalApiUrl: ctx.portalApiUrl ?? null,
+    portalEnabled: ctx.portalEnabled ?? false,
+    prisma: ctx.prisma,
+    timezone: ctx.timezone,
+    shopCard: {
+      botAvgRepairDaysAfterPart: ai.avgRepairDaysAfterPart,
+      botInfoText: ai.botInfoText,
+    },
+  };
+  // §G.4 — com a inbox ativa, o contexto vem das últimas 6 mensagens
+  // gravadas (a atual excluída: vai como userText à parte).
+  const history = opts.inboxRecord
+    ? await getConversationHistory(
+        ctx.prisma,
+        opts.inboxRecord.conversationId,
+        6,
+        opts.inboxRecord.messageId
+      ).catch(() => undefined)
+    : undefined;
+
+  const res = await askBotAi(toolCtx, ai, {
+    channel: ai.channel,
+    context: {
+      aiEnabled: ai.enabled && ai.modules.includes(ai.module),
+      allowQuoteDecision: opts.allowQuoteDecision,
+      currency: ctx.currency,
+      customers,
+      jobs: serializeJobs(jobs),
+      messageCreatedAt: msg.sentAt ?? msg.createdAt,
+      messageType: msg.messageType,
+      shopLabel: ctx.shopLabel,
+      timezone: ctx.timezone,
+    },
+    history,
+    phone: msg.fromPhone,
+    userText: text,
+  });
+
+  // Cloud em baixo / resposta inválida → escala para staff (tradeoff
+  // do enforcement — não há regras locais de reserva).
+  if (!res) {
+    return escalateFallback();
   }
 
-  const reply = routeIntent(ctx, customerName, jobs, direct, lower);
-  if (plainText) {
-    reply.text = reply.text.replace(WA_BOLD_RE, "");
-  }
-  return reply;
+  const executed = await executeCloudAction(
+    ctx,
+    res,
+    msg,
+    customers,
+    res.reply
+  );
+  const replyText = plainText ? executed.replace(WA_BOLD_RE, "") : executed;
+  return {
+    customerName,
+    escalate: res.escalate,
+    // null explícito da Cloud = reparação ambígua — ligar a mais
+    // recente abria a reparação errada ao staff. undefined (Cloud
+    // antiga sem o campo) → compat com o comportamento anterior.
+    jobId: res.jobId === undefined ? (jobs[0]?.id ?? null) : res.jobId,
+    text: replyText,
+  };
 }
 
 /** PARAR/STOP — desliga o consentimento em todos os clientes do número. */
@@ -710,65 +513,6 @@ export async function revokeConsentForPhone(
       where: { id: c.id },
     });
   }
-}
-
-/** Pergunta à IA quando a flag, o entitlement e o formato da mensagem deixam. */
-async function tryBotAiReply(
-  ctx: BotReplyCtx,
-  msg: InboundMessage,
-  input: {
-    codeMatch: boolean;
-    customerIds: string[];
-    inboxRecord?: { conversationId: string; messageId: string };
-    lower: string;
-    text: string;
-  }
-): Promise<{ escalate: boolean; text: string } | null> {
-  const ai = ctx.ai;
-  if (
-    !ai?.enabled ||
-    input.text.length === 0 ||
-    QUOTE_RE.test(input.lower) ||
-    TIME_RE.test(input.lower) ||
-    // «quando chega a peça?» não tem «previsão»/«prazo» — sem este
-    // termo a pergunta ia para a IA em vez da resposta determinística
-    // com a data registada da peça.
-    PART_ETA_RE.test(input.lower) ||
-    input.codeMatch ||
-    !ai.modules.includes(ai.module)
-  ) {
-    return null;
-  }
-  const toolCtx: BotToolCtx = {
-    currency: ctx.currency,
-    customerIds: input.customerIds,
-    log: ctx.log,
-    portalApiUrl: ctx.portalApiUrl ?? null,
-    portalEnabled: ctx.portalEnabled ?? false,
-    prisma: ctx.prisma,
-    timezone: ctx.timezone,
-    shopCard: {
-      botAvgRepairDaysAfterPart: ai.avgRepairDaysAfterPart,
-      botInfoText: ai.botInfoText,
-    },
-  };
-  // §G.4 — com a inbox ativa, o contexto vem das últimas 6 mensagens
-  // gravadas (a atual excluída: vai como userText à parte).
-  const history = input.inboxRecord
-    ? await getConversationHistory(
-        ctx.prisma,
-        input.inboxRecord.conversationId,
-        6,
-        input.inboxRecord.messageId
-      ).catch(() => undefined)
-    : undefined;
-  const res = await askBotAi(toolCtx, ai, {
-    channel: ai.channel,
-    history,
-    phone: msg.fromPhone,
-    userText: input.text,
-  });
-  return res ? { escalate: res.escalate, text: res.reply } : null;
 }
 
 /** Regista o inbound na caixa de entrada; com requireInboxPersist um
@@ -967,95 +711,4 @@ export async function handleInboundMessage(
     );
   }
   return { reply: out, sent };
-}
-
-/** Decide o intent e compõe a resposta quando há ≥1 job ativo. */
-function routeIntent(
-  ctx: BotReplyCtx,
-  customerName: string | null,
-  jobs: ActiveJob[],
-  direct: ActiveJob | undefined,
-  lower: string
-): BotReply {
-  if (TIME_RE.test(lower) || PART_ETA_RE.test(lower)) {
-    const target = direct ?? (jobs.length === 1 ? jobs[0] : undefined);
-    if (!target) {
-      return {
-        customerName,
-        escalate: false,
-        jobId: null,
-        text: `Tens ${jobs.length} reparações em curso: ${jobs
-          .map((j) => j.jobCode)
-          .join(", ")}. Responde com o código para veres a previsão.`,
-      };
-    }
-    // «Chegada da peça» pergunta pela peça em falta — se há peças
-    // registadas, responde com a data esperada da peça (não o estado).
-    // Em reparações concluídas os registos podem ficar por apagar —
-    // cai no estado («Pronto para levantar») como no statusText.
-    if (
-      PART_ETA_RE.test(lower) &&
-      (target.partsWaiting?.length ?? 0) > 0 &&
-      !(COMPLETED_STATUSES as string[]).includes(target.status)
-    ) {
-      return {
-        customerName,
-        escalate: false,
-        jobId: target.id,
-        text: partEtaText(ctx, target),
-      };
-    }
-    return {
-      customerName,
-      escalate: false,
-      jobId: target.id,
-      text: statusText(ctx, target),
-    };
-  }
-
-  if (QUOTE_RE.test(lower)) {
-    const target = direct ?? (jobs.length === 1 ? jobs[0] : undefined);
-    if (!target) {
-      return {
-        customerName,
-        escalate: false,
-        jobId: null,
-        text: `Tens ${jobs.length} reparações em curso: ${jobs
-          .map((j) => j.jobCode)
-          .join(", ")}. Responde com o código para veres o orçamento.`,
-      };
-    }
-    return {
-      customerName,
-      escalate: false,
-      jobId: target.id,
-      text: quoteText(ctx, target),
-    };
-  }
-
-  if (direct) {
-    return {
-      customerName,
-      escalate: false,
-      jobId: direct.id,
-      text: statusText(ctx, direct),
-    };
-  }
-
-  if (jobs.length === 1) {
-    const job = jobs[0];
-    return {
-      customerName,
-      escalate: false,
-      jobId: job.id,
-      text: statusText(ctx, job),
-    };
-  }
-
-  return {
-    customerName,
-    escalate: false,
-    jobId: null,
-    text: listJobsText(customerName, jobs),
-  };
 }

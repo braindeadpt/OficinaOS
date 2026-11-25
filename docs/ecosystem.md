@@ -168,7 +168,12 @@ Inbound:  cliente SMS → SMS Gateway for Android → webhook
     de entrada, sem resposta
 ```
 
-100% LAN: nada passa pela Cloud nem pela Meta — só sai o SMS pela rede móvel.
+Transporte 100% LAN: o SMS em si só sai pela rede móvel — a Meta não
+intervém. **Atenção (WP0.4): a composição da resposta automática passa
+pela Cloud** mesmo neste canal — as regras do bot (estado, orçamento,
+códigos REP) vivem em `/ai/bot-reply` e a app envia-lhe o contexto da
+reparação, com ou sem IA ativa. Cloud em baixo → o cliente recebe só um ack genérico («a loja responde-te já») e a conversa escala ao staff — não há resposta de regras nem de IA. PARAR/STOP é a exceção deliberada: a
+revogação do consentimento corre sempre localmente.
 Sem template SMS dedicado, o dispatch usa o corpo WhatsApp com `*bold*`
 removido (SMS não renderiza markdown). Desde a decisão do dono de
 2026-11-23 **todo o SMS é Pro — inclusive o envio pela LAN**: o

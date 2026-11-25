@@ -40,7 +40,34 @@ describe("askBotAi", () => {
       ok({ escalate: false, reply: "Fechamos às 18h.", type: "reply" })
     );
     const res = await askBotAi(ctx, cloud, input);
-    expect(res).toEqual({ escalate: false, reply: "Fechamos às 18h." });
+    expect(res).toEqual({
+      action: undefined,
+      actionFailureText: undefined,
+      actionSuccessText: undefined,
+      escalate: false,
+      jobId: undefined,
+      reply: "Fechamos às 18h.",
+    });
+  });
+
+  it("empty reply with escalate is a valid silent escalation", async () => {
+    mocks.cloudFetch.mockResolvedValueOnce(
+      ok({ escalate: true, jobId: null, reply: "", type: "reply" })
+    );
+    const res = await askBotAi(ctx, cloud, input);
+    // Válido: um SIM stale escala em silêncio — reply vazio, jobId null
+    // explícito (não undefined) para não ligar reparação nenhuma.
+    expect(res?.reply).toBe("");
+    expect(res?.escalate).toBe(true);
+    expect(res?.jobId).toBeNull();
+  });
+
+  it("empty reply without action or escalate is invalid", async () => {
+    mocks.cloudFetch.mockResolvedValueOnce(
+      ok({ escalate: false, reply: "", type: "reply" })
+    );
+    const res = await askBotAi(ctx, cloud, input);
+    expect(res).toBeNull();
   });
 
   it("executes tool calls locally and resends the conversation", async () => {
