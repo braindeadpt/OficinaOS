@@ -804,16 +804,20 @@ function pushDayHours(
 }
 
 /**
- * Histórico completo dos trabalhadores com eventos no período — os
- * intervalos são path-dependent (um turno aberto no início do período só
- * se calcula vendo os eventos anteriores), por isso a leitura não é
- * limitada às datas pedidas.
+ * Eventos dos trabalhadores dentro do período pedido. O corte é exato:
+ * sem emparelhamento overnight (decisão do dono 2026-11-25) um evento
+ * anterior ao período está sempre noutro dia civil — nunca emparelha
+ * nem suprime nada dentro dele —, e o estado de cada dia dentro do
+ * período depende só dos eventos desse mesmo dia. Ler o histórico
+ * completo crescia sem limite com a antiguidade da loja.
  */
 async function loadUserHistories(
   prisma: DbClient,
-  userIds: string[]
+  userIds: string[],
+  range: PontoRange
 ): Promise<Map<string, ComputeRow[]>> {
   const rows = await findComputeEntries(prisma, {
+    at: { gte: range.start, lt: range.end },
     userId: { in: userIds },
   });
   const byUser = new Map<string, ComputeRow[]>();
@@ -842,7 +846,7 @@ export async function getHours(
   }
 
   const [byUser, users] = await Promise.all([
-    loadUserHistories(prisma, userIds),
+    loadUserHistories(prisma, userIds, range),
     prisma.user.findMany({
       select: {
         id: true,
@@ -907,7 +911,7 @@ export async function getMissingExits(
   }
 
   const [byUser, users] = await Promise.all([
-    loadUserHistories(prisma, userIds),
+    loadUserHistories(prisma, userIds, range),
     prisma.user.findMany({
       select: { id: true, name: true, username: true },
       where: { id: { in: userIds } },
