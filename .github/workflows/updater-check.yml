@@ -60,6 +60,18 @@ jobs:
               if (-not (Test-Path $full)) { throw "Ficheiro em falta apos instalacao: $full" }
             }
 
+            $trayInstalled = Join-Path $installDir "tools\OficinaOSTray.exe"
+            $trayDeadline = (Get-Date).AddSeconds(15)
+            $trayProc = $null
+            while (-not $trayProc -and (Get-Date) -lt $trayDeadline) {
+              $trayProc = Get-Process OficinaOSTray -ErrorAction SilentlyContinue |
+                Where-Object { $_.Path -eq $trayInstalled }
+              if (-not $trayProc) { Start-Sleep -Milliseconds 250 }
+            }
+            if (-not $trayProc) {
+              throw "OficinaOSTray.exe nao arrancou a partir de $trayInstalled antes da desinstalacao"
+            }
+
             $u = Start-Process -FilePath (Join-Path $installDir "unins000.exe") `
               -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" `
               -PassThru
