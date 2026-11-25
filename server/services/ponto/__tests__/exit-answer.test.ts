@@ -95,6 +95,17 @@ describe("parsePontoExitAnswer — ambíguo", () => {
       kind: "ambiguous",
     });
     expect(parsePontoExitAnswer("18.305")).toEqual({ kind: "ambiguous" });
+    // Com espaço depois do separador — o mesmo erro de digitação.
+    expect(parsePontoExitAnswer("Saí às 18: 305")).toEqual({
+      kind: "ambiguous",
+    });
+    expect(parsePontoExitAnswer("18. 305")).toEqual({ kind: "ambiguous" });
+  });
+
+  it("hora solta + ponto final seguido de duração lê a hora certa", () => {
+    expect(
+      parsePontoExitAnswer("Saí às 18. 100 minutos depois cheguei a casa")
+    ).toEqual({ hhmm: "18:00", kind: "time" });
   });
 
   it("ponto final seguido de duração não é hora malformada", () => {
