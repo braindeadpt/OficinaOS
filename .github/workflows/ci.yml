@@ -61,6 +61,11 @@ jobs:
           git fetch --depth=1 origin "${GITHUB_BASE_REF:-main}"
           bun scripts/check-migration-timestamps.ts FETCH_HEAD
 
+      - name: Ponto immutability at the database level (WP0.3)
+        # UPDATE/DELETE têm de falhar mesmo com o GUC antigo ligado; a
+        # purga dos 5 anos só corre pela função SECURITY DEFINER.
+        run: bun scripts/test-ponto-immutability.ts
+
       - name: Lint
         run: bun run check
 
