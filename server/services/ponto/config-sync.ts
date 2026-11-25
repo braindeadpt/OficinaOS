@@ -206,7 +206,7 @@ async function fetchPontoStaffUsers(prisma: DbClient) {
     const state = states.get(u.id);
     const cloudEntry = state?.cloudEntry;
     const validation = cloudEntry?.validations[0];
-    const revokedBy = validation?.byUser.username || validation?.byUser.name;
+    const revokedBy = validation?.byUser.name || validation?.byUser.username;
     return {
       ...u,
       manualEntryAt: state?.manualEntryAt ?? null,

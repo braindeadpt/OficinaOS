@@ -482,7 +482,7 @@ describe("ponto — sync após validação do painel", () => {
         manualEntryAt: null,
         phone: "+351911111111",
         revokeEntryAt: proofRecordedAt,
-        revokedBy: "dono",
+        revokedBy: "Dono",
         smsAllowed: true,
       },
       {
@@ -490,7 +490,7 @@ describe("ponto — sync após validação do painel", () => {
         manualEntryAt: null,
         phone: "+351922222222",
         revokeEntryAt: fallbackRecordedAt.toISOString(),
-        revokedBy: "dono",
+        revokedBy: "Dono",
         smsAllowed: false,
       },
     ]);
