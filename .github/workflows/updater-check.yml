@@ -10,6 +10,7 @@ on:
       - scripts/update-launch.ps1
       - scripts/update-apply.test.ps1
       - installer/oficinaos.iss
+      - installer/tray/OficinaOSTray.cs
       - .github/workflows/updater-check.yml
   workflow_dispatch:
 
@@ -26,13 +27,43 @@ jobs:
       - name: Install Inno Setup 6
         run: choco install innosetup --no-progress -y
 
-      - name: Compile oficinaos.iss (stage minimo — so valida sintaxe/constantes)
-        # O .iss so era compilado na release — um erro de Pascal ou de
-        # constante chegava la dentro. Fontes stub para o [Files] nao falhar.
+      - name: Compile oficinaos.iss + tray and verify version metadata
+        # O .iss e o tray so eram compilados na release — valida sintaxe,
+        # constantes e o contrato de metadados exigido pela SignPath
+        # (ProductName, ProductVersion e FileVersion alinhados nos dois .exe).
         run: |
+          $v = "1.2.3-ci"
+          $numVer = "1.2.3.0"
           $s = "installer\stage-ci"
           New-Item -ItemType Directory -Force "$s\app", "$s\bun", "$s\pgsql", "$s\tools", "dist" | Out-Null
           Set-Content "$s\app\stub", "$s\bun\stub", "$s\pgsql\stub", "$s\tools\stub" x
+
+          $verFile = "$env:RUNNER_TEMP\OficinaOSTrayVersion.cs"
+          @"
+          using System.Reflection;
+          [assembly: AssemblyVersion("$numVer")]
+          [assembly: AssemblyFileVersion("$numVer")]
+          [assembly: AssemblyInformationalVersion("$v")]
+          "@ | Set-Content -Encoding utf8 $verFile
+          $csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+          & $csc /target:winexe /nologo `
+            /win32icon:"installer\OficinaOS.ico" `
+            /out:"$s\tools\OficinaOSTray.exe" `
+            /r:System.Windows.Forms.dll /r:System.Drawing.dll `
+            installer\tray\OficinaOSTray.cs $verFile
+          if ($LASTEXITCODE -ne 0) { throw "csc falhou: $LASTEXITCODE" }
+
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" `
-            "/DMyAppVersion=0.0.0-ci" "/DSourceDir=stage-ci" /Q installer\oficinaos.iss
+            "/DMyAppVersion=$v" "/DMyAppNumericVersion=$numVer" "/DSourceDir=stage-ci" /Q installer\oficinaos.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC falhou: $LASTEXITCODE" }
+
+          foreach ($exe in @("$s\tools\OficinaOSTray.exe", "dist\OficinaOS-Setup.exe")) {
+            $vi = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $exe))
+            $fileNum = "$($vi.FileMajorPart).$($vi.FileMinorPart).$($vi.FileBuildPart).$($vi.FilePrivatePart)"
+            $prodNum = "$($vi.ProductMajorPart).$($vi.ProductMinorPart).$($vi.ProductBuildPart).$($vi.ProductPrivatePart)"
+            if ($vi.ProductName -ne "OficinaOS") { throw "${exe}: ProductName='$($vi.ProductName)' (esperado 'OficinaOS')" }
+            if ($vi.ProductVersion -ne $v) { throw "${exe}: ProductVersion='$($vi.ProductVersion)' (esperado '$v')" }
+            if ($vi.FileVersion -ne $numVer) { throw "${exe}: FileVersion='$($vi.FileVersion)' (esperado '$numVer')" }
+            if ($fileNum -ne $numVer) { throw "${exe}: numeric FileVersion='$fileNum' (esperado '$numVer')" }
+            if ($prodNum -ne $numVer) { throw "${exe}: numeric ProductVersion='$prodNum' (esperado '$numVer')" }
+          }
