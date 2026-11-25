@@ -112,6 +112,7 @@ interface BotAiBody {
   actionFailureText?: unknown;
   actionSuccessText?: unknown;
   calls?: unknown;
+  continuationToken?: unknown;
   escalate?: unknown;
   jobCode?: unknown;
   jobId?: unknown;
@@ -252,6 +253,10 @@ export async function askBotAi(
   // Constante para a mensagem inteira — calculada uma vez, usada só na
   // ronda 0 (nas continuações de ferramentas não há mensagem nova).
   const key = conversationKey(input.phone);
+  // Emitido pela Cloud na ronda contada — prova às rondas de
+  // ferramentas que a mensagem já contou para a quota da conta. Sem
+  // subscrição a Cloud não o exige; undefined não serializa.
+  let continuationToken: string | undefined;
 
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round += 1) {
     const remaining = deadline - Date.now();
@@ -265,7 +270,7 @@ export async function askBotAi(
         // ronda — nas continuações de ferramentas não há mensagem nova.
         ...(round === 0
           ? { context: input.context, conversationKey: key }
-          : {}),
+          : { continuationToken }),
         messages,
         shopCard: ctx.shopCard,
       },
@@ -277,6 +282,9 @@ export async function askBotAi(
       return null;
     }
     const body = res.body as BotAiBody;
+    if (typeof body.continuationToken === "string") {
+      continuationToken = body.continuationToken;
+    }
 
     const reply = parseReply(body, escalate);
     if (reply) {
