@@ -17,6 +17,7 @@ import { dashboardScope } from "../middlewares/dashboard-scope.js";
 import { requirePermission } from "../middlewares/rbac.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import { cloudFetch } from "../services/cloud.service.js";
+import { pushPontoCloudConfig } from "../services/ponto/config-sync.js";
 import {
   createManualEntry,
   createValidation,
@@ -156,15 +157,8 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
       },
     },
     async (req, reply) => {
-      const { apiUrl, settings, token } = await requirePonto(app.prisma);
-      const res = await cloudFetch(apiUrl, "/ponto/config", {
-        body: {
-          smsNumber: settings.pontoSmsNumber,
-          waNumber: settings.pontoWaNumber,
-        },
-        method: "PUT",
-        token,
-      }).catch(() => null);
+      await requirePonto(app.prisma);
+      const res = await pushPontoCloudConfig(app.prisma, req.log);
       if (!res) {
         throw new AppError("CLOUD_UNREACHABLE");
       }
@@ -386,6 +380,10 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
         getUserId(req),
         body.data
       );
+      // Entradas manuais/correções mudam o estado que a Cloud usa para
+      // validar pausas/saídas. Best-effort e fora da resposta: uma Cloud
+      // em baixo não pode impedir o livro legal local.
+      pushPontoCloudConfig(app.prisma, req.log).catch(() => null);
       return reply.status(201).send(result);
     }
   );

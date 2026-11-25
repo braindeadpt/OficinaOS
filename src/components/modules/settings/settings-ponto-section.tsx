@@ -17,6 +17,7 @@ interface PontoStatus {
 
 interface PontoConfig {
   configured?: boolean;
+  qrId?: string;
   slug?: string;
 }
 
@@ -201,6 +202,8 @@ export default function SettingsPontoSection({
   const [confirmSheetLeave, setConfirmSheetLeave] = useState<string | null>(
     null
   );
+  const [confirmRegenerate, setConfirmRegenerate] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
   const [geoLat, setGeoLat] = useState("");
   const [geoLng, setGeoLng] = useState("");
   const [radius, setRadius] = useState("100");
@@ -306,6 +309,27 @@ export default function SettingsPontoSection({
       onToast(getErrorMessage(err, t("ponto.save_failed")), "error");
     } finally {
       setBusy(false);
+    }
+  }
+
+  // Regenerar o QR aleatório invalida imediatamente a folha impressa —
+  // a confirmação é obrigatória e o toast de sucesso repete o aviso de
+  // que é preciso imprimir/substituir.
+  async function handleRegenerate() {
+    setConfirmRegenerate(false);
+    setRegenerating(true);
+    try {
+      await api.post("/ponto/regenerate-qr");
+      // Só o qrId/config mudou — refresh() reescreveria o rascunho por
+      // guardar da secção. As definições locais continuam exatamente como
+      // o utilizador as tinha.
+      const cfg = await api.get<PontoConfig>("/ponto/config");
+      setConfig(cfg.data);
+      onToast(t("ponto.qr_regenerated"), "success");
+    } catch (err) {
+      onToast(getErrorMessage(err, t("ponto.qr_regenerate_failed")), "error");
+    } finally {
+      setRegenerating(false);
     }
   }
 
@@ -551,6 +575,14 @@ export default function SettingsPontoSection({
           >
             {t("ponto.qr_open")}
           </Link>
+          <Button
+            disabled={regenerating || busy}
+            onClick={() => setConfirmRegenerate(true)}
+            type="button"
+            variant="destructive-soft"
+          >
+            {t("ponto.qr_regenerate")}
+          </Button>
           <Button disabled={busy} icon="save" onClick={handleSave}>
             {t("save")}
           </Button>
@@ -567,6 +599,22 @@ export default function SettingsPontoSection({
             }}
             onKeepEditing={() => setConfirmSheetLeave(null)}
             open
+          />
+        </div>
+      )}
+
+      {confirmRegenerate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay">
+          <ConfirmDiscardDialog
+            description={t("ponto.qr_regenerate_desc")}
+            discardLabel={t("ponto.qr_regenerate_confirm")}
+            keepLabel={t("cancel")}
+            onDiscard={() => {
+              handleRegenerate().catch(() => null);
+            }}
+            onKeepEditing={() => setConfirmRegenerate(false)}
+            open
+            title={t("ponto.qr_regenerate_title")}
           />
         </div>
       )}

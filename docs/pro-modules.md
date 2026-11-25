@@ -200,8 +200,8 @@ automática), ou `whatsapp-bot`/`sms` para os canais oficiais.
 > **Em beta** — nome comercial e preço por decidir.
 
 Livro de ponto digital para os trabalhadores da loja, sem ecrã nem
-tablet obrigatório: um **QR fixo impresso** (autocolante) aponta para a
-página pública da Cloud (`/ponto/<slug>`), que emite um código de 4
+tablet obrigatório: um **QR impresso** (autocolante) aponta para a
+página pública da Cloud (`/ponto/<qrId>`), que emite um código de 4
 dígitos; o trabalhador envia `ENTRADA <código>` (ou PAUSA/VOLTEI/SAIDA/
 ESTADO) pelo WhatsApp ou SMS do número da loja e partilha a
 **localização** — a hora é sempre a do servidor, nunca a do telemóvel.
@@ -229,7 +229,10 @@ ESTADO) pelo WhatsApp ou SMS do número da loja e partilha a
   exportação continuam disponíveis mesmo sem o módulo ativo.
 - **Informação ao trabalhador:** Definições → Cloud → secção Ponto tem o
   texto RGPD editável; `/ponto/info` imprime a folha para assinatura e
-  `/ponto/qr` a folha do QR. Ver `docs/privacy-and-data.md`.
+  `/ponto/qr` a folha do QR. O `qrId` é aleatório e pode ser regenerado
+  na mesma secção; regenerar invalida imediatamente a folha anterior,
+  por isso é preciso imprimir e substituir a folha nova. Ver
+  `docs/privacy-and-data.md`.
 
 Precisa de **pelo menos um canal Pro de receção ativo** (WhatsApp
 oficial, Evolution ou SMS) — os comandos chegam por esses transportes.

@@ -8,9 +8,9 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn() }));
+const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), put: vi.fn() }));
 vi.mock("@/lib/api", () => ({
-  default: { get: mocks.get, put: mocks.put },
+  default: { get: mocks.get, post: mocks.post, put: mocks.put },
   getErrorMessage: (_err: unknown, fallback: string) => fallback,
 }));
 
@@ -38,11 +38,14 @@ function mockApi() {
       return Promise.resolve({ data: { ...SHOP } });
     }
     if (url === "/ponto/config") {
-      return Promise.resolve({ data: { configured: true, slug: "my-shop" } });
+      return Promise.resolve({
+        data: { configured: true, qrId: "qr-1", slug: "my-shop" },
+      });
     }
     return Promise.reject(new Error(`unexpected ${url}`));
   });
   mocks.put.mockResolvedValue({ data: {} });
+  mocks.post.mockResolvedValue({ data: { ok: true, qrId: "qr-2" } });
 }
 
 function LocationProbe() {
@@ -281,5 +284,83 @@ describe("SettingsPontoSection — refreshNonce (Sincronize agora)", () => {
     // Dá tempo ao efeito correr — o refresh não pode acontecer.
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(statusCalls()).toBe(1);
+  });
+});
+
+describe("SettingsPontoSection — regenerar QR", () => {
+  it("pede confirmação antes de regenerar e cancelar não chama a API", async () => {
+    renderSection();
+    await screen.findByLabelText("ponto.latitude");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "ponto.qr_regenerate" })
+    );
+    expect(await screen.findByRole("alertdialog")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "cancel" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+    );
+    expect(mocks.post).not.toHaveBeenCalled();
+  });
+
+  it("confirmar chama POST /ponto/regenerate-qr e refaz o refresh", async () => {
+    const onToast = vi.fn();
+    render(
+      <MemoryRouter>
+        <SettingsPontoSection onToast={onToast} />
+      </MemoryRouter>
+    );
+    await screen.findByLabelText("ponto.latitude");
+    const configCallsBefore = mocks.get.mock.calls.filter(
+      ([url]) => url === "/ponto/config"
+    ).length;
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "ponto.qr_regenerate" })
+    );
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "ponto.qr_regenerate_confirm",
+      })
+    );
+
+    await waitFor(() =>
+      expect(mocks.post).toHaveBeenCalledWith("/ponto/regenerate-qr")
+    );
+    await waitFor(() => {
+      const configCalls = mocks.get.mock.calls.filter(
+        ([url]) => url === "/ponto/config"
+      ).length;
+      expect(configCalls).toBeGreaterThan(configCallsBefore);
+    });
+    expect(onToast).toHaveBeenCalledWith("ponto.qr_regenerated", "success");
+  });
+
+  it("falha da API mostra toast de erro e não quebra a secção", async () => {
+    mocks.post.mockRejectedValueOnce(new Error("boom"));
+    const onToast = vi.fn();
+    render(
+      <MemoryRouter>
+        <SettingsPontoSection onToast={onToast} />
+      </MemoryRouter>
+    );
+    await screen.findByLabelText("ponto.latitude");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "ponto.qr_regenerate" })
+    );
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "ponto.qr_regenerate_confirm",
+      })
+    );
+
+    await waitFor(() =>
+      expect(onToast).toHaveBeenCalledWith(
+        "ponto.qr_regenerate_failed",
+        "error"
+      )
+    );
   });
 });

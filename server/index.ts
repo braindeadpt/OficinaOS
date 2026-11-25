@@ -30,6 +30,7 @@ import { syncDeviceCatalogIfStale } from "./services/device-catalog.service.js";
 import { startLowStockScheduler } from "./services/low-stock.service.js";
 import { cleanupReadNotifications } from "./services/notification-inapp.service.js";
 import { startOutboxWorker } from "./services/notification-outbox.service.js";
+import { pushPontoCloudConfig } from "./services/ponto/config-sync.js";
 import { cleanupPontoPhotos } from "./services/ponto-photos.service.js";
 import { startRemarketingScheduler } from "./services/remarketing.service.js";
 import { applyTaskRules } from "./services/tasks.service.js";
@@ -162,6 +163,15 @@ const stopRemarketing = env.DEMO_MODE ? noop : startRemarketingScheduler(app);
 const stopPontoReminder = env.DEMO_MODE
   ? noop
   : startPontoReminderScheduler(app);
+// Livro de ponto — a configuração autoritativa vive na Cloud (WP0.1):
+// geo, flags e a escala de staff. O arranque é o momento de recuperação
+// dos syncs falhados (Cloud em baixo quando o dono gravou definições)
+// — best-effort, fire-and-forget.
+if (!env.DEMO_MODE) {
+  pushPontoCloudConfig(app.prisma, app.log).catch((err) =>
+    app.log.warn({ err }, "ponto config sync no arranque falhou")
+  );
+}
 const stopOutboxWorker = env.DEMO_MODE ? noop : startOutboxWorker(app.prisma);
 // Ligação permanente app→Cloud do módulo "ai-inbox" (§G.6): supervisor
 // interno — só abre o SSE quando o entitlement está ativo.

@@ -3,6 +3,15 @@
 // raio da loja, foto obrigatória e flags do funcionário — a app só
 // transporta provas e grava o veredicto.
 //
+// WP0.1: geo/raio, externalWork/smsAllowed, autoaprovação e "tem entrada
+// hoje" são lidos pela Cloud da configuração autoritativa (PUT
+// /ponto/config — ver config-sync.ts). Versões anteriores deste módulo
+// enviavam esses campos no corpo do evaluate; a Cloud atual tolera-os
+// mas ignora-os, por isso deixaram de ser enviados. todayHasEntry
+// continua a ser calculado localmente para o fluxo de conversa
+// (PAUSA/VOLTEI/SAIDA exigem entrada — ver handler.ts), só não segue
+// no payload.
+//
 // Credenciais: cloudApiUrl + cloudShopTokenEncrypted das definições —
 // mesmo esquema dos restantes serviços cloud (decryptSecret + Bearer).
 
@@ -19,21 +28,16 @@ export type PontoTransportKind = "sms" | "whatsapp_evolution" | "whatsapp_meta";
 
 export interface PontoEvaluateInput {
   code?: string;
-  externalAutoApprove: boolean;
   hasPhoto: boolean;
   location?: PontoPendingLocation;
   /** ISO do instante de envio da mensagem de comando (sentAt ??
    *  createdAt) — ver state.ts commandAt. */
   messageAt?: string;
   phone: string;
-  photoRequired?: boolean;
-  shopGeo: { lat: number; lng: number; radiusM: number };
-  todayHasEntry: boolean;
   transport: PontoTransportKind;
   /** Comando original (ENTRADA pode ter sido convertido em VOLTEI por
    *  pausa — o `type` enviado é o efetivo). */
   type: Exclude<PontoCommand, "ESTADO">;
-  user: { externalWork: boolean; smsAllowed: boolean };
 }
 
 export interface PontoEvaluateResult {

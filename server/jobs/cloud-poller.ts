@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { AppError } from "../../shared/errors/app-error.js";
 import { syncCloudEntitlements } from "../services/cloud.service.js";
+import { pushPontoCloudConfig } from "../services/ponto/config-sync.js";
+import { isModuleEnabled } from "../utils/modules.js";
 
 const INTERVAL_MS = 2 * 60 * 1000;
 
@@ -18,10 +20,23 @@ export function startCloudPoller(app: FastifyInstance): () => void {
     }
     ticking = true;
     try {
-      await syncCloudEntitlements(app.prisma, app.log, {
+      const before = await app.prisma.shopSettings.findUnique({
+        where: { id: "default" },
+      });
+      const hadFreshPonto = isModuleEnabled(before, "ponto");
+      const status = await syncCloudEntitlements(app.prisma, app.log, {
         prisma: app.prisma,
         wsBroadcast: app.wsBroadcast,
       });
+      // Se o cache tinha expirado (ou o módulo acabou de ser ativado), o
+      // arranque já passou: este é o momento em que recuperamos o sync sem
+      // voltar a transmitir staff a cada tick — só na transição para um
+      // entitlement fresco de ponto.
+      if (!hadFreshPonto && status.modules.includes("ponto")) {
+        pushPontoCloudConfig(app.prisma, app.log).catch((err) =>
+          app.log.warn({ err }, "ponto config sync após refresh cloud falhou")
+        );
+      }
     } catch (err) {
       // Expected when unpaired or when the cloud is down — stay quiet.
       if (!(err instanceof AppError)) {

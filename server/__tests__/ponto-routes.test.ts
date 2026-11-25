@@ -12,8 +12,14 @@ interface SettingsRow {
   cloudEntitlements: unknown;
   cloudShopTokenEncrypted: string | null;
   cloudSyncedAt: Date | null;
+  pontoExternalAutoApprove: boolean;
+  pontoExternalPhotoRequired: boolean;
+  pontoGeoLat: number | null;
+  pontoGeoLng: number | null;
+  pontoRadiusM: number;
   pontoSmsNumber: string | null;
   pontoWaNumber: string | null;
+  timezone: string | null;
 }
 
 function fakePrisma(overrides: Partial<SettingsRow> = {}) {
@@ -22,8 +28,14 @@ function fakePrisma(overrides: Partial<SettingsRow> = {}) {
     cloudEntitlements: ["ponto"],
     cloudShopTokenEncrypted: encryptSecret("shop-token-secret"),
     cloudSyncedAt: new Date(),
+    pontoExternalAutoApprove: true,
+    pontoExternalPhotoRequired: false,
+    pontoGeoLat: 38.7,
+    pontoGeoLng: -9.1,
+    pontoRadiusM: 100,
     pontoSmsNumber: "+351210000000",
     pontoWaNumber: "+351912345678",
+    timezone: "Europe/Lisbon",
     ...overrides,
   };
   return {
@@ -175,7 +187,7 @@ describe("ponto — GET /config", () => {
 });
 
 describe("ponto — PUT /config", () => {
-  it("pushes the local wa/sms numbers to the cloud", async () => {
+  it("pushes the complete authoritative ponto config to the cloud", async () => {
     fetchMock.mockReturnValueOnce(cloudJson({ ok: true }));
     const app = buildApp(fakePrisma());
     const res = await app.inject({ method: "PUT", url: "/api/ponto/config" });
@@ -184,9 +196,54 @@ describe("ponto — PUT /config", () => {
     expect(url).toBe(`${CLOUD_URL}/ponto/config`);
     expect(init.method).toBe("PUT");
     expect(JSON.parse(init.body)).toEqual({
+      externalAutoApprove: true,
+      photoRequired: false,
+      pinSyncVersion: 1,
+      shopGeo: { lat: 38.7, lng: -9.1, radiusM: 100 },
       smsNumber: "+351210000000",
+      staff: [],
+      timezone: "Europe/Lisbon",
       waNumber: "+351912345678",
     });
+  });
+
+  it("staff envia a última entrada efetiva e ignora entradas recusadas", async () => {
+    fetchMock.mockReturnValueOnce(cloudJson({ ok: true }));
+    const prisma = fakePrisma();
+    prisma.user.findMany.mockResolvedValue([
+      {
+        externalWork: false,
+        id: "u1",
+        phoneE164: "+351911111111",
+        pontoSmsAllowed: true,
+      },
+    ] as never);
+    const validAt = new Date("2026-01-10T09:00:00.000Z");
+    prisma.timeEntry.findMany.mockResolvedValue([
+      {
+        at: new Date("2026-01-10T10:00:00.000Z"),
+        userId: "u1",
+        validations: [{ decision: "RECUSADO" }],
+      },
+      { at: validAt, userId: "u1", validations: [] },
+    ] as never);
+    const app = buildApp(prisma);
+    const res = await app.inject({ method: "PUT", url: "/api/ponto/config" });
+    expect(res.statusCode).toBe(200);
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init.body).staff).toEqual([
+      {
+        externalWork: false,
+        lastEntryAt: validAt.toISOString(),
+        phone: "+351911111111",
+        smsAllowed: true,
+      },
+    ]);
+    expect(prisma.timeEntry.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ corrections: { none: {} } }),
+      })
+    );
   });
 
   it("502 CLOUD_UNREACHABLE when the cloud does not answer", async () => {
