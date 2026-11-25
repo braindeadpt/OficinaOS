@@ -441,7 +441,10 @@ export async function composeReply(
     return {
       customerName,
       escalate: true,
-      jobId: jobs[0]?.id ?? null,
+      // Mesma regra do resolveCloudJobId: sem qualquer indicação da
+      // Cloud, ligar o alerta a uma reparação só é seguro quando há
+      // exatamente uma ativa — com 2+ seria adivinhação.
+      jobId: jobs.length === 1 ? (jobs[0]?.id ?? null) : null,
       text: name
         ? `Recebemos a tua mensagem, ${name} — a loja responde-te já.`
         : "Recebemos a tua mensagem — a loja responde-te já.",

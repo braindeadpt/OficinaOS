@@ -311,6 +311,22 @@ describe("composeReply — transporte WP0.4 (regras na Cloud)", () => {
     const out = await composeReply(ctx, msg("como está a minha reparação?"));
     expect(out.escalate).toBe(true);
     expect(out.text).toContain("a loja responde-te já");
+    // Uma única reparação ativa: ligar o alerta a ela é seguro.
+    expect(out.jobId).toBe("job-1");
+  });
+
+  it("Cloud em baixo com 2+ reparações ativas → escala sem adivinhar (jobId null)", async () => {
+    mocks.askBotAi.mockResolvedValueOnce(null);
+    // Mesma regra do resolveCloudJobId: sem qualquer indicação da
+    // Cloud, ligar o alerta à reparação mais recente seria adivinhação.
+    const { ctx } = makeCtx({
+      ai: aiCfg,
+      customers: [cust],
+      jobs: [job(), job({ id: "job-2", jobCode: "REP-2024-000002-BBB" })],
+    });
+    const out = await composeReply(ctx, msg("como está a minha reparação?"));
+    expect(out.escalate).toBe(true);
+    expect(out.jobId).toBeNull();
   });
 
   it("sem configuração de canal → escala para staff", async () => {
