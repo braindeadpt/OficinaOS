@@ -227,4 +227,41 @@ describe("conversationKey (WP1)", () => {
       expect(b.conversationKey).toBeUndefined();
     }
   });
+
+  it("rondas de ferramentas reenviam o continuationToken emitido na ronda 0", async () => {
+    mocks.cloudFetch
+      .mockResolvedValueOnce(
+        ok({
+          calls: [{ args: {}, id: "c1", name: "info_loja" }],
+          continuationToken: "tok-abc",
+          type: "tool_calls",
+        })
+      )
+      .mockResolvedValueOnce(
+        ok({ escalate: false, reply: "pronto", type: "reply" })
+      );
+    await askBotAi(ctx, cloud, input);
+    const all = bodies();
+    expect(all.length).toBeGreaterThanOrEqual(2);
+    // a ronda 0 não envia token; as rondas seguintes reenviam o emitido
+    expect(all[0].continuationToken).toBeUndefined();
+    expect(all[1].continuationToken).toBe("tok-abc");
+  });
+
+  it("sem token emitido as rondas de ferramentas não enviam o campo", async () => {
+    mocks.cloudFetch
+      .mockResolvedValueOnce(
+        ok({
+          calls: [{ args: {}, id: "c1", name: "info_loja" }],
+          type: "tool_calls",
+        })
+      )
+      .mockResolvedValueOnce(
+        ok({ escalate: false, reply: "pronto", type: "reply" })
+      );
+    await askBotAi(ctx, cloud, input);
+    const all = bodies();
+    expect(all.length).toBeGreaterThanOrEqual(2);
+    expect(all[1].continuationToken).toBeUndefined();
+  });
 });
