@@ -365,17 +365,20 @@ try {
     // a regressão. O nome é único por corrida — nunca se apaga um schema
     // que não se criou, mesmo numa base de testes reutilizada.
     const evilSchema = `probe_evil_${Date.now()}`;
-    await client.query(`CREATE SCHEMA ${evilSchema}`);
-    await client.query(`CREATE TABLE ${evilSchema}.time_entries (id text)`);
-    await client.query(
-      `GRANT USAGE ON SCHEMA ${evilSchema} TO oficinaos_ponto_purge`
-    );
-    await client.query(
-      `GRANT SELECT ON ${evilSchema}.time_entries TO oficinaos_ponto_purge`
-    );
     const evilConn = new pg.Client({ connectionString: url });
-    await evilConn.connect();
     try {
+      // A preparação inteira fica dentro do try: se um passo falhar a
+      // meio, o finally limpa o schema na mesma — não ficam restos numa
+      // base de testes reutilizada.
+      await client.query(`CREATE SCHEMA ${evilSchema}`);
+      await client.query(`CREATE TABLE ${evilSchema}.time_entries (id text)`);
+      await client.query(
+        `GRANT USAGE ON SCHEMA ${evilSchema} TO oficinaos_ponto_purge`
+      );
+      await client.query(
+        `GRANT SELECT ON ${evilSchema}.time_entries TO oficinaos_ponto_purge`
+      );
+      await evilConn.connect();
       await evilConn.query(`SET search_path = ${evilSchema}, public`);
       await evilConn.query("SET ROLE oficinaos_ponto_purge");
       ok(
@@ -400,7 +403,11 @@ try {
       await evilConn.end().catch(() => {
         // encerramento best-effort
       });
-      await client.query(`DROP SCHEMA IF EXISTS ${evilSchema} CASCADE`);
+      await client
+        .query(`DROP SCHEMA IF EXISTS ${evilSchema} CASCADE`)
+        .catch(() => {
+          // limpeza best-effort — base descartável
+        });
     }
   } finally {
     await purgeConn.end().catch(() => {
