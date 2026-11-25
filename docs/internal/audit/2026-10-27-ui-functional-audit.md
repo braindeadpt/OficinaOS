@@ -89,7 +89,7 @@ Foram encontrados, no entanto, **um problema crítico de validação de IDs que 
 
 **Severidade:** Crítico  
 **Áreas:** Reparações, Clientes, Técnicos, Perfil  
-**Ficheiros:** [`shared/schemas/customer.schema.ts:85`](../../shared/schemas/customer.schema.ts#L85), [`shared/schemas/job.schema.ts:35`](../../shared/schemas/job.schema.ts#L35), [`shared/schemas/job.schema.ts:110`](../../shared/schemas/job.schema.ts#L110), [`shared/schemas/auth.schema.ts:82`](../../shared/schemas/auth.schema.ts#L82)
+**Ficheiros:** [`shared/schemas/customer.schema.ts:85`](../../../shared/schemas/customer.schema.ts#L85), [`shared/schemas/job.schema.ts:35`](../../../shared/schemas/job.schema.ts#L35), [`shared/schemas/job.schema.ts:110`](../../../shared/schemas/job.schema.ts#L110), [`shared/schemas/auth.schema.ts:82`](../../../shared/schemas/auth.schema.ts#L82)
 
 **O que acontece**
 
@@ -109,9 +109,9 @@ Consequências confirmadas:
 
 Evidência visual:
 
-- ![Detalhe de cliente demo com erro](../../audit/shots/flows5/customer-demo.png)
-- ![Reparação demo após tentar mudar de técnico](../../audit/shots/flows12/after-tech-change.png)
-- ![Perfil — atividade vazia por erro 400](../../audit/shots/flows/activity-error.png)
+- ![Detalhe de cliente demo com erro](../../../audit/shots/flows5/customer-demo.png)
+- ![Reparação demo após tentar mudar de técnico](../../../audit/shots/flows12/after-tech-change.png)
+- ![Perfil — atividade vazia por erro 400](../../../audit/shots/flows/activity-error.png)
 
 **Impacto**
 
@@ -140,7 +140,7 @@ Validação de *forma* de IDs opacos. O servidor já verifica existência e perm
 
 **Severidade:** Alto (perda de dados)  
 **Área:** Definições → Informações da loja  
-**Ficheiro:** [`src/components/modules/settings/settings-shop-tab.tsx:241`](../../src/components/modules/settings/settings-shop-tab.tsx#L241)
+**Ficheiro:** [`src/components/modules/settings/settings-shop-tab.tsx:241`](../../../src/components/modules/settings/settings-shop-tab.tsx#L241)
 
 **O que acontece**
 
@@ -158,7 +158,7 @@ monthlyRevenueGoal:
   goal === "" || !Number.isFinite(parsedGoal) ? null : parsedGoal,
 ```
 
-Evidência: ![Meta apagada após “abc”](../../audit/shots/flows7/goal-after.png)
+Evidência: ![Meta apagada após “abc”](../../../audit/shots/flows7/goal-after.png)
 
 **Impacto:** perda silenciosa de um indicador de gestão. O utilizador acredita que guardou e o dashboard perde a meta. Valores negativos são rejeitados pelo schema com erro genérico, mas o campo inválido não é assinalado.
 
@@ -175,7 +175,7 @@ Evidência: ![Meta apagada após “abc”](../../audit/shots/flows7/goal-after.
 
 **Severidade:** Alto (qualidade de dados / comunicações)  
 **Áreas:** API de clientes e reparações  
-**Ficheiros:** [`shared/schemas/customer.schema.ts:24`](../../shared/schemas/customer.schema.ts#L24), [`shared/schemas/job.schema.ts:39`](../../shared/schemas/job.schema.ts#L39)
+**Ficheiros:** [`shared/schemas/customer.schema.ts:24`](../../../shared/schemas/customer.schema.ts#L24), [`shared/schemas/job.schema.ts:39`](../../../shared/schemas/job.schema.ts#L39)
 
 **O que acontece**
 
@@ -199,7 +199,7 @@ Evidência: ![Meta apagada após “abc”](../../audit/shots/flows7/goal-after.
 
 **Severidade:** Médio  
 **Área:** Definições, Notificações  
-**Ficheiros:** [`src/components/modules/settings/settings-notifications-tab.tsx:82`](../../src/components/modules/settings/settings-notifications-tab.tsx#L82), [`prisma/seed-demo.ts:552`](../../prisma/seed-demo.ts#L552)
+**Ficheiros:** [`src/components/modules/settings/settings-notifications-tab.tsx:82`](../../../src/components/modules/settings/settings-notifications-tab.tsx#L82), [`prisma/seed-demo.ts:552`](../../../prisma/seed-demo.ts#L552)
 
 **O que acontece**
 
@@ -219,11 +219,11 @@ O separador diz “Personalize as suas mensagens WhatsApp e SMS”, mas mostra d
 
 **Severidade:** Médio  
 **Área:** Relatórios  
-**Ficheiro:** [`src/pages/reports/revenue-tab.tsx:82`](../../src/pages/reports/revenue-tab.tsx#L82)
+**Ficheiro:** [`src/pages/reports/revenue-tab.tsx:82`](../../../src/pages/reports/revenue-tab.tsx#L82)
 
 **O que acontece**
 
-Os KPIs e a tabela usam `.toLocaleString()` sem locale nem moeda, enquanto o resto da app usa `formatCurrency`/`formatNumber` ([`src/lib/format.ts`](../../src/lib/format.ts)). Resultado visível:
+Os KPIs e a tabela usam `.toLocaleString()` sem locale nem moeda, enquanto o resto da app usa `formatCurrency`/`formatNumber` ([`src/lib/format.ts`](../../../src/lib/format.ts)). Resultado visível:
 
 - `Receita total` = **`1446,3`** (sem `€` e sem duas casas decimais);
 - `Saldo pendente` = **`745,6`**;
@@ -231,7 +231,7 @@ Os KPIs e a tabela usam `.toLocaleString()` sem locale nem moeda, enquanto o res
 - a tabela mostra `199,9`, `27,9`, `83.78` sem símbolo;
 - o dashboard mostra o mesmo tipo de valor como `1651,20 €` — mesma métrica, apresentação diferente.
 
-Evidência: ![Relatórios — formatação inconsistente](../../audit/shots/pages/desktop-reports.png)
+Evidência: ![Relatórios — formatação inconsistente](../../../audit/shots/pages/desktop-reports.png)
 
 **Impacto:** quebra de confiança nos números, formatação dependente do locale do browser (um browser en-US num UI pt-PT muda os separadores) e violação da convenção já documentada em `format.ts`.
 
@@ -247,7 +247,7 @@ Evidência: ![Relatórios — formatação inconsistente](../../audit/shots/page
 
 **Severidade:** Médio (UX)  
 **Área:** Clientes, Pedidos, Retomas  
-**Ficheiros:** [`src/pages/customers/detail.tsx:99`](../../src/pages/customers/detail.tsx#L99), [`src/pages/requests/index.tsx`](../../src/pages/requests/index.tsx), [`src/pages/trade-ins/index.tsx`](../../src/pages/trade-ins/index.tsx)
+**Ficheiros:** [`src/pages/customers/detail.tsx:99`](../../../src/pages/customers/detail.tsx#L99), [`src/pages/requests/index.tsx`](../../../src/pages/requests/index.tsx), [`src/pages/trade-ins/index.tsx`](../../../src/pages/trade-ins/index.tsx)
 
 **O que acontece**
 
@@ -255,8 +255,8 @@ No detalhe de cliente, `BusinessHistory` e `RecordWorkflow` são renderizados **
 
 Evidência:
 
-- ![Detalhe de cliente — identidade no fundo](../../audit/shots/flows7/fail-customer-edit.png)
-- ![Pedidos — painel de workflow antes dos dados](../../audit/shots/pages/desktop-requests.png)
+- ![Detalhe de cliente — identidade no fundo](../../../audit/shots/flows7/fail-customer-edit.png)
+- ![Pedidos — painel de workflow antes dos dados](../../../audit/shots/pages/desktop-requests.png)
 
 **Impacto:** a informação mais importante (quem é o cliente, o que precisa) fica escondida; a página parece uma ferramenta interna de workflow em vez de uma ficha de cliente. Em listas, quebra o ritmo da tabela e dificulta a leitura.
 
@@ -272,7 +272,7 @@ Evidência:
 
 **Severidade:** Médio  
 **Áreas:** Devoluções, acessibilidade  
-**Ficheiros:** [`src/pages/returns/index.tsx:54`](../../src/pages/returns/index.tsx#L54), [`src/components/modules/returns/create-wizard-modal.tsx:84`](../../src/components/modules/returns/create-wizard-modal.tsx#L84)
+**Ficheiros:** [`src/pages/returns/index.tsx:54`](../../../src/pages/returns/index.tsx#L54), [`src/components/modules/returns/create-wizard-modal.tsx:84`](../../../src/components/modules/returns/create-wizard-modal.tsx#L84)
 
 **O que acontece**
 
@@ -282,8 +282,8 @@ Evidência:
 
 Evidências:
 
-- ![Devoluções — botão “Limpar filtros” inútil](../../audit/shots/pages/desktop-returns.png)
-- ![Wizard de devolução aberto](../../audit/shots/flows14/wizard-open.png)
+- ![Devoluções — botão “Limpar filtros” inútil](../../../audit/shots/pages/desktop-returns.png)
+- ![Wizard de devolução aberto](../../../audit/shots/flows14/wizard-open.png)
 
 **Recomendação**
 
@@ -296,13 +296,13 @@ Evidências:
 ### 🟡 C8 — Sidebar corta itens de navegação em alturas comuns
 
 **Severidade:** Médio (UX)  
-**Ficheiro:** [`src/components/modules/sidebar.tsx:64`](../../src/components/modules/sidebar.tsx#L64)
+**Ficheiro:** [`src/components/modules/sidebar.tsx:64`](../../../src/components/modules/sidebar.tsx#L64)
 
 **O que acontece**
 
 Com 900–1000 px de altura, a navegação mostra “RMAs a fornecedores” cortado a meio; “Clientes”, “Inventário de peças” e “Fornecedores” ficam abaixo da dobra. A `<nav>` tem `overflow-y-auto`, mas não há scrollbar visível nem indicação de continuidade, e o botão “Novo check-in” fixo no fundo faz parecer que a lista termina.
 
-Evidência: ![Sidebar cortada](../../audit/shots/pages/desktop-dashboard.png)
+Evidência: ![Sidebar cortada](../../../audit/shots/pages/desktop-dashboard.png)
 
 **Impacto:** módulos importantes parecem inexistentes; o utilizador pode não descobrir Clientes/Inventário/Fornecedores.
 
@@ -318,13 +318,13 @@ Evidência: ![Sidebar cortada](../../audit/shots/pages/desktop-dashboard.png)
 
 **Severidade:** Médio  
 **Área:** POS em mobile  
-**Ficheiro:** [`src/pages/pos.tsx`](../../src/pages/pos.tsx)
+**Ficheiro:** [`src/pages/pos.tsx`](../../../src/pages/pos.tsx)
 
 **O que acontece**
 
 Em 390 px, o carrinho e o botão “Finalizar venda” ficam depois de uma grelha longa de peças. Ao tocar numa peça, não há barra fixa com total/quantidade; o utilizador tem de fazer scroll até ao fim para confirmar que o artigo foi adicionado e concluir a venda. Os cartões com “Sugestão de reposição” ficam mais altos que os vizinhos, criando alinhamentos irregulares.
 
-Evidência: ![POS mobile](../../audit/shots/pages/mobile-pos.png)
+Evidência: ![POS mobile](../../../audit/shots/pages/mobile-pos.png)
 
 **Recomendação**
 
@@ -346,8 +346,8 @@ Evidência: ![POS mobile](../../audit/shots/pages/mobile-pos.png)
 
 Evidências:
 
-- ![Definições mobile](../../audit/shots/pages/mobile-settings.png)
-- ![Relatórios mobile](../../audit/shots/pages/mobile-reports.png)
+- ![Definições mobile](../../../audit/shots/pages/mobile-settings.png)
+- ![Relatórios mobile](../../../audit/shots/pages/mobile-reports.png)
 
 **Recomendação**
 
@@ -359,7 +359,7 @@ Evidências:
 ### 🟡 C11 — Técnicos recebem lista completa de utilizadores, incluindo email do proprietário
 
 **Severidade:** Médio (privacidade)  
-**Ficheiro:** [`server/routes/users.ts:56`](../../server/routes/users.ts#L56)
+**Ficheiro:** [`server/routes/users.ts:56`](../../../server/routes/users.ts#L56)
 
 **O que acontece**
 
@@ -375,13 +375,13 @@ Autenticado como `TECHNICIAN`, `GET /api/users` devolve **200** com a lista de u
 ### 🔵 C12 — Avatar do perfil mostra “R”, a sidebar mostra “RA”
 
 **Severidade:** Baixo (consistência visual)  
-**Ficheiro:** [`src/pages/profile/index.tsx:54`](../../src/pages/profile/index.tsx#L54)
+**Ficheiro:** [`src/pages/profile/index.tsx:54`](../../../src/pages/profile/index.tsx#L54)
 
 **O que acontece**
 
 O perfil usa `displayUser.name?.charAt(0)`; a sidebar usa `getInitials(name)` (duas iniciais). Para “Rui Andrade”, o perfil mostra **R** e a sidebar **RA**.
 
-Evidência: ![Perfil — avatar “R”](../../audit/shots/pages/desktop-profile.png)
+Evidência: ![Perfil — avatar “R”](../../../audit/shots/pages/desktop-profile.png)
 
 **Recomendação:** usar `getInitials` também no perfil, com fallback para username.
 
@@ -396,7 +396,7 @@ Evidência: ![Perfil — avatar “R”](../../audit/shots/pages/desktop-profile
 
 A inbox mostra **19 alertas “Stock baixo”** iguais, todos “há 10m”, sem nome da peça, quantidade ou link de ação visível. O cartão apresenta apenas título e tempo; o corpo/mensagem não aparece, embora exista `alert.message` no componente.
 
-Evidência: ![Notificações — 19 alertas iguais](../../audit/shots/pages/desktop-notifications.png)
+Evidência: ![Notificações — 19 alertas iguais](../../../audit/shots/pages/desktop-notifications.png)
 
 **Recomendação**
 
@@ -414,7 +414,7 @@ Evidência: ![Notificações — 19 alertas iguais](../../audit/shots/pages/desk
 
 A página afirma “Está ligado à rede da loja”, mas apresenta `http://127.0.0.1:5173` e, por baixo do QR, `http://localhost:5173`. Num telemóvel, nenhum dos dois é alcançável. Em produção o host será o correto, mas a inconsistência entre texto/QR e a mensagem “rede da loja” confunde.
 
-Evidência: ![Ajuda — 127.0.0.1](../../audit/shots/pages/desktop-help.png)
+Evidência: ![Ajuda — 127.0.0.1](../../../audit/shots/pages/desktop-help.png)
 
 **Recomendação:** usar o mesmo `origin` no texto e no QR; quando o host for loopback, avisar que o acesso por outros dispositivos exige o IP da rede/`APP_URL`.
 
@@ -431,8 +431,8 @@ Evidência: ![Ajuda — 127.0.0.1](../../audit/shots/pages/desktop-help.png)
 
 Evidências:
 
-- ![Detalhe de reparação](../../audit/shots/pages/desktop-job-detail2.png)
-- ![Tickets vazios](../../audit/shots/pages/desktop-tickets.png)
+- ![Detalhe de reparação](../../../audit/shots/pages/desktop-job-detail2.png)
+- ![Tickets vazios](../../../audit/shots/pages/desktop-tickets.png)
 
 **Recomendação:** uniformizar botões secundários (contorno/fundo), escolher uma única via de mudança de estado e esconder cabeçalhos de tabela quando não há linhas.
 
@@ -503,6 +503,6 @@ Evidências:
 
 ## 8. Anexos
 
-- Capturas de todas as páginas (desktop, mobile, dark): [`audit/shots/pages`](../../audit/shots/pages)
-- Capturas dos fluxos (POS, tracking, retoma, definições, permissões): [`audit/shots/flows`](../../audit/shots/flows), [`flows3`](../../audit/shots/flows3), [`flows5`](../../audit/shots/flows5), [`flows7`](../../audit/shots/flows7), [`flows8`](../../audit/shots/flows8), [`flows10`](../../audit/shots/flows10), [`flows11`](../../audit/shots/flows11), [`flows12`](../../audit/shots/flows12), [`flows14`](../../audit/shots/flows14)
+- Capturas de todas as páginas (desktop, mobile, dark): [`audit/shots/pages`](../../../audit/shots/pages)
+- Capturas dos fluxos (POS, tracking, retoma, definições, permissões): [`audit/shots/flows`](../../../audit/shots/flows), [`flows3`](../../../audit/shots/flows3), [`flows5`](../../../audit/shots/flows5), [`flows7`](../../../audit/shots/flows7), [`flows8`](../../../audit/shots/flows8), [`flows10`](../../../audit/shots/flows10), [`flows11`](../../../audit/shots/flows11), [`flows12`](../../../audit/shots/flows12), [`flows14`](../../../audit/shots/flows14)
 - Logs de verificação: `typecheck`, `lint`, `test`, `build` e `check-primitives` executados localmente; resultados resumidos na secção 2.

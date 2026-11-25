@@ -73,7 +73,9 @@ sends, in the **first round** of each message:
   `emprestimo`, human-readable `estado`, `garantia`, `linkPortal`,
   `notasVisiveis`, `pecasEmEspera` (`nome`, `chegadaPrevista`),
   `reparacaoExterna.regressoPrevisto`, `valores` (`estimado`, `sinal`,
-  `pago`, `emFalta`) and `orcamento` (`valor`).
+  `pago`, `emFalta`) and `orcamento` (`valor`, human-readable `estado`,
+  `nota`, `enviadoEm`, `validade`, `versao` — plus the internal quote `id`
+  when the quote is pending and the interaction can decide it).
 
 ## Time tracking (`ponto`) in detail
 

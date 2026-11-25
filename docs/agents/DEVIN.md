@@ -4,7 +4,7 @@ Lê isto antes de tocar no código. O que o corpo da issue diz prevalece sobre e
 
 ## Projeto
 - Sistema de gestão self-hosted para lojas de reparação (PT-PT). Fastify + React + PostgreSQL, com Bun e Prisma.
-- Convenções do código e da UI: `AGENTS.md` e `DESIGN.md` (design system «Parafuso»).
+- Convenções do código e da UI: `AGENTS.md` e `docs/internal/DESIGN.md` (design system «Parafuso»).
 - Texto de interface em PT-PT formal («você»), sem «tu». Toda a string nova entra em `src/i18n/locales/{pt,en,es}.json`.
 
 ## Preparar o ambiente

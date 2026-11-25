@@ -1,6 +1,6 @@
 # Tasks and RMA workflow
 
-The tickets, messages, shared-parties and commercial-management extension is described in [business-support.md](business-support.md) (English).
+The tickets, messages, shared-parties and commercial-management extension is described in [business-support.md](../business-support.md) (English).
 
 ## Implemented
 

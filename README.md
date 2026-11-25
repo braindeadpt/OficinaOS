@@ -42,6 +42,10 @@ Register the device intake, track the repair, deliver it back to the customer â€
 | <img src="docs/screenshots/03-intake.png" alt="Intake form" width="390" /> | <img src="docs/screenshots/09-job-detail.png" alt="Job detail" width="390" /> |
 | **Counter POS** | **Parts inventory** |
 | <img src="docs/screenshots/04-pos.png" alt="Point of sale" width="390" /> | <img src="docs/screenshots/05-inventory.png" alt="Inventory" width="390" /> |
+| **Jobs board** | **Team messages** |
+| <img src="docs/screenshots/02-jobs.png" alt="Jobs board" width="390" /> | <img src="docs/screenshots/06-messages.png" alt="Messages" width="390" /> |
+| **WhatsApp/AI inbox** | **Settings** |
+| <img src="docs/screenshots/07-inbox.png" alt="Inbox" width="390" /> | <img src="docs/screenshots/08-settings.png" alt="Settings" width="390" /> |
 
 <p align="center">
   <b>Customer-facing tracking page</b> â€” the customer scans a QR code on the receipt and follows the repair on their phone, no app to install:<br/><br/>

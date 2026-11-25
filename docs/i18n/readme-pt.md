@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/logo.svg" alt="OficinaOS" width="280" />
+  <img src="../../public/logo.svg" alt="OficinaOS" width="280" />
 </p>
 
 # OficinaOS
@@ -50,11 +50,11 @@ Uma máquina corre o servidor e a base de dados; todos os outros dispositivos ac
 
 Descarrega o **[OficinaOS-Setup.exe](https://github.com/braindeadpt/OficinaOS/releases/latest)** — um instalador Windows normal: fica como serviço, arranca com o PC, ícone na bandeja, sem Docker nem janelas de consola. Pede administrador só na instalação.
 
-Alternativas: **[oficinaos-portable.zip](https://github.com/braindeadpt/OficinaOS/releases/latest/download/oficinaos-portable.zip)** (~470 MB, Bun + PostgreSQL embutidos — sem admin, sem instalar nada) ou o **[instalador ZIP Docker](https://github.com/braindeadpt/OficinaOS/releases/latest/download/oficinaos-install.zip)** (`INSTALAR.bat` — para NAS/Linux e quem já usa Docker). Diferenças, backups e restauro: **[INSTALL.md → Instalação portátil](./INSTALL.md#instalação-portátil-sem-docker)**.
+Alternativas: **[oficinaos-portable.zip](https://github.com/braindeadpt/OficinaOS/releases/latest/download/oficinaos-portable.zip)** (~470 MB, Bun + PostgreSQL embutidos — sem admin, sem instalar nada) ou o **[instalador ZIP Docker](https://github.com/braindeadpt/OficinaOS/releases/latest/download/oficinaos-install.zip)** (`INSTALAR.bat` — para NAS/Linux e quem já usa Docker). Diferenças, backups e restauro: **[INSTALL.md → Instalação portátil](../../INSTALL.md#instalação-portátil-sem-docker)**.
 
 > O ZIP da release contém só os ficheiros de instalação. Para o código completo: **Code → Download ZIP** (sempre a versão mais recente de `main`).
 
-Guia passo a passo completo: **[INSTALL.md](./INSTALL.md)**
+Guia passo a passo completo: **[INSTALL.md](../../INSTALL.md)**
 
 ### Docker manual (recomendado para Linux/Mac)
 
@@ -90,14 +90,14 @@ docker compose restart app  # reiniciar após mudanças de build
 Este fork inclui patches para funcionar em HTTP simples dentro de uma rede local de confiança (sem TLS): cookies de sessão sem `Secure`, CSP sem `upgrade-insecure-requests`, HSTS desativado.
 
 - Acede sempre pelo **mesmo URL configurado em `APP_URL`** — misturar `localhost` e IP provoca erros de origem inválida
-- Se expuseres a app fora da rede da loja, **usa HTTPS** — a configuração HTTP é só para LAN privada. A forma mais simples: **[acesso remoto via Cloudflare Tunnel](docs/remote-access.md)**, sem abrir portas e sem IP público
+- Se expuseres a app fora da rede da loja, **usa HTTPS** — a configuração HTTP é só para LAN privada. A forma mais simples: **[acesso remoto via Cloudflare Tunnel](../../docs/remote-access.md)**, sem abrir portas e sem IP público
 - Se o IP da máquina mudar, atualiza `APP_URL` no `.env` e corre `docker compose up -d`
 
 ## Telemóveis e tablets
 
 A app é responsiva e instalável como **PWA** (ícone no ecrã principal, ecrã cheio) — iPhone, iPad e Android, na rede da loja ou remotamente. Também há configuração **Capacitor** pronta para gerar um APK Android nativo sem Play Store.
 
-Guia completo: **[docs/mobile-access.md](docs/mobile-access.md)**
+Guia completo: **[docs/mobile-access.md](../../docs/mobile-access.md)**
 
 ## Acesso remoto (opcional)
 
@@ -113,7 +113,7 @@ EXTRA_TRUSTED_ORIGINS=https://oficina.oteudominio.pt
 docker compose --profile tunnel up -d
 ```
 
-Guia passo a passo: **[docs/remote-access.md](docs/remote-access.md)**
+Guia passo a passo: **[docs/remote-access.md](../../docs/remote-access.md)**
 
 ## Backups e teste de restore (sidecar db-backup)
 
@@ -186,7 +186,7 @@ O script lista os ficheiros disponíveis com `docker compose exec db-backup ls -
 
 ## Configuração
 
-Todas as variáveis de ambiente estão documentadas no [`.env.example`](./.env.example). Em produção o servidor recusa arrancar se faltarem segredos obrigatórios.
+Todas as variáveis de ambiente estão documentadas no [`.env.example`](../../.env.example). Em produção o servidor recusa arrancar se faltarem segredos obrigatórios.
 
 | Variável | Descrição |
 |---|---|
@@ -221,7 +221,7 @@ Todas as variáveis de ambiente estão documentadas no [`.env.example`](./.env.e
 
 **Reset horário:** o timer da infra corre `docker exec demo-web bun run demo:reset` — regenera o dump (datas sempre frescas), faz TRUNCATE+replay **numa única transação** (`lock_timeout=10s`, timeout 60s) e limpa o conteúdo dos uploads. A app continua a responder durante o reset — os leitores veem o estado antes ou depois, nunca uma base a meio; o comando é idempotente e corre inteiramente dentro do contentor.
 
-**Deploy de exemplo:** [`compose.demo.yaml`](./compose.demo.yaml) — app + Postgres com imagem de tag fixa, `read_only` + `tmpfs /tmp`, `cap_drop ALL`, `no-new-privileges`, limites de memória/CPU/PIDs, rede `internal` selada e **nenhuma porta publicada** (só a rede `edge`), com [`.env.demo.example`](./.env.demo.example). O reverse proxy na edge aponta `demo.oficinaos.app` para `demo-web:4000`.
+**Deploy de exemplo:** [`compose.demo.yaml`](../../compose.demo.yaml) — app + Postgres com imagem de tag fixa, `read_only` + `tmpfs /tmp`, `cap_drop ALL`, `no-new-privileges`, limites de memória/CPU/PIDs, rede `internal` selada e **nenhuma porta publicada** (só a rede `edge`), com [`.env.demo.example`](../../.env.demo.example). O reverse proxy na edge aponta `demo.oficinaos.app` para `demo-web:4000`.
 
 ## Desenvolvimento local (sem Docker)
 
@@ -254,25 +254,25 @@ Strings hardcoded na UI são rejeitadas em review.
 
 ## Contribuir
 
-Vê [CONTRIBUTING.md](./CONTRIBUTING.md). Resumindo: abre um issue antes de PRs grandes, corre `bun run check` e `bun run test`, e mantém cada PR focado numa só coisa.
+Vê [CONTRIBUTING.md](../../CONTRIBUTING.md). Resumindo: abre um issue antes de PRs grandes, corre `bun run check` e `bun run test`, e mantém cada PR focado numa só coisa.
 
 ## Segurança
 
-Encontraste uma vulnerabilidade? Vê [SECURITY.md](./SECURITY.md) — **não** abras um issue público.
+Encontraste uma vulnerabilidade? Vê [SECURITY.md](../../SECURITY.md) — **não** abras um issue público.
 
 ## Code signing policy
 
 Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/) *(pending SignPath Foundation onboarding; releases prior to workflow integration are unsigned)*.
 
-- **Signed artifacts:** Once SignPath integration is enabled in [`.github/workflows/release.yml`](./.github/workflows/release.yml), Windows release binaries built by this project (`OficinaOS-Setup.exe` and `OficinaOSTray.exe`) will be signed exclusively from tagged commits on `main`. Third-party open-source runtimes bundled inside the installer (Bun, PostgreSQL, WinSW) are included as distributed upstream and are not re-signed with the project certificate.
+- **Signed artifacts:** Once SignPath integration is enabled in [`.github/workflows/release.yml`](../../.github/workflows/release.yml), Windows release binaries built by this project (`OficinaOS-Setup.exe` and `OficinaOSTray.exe`) will be signed exclusively from tagged commits on `main`. Third-party open-source runtimes bundled inside the installer (Bun, PostgreSQL, WinSW) are included as distributed upstream and are not re-signed with the project certificate.
 - **Team roles:**
   - **Committers and reviewers:** [@braindeadpt](https://github.com/braindeadpt)
   - **Approvers:** [@braindeadpt](https://github.com/braindeadpt) (every release signing request requires manual approval)
-- **Privacy:** This program will not transfer any user or shop data to other networked systems unless specifically requested by the user or the person installing or operating it. When an administrator opens the dashboard, the app performs a read-only update check against GitHub Releases (`api.github.com`, no telemetry or shop data sent). All other external integrations (remote access tunnel, WhatsApp/SMS notifications, AI assistant, OficinaOS Cloud) are optional, disabled by default, and documented in [docs/privacy-and-data.md](./docs/privacy-and-data.md).
+- **Privacy:** This program will not transfer any user or shop data to other networked systems unless specifically requested by the user or the person installing or operating it. When an administrator opens the dashboard, the app performs a read-only update check against GitHub Releases (`api.github.com`, no telemetry or shop data sent). All other external integrations (remote access tunnel, WhatsApp/SMS notifications, AI assistant, OficinaOS Cloud) are optional, disabled by default, and documented in [docs/privacy-and-data.md](../../docs/privacy-and-data.md).
 
 ## Licença
 
-[MIT](./LICENSE) © 2026 Bechar Gherbi (projeto original), alterações © braindeadpt. O nome "Reparilo" pertence ao autor original e não está licenciado — este fork usa o nome **OficinaOS**.
+[MIT](../../LICENSE) © 2026 Bechar Gherbi (projeto original), alterações © braindeadpt. O nome "Reparilo" pertence ao autor original e não está licenciado — este fork usa o nome **OficinaOS**.
 
 ---
 

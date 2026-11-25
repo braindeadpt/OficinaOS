@@ -424,8 +424,8 @@ requires `whatsapp-bot`).
 - **Site copy** (all public text): `oficinaos-website/src/i18n/{pt,en,es}.ts` — data-driven, `Copy` derives from `pt.ts`
 - **User docs**: `oficinaos-website` `/docs` + `/docs/{portal,whatsapp,diag}` — the site, not the `.md` files, is the source for customers
 - **Technical docs**: `reparilo/docs/` (pro-modules.md, remote-access.md, mobile-access.md, privacy-and-data.md, this map)
-- **Approved roadmap (not implemented)**: `docs/marketplace.md` — B2B classifieds between shops, post-beta; `oficinaos-diag/docs/roadmap.md` — scrcpy license (Apache-2.0, commercially OK) + deterministic auto-quote plan
-- **Recorded idea (not approved)**: `docs/ai-counter.md` — WhatsApp "AI Counter": estimated quotes, scheduling, LLM fallback. Only moves forward with free traction + Pro interest
+- **Approved roadmap (not implemented)**: `docs/internal/marketplace.md` — B2B classifieds between shops, post-beta; `oficinaos-diag/docs/roadmap.md` — scrcpy license (Apache-2.0, commercially OK) + deterministic auto-quote plan
+- **Recorded idea (not approved)**: `docs/internal/ai-counter.md` — WhatsApp "AI Counter": estimated quotes, scheduling, LLM fallback. Only moves forward with free traction + Pro interest
 
 ## Cross-cutting rules (apply to all repos)
 
