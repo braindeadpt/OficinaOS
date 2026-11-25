@@ -60,12 +60,19 @@ export interface PontoTodayEntry {
   corrects?: { at: Date } | null;
   status: string;
   type: TimeEntryType;
+  /** Decisão mais recente do painel — presente só em pontoEntriesSince
+   *  (o status da linha não muda com a validação, é append-only). */
+  validations?: { decision: string }[];
 }
 
 /** Registos do dia civil da loja (fuso das definições) para um user —
  *  usado pelo gate "entrada hoje" e pelo resumo do ESTADO. Desempate
  *  por createdAt: uma PAUSA e a SAIDA presumida ao mesmo instante ficam
- *  com ordem determinística (a escrita mais recente decide o "último"). */
+ *  com ordem determinística (a escrita mais recente decide o "último").
+ *  Linhas anuladas ficam de fora: as já substituídas por uma correção
+ *  (senão a original e a correção contavam as duas) e as recusadas
+ *  pela gerência — uma entrada recusada não pode valer como pré-
+ *  requisito de PAUSA/VOLTEI/SAIDA. */
 export function todayPontoEntries(
   prisma: DbClient,
   userId: string,
@@ -76,14 +83,23 @@ export function todayPontoEntries(
   return prisma.timeEntry.findMany({
     orderBy: [{ at: "asc" }, { createdAt: "asc" }],
     select: { at: true, status: true, type: true },
-    where: { at: { gte: start, lt: end }, userId },
+    where: {
+      at: { gte: start, lt: end },
+      corrections: { none: {} },
+      userId,
+      validations: { none: { decision: "RECUSADO" } },
+    },
   });
 }
 
 /** SAIDA presumida do dia ainda por corrigir (item 5): proofs
  *  .exitReminderPresumed=true e nenhuma correction a apontar. É a
  *  "pergunta pendente" do fluxo Esquecimentos — a resposta do
- *  trabalhador, uma SAIDA normal ou a correção do painel fecham-na. */
+ *  trabalhador, uma SAIDA normal ou a correção do painel fecham-na.
+ *  Presumida recusada pela gerência NÃO é oferecida: a recusa passa
+ *  a decisão para o painel e uma SAIDA normal do trabalhador nunca
+ *  a pode substituir por cima da recusa — fica registo novo, e a
+ *  presumida recusada continua à espera de decisão do gestor. */
 export function findOpenPresumedExit(
   prisma: DbClient,
   userId: string,
@@ -100,6 +116,7 @@ export function findOpenPresumedExit(
       proofs: { equals: true, path: ["exitReminderPresumed"] },
       type: "SAIDA",
       userId,
+      validations: { none: { decision: "RECUSADO" } },
     },
   });
 }
@@ -109,7 +126,12 @@ export function findOpenPresumedExit(
  *  substituídas por uma correção (correctsId a apontar para elas, ex.:
  *  a SAIDA presumida corrigida pela resposta ao lembrete) ficam de
  *  fora — senão o resumo listava a presumida e a correção, contava a
- *  pendência em duplicado e fechava o turno na primeira saída. */
+ *  pendência em duplicado e fechava o turno na primeira saída. Linhas
+ *  recusadas pela gerência também ficam de fora: uma marcação anulada
+ *  não conta horas nem aparece no resumo. A decisão mais recente vem
+ *  no resultado — o status da linha é o da avaliação automática e não
+ *  muda com a validação (append-only), por isso um registo já decidido
+ *  no painel não pode continuar a contar como "por validar". */
 export function pontoEntriesSince(
   prisma: DbClient,
   userId: string,
@@ -122,8 +144,18 @@ export function pontoEntriesSince(
       corrects: { select: { at: true } },
       status: true,
       type: true,
+      validations: {
+        orderBy: { at: "desc" },
+        select: { decision: true },
+        take: 1,
+      },
     },
-    where: { at: { gte: since }, corrections: { none: {} }, userId },
+    where: {
+      at: { gte: since },
+      corrections: { none: {} },
+      userId,
+      validations: { none: { decision: "RECUSADO" } },
+    },
   });
 }
 
