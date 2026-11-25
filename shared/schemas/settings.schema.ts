@@ -198,6 +198,10 @@ export const updateNotificationTemplateSchema = z.object({
 export const updateWhatsAppSettingsSchema = z
   .object({
     apiToken: z.string().optional(),
+    // Consentimento explícito para guardar o token Meta cifrado na
+    // OficinaOS Cloud e enviar pelo relay — grava whatsappCloudConsentAt
+    // uma vez no servidor. Sem ele não há upload de credenciais.
+    cloudConsent: z.boolean().optional(),
     businessId: z.string().optional(),
     phoneNumberId: z.string().optional(),
     enabled: z.boolean().optional(),

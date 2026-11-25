@@ -54,6 +54,7 @@ interface WhatsAppSettings {
   botDisclaimerAccepted: boolean;
   botSuspendedAt: string | null;
   businessId: string | null;
+  cloudConsentAccepted: boolean;
   credentialsAtCloud: boolean;
   disclaimerAccepted: boolean;
   enabled: boolean;
@@ -61,6 +62,7 @@ interface WhatsAppSettings {
   evolutionUrl: string | null;
   hasApiToken: boolean;
   hasEvolutionApiKey: boolean;
+  localDeprecationWarnedAt: string | null;
   phoneNumberId: string | null;
   pickupReminderTemplate: string | null;
   remarketingCooldownDays: number;
@@ -180,6 +182,7 @@ interface SettingsState {
   }) => Promise<void>;
   saveWhatsAppSettings: (data: {
     apiToken?: string;
+    cloudConsent?: boolean;
     businessId?: string;
     phoneNumberId?: string;
     enabled?: boolean;

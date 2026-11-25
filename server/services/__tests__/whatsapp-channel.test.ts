@@ -97,10 +97,11 @@ describe("resolveWhatsAppChannel", () => {
     ).toBeNull();
   });
 
-  it("prefers the cloud relay once credentials migrated", () => {
+  it("prefers the cloud relay once credentials migrated — grandfathered without consent", () => {
     const channel = resolveWhatsAppChannel({
       ...pairedCloud,
       whatsappApiTokenEncrypted: "enc:meta",
+      whatsappCloudConsentAt: null,
     });
     expect(channel).toEqual({
       apiUrl: "https://cloud.example",
@@ -335,6 +336,7 @@ describe("pushCredentialsToCloud", () => {
     cloudShopTokenEncrypted: "enc:shop-token",
     cloudSyncedAt: new Date(),
     whatsappApiTokenEncrypted: "enc:meta-token",
+    whatsappCloudConsentAt: new Date(),
     whatsappCredentialsAtCloud: false,
     whatsappPhoneNumberId: "1234",
   };
@@ -361,6 +363,16 @@ describe("pushCredentialsToCloud", () => {
     });
   });
 
+  it("never uploads without explicit cloud consent", async () => {
+    mocks.getOrCreateShopSettings.mockResolvedValue({
+      ...settings,
+      whatsappCloudConsentAt: null,
+    });
+    expect(await pushCredentialsToCloud(prisma)).toBe(false);
+    expect(mocks.cloudFetch).not.toHaveBeenCalled();
+    expect(updateSettings).not.toHaveBeenCalled();
+  });
+
   it("returns false when the cloud rejects — local send keeps working", async () => {
     mocks.getOrCreateShopSettings.mockResolvedValue(settings);
     mocks.cloudFetch.mockResolvedValue({ body: null, ok: false, status: 402 });
@@ -378,9 +390,10 @@ describe("pushCredentialsToCloud", () => {
     expect(updateSettings).not.toHaveBeenCalled();
   });
 
-  it("is a no-op once credentials are already at the cloud", async () => {
+  it("is a grandfathered no-op once credentials are already at the cloud", async () => {
     mocks.getOrCreateShopSettings.mockResolvedValue({
       ...settings,
+      whatsappCloudConsentAt: null,
       whatsappCredentialsAtCloud: true,
     });
     expect(await pushCredentialsToCloud(prisma)).toBe(true);

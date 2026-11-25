@@ -553,9 +553,10 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
           app.log.warn({ err }, "evolution webhook register failed")
         );
       }
-      // Migração silenciosa: envia as credenciais Meta para o relay da
-      // cloud. Se falhar (cloud em baixo / sem entitlement) fica para a
-      // próxima gravação — o envio local continua a funcionar entretanto.
+      // Migração consentida: envia as credenciais Meta para o relay da
+      // cloud apenas quando whatsappCloudConsentAt existe (gate central no
+      // push). Se falhar fica para a próxima gravação/ciclo — o envio local
+      // continua durante a transição.
       const credentialsAtCloud = await pushCredentialsToCloud(app.prisma);
       // §5.6 C.2 — ao ligar/configurar o WhatsApp, corre o sync de
       // templates Meta em background (GET primeiro, cria o que falta).
