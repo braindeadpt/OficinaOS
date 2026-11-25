@@ -1112,6 +1112,31 @@ describe("SAIDA normal após presumida", () => {
     expect(entry.correctsId).toBeNull();
     expect(entry.type).toBe("SAIDA");
   });
+
+  it("reentrada recusada pela gerência não abre turno — SAIDA corrige a presumida", async () => {
+    const { ctx, message, t } = setup({ smsAllowed: true, transport: "sms" });
+    mocks.findOpenPresumedExit.mockResolvedValue({
+      at: PRESUMED_AT,
+      id: "presumed-1",
+    });
+    // A entrada das 18:04 foi recusada na validação — na base de
+    // dados real o filtro validations.none RECUSADO exclui-a da
+    // procura. O mock emula esse filtro: só devolve a entrada quando
+    // a query NÃO a exclui (comportamento antigo, errado).
+    mocks.timeEntryFindFirst.mockImplementation(((args?: unknown) => {
+      const where = (args as { where?: { validations?: unknown } } | undefined)
+        ?.where;
+      return Promise.resolve(where?.validations ? null : { id: "entrada-2" });
+    }) as never);
+
+    await tryHandlePontoStaff(ctx, message("SAIDA"), t);
+
+    const entry = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect(entry.correctsId).toBe("presumed-1");
+  });
 });
 
 describe("workedMs — saída corrigida depois da meia-noite", () => {

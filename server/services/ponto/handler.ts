@@ -1200,6 +1200,9 @@ async function presumedCorrectionFor(
   if (!presumed) {
     return null;
   }
+  // Uma reentrada recusada pela gerência não abre turno nenhum —
+  // sem o filtro ela impedia a SAIDA de corrigir a presumida e o
+  // apuramento ignorava a saída real do turno anterior.
   const reentry = await ctx.prisma.timeEntry
     .findFirst({
       select: { id: true },
@@ -1208,6 +1211,7 @@ async function presumedCorrectionFor(
         corrections: { none: {} },
         type: "ENTRADA",
         userId: staff.user.id,
+        validations: { none: { decision: "RECUSADO" } },
       },
     })
     .catch(() => null);
