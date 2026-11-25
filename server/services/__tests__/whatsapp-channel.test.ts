@@ -461,7 +461,12 @@ describe("pushCredentialsToCloud", () => {
     // segunda chamada só pode ler/enviar esse token depois da primeira acabar.
     currentToken = "enc:replacement";
     const second = pushCredentialsToCloud(prisma);
+    // Sem a fila o segundo upload partia imediatamente para a Cloud — este é
+    // o invariante que impede a substituição fora de ordem.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(mocks.cloudFetch).toHaveBeenCalledTimes(1);
     resolveFirst({ body: { ok: true }, ok: true, status: 200 });
+    await vi.waitFor(() => expect(mocks.cloudFetch).toHaveBeenCalledTimes(2));
 
     await expect(first).resolves.toBe(false);
     await expect(second).resolves.toBe(true);

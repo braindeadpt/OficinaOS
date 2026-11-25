@@ -46,9 +46,6 @@ if (m && adminUrl) {
   }
 }
 
-const RESET_STMT =
-  /UPDATE "shop_settings"\s+SET "whatsappLocalDeprecationStartedAt" = NULL;/;
-
 let adminClient: Client | null = null;
 let pg: Client | null = null;
 let prisma: PrismaClient | null = null;
@@ -134,8 +131,13 @@ describe.skipIf(!serverReachable)(
         update: { whatsappLocalDeprecationStartedAt: oldWarningAt },
       });
 
-      // Run the reset verbatim from the migration file — this is the state the
-      // column is in immediately after RENAME preserves a pre-correction value.
+      // Reverte apenas a coluna para o estado pré-correção — com a data antiga
+      // dentro de WarnedAt — e aplica o ficheiro de migração completo, verbatim.
+      // Assim o teste cobre o upgrade real (RENAME preserva + UPDATE limpa), não
+      // apenas uma instrução SQL copiada para fora de contexto.
+      await sql.query(
+        'ALTER TABLE "shop_settings" RENAME COLUMN "whatsappLocalDeprecationStartedAt" TO "whatsappLocalDeprecationWarnedAt"'
+      );
       const migrationSql = readFileSync(
         join(
           process.cwd(),
@@ -143,9 +145,7 @@ describe.skipIf(!serverReachable)(
         ),
         "utf8"
       );
-      const reset = migrationSql.match(RESET_STMT);
-      expect(reset).toBeTruthy();
-      await sql.query(reset?.[0] as string);
+      await sql.query(migrationSql);
 
       const cleared = await db.shopSettings.findUniqueOrThrow({
         where: { id: "default" },
