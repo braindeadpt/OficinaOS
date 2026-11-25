@@ -231,10 +231,12 @@ try {
     const casc = await client.query<{
       entry: number;
       validation: number;
+      correction: number;
       link: string | null;
     }>(
       `SELECT (SELECT count(*)::int FROM time_entries WHERE id = $1) AS entry,
               (SELECT count(*)::int FROM time_entry_validations WHERE "entryId" = $1) AS validation,
+              (SELECT count(*)::int FROM time_entries WHERE id = $2) AS correction,
               (SELECT "correctsId" FROM time_entries WHERE id = $2) AS link`,
       [srOld, srCorrExpired]
     );
@@ -247,8 +249,8 @@ try {
       casc.rows[0]?.validation === 0
     );
     ok(
-      "A1: a cascata da FK anulou correctsId na correção retida",
-      casc.rows[0]?.link === null
+      "A1: a cascata da FK anulou correctsId e a correção retida sobreviveu",
+      casc.rows[0]?.correction === 1 && casc.rows[0]?.link === null
     );
 
     // UPDATE arbitrário de correctsId (valor não-nulo) falha.
@@ -334,6 +336,71 @@ try {
         purgeConn
       )
     );
+
+    // UPDATE com o papel da purga falha ainda antes de chegar ao trigger
+    // — o papel não tem UPDATE na tabela. Se um dia um provisioning lhe
+    // der esse privilégio por engano, passa a ser o trigger a responder:
+    // qualquer dos dois erros é falha fechada.
+    let updateDenied = false;
+    try {
+      await purgeConn.query(
+        `UPDATE time_entry_validations SET decision = 'APROVADO' WHERE id = $1`,
+        [liveVal]
+      );
+    } catch (err) {
+      const msg = String(err);
+      updateDenied =
+        msg.includes("permission denied") || msg.includes("só-acrescento");
+    }
+    ok(
+      "A3: SET ROLE purga — UPDATE de validação falha (permissão ou trigger)",
+      updateDenied
+    );
+
+    // ── SEC: search_path sombreado não esconde o livro real ──────────
+    // Antes da correção: um schema sombra com uma time_entries vazia +
+    // GRANT USAGE/SELECT ao papel da purga fazia o NOT EXISTS do trigger
+    // dar sempre verdade — validações apagáveis e links de correção
+    // anuláveis em registos vivos. Reproduzido em Postgres 16; aqui fica
+    // a regressão.
+    await client.query("DROP SCHEMA IF EXISTS probe_evil CASCADE");
+    await client.query("CREATE SCHEMA probe_evil");
+    await client.query("CREATE TABLE probe_evil.time_entries (id text)");
+    await client.query(
+      "GRANT USAGE ON SCHEMA probe_evil TO oficinaos_ponto_purge"
+    );
+    await client.query(
+      "GRANT SELECT ON probe_evil.time_entries TO oficinaos_ponto_purge"
+    );
+    const evilConn = new pg.Client({ connectionString: url });
+    await evilConn.connect();
+    try {
+      await evilConn.query("SET search_path = probe_evil, public");
+      await evilConn.query("SET ROLE oficinaos_ponto_purge");
+      ok(
+        "SEC: search_path sombreado não abre o DELETE de validações",
+        await expectDbError(
+          `DELETE FROM public.time_entry_validations WHERE id = $1`,
+          [liveVal],
+          "só-acrescento",
+          evilConn
+        )
+      );
+      ok(
+        "SEC: search_path sombreado não anula correctsId em registo vivo",
+        await expectDbError(
+          `UPDATE public.time_entries SET "correctsId" = NULL WHERE id = $1`,
+          [srCorrRecent],
+          "imutável",
+          evilConn
+        )
+      );
+    } finally {
+      await evilConn.end().catch(() => {
+        // encerramento best-effort
+      });
+      await client.query("DROP SCHEMA IF EXISTS probe_evil CASCADE");
+    }
   } finally {
     await purgeConn.end().catch(() => {
       // encerramento best-effort
