@@ -145,8 +145,8 @@ vi.mock("../repositories/settings.repository.js", () => ({
   ),
 }));
 
-function buildApp(prisma: unknown) {
-  const app = Fastify();
+function buildApp(prisma: unknown, options?: { trustProxy?: boolean }) {
+  const app = Fastify({ trustProxy: options?.trustProxy ?? false });
   app.setErrorHandler((error, _request, reply) => {
     if (isAppError(error)) {
       reply.status(error.status).send({
@@ -625,6 +625,102 @@ describe("Evolution inbound webhook registration (MESSAGES_UPSERT)", () => {
     expect(lastWebhookCall()?.[1].url).toBe(
       "https://oficina.exemplo/api/public/whatsapp/evolution/inbound"
     );
+  });
+
+  it("IPv6 público vindo do DNS → HTTPS (dns.lookup não usa parênteses)", async () => {
+    // Regressão SEC da revisão: lookup devolve "2001:..." sem "[]"; sem
+    // normalizar antes de isPublicIpv6, o IPv6 público passava por privado.
+    mocks.dnsLookup.mockResolvedValue([
+      { address: "2001:4860:4860::8888", family: 6 },
+    ]);
+    const res = await saveWhatsApp("oficina.exemplo");
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "https://oficina.exemplo/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("APP_URL HTTPS no mesmo hostname vence o DNS privado", async () => {
+    // Instalação HTTPS-only dentro da LAN: a configuração explícita da
+    // loja não pode ser rebaixada só porque o nome resolve um IP privado.
+    mocks.dnsLookup.mockResolvedValue([{ address: "192.168.1.30", family: 4 }]);
+    process.env.APP_URL = "https://oficina.exemplo";
+    resetEnvForTests();
+    const res = await saveWhatsApp("oficina.exemplo");
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "https://oficina.exemplo/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("APP_URL HTTPS noutra porta não rebaixa o acesso HTTP direto da LAN", async () => {
+    // O virtual host TLS pode viver na 443 enquanto a app responde em
+    // HTTP na 4000; só o mesmo host[:port] herda o esquema da APP_URL.
+    mocks.dnsLookup.mockResolvedValue([{ address: "192.168.1.30", family: 4 }]);
+    process.env.APP_URL = "https://oficina.exemplo";
+    resetEnvForTests();
+    const res = await saveWhatsApp("oficina.exemplo:4000");
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "http://oficina.exemplo:4000/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("pedido HTTPS através de proxy confiável vence o DNS privado", async () => {
+    mocks.dnsLookup.mockResolvedValue([{ address: "192.168.1.30", family: 4 }]);
+    const app = buildApp(fakePrisma(PRO_BOT_ROW), { trustProxy: true });
+    const res = await app.inject({
+      headers: {
+        host: "oficina.exemplo",
+        "x-forwarded-proto": "https",
+      },
+      method: "PUT",
+      payload: { botDisclaimerAccepted: true, transport: "evolution" },
+      url: "/api/settings/whatsapp",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "https://oficina.exemplo/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("Evolution fora da LAN não aceita HTTP inferido pelo DNS da app", async () => {
+    mocks.dnsLookup.mockResolvedValue([{ address: "192.168.1.30", family: 4 }]);
+    const app = buildApp(
+      fakePrisma({
+        ...PRO_BOT_ROW,
+        evolutionUrl: "https://evolution.example.com",
+      })
+    );
+    const res = await app.inject({
+      headers: { host: "oficina.exemplo" },
+      method: "PUT",
+      payload: { botDisclaimerAccepted: true, transport: "evolution" },
+      url: "/api/settings/whatsapp",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "https://oficina.exemplo/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("sem consumidor Evolution, não resolve DNS nem regista webhook", async () => {
+    const app = buildApp(
+      fakePrisma({
+        ...BOT_ROW,
+        cloudEntitlements: [],
+        cloudSyncedAt: new Date(),
+      })
+    );
+    const res = await app.inject({
+      headers: { host: "oficina.exemplo" },
+      method: "PUT",
+      payload: { transport: "evolution" },
+      url: "/api/settings/whatsapp",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mocks.setEvolutionWebhook).not.toHaveBeenCalled();
+    expect(mocks.dnsLookup).not.toHaveBeenCalled();
   });
 
   it("host público com porta → HTTPS preserva a porta explícita", async () => {
