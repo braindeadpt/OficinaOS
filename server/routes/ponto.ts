@@ -166,8 +166,7 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
       // ainda não tem callback — sem ele as marcações nunca chegam.
       // O Host do pedido é o endereço que a Evolution alcança.
       await tryRegisterEvolutionWebhook(app.prisma, {
-        host: req.headers.host ?? "",
-        ip: req.ip,
+        host: req.host ?? req.headers.host ?? "",
         protocol: req.protocol,
       }).catch((err) =>
         req.log.warn({ err }, "evolution webhook register failed")

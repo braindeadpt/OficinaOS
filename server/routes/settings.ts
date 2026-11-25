@@ -527,8 +527,7 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
         parsed.data.transport === "evolution"
       ) {
         await tryRegisterEvolutionWebhook(app.prisma, {
-          host: req.headers.host ?? "",
-          ip: req.ip,
+          host: req.host ?? req.headers.host ?? "",
           protocol: req.protocol,
         }).catch((err) =>
           app.log.warn({ err }, "evolution webhook register failed")
@@ -652,8 +651,7 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       // Termo já aceite numa gravação anterior → a instância (re)criada
       // fica sem webhook até ao próximo save; regista já no pair.
       await tryRegisterEvolutionWebhook(app.prisma, {
-        host: req.headers.host ?? "",
-        ip: req.ip,
+        host: req.host ?? req.headers.host ?? "",
         protocol: req.protocol,
       }).catch((err) =>
         req.log.warn({ err }, "evolution webhook register failed")
@@ -842,7 +840,6 @@ const DOCKER_INTERNAL_HOSTS = new Set([
 
 interface EvolutionWebhookRequestContext {
   host: string;
-  ip?: string;
   protocol?: string;
 }
 
@@ -971,9 +968,9 @@ function isHttpsAppUrlForHost(hostPort: string): boolean {
 }
 
 /** callbackBaseForHost + resolução DNS para hostnames com ponto. O DNS
- *  só pode autorizar HTTP quando há prova LAN nas duas pontas: o pedido
- *  atual chegou em HTTP de um IP privado e a Evolution configurada é
- *  interna. HTTPS observado no pedido/APP_URL vence sempre. */
+ *  só pode autorizar HTTP quando o pedido chegou em HTTP e a Evolution
+ *  configurada também resolve na LAN — o destino só-privado não é
+ *  alcançável pela Internet pública. HTTPS observado/configurado vence. */
 async function callbackBaseForHostResolved(
   hostPort: string,
   context: {
@@ -991,16 +988,26 @@ async function callbackBaseForHostResolved(
   if (!url.hostname) {
     return null;
   }
-  if (context.protocol === "https" || isHttpsAppUrlForHost(hostPort)) {
+  const appUrlDeclaresHttps = isHttpsAppUrlForHost(hostPort);
+  if (context.protocol === "https") {
+    if (appUrlDeclaresHttps || !isPrivateCallbackHost(url.hostname)) {
+      return `https://${url.host}`;
+    }
+    // Um host estruturalmente interno (app, IP LAN, .local) combinado com
+    // X-Forwarded-Proto=https descreve duas ligações diferentes quando o
+    // proxy reescreve o Host: o TLS é do endereço externo, não deste host.
+    // Sem um endereço externo explícito, não inventamos esse par — cai no
+    // fallback IP LAN/APP_URL/docker abaixo.
+    return null;
+  }
+  if (appUrlDeclaresHttps) {
     return `https://${url.host}`;
   }
   if (isPrivateCallbackHost(url.hostname)) {
     return `http://${url.host}`;
   }
   const canInferPrivateDns =
-    context.allowPrivateDnsHttp &&
-    context.protocol === "http" &&
-    Boolean(context.ip && isPrivateIpLiteral(context.ip));
+    context.allowPrivateDnsHttp && context.protocol === "http";
   const privateHost =
     canInferPrivateDns &&
     url.hostname.includes(".") &&
@@ -1012,14 +1019,14 @@ async function callbackBaseForHostResolved(
 /**
  * Base (scheme://host[:port]) que a Evolution consegue alcançar para o
  * callback do webhook. O Host do pedido é a primeira escolha — o staff
- * chegou à app por ele. Em localhost num contentor com netns isolado
- * (Docker padrão) esse nome não serve e a máquina nem expõe IPv4 LAN:
- * caem-se para a APP_URL configurada (obrigatória em produção, valida-
- * da não-localhost) e, em último recurso, para o nome do serviço na
- * rede docker (`app:PORT` — o perfil wa-local põe app e Evolution na
- * mesma network do compose).
+ * chegou à app por ele. Em localhost, ou quando um proxy reescreve o
+ * Host interno e o esquema externo não forma um par endereço+TLS válido,
+ * caem-se para o IPv4 LAN, para a APP_URL configurada (obrigatória em
+ * produção, validada não-localhost) e, em último recurso, para o nome
+ * do serviço na rede docker (`app:PORT` — o perfil wa-local põe app e
+ * Evolution na mesma network do compose).
  */
-function resolveEvolutionCallbackBase(
+async function resolveEvolutionCallbackBase(
   context: EvolutionWebhookRequestContext & { allowPrivateDnsHttp: boolean }
 ): Promise<string | null> {
   const host = context.host.trim();
@@ -1027,7 +1034,12 @@ function resolveEvolutionCallbackBase(
     return Promise.resolve(null);
   }
   if (!isLoopbackHostPort(host)) {
-    return callbackBaseForHostResolved(host, context);
+    const hostBase = await callbackBaseForHostResolved(host, context);
+    if (hostBase) {
+      return hostBase;
+    }
+    // Sem par scheme+host confiável (ex.: proxy que reescreve o Host): usa
+    // os mesmos fallbacks explícitos do acesso por localhost.
   }
   const ip = primaryLanIpv4();
   if (ip) {
@@ -1059,6 +1071,21 @@ function resolveEvolutionCallbackBase(
     return Promise.resolve(callbackBaseForHost(`app:${loadEnv().PORT}`));
   }
   return Promise.resolve(null);
+}
+
+/** A Evolution configurada é interna? Nomes DNS privados com pontos
+ *  precisam da mesma resolução assíncrona do host do callback; falha de
+ *  DNS ou qualquer IP público fecha para o lado seguro. */
+async function isPrivateEvolutionUrl(rawUrl: string): Promise<boolean> {
+  try {
+    const hostname = new URL(rawUrl).hostname;
+    return (
+      isPrivateCallbackHost(hostname) ||
+      (hostname.includes(".") && (await resolvesToPrivateOnly(hostname)))
+    );
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -1114,12 +1141,7 @@ export async function tryRegisterEvolutionWebhook(
   if (!apiKey) {
     return false;
   }
-  let evolutionIsLan = false;
-  try {
-    evolutionIsLan = isPrivateCallbackHost(new URL(row.evolutionUrl).hostname);
-  } catch {
-    evolutionIsLan = false;
-  }
+  const evolutionIsLan = await isPrivateEvolutionUrl(row.evolutionUrl);
   const base = await resolveEvolutionCallbackBase({
     ...request,
     allowPrivateDnsHttp: evolutionIsLan,

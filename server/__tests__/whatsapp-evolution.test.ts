@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
     payload === "enc:key" ? "evo-key" : null
   ),
   dnsLookup: vi.fn(
-    (): Promise<{ address: string; family: number }[]> =>
+    (_hostname?: string): Promise<{ address: string; family: number }[]> =>
       Promise.reject(new Error("ENOTFOUND"))
   ),
   disconnectEvolutionInstance: vi.fn(async () => ({ success: true })),
@@ -640,6 +640,87 @@ describe("Evolution inbound webhook registration (MESSAGES_UPSERT)", () => {
     );
   });
 
+  it("Evolution num nome DNS interno permite HTTP inferido na app", async () => {
+    mocks.dnsLookup.mockImplementation((hostname?: string) =>
+      Promise.resolve(
+        hostname === "evolution.loja.interna"
+          ? [{ address: "192.168.1.50", family: 4 }]
+          : [{ address: "192.168.1.30", family: 4 }]
+      )
+    );
+    const app = buildApp(
+      fakePrisma({
+        ...PRO_BOT_ROW,
+        evolutionUrl: "http://evolution.loja.interna:8080",
+      })
+    );
+    const res = await app.inject({
+      headers: { host: "oficina.exemplo" },
+      method: "PUT",
+      payload: { botDisclaimerAccepted: true, transport: "evolution" },
+      url: "/api/settings/whatsapp",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "http://oficina.exemplo/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("X-Forwarded-Host externo preserva o par HTTPS", async () => {
+    const app = buildApp(fakePrisma(PRO_BOT_ROW), { trustProxy: true });
+    const res = await app.inject({
+      headers: {
+        host: "app:4000",
+        "x-forwarded-host": "oficina.exemplo",
+        "x-forwarded-proto": "https",
+      },
+      method: "PUT",
+      payload: { botDisclaimerAccepted: true, transport: "evolution" },
+      url: "/api/settings/whatsapp",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "https://oficina.exemplo/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("HTTPS com Host interno reescrito cai no IP LAN alcançável", async () => {
+    mocks.primaryLanIpv4.mockReturnValue("192.168.1.20");
+    const app = buildApp(fakePrisma(PRO_BOT_ROW), { trustProxy: true });
+    const res = await app.inject({
+      headers: {
+        host: "app:4000",
+        "x-forwarded-proto": "https",
+      },
+      method: "PUT",
+      payload: { botDisclaimerAccepted: true, transport: "evolution" },
+      url: "/api/settings/whatsapp",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "http://192.168.1.20:4000/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("HTTPS com Host interno e sem IP LAN usa APP_URL como par explícito", async () => {
+    process.env.APP_URL = "https://oficina.exemplo";
+    resetEnvForTests();
+    const app = buildApp(fakePrisma(PRO_BOT_ROW), { trustProxy: true });
+    const res = await app.inject({
+      headers: {
+        host: "app:4000",
+        "x-forwarded-proto": "https",
+      },
+      method: "PUT",
+      payload: { botDisclaimerAccepted: true, transport: "evolution" },
+      url: "/api/settings/whatsapp",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "https://oficina.exemplo/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
   it("APP_URL HTTPS no mesmo hostname vence o DNS privado", async () => {
     // Instalação HTTPS-only dentro da LAN: a configuração explícita da
     // loja não pode ser rebaixada só porque o nome resolve um IP privado.
@@ -685,7 +766,13 @@ describe("Evolution inbound webhook registration (MESSAGES_UPSERT)", () => {
   });
 
   it("Evolution fora da LAN não aceita HTTP inferido pelo DNS da app", async () => {
-    mocks.dnsLookup.mockResolvedValue([{ address: "192.168.1.30", family: 4 }]);
+    mocks.dnsLookup.mockImplementation((hostname?: string) =>
+      Promise.resolve(
+        hostname === "evolution.example.com"
+          ? [{ address: "8.8.8.8", family: 4 }]
+          : [{ address: "192.168.1.30", family: 4 }]
+      )
+    );
     const app = buildApp(
       fakePrisma({
         ...PRO_BOT_ROW,
