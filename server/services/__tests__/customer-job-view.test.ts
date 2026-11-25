@@ -36,7 +36,15 @@ const makeJob = () => ({
   ],
   payments: [{ amount: dec(30) }],
   portalPublishedAt: new Date(),
-  quotes: [{ amount: dec(200), status: "SENT", version: 1 }],
+  quotes: [
+    {
+      amount: dec(200),
+      note: "Inclui a peça",
+      sentAt: new Date("2026-11-20T10:00:00.000Z"),
+      status: "SENT",
+      version: 1,
+    },
+  ],
   repairs: [{ price: dec(160) }],
   status: "WAITING_FOR_PARTS",
   warrantyForJobId: null,
@@ -74,6 +82,9 @@ describe("vistaCliente", () => {
     );
     expect(Object.keys(view.pecasEmEspera[0] ?? {}).sort()).toEqual(
       ["chegadaPrevista", "nome"].sort()
+    );
+    expect(Object.keys(view.orcamento ?? {}).sort()).toEqual(
+      ["enviadoEm", "estado", "nota", "validade", "valor", "versao"].sort()
     );
   });
 

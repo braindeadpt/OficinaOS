@@ -399,6 +399,9 @@ function buildCtx(
     shopLabel:
       [settings.shopName, settings.phone].filter(Boolean).join(" · ") ||
       "a loja",
+    // Mesma precedência do resto da app — sem ela a vistaCliente caía
+    // no fallback fixo de Lisboa e as datas saiam no dia errado.
+    timezone: settings.timezone ?? process.env.TZ ?? "UTC",
   };
 }
 
@@ -560,7 +563,7 @@ function tryPontoForEvolution(
       shopLabel:
         [settings.shopName, settings.phone].filter(Boolean).join(" · ") ||
         "a loja",
-      timezone: settings.timezone ?? undefined,
+      timezone: settings.timezone ?? process.env.TZ ?? "UTC",
     } satisfies BotReplyCtx);
   // O envio devolve o key.id — `sendWithId` expõe-o às perguntas de
   // seguimento do lembrete de saída (citação do trabalhador).

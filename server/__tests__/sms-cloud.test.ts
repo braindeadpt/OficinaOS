@@ -145,6 +145,56 @@ describe("syncSmsInbound", () => {
     ]);
   });
 
+  it("contexto resolve o fuso com settings.timezone → env TZ → UTC", async () => {
+    // O dia da previsão é convertido na vistaCliente com este fuso — a
+    // precedência errada trocava o dia que a Cloud lê ao cliente.
+    const runOnce = async () => {
+      mocks.handleInboundMessage.mockClear();
+      mocks.cloudFetch
+        .mockResolvedValueOnce({
+          body: {
+            messages: [
+              {
+                createdAt: "2026-01-01",
+                fromPhone: "351912345678",
+                id: "in-tz",
+                kind: "RECEIVED",
+                text: "olá",
+              },
+            ],
+          },
+          ok: true,
+        })
+        .mockResolvedValueOnce({ ok: true, status: 200 });
+      await syncSmsInbound(fakePrisma(), "https://c", "tok", log, undefined, [
+        "sms",
+      ]);
+      return mocks.handleInboundMessage.mock.calls[0]?.[0] as {
+        timezone?: string;
+      };
+    };
+    const original = process.env.TZ;
+    try {
+      process.env.TZ = "America/New_York";
+      expect((await runOnce()).timezone).toBe("America/New_York");
+
+      delete process.env.TZ;
+      expect((await runOnce()).timezone).toBe("UTC");
+
+      process.env.TZ = "America/New_York";
+      mocks.getOrCreateShopSettings.mockResolvedValueOnce({
+        timezone: "Africa/Algiers",
+      });
+      expect((await runOnce()).timezone).toBe("Africa/Algiers");
+    } finally {
+      if (original === undefined) {
+        delete process.env.TZ;
+      } else {
+        process.env.TZ = original;
+      }
+    }
+  });
+
   it("REPORT DELIVERED/SENT marca o outbox SENT; FAILED marca FAILED", async () => {
     const prisma = fakePrisma();
     mocks.cloudFetch

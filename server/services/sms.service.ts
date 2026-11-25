@@ -221,7 +221,7 @@ export async function handleInboundSms(
     portalApiUrl: settings.cloudApiUrl,
     portalEnabled: modules.includes("portal"),
     prisma,
-    timezone: settings.timezone ?? undefined,
+    timezone: settings.timezone ?? process.env.TZ ?? "UTC",
     shopLabel:
       [settings.shopName, settings.phone].filter(Boolean).join(" · ") ||
       "a loja",

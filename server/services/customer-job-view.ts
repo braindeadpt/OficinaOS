@@ -33,7 +33,7 @@ const QUOTE_STATUS_PT: Record<string, string> = {
 
 const MS_PER_DAY = 86_400_000;
 
-const VIEW_SELECT = {
+export const CUSTOMER_JOB_VIEW_SELECT = {
   accessCode: true,
   color: true,
   depositAmount: true,
@@ -65,14 +65,23 @@ const VIEW_SELECT = {
   repairs: { select: { price: true } },
   quotes: {
     orderBy: { version: "desc" as const },
-    select: { amount: true, status: true, version: true },
+    select: {
+      amount: true,
+      id: true,
+      note: true,
+      sentAt: true,
+      status: true,
+      version: true,
+    },
     take: 1,
   },
   status: true,
   warrantyForJobId: true,
 } satisfies Prisma.JobSelect;
 
-type ViewJob = Prisma.JobGetPayload<{ select: typeof VIEW_SELECT }>;
+export type CustomerJobViewRow = Prisma.JobGetPayload<{
+  select: typeof CUSTOMER_JOB_VIEW_SELECT;
+}>;
 
 export interface CustomerJobView {
   aparelho: string;
@@ -85,7 +94,14 @@ export interface CustomerJobView {
   garantia: boolean;
   linkPortal: string | null;
   notasVisiveis: string[];
-  orcamento: { estado: string; validade: string | null; valor: string } | null;
+  orcamento: {
+    enviadoEm: string | null;
+    estado: string;
+    nota: string | null;
+    validade: string | null;
+    valor: string;
+    versao: number;
+  } | null;
   pecasEmEspera: { chegadaPrevista: string | null; nome: string }[];
   reparacaoExterna: { regressoPrevisto: string | null } | null;
   valores: {
@@ -122,9 +138,9 @@ function isoDate(d: Date | null, tz: string): string | null {
   return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(d);
 }
 
-/** Constrói a ficha do cliente a partir de um Job já carregado com VIEW_SELECT. */
+/** Constrói a ficha do cliente a partir de um Job já carregado com CUSTOMER_JOB_VIEW_SELECT. */
 export function vistaCliente(
-  job: ViewJob,
+  job: CustomerJobViewRow,
   ctx: CustomerViewCtx
 ): CustomerJobView {
   const aparelho = `${job.device.brand.name} ${job.device.model}${
@@ -170,9 +186,12 @@ export function vistaCliente(
     notasVisiveis: job.notes.map((n) => n.content),
     orcamento: quote
       ? {
+          enviadoEm: quote.sentAt?.toISOString() ?? null,
           estado: QUOTE_STATUS_PT[quote.status] ?? quote.status,
+          nota: quote.note,
           validade: null,
           valor: eur(ctx, quote.amount.toNumber()),
+          versao: quote.version,
         }
       : null,
     pecasEmEspera: job.partsWaiting.map((p) => ({
@@ -201,7 +220,7 @@ export async function loadVistaCliente(
   ctx: CustomerViewCtx
 ): Promise<CustomerJobView | null> {
   const job = await prisma.job.findUnique({
-    select: VIEW_SELECT,
+    select: CUSTOMER_JOB_VIEW_SELECT,
     where: { id: jobId },
   });
   return job ? vistaCliente(job, ctx) : null;

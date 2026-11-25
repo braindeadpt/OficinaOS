@@ -172,6 +172,9 @@ async function syncSmsInboundCycle(
     shopLabel:
       [settings.shopName, settings.phone].filter(Boolean).join(" · ") ||
       "a loja",
+    // Mesma precedência do resto da app — sem ela a vistaCliente caía
+    // no fallback fixo de Lisboa e as datas saiam no dia errado.
+    timezone: settings.timezone ?? process.env.TZ ?? "UTC",
   };
 
   const ackIds: string[] = [];

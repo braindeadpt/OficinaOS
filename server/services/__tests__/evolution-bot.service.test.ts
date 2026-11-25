@@ -371,3 +371,40 @@ describe("handleEvolutionInbound — proteções anti-ban", () => {
     expect(mocks.escalateToStaff).toHaveBeenCalled();
   });
 });
+
+describe("handleEvolutionInbound — fuso do contexto", () => {
+  it("passa ao bot o fuso com a precedência settings → env TZ → UTC", async () => {
+    // O dia das previsões é convertido na vistaCliente com este fuso —
+    // uma loja fora de Lisboa sem fuso gravado tinha as datas trocadas.
+    const runOnce = async () => {
+      mocks.handleInboundMessage.mockClear();
+      const p = handleEvolutionInbound(prisma, log, undefined, envelope());
+      await vi.runAllTimersAsync();
+      await p;
+      return mocks.handleInboundMessage.mock.calls[0]?.[0] as {
+        timezone?: string;
+      };
+    };
+    const original = process.env.TZ;
+    try {
+      process.env.TZ = "America/New_York";
+      mocks.getOrCreateShopSettings.mockResolvedValue({
+        ...SETTINGS,
+        timezone: "Africa/Algiers",
+      });
+      expect((await runOnce()).timezone).toBe("Africa/Algiers");
+
+      mocks.getOrCreateShopSettings.mockResolvedValue({ ...SETTINGS });
+      expect((await runOnce()).timezone).toBe("America/New_York");
+
+      delete process.env.TZ;
+      expect((await runOnce()).timezone).toBe("UTC");
+    } finally {
+      if (original === undefined) {
+        delete process.env.TZ;
+      } else {
+        process.env.TZ = original;
+      }
+    }
+  });
+});

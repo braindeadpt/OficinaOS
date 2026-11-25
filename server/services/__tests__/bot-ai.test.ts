@@ -50,6 +50,19 @@ describe("askBotAi", () => {
     });
   });
 
+  it("parses the public job reference returned by newer Clouds", async () => {
+    mocks.cloudFetch.mockResolvedValueOnce(
+      ok({
+        escalate: false,
+        jobCode: "REP-2024-000001-AAA",
+        reply: "Segue para a loja.",
+        type: "reply",
+      })
+    );
+    const res = await askBotAi(ctx, cloud, input);
+    expect(res?.jobCode).toBe("REP-2024-000001-AAA");
+  });
+
   it("empty reply with escalate is a valid silent escalation", async () => {
     mocks.cloudFetch.mockResolvedValueOnce(
       ok({ escalate: true, jobId: null, reply: "", type: "reply" })

@@ -33,22 +33,35 @@ const PHONE = "351912345678";
 
 function job(over: Record<string, unknown> = {}) {
   return {
-    customer: { name: "Ana" },
+    accessCode: "portal-token",
+    color: null,
+    depositAmount: null,
     device: { brand: { name: "Apple" }, model: "iPhone 13" },
+    estimatedCost: null,
     estimatedDate: null,
+    externalRepairs: [],
+    hasLoanerDevice: false,
     id: "job-1",
     jobCode: "REP-2024-000001-AAA",
+    loanerReturnedAt: null,
+    notes: [],
+    partsUsed: [],
     partsWaiting: [],
+    payments: [],
+    portalPublishedAt: null,
     quotes: [
       {
         amount: { toNumber: () => 100 },
         id: "q1",
         note: null,
+        sentAt: new Date("2026-11-20T10:00:00.000Z"),
         status: "SENT",
         version: 1,
       },
     ],
+    repairs: [],
     status: "IN_REPAIR",
+    warrantyForJobId: null,
     ...over,
   };
 }
@@ -77,6 +90,7 @@ function makeCtx(opts: {
     notifyCtx: undefined,
     prisma: prisma as never,
     shopLabel: "Loja X",
+    timezone: "Europe/Lisbon",
   };
   return { ctx, prisma };
 }
@@ -101,6 +115,27 @@ const msg = (text: string | null, type = "text") => ({
 });
 
 const cust = { id: "cust-1", name: "Ana", phone: "351912345678" };
+
+/** Chaves estáveis do payload — arrays entram como `[]` e só o primeiro
+ *  objeto contribui (a forma é igual em todos os elementos). */
+function keyPaths(value: unknown, prefix = ""): string[] {
+  if (Array.isArray(value)) {
+    const firstObject = value.find(
+      (item) => item !== null && typeof item === "object"
+    );
+    return firstObject ? keyPaths(firstObject, `${prefix}[]`) : [];
+  }
+  if (value === null || typeof value !== "object") {
+    return [];
+  }
+  return Object.keys(value)
+    .sort()
+    .flatMap((key) => {
+      const child = (value as Record<string, unknown>)[key];
+      const path = prefix ? `${prefix}.${key}` : key;
+      return [path, ...keyPaths(child, path)];
+    });
+}
 
 beforeEach(() => vi.clearAllMocks());
 describe("composeReply — transporte WP0.4 (regras na Cloud)", () => {
@@ -210,24 +245,57 @@ describe("composeReply — transporte WP0.4 (regras na Cloud)", () => {
     expect(out.escalate).toBe(true);
   });
 
-  it("contexto vai serializado: amount number, datas ISO, metadados", async () => {
+  it("dataPrevista segue o fuso do contexto quando o dia da loja difere do dia UTC", async () => {
+    mocks.askBotAi.mockResolvedValue({ escalate: false, reply: "ok" });
+    // 01:30 UTC de 26/11 — em Lisboa já é dia 26, em Nova Iorque
+    // ainda é 25 ao fim da tarde. O fuso errado trocava o dia da
+    // previsão que a Cloud lê ao cliente.
+    const estimated = new Date("2026-11-26T01:30:00.000Z");
+    const base = {
+      ai: aiCfg,
+      customers: [cust],
+      jobs: [job({ estimatedDate: estimated })],
+    };
+    const ny = makeCtx(base);
+    ny.ctx.timezone = "America/New_York";
+    await composeReply(ny.ctx, msg("quando fica?"));
+    expect(mocks.askBotAi.mock.calls[0]?.[2].context.jobs[0].dataPrevista).toBe(
+      "2026-11-25"
+    );
+
+    mocks.askBotAi.mockClear();
+    const lisbon = makeCtx(base);
+    await composeReply(lisbon.ctx, msg("quando fica?"));
+    expect(mocks.askBotAi.mock.calls[0]?.[2].context.jobs[0].dataPrevista).toBe(
+      "2026-11-26"
+    );
+  });
+
+  it("contexto usa a vistaCliente e o snapshot das chaves fica fechado", async () => {
     mocks.askBotAi.mockResolvedValueOnce({
       escalate: false,
       reply: "ok",
     });
     const sentAt = new Date("2026-11-20T10:00:00.000Z");
     const estimated = new Date("2026-12-01T00:00:00.000Z");
+    const partExpectedAt = new Date("2026-11-28T12:00:00.000Z");
+    const externalReturnAt = new Date("2026-12-05T12:00:00.000Z");
     const { ctx } = makeCtx({
       ai: aiCfg,
       customers: [cust],
       jobs: [
         job({
           estimatedDate: estimated,
+          externalRepairs: [
+            { expectedReturnAt: externalReturnAt, status: "SENT" },
+          ],
+          notes: [{ content: "nota visível" }],
+          partsWaiting: [{ expectedAt: partExpectedAt, partName: "ecrã" }],
           quotes: [
             {
               amount: { toNumber: () => 100 },
               id: "q1",
-              note: null,
+              note: "Inclui a peça",
               sentAt,
               status: "SENT",
               version: 1,
@@ -237,20 +305,146 @@ describe("composeReply — transporte WP0.4 (regras na Cloud)", () => {
       ],
     });
     await composeReply(ctx, msg("como está?"), false, {
-      allowQuoteDecision: false,
+      allowQuoteDecision: true,
     });
     const input = mocks.askBotAi.mock.calls[0]?.[2];
-    expect(input.context.customers).toEqual([{ id: "cust-1", name: "Ana" }]);
-    expect(input.context.allowQuoteDecision).toBe(false);
+    expect(input.context.customerFirstName).toBe("Ana");
+    expect(input.context.customers).toBeUndefined();
+    expect(input.context.allowQuoteDecision).toBe(true);
     expect(input.context.shopLabel).toBe("Loja X");
     const j = input.context.jobs[0];
-    expect(j.estimatedDate).toBe(estimated.toISOString());
-    expect(j.quotes[0].amount).toBe(100);
-    expect(j.quotes[0].sentAt).toBe(sentAt.toISOString());
-    expect(j.deviceName).toBe("Apple iPhone 13");
+    expect(j.aparelho).toBe("Apple iPhone 13");
+    expect(j.codigo).toBe("REP-2024-000001-AAA");
+    expect(j.dataPrevista).toBe("2026-12-01");
+    expect(j.estado).toBe("Em reparação");
+    expect(j.orcamento).toMatchObject({
+      enviadoEm: sentAt.toISOString(),
+      estado: "por responder",
+      id: "q1",
+      nota: "Inclui a peça",
+      versao: 1,
+    });
+    expect(j.orcamento.valor).toContain("100");
+    expect(j.id).toBeUndefined();
+    expect(j.jobCode).toBeUndefined();
+    expect(j.quotes).toBeUndefined();
+    expect(j.status).toBeUndefined();
     expect(input.context.messageType).toBe("text");
     // flag on + módulo ativo → aiEnabled true
     expect(input.context.aiEnabled).toBe(true);
+    expect(
+      keyPaths(JSON.parse(JSON.stringify(input.context)))
+    ).toMatchInlineSnapshot(`
+      [
+        "aiEnabled",
+        "allowQuoteDecision",
+        "currency",
+        "customerFirstName",
+        "jobs",
+        "jobs[].aparelho",
+        "jobs[].codigo",
+        "jobs[].dataPrevista",
+        "jobs[].diasAtraso",
+        "jobs[].emPausa",
+        "jobs[].emprestimo",
+        "jobs[].estado",
+        "jobs[].garantia",
+        "jobs[].linkPortal",
+        "jobs[].notasVisiveis",
+        "jobs[].orcamento",
+        "jobs[].orcamento.enviadoEm",
+        "jobs[].orcamento.estado",
+        "jobs[].orcamento.id",
+        "jobs[].orcamento.nota",
+        "jobs[].orcamento.validade",
+        "jobs[].orcamento.valor",
+        "jobs[].orcamento.versao",
+        "jobs[].pecasEmEspera",
+        "jobs[].pecasEmEspera[].chegadaPrevista",
+        "jobs[].pecasEmEspera[].nome",
+        "jobs[].reparacaoExterna",
+        "jobs[].reparacaoExterna.regressoPrevisto",
+        "jobs[].valores",
+        "jobs[].valores.emFalta",
+        "jobs[].valores.estimado",
+        "jobs[].valores.pago",
+        "jobs[].valores.sinal",
+        "messageCreatedAt",
+        "messageType",
+        "shopLabel",
+        "timezone",
+      ]
+    `);
+  });
+
+  it("o id interno do orçamento só atravessa quando está por responder", async () => {
+    mocks.askBotAi.mockResolvedValueOnce({ escalate: false, reply: "ok" });
+    const { ctx } = makeCtx({
+      ai: aiCfg,
+      customers: [cust],
+      jobs: [
+        job({
+          quotes: [
+            {
+              amount: { toNumber: () => 100 },
+              id: "q1",
+              note: null,
+              sentAt: new Date("2026-11-20T10:00:00.000Z"),
+              status: "APPROVED",
+              version: 1,
+            },
+          ],
+        }),
+      ],
+    });
+    await composeReply(ctx, msg("olá"));
+    const j = mocks.askBotAi.mock.calls[0]?.[2].context.jobs[0];
+    expect(j.orcamento.estado).toBe("aceite");
+    expect(j.orcamento.id).toBeNull();
+  });
+
+  it("fora da janela de decisão o id do orçamento não atravessa, mesmo por responder", async () => {
+    mocks.askBotAi.mockResolvedValueOnce({ escalate: false, reply: "ok" });
+    const { ctx } = makeCtx({
+      ai: aiCfg,
+      customers: [cust],
+      jobs: [job()],
+    });
+    await composeReply(ctx, msg("olá"), false, { allowQuoteDecision: false });
+    const j = mocks.askBotAi.mock.calls[0]?.[2].context.jobs[0];
+    expect(j.orcamento.estado).toBe("por responder");
+    expect(j.orcamento.id).toBeNull();
+  });
+
+  it("na janela de decisão o id do orçamento por responder atravessa", async () => {
+    mocks.askBotAi.mockResolvedValueOnce({ escalate: false, reply: "ok" });
+    const { ctx } = makeCtx({
+      ai: aiCfg,
+      customers: [cust],
+      jobs: [job()],
+    });
+    await composeReply(ctx, msg("olá"));
+    const j = mocks.askBotAi.mock.calls[0]?.[2].context.jobs[0];
+    expect(j.orcamento.estado).toBe("por responder");
+    expect(j.orcamento.id).toBe("q1");
+  });
+
+  it("só envia o primeiro nome do cliente casado, não todos os clientes", async () => {
+    mocks.askBotAi.mockResolvedValueOnce({ escalate: false, reply: "ok" });
+    const { ctx } = makeCtx({
+      ai: aiCfg,
+      customers: [
+        { ...cust, name: "Ana Maria Silva" },
+        { id: "cust-2", name: "Bruno Costa", phone: cust.phone },
+      ],
+      jobs: [job()],
+    });
+    await composeReply(ctx, msg("olá"));
+    const context = mocks.askBotAi.mock.calls[0]?.[2].context;
+    expect(context.customerFirstName).toBe("Ana");
+    expect(JSON.stringify(context)).not.toContain("Bruno");
+    expect(JSON.stringify(context)).not.toContain("Silva");
+    expect(context.customers).toBeUndefined();
   });
 
   it("aiEnabled false quando a flag está desligada", async () => {
@@ -296,6 +490,28 @@ describe("composeReply — transporte WP0.4 (regras na Cloud)", () => {
     expect(out.escalate).toBe(true);
     expect(out.jobId).toBe("job-1");
     expect(out.customerName).toBe("Ana");
+  });
+
+  it("jobCode devolvido pela Cloud resolve para o id local sem o expor", async () => {
+    mocks.askBotAi.mockResolvedValueOnce({
+      escalate: true,
+      jobCode: "REP-2024-000001-AAA",
+      reply: "passo a um colega",
+    });
+    const { ctx } = makeCtx({ ai: aiCfg, customers: [cust], jobs: [job()] });
+    const out = await composeReply(ctx, msg("olá"));
+    expect(out.jobId).toBe("job-1");
+  });
+
+  it("jobId legado que também é um código REP resolve para o id local", async () => {
+    mocks.askBotAi.mockResolvedValueOnce({
+      escalate: true,
+      jobId: "REP-2024-000001-AAA",
+      reply: "passo a um colega",
+    });
+    const { ctx } = makeCtx({ ai: aiCfg, customers: [cust], jobs: [job()] });
+    const out = await composeReply(ctx, msg("olá"));
+    expect(out.jobId).toBe("job-1");
   });
 
   it("PARAR bypasses the hourly flood limit — opt-out is compliance", async () => {

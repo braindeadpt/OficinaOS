@@ -296,7 +296,7 @@ async function pollWhatsAppInboundCycle(
     portalApiUrl: apiUrl,
     portalEnabled: modules.includes("portal"),
     prisma,
-    timezone: settings.timezone ?? undefined,
+    timezone: settings.timezone ?? process.env.TZ ?? "UTC",
     settings,
     shopLabel:
       [settings.shopName, settings.phone].filter(Boolean).join(" · ") ||
@@ -372,7 +372,7 @@ async function drainInboxOnly(
     shopLabel:
       [settings.shopName, settings.phone].filter(Boolean).join(" · ") ||
       "a loja",
-    timezone: settings.timezone ?? undefined,
+    timezone: settings.timezone ?? process.env.TZ ?? "UTC",
   };
   const ackIds: string[] = [];
   const processed: string[] = [];

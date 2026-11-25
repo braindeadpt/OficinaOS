@@ -37,13 +37,54 @@ registo de atividades de tratamento (Art. 30):
 | Acesso remoto (Cloudflare Tunnel) | Cloudflare, Inc. (EUA, com cláusulas UE) | O tráfego que passa pelo túnel: páginas e dados consultados por quem usa o acesso remoto ou os links públicos | Não ligues o profile `tunnel` |
 | Links públicos ao cliente (tracking, orçamentos, recibos, pré-check) | Cloudflare, Inc. | Os dados mostrados nessas páginas públicas | Sem túnel, os links só funcionam dentro da loja |
 | Notificações e bot WhatsApp | OficinaOS Cloud (relay) → Meta (WhatsApp Business) | O número de telefone do cliente e o texto da mensagem transitam pela nossa Cloud para chegar à Meta — **a Cloud não guarda nem regista o conteúdo** (logs só com id, estado e telefone mascarado). Guardamos o teu token Meta cifrado para poder enviar por ti | Definições → WhatsApp → desligar; desemparelhar a Cloud apaga o token guardado |
-| Bot com IA (SMS/WhatsApp) | OficinaOS Cloud → fornecedor LLM configurado | Quando a IA responde: a mensagem atual do cliente, o canal e a ficha da loja (`shopCard`), mais — em cada ronda — os resultados das ferramentas executadas **localmente** (ficha `vistaCliente` **desse cliente**: estado, previsão, orçamento — nunca `holdReason`, IMEI, fornecedores nem outros clientes). O número de telefone **não é enviado como campo** e não há histórico entre mensagens do cliente — a Cloud é stateless e cada pedido leva apenas a interação atual (a mensagem e, a cada nova ronda, os resultados das ferramentas das rondas anteriores **dessa mesma interação**). A Cloud **não regista o conteúdo** — só contadores de uso (`AiBotUsage`: nº de pedidos/tokens por mês) e as filas temporárias com a retenção atual. A Cloud nunca lê a base de dados da loja | Sem entitlement o bot usa só as regras locais (nada sai); desemparelhar desliga tudo |
+| Bot de clientes (regras + IA, SMS/WhatsApp) | OficinaOS Cloud → fornecedor LLM configurado | Ver a lista exata em [«Bot de clientes (`/ai/bot-reply`)»](#bot-de-clientes-aibot-reply) abaixo. Em resumo: a mensagem/conversa necessária, a ficha da loja e a projeção `vistaCliente` das reparações ativas do número — sem ids internos de clientes/reparações, sem estados crus, sem IMEI, `holdReason`, fornecedores nem todos os nomes casados ao número. A Cloud **não regista o conteúdo** — só contadores de uso (`AiBotUsage`) e as filas temporárias com a retenção atual. A Cloud nunca lê a base de dados da loja | Desligar o módulo do canal ou desemparelhar a Cloud |
 | Caixa de entrada + IA de staff (`ai-inbox`) | OficinaOS Cloud → fornecedor LLM que a loja escolher | Quando um funcionário usa a IA ou um cliente MCP: os resultados das ferramentas da caixa de entrada (`staffInboxTools` – conversas, resumo de clientes, rascunhos) passam pela Cloud **em trânsito** na ligação app→Cloud e nunca ficam guardados nem registados. O **token pessoal MCP** de cada utilizador fica na Cloud só como **hash**; a **chave de IA da loja** fica cifrada (AES-256-GCM) e nunca é devolvida à app. Com um modelo local via MCP (LM Studio/Open WebUI), o modelo é local mas os dados continuam a passar pela Cloud em trânsito. A Cloud nunca lê a base de dados da loja | Definições → IA: desligar ou revogar o token MCP de cada utilizador |
 | SMS via Cloud (Pro) | OficinaOS Cloud → SMS Gateway (device Android) | O telefone e o texto transitam pela Cloud para o device que envia; `SmsRoute` guarda só o mapeamento telefone→loja para encaminhar respostas | Definições → SMS → o fallback LAN continua a funcionar |
 | Portal do cliente / montra online | OficinaOS Cloud | Snapshot redigido da reparação ou dos produtos que publicares (sem custos internos nem notas privadas) | Remove o link público / despublica a montra |
 | Analista IA | O fornecedor que configurares (ex.: OpenAI) | O conteúdo das perguntas que fizeres à IA | Definições → IA → desligar (vem desligado) |
 | Reviews Google | Google | Apenas o link de review — nenhum dado do cliente sai, o cliente abre a página dele | Definições → Reviews → desligar |
 | Livro de ponto (`ponto`, Pro) | OficinaOS Cloud → canais Pro (WhatsApp/SMS) | Os comandos e a **localização só no momento do registo** (nunca tracking) transitam pelos canais até à app; as fotos de prova viajam como media do próprio canal. O pedido de avaliação à Cloud (`POST /ponto/evaluate`) leva o telefone, a localização e um indicador de existe/não-existe foto — **nunca a imagem**. A Cloud **não guarda** registos — só `PontoToken` 24 h para auditoria | Não ativar o módulo `ponto`; sem ele nada é recolhido |
+
+## Bot de clientes (`/ai/bot-reply`)
+
+As respostas automáticas do bot — primeiro as regras (estado, código REP,
+SIM/NÃO a orçamento) e só depois a IA — são compostas na Cloud. A app
+envia, na **primeira ronda** de cada mensagem:
+
+- `channel` (`sms`, `whatsapp` ou `evolution`) em todas as rondas, e —
+  só na primeira — `messageType` e `messageCreatedAt` da mensagem
+  recebida;
+- a mensagem atual do cliente; com a caixa de entrada ativa, até 6
+  mensagens anteriores **dessa conversa**; nas rondas seguintes a mesma
+  conversa volta a ir, acrescida dos resultados das ferramentas
+  executadas localmente nessa interação (a Cloud é stateless);
+- `shopLabel` e `shopCard` (o texto público «o que o bot pode dizer» e a
+  média de dias de reparação após a peça chegar), `currency`, `timezone`,
+  `aiEnabled` e `allowQuoteDecision`;
+- `customerFirstName` — só o primeiro nome do cliente casado pelo
+  número, necessário às saudações. Nunca vai a lista de clientes que
+  partilham esse número;
+- `jobs`: as reparações ativas desse número projetadas pela
+  `vistaCliente`: `aparelho`, `codigo`, `dataPrevista`, `diasAtraso`,
+  `emPausa`, `emprestimo`, `estado` legível, `garantia`, `linkPortal`,
+  `notasVisiveis`, `pecasEmEspera` (`nome`, `chegadaPrevista`),
+  `reparacaoExterna.regressoPrevisto`, `valores` (`estimado`, `sinal`,
+  `pago`, `emFalta`) e `orcamento` (`valor`, `estado` legível, `nota`,
+  `enviadoEm`, `validade`, `versao`).
+
+O único identificador interno no contexto é `orcamento.id`, e apenas
+quando esse orçamento está por responder e a interação pode decidi-lo
+(fora da janela de decisão nem ele atravessa) — é indispensável para a
+Cloud devolver a ação SIM/NÃO que a app valida e aplica localmente. Não
+vão ids de clientes nem de reparações, estados crus da base de dados,
+telefone como campo próprio, IMEI, códigos de desbloqueio, `holdReason`,
+`accessCode` em bruto (o `linkPortal` é o link público que o próprio
+cliente recebe), fornecedores, custos internos, notas privadas nem dados
+de outros clientes.
+
+A Cloud não guarda nem regista estes conteúdos; persistem apenas
+contadores de uso e as filas temporárias de mensagens com a retenção
+atual.
 
 ## Livro de ponto (Pro `ponto`)
 
