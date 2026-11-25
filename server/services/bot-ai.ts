@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHmac } from "node:crypto";
 import type { BotToolCtx } from "./bot-tools.js";
 import { runBotTool } from "./bot-tools.js";
 import { cloudFetch } from "./cloud.service.js";
@@ -218,30 +218,27 @@ function parseReply(body: BotAiBody, escalate: boolean): BotAiResult | null {
 
 // WP1 — chave opaca e estável por cliente final para a quota de conversas
 // da conta na Cloud (uma conversa = cliente numa janela de 24h). O número
-// de telefone nunca sai da loja: vai só o hash com sal por instalação —
-// o cloudShopId, que a Cloud já conhece, serve de sal e mantém a chave
-// estável entre mensagens do mesmo cliente.
-function roundZeroFields(
-  input: { context?: unknown },
-  key: string
-): Record<string, unknown> {
-  return {
-    conversationKey: key,
-    ...(input.context ? { context: input.context } : {}),
-  };
-}
-
-function conversationKey(phone: string, shopId: string | null): string {
+// de telefone nunca sai da loja: vai só um HMAC com o BETTER_AUTH_SECRET —
+// segredo local que nunca é transmitido, por isso nem com acesso aos
+// pedidos do bot se consegue inverter por força bruta (um sha256 simples
+// de um número de telefone invertia-se: o espaço é pequeno). Sem segredo
+// configurado não vai chave e a conversa não conta — o cap mensal de IA
+// por loja é o backstop.
+function conversationKey(phone: string): string | null {
+  const secret = process.env.BETTER_AUTH_SECRET;
+  if (!secret) {
+    return null;
+  }
   const digits = phone.replace(/\D/g, "");
-  return createHash("sha256")
-    .update(`conv:${shopId ?? "local"}:${digits}`)
+  return createHmac("sha256", secret)
+    .update(`conv:${digits}`)
     .digest("hex")
     .slice(0, 48);
 }
 
 export async function askBotAi(
   ctx: BotToolCtx,
-  cloud: { apiUrl: string; token: string; shopId?: string | null },
+  cloud: { apiUrl: string; token: string },
   input: BotAiInput
 ): Promise<BotAiResult | null> {
   const deadline = Date.now() + TOTAL_BUDGET_MS;
@@ -250,6 +247,9 @@ export async function askBotAi(
     { content: input.userText, role: "user" },
   ];
   let escalate = false;
+  // Constante para a mensagem inteira — calculada uma vez, usada só na
+  // ronda 0 (nas continuações de ferramentas não há mensagem nova).
+  const key = conversationKey(input.phone);
 
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round += 1) {
     const remaining = deadline - Date.now();
@@ -262,10 +262,7 @@ export async function askBotAi(
         // O contexto das regras e a chave da conversa vão só na primeira
         // ronda — nas continuações de ferramentas não há mensagem nova.
         ...(round === 0
-          ? roundZeroFields(
-              input,
-              conversationKey(input.phone, cloud.shopId ?? null)
-            )
+          ? { context: input.context, conversationKey: key }
           : {}),
         messages,
         shopCard: ctx.shopCard,

@@ -138,7 +138,10 @@ describe("askBotAi", () => {
   });
 
   it("gives up after the tool-round cap", async () => {
-    for (let i = 0; i < 5; i += 1) {
+    // exatamente 4 respostas na fila: initial + 3 rondas — uma a mais
+    // ficava na fila e vazava para o teste seguinte (clearAllMocks não
+    // limpa a fila de once)
+    for (let i = 0; i < 4; i += 1) {
       mocks.cloudFetch.mockResolvedValueOnce(
         ok({
           calls: [{ args: {}, id: `c${i}`, name: "info_loja" }],
@@ -165,24 +168,19 @@ describe("conversationKey (WP1)", () => {
     mocks.cloudFetch.mockResolvedValue(
       ok({ escalate: false, reply: "ok", type: "reply" })
     );
-    await askBotAi(
-      ctx,
-      { ...cloud, shopId: "shop-cloud-1" },
-      {
-        ...input,
-        phone: "+351 910 111 222",
-      }
-    );
+    await askBotAi(ctx, cloud, {
+      ...input,
+      phone: "+351 910 111 222",
+    });
     // a mesma chamada com o mesmo número noutra formatação
-    await askBotAi(
-      ctx,
-      { ...cloud, shopId: "shop-cloud-1" },
-      {
-        ...input,
-        phone: "351910111222",
-      }
-    );
+    await askBotAi(ctx, cloud, {
+      ...input,
+      phone: "351910111222",
+    });
 
+    // exatamente duas chamadas HTTP — mais alguma seria resposta vazada
+    // da fila de outro teste a fingir ser ronda de ferramentas
+    expect(mocks.cloudFetch.mock.calls).toHaveLength(2);
     const keyed = bodies().filter((b) => b.conversationKey !== undefined);
     // uma chave por ronda 0 — duas chamadas, duas chaves
     expect(keyed).toHaveLength(2);
@@ -207,7 +205,7 @@ describe("conversationKey (WP1)", () => {
       .mockResolvedValueOnce(
         ok({ escalate: false, reply: "pronto", type: "reply" })
       );
-    await askBotAi(ctx, { ...cloud, shopId: "s" }, input);
+    await askBotAi(ctx, cloud, input);
     const all = bodies();
     expect(all.length).toBeGreaterThanOrEqual(2);
     // a chave aparece uma única vez — na ronda 0

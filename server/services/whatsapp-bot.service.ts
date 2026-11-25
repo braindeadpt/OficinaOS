@@ -282,7 +282,6 @@ async function pollWhatsAppInboundCycle(
       enabled: settings.botAiEnabled,
       module: "whatsapp-bot",
       modules,
-      shopId: settings.cloudShopId,
       token,
     },
     apiUrl,

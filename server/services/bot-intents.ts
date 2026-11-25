@@ -90,7 +90,6 @@ export interface BotAiChannelConfig {
   modules: string[];
   /** WP1 — id da loja na Cloud: sal da conversationKey (quota de
    *  conversas por conta). Null em installs antigas/legacy. */
-  shopId?: string | null;
   token: string;
 }
 

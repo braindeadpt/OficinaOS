@@ -211,7 +211,6 @@ export async function handleInboundSms(
             enabled: settings.botAiEnabled,
             module: "sms",
             modules,
-            shopId: settings.cloudShopId,
             token: cloudToken,
           }
         : undefined,
