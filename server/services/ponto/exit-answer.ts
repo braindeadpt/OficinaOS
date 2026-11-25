@@ -898,8 +898,10 @@ function statedDate(text: string): {
 // de digitação. Nunca se trunca para uma hora válida nem se lê o
 // dígito extra como segunda hora — a resposta fica ambígua e o bot
 // pergunta. Com segundos («18:30:45») não há 3 dígitos seguidos —
-// não é este caso.
-const MALFORMED_COMPACT_RE = /\b\d{1,2}\s*[:hH.]\s*\d{3}/;
+// não é este caso. Os dígitos colam-se ao separador: o ponto final
+// duma frase seguido de quantidade («18:05. 100 minutos depois»)
+// não é hora malformada — o espaço denuncia a fronteira de frase.
+const MALFORMED_COMPACT_RE = /\b\d{1,2}[:hH.]\d{3}/;
 
 export function parsePontoExitAnswer(
   text: string | null | undefined

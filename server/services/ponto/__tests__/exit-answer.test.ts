@@ -94,6 +94,15 @@ describe("parsePontoExitAnswer — ambíguo", () => {
     expect(parsePontoExitAnswer("saí às 18:305")).toEqual({
       kind: "ambiguous",
     });
+    expect(parsePontoExitAnswer("18.305")).toEqual({ kind: "ambiguous" });
+  });
+
+  it("ponto final seguido de duração não é hora malformada", () => {
+    // «Saí às 18:05. 100 minutos depois cheguei a casa» — o espaço
+    // depois do ponto denuncia a fronteira de frase; a hora lê-se.
+    expect(
+      parsePontoExitAnswer("Saí às 18:05. 100 minutos depois cheguei a casa")
+    ).toEqual({ hhmm: "18:05", kind: "time" });
   });
 });
 
