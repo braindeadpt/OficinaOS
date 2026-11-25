@@ -202,3 +202,54 @@ describe("ponto — PUT /config", () => {
     expect(res.json().code).toBe("CLOUD_REQUEST_FAILED");
   });
 });
+
+describe("ponto — gate de escrita sem módulo (WP0.5)", () => {
+  const semModulo = { cloudEntitlements: ["portal"] };
+
+  it("POST /entries devolve CLOUD_MODULE_REQUIRED sem o módulo", async () => {
+    const app = buildApp(fakePrisma(semModulo));
+    const res = await app.inject({
+      method: "POST",
+      payload: {
+        at: "2026-01-10T09:00:00.000Z",
+        type: "ENTRADA",
+        userId: "u1",
+      },
+      url: "/api/ponto/entries",
+    });
+    expect(res.json().code).toBe("CLOUD_MODULE_REQUIRED");
+  });
+
+  it("POST /entries/:id/validate devolve CLOUD_MODULE_REQUIRED sem o módulo", async () => {
+    const app = buildApp(fakePrisma(semModulo));
+    const res = await app.inject({
+      method: "POST",
+      payload: { decision: "APROVADO" },
+      url: "/api/ponto/entries/entry-1/validate",
+    });
+    expect(res.json().code).toBe("CLOUD_MODULE_REQUIRED");
+  });
+
+  it("com o módulo ativo a validação passa o gate (não é 402 de módulo)", async () => {
+    const app = buildApp(fakePrisma());
+    const res = await app.inject({
+      method: "POST",
+      payload: { decision: "APROVADO" },
+      url: "/api/ponto/entries/entry-1/validate",
+    });
+    expect(res.json().code).not.toBe("CLOUD_MODULE_REQUIRED");
+  });
+
+  it("as leituras NUNCA levam gate — retenção legal de 5 anos", async () => {
+    const app = buildApp(fakePrisma(semModulo));
+    for (const url of [
+      "/api/ponto/entries",
+      "/api/ponto/pending",
+      "/api/ponto/decided",
+      "/api/ponto/now",
+    ]) {
+      const res = await app.inject({ method: "GET", url });
+      expect(res.json().code).not.toBe("CLOUD_MODULE_REQUIRED");
+    }
+  });
+});

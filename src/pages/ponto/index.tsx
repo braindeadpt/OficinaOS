@@ -26,6 +26,11 @@ const TABS: { icon: string; key: TabKey }[] = [
   { icon: "group", key: "equipa" },
 ];
 
+// Sem o módulo ativo o painel passa a leitura: consulta e exportação
+// continuam sempre possíveis (retenção legal de 5 anos), mas validar,
+// registar esquecimentos e gerir a equipa são escritas que exigem ponto.
+const READONLY_KEYS = new Set<TabKey>(["agora", "horas", "exportar"]);
+
 export default function PontoPage() {
   const { t } = useTranslation();
   const enabled = usePontoStore((s) => s.enabled);
@@ -44,28 +49,6 @@ export default function PontoPage() {
     );
   }
 
-  if (!enabled) {
-    return (
-      <div className="rounded-3xl bg-surface-container-low p-8 text-center">
-        <span className="material-symbols-outlined text-5xl text-on-surface-variant/40">
-          lock
-        </span>
-        <h1 className="mt-4 font-black font-headline text-2xl text-on-surface">
-          {t("ponto.title")}
-        </h1>
-        <p className="mx-auto mt-2 max-w-md text-on-surface-variant text-sm">
-          {t("ponto.module_inactive")}
-        </p>
-        <Link
-          className="mt-6 inline-flex min-h-[44px] items-center rounded-xl bg-primary px-6 font-bold text-on-primary text-sm"
-          to="/settings"
-        >
-          {t("ponto.go_settings")}
-        </Link>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <div>
@@ -77,8 +60,27 @@ export default function PontoPage() {
         </p>
       </div>
 
+      {enabled === false && (
+        <div className="flex items-center gap-3 rounded-2xl border border-outline-variant bg-surface-container-low px-4 py-3">
+          <span className="material-symbols-outlined text-on-surface-variant">
+            lock
+          </span>
+          <p className="text-on-surface-variant text-sm">
+            {t("ponto.readonly_inactive")}
+          </p>
+          <Link
+            className="ml-auto shrink-0 font-bold text-primary text-sm"
+            to="/settings"
+          >
+            {t("ponto.go_settings")}
+          </Link>
+        </div>
+      )}
+
       <div className="oos-scrollbar -mx-1 flex gap-1 overflow-x-auto rounded-xl bg-surface-container-low p-1">
-        {TABS.map(({ icon, key }) => (
+        {TABS.filter(
+          ({ key }) => enabled !== false || READONLY_KEYS.has(key)
+        ).map(({ icon, key }) => (
           <button
             className={`flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg px-4 font-medium text-sm transition-colors ${
               tab === key

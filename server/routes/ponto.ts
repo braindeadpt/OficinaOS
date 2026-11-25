@@ -83,6 +83,19 @@ async function requirePonto(prisma: PrismaClient): Promise<PontoAuth> {
   };
 }
 
+/**
+ * Gate das escritas do painel (criar/validar/corrigir): exigem o módulo
+ * `ponto` ativo. As leituras e a exportação ficam propositadamente fora
+ * deste gate — retenção legal de 5 anos mesmo depois de a subscrição
+ * cair (decisão WP0.5, 2026-11-25).
+ */
+async function requirePontoModule(prisma: PrismaClient): Promise<void> {
+  const settings = await getOrCreateShopSettings(prisma);
+  if (!isModuleEnabled(settings, MODULE)) {
+    throw new AppError("CLOUD_MODULE_REQUIRED");
+  }
+}
+
 // Registo síncrono — a variante callback evita o async sem await.
 export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
   app.get(
@@ -182,10 +195,10 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
   //
   // Permissões: leituras de dados laborais seguem a família reports
   // (viewShop — só OWNER); escritas/validação seguem a gestão de staff
-  // (user:update — só OWNER na matriz atual). Sem gate de módulo: os
-  // registos são dados laborais com retenção legal de 5 anos — o painel
-  // continua consultável/acessível mesmo se o entitlement cair; a UI é
-  // que esconde a entrada de menu.
+  // (user:update — só OWNER na matriz atual). Leituras sem gate de
+  // módulo: os registos são dados laborais com retenção legal de 5 anos
+  // e continuam consultáveis/exportáveis mesmo se o entitlement cair.
+  // As escritas (validate/manual) exigem o módulo — ver requirePontoModule.
 
   app.get(
     "/now",
@@ -296,6 +309,7 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
           ),
         });
       }
+      await requirePontoModule(app.prisma);
       const validation = await createValidation(
         app.prisma,
         params.data.id,
@@ -335,6 +349,7 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
           ),
         });
       }
+      await requirePontoModule(app.prisma);
       const result = await createManualEntry(
         app.prisma,
         getUserId(req),

@@ -3083,5 +3083,6 @@
   "ponto.decided_empty": "Aucune décision au cours des 7 derniers jours",
   "ponto.decision_approved": "Approuvé",
   "ponto.decision_rejected": "Rejeté",
-  "ponto.decided_by": "par"
+  "ponto.decided_by": "par",
+  "ponto.readonly_inactive": "Module de pointage inactif — mode lecture seule : les enregistrements restent consultables et exportables (conservation de 5 ans), mais valider ou enregistrer des pointages exige le module."
 }

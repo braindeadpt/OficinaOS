@@ -3083,5 +3083,6 @@
   "ponto.decided_empty": "No decisions in the last 7 days",
   "ponto.decision_approved": "Approved",
   "ponto.decision_rejected": "Rejected",
-  "ponto.decided_by": "by"
+  "ponto.decided_by": "by",
+  "ponto.readonly_inactive": "Time clock module inactive — read-only mode: records stay available for viewing and export (5-year retention), but validating or registering entries requires the module."
 }

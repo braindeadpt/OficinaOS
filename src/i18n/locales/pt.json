@@ -3083,5 +3083,6 @@
   "ponto.decided_empty": "Sem decisão nos últimos 7 dias",
   "ponto.decision_approved": "Aprovado",
   "ponto.decision_rejected": "Rejeitado",
-  "ponto.decided_by": "por"
+  "ponto.decided_by": "por",
+  "ponto.readonly_inactive": "Módulo de relógio de ponto inativo — modo só de leitura: os registos continuam disponíveis para consulta e exportação (retenção de 5 anos), mas validar ou registar picagens exige o módulo."
 }

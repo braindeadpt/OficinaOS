@@ -3083,5 +3083,6 @@
   "ponto.decided_empty": "Sin decisiones en los últimos 7 días",
   "ponto.decision_approved": "Aprobado",
   "ponto.decision_rejected": "Rechazado",
-  "ponto.decided_by": "por"
+  "ponto.decided_by": "por",
+  "ponto.readonly_inactive": "Módulo de control horario inactivo — modo de sólo lectura: los registros siguen disponibles para consulta y exportación (retención de 5 años), pero validar o registrar fichajes requiere el módulo."
 }
