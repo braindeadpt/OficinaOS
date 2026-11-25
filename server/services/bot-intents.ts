@@ -88,8 +88,7 @@ export interface BotAiChannelConfig {
   module: string;
   /** Módulos ativos conforme último sync de entitlements. */
   modules: string[];
-  /** WP1 — id da loja na Cloud: sal da conversationKey (quota de
-   *  conversas por conta). Null em installs antigas/legacy. */
+  /** Token da loja na Cloud (bearer do /ai/bot-reply). */
   token: string;
 }
 
