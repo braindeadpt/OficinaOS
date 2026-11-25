@@ -4,7 +4,11 @@ const mocks = vi.hoisted(() => ({
   askBotAi: vi.fn(),
   createManyAndReturnInAppNotifications: vi.fn(async () => []),
   findManyUsers: vi.fn(async () => []),
-  respondToQuote: vi.fn(async () => ({ jobExists: true })),
+  respondToQuote: vi.fn(
+    async (): Promise<{ error?: string; jobExists: boolean }> => ({
+      jobExists: true,
+    })
+  ),
 }));
 
 vi.mock("../bot-ai.js", () => ({ askBotAi: mocks.askBotAi }));
