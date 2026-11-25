@@ -279,3 +279,12 @@ jobs:
             --command="SELECT count(*) FROM backup_probe WHERE marker = 'round-trip-marker';")
           echo "probe rows after off-site restore: $COUNT"
           [ "$COUNT" = "1" ]
+      - name: Ponto purge survives the restore (WP0.3)
+        # O dump não traz papéis, donos nem grants — é o provisioning do
+        # arranque que os repõe. Sem este passo a purga ficava morta
+        # depois de qualquer restore.
+        env:
+          DATABASE_URL: postgresql://reparilo:reparilo_test@localhost:5432/reparilo_test
+        run: |
+          bun run provision:ponto-purge
+          bun scripts/test-ponto-immutability.ts
