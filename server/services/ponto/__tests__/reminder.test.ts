@@ -402,34 +402,49 @@ describe("lembrete de saída (Esquecimentos)", () => {
     expect(mocks.sendWhatsAppText).not.toHaveBeenCalled();
   });
 
-  it("SAIDA picada a meio do ciclo (depois do instante injetado) → sem presumida duplicada", async () => {
-    // O trabalhador picou SAIDA às 18:31 — um minuto DEPOIS do
-    // instante do tick (18:30) mas antes da re-leitura anti-duplicado.
-    // O teto da procura é o instante da consulta, não o do ciclo —
-    // senão o livro ficava também com uma saída presumida.
-    const entrada = entry({
-      at: new Date("2026-01-10T08:00:00.000Z"),
-      type: "ENTRADA",
-    });
-    const prisma = makePrisma([entrada], []);
-    // A saída não está na leitura em lote (foi picada depois dela) —
-    // só existe na base de dados que a re-leitura consulta. O mock
-    // respeita o teto `lt` da query: com o instante injetado do ciclo
-    // (18:30) a saída das 18:31 ficava de fora e gravava-se a
-    // presumida em cima; com o instante da consulta entra.
-    const saidaAt = new Date("2026-01-10T18:31:00.000Z").getTime();
-    mocks.timeEntryFindFirst.mockImplementation((args?: unknown) => {
-      const lt = (
-        args as { where?: { at?: { lt?: Date } } } | undefined
-      )?.where?.at?.lt?.getTime();
-      return Promise.resolve(
-        lt !== undefined && saidaAt < lt ? { id: "saida-1" } : null
+  it("re-leitura anti-duplicado: teto é o instante da consulta, não o do ciclo nem o fim do dia", async () => {
+    // Relógio fixo às 18:32 — o tick injetado arrancou às 18:30.
+    // · SAIDA às 18:31 (depois do início do ciclo, antes da consulta):
+    //   FECHA o turno — com o instante injetado como teto ficava de
+    //   fora e gravava-se uma presumida em cima.
+    // · SAIDA às 18:33 (depois da consulta): NÃO fecha — com o fim do
+    //   dia como teto suprimia o lembrete indevidamente.
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-01-10T18:32:00.000Z"));
+      const entrada = entry({
+        at: new Date("2026-01-10T08:00:00.000Z"),
+        type: "ENTRADA",
+      });
+      const prisma = makePrisma([entrada], []);
+      let saidaAt = 0;
+      // A saída não está na leitura em lote (foi picada depois dela)
+      // — só existe na base de dados que a re-leitura consulta, e o
+      // mock respeita o teto `lt` da query.
+      mocks.timeEntryFindFirst.mockImplementation((args?: unknown) => {
+        const lt = (
+          args as { where?: { at?: { lt?: Date } } } | undefined
+        )?.where?.at?.lt?.getTime();
+        return Promise.resolve(
+          lt !== undefined && saidaAt < lt ? { id: "saida-1" } : null
+        );
+      });
+
+      saidaAt = new Date("2026-01-10T18:31:00.000Z").getTime();
+      await processPontoReminders(prisma, log, undefined, NOW_AFTER);
+      expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
+
+      saidaAt = new Date("2026-01-10T18:33:00.000Z").getTime();
+      await processPontoReminders(
+        prisma,
+        log,
+        undefined,
+        new Date("2026-01-10T18:32:30.000Z")
       );
-    });
-
-    await processPontoReminders(prisma, log, undefined, NOW_AFTER);
-
-    expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
+      expect(mocks.recordPontoEntry).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("presumida já perguntada (pending vivo) → não repete lembrete", async () => {
