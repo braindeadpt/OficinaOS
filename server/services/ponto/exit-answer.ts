@@ -714,7 +714,8 @@ function collectClause(
   bare: Set<string>,
   bound: Set<string>,
   looseBound: Set<string>,
-  prevRole: ClauseRole | null
+  prevRole: ClauseRole | null,
+  prevBareAdded: string[]
 ): ClauseRole | null {
   // «à» com acento marca hora como «às» — reescreve-se para «ás» no
   // texto cru (a normalização apagava a diferença) para o separar do
@@ -770,6 +771,18 @@ function collectClause(
       : clauseBoundMatches.map(() => clauseNfc);
   const clauseTokens = normalizedClause.split(" ");
   const ouLinked = clauseTokens[0] === "ou" && clauseTokens[1] !== "seja";
+  // A alternância «ou» liga-se à hora da oração anterior: em «saí às
+  // 18, ou às 19» as DUAS horas são alternativas — a primeira não
+  // pode ficar solta (cedia à explícita e o bot gravava 19:00 sem
+  // perguntar). Sobe para explícita como a parceira.
+  if (ouLinked) {
+    for (const h of prevBareAdded) {
+      const hhmm = hhmmOf(Number(h), 0, zeroPadded(h));
+      if (hhmm && bare.delete(h)) {
+        explicit.add(hhmm);
+      }
+    }
+  }
   const hourKind = collectClauseHours(
     clausePre,
     withoutRelatives.replace(BOUND_HOUR_RE, " "),
@@ -904,17 +917,21 @@ export function parsePontoExitAnswer(
   const bound = new Set<string>();
   const looseBound = new Set<string>();
   let prevRole: ClauseRole | null = null;
+  let prevBareAdded: string[] = [];
   for (const clause of text.split(CLAUSE_SPLIT_RE)) {
+    const bareBefore = new Set(bare);
     const role = collectClause(
       clause,
       explicit,
       bare,
       bound,
       looseBound,
-      prevRole
+      prevRole,
+      prevBareAdded
     );
     if (role !== null) {
       prevRole = role;
+      prevBareAdded = [...bare].filter((h) => !bareBefore.has(h));
     }
   }
   if (explicit.size === 1 && bound.size === 0) {

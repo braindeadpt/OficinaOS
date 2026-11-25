@@ -74,6 +74,27 @@ describe("parsePontoExitAnswer — ambíguo", () => {
     expect(parsePontoExitAnswer("")).toBeNull();
     expect(parsePontoExitAnswer(null)).toBeNull();
   });
+
+  it("alternância «ou» com as duas horas soltas → ambíguo", () => {
+    // «saí às 18, ou às 19» — as DUAS horas são alternativas: sem a
+    // promoção da parceira, a primeira ficava solta e o bot gravava
+    // 19:00 sem perguntar.
+    expect(parsePontoExitAnswer("saí às 18, ou às 19")).toEqual({
+      kind: "ambiguous",
+    });
+    expect(parsePontoExitAnswer("saí às 18 ou às 19")).toEqual({
+      kind: "ambiguous",
+    });
+  });
+
+  it("minutos com dígito a mais («18:305») → ambíguo, nunca 18:30", () => {
+    // Erro de digitação — não se grava uma hora truncada; a pergunta
+    // repete-se para esclarecer.
+    expect(parsePontoExitAnswer("18:305")).toEqual({ kind: "ambiguous" });
+    expect(parsePontoExitAnswer("saí às 18:305")).toEqual({
+      kind: "ambiguous",
+    });
+  });
 });
 
 describe("parsePontoExitAnswer — ponto antes de duração", () => {
