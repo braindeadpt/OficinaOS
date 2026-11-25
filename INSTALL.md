@@ -1,184 +1,184 @@
-# Instalar o OficinaOS — passo a passo
+# Installing OficinaOS — step by step
 
-Guia para Windows. Demora ~10 minutos na primeira vez.
+Windows guide. Takes ~10 minutes the first time.
 
-## Requisitos
+## Requirements
 
-| Requisito | Detalhe |
+| Requirement | Detail |
 |---|---|
-| **PC** | Windows 10/11 **64-bit** — o PC que fica ligado na loja |
-| **RAM** | 4 GB livres |
-| **Disco** | ~3 GB livres (app + base de dados + backups) |
-| **Permissões** | Administrador, só durante a instalação pelo `OficinaOS-Setup.exe` — sem admin usa a **instalação portátil** |
-| **Internet** | Só na **primeira instalação** e para atualizar — depois funciona offline na rede local |
-| **Outros dispositivos** | **Nada** — só um browser |
+| **PC** | Windows 10/11 **64-bit** — the PC that stays on in the shop |
+| **RAM** | 4 GB free |
+| **Disk** | ~3 GB free (app + database + backups) |
+| **Permissions** | Administrator, only while installing with `OficinaOS-Setup.exe` — without admin use the **portable install** |
+| **Internet** | Only for the **first install** and for updates — afterwards it runs offline on the local network |
+| **Other devices** | **Nothing** — just a browser |
 
-## Cenários de uso
+## Usage scenarios
 
-| Cenário | Como funciona |
+| Scenario | How it works |
 |---|---|
-| **1. Um só PC** (o mais simples) | Instalas no PC do balcão e usas `http://localhost:4000` nesse mesmo PC |
-| **2. PC-servidor + vários dispositivos** | O mesmo PC corre a app; tablets, telemóveis e outros PCs abrem `http://<IP>:4000` no browser — sem instalar nada. ⚠️ A app só funciona enquanto esse PC estiver ligado |
-| **3. Máquina dedicada** | Um mini-PC ou NAS com Docker sempre ligado corre a app; todos acedem por browser. Ideal para não depender do PC do balcão |
-| **4. Acesso pela internet** | Cloudflare Tunnel grátis — HTTPS automático, sem abrir portas no router, funciona com CGNAT. Guia: **[docs/remote-access.md](docs/remote-access.md)**. Também dá links públicos aos clientes (tracking, orçamentos, QR de garantia) |
+| **1. A single PC** (simplest) | Install on the counter PC and use `http://localhost:4000` on that same PC |
+| **2. Server PC + several devices** | The same PC runs the app; tablets, phones and other PCs open `http://<IP>:4000` in the browser — nothing to install. ⚠️ The app only works while that PC is on |
+| **3. Dedicated machine** | A mini-PC or NAS with Docker always on runs the app; everyone connects by browser. Ideal so you don't depend on the counter PC |
+| **4. Internet access** | Free Cloudflare Tunnel — automatic HTTPS, no router ports to open, works behind CGNAT. Guide: **[docs/remote-access.md](docs/remote-access.md)**. Also gives customers public links (tracking, quotes, warranty QR) |
 
-## Instalação recomendada — `OficinaOS-Setup.exe`
+## Recommended install — `OficinaOS-Setup.exe`
 
-O caminho mais simples para um PC de balcão: um instalador Windows normal que
-deixa o OficinaOS a correr como serviço — **sem Docker, sem janelas de consola,
-arranca sozinho com o PC**.
+The simplest path for a counter PC: a normal Windows installer that
+leaves OficinaOS running as a service — **no Docker, no console windows,
+starts by itself with the PC**.
 
-1. Descarrega **[OficinaOS-Setup](https://github.com/braindeadpt/OficinaOS/releases/latest)** (ficheiro `OficinaOS-Setup-*.exe` na release mais recente)
-2. Duplo clique → se o SmartScreen avisar: **Mais informações → Executar mesmo assim**
-3. Pede administrador **uma vez** (serviços + firewall) e no fim a app abre no browser
-4. Fica um **ícone na bandeja** junto ao relógio: abrir a app, ver o estado, fazer backup, parar/arrancar
+1. Download **[OficinaOS-Setup](https://github.com/braindeadpt/OficinaOS/releases/latest)** (the `OficinaOS-Setup-*.exe` file in the latest release)
+2. Double-click → if SmartScreen warns: **More info → Run anyway**
+3. It asks for administrator **once** (services + firewall) and at the end the app opens in the browser
+4. A **tray icon** appears next to the clock: open the app, check status, back up, stop/start
 
-Depois da instalação:
+After installation:
 
-- **Neste PC:** `http://localhost:4000`
-- **Noutros aparelhos da loja** (tablet, telemóvel): `http://oficinaos.local:4000` — nome estável que funciona mesmo que o PC mude de IP. A página **Ajuda → QR code** tem um código para apontar com a câmara e ligar sem escrever nada
-- **Atualizar:** quando a app avisar que existe versão nova, o dono da loja (admin) tem um botão **"Atualizar"** no aviso — descarrega só a parte da app (~100 MB em vez de ~600 MB), faz backup da base de dados antes e, se a nova versão não arrancar, repõe automaticamente a anterior. Também podes atualizar à mão: descarrega o `OficinaOS-Setup` da versão nova e corre por cima — os dados ficam
-- **Backups automáticos:** diário às 03:30 para `C:\ProgramData\OficinaOS\backups` (copia para uma pen/disco externo com regularidade)
-- **Desinstalar:** "Aplicações" nas Definições do Windows — pergunta se queres apagar também os dados
+- **On this PC:** `http://localhost:4000`
+- **On other shop devices** (tablet, phone): `http://oficinaos.local:4000` — a stable name that works even if the PC changes IP. The **Help → QR code** page has a code you can scan with the camera to connect without typing anything
+- **Updating:** when the app warns about a new version, the shop owner (admin) gets an **"Update"** button in the notice — it downloads only the app part (~100 MB instead of ~600 MB), backs up the database first and, if the new version doesn't boot, automatically restores the previous one. You can also update manually: download the new version's `OficinaOS-Setup` and run it over the top — your data stays
+- **Automatic backups:** daily at 03:30 to `C:\ProgramData\OficinaOS\backups` (copy to a pen drive/external disk regularly)
+- **Uninstall:** "Apps" in Windows Settings — it asks whether to delete the data too
 
-Documentação técnica do instalador: [installer/README.md](installer/README.md)
+Installer technical documentation: [installer/README.md](installer/README.md)
 
-## Instalação via Docker (alternativa)
+## Docker install (alternative)
 
-Para NAS, servidores ou quem já usa Docker.
+For NAS, servers or existing Docker users.
 
-### 1. Descarregar
+### 1. Download
 
-1. Descarrega o instalador: **[oficinaos-install.zip](https://github.com/braindeadpt/OficinaOS/releases/latest/download/oficinaos-install.zip)** — este link descarrega sempre a versão mais recente
-2. Extrai o ZIP para uma pasta, ex.: `C:\OficinaOS`
+1. Download the installer: **[oficinaos-install.zip](https://github.com/braindeadpt/OficinaOS/releases/latest/download/oficinaos-install.zip)** — this link always downloads the latest version
+2. Extract the ZIP to a folder, e.g. `C:\OficinaOS`
 
-> Alternativa: na página do GitHub, botão verde **Code → Download ZIP** dá o código completo (mais pesado — usa-o só se o instalador falhar).
+> Alternative: on the GitHub page, the green **Code → Download ZIP** button gives the full source (heavier — only use it if the installer fails).
 
-### 2. Instalar
+### 2. Install
 
-1. Dentro da pasta, **duplo clique em `INSTALAR.bat`**
-2. Se o Windows Defender SmartScreen avisar: **Mais informações → Executar mesmo assim**
-3. O instalador faz tudo sozinho:
-   - Instala o **Docker Desktop** se não existir (gratuito, oficial)
-   - Gera as passwords e segredos automaticamente
-   - **Descarrega a imagem pronta do GitHub** (segundos) — se falhar, descarrega o código-fonte e constrói localmente (~5-10 min; fica em `oficinaos-src\app-source` para os `INICIAR`/`PARAR`/`ATUALIZAR` funcionarem depois)
-4. No fim, o browser abre automaticamente em `http://localhost:4000`
+1. Inside the folder, **double-click `INSTALAR.bat`**
+2. If Windows Defender SmartScreen warns: **More info → Run anyway**
+3. The installer does everything by itself:
+   - Installs **Docker Desktop** if missing (free, official)
+   - Generates passwords and secrets automatically
+   - **Downloads the ready-made image from GitHub** (seconds) — if that fails, downloads the source and builds locally (~5-10 min; kept in `oficinaos-src\app-source` so `INICIAR`/`PARAR`/`ATUALIZAR` work afterwards)
+4. At the end, the browser opens automatically at `http://localhost:4000`
 
-> **Se o Windows pedir para reiniciar** durante a instalação do Docker (é normal), reinicia o PC e volta a correr `INSTALAR.bat`.
+> **If Windows asks for a restart** during the Docker install (normal), restart the PC and run `INSTALAR.bat` again.
 
-## 3. Primeiro acesso — «Criar a sua oficina»
+## 3. First access — "Create your workshop"
 
-Não há utilizador nem palavra-passe pré-definidos. Na primeira vez que a app abre (em qualquer modo de instalação: Setup.exe, Docker ou portátil), aparece o ecrã **«Criar a sua oficina»**: escreves o nome da loja, o teu nome, o utilizador (ou email) com que vais entrar e a tua palavra-passe. A app cria a conta de **dono** e entra logo no painel. As contas da equipa criam-se depois em **Definições → Utilizadores**.
+There is no default user or password. The first time the app opens (in any install mode: Setup.exe, Docker or portable), the **"Create your workshop"** screen appears: you type the shop name, your name, the username (or email) you'll sign in with and your password. The app creates the **owner** account and lands straight on the dashboard. Team accounts are created later in **Settings → Users**.
 
-Por segurança, este ecrã **só funciona no PC onde o OficinaOS está instalado** (`http://localhost:4000`) — o instalador e o `INICIAR.bat` já abrem o browser aí. Na instalação via Docker, o browser abre com uma ligação de configuração de uso único (`/setup?token=…`, também escrita no `PRIMEIRO-LOGIN.txt`); o código vem da variável `SETUP_TOKEN` do `.env`. Assim que a oficina está criada, o ecrã deixa de existir e passa a aparecer o login normal.
+For security, this screen **only works on the PC where OficinaOS is installed** (`http://localhost:4000`) — the installer and `INICIAR.bat` already open the browser there. In the Docker install, the browser opens with a single-use setup link (`/setup?token=…`, also written in `PRIMEIRO-LOGIN.txt`); the code comes from the `SETUP_TOKEN` variable in `.env`. Once the shop is created, the screen ceases to exist and the normal login appears.
 
-## 4. Uso diário
+## 4. Daily use
 
-| Ficheiro | Para quê |
+| File | What for |
 |---|---|
-| `INICIAR.bat` | Ligar o OficinaOS (duplo clique — abre o browser) |
-| `PARAR.bat` | Desligar (os dados ficam guardados) |
-| `ATUALIZAR.bat` | Atualizar para a versão mais recente |
+| `INICIAR.bat` | Start OficinaOS (double-click — opens the browser) |
+| `PARAR.bat` | Stop (data is kept) |
+| `ATUALIZAR.bat` | Update to the latest version |
 
-**Outros dispositivos da loja** (tablet, telemóvel do técnico, outro PC): abrir `http://<IP-do-PC>:4000` — o endereço exato está no `PRIMEIRO-LOGIN.txt` (crie primeiro a oficina no PC da loja). Não precisam de instalar nada.
+**Other shop devices** (tablet, technician's phone, another PC): open `http://<PC-IP>:4000` — the exact address is in `PRIMEIRO-LOGIN.txt` (create the shop on the shop PC first). They don't need to install anything.
 
-## Problemas comuns
+## Common problems
 
-| Sintoma | Solução |
+| Symptom | Solution |
 |---|---|
-| O firewall do Windows pergunta se permite o acesso | Escolher **Permitir** (rede privada) |
-| Página em branco no browser | `Ctrl+F5`; se persistir, confirmar que usaste `http://` e não `https://` |
-| "Invalid username or password" | O login é por **username** (`admin`), não email |
-| O PC mudou de IP e os outros dispositivos deixaram de ligar | Apagar o ficheiro `.env`, correr `INSTALAR.bat` outra vez (gera config nova; os dados mantêm-se) |
-| "Virtualization support not detected" / Docker não arranca | O `INSTALAR.bat` deteta isto e oferece alternativa — ver **Instalação portátil** abaixo |
-| Desinstalar por completo | `docker compose down -v` na pasta + apagar a pasta (⚠️ apaga a base de dados) |
+| Windows firewall asks whether to allow access | Choose **Allow** (private network) |
+| Blank page in the browser | `Ctrl+F5`; if it persists, confirm you used `http://` and not `https://` |
+| "Invalid username or password" | Login is by **username** (`admin`), not email |
+| The PC changed IP and other devices stopped connecting | Delete the `.env` file, run `INSTALAR.bat` again (generates fresh config; data is kept) |
+| "Virtualization support not detected" / Docker won't start | `INSTALAR.bat` detects this and offers an alternative — see **Portable install** below |
+| Full uninstall | `docker compose down -v` in the folder + delete the folder (⚠️ deletes the database) |
 
-## Instalação portátil (sem admin, sem instalar nada)
+## Portable install (no admin, nothing to install)
 
-O `OficinaOS-Setup.exe` é o caminho recomendado — mas o **modo portátil** existe para as situações em que o instalador não serve:
+`OficinaOS-Setup.exe` is the recommended path — but **portable mode** exists for situations where the installer doesn't fit:
 
-- **Sem administrador** — não tens a password de admin do PC da loja (o Setup precisa dela para serviços e firewall; o portátil não precisa de nada)
-- **Não queres instalar nada** — nada fica registado no sistema: sem serviços, sem entradas em "Aplicações", é só extrair e correr
-- **Fallback** — o instalador falha naquela máquina concreta (antivírus ou políticas da empresa a bloquear serviços), ou queres experimentar a app sem compromisso
+- **No administrator** — you don't have the shop PC's admin password (Setup needs it for services and firewall; portable needs nothing)
+- **You don't want to install anything** — nothing is registered in the system: no services, no entries in "Apps", just extract and run
+- **Fallback** — the installer fails on that particular machine (antivirus or company policies blocking services), or you want to try the app with no commitment
 
-Descarrega [`oficinaos-portable.zip`](https://github.com/braindeadpt/OficinaOS/releases/latest/download/oficinaos-portable.zip), extrai para uma pasta e corre `INICIAR.bat`. A app é exatamente a mesma — mesmo código, mesma base de dados PostgreSQL, mesmas funcionalidades — e o botão **"Atualizar"** dentro da app também funciona (descarrega só a parte da app com verificação SHA-256, backup e rollback automático).
+Download [`oficinaos-portable.zip`](https://github.com/braindeadpt/OficinaOS/releases/latest/download/oficinaos-portable.zip), extract to a folder and run `INICIAR.bat`. The app is exactly the same — same code, same PostgreSQL database, same features — and the in-app **"Update"** button also works (downloads only the app part with SHA-256 verification, backup and automatic rollback).
 
-Duas diferenças práticas face ao Setup.exe:
+Two practical differences vs Setup.exe:
 
-- O arranque automático é uma **tarefa agendada opcional** (o `INICIAR.bat` pergunta na 1ª execução) em vez de um serviço Windows
-- Como ninguém abre a firewall por ti, o Windows pergunta **uma vez** se permite a ligação — escolhe **Permitir** (rede privada) para os tablets da loja ligarem
+- Autostart is an **optional scheduled task** (`INICIAR.bat` asks on first run) instead of a Windows service
+- Since nobody opens the firewall for you, Windows asks **once** whether to allow the connection — choose **Allow** (private network) so shop tablets can connect
 
-> Se vieste do erro **"virtualization support not detected"** do caminho Docker (BIOS com VT-x/SVM desligado), o portátil também resolve — mas o Setup.exe é ainda mais simples, porque também não precisa de Docker.
+> If you came from the **"virtualization support not detected"** error on the Docker path (BIOS with VT-x/SVM disabled), portable also solves it — but Setup.exe is even simpler, because it doesn't need Docker either.
 
-### Uso diário (modo portátil)
+### Daily use (portable mode)
 
-Dentro de `oficinaos-portable\`:
+Inside `oficinaos-portable\`:
 
-| Ficheiro | Para quê |
+| File | What for |
 |---|---|
-| `INICIAR.bat` | Ligar tudo (Postgres + app) — duplo clique, abre o browser |
-| `PARAR.bat` | Desligar (os dados ficam guardados em `data\`) |
-| `ATUALIZAR.bat` | Atualizar para a versão mais recente (preserva dados e configuração) |
-| `BACKUP.bat` | Backup manual da base de dados |
-| `RESTAURAR.bat` | Repor a base de dados a partir de um backup |
+| `INICIAR.bat` | Start everything (Postgres + app) — double-click, opens the browser |
+| `PARAR.bat` | Stop (data is kept in `data\`) |
+| `ATUALIZAR.bat` | Update to the latest version (preserves data and configuration) |
+| `BACKUP.bat` | Manual database backup |
+| `RESTAURAR.bat` | Restore the database from a backup |
 
-- **Arranque automático**: na primeira execução o `INICIAR.bat` pergunta se queres que o OficinaOS arranque sozinho quando o PC liga (regista uma tarefa agendada; para remover: `schtasks /delete /tn "OficinaOS" /f`)
-- **Se a app crashar**: reinicia sozinha passados 5 segundos (wrapper de respawn)
-- **Backups**: feitos automaticamente a cada arranque para `app\uploads\backups\` (retenção 14 dias) — o indicador de backups na app funciona igual
+- **Autostart**: on first run `INICIAR.bat` asks whether you want OficinaOS to start by itself when the PC boots (registers a scheduled task; to remove: `schtasks /delete /tn "OficinaOS" /f`)
+- **If the app crashes**: it restarts by itself after 5 seconds (respawn wrapper)
+- **Backups**: made automatically at every start to `app\uploads\backups\` (14-day retention) — the backup indicator in the app works the same
 
-### Diferenças vs instalação por Setup.exe
+### Differences vs Setup.exe install
 
-| | Setup.exe | Portátil |
+| | Setup.exe | Portable |
 |---|---|---|
-| Requer administrador | sim, na instalação | **não** |
-| Tamanho do download | ~285 MB | ~470 MB uma vez |
-| Arranque com o PC | automático (serviço Windows) | automático se aceitares a tarefa agendada |
-| Regra de firewall para a LAN | criada na instalação | o Windows pergunta uma vez — escolher Permitir |
-| Backups automáticos | diário às 03:30 (`ProgramData\OficinaOS\backups`) | a cada arranque + `BACKUP.bat` |
-| Atualizar | botão "Atualizar" na app, ou Setup por cima | botão "Atualizar" na app, ou `ATUALIZAR.bat` |
-| Ícone na bandeja | sim | não |
-| Acesso de outros dispositivos na LAN | `http://oficinaos.local:4000` ou IP | igual |
+| Requires administrator | yes, during install | **no** |
+| Download size | ~285 MB | ~470 MB once |
+| Starts with the PC | automatic (Windows service) | automatic if you accept the scheduled task |
+| Firewall rule for the LAN | created during install | Windows asks once — choose Allow |
+| Automatic backups | daily at 03:30 (`ProgramData\OficinaOS\backups`) | at every start + `BACKUP.bat` |
+| Updating | in-app "Update" button, or Setup over the top | in-app "Update" button, or `ATUALIZAR.bat` |
+| Tray icon | yes | no |
+| Access from other LAN devices | `http://oficinaos.local:4000` or IP | same |
 
-### Restaurar um backup (modo portátil)
+### Restoring a backup (portable mode)
 
-1. Duplo clique em **`RESTAURAR.bat`** — lista os backups em `app\uploads\backups\` do mais recente ao mais antigo
-2. Escolhe o número do backup e confirma com `SIM` — ⚠️ **substitui todos os dados atuais** pelos do backup
-3. O script para a app, recria a base de dados e aplica o dump; no fim corre `INICIAR.bat`
+1. Double-click **`RESTAURAR.bat`** — lists backups in `app\uploads\backups\` newest first
+2. Pick the backup number and confirm with `SIM` — ⚠️ **replaces all current data** with the backup's
+3. The script stops the app, recreates the database and applies the dump; at the end it runs `INICIAR.bat`
 
-> Backups no mesmo disco não protegem contra avaria, roubo ou ransomware — copia `app\uploads\backups\` para um disco externo ou pen com regularidade.
+> Backups on the same disk don't protect against failure, theft or ransomware — copy `app\uploads\backups\` to an external disk or pen drive regularly.
 
-### Migrar entre instalações
+### Migrating between installations
 
-Os dumps são `pg_dump` plain comprimidos — o mesmo formato nos dois modos, portanto migrar é fazer backup num lado e restaurar no outro.
+The dumps are compressed plain `pg_dump` — the same format in both modes, so migrating is backing up on one side and restoring on the other.
 
-**Portátil → Docker:**
-1. No portátil: `BACKUP.bat` → copia o `oficinaos-*.sql.gz` de `app\uploads\backups\`
-2. No Docker: coloca o ficheiro no volume de backups (`docker compose cp` ou a pasta mapeada) e corre o restore: `docker compose exec -T db-backup /scripts/run-restore.sh oficinaos-<stamp>.sql.gz`
+**Portable → Docker:**
+1. On portable: `BACKUP.bat` → copy the `oficinaos-*.sql.gz` from `app\uploads\backups\`
+2. On Docker: place the file in the backups volume (`docker compose cp` or the mapped folder) and run the restore: `docker compose exec -T db-backup /scripts/run-restore.sh oficinaos-<stamp>.sql.gz`
 
-**Docker → portátil:**
-1. No Docker: `docker compose exec -T db-backup /scripts/run-backup.sh` → copia o dump do volume `backups` para `oficinaos-portable\app\uploads\backups\`
-2. No portátil: `RESTAURAR.bat` e escolhe esse dump
-3. As imagens/ficheiros de upload vivem fora da BD: no Docker está no volume `uploads`, no portátil em `app\uploads\` — copia também esse conteúdo para não perderes fotos e talões
+**Docker → portable:**
+1. On Docker: `docker compose exec -T db-backup /scripts/run-backup.sh` → copy the dump from the `backups` volume into `oficinaos-portable\app\uploads\backups\`
+2. On portable: `RESTAURAR.bat` and pick that dump
+3. Images/upload files live outside the DB: in Docker in the `uploads` volume, in portable in `app\uploads\` — copy that content too so you don't lose photos and receipts
 
-### Desinstalar (modo portátil)
+### Uninstalling (portable mode)
 
-Corre `PARAR.bat` e apaga a pasta `oficinaos-portable`. ⚠️ `data\` contém a base de dados inteira — faz backup primeiro se quiseres guardar. Se ativaste o arranque automático, remove a tarefa: `schtasks /delete /tn "OficinaOS" /f`.
+Run `PARAR.bat` and delete the `oficinaos-portable` folder. ⚠️ `data\` contains the entire database — back up first if you want to keep it. If you enabled autostart, remove the task: `schtasks /delete /tn "OficinaOS" /f`.
 
-Documentação técnica do bundle: [scripts/portable/README.md](scripts/portable/README.md)
+Bundle technical documentation: [scripts/portable/README.md](scripts/portable/README.md)
 
-## Atualizar para uma versão nova
+## Updating to a new version
 
-**Botão "Atualizar" dentro da app** (instalação por `OficinaOS-Setup.exe` ou modo portátil): quando o aviso de versão nova aparece, o admin tem um botão "Atualizar" — descarrega só o pacote da app (~100 MB em vez de ~600 MB) com verificação SHA-256, faz backup da base de dados antes de mexer, e repõe a versão anterior automaticamente se a nova não arrancar (`/health` falha ou a migração rebenta). A app fica offline ~1-2 minutos durante a troca.
+**In-app "Update" button** (`OficinaOS-Setup.exe` install or portable mode): when the new-version notice appears, the admin has an "Update" button — downloads only the app package (~100 MB instead of ~600 MB) with SHA-256 verification, backs up the database before touching anything, and automatically restores the previous version if the new one doesn't boot (`/health` fails or the migration breaks). The app is offline ~1-2 minutes during the swap.
 
-> **Instalações da v1.0.9:** essa versão ainda não trazia o updater — o botão não aparece. É uma passagem manual **uma única vez**: corre o `OficinaOS-Setup.exe` da versão nova por cima (os dados em `ProgramData` ficam) — a partir daí o botão funciona sempre.
+> **Installs from v1.0.9:** that version didn't ship the updater yet — the button doesn't appear. It's a manual step **only once**: run the new version's `OficinaOS-Setup.exe` over the top (data in `ProgramData` stays) — from then on the button always works.
 >
-> Em alternativa, sem reinstalar, numa PowerShell de administrador:
+> Alternatively, without reinstalling, in an administrator PowerShell:
 >
 > ```powershell
 > $base = "https://github.com/braindeadpt/OficinaOS/releases/latest/download"
 > Invoke-WebRequest "$base/update-apply.ps1" -OutFile update-apply.ps1
 > Invoke-WebRequest "$base/oficinaos-app-update.zip" -OutFile app-update.zip
-> # opcional: verifica os .sha256 antes de correr
+> # optional: verify the .sha256 before running
 > powershell -ExecutionPolicy Bypass -File .\update-apply.ps1 -Mode service `
 >   -InstallRoot "C:\Program Files\OficinaOS" `
 >   -ZipPath .\app-update.zip `
@@ -186,30 +186,30 @@ Documentação técnica do bundle: [scripts/portable/README.md](scripts/portable
 >   -BackupScript "C:\Program Files\OficinaOS\tools\backup.ps1"
 > ```
 
-**Docker / à mão:** duplo clique em **`ATUALIZAR.bat`** — faz backup da base de dados, descarrega a imagem nova e reinicia. As migrações da base de dados correm sozinhas no arranque.
+**Docker / manually:** double-click **`ATUALIZAR.bat`** — backs up the database, pulls the new image and restarts. Database migrations run by themselves on boot.
 
-À mão, se preferires:
+By hand, if you prefer:
 
 ```bat
-:: com imagem pré-construída (recomendado):
+:: with the pre-built image (recommended):
 docker compose -f docker-compose.app.yml pull
 docker compose -f docker-compose.app.yml up -d
 
-:: ou, se instalaste em modo build (sem imagem ghcr — o ATUALIZAR.bat trata disto sozinho):
+:: or, if you installed in build mode (no ghcr image — ATUALIZAR.bat handles this itself):
 docker compose -f oficinaos-src\app-source\docker-compose.yml up -d --build
 
-:: ou, num checkout git de desenvolvimento:
+:: or, in a development git checkout:
 git pull
 docker compose up -d --build
 ```
 
-### Atualizações automáticas (opcional)
+### Automatic updates (optional)
 
-Se quiseres que a app se atualize sozinha, ativa o perfil `auto-update` no `.env`:
+If you want the app to update itself, enable the `auto-update` profile in `.env`:
 
 ```ini
 COMPOSE_PROFILES=auto-update
-UPDATE_SCHEDULE=0 30 7 * * *   # cron de 6 campos — por defeito 07:30 diário
+UPDATE_SCHEDULE=0 30 7 * * *   # 6-field cron — defaults to 07:30 daily
 ```
 
-Depois `docker compose -f docker-compose.app.yml up -d` para arrancar o Watchtower. Escolhe uma hora em que **o PC está ligado e a loja fechada** — atualizar implica uns segundos de restart. Só o contentor da app é atualizado; a base de dados e os backups nunca são mexidos. Se uma atualização correr mal, o dump diário (14 dias de retenção) permite restaurar.
+Then `docker compose -f docker-compose.app.yml up -d` to start Watchtower. Pick a time when **the PC is on and the shop closed** — updating implies a few seconds of restart. Only the app container is updated; the database and backups are never touched. If an update goes wrong, the daily dump (14-day retention) lets you restore.

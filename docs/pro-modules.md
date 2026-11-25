@@ -1,275 +1,275 @@
-# Módulos Pro — OficinaOS Cloud
+# Pro modules — OficinaOS Cloud
 
-O OficinaOS funciona **grátis e completo dentro da loja**. Os módulos Pro são
-funcionalidades que precisam de "chegar à internet" — e isso passa pelo
-**OficinaOS Cloud** (`cloud.oficinaos.app`), o serviço que liga a app da loja
-ao mundo exterior sem expor o PC da loja.
+OficinaOS works **free and complete inside the shop**. Pro modules are
+features that need to "reach the internet" — and that goes through
+**OficinaOS Cloud** (`cloud.oficinaos.app`), the service connecting the shop
+app to the outside world without exposing the shop PC.
 
 ```
-Loja (app local)                OficinaOS Cloud                 Cliente
+Shop (local app)                OficinaOS Cloud                 Customer
 ──────────────                  ────────────────                ────────
-Dados completos  ── emparelha ──► Snapshots/filas redigidos ──►   portal web
-                 ◄── respostas ──   / mensagens WhatsApp ◄──      whatsapp
+Complete data    ── pairs ────►   Redacted snapshots/queues ──►   web portal
+                 ◄── replies ──   / WhatsApp messages ◄──         whatsapp
 ```
 
-- A loja cria conta na Cloud e **emparelha** a app com um token (feito uma vez)
-- Cada módulo pago é ativado **do lado do servidor** (entitlement) — sem
-  ficheiros de licença
-- A app pergunta à Cloud a cada ~2 min se há novidades e envia atualizações
-- **Sem Cloud emparelhada = tudo local grátis na mesma**; os módulos Pro
-  simplesmente não aparecem
+- The shop creates a Cloud account and **pairs** the app with a token (done once)
+- Each paid module is activated **server-side** (entitlement) — no
+  license files
+- The app asks the Cloud every ~2 min for news and pushes updates
+- **No paired Cloud = everything local free all the same**; Pro modules
+  simply don't appear
 
-## Separação público / privado
+## Public / private separation
 
-| Repositório | Visibilidade | O que lá mora |
+| Repository | Visibility | What lives there |
 |---|---|---|
-| `OficinaOS` (app da loja) | público | Core local completo + **adaptadores** Pro |
-| `oficinaos-cloud` | **privado** | Toda a lógica paga — portal, bot, IA, filas |
-| `oficinaos-diag` | público | Ferramenta de bancada gratuita |
-| `oficinaos-website` | público | Site/docs — zero lógica de produto |
+| `OficinaOS` (shop app) | public | Complete local core + Pro **adapters** |
+| `oficinaos-cloud` | **private** | All paid logic — portal, bot, AI, queues |
+| `oficinaos-diag` | public | Free bench tool |
+| `oficinaos-website` | public | Site/docs — zero product logic |
 
-Regra estrutural: **o valor pago vive na Cloud, não na app**. O repo público da
-app contém apenas clientes finos (`portal.service.ts`, `whatsapp-bot.service.ts`)
-que empurram snapshots redigidos — clonar o repo público não dá nenhum módulo Pro
-funcional, porque:
+Structural rule: **the paid value lives in the Cloud, not the app**. The app's
+public repo contains only thin clients (`portal.service.ts`, `whatsapp-bot.service.ts`)
+pushing redacted snapshots — cloning the public repo yields no working Pro
+module, because:
 
-- o processamento (páginas públicas, cérebro do bot, relatórios IA) corre
-  todo na Cloud privada
-- cada rota Pro na Cloud exige entitlement server-side → `402 MODULE_NOT_ENTITLED`
-- a app esconde os pontos de entrada quando o módulo não consta dos
-  entitlements — a cache local é só um **hint de UI** com validade de 24h
-  (renovada pelo poller de ~2 min); a enforcement real é sempre na Cloud
+- the processing (public pages, bot brain, AI reports) runs entirely
+  in the private Cloud
+- every Pro route on the Cloud requires server-side entitlement → `402 MODULE_NOT_ENTITLED`
+- the app hides the entry points when the module is absent from
+  entitlements — the local cache is only a **UI hint** valid for 24h
+  (renewed by the ~2 min poller); real enforcement is always on the Cloud
 
-**Para módulos futuros**: a lógica de negócio (prompts IA, regras de decisão,
-agregação) entra em `oficinaos-cloud`; a app recebe só o cliente mínimo para
-falar com ela. Nunca código pago compilado na app pública.
+**For future modules**: business logic (AI prompts, decision rules,
+aggregation) goes into `oficinaos-cloud`; the app gets only the minimal client
+to talk to it. Never paid code compiled into the public app.
 
-## Resumo dos módulos
+## Module summary
 
-| Módulo | O que o cliente ganha | Onde se usa |
+| Module | What the customer gets | Where it's used |
 |---|---|---|
-| `portal` | Link público `cloud.oficinaos.app/t/...` com estado da reparação + aceitar/recusar orçamento | Botão "Public link" no detalhe do trabalho |
-| `whatsapp-bot` | Pergunta "está pronto?" no WhatsApp da loja e recebe resposta automática; aprova orçamento com SIM/NÃO | Notificações → Setup → WhatsApp |
-| `diag-intake` | Recebe diagnósticos do `oficinaos-diag` enviados por clientes | Fila de intake na app |
-| `ai-reports` | Relatórios de diagnóstico gerados por IA | Anexado a trabalhos/diag |
-| `remarketing` | Recontacto automático de clientes inativos via template WhatsApp aprovado — **requer também `whatsapp-bot`** (o envio usa o canal WhatsApp da loja) | Notificações → Setup → WhatsApp |
-| `sms` | SMS pelo Android da loja — ligado **à Cloud** (sms-gate modo servidor, multi-loja, funciona com o PC desligado) **ou na LAN** como fallback | Notificações → Setup → SMS |
-| `ai-inbox` ⚠️ *em desenvolvimento — ainda não vendido/ativável em produção* | Caixa de entrada unificada de WhatsApp/SMS + assistente de IA para a equipa (qualquer LLM, chat na app ou MCP) — **contratável sozinho** | Mensagens + Definições → IA |
-| `ponto` ⚠️ *em beta — nome e preço por decidir* | Livro de ponto por WhatsApp/SMS: QR fixo impresso, comandos (ENTRADA/PAUSA/VOLTEI/SAIDA/ESTADO), prova de localização no raio da loja, registos guardados 5 anos e folha de informação ao trabalhador imprimível | Definições → Cloud → secção Ponto; folhas `/ponto/qr` e `/ponto/info` |
+| `portal` | Public link `cloud.oficinaos.app/t/...` with repair status + accept/decline quote | "Public link" button on the job detail |
+| `whatsapp-bot` | Asks "is it ready?" on the shop's WhatsApp and gets an automatic reply; approves quotes with YES/NO | Notifications → Setup → WhatsApp |
+| `diag-intake` | Receives diagnostics from `oficinaos-diag` sent by customers | Intake queue in the app |
+| `ai-reports` | AI-generated diagnostic reports | Attached to jobs/diag |
+| `remarketing` | Automatic recontact of inactive customers via approved WhatsApp template — **also requires `whatsapp-bot`** (sending uses the shop's WhatsApp channel) | Notifications → Setup → WhatsApp |
+| `sms` | SMS through the shop's Android — connected **to the Cloud** (sms-gate server mode, multi-shop, works with the PC off) **or on the LAN** as fallback | Notifications → Setup → SMS |
+| `ai-inbox` ⚠️ *in development — not yet sold/activatable in production* | Unified WhatsApp/SMS inbox + AI assistant for the team (any LLM, in-app chat or MCP) — **contractable alone** | Messages + Settings → AI |
+| `ponto` ⚠️ *in beta — name and price TBD* | Time tracking via WhatsApp/SMS: printed fixed QR, commands (ENTRADA/PAUSA/VOLTEI/SAIDA/ESTADO), location proof within shop radius, records kept 5 years and printable worker information sheet | Settings → Cloud → Ponto section; `/ponto/qr` and `/ponto/info` sheets |
 
-(Desde 2026-11-23 **todo o SMS é Pro** — inclusive o gateway Android na
-LAN, que passou de "core grátis" a transporte Pro/fallback. O grátis
-não envia nem recebe mensagem nenhuma.)
+(Since 2026-11-23 **all SMS is Pro** — including the Android gateway on the
+LAN, which went from "free core" to Pro transport/fallback. Free neither
+sends nor receives any message.)
 
-## Tabela grátis/Pro — canais de mensagens
+## Free/Pro table — messaging channels
 
-> **Decisão do dono (2026-11-23): o grátis não envia NADA.** Toda a
-> mensagem — SMS e WhatsApp, todos os transportes e direções — é Pro.
-> Na app os cards/botões ficam visíveis mas locked ("Esta opção existe
-> apenas no OficinaOS Pro."); opt-out "PARAR" fica 100% manual;
-> `POST /api/public/quote-respond` continua grátis por ser a página
-> pública de resposta a orçamento, não um canal de mensagens.
+> **Owner's decision (2026-11-23): free sends NOTHING.** Every
+> message — SMS and WhatsApp, all transports and directions — is Pro.
+> In the app the cards/buttons stay visible but locked ("This option
+> only exists in OficinaOS Pro."); "PARAR" opt-out stays 100% manual;
+> `POST /api/public/quote-respond` stays free because it's the public
+> quote-response page, not a messaging channel.
 
-| | Grátis | Pro |
+| | Free | Pro |
 |---|---|---|
-| **SMS** | nada | `sms`: Android ligado à Cloud (`SmsDevice`/`SmsRoute`) — multi-loja, inbound/outbound com PC desligado, respostas automáticas + IA — ou gateway LAN como fallback |
-| **WhatsApp oficial** | nada | `whatsapp-bot`: Meta Cloud API — envio `POST /whatsapp/send` ou direto app→Meta, templates auto-sincronizados, janela de 24 h, IA |
-| **WhatsApp Evolution** | nada | `whatsapp-bot`: transporte local (não-oficial, disclaimer) + bot inbound com termo próprio + proteções anti-ban (10/h por número, teto diário, dedupe, atraso 3–8 s) |
-| **Caixa de entrada + IA de staff** | nada | `ai-inbox` *(em desenvolvimento)*: caixa unificada WhatsApp/SMS, ferramentas na app, chat IA na app (`/ai/staff-reply`) e MCP na Cloud (`/mcp`) — envio sempre com aprovação humana |
-| **Livro de ponto (`ponto`)** | nada | registos de ponto entram pelos canais Pro de receção acima — WhatsApp oficial (mensagens interativas + template), Evolution (texto + localização/foto) e SMS; **exige pelo menos um canal Pro de receção ativo** |
+| **SMS** | nothing | `sms`: Android connected to the Cloud (`SmsDevice`/`SmsRoute`) — multi-shop, inbound/outbound with PC off, automatic replies + AI — or LAN gateway as fallback |
+| **Official WhatsApp** | nothing | `whatsapp-bot`: Meta Cloud API — send `POST /whatsapp/send` or direct app→Meta, auto-synced templates, 24 h window, AI |
+| **Evolution WhatsApp** | nothing | `whatsapp-bot`: local transport (unofficial, disclaimer) + inbound bot with its own term + anti-ban protections (10/h per number, daily cap, dedupe, 3–8 s delay) |
+| **Inbox + staff AI** | nothing | `ai-inbox` *(in development)*: unified WhatsApp/SMS inbox, tools in the app, AI chat in the app (`/ai/staff-reply`) and MCP on the Cloud (`/mcp`) — sending always with human approval |
+| **Time tracking (`ponto`)** | nothing | time records enter through the Pro receiving channels above — official WhatsApp (interactive messages + template), Evolution (text + location/photo) and SMS; **requires at least one active Pro receiving channel** |
 
-## Portal do cliente (`portal`)
+## Customer portal (`portal`)
 
-Quando ativo, cada trabalho ganha um botão **"Public link"** na página de
-detalhe. Ao clicar:
+When active, each job gets a **"Public link"** button on the detail
+page. Clicking it:
 
-1. A app publica na Cloud um snapshot **redigido** do trabalho (estado,
-   dispositivo, orçamento, prazo, timeline — sem custos internos, notas
-   privadas ou telefone do cliente)
-2. O link é copiado: `https://cloud.oficinaos.app/t/<código>` — envia-se ao
-   cliente por SMS/WhatsApp/papel
-3. O cliente abre em casa e vê o estado; se houver orçamento pendente, pode
-   **Aceitar/Recusar** — a resposta entra na app em ≤2 min pelo fluxo normal
-   de orçamentos (com notificação ao staff)
-4. Mudanças de estado na app re-publicam automaticamente; remover o link
-   apaga a página da Cloud
+1. The app publishes to the Cloud a **redacted** snapshot of the job (status,
+   device, quote, deadline, timeline — no internal costs, private
+   notes or customer phone)
+2. The link is copied: `https://cloud.oficinaos.app/t/<code>` — send it to the
+   customer by SMS/WhatsApp/paper
+3. The customer opens it at home and sees the status; if there's a pending
+   quote, they can **Accept/Decline** — the response enters the app in ≤2 min
+   through the normal quote flow (with staff notification)
+4. Status changes in the app re-publish automatically; removing the link
+   deletes the Cloud page
 
-Quem tem o link vê a página — tratar como um segredo por trabalho.
+Whoever has the link sees the page — treat it as a per-job secret.
 
-## Bot de WhatsApp (`whatsapp-bot`)
+## WhatsApp bot (`whatsapp-bot`)
 
-O cliente escreve para o número WhatsApp **da loja**; o bot responde com dados
-reais da ficha:
+The customer writes to the shop's WhatsApp number; the bot replies with real
+job-sheet data:
 
-| Cliente escreve | Bot responde |
+| Customer writes | Bot replies |
 |---|---|
-| qualquer texto com trabalho ativo | Estado da reparação + previsão |
-| "orçamento" / "preço" | Valor + "responde SIM ou NÃO" |
-| "SIM" / "aceito" | Orçamento aprovado na app (mesmo fluxo do balcão) |
-| "NÃO" / "recuso" | Orçamento recusado |
-| código `REP-...` | Estado desse trabalho |
-| "ajuda" / áudio / imagem | Encaminha ao staff + aviso na app |
-| número desconhecido | Mensagem padrão com contacto da loja |
+| any text with an active job | Repair status + estimate |
+| "quote" / "price" | Amount + "reply YES or NO" |
+| "YES" / "accept" | Quote approved in the app (same flow as the counter) |
+| "NO" / "decline" | Quote declined |
+| code `REP-...` | That job's status |
+| "help" / audio / image | Escalates to staff + notice in the app |
+| unknown number | Default message with shop contact |
 
-Funciona com o **próprio número da loja** (Meta "coexistence" — a app WhatsApp
-Business continua a funcionar no telemóvel em paralelo).
+Works with the **shop's own number** (Meta "coexistence" — the WhatsApp
+Business app keeps working on the phone in parallel).
 
-### Setup — uma vez por conta OficinaOS (operador)
+### Setup — once per OficinaOS account (operator)
 
-Feito na Meta App "OficinaOS" (developers.facebook.com):
+Done in the "OficinaOS" Meta App (developers.facebook.com):
 
-1. Criar Meta App → use case "Connect with customers through WhatsApp"
-2. WhatsApp → API setup → número de teste provisionado
+1. Create Meta App → use case "Connect with customers through WhatsApp"
+2. WhatsApp → API setup → provisioned test number
 3. Webhook: Callback `https://cloud.oficinaos.app/webhooks/whatsapp`,
-   verify token em `WA_VERIFY_TOKEN` (.env da cloud) → **Verify and save**
-4. Webhooks → WhatsApp Business Account → subscrever campo **messages**
-5. **Subscrever a app à WABA** (obrigatório — sem isto a Meta não entrega):
-   `POST /{WABA_ID}/subscribed_apps` com um token válido
-6. `WA_APP_SECRET` = App Secret da app → `.env` da cloud → restart
-7. **Publicar a app** (Publicar → Live): requer Privacy policy URL —
-   servida em `https://cloud.oficinaos.app/privacy`
-8. Token permanente: Business Settings → System Users → criar → ligar app +
-   WABA → gerar token com `whatsapp_business_messaging` +
+   verify token in `WA_VERIFY_TOKEN` (cloud .env) → **Verify and save**
+4. Webhooks → WhatsApp Business Account → subscribe to the **messages** field
+5. **Subscribe the app to the WABA** (mandatory — without this Meta doesn't deliver):
+   `POST /{WABA_ID}/subscribed_apps` with a valid token
+6. `WA_APP_SECRET` = the app's App Secret → cloud `.env` → restart
+7. **Publish the app** (Publish → Live): requires a Privacy policy URL —
+   served at `https://cloud.oficinaos.app/privacy`
+8. Permanent token: Business Settings → System Users → create → link app +
+   WABA → generate token with `whatsapp_business_messaging` +
    `whatsapp_business_management`
 
-### Setup — por loja
+### Setup — per shop
 
-1. Notificações → **Setup** → WhatsApp: `enabled` + API Token +
-   Phone Number ID + Business ID → a app faz upload das credenciais para a
-   Cloud (`POST /shops/whatsapp-credentials`, validadas contra a Graph API
-   antes de serem guardadas cifradas). A partir daí os envios saem pelo
-   relay `POST /whatsapp/send` — o token Meta deixa de viver no PC da loja
-   (é apagado após o primeiro envio Cloud bem-sucedido)
-2. Número de teste Meta: só conversa com números verificados (máx. 5) —
-   adicionar em WhatsApp → API setup → "To"
-3. Número real da loja (coexistence): requer **business verification** da
-   Meta e WhatsApp Business no telemóvel da loja
+1. Notifications → **Setup** → WhatsApp: `enabled` + API Token +
+   Phone Number ID + Business ID → the app uploads the credentials to the
+   Cloud (`POST /shops/whatsapp-credentials`, validated against the Graph API
+   before being stored encrypted). From then on sends go out through the
+   relay `POST /whatsapp/send` — the Meta token stops living on the shop PC
+   (wiped after the first successful Cloud send)
+2. Meta test number: only talks to verified numbers (max 5) —
+   add them in WhatsApp → API setup → "To"
+3. Real shop number (coexistence): requires Meta **business verification**
+   and WhatsApp Business on the shop's phone
 
-### Limites conhecidos
+### Known limits
 
-- Resposta do bot chega em ~10–15 s (poller rápido de mensagens); o resto
-  da sincronização mantém o ciclo de ~2 min
-- Notificações proativas ("está pronta") fora da janela de 24h do cliente
-  saem como **templates** — a app submete-os automaticamente à Meta e a UI
-  mostra o estado (aprovado/em revisão/rejeitado + "Voltar a submeter");
-  mensagens de template têm custo Meta por conversa
-- Número de teste: máx. 5 destinatários verificados — chega para demos
-- "Loja fechada": inbound não consumido há >5 min recebe a resposta de
-  fallback da Cloud ("Recebemos a sua mensagem. A loja responde assim que
-  abrir."), máx. 1 por número/12 h
+- Bot reply arrives in ~10–15 s (fast messaging poller); the rest of
+  the sync keeps the ~2 min cycle
+- Proactive notifications ("it's ready") outside the customer's 24h window
+  go out as **templates** — the app submits them automatically to Meta and the
+  UI shows the state (approved/in review/rejected + "Resubmit");
+  template messages carry a Meta per-conversation cost
+- Test number: max 5 verified recipients — enough for demos
+- "Shop closed": inbound unconsumed for >5 min gets the Cloud fallback
+  reply ("We received your message. The shop will reply when it opens."),
+  max 1 per number/12 h
 
-## Caixa de entrada + IA de staff (`ai-inbox`)
+## Inbox + staff AI (`ai-inbox`)
 
-> **Em desenvolvimento — ainda não está disponível em produção** (a app
-> que corre nas lojas ainda não tem a caixa de entrada nem o MCP).
-> **Pendente de decisão do dono:** o nome comercial e o preço ainda não
-> estão fechados — nos textos visíveis usa-se o marcador
-> `{{AI_INBOX_NOME}}` / `{{AI_INBOX_PRECO}}` até lá. No código fica só o
-> identificador técnico `ai-inbox`.
+> **In development — not yet available in production** (the app
+> running in shops doesn't have the inbox or MCP yet).
+> **Pending owner decision:** the commercial name and price aren't
+> final — visible texts use the placeholder
+> `{{AI_INBOX_NOME}}` / `{{AI_INBOX_PRECO}}` until then. In code only the
+> technical identifier `ai-inbox` remains.
 
-Módulo próprio, **contratável sozinho** (não obriga a `whatsapp-bot`
-nem `sms`). Duas peças:
+Its own module, **contractable alone** (doesn't require `whatsapp-bot`
+or `sms`). Two pieces:
 
-- **Caixa de entrada unificada (app):** todas as mensagens de WhatsApp
-  (oficial + Evolution) e SMS — incluindo as do bot — em
-  `BusinessMessage`, com conversas, filtros, atribuição e resposta
-  manual na UI "Mensagens".
-- **IA para a equipa:** um único conjunto de ferramentas
-  (`staffInboxTools`) corre **na app**, sobre a BD local e com as
-  permissões do funcionário. O "cérebro" fica na Cloud (system
-  prompt + esquemas + ciclo de ferramentas, entitlement `ai-inbox` →
-  402 sem módulo) e é servido por duas portas:
-  - **chat na app** — `POST /ai/staff-reply`: a loja escolhe qualquer
-    API compatível com OpenAI; a chave da loja fica cifrada na Cloud
-    (AES-256-GCM, nunca devolvida) ou usa o modelo incluído com
-    medição de uso;
-  - **MCP na Cloud** — `cloud.oficinaos.app/mcp` (Streamable HTTP):
-    Claude, ChatGPT, Cursor, LM Studio e outros clientes ligam com um
-    **token pessoal por utilizador** (a Cloud guarda só o hash).
-    As chamadas chegam à app por uma ligação permanente
-    (`/ai-inbox/link`, iniciada pela app — sem portas abertas na
-    loja).
+- **Unified inbox (app):** all WhatsApp (official + Evolution) and SMS
+  messages — including the bot's — in `BusinessMessage`, with
+  conversations, filters, assignment and manual reply in the "Messages"
+  UI.
+- **AI for the team:** a single tool set (`staffInboxTools`) runs **in
+  the app**, on the local DB and with the staff member's permissions.
+  The "brain" lives on the Cloud (system prompt + schemas + tool loop,
+  `ai-inbox` entitlement → 402 without the module) and is served
+  through two doors:
+  - **in-app chat** — `POST /ai/staff-reply`: the shop picks any
+    OpenAI-compatible API; the shop key stays encrypted on the Cloud
+    (AES-256-GCM, never returned) or uses the included model with
+    usage metering;
+  - **MCP on the Cloud** — `cloud.oficinaos.app/mcp` (Streamable HTTP):
+    Claude, ChatGPT, Cursor, LM Studio and other clients connect with a
+    **personal token per user** (the Cloud stores only the hash).
+    Calls reach the app through a permanent connection
+    (`/ai-inbox/link`, initiated by the app — no open ports in the
+    shop).
 
-Envio sempre em dois passos: a IA cria um rascunho e um humano aprova
-na app. Precisa de um canal que receba mensagens: a Evolution na LAN
-funciona só com este módulo (grava na caixa de entrada, sem resposta
-automática), ou `whatsapp-bot`/`sms` para os canais oficiais.
+Sending always in two steps: the AI creates a draft and a human approves
+in the app. Needs a channel that receives messages: Evolution on the LAN
+works with this module alone (records in the inbox, no automatic
+reply), or `whatsapp-bot`/`sms` for the official channels.
 
-## Livro de ponto (`ponto`)
+## Time tracking (`ponto`)
 
-> **Em beta** — nome comercial e preço por decidir.
+> **In beta** — commercial name and price TBD.
 
-Livro de ponto digital para os trabalhadores da loja, sem ecrã nem
-tablet obrigatório: um **QR impresso** (autocolante) aponta para a
-página pública da Cloud (`/ponto/<qrId>`), que emite um código de 4
-dígitos; o trabalhador envia `ENTRADA <código>` (ou PAUSA/VOLTEI/SAIDA/
-ESTADO) pelo WhatsApp ou SMS do número da loja e partilha a
-**localização** — a hora é sempre a do servidor, nunca a do telemóvel.
+Digital time tracking for shop workers, no screen or tablet required: a
+**printed QR** (sticker) points to the Cloud's public page
+(`/ponto/<qrId>`), which issues a 4-digit code; the worker sends
+`ENTRADA <code>` (or PAUSA/VOLTEI/SAIDA/ESTADO) through the shop
+number's WhatsApp or SMS and shares their **location** — the time is
+always the server's, never the phone's.
 
-- **Prova:** entrada na loja exige código válido + localização dentro do
-  raio configurável (default 100 m); pausa/saída só pedem localização.
-  Externos (trabalhadores ao domicílio) registam sem raio e podem enviar
-  foto de prova. SMS só para quem a loja marcar "sem WhatsApp" e fica
-  sempre por validar.
-- **Avaliação na Cloud:** cada marcação (ENTRADA/PAUSA/VOLTEI/SAIDA)
-  recebida pelos canais passa por `POST /ponto/evaluate` (entitlement
-  `ponto` → 402) — uma app alterada não consegue registar ponto. O
-  comando ESTADO dispensa essa avaliação: responde com um resumo local
-  das horas e dos registos por validar (o transporte da mensagem —
-  webhook WhatsApp/SMS — continua a chegar via Cloud). O pedido leva o telefone e um indicador
-  de foto, nunca a imagem. Correções internas (saída presumida pelo
-  lembrete, hora declarada pelo trabalhador) são gravadas só na app,
-  sem chamada à Cloud. A Cloud **não guarda** localização, fotos nem
-  registos: só `PontoToken` de uso único durante ~24 h para auditoria.
-- **Na loja:** `TimeEntry` é append-only (correções são linhas novas),
-  retenção de 5 anos (Código do Trabalho, art. 202.º); fotos de prova
-  apagadas aos 90 dias. O painel (agora, validar, horas, esquecimentos,
-  exportar PDF) está em Ponto no menu; as decisões do gestor são
-  reversíveis — a validação mais recente é a efetiva — e leitura e
-  exportação continuam disponíveis mesmo sem o módulo ativo.
-- **Informação ao trabalhador:** Definições → Cloud → secção Ponto tem o
-  texto RGPD editável; `/ponto/info` imprime a folha para assinatura e
-  `/ponto/qr` a folha do QR. O `qrId` é aleatório e pode ser regenerado
-  na mesma secção; regenerar invalida imediatamente a folha anterior,
-  por isso é preciso imprimir e substituir a folha nova. Ver
+- **Proof:** clocking in at the shop requires a valid code + location
+  within the configurable radius (default 100 m); pause/exit only ask
+  for location. External workers (at customers' homes) register without
+  radius and can send a proof photo. SMS only for those the shop marks
+  "no WhatsApp" and always stays pending validation.
+- **Evaluation on the Cloud:** every clock event (ENTRADA/PAUSA/VOLTEI/SAIDA)
+  received through the channels passes `POST /ponto/evaluate` (`ponto`
+  entitlement → 402) — a tampered app cannot register time. The ESTADO
+  command skips that evaluation: it replies with a local summary of
+  hours and records pending validation (the message transport —
+  WhatsApp/SMS webhook — still arrives via Cloud). The request carries
+  the phone and a photo flag, never the image. Internal corrections
+  (exit presumed by the reminder, time declared by the worker) are
+  recorded only in the app, no Cloud call. The Cloud **stores no**
+  location, photos or records: only single-use `PontoToken`s for ~24 h
+  for auditing.
+- **In the shop:** `TimeEntry` is append-only (corrections are new rows),
+  5-year retention (Labour Code, art. 202); proof photos deleted at 90
+  days. The panel (now, validate, hours, missed clock-outs, export PDF)
+  is in Ponto in the menu; manager decisions are reversible — the most
+  recent validation is the effective one — and reading and export stay
+  available even without the module active.
+- **Worker information:** Settings → Cloud → Ponto section has the
+  editable GDPR text; `/ponto/info` prints the signature sheet and
+  `/ponto/qr` the QR sheet. The `qrId` is random and can be regenerated
+  in the same section; regenerating immediately invalidates the
+  previous sheet, so you need to print and replace it with the new one. See
   `docs/privacy-and-data.md`.
 
-Precisa de **pelo menos um canal Pro de receção ativo** (WhatsApp
-oficial, Evolution ou SMS) — os comandos chegam por esses transportes.
+Requires **at least one active Pro receiving channel** (official WhatsApp,
+Evolution or SMS) — commands arrive through those transports.
 
-## Emparelhamento com a Cloud
+## Pairing with the Cloud
 
-Feito uma vez por loja: a Cloud emite um pairing token → a loja cola na app
-(Definições → OficinaOS Cloud) → a app valida e guarda encriptado. Os módulos
-ativos aparecem em Definições → OficinaOS Cloud → lista de módulos.
+Done once per shop: the Cloud issues a pairing token → the shop pastes it in
+the app (Settings → OficinaOS Cloud) → the app validates and stores it
+encrypted. Active modules appear in Settings → OficinaOS Cloud → module list.
 
-Ativar módulos a uma loja (lado operador, na cloud):
+Granting modules to a shop (operator side, on the cloud):
 
 ```
-bun run scripts/grant.ts "<nome da loja>" portal
-bun run scripts/grant.ts "<nome da loja>" whatsapp-bot
+bun run scripts/grant.ts "<shop name>" portal
+bun run scripts/grant.ts "<shop name>" whatsapp-bot
 ```
 
-## Interfaces para agentes de IA (roadmap)
+## Interfaces for AI agents (roadmap)
 
-O portal já é consumível por agentes sem trabalho extra:
+The portal is already consumable by agents with no extra work:
 
-- `GET /api/portal/<token>` devolve JSON limpo; o token de 16 chars na URL é
-  a credencial — um assistente do cliente com browsing já lê o estado da
-  reparação a partir do link
-- `POST /api/portal/<token>/reply` aceita `{kind:"quote",decision:"approve"|"reject",quoteId}` —
-  rate-limited + honeypot anti-bot
-- A página `/t/<token>` declara o JSON via `<link rel="alternate" type="application/json">`
-  e `noindex`
-- `oficinaos.app/llms.txt` indexa a documentação para LLMs/AI search
+- `GET /api/portal/<token>` returns clean JSON; the 16-char token in the URL is
+  the credential — a customer assistant with browsing can already read the
+  repair status from the link
+- `POST /api/portal/<token>/reply` accepts `{kind:"quote",decision:"approve"|"reject",quoteId}` —
+  rate-limited + anti-bot honeypot
+- The `/t/<token>` page declares the JSON via `<link rel="alternate" type="application/json">`
+  and `noindex`
+- `oficinaos.app/llms.txt` indexes the documentation for LLMs/AI search
 
-**Regra de segurança**: credenciais só por reparação (token no link). Nunca um
-endpoint "pesquisar por telefone/email" — vazaria a existência de reparações.
+**Security rule**: per-repair credentials only (token in the link). Never a
+"search by phone/email" endpoint — it would leak the existence of repairs.
 
-**Possível futuro**: MCP server na Cloud (`mcp.oficinaos.app`) expondo tools
-`get_status` / `get_quote` / `respond_quote` com o portal token como
-credencial, no entitlement `portal` — distinto do `/mcp` do `ai-inbox`
-(secção acima), que é para **staff** com as ferramentas da caixa de entrada.
-Construir só se as lojas beta confirmarem
-procura — hoje o WhatsApp bot cobre o mesmo caso de uso no canal que os
-clientes realmente usam.
+**Possible future**: MCP server on the Cloud (`mcp.oficinaos.app`) exposing
+`get_status` / `get_quote` / `respond_quote` tools with the portal token as
+credential, under the `portal` entitlement — distinct from the `ai-inbox`
+`/mcp` (section above), which is for **staff** with the inbox tools.
+Build only if beta shops confirm demand — today the WhatsApp bot covers
+the same use case in the channel customers actually use.
