@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import PreCheckPage from "..";
@@ -14,12 +14,15 @@ vi.mock("react-i18next", () => ({
 }));
 
 describe("PreCheckPage embed mode", () => {
-  it("renders no nav and no links inside the iframe widget", () => {
+  it("renders no nav and no links inside the iframe widget", async () => {
     const { container } = render(
       <MemoryRouter>
         <PreCheckPage embed />
       </MemoryRouter>
     );
+    await waitFor(() => {
+      expect(screen.getByText("pre_check_submit")).toBeTruthy();
+    });
     expect(container.querySelector("nav")).toBeNull();
     expect(screen.queryAllByRole("link")).toHaveLength(0);
   });
