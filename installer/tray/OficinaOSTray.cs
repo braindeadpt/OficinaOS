@@ -7,7 +7,13 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Net;
+using System.Reflection;
 using System.Windows.Forms;
+
+[assembly: AssemblyTitle("OficinaOS Tray")]
+[assembly: AssemblyDescription("OficinaOS service tray controller")]
+[assembly: AssemblyCompany("OficinaOS")]
+[assembly: AssemblyProduct("OficinaOS")]
 
 internal static class Program
 {

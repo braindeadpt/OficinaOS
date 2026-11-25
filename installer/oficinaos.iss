@@ -20,6 +20,14 @@ AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher=OficinaOS
 AppPublisherURL=https://oficinaos.app
 AppSupportURL=https://oficinaos.app/docs/
+VersionInfoCompany=OficinaOS
+VersionInfoDescription={#MyAppName} Installer
+VersionInfoProductName={#MyAppName}
+VersionInfoProductVersion={#MyAppVersion}
+VersionInfoTextVersion={#MyAppVersion}
+#ifdef MyAppNumericVersion
+VersionInfoVersion={#MyAppNumericVersion}
+#endif
 DefaultDirName={autopf}\OficinaOS
 DefaultGroupName={#MyAppName}
 OutputDir=..\dist

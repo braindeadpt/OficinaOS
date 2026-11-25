@@ -52,3 +52,11 @@ If you make a good-faith effort to follow this policy, I will not pursue or supp
 ## Supported versions
 
 Only the latest commit on `main` receives security updates. There are no LTS branches.
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
+
+- Only Windows release artifacts built from `main` by GitHub Actions ([`.github/workflows/release.yml`](./.github/workflows/release.yml)) are signed (`OficinaOS-Setup.exe` and `OficinaOSTray.exe`). Local developer builds are never signed.
+- **Roles:** Committers, reviewers, and approvers: [@braindeadpt](https://github.com/braindeadpt). All accounts with repository write or signing approval access enforce multi-factor authentication (MFA), and every release requires manual approval before signing and publishing.
+- **Privacy:** This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. See [docs/privacy-and-data.md](./docs/privacy-and-data.md) for details on optional third-party integrations.

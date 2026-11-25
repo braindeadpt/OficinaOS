@@ -260,6 +260,16 @@ Vê [CONTRIBUTING.md](./CONTRIBUTING.md). Resumindo: abre um issue antes de PRs 
 
 Encontraste uma vulnerabilidade? Vê [SECURITY.md](./SECURITY.md) — **não** abras um issue público.
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
+
+- **Signed artifacts:** Windows release binaries built by this project (`OficinaOS-Setup.exe` and `OficinaOSTray.exe`), produced exclusively from tagged commits on `main` via [`.github/workflows/release.yml`](./.github/workflows/release.yml). Third-party open-source runtimes bundled inside the installer (Bun, PostgreSQL, WinSW) are included as distributed upstream and are not re-signed with the project certificate.
+- **Team roles:**
+  - **Committers and reviewers:** [@braindeadpt](https://github.com/braindeadpt)
+  - **Approvers:** [@braindeadpt](https://github.com/braindeadpt) (every release signing request requires manual approval)
+- **Privacy:** This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. Optional integrations (remote access tunnel, WhatsApp/SMS notifications, AI assistant, OficinaOS Cloud) are disabled by default and documented in [docs/privacy-and-data.md](./docs/privacy-and-data.md).
+
 ## Licença
 
 [MIT](./LICENSE) © 2026 Bechar Gherbi (projeto original), alterações © braindeadpt. O nome "Reparilo" pertence ao autor original e não está licenciado — este fork usa o nome **OficinaOS**.
