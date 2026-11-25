@@ -289,9 +289,7 @@ export function maskPhone(to: string): string {
  * notice. Returns true when the cloud has the current credentials — on
  * false the legacy local send path keeps working during the transition.
  */
-export async function pushCredentialsToCloud(
-  prisma: DbClient
-): Promise<boolean> {
+async function pushCredentialsToCloudOnce(prisma: DbClient): Promise<boolean> {
   const settings = await getOrCreateShopSettings(prisma);
   // §5.6 — só lojas Pro migram para o relay cloud: sem o módulo
   // "whatsapp-bot" fresco a loja nunca envia credenciais.
@@ -360,6 +358,24 @@ export async function pushCredentialsToCloud(
     },
   });
   return marked.count > 0;
+}
+
+// O save das definições e o poller podem chamar o upload em simultâneo.
+// Serializar dentro do processo garante que cada chamada relê as credenciais
+// atuais e que a Cloud recebe substituições pela ordem em que foram aceites —
+// caso contrário um upload antigo mais lento podia terminar depois e gravar
+// credenciais obsoletas por cima das novas.
+let credentialsPushQueue: Promise<void> = Promise.resolve();
+
+export function pushCredentialsToCloud(prisma: DbClient): Promise<boolean> {
+  const run = credentialsPushQueue.then(() =>
+    pushCredentialsToCloudOnce(prisma)
+  );
+  credentialsPushQueue = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run;
 }
 
 export async function sendWhatsAppTemplateVia(

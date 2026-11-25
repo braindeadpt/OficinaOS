@@ -427,6 +427,50 @@ describe("pushCredentialsToCloud", () => {
     expect(await pushCredentialsToCloud(prisma)).toBe(false);
   });
 
+  it("serializes concurrent uploads so the cloud receives the replacement last", async () => {
+    let currentToken = "enc:meta-token";
+    let uploadCalls = 0;
+    let resolveFirst: (value: unknown) => void = () => undefined;
+    const firstResponse = new Promise<unknown>((resolve) => {
+      resolveFirst = resolve;
+    });
+    mocks.getOrCreateShopSettings.mockImplementation(() =>
+      Promise.resolve({
+        ...settings,
+        whatsappApiTokenEncrypted: currentToken,
+      })
+    );
+    mocks.cloudFetch.mockImplementation(() => {
+      uploadCalls += 1;
+      if (uploadCalls === 1) {
+        return firstResponse;
+      }
+      return Promise.resolve({ body: { ok: true }, ok: true, status: 200 });
+    });
+    updateManySettings.mockImplementation(({ where }) => {
+      const matches =
+        currentToken === where.whatsappApiTokenEncrypted &&
+        settings.whatsappPhoneNumberId === where.whatsappPhoneNumberId;
+      return Promise.resolve({ count: matches ? 1 : 0 });
+    });
+
+    const first = pushCredentialsToCloud(prisma);
+    await vi.waitFor(() => expect(mocks.cloudFetch).toHaveBeenCalledTimes(1));
+
+    // A loja substitui o token enquanto o primeiro upload está em voo; a
+    // segunda chamada só pode ler/enviar esse token depois da primeira acabar.
+    currentToken = "enc:replacement";
+    const second = pushCredentialsToCloud(prisma);
+    resolveFirst({ body: { ok: true }, ok: true, status: 200 });
+
+    await expect(first).resolves.toBe(false);
+    await expect(second).resolves.toBe(true);
+    const uploadedTokens = mocks.cloudFetch.mock.calls.map(
+      (call) => (call[2] as { body: { accessToken: string } }).body.accessToken
+    );
+    expect(uploadedTokens).toEqual(["meta-token", "replacement"]);
+  });
+
   it("never uploads without explicit cloud consent", async () => {
     mocks.getOrCreateShopSettings.mockResolvedValue({
       ...settings,

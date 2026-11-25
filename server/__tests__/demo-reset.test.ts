@@ -163,8 +163,22 @@ describe.skipIf(!serverReachable)("demo seed/reset (integration)", () => {
     resetEnvForTests();
     try {
       const db = getPrisma();
+      const { stampWhatsAppLocalDeprecationStartedAtOnce } = await import(
+        "../services/settings.service.js"
+      );
+      const bootStartedAt = await stampWhatsAppLocalDeprecationStartedAtOnce(
+        db as never
+      );
       const { seedDemo } = await import("../../prisma/seed-demo.js");
       const dump = await seedDemo(db as never);
+
+      // A data do sunset gravada no boot sobrevive ao seed inicial — mesmo
+      // na demo não recomeça a cada reposição do dataset ficcional.
+      expect(
+        (
+          await db.shopSettings.findUniqueOrThrow({ where: { id: "default" } })
+        ).whatsappLocalDeprecationStartedAt?.getTime()
+      ).toBe(bootStartedAt.getTime());
 
       // Sanity: the dataset is real — users, customers, jobs all present.
       expect(await db.user.count()).toBe(1);
@@ -215,6 +229,13 @@ describe.skipIf(!serverReachable)("demo seed/reset (integration)", () => {
 
       const { applyDemoDump } = await import("../../prisma/seed-demo.js");
       await applyDemoDump(db as never, dump);
+
+      // O reset horário também preserva o início canónico da transição.
+      expect(
+        (
+          await db.shopSettings.findUniqueOrThrow({ where: { id: "default" } })
+        ).whatsappLocalDeprecationStartedAt?.getTime()
+      ).toBe(bootStartedAt.getTime());
 
       const counts = {
         customers: await db.customer.count(),
