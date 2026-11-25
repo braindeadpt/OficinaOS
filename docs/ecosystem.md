@@ -174,9 +174,10 @@ removido (SMS não renderiza markdown). Desde a decisão do dono de
 `isModuleEnabled(settings, "sms")` (entitlement + `cloudSyncedAt` < 24 h)
 e o `PUT /settings/sms` + `POST /settings/sms/test` devolvem 402 sem ele.
 O **inbound** também é Pro: a rota pública só chama `handleInboundSms`
-com o mesmo check fresco; sem Pro o webhook LAN devolve 200 sem bot nem
-gravação — **exceto PARAR/STOP**, que revoga o consentimento mesmo sem
-módulo (o opt-out é legal e não depende de pagamento; mesma regra do bot
+com o mesmo check fresco (`sms` **ou** `ai-inbox` — só com `ai-inbox` a
+mensagem fica gravada na caixa de entrada, sem resposta automática); sem
+nenhum dos dois o webhook LAN devolve 200 sem bot nem gravação —
+**exceto PARAR/STOP**, que revoga o consentimento mesmo sem módulo (o opt-out é legal e não depende de pagamento; mesma regra do bot
 Evolution). Isto só vale para o device que posta à LAN: o poller da
 fila SMS da Cloud corre apenas com o entitlement `sms`.
 A responsabilidade é da loja: o SIM é dela, a fatura da operadora e os
