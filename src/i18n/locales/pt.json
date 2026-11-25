@@ -1222,12 +1222,6 @@
   "ponto.qr_open": "Abrir folha de cálculo QR",
   "ponto.qr_page_title": "Relógio de ponto QR",
   "ponto.qr_print": "Imprimir",
-  "ponto.qr_regenerate": "Regenerar QR",
-  "ponto.qr_regenerate_confirm": "Regenerar",
-  "ponto.qr_regenerate_desc": "A folha do QR atualmente impressa na loja deixa de funcionar imediatamente. Terá de imprimir e substituir a folha.",
-  "ponto.qr_regenerate_failed": "Não foi possível regenerar o código QR",
-  "ponto.qr_regenerate_title": "Regenerar o código QR?",
-  "ponto.qr_regenerated": "QR regenerado — imprima e substitua a folha na loja",
   "ponto.qr_sms_label": "SMS",
   "ponto.qr_step1": "Digitalize o código QR com a câmara do seu telemóvel",
   "ponto.qr_step2": "Na página, toque em “Abrir WhatsApp” (ou envie ENTRADA <código> por SMS)",
@@ -3090,5 +3084,10 @@
   "ponto.decision_approved": "Aprovado",
   "ponto.decision_rejected": "Rejeitado",
   "ponto.decided_by": "por",
-  "ponto.readonly_inactive": "Módulo de relógio de ponto inativo — modo só de leitura: os registos continuam disponíveis para consulta e exportação (retenção de 5 anos), mas validar ou registar picagens exige o módulo."
+  "ponto.readonly_inactive": "Módulo de relógio de ponto inativo — modo só de leitura: os registos continuam disponíveis para consulta e exportação (retenção de 5 anos), mas validar ou registar picagens exige o módulo.",
+  "ponto.qr_regenerate": "Regenerar QR",
+  "ponto.qr_regenerate_warning": "Os QR impressos deixam de funcionar de imediato — terá de imprimir esta folha outra vez.",
+  "ponto.qr_regenerate_confirm": "Regenerar agora",
+  "ponto.qr_regenerate_error": "Não foi possível regenerar — o QR impresso continua válido.",
+  "ponto.qr_regenerate_unknown": "Não foi possível confirmar a regeneração — verifique a ligação e leia o QR impresso antes de confiar nele."
 }

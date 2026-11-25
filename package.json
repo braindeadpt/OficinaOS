@@ -79,7 +79,7 @@
     "dev:front": "vite",
     "server": "bun run --watch server/index.ts",
     "start": "bun run server/index.ts",
-    "start:prod": "bun run db:migrate-deploy && bun run provision:analyst && bun start",
+    "start:prod": "bun run db:migrate-deploy && bun run provision:analyst && bun run provision:ponto-purge && bun start",
     "build": "bun run db:generate && vite build",
     "build:mobile": "bun run build && cap sync",
     "build:prod": "bun run build",
@@ -111,7 +111,8 @@
     "check-coverage": "bun run scripts/check-coverage.ts",
     "coverage:update": "bun run scripts/check-coverage.ts --update",
     "fix": "ultracite fix",
-    "prepare": "husky"
+    "prepare": "husky",
+    "provision:ponto-purge": "bun run server/scripts/provision-ponto-purge.ts"
   },
   "type": "module",
   "version": "1.0.22",

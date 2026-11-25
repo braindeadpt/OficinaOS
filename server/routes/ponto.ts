@@ -52,6 +52,10 @@ function shopTz(req: FastifyRequest): string {
 
 interface PontoAuth {
   apiUrl: string;
+  settings: {
+    pontoSmsNumber: string | null;
+    pontoWaNumber: string | null;
+  };
   token: string;
 }
 
@@ -72,6 +76,10 @@ async function requirePonto(prisma: PrismaClient): Promise<PontoAuth> {
   }
   return {
     apiUrl: settings.cloudApiUrl,
+    settings: {
+      pontoSmsNumber: settings.pontoSmsNumber,
+      pontoWaNumber: settings.pontoWaNumber,
+    },
     token: decryptSecret(settings.cloudShopTokenEncrypted),
   };
 }
@@ -144,14 +152,20 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
     {
       preHandler: [requirePermission({ settings: ["edit"] })],
       schema: {
-        summary:
-          "Push the full ponto config (numbers, geo, flags, timezone, staff) to the cloud",
+        summary: "Push the local ponto WhatsApp/SMS numbers to the cloud",
         tags: ["ponto"],
       },
     },
     async (req, reply) => {
-      await requirePonto(app.prisma);
-      const res = await pushPontoCloudConfig(app.prisma, req.log);
+      const { apiUrl, settings, token } = await requirePonto(app.prisma);
+      const res = await cloudFetch(apiUrl, "/ponto/config", {
+        body: {
+          smsNumber: settings.pontoSmsNumber,
+          waNumber: settings.pontoWaNumber,
+        },
+        method: "PUT",
+        token,
+      }).catch(() => null);
       if (!res) {
         throw new AppError("CLOUD_UNREACHABLE");
       }
@@ -178,15 +192,13 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
     }
   );
 
-  // Regenera o QR aleatório na Cloud — invalida o QR impresso anterior,
-  // por isso a UI pede confirmação antes de chamar esta rota.
   app.post(
     "/regenerate-qr",
     {
       preHandler: [requirePermission({ settings: ["edit"] })],
       schema: {
         summary:
-          "Regenerate the random ponto QR id (invalidates the printed sheet)",
+          "Regenerate the ponto QR id in the cloud (invalidates printed QRs)",
         tags: ["ponto"],
       },
     },

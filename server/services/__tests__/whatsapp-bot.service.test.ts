@@ -121,13 +121,16 @@ describe("pollWhatsAppInbound — fila Meta com transporte Evolution", () => {
     );
     const customerUpdate = vi.fn(async () => ({}));
     const prismaReal = {
+      $queryRaw: vi.fn(async () => [
+        { id: "c1", name: "Ana", phone: "900000001" },
+      ]),
       customer: {
-        findMany: vi.fn(async () => [
-          { id: "c1", name: "Ana", phone: "900000001" },
-        ]),
         update: customerUpdate,
       },
       job: { findMany: vi.fn(async () => []) },
+      shopSettings: {
+        findUnique: vi.fn(async () => ({ countryCode: "PT" })),
+      },
     } as never;
     mocks.cloudFetch
       .mockResolvedValueOnce({
@@ -152,7 +155,7 @@ describe("pollWhatsAppInbound — fila Meta com transporte Evolution", () => {
       undefined
     );
     expect(customerUpdate).toHaveBeenCalledWith({
-      data: { whatsappConsent: false },
+      data: { whatsappConsent: false, whatsappConsentAt: null },
       where: { id: "c1" },
     });
   });

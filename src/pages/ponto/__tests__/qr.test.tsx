@@ -1,96 +1,169 @@
 // @vitest-environment jsdom
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
-const mocks = vi.hoisted(() => ({ get: vi.fn(), toDataURL: vi.fn() }));
-vi.mock("@/lib/api", () => ({
-  default: { get: mocks.get },
-  getErrorMessage: (_err: unknown, fallback: string) => fallback,
-}));
-vi.mock("qrcode", () => ({
-  default: { toDataURL: mocks.toDataURL },
-}));
-
 import PontoQrPage from "../qr";
 
-function mockApi(config: Record<string, unknown>) {
-  mocks.get.mockImplementation((url: string) => {
-    if (url === "/ponto/status") {
-      return Promise.resolve({ data: { enabled: true } });
-    }
-    if (url === "/settings/shop") {
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string) => key,
+  }),
+}));
+
+vi.mock("qrcode", () => ({
+  default: { toDataURL: vi.fn(async (url: string) => `data:${url}`) },
+}));
+
+// Estado mutável partilhado pelos mocks: o qrId que a "Cloud" devolve.
+const { apiPost, cloud } = vi.hoisted(() => ({
+  apiPost: vi.fn(() => Promise.resolve({})),
+  cloud: { down: false, qrId: "qr-one" as string | undefined },
+}));
+vi.mock("@/lib/api", () => ({
+  default: {
+    get: vi.fn((url: string) => {
+      if (cloud.down && url === "/ponto/config") {
+        // O proxy da app degrada para configured:false sem rejeitar —
+        // é isto que acontece em produção com a Cloud em baixo.
+        return Promise.resolve({ data: { configured: false } });
+      }
+      if (url === "/ponto/status") {
+        return Promise.resolve({ data: { enabled: true } });
+      }
+      if (url === "/settings/shop") {
+        return Promise.resolve({
+          data: {
+            cloudApiUrl: "https://cloud.test",
+            shopName: "Oficina X",
+          },
+        });
+      }
       return Promise.resolve({
         data: {
-          cloudApiUrl: "https://cloud.test/",
-          pontoSmsNumber: null,
-          pontoWaNumber: null,
-          shopName: "Loja X",
+          qrId: cloud.qrId,
+          slug: "oficina-x",
+          smsNumber: null,
+          waNumber: null,
         },
       });
-    }
-    if (url === "/ponto/config") {
-      return Promise.resolve({ data: config });
-    }
-    return Promise.reject(new Error(`unexpected ${url}`));
-  });
-  mocks.toDataURL.mockImplementation((url: string) =>
-    Promise.resolve(`data:image/png;qr-of:${url}`)
-  );
-}
+    }),
+    post: apiPost,
+  },
+}));
 
-function renderPage() {
-  return render(
+async function renderReady() {
+  render(
     <MemoryRouter>
       <PontoQrPage />
     </MemoryRouter>
   );
+  // O URL do QR aparece em texto na folha quando está pronta.
+  await screen.findByText("https://cloud.test/ponto/qr-one");
 }
 
-async function qrUrl(): Promise<string> {
-  await waitFor(() => expect(mocks.toDataURL).toHaveBeenCalled());
-  return mocks.toDataURL.mock.calls[0][0] as string;
-}
+describe("PontoQrPage — qrId e regeneração (WP0.2)", () => {
+  beforeEach(() => {
+    cloud.down = false;
+    cloud.qrId = "qr-one";
+    apiPost.mockClear();
+    apiPost.mockImplementation(() => Promise.resolve({}));
+  });
 
-beforeEach(() => {
-  vi.clearAllMocks();
-});
+  it("renderiza o QR com o qrId da Cloud, não o slug", async () => {
+    await renderReady();
+    expect(
+      screen.getByText("https://cloud.test/ponto/qr-one")
+    ).toBeInTheDocument();
+  });
 
-describe("PontoQrPage — qrId vs slug", () => {
-  it("usa o qrId aleatório quando a Cloud o devolve", async () => {
-    mockApi({
-      configured: true,
-      qrId: "ab12cd34ef56ab12cd34ef56ab12cd34",
-      slug: "loja-x",
+  it("regenerar substitui o QR na folha pelo novo qrId", async () => {
+    apiPost.mockImplementation(() => {
+      cloud.qrId = "qr-two";
+      return Promise.resolve({});
     });
-    renderPage();
-    expect(await qrUrl()).toBe(
-      "https://cloud.test/ponto/ab12cd34ef56ab12cd34ef56ab12cd34"
+    await renderReady();
+    fireEvent.click(
+      screen.getByRole("button", { name: "ponto.qr_regenerate" })
     );
+    fireEvent.click(
+      screen.getByRole("button", { name: "ponto.qr_regenerate_confirm" })
+    );
+    await waitFor(() => {
+      expect(
+        screen.getByText("https://cloud.test/ponto/qr-two")
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByText("https://cloud.test/ponto/qr-one")
+    ).not.toBeInTheDocument();
   });
 
-  it("cai para o slug legado quando não há qrId", async () => {
-    mockApi({ configured: true, slug: "loja-x" });
-    renderPage();
-    expect(await qrUrl()).toBe("https://cloud.test/ponto/loja-x");
+  it("falha na regeneração mostra o erro e mantém o QR antigo", async () => {
+    apiPost.mockRejectedValueOnce(new Error("cloud antiga"));
+    await renderReady();
+    fireEvent.click(
+      screen.getByRole("button", { name: "ponto.qr_regenerate" })
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "ponto.qr_regenerate_confirm" })
+    );
+    await screen.findByText("ponto.qr_regenerate_error");
+    expect(
+      screen.getByText("https://cloud.test/ponto/qr-one")
+    ).toBeInTheDocument();
   });
 
-  it("indisponível quando não há qrId nem slug", async () => {
-    mockApi({ configured: true });
-    renderPage();
-    expect(await screen.findByText("ponto.qr_unavailable")).toBeInTheDocument();
-    expect(mocks.toDataURL).not.toHaveBeenCalled();
+  it("rotação com resposta perdida mostra o QR novo sem erro", async () => {
+    // A Cloud rodou o qrId mas a resposta perdeu-se: a releitura traz o
+    // novo — dizer «o impresso continua válido» seria mentira.
+    apiPost.mockImplementation(() => {
+      cloud.qrId = "qr-two";
+      return Promise.reject(new Error("resposta perdida"));
+    });
+    await renderReady();
+    fireEvent.click(
+      screen.getByRole("button", { name: "ponto.qr_regenerate" })
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "ponto.qr_regenerate_confirm" })
+    );
+    await waitFor(() => {
+      expect(
+        screen.getByText("https://cloud.test/ponto/qr-two")
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByText("ponto.qr_regenerate_error")
+    ).not.toBeInTheDocument();
   });
 
-  it("indisponível quando a Cloud ainda não tem configuração", async () => {
-    mockApi({ configured: false });
-    renderPage();
-    expect(await screen.findByText("ponto.qr_unavailable")).toBeInTheDocument();
-    expect(mocks.toDataURL).not.toHaveBeenCalled();
+  it("Cloud em baixo na regeneração mostra o aviso neutro mesmo sem folha", async () => {
+    apiPost.mockImplementation(() => {
+      cloud.down = true;
+      return Promise.reject(new Error("cloud em baixo"));
+    });
+    await renderReady();
+    fireEvent.click(
+      screen.getByRole("button", { name: "ponto.qr_regenerate" })
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "ponto.qr_regenerate_confirm" })
+    );
+    await screen.findByText("ponto.qr_regenerate_unknown");
+    // Sem afirmar que o impresso continua válido — não se sabe.
+    expect(
+      screen.queryByText("ponto.qr_regenerate_error")
+    ).not.toBeInTheDocument();
+  });
+
+  it("cai para o slug quando a Cloud ainda não devolve qrId", async () => {
+    cloud.qrId = undefined;
+    render(
+      <MemoryRouter>
+        <PontoQrPage />
+      </MemoryRouter>
+    );
+    await screen.findByText("https://cloud.test/ponto/oficina-x");
   });
 });

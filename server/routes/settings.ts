@@ -378,6 +378,9 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
     },
     async (req, reply) => {
       assertNotDemoMode();
+      // Configurar a IA fica livre — a loja pode preparar endpoint/chave
+      // antes de subscrever. O que é Pro é o USO: POST /api/ai/chat/stream
+      // exige o módulo "ai-inbox" fresco (decisão WP0.5).
       const parsed = updateAiSettingsSchema.safeParse(req.body);
       if (!parsed.success) {
         throw new AppError("VALIDATION_ERROR", {

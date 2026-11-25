@@ -18,7 +18,12 @@ vi.mock("../job-quote.service.js", () => ({
 }));
 
 import type { BotReplyCtx } from "../bot-intents.js";
-import { composeReply, handleInboundMessage } from "../bot-intents.js";
+import {
+  composeReply,
+  findCustomersByPhone,
+  handleInboundMessage,
+  revokeConsentForPhone,
+} from "../bot-intents.js";
 
 const PHONE = "351912345678";
 
@@ -50,12 +55,15 @@ function makeCtx(opts: {
   jobs?: ReturnType<typeof job>[];
 }) {
   const prisma = {
+    $queryRaw: vi.fn(async () => opts.customers ?? []),
     customer: {
-      findMany: vi.fn(async () => opts.customers ?? []),
       update: vi.fn(async () => ({})),
     },
     job: {
       findMany: vi.fn(async () => opts.jobs ?? []),
+    },
+    shopSettings: {
+      findUnique: vi.fn(async () => ({ countryCode: "PT" })),
     },
   };
   const ctx: BotReplyCtx = {
@@ -251,7 +259,7 @@ describe("composeReply — deterministic rules before AI", () => {
     const out = await composeReply(ctx, msg("PARAR"));
     expect(mocks.askBotAi).not.toHaveBeenCalled();
     expect(prisma.customer.update).toHaveBeenCalledWith({
-      data: { whatsappConsent: false },
+      data: { whatsappConsent: false, whatsappConsentAt: null },
       where: { id: "cust-1" },
     });
     expect(out.text).toContain("mensagens automáticas");
@@ -591,7 +599,7 @@ describe("composeReply — deterministic rules before AI", () => {
     });
     expect(out).not.toBeNull();
     expect(prisma.customer.update).toHaveBeenCalledWith({
-      data: { whatsappConsent: false },
+      data: { whatsappConsent: false, whatsappConsentAt: null },
       where: { id: "cust-1" },
     });
     // A confirmação conta para o limite anti-ban — acima do teto a
@@ -628,5 +636,75 @@ describe("composeReply — deterministic rules before AI", () => {
     const out = await composeReply(ctx, msg("Quando está aberta a loja?"));
     expect(mocks.askBotAi).toHaveBeenCalledOnce();
     expect(out.text).toBe("Aberto das 9h às 18h.");
+  });
+});
+
+describe("findCustomersByPhone — ficha com separadores", () => {
+  // Mock que aplica o pré-filtro LIKE sobre os dígitos como o Postgres.
+  function phonePrisma(phones: string[], countryCode = "PT") {
+    const rows = phones.map((phone, i) => ({
+      id: `c${i}`,
+      name: `C${i}`,
+      phone,
+    }));
+    return {
+      $queryRaw: vi.fn(async (_sql: TemplateStringsArray, like: string) =>
+        rows.filter((r) =>
+          r.phone.replace(/\D/g, "").endsWith(like.replace("%", ""))
+        )
+      ),
+      customer: {
+        update: vi.fn(async () => ({})),
+      },
+      shopSettings: {
+        findUnique: vi.fn(async () => ({ countryCode })),
+      },
+    };
+  }
+
+  it("casa +351912345678 com fichas guardadas com separadores", async () => {
+    const prisma = phonePrisma([
+      "+351 912 345 678",
+      "912 345 678",
+      "+34 912 345 678",
+      "(912 345 678 )",
+    ]);
+    const found = await findCustomersByPhone(prisma as never, "+351912345678");
+    expect(found.map((c) => c.id)).toEqual(["c0", "c1", "c3"]);
+  });
+
+  it("loja noutro país suportado não casa um +351 pelo sufixo de uma ficha nacional", async () => {
+    // Loja francesa: o cliente «912 345 678» é um nacional francês,
+    // não um PT — um remetente português com o mesmo sufixo não é ele.
+    const prisma = phonePrisma(["912 345 678"], "FR");
+    const found = await findCustomersByPhone(prisma as never, "+351912345678");
+    expect(found).toEqual([]);
+  });
+
+  it("loja fora de Portugal continua a casar por número completo", async () => {
+    const prisma = phonePrisma(["+351 912 345 678"], "ES");
+    const found = await findCustomersByPhone(prisma as never, "+351912345678");
+    expect(found.map((c) => c.id)).toEqual(["c0"]);
+  });
+
+  it("loja legada DZ usa o fallback +351 do envio e revoga um STOP nacional", async () => {
+    // As primeiras instalações herdaram countryCode "DZ"; formatPhone não
+    // conhece esse indicativo e envia esses nacionais como +351. O STOP
+    // chega, por isso, de +351912345678 e tem de casar a ficha nacional.
+    const prisma = phonePrisma(["912 345 678"], "DZ");
+    await revokeConsentForPhone(prisma as never, "+351912345678");
+    expect(prisma.customer.update).toHaveBeenCalledWith({
+      data: { whatsappConsent: false, whatsappConsentAt: null },
+      where: { id: "c0" },
+    });
+  });
+
+  it("PARAR revoga o consentimento e limpa a data de opt-in", async () => {
+    const prisma = phonePrisma(["+351 912 345 678"]);
+    await revokeConsentForPhone(prisma as never, "+351912345678");
+    expect(prisma.customer.update).toHaveBeenCalledWith({
+      data: { whatsappConsent: false, whatsappConsentAt: null },
+      where: { id: "c0" },
+    });
   });
 });

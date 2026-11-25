@@ -1,5 +1,5 @@
 import {
-  COUNTRY_DIAL_CODES,
+  effectiveDialCode,
   NATIONAL_NUMBER_LENGTHS,
 } from "@shared/constants/countries.js";
 import { decryptSecret, isEncrypted } from "../lib/crypto.js";
@@ -212,10 +212,7 @@ export function formatPhone(phone: string, countryCode?: string): string {
     return trimmed;
   }
   const digits = trimmed.replace(/\D/g, "");
-  const dialCode =
-    countryCode && COUNTRY_DIAL_CODES[countryCode]
-      ? COUNTRY_DIAL_CODES[countryCode]
-      : "351";
+  const dialCode = effectiveDialCode(countryCode);
   if (digits.startsWith("00")) {
     // International prefix without "+": 00351912… → +351912…
     return `+${digits.slice(2)}`;
