@@ -821,7 +821,12 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
   );
 };
 
-const LOCALHOST_RE = /^(localhost|127\.|::1|\[::1\])/i;
+// Loopback EXATO — nunca por prefixo: «localhost.evil.com» ou
+// «127.evil.com» são nomes DNS públicos legítimos e um teste de
+// prefixo tratava-os como internos, entregando o token do webhook
+// em HTTP claro no caminho de rede. O 127/8 não precisa de alternativa
+// aqui — o ramo de octetos IPv4 já o classifica como não-público.
+const LOOPBACK_HOSTS = new Set(["localhost", "::1", "[::1]"]);
 const PORT_SUFFIX_RE = /:(\d+)$/;
 const TRAILING_DOT_RE = /\.$/;
 // Endereços internos do Docker Desktop — HTTP na mesma é seguro (a
@@ -830,6 +835,23 @@ const DOCKER_INTERNAL_HOSTS = new Set([
   "gateway.docker.internal",
   "host.docker.internal",
 ]);
+
+/** host[:port] de pedido é loopback exato (com porta opcional) —
+ *  localhost, 127/8 ou ::1. */
+function isLoopbackHostPort(hostPort: string): boolean {
+  try {
+    const h = new URL(`http://${hostPort}`).hostname
+      .toLowerCase()
+      .replace(TRAILING_DOT_RE, "");
+    if (LOOPBACK_HOSTS.has(h)) {
+      return true;
+    }
+    const octets = ipv4Octets(h);
+    return octets !== null && octets[0] === 127;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * True quando o host do callback é LAN/interno — HTTP é aceitável
@@ -842,7 +864,7 @@ function isPrivateCallbackHost(host: string): boolean {
   // das comparações para não cair no ramo "hostname com ponto" → https.
   const h = host.toLowerCase().replace(TRAILING_DOT_RE, "");
   if (
-    LOCALHOST_RE.test(h) ||
+    LOOPBACK_HOSTS.has(h) ||
     h.endsWith(".localhost") ||
     h.endsWith(".local") ||
     h === "0.0.0.0" ||
@@ -898,7 +920,7 @@ function resolveEvolutionCallbackBase(requestHost: string): string | null {
   if (!host) {
     return null;
   }
-  if (!LOCALHOST_RE.test(host)) {
+  if (!isLoopbackHostPort(host)) {
     return callbackBaseForHost(host);
   }
   const ip = primaryLanIpv4();
@@ -913,7 +935,12 @@ function resolveEvolutionCallbackBase(requestHost: string): string | null {
   if (appUrl && isDialableUrl(appUrl)) {
     try {
       const url = new URL(appUrl);
-      if (url.protocol === "http:" || url.protocol === "https:") {
+      // APP_URL explícita em HTTPS nunca desce para HTTP — o token do
+      // webhook viaja num header e a loja declarou que exige TLS.
+      if (url.protocol === "https:") {
+        return `https://${url.host}`;
+      }
+      if (url.protocol === "http:") {
         return callbackBaseForHost(url.host);
       }
     } catch {
