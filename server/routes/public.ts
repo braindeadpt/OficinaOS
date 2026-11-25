@@ -6,6 +6,7 @@ import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { loadEnv } from "../config/env.js";
 import { accessUrls } from "../lib/mdns.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
+import { isStopText, revokeConsentForPhone } from "../services/bot-intents.js";
 import { EVOLUTION_WEBHOOK_TOKEN_HEADER } from "../services/evolution.service.js";
 import { handleEvolutionInbound } from "../services/evolution-bot.service.js";
 import { submitPreCheckRequest } from "../services/intake-request.service.js";
@@ -294,8 +295,10 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
         payload?: { message?: string; phoneNumber?: string; sender?: string };
       };
       // Grátis não envia nada (decisão 2026-11-23): inbound responde
-      // sempre 200 sem processar (sem bot, sem gravar) — incluindo
-      // PARAR/STOP.
+      // sempre 200 sem processar (sem bot, sem gravar) — EXCETO
+      // PARAR/STOP: o opt-out é legal e não pode depender de pagamento,
+      // por isso a revogação de consentimento corre mesmo sem módulo
+      // (mesma regra do bot Evolution — sem gravar inbox nem responder).
       // Pro processa aqui quando o device posta à LAN — em modo servidor
       // é a Cloud que fila e o poller da app trata. isModuleEnabled
       // exige cloudSyncedAt fresco (<24h): sem ele uma loja desligada da
@@ -305,19 +308,23 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
         const text = body.payload?.message;
         // "ai-inbox" sem "sms" entra também: handleInboundSms grava a
         // mensagem na caixa de entrada e devolve sem responder (§G.7).
-        if (
-          from &&
-          text &&
-          (isModuleEnabled(settings, "sms") ||
-            isModuleEnabled(settings, "ai-inbox"))
-        ) {
-          await handleInboundSms(
-            app.prisma,
-            app.log,
-            { prisma: app.prisma, wsBroadcast: app.wsBroadcast },
-            from,
-            text
-          );
+        const gateOpen =
+          isModuleEnabled(settings, "sms") ||
+          isModuleEnabled(settings, "ai-inbox");
+        if (from && text) {
+          if (gateOpen) {
+            await handleInboundSms(
+              app.prisma,
+              app.log,
+              { prisma: app.prisma, wsBroadcast: app.wsBroadcast },
+              from,
+              text
+            );
+          } else if (isStopText(text)) {
+            await revokeConsentForPhone(app.prisma, from).catch(
+              () => undefined
+            );
+          }
         }
       }
       // Responde sempre 200 — o gateway repete o POST em erros e não nos

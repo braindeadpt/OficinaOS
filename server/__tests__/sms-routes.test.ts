@@ -75,6 +75,15 @@ const SMS_ROW = {
 
 function fakePrisma(row: Record<string, unknown> = SMS_ROW) {
   return {
+    customer: {
+      // O remetente dos testes é +351912345678 — o match real de
+      // revokeConsentForPhone filtra por sufixo; devolver esta ficha
+      // faz-a casar como na BD.
+      findMany: vi.fn(async () => [
+        { id: "c1", name: "Ana", phone: "+351912345678" },
+      ]),
+      update: vi.fn(async () => ({})),
+    },
     shopSettings: {
       findUnique: vi.fn(async () => ({ ...row })),
       upsert: vi.fn(
@@ -332,8 +341,8 @@ describe("POST /api/public/sms/inbound/:token", () => {
   });
 
   it("free mode: sms:received returns 200 without processing anything", async () => {
-    // Grátis = só envio — sem entitlement "sms" o inbound não toca em
-    // consentimento, não grava mensagens e não responde.
+    // Grátis = só envio — sem entitlement "sms" um texto normal é no-op
+    // total: não toca em consentimento, não grava mensagens e não responde.
     const prisma = fakePrisma({ ...SMS_ROW, cloudEntitlements: [] });
     const app = buildApp(prisma);
     const res = await app.inject({
@@ -344,11 +353,15 @@ describe("POST /api/public/sms/inbound/:token", () => {
     expect(res.statusCode).toBe(200);
     expect(mocks.handleInboundSms).not.toHaveBeenCalled();
     expect(prisma.shopSettings.upsert).not.toHaveBeenCalled();
+    expect(prisma.customer.update).not.toHaveBeenCalled();
   });
 
-  it("free mode: PARAR/STOP also returns 200 without processing", async () => {
-    // Revogar consentimento já não é exceção — inbound grátis é inerte.
-    const app = buildApp(fakePrisma({ ...SMS_ROW, cloudEntitlements: [] }));
+  it("free mode: PARAR/STOP revoga consentimento sem gravar nem responder", async () => {
+    // Opt-out é legal e não pode depender de pagamento — mesmo sem
+    // entitlement a revogação corre (regra do bot Evolution). Só a
+    // revogação: o resto do inbound grátis continua inerte.
+    const prisma = fakePrisma({ ...SMS_ROW, cloudEntitlements: [] });
+    const app = buildApp(prisma);
     for (const text of ["PARAR", "STOP", "parar"]) {
       const res = await app.inject({
         method: "POST",
@@ -361,6 +374,29 @@ describe("POST /api/public/sms/inbound/:token", () => {
       expect(res.statusCode).toBe(200);
     }
     expect(mocks.handleInboundSms).not.toHaveBeenCalled();
+    expect(prisma.customer.update).toHaveBeenCalledTimes(3);
+    expect(prisma.customer.update).toHaveBeenCalledWith({
+      data: { whatsappConsent: false },
+      where: { id: "c1" },
+    });
+  });
+
+  it("free mode: texto com «parar» embutido não revoga (exact-match)", async () => {
+    const prisma = fakePrisma({ ...SMS_ROW, cloudEntitlements: [] });
+    const app = buildApp(prisma);
+    const res = await app.inject({
+      method: "POST",
+      payload: {
+        ...inboundPayload,
+        payload: {
+          ...inboundPayload.payload,
+          message: "quero parar a reparação",
+        },
+      },
+      url: "/api/public/sms/inbound/tok-abc",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.customer.update).not.toHaveBeenCalled();
   });
 
   it("ignores non-received events", async () => {

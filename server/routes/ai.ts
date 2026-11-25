@@ -17,6 +17,7 @@ import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { getToolDefinitions } from "../ai/context.js";
 import { streamChat } from "../ai/stream.js";
 import { requirePermission } from "../middlewares/rbac.js";
+import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import {
   createAgentDefinition,
   createInstruction,
@@ -48,6 +49,7 @@ import {
   getAiSettings,
   getRawAiSettings,
 } from "../services/settings.service.js";
+import { isModuleEnabled } from "../utils/modules.js";
 import { getUserId } from "../utils/request.js";
 import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 
@@ -59,6 +61,21 @@ export const aiRoutes: FastifyPluginAsync = async (app) => {
     const settings = await getAiSettings(app.prisma);
     if (!settings?.enabled) {
       throw new AppError("AI_DISABLED");
+    }
+  }
+
+  // O USO do chat de staff é Pro (módulo "ai-inbox" — caixa de entrada +
+  // IA de staff, docs/ecosystem.md), mesmo com chave API própria: sem o
+  // entitlement fresco o stream devolve 402. Configurar as settings
+  // (PUT /settings/ai) fica livre — a loja pode preparar endpoint/chave
+  // antes de subscrever; o gate é sobre o uso, não sobre a configuração.
+  async function requireAiInboxModule(
+    _req: FastifyRequest,
+    _reply: FastifyReply
+  ) {
+    const settings = await getOrCreateShopSettings(app.prisma);
+    if (!isModuleEnabled(settings, "ai-inbox")) {
+      throw new AppError("CLOUD_MODULE_REQUIRED");
     }
   }
 
@@ -169,7 +186,7 @@ export const aiRoutes: FastifyPluginAsync = async (app) => {
   app.post(
     "/chat/stream",
     {
-      preHandler: [requireAiEnabled],
+      preHandler: [requireAiEnabled, requireAiInboxModule],
       schema: {
         tags: ["ai"],
         summary: "Stream chat message",
