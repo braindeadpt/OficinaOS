@@ -125,7 +125,7 @@ describe("ai-inbox link — idempotência e cancelamento", () => {
         args: {},
         callId: "expiry-1",
         idempotencyKey: key,
-        tool: "procurar",
+        tool: "rascunhar_resposta",
         userId: "u-owner",
       });
       firstExecution.resolve({ result: { ok: true } });
@@ -141,7 +141,7 @@ describe("ai-inbox link — idempotência e cancelamento", () => {
         args: {},
         callId: "expiry-2",
         idempotencyKey: key,
-        tool: "procurar",
+        tool: "rascunhar_resposta",
         userId: "u-owner",
       });
       expect(mocks.runStaffInboxTool).toHaveBeenCalledTimes(2);
@@ -184,7 +184,7 @@ describe("ai-inbox link — idempotência e cancelamento", () => {
     const frame = {
       args: { q: "ana" },
       idempotencyKey: "test-key-replay-ok",
-      tool: "procurar",
+      tool: "rascunhar_resposta",
       userId: "u-owner",
     };
     await handleCall(app, "https://cloud.example", "tok", {
@@ -198,7 +198,7 @@ describe("ai-inbox link — idempotência e cancelamento", () => {
     expect(mocks.runStaffInboxTool).toHaveBeenCalledTimes(1);
     expect(mocks.canReplayStaffInboxTool).toHaveBeenCalledWith(
       {},
-      "procurar",
+      "rascunhar_resposta",
       "u-owner"
     );
     expect(responseBodies()).toEqual([
@@ -211,7 +211,7 @@ describe("ai-inbox link — idempotência e cancelamento", () => {
     const frame = {
       args: { q: "ana" },
       idempotencyKey: "test-key-replay-deactivated",
-      tool: "procurar",
+      tool: "rascunhar_resposta",
       userId: "u-gone",
     };
     await handleCall(app, "https://cloud.example", "tok", {
@@ -284,6 +284,52 @@ describe("ai-inbox link — idempotência e cancelamento", () => {
     expect(responseBodies()).toEqual([
       { callId: "cancel-1", error: "cancelado" },
       { callId: "cancel-2", result: { ok: true } },
+    ]);
+  });
+
+  it("marcar não usa cache — fechar depois de reabrir volta a executar", async () => {
+    const frame = {
+      args: { conversaId: "conv-1", estado: "fechada" },
+      idempotencyKey: "test-key-marcar",
+      tool: "marcar",
+      userId: "u-owner",
+    };
+    await handleCall(app, "https://cloud.example", "tok", {
+      ...frame,
+      callId: "close-1",
+    });
+    await handleCall(app, "https://cloud.example", "tok", {
+      ...frame,
+      callId: "close-2",
+    });
+    expect(mocks.runStaffInboxTool).toHaveBeenCalledTimes(2);
+    expect(mocks.canReplayStaffInboxTool).not.toHaveBeenCalled();
+  });
+
+  it("marcar como lida usa cache — a reentrega não volta a executar", async () => {
+    const frame = {
+      args: { conversaId: "conv-1", estado: "lida" },
+      idempotencyKey: "test-key-marcar-lida",
+      tool: "marcar",
+      userId: "u-owner",
+    };
+    await handleCall(app, "https://cloud.example", "tok", {
+      ...frame,
+      callId: "read-1",
+    });
+    await handleCall(app, "https://cloud.example", "tok", {
+      ...frame,
+      callId: "read-2",
+    });
+    expect(mocks.runStaffInboxTool).toHaveBeenCalledTimes(1);
+    expect(mocks.canReplayStaffInboxTool).toHaveBeenCalledWith(
+      {},
+      "marcar",
+      "u-owner"
+    );
+    expect(responseBodies()).toEqual([
+      { callId: "read-1", result: { ok: true } },
+      { callId: "read-2", result: { ok: true } },
     ]);
   });
 });
