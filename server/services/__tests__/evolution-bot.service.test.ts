@@ -159,6 +159,49 @@ describe("handleEvolutionInbound — proteções anti-ban", () => {
     expect(mocks.handleInboundMessage).toHaveBeenCalledTimes(1);
   });
 
+  it("DM por LID usa o telefone real de remoteJidAlt — não os dígitos do LID", async () => {
+    // WhatsApp LID: o remoteJid vem «<lid>@lid» e os seus dígitos não
+    // são o telefone — sem a troca o trabalhador nunca correspondia ao
+    // staff e a resposta ia para um número inexistente.
+    const env = envelope({
+      key: {
+        fromMe: false,
+        id: `lid-${Math.random().toString(36).slice(2)}`,
+        remoteJid: "100000000000000@lid",
+        remoteJidAlt: "351912345678@s.whatsapp.net",
+      },
+    });
+    const p = handleEvolutionInbound(prisma, log, undefined, env);
+    await vi.runAllTimersAsync();
+    await p;
+    expect(mocks.handleInboundMessage).toHaveBeenCalledTimes(1);
+    const msg = mocks.handleInboundMessage.mock.calls[0]?.[1] as {
+      fromPhone: string;
+    };
+    expect(msg.fromPhone).toBe("351912345678");
+  });
+
+  it("LID sem remoteJidAlt cai nos dígitos do LID — degradação documentada", async () => {
+    // Sem o alt não há telefone real disponível — o lookup de staff
+    // falha e a mensagem segue o caminho de número desconhecido.
+    // Melhor isso do que nunca processar a DM.
+    const env = envelope({
+      key: {
+        fromMe: false,
+        id: `lid-noalt-${Math.random().toString(36).slice(2)}`,
+        remoteJid: "100000000000000@lid",
+      },
+    });
+    const p = handleEvolutionInbound(prisma, log, undefined, env);
+    await vi.runAllTimersAsync();
+    await p;
+    expect(mocks.handleInboundMessage).toHaveBeenCalledTimes(1);
+    const msg = mocks.handleInboundMessage.mock.calls[0]?.[1] as {
+      fromPhone: string;
+    };
+    expect(msg.fromPhone).toBe("100000000000000");
+  });
+
   it("número desconhecido → notifica staff, sem resposta", async () => {
     mocks.findCustomersByPhone.mockResolvedValue([]);
     await handleEvolutionInbound(prisma, log, undefined, envelope());
@@ -244,6 +287,61 @@ describe("handleEvolutionInbound — proteções anti-ban", () => {
       envelope({ message: { conversation: "estado" } })
     );
     expect(mocks.handleInboundMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("PARAR de número dual-role (staff ponto + cliente) → ponto responde E consentimento revoga", async () => {
+    // O ponto corre antes do pipeline de clientes: sem a revogação
+    // transversal o PARAR morria como "comando desconhecido" e os
+    // avisos automáticos continuavam autorizados.
+    const staff = {
+      externalWork: false,
+      id: "u-staff",
+      name: "Rui",
+      phoneE164: "+351912345678",
+      pontoSmsAllowed: false,
+      username: "rui",
+    };
+    const customerUpdate = vi.fn(() => Promise.resolve({}));
+    const prismaFull = {
+      customer: {
+        // revokeConsentForPhone usa a findCustomersByPhone real (a
+        // versão interna do módulo) — precisa do findMany+update.
+        findMany: vi.fn(async () => [
+          { id: "cust-1", name: "Rui", phone: "+351912345678" },
+        ]),
+        update: customerUpdate,
+      },
+      shopSettings: { update: mocks.updateSettings },
+      user: { findMany: vi.fn(async () => [staff]) },
+    } as never;
+    mocks.getOrCreateShopSettings.mockResolvedValue({
+      ...SETTINGS,
+      cloudEntitlements: ["ponto", "whatsapp-bot"],
+    });
+    const p = handleEvolutionInbound(
+      prismaFull,
+      log,
+      undefined,
+      envelope({ message: { conversation: "PARAR" } })
+    );
+    // O send do ponto espera 3–8 s (presença "a escrever…").
+    await vi.runAllTimersAsync();
+    await p;
+    // O ponto consumiu a mensagem — a resposta é a lista de comandos,
+    // não a do pipeline de clientes ("resposta" do mock).
+    expect(mocks.sendEvolutionText).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.stringContaining("Comandos"),
+      expect.anything()
+    );
+    // …e o consentimento do cliente foi revogado na mesma.
+    expect(customerUpdate).toHaveBeenCalledWith({
+      data: { whatsappConsent: false },
+      where: { id: "cust-1" },
+    });
+    // Nunca chegou ao pipeline de clientes.
+    expect(mocks.handleInboundMessage).not.toHaveBeenCalled();
   });
 
   it("sessão fechada no envio → suspende o bot e avisa o staff", async () => {

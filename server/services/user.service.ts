@@ -21,6 +21,7 @@ import {
   USER_SELECT,
   USER_SELECT_MINIMAL,
   USER_SELECT_NO_IMAGE,
+  USER_SELECT_NO_PONTO,
   updateCredentialPassword as updateCredentialPasswordRepo,
   updateMustChangePassword as updateMustChangePasswordRepo,
   count as userCount,
@@ -112,12 +113,59 @@ export async function list(
   return { users, nextCursor, totalCount };
 }
 
-export async function getById(prisma: DbClient, id: string) {
-  const user = await userFindUniqueById(prisma, id, USER_SELECT);
+export async function getById(prisma: DbClient, id: string, nonOwner = false) {
+  // nonOwner=true: sem campos do livro de ponto — user:get é permissão de
+  // TECHNICIAN/FRONT_DESK e telefone/horário/flags de ponto são dados
+  // laborais do OWNER.
+  const user = await userFindUniqueById(
+    prisma,
+    id,
+    nonOwner ? USER_SELECT_NO_PONTO : USER_SELECT
+  );
   if (!user) {
     throw new AppError("USER_NOT_FOUND");
   }
   return user;
+}
+
+// Campos do livro de ponto (Pro "ponto") — partilhados por create/update.
+// ""/null limpam os campos nullable; os booleanos são flags diretas.
+export interface PontoUserFields {
+  externalWork?: boolean;
+  phoneE164?: string | null;
+  pontoEnabled?: boolean;
+  pontoScheduleEnd?: string | null;
+  pontoScheduleStart?: string | null;
+  pontoSmsAllowed?: boolean;
+}
+
+function pontoUpdateData(fields: PontoUserFields): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const nullable = (v: string | null | undefined) => {
+    if (v === undefined) {
+      return;
+    }
+    return v === "" ? null : v;
+  };
+  if (fields.phoneE164 !== undefined) {
+    out.phoneE164 = nullable(fields.phoneE164);
+  }
+  if (fields.pontoEnabled !== undefined) {
+    out.pontoEnabled = fields.pontoEnabled;
+  }
+  if (fields.externalWork !== undefined) {
+    out.externalWork = fields.externalWork;
+  }
+  if (fields.pontoSmsAllowed !== undefined) {
+    out.pontoSmsAllowed = fields.pontoSmsAllowed;
+  }
+  if (fields.pontoScheduleStart !== undefined) {
+    out.pontoScheduleStart = nullable(fields.pontoScheduleStart);
+  }
+  if (fields.pontoScheduleEnd !== undefined) {
+    out.pontoScheduleEnd = nullable(fields.pontoScheduleEnd);
+  }
+  return out;
 }
 
 export async function createUser(
@@ -126,11 +174,16 @@ export async function createUser(
     createUser: (args: unknown) => Promise<{ user?: { id: string } }>;
   },
   headers: unknown,
-  data: { username: string; email: string; password: string; role: string },
+  data: {
+    username: string;
+    email: string;
+    password: string;
+    role: string;
+  } & PontoUserFields,
   userId: string,
   callerRole: RoleType
 ) {
-  const { username, email, password, role } = data;
+  const { username, email, password, role, ...pontoFields } = data;
 
   // Only an OWNER may create another OWNER — non-owner callers can at most
   // provision TECHNICIAN / FRONT_DESK accounts.
@@ -157,6 +210,7 @@ export async function createUser(
       data: {
         username,
         mustChangePassword: true,
+        ...pontoUpdateData(pontoFields),
       },
     },
   });
@@ -250,7 +304,11 @@ export async function resetPassword(
 export async function updateUserProfileService(
   prisma: DbClient,
   id: string,
-  data: { name?: string; email?: string; username?: string }
+  data: {
+    name?: string;
+    email?: string;
+    username?: string;
+  } & PontoUserFields
 ) {
   const { email, username } = data;
   let { name } = data;
@@ -277,7 +335,10 @@ export async function updateUserProfileService(
     }
   }
 
-  const updateData = buildUpdateData({ name, email, username });
+  const updateData = {
+    ...buildUpdateData({ name, email, username }),
+    ...pontoUpdateData(data),
+  };
 
   if (Object.keys(updateData).length === 0) {
     throw new AppError("AT_LEAST_ONE_FIELD");

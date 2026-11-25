@@ -13,6 +13,7 @@ import { startCloudPoller } from "./jobs/cloud-poller.js";
 import { startMessagingPoller } from "./jobs/messaging-poller.js";
 import { startOverdueScheduler } from "./jobs/overdue-scheduler.js";
 import { startPickupReminderScheduler } from "./jobs/pickup-reminder-scheduler.js";
+import { startPontoReminderScheduler } from "./jobs/ponto-reminder-scheduler.js";
 import { startMdnsResponder } from "./lib/mdns.js";
 import { isFileRequestPath } from "./lib/spa-fallback.js";
 import { cacheControlFor } from "./lib/static-cache.js";
@@ -29,6 +30,7 @@ import { syncDeviceCatalogIfStale } from "./services/device-catalog.service.js";
 import { startLowStockScheduler } from "./services/low-stock.service.js";
 import { cleanupReadNotifications } from "./services/notification-inapp.service.js";
 import { startOutboxWorker } from "./services/notification-outbox.service.js";
+import { cleanupPontoPhotos } from "./services/ponto-photos.service.js";
 import { startRemarketingScheduler } from "./services/remarketing.service.js";
 import { applyTaskRules } from "./services/tasks.service.js";
 import { initValidationI18n } from "./utils/resolve-validation-messages.js";
@@ -155,6 +157,11 @@ const stopCloudPoller = env.DEMO_MODE ? noop : startCloudPoller(app);
 const stopMessagingPoller = env.DEMO_MODE ? noop : startMessagingPoller(app);
 const stopLowStock = startLowStockScheduler(app);
 const stopRemarketing = env.DEMO_MODE ? noop : startRemarketingScheduler(app);
+// Livro de ponto — lembretes de saída/pausa enviam WhatsApp/SMS
+// diretamente (fora do outbox), por isso nunca arranca em DEMO_MODE.
+const stopPontoReminder = env.DEMO_MODE
+  ? noop
+  : startPontoReminderScheduler(app);
 const stopOutboxWorker = env.DEMO_MODE ? noop : startOutboxWorker(app.prisma);
 // Ligação permanente app→Cloud do módulo "ai-inbox" (§G.6): supervisor
 // interno — só abre o SSE quando o entitlement está ativo.
@@ -172,6 +179,9 @@ const runCleanup = () =>
     }),
     cleanupOldAuditLogs(app.prisma).catch((err) => {
       app.log.error(err, "Audit log cleanup error");
+    }),
+    cleanupPontoPhotos(app.prisma).catch((err) => {
+      app.log.error(err, "Ponto photo cleanup error");
     }),
   ]);
 const cleanupHandle = setInterval(runCleanup, CLEANUP_INTERVAL_MS);
@@ -274,6 +284,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
     stopMessagingPoller();
     stopLowStock();
     stopRemarketing();
+    stopPontoReminder();
     stopOutboxWorker();
     stopAiInboxLink();
     clearInterval(cleanupHandle);

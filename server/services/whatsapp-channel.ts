@@ -12,6 +12,7 @@ import {
   decryptWhatsAppConfig,
   formatPhone,
   sendWhatsApp,
+  sendWhatsAppInteractiveMessage,
   sendWhatsAppTemplate,
   type WhatsAppConfig,
 } from "./notification-sender.js";
@@ -47,6 +48,10 @@ interface SettingsLike {
 
 export interface SendResult {
   error?: string;
+  /** Id da mensagem aceite quando o provider o devolve (key.id da
+   *  Evolution, wamid da Meta direta ou via relay cloud) — o livro de
+   *  ponto correlaciona a resposta citada com a pergunta enviada. */
+  messageId?: string;
   success: boolean;
 }
 
@@ -148,7 +153,11 @@ async function sendViaCloud(
   if (!res.ok) {
     return { error: cloudError(res.status, res.body), success: false };
   }
-  return { success: true };
+  const messageId = (res.body as { messageId?: unknown } | null)?.messageId;
+  return {
+    ...(typeof messageId === "string" ? { messageId } : {}),
+    success: true,
+  };
 }
 
 /**
@@ -203,6 +212,50 @@ export async function sendWhatsAppText(
   }
   const res = await sendViaCloud(channel, {
     text: message,
+    to: formatPhone(to, countryCode),
+  });
+  if (res.success) {
+    await clearMigratedLocalToken(prisma, settings);
+  }
+  return res;
+}
+
+/**
+ * Interactive Meta message — só o livro de ponto usa (pedido de
+ * localização, botões de resposta). Evolution não tem equivalente →
+ * falha explícita; o handler cai sempre em texto simples.
+ */
+export async function sendWhatsAppInteractive(
+  prisma: DbClient,
+  channel: WhatsAppChannel,
+  to: string,
+  interactive: Record<string, unknown>,
+  countryCode: string | undefined,
+  settings: SettingsLike | null
+): Promise<SendResult> {
+  assertNotDemoMode();
+  if (!isModuleEnabled(settings, "whatsapp-bot")) {
+    return {
+      error: "Módulo whatsapp-bot não está ativo (OficinaOS Pro)",
+      success: false,
+    };
+  }
+  if (channel.mode === "local") {
+    return sendWhatsAppInteractiveMessage(
+      channel.config,
+      to,
+      interactive,
+      countryCode
+    );
+  }
+  if (channel.mode === "evolution") {
+    return {
+      error: "Mensagens interativas indisponíveis no transporte Evolution",
+      success: false,
+    };
+  }
+  const res = await sendViaCloud(channel, {
+    interactive,
     to: formatPhone(to, countryCode),
   });
   if (res.success) {

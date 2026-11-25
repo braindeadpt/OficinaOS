@@ -228,6 +228,9 @@ async function processReceived(
     };
     const out = await handleInboundMessage(ctx, msg, {
       channelLabel: "SMS",
+      // Livro de ponto: transport=sms — evaluate direto, sempre
+      // POR_VALIDAR (sem localização); user.pontoSmsAllowed é o gate.
+      ponto: { transport: "sms" },
       plainText: true,
       send: async (text) => {
         const r = await sendSmsViaCloud(c, {

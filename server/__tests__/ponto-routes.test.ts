@@ -2,6 +2,7 @@ import { isAppError } from "@shared/errors/app-error.js";
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { encryptSecret } from "../lib/crypto.js";
+import { __resetTzCache } from "../middlewares/dashboard-scope.js";
 import { pontoRoutes } from "../routes/ponto.js";
 
 const CLOUD_URL = "https://cloud.test";
@@ -26,8 +27,21 @@ function fakePrisma(overrides: Partial<SettingsRow> = {}) {
     ...overrides,
   };
   return {
+    pontoPhoto: { findMany: vi.fn(async () => []) },
     shopSettings: {
+      // dashboardScope lê o fuso da loja via findFirst (cache 60s).
+      findFirst: vi.fn(async () => ({ timezone: "Europe/Lisbon" })),
       findUnique: vi.fn(async () => ({ ...row })),
+    },
+    timeEntry: {
+      create: vi.fn(async () => ({})),
+      findMany: vi.fn(async () => []),
+      findUnique: vi.fn(async () => null),
+    },
+    timeEntryValidation: { create: vi.fn(async () => ({})) },
+    user: {
+      findMany: vi.fn(async () => []),
+      findUnique: vi.fn(async () => null),
     },
   };
 }
@@ -75,10 +89,12 @@ function buildApp(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  __resetTzCache();
 });
 
 afterEach(() => {
   vi.clearAllMocks();
+  __resetTzCache();
 });
 
 describe("ponto — GET /status", () => {
@@ -93,7 +109,8 @@ describe("ponto — GET /status", () => {
     const app = buildApp(fakePrisma());
     const res = await app.inject({ method: "GET", url: "/api/ponto/status" });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ enabled: true });
+    // tz é o fuso efetivo da loja — a UI formata as horas nele.
+    expect(res.json()).toEqual({ enabled: true, tz: "Europe/Lisbon" });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -101,7 +118,7 @@ describe("ponto — GET /status", () => {
     const app = buildApp(fakePrisma({ cloudEntitlements: ["portal"] }));
     const res = await app.inject({ method: "GET", url: "/api/ponto/status" });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ enabled: false });
+    expect(res.json()).toEqual({ enabled: false, tz: "Europe/Lisbon" });
   });
 });
 
@@ -194,5 +211,61 @@ describe("ponto — PUT /config", () => {
     const res = await app.inject({ method: "PUT", url: "/api/ponto/config" });
     expect(res.statusCode).toBe(502);
     expect(res.json().code).toBe("CLOUD_REQUEST_FAILED");
+  });
+});
+
+describe("ponto — gate de escrita sem módulo (WP0.5)", () => {
+  const semModulo = { cloudEntitlements: ["portal"] };
+
+  it("POST /entries devolve CLOUD_MODULE_REQUIRED sem o módulo", async () => {
+    const app = buildApp(fakePrisma(semModulo));
+    const res = await app.inject({
+      method: "POST",
+      payload: {
+        at: "2026-01-10T09:00:00.000Z",
+        type: "ENTRADA",
+        userId: "u1",
+      },
+      url: "/api/ponto/entries",
+    });
+    expect(res.json().code).toBe("CLOUD_MODULE_REQUIRED");
+  });
+
+  it("POST /entries/:id/validate devolve CLOUD_MODULE_REQUIRED sem o módulo", async () => {
+    const app = buildApp(fakePrisma(semModulo));
+    const res = await app.inject({
+      method: "POST",
+      payload: { decision: "APROVADO" },
+      url: "/api/ponto/entries/entry-1/validate",
+    });
+    expect(res.json().code).toBe("CLOUD_MODULE_REQUIRED");
+  });
+
+  it("com o módulo ativo a validação passa o gate (não é 402 de módulo)", async () => {
+    const app = buildApp(fakePrisma());
+    const res = await app.inject({
+      method: "POST",
+      payload: { decision: "APROVADO" },
+      url: "/api/ponto/entries/entry-1/validate",
+    });
+    // Passa o gate e morre mais à frente na entrada inexistente — nunca
+    // por falta de módulo.
+    expect(res.json().code).not.toBe("CLOUD_MODULE_REQUIRED");
+    expect(res.statusCode).not.toBe(500);
+  });
+
+  it("as leituras NUNCA levam gate e respondem 200 — retenção legal de 5 anos", async () => {
+    const app = buildApp(fakePrisma(semModulo));
+    for (const url of [
+      "/api/ponto/entries",
+      "/api/ponto/pending",
+      "/api/ponto/decided",
+      "/api/ponto/now",
+      "/api/ponto/hours?from=2026-01-05&to=2026-01-11",
+      "/api/ponto/missing-exits?from=2026-01-05&to=2026-01-11",
+    ]) {
+      const res = await app.inject({ method: "GET", url });
+      expect(res.statusCode).toBe(200);
+    }
   });
 });

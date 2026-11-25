@@ -237,6 +237,9 @@ export async function handleInboundSms(
   try {
     await handleInboundMessage(ctx, msg, {
       channelLabel: "SMS",
+      // Livro de ponto: transport=sms — evaluate direto, sempre
+      // POR_VALIDAR (sem localização); user.pontoSmsAllowed é o gate.
+      ponto: { transport: "sms" },
       plainText: true,
       send: async (replyText) => {
         const res = await sendSms(

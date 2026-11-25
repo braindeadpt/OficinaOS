@@ -9,6 +9,7 @@ import { NAV_ITEMS } from "@/lib/navigation";
 import { getInitials } from "@/lib/utils";
 import { useAiInboxStore } from "@/stores/ai-inbox";
 import { useAuthStore } from "@/stores/auth";
+import { usePontoStore } from "@/stores/ponto";
 import { useUiStore } from "@/stores/ui";
 
 const NAV_GROUPS: { labelKey: string; paths: string[] }[] = [
@@ -88,13 +89,24 @@ export default function Sidebar() {
       fetchAiInbox().catch(() => undefined);
     }
   }, [aiInboxEnabled, fetchAiInbox]);
+  // "ponto" é um entitlement Cloud — a entrada só aparece com o módulo
+  // ativo (mesmo padrão do ai-inbox).
+  const pontoEnabled = usePontoStore((s) => s.enabled);
+  const fetchPonto = usePontoStore((s) => s.fetchStatus);
+  useEffect(() => {
+    if (pontoEnabled === null) {
+      fetchPonto().catch(() => undefined);
+    }
+  }, [pontoEnabled, fetchPonto]);
   const navItems = useMemo(
     () =>
       NAV_ITEMS.filter(
         (item) =>
-          can(role, item.perm) && (item.to !== "/inbox" || aiInboxEnabled)
+          can(role, item.perm) &&
+          (item.to !== "/inbox" || aiInboxEnabled) &&
+          (item.to !== "/ponto" || pontoEnabled)
       ),
-    [role, aiInboxEnabled]
+    [role, aiInboxEnabled, pontoEnabled]
   );
   const navGroups = useMemo(() => {
     const groupedPaths = new Set(NAV_GROUPS.flatMap((group) => group.paths));

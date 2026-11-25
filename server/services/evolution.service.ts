@@ -77,7 +77,7 @@ export async function sendEvolutionText(
     cloudEntitlements?: unknown;
     cloudSyncedAt?: Date | null;
   } | null
-): Promise<{ error?: string; success: boolean }> {
+): Promise<{ error?: string; messageId?: string; success: boolean }> {
   // Demo bloqueia qualquer saída antes de se olhar para o entitlement.
   assertNotDemoMode();
   // Defesa em profundidade: o resolve já gateia o canal, mas uma
@@ -107,7 +107,10 @@ export async function sendEvolutionText(
         ?.message?.[0] ?? (res.body as { message?: string } | null)?.message;
     return { error: msg ?? `Evolution API ${res.status}`, success: false };
   }
-  return { success: true };
+  // O key.id permite correlacionar um reply-quote inbound (stanzaId)
+  // com a mensagem enviada — livro de ponto.
+  const messageId = (res.body as { key?: { id?: string } } | null)?.key?.id;
+  return { ...(messageId ? { messageId } : {}), success: true };
 }
 
 /** Presença "a escrever…" antes da resposta do bot (§5.7) — best-effort. */
@@ -131,13 +134,56 @@ export async function sendEvolutionPresence(
 }
 
 /**
+ * Download de média recebida (ponto — foto de prova): a Evolution serve
+ * a mensagem original em `message` e devolve base64 + mimetype. Usado só
+ * pelo handler do livro de ponto; o pipeline de clientes nunca baixa
+ * anexos.
+ */
+export async function downloadEvolutionMedia(
+  config: EvolutionConfig,
+  message: unknown
+): Promise<{ base64: string; mimetype?: string } | null> {
+  const res = await evoFetch(
+    config.baseUrl,
+    config.apiKey,
+    `/chat/getBase64FromMediaMessage/${config.instance}`,
+    {
+      body: { convertToMp4: false, message },
+      method: "POST",
+    }
+  );
+  if (!res?.ok) {
+    return null;
+  }
+  const body = res.body as { base64?: unknown; mimetype?: unknown } | null;
+  if (typeof body?.base64 !== "string" || body.base64.length === 0) {
+    return null;
+  }
+  return {
+    base64: body.base64,
+    mimetype: typeof body.mimetype === "string" ? body.mimetype : undefined,
+  };
+}
+
+/**
+ * Header que transporta o segredo do webhook inbound — a Evolution
+ * aceita `headers` custom no /webhook/set e reenvia-os em cada POST.
+ * O token nunca vai no path: em HTTP remoto (domínio público) um path
+ * com segredo é sniffável em trânsito; o header mantém-se igual de
+ * exposto em claro, por isso hosts públicos são sempre registados em
+ * HTTPS (ver tryRegisterEvolutionWebhook). A rota legada
+ * /inbound/:token continua aceite para webhooks já registados.
+ */
+export const EVOLUTION_WEBHOOK_TOKEN_HEADER = "x-oficinaos-webhook-token";
+
+/**
  * Regista o webhook inbound na instância — a Evolution passa a POSTar
  * MESSAGES_UPSERT ao callback (§5.7). webhookByEvents: false porque a
  * rota recebe o envelope completo e filtra o evento.
  */
 export async function setEvolutionWebhook(
   config: EvolutionConfig,
-  callbackUrl: string
+  callback: { headers?: Record<string, string>; url: string }
 ): Promise<{ error?: string; success: boolean }> {
   const res = await evoFetch(
     config.baseUrl,
@@ -148,9 +194,10 @@ export async function setEvolutionWebhook(
         webhook: {
           enabled: true,
           events: ["MESSAGES_UPSERT"],
-          url: callbackUrl,
+          url: callback.url,
           webhookBase64: false,
           webhookByEvents: false,
+          ...(callback.headers ? { headers: callback.headers } : {}),
         },
       },
       method: "POST",
