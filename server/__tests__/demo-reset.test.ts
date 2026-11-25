@@ -151,21 +151,24 @@ describe.skipIf(!serverReachable)("demo seed/reset (integration)", () => {
         )
       ).not.toThrow();
     } finally {
+      delete process.env.DEMO_MODE;
       process.env.DATABASE_URL = saved;
       resetEnvForTests();
     }
   });
 
   it("seed → mutate → reset restores the dump and keeps only the demo user", async () => {
+    // Importar o service antes de ativar DEMO_MODE: em CI as variáveis
+    // GITHUB_* do runner são proibidas em demo e o import carrega loadEnv().
+    const { stampWhatsAppLocalDeprecationStartedAtOnce } = await import(
+      "../services/settings.service.js"
+    );
     process.env.DEMO_MODE = "true";
     const saved = process.env.DATABASE_URL;
     process.env.DATABASE_URL = testDbUrl as string;
     resetEnvForTests();
     try {
       const db = getPrisma();
-      const { stampWhatsAppLocalDeprecationStartedAtOnce } = await import(
-        "../services/settings.service.js"
-      );
       const bootStartedAt = await stampWhatsAppLocalDeprecationStartedAtOnce(
         db as never
       );
@@ -265,6 +268,7 @@ describe.skipIf(!serverReachable)("demo seed/reset (integration)", () => {
       const sessions = await db.session.findMany();
       expect(sessions.map((s) => s.id)).toEqual([liveSession.id]);
     } finally {
+      delete process.env.DEMO_MODE;
       process.env.DATABASE_URL = saved;
       resetEnvForTests();
     }
