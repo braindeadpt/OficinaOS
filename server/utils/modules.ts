@@ -8,8 +8,17 @@
  * straight to a third-party API (invoicing, remarketing via a legacy
  * local token) must not run forever on a stale list, so a row whose
  * last sync is missing or older than HINT_TTL_MS counts as no modules.
+ * A sync timestamp in the future (beyond a small clock-skew tolerance)
+ * counts as no modules too — otherwise a negative age would pass the
+ * freshness test forever.
  */
 export const HINT_TTL_MS = 24 * 3600 * 1000;
+
+// Tolerância de skew entre o relógio da loja e quem escreveu o último
+// sync. Além disto um cloudSyncedAt no futuro é relógio mal ajustado ou
+// manipulação — a diferença negativa passaria sempre no teste de
+// frescura e a loja ficava com módulos válidos para sempre.
+const FUTURE_SKEW_MS = 5 * 60 * 1000;
 
 export function isModuleEnabled(
   row:
@@ -21,9 +30,11 @@ export function isModuleEnabled(
     | undefined,
   module: string
 ): boolean {
-  const fresh =
-    row?.cloudSyncedAt != null &&
-    Date.now() - row.cloudSyncedAt.getTime() < HINT_TTL_MS;
+  if (row?.cloudSyncedAt == null) {
+    return false;
+  }
+  const age = Date.now() - row.cloudSyncedAt.getTime();
+  const fresh = age >= -FUTURE_SKEW_MS && age < HINT_TTL_MS;
   if (!fresh) {
     return false;
   }

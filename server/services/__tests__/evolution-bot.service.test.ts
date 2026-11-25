@@ -303,15 +303,23 @@ describe("handleEvolutionInbound — proteções anti-ban", () => {
     };
     const customerUpdate = vi.fn(() => Promise.resolve({}));
     const prismaFull = {
+      // revokeConsentForPhone usa a findCustomersByPhone real (a
+      // versão interna do módulo): o pré-filtro é SQL sobre os
+      // dígitos ($queryRaw) e o país da loja lê-se em shopSettings —
+      // o casamento exato faz-se em memória sobre estas fichas.
+      $queryRaw: vi.fn(async () => [
+        { id: "cust-1", name: "Rui", phone: "+351912345678" },
+      ]),
       customer: {
-        // revokeConsentForPhone usa a findCustomersByPhone real (a
-        // versão interna do módulo) — precisa do findMany+update.
         findMany: vi.fn(async () => [
           { id: "cust-1", name: "Rui", phone: "+351912345678" },
         ]),
         update: customerUpdate,
       },
-      shopSettings: { update: mocks.updateSettings },
+      shopSettings: {
+        findUnique: vi.fn(async () => ({ countryCode: "PT" })),
+        update: mocks.updateSettings,
+      },
       user: { findMany: vi.fn(async () => [staff]) },
     } as never;
     mocks.getOrCreateShopSettings.mockResolvedValue({
@@ -337,7 +345,7 @@ describe("handleEvolutionInbound — proteções anti-ban", () => {
     );
     // …e o consentimento do cliente foi revogado na mesma.
     expect(customerUpdate).toHaveBeenCalledWith({
-      data: { whatsappConsent: false },
+      data: { whatsappConsent: false, whatsappConsentAt: null },
       where: { id: "cust-1" },
     });
     // Nunca chegou ao pipeline de clientes.

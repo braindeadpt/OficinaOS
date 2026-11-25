@@ -754,10 +754,14 @@ function ChatInterface({ agentEnabled = true }: ChatInterfaceProps) {
           error?: string;
           message?: string;
         };
+        // Backend errors arrive as i18n keys (e.g. a 402 carries
+        // "errors.cloud_module_required") — translate like the axios
+        // interceptor does, falling back to the raw string when it is
+        // not a key.
         if (body.message) {
-          errorMessage = body.message;
+          errorMessage = t(body.message, body.message);
         } else if (body.error) {
-          errorMessage = body.error;
+          errorMessage = t(body.error, body.error);
         }
       } catch {
         // use default error message

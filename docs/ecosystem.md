@@ -161,9 +161,11 @@ Outbound: evento → notification-dispatch → outbox →
   POST http://<telemovel>:8080/message (Basic auth, LAN — sms-gate.app)
 Inbound:  cliente SMS → SMS Gateway for Android → webhook
   POST /api/public/sms/inbound/:token (route-security: CSRF off + rate limit)
-  → só processa com entitlement `sms` fresco (isModuleEnabled — grátis
-    responde 200 sem ler) → handleInboundSms → mesmos intents do bot
-    (bot-intents.ts partilhado com whatsapp-bot) → resposta automática
+  → só processa com `sms` ou `ai-inbox` fresco (isModuleEnabled — grátis
+    responde 200 sem ler, exceto PARAR/STOP) → handleInboundSms →
+    com `sms`: mesmos intents do bot (bot-intents.ts partilhado com
+    whatsapp-bot) → resposta automática; só `ai-inbox`: grava na caixa
+    de entrada, sem resposta
 ```
 
 100% LAN: nada passa pela Cloud nem pela Meta — só sai o SMS pela rede móvel.
@@ -174,9 +176,12 @@ removido (SMS não renderiza markdown). Desde a decisão do dono de
 `isModuleEnabled(settings, "sms")` (entitlement + `cloudSyncedAt` < 24 h)
 e o `PUT /settings/sms` + `POST /settings/sms/test` devolvem 402 sem ele.
 O **inbound** também é Pro: a rota pública só chama `handleInboundSms`
-com o mesmo check fresco; sem Pro o webhook devolve 200 e não processa
-nada — nem bot, nem gravação, nem PARAR/STOP (o opt-out manual fica a
-cargo do staff na ficha do cliente).
+com o mesmo check fresco (`sms` **ou** `ai-inbox` — só com `ai-inbox` a
+mensagem fica gravada na caixa de entrada, sem resposta automática); sem
+nenhum dos dois o webhook LAN devolve 200 sem bot nem gravação —
+**exceto PARAR/STOP**, que revoga o consentimento mesmo sem módulo (o opt-out é legal e não depende de pagamento; mesma regra do bot
+Evolution). Isto só vale para o device que posta à LAN: o poller da
+fila SMS da Cloud corre apenas com o entitlement `sms`.
 A responsabilidade é da loja: o SIM é dela, a fatura da operadora e os
 limites anti-spam também.
 Consentimento partilhado (`whatsappConsent` = opt-in de mensagens
@@ -307,11 +312,13 @@ Regras:
   bem-sucedido.
 - `customer.whatsappConsent` é o opt-in único para toda a mensagem
   automática — gravado mesmo sem Pro (fica pronto para quando ativar).
-- Opt-out ("PARAR") 100% manual no grátis — sem receção não há
-  processamento; o staff desliga o consentimento na ficha do cliente.
+- Opt-out ("PARAR"/"STOP") no grátis: os webhooks LAN (SMS e Evolution)
+  revogam o consentimento sem responder nem gravar; nos restantes
+  canais o staff desliga-o na ficha do cliente.
 - `POST /api/public/quote-respond` continua grátis — página pública de
   resposta a orçamento, não um canal de mensagens.
-- Inbound grátis: webhooks SMS/Evolution respondem 200 sem processar.
+- Inbound grátis: webhooks SMS/Evolution respondem 200 sem processar
+  (só PARAR/STOP revoga o consentimento).
 
 ### Notificações ao cliente — quando disparam e onde vivem
 
