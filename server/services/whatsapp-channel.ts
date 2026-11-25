@@ -347,11 +347,19 @@ export async function pushCredentialsToCloud(
   if (!res?.ok) {
     return false;
   }
-  await prisma.shopSettings.update({
+  // O upload demora e a loja pode gravar um token/phone_number_id de
+  // substituição entretanto. Marcar a migração só se a row ainda tiver o
+  // snapshot enviado à Cloud; caso contrário a Cloud ficaria com as
+  // credenciais antigas mas a flag diria que tem as atuais.
+  const marked = await prisma.shopSettings.updateMany({
     data: { whatsappCredentialsAtCloud: true },
-    where: { id: "default" },
+    where: {
+      id: "default",
+      whatsappApiTokenEncrypted: rawToken,
+      whatsappPhoneNumberId: settings.whatsappPhoneNumberId,
+    },
   });
-  return true;
+  return marked.count > 0;
 }
 
 export async function sendWhatsAppTemplateVia(

@@ -34,6 +34,7 @@ import { startOutboxWorker } from "./services/notification-outbox.service.js";
 import { pushPontoCloudConfig } from "./services/ponto/config-sync.js";
 import { cleanupPontoPhotos } from "./services/ponto-photos.service.js";
 import { startRemarketingScheduler } from "./services/remarketing.service.js";
+import { stampWhatsAppLocalDeprecationStartedAtOnce } from "./services/settings.service.js";
 import { applyTaskRules } from "./services/tasks.service.js";
 import { initValidationI18n } from "./utils/resolve-validation-messages.js";
 
@@ -126,6 +127,13 @@ await app.register(websocket);
 await app.register(localePlugin);
 
 await app.register(prismaPlugin);
+
+// WP0.6 — sunset do envio Meta local: a contagem de 30 dias arranca no
+// primeiro boot da versão nova, incondicionalmente (decisão do dono). Não
+// depende de token, consentimento, Cloud pairing ou de alguém abrir as
+// Definições. Awaited aqui para garantir que uma instalação nova fica com a
+// data antes de servir requests.
+await stampWhatsAppLocalDeprecationStartedAtOnce(app.prisma);
 
 // DEMO_MODE first boot: an empty database would leave the demo dead —
 // /setup is disabled and nobody could sign in. Seed the fictional

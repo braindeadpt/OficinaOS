@@ -62,7 +62,7 @@ interface WhatsAppSettings {
   evolutionUrl: string | null;
   hasApiToken: boolean;
   hasEvolutionApiKey: boolean;
-  localDeprecationWarnedAt: string | null;
+  localDeprecationStartedAt: string | null;
   phoneNumberId: string | null;
   pickupReminderTemplate: string | null;
   remarketingCooldownDays: number;
