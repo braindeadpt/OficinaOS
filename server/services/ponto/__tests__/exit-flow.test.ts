@@ -571,6 +571,52 @@ describe("resposta ao lembrete de saída", () => {
     expect(getPendingPontoExit("user-1")).toBeNull();
   });
 
+  it("«ontem às 18:05» no próprio dia do turno → repete a pergunta, não grava no dia errado", async () => {
+    // Regressão: a palavra «ontem» perdia-se e as 18:05 gravavam-se no
+    // dia da presumida — o trabalhador disse ONTEM e o livro marcava
+    // HOJE. Ontem não é candidato deste turno → pergunta outra vez.
+    const { ctx, message, sent, t } = setup({
+      smsAllowed: true,
+      transport: "sms",
+    });
+    armPending();
+
+    await tryHandlePontoStaff(ctx, message("ontem às 18:05"), t);
+
+    expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
+    expect(sent.at(-1)).toContain("escreva a hora de saída");
+    expect(getPendingPontoExit("user-1")).not.toBeNull();
+  });
+
+  it("«ontem às 18:05» respondido depois da meia-noite → grava no dia da presumida", async () => {
+    // Lembrete das 23:30 respondido às 00:20 — «ontem» É o dia da
+    // presumida: a palavra resolve para o dia certo e grava 18:05 lá.
+    const { ctx, message, t } = setup({
+      smsAllowed: true,
+      transport: "sms",
+    });
+    setPendingPontoExit("user-1", {
+      expiresAt: Date.now() + PONTO_EXIT_PENDING_TTL_MS,
+      presumedAt: "2026-01-10T23:30:00.000Z",
+      presumedEntryId: "presumed-1",
+      shiftOpenAt: "2026-01-10T16:00:00.000Z",
+      userId: "user-1",
+    });
+    const msg = {
+      ...message("ontem às 18:05"),
+      createdAt: "2026-01-11T00:20:00.000Z",
+    };
+
+    await tryHandlePontoStaff(ctx, msg, t);
+
+    expect(mocks.recordPontoEntry).toHaveBeenCalledTimes(1);
+    const entry = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect((entry.at as Date).toISOString()).toBe("2026-01-10T18:05:00.000Z");
+  });
+
   it("resposta depois da meia-noite → hora declarada fica no dia da resposta", async () => {
     const { ctx, message, t } = setup();
     // Lembrete das 23:30, entrada às 16:00 — resposta «00:15» às 00:20

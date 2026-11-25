@@ -211,6 +211,14 @@ function utcYmd(d: Date): string {
   return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
 }
 
+/** ymd deslocado N dias civis — aritmética sobre a data civil (UTC),
+ *  imune a DST: somar 24 h ao instante saltava o dia inteiro na
+ *  transição para a hora de verão. */
+function shiftYmd(ymd: string, days: number): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return utcYmd(new Date(Date.UTC(y, m - 1, d + days)));
+}
+
 /** Segunda-feira 00:00 do fuso da loja — base do "horas da semana".
  *  O dia civil local não tem 24 h exatas (DST), por isso retrocede-se
  *  por instantes e valida-se a data local até cair na segunda. */
@@ -650,6 +658,42 @@ async function askExitQuestion(
  * repete a pergunta — o pending continua até resposta clara, comando
  * ponto ou TTL.
  */
+/** Dias candidatos da hora declarada filtrados pela data explícita
+ *  («23/11») e pelo dia relativo («ontem às 18:05») da resposta. O
+ *  relativo resolve-se contra o dia civil da RESPOSTA e intersecta com
+ *  os candidatos: sem isto a palavra perdia-se e a hora gravava-se
+ *  noutro dia («ontem» dito no próprio dia do turno caía na data do
+ *  lembrete). Zero coincidências repete a pergunta com o pending vivo
+ *  em vez de gravar no dia errado. */
+function wantedAnswerDays(
+  ymds: Set<string>,
+  answer: {
+    date?: { day: number; month: number; year: number | null };
+    relativeDay?: number;
+  },
+  tz: string,
+  answerAt: Date
+): Set<string> {
+  const stated = answer.date;
+  let wanted = stated
+    ? new Set(
+        [...ymds].filter((ymd) => {
+          const [y, mo, d] = ymd.split("-").map(Number);
+          return (
+            d === stated.day &&
+            mo === stated.month &&
+            (stated.year === null || y === stated.year)
+          );
+        })
+      )
+    : ymds;
+  if (answer.relativeDay !== undefined) {
+    const relYmd = shiftYmd(dayRange(tz, answerAt).date, answer.relativeDay);
+    wanted = new Set([...wanted].filter((ymd) => ymd === relYmd));
+  }
+  return wanted;
+}
+
 async function onExitReminderAnswer(
   env: FlowEnv,
   pending: PendingPontoExit
@@ -749,19 +793,7 @@ async function onExitReminderAnswer(
     // dos dias candidatos. Se aponta para outro dia, a resposta não é
     // sobre este turno: repete-se a pergunta com o pending vivo em vez
     // de gravar a hora no dia errado.
-    const stated = answer.date;
-    const wanted = stated
-      ? new Set(
-          [...ymds].filter((ymd) => {
-            const [y, mo, d] = ymd.split("-").map(Number);
-            return (
-              d === stated.day &&
-              mo === stated.month &&
-              (stated.year === null || y === stated.year)
-            );
-          })
-        )
-      : ymds;
+    const wanted = wantedAnswerDays(ymds, answer, env.tz, answerAt);
     if (wanted.size === 0) {
       await askExitQuestion(env, PONTO_TEXT.exitReminderReprompt);
       return;
@@ -1121,7 +1153,12 @@ async function onLocation(env: FlowEnv, pending: PendingPonto): Promise<void> {
     command: pending.command,
     hasPhoto: false,
     location: pending.location,
-    messageAt: pending.commandAt,
+    // Com código QR em jogo (ENTRADA de loja) a hora do comando fica —
+    // é dela que a Cloud mede a validade do código. Sem código (fluxos
+    // de externos) a frescura mede-se da última interação, como no
+    // onPhoto: a espera da localização é janela da app, não atraso de
+    // transporte.
+    messageAt: pending.code ? pending.commandAt : (msg.sentAt ?? msg.createdAt),
     pauseMinutes: pauseMinutesOf(
       pending.pauseSinceAt,
       new Date(pending.locationAt)
@@ -1165,7 +1202,17 @@ async function onPhoto(env: FlowEnv, pending: PendingPonto): Promise<void> {
     command: pending.command,
     hasPhoto: photoId !== null,
     location: pending.location,
-    messageAt: pending.commandAt,
+    // A frescura mede-se sobre a ÚLTIMA interação do fluxo, não sobre o
+    // comando: comando+localização+foto são janelas da app (3+5 min) e
+    // somadas ao commandAt ultrapassavam o corte de 5 min da Cloud mesmo
+    // com o funcionário a responder sempre a tempo — uma entrada
+    // aprovável caía em POR_VALIDAR. A cadeia interativa prova por si
+    // que o fluxo correu em tempo real; o atraso de transporte real
+    // (fila, PC desligado) continua medido desde o envio da foto.
+    // Sem código QR em jogo (a foto só existe no fluxo de externos,
+    // que não usam QR) nada precisa da hora do comando. Mesmo padrão
+    // do finalizeExpiredPhoto.
+    messageAt: msg.sentAt ?? msg.createdAt,
     pauseMinutes: pauseMinutesOf(
       pending.pauseSinceAt,
       new Date(pending.locationAt ?? pending.commandAt)
@@ -1351,7 +1398,12 @@ async function replyEstado(
   const { start: todayStart } = dayRange(tz, now);
   const entries = await pontoEntriesSince(ctx.prisma, userId, wStart);
   const today = entries.filter((e) => e.at >= todayStart);
-  const pendingCount = today.filter((e) => e.status === "POR_VALIDAR").length;
+  // Por validar = ainda sem decisão do painel — o status da linha é o
+  // da avaliação automática e não muda com a validação (append-only),
+  // por isso um registo já decidido não pode contar outra vez.
+  const pendingCount = today.filter(
+    (e) => e.status === "POR_VALIDAR" && !(e.validations?.length ?? 0)
+  ).length;
   const marks = today
     .map((e) => `${ENTRY_TYPE_PT[e.type] ?? e.type} ${hhmm(e.at, tz)}`)
     .join(" · ");
