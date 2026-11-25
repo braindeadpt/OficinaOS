@@ -463,6 +463,13 @@ interface CustomerMatch {
  * um +34 são iguais aos de um cliente PT e o bot daria a ficha dele a um
  * estranho (sec: a ficha leva histórico e dados da reparação).
  *
+ * O sufixo de 9 dígitos só existe quando a loja é portuguesa
+ * (ShopSettings.countryCode = "PT"): noutro país o número nacional do
+ * cliente pode ter 9 dígitos sem ser português e um remetente +351 com
+ * o mesmo sufixo herdava a ficha de um estranho. Lojas fora de Portugal
+ * casam só por número completo — fichas nacionais devem guardar-se com
+ * indicativo.
+ *
  * Partilhado pelo pipeline (findCustomerJobs) e pelo gate "só clientes"
  * do bot Evolution — as duas superfícies têm de casar da mesma forma.
  */
@@ -477,6 +484,11 @@ export async function findCustomersByPhone(
   const ptLike = (d: string) =>
     d.length === 9 || (d.startsWith(PT_CC) && d.length === 12);
   const isPtSender = ptLike(senderDigits);
+  const shop = await prisma.shopSettings.findUnique({
+    select: { countryCode: true },
+    where: { id: "default" },
+  });
+  const shopIsPt = (shop?.countryCode ?? "PT").toUpperCase() === "PT";
   const last9 = senderDigits.slice(-9);
   const last4 = senderDigits.slice(-4);
   if ((isPtSender && last9.length < 9) || last4.length < 4) {
@@ -501,9 +513,10 @@ export async function findCustomersByPhone(
       if (cd === senderDigits) {
         return true;
       }
-      // Sufixo só vale entre números PT — uma ficha estrangeira com os
-      // mesmos 9 dígitos finais não é o mesmo cliente.
-      return isPtSender && ptLike(cd) && cd.slice(-9) === last9;
+      // Sufixo só vale entre números PT numa loja portuguesa — uma
+      // ficha estrangeira com os mesmos 9 dígitos finais não é o mesmo
+      // cliente.
+      return isPtSender && shopIsPt && ptLike(cd) && cd.slice(-9) === last9;
     })
     .map(({ id, name }) => ({ id, name }));
 }

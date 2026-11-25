@@ -62,6 +62,9 @@ function makeCtx(opts: {
     job: {
       findMany: vi.fn(async () => opts.jobs ?? []),
     },
+    shopSettings: {
+      findUnique: vi.fn(async () => ({ countryCode: "PT" })),
+    },
   };
   const ctx: BotReplyCtx = {
     ai: opts.ai,
@@ -638,7 +641,7 @@ describe("composeReply — deterministic rules before AI", () => {
 
 describe("findCustomersByPhone — ficha com separadores", () => {
   // Mock que aplica o pré-filtro endsWith como o Postgres faria.
-  function phonePrisma(phones: string[]) {
+  function phonePrisma(phones: string[], countryCode = "PT") {
     const rows = phones.map((phone, i) => ({
       id: `c${i}`,
       name: `C${i}`,
@@ -654,6 +657,9 @@ describe("findCustomersByPhone — ficha com separadores", () => {
         ),
         update: vi.fn(async () => ({})),
       },
+      shopSettings: {
+        findUnique: vi.fn(async () => ({ countryCode })),
+      },
     };
   }
 
@@ -666,6 +672,20 @@ describe("findCustomersByPhone — ficha com separadores", () => {
     ]);
     const found = await findCustomersByPhone(prisma as never, "+351912345678");
     expect(found.map((c) => c.id)).toEqual(["c0", "c1", "c3"]);
+  });
+
+  it("loja fora de Portugal não casa um +351 pelo sufixo de uma ficha nacional", async () => {
+    // Loja espanhola: o cliente «912 345 678» é um nacional espanhol,
+    // não um PT — um remetente português com o mesmo sufixo não é ele.
+    const prisma = phonePrisma(["912 345 678"], "ES");
+    const found = await findCustomersByPhone(prisma as never, "+351912345678");
+    expect(found).toEqual([]);
+  });
+
+  it("loja fora de Portugal continua a casar por número completo", async () => {
+    const prisma = phonePrisma(["+351 912 345 678"], "ES");
+    const found = await findCustomersByPhone(prisma as never, "+351912345678");
+    expect(found.map((c) => c.id)).toEqual(["c0"]);
   });
 
   it("PARAR revoga o consentimento e limpa a data de opt-in", async () => {

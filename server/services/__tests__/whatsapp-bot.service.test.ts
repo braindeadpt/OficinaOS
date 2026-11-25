@@ -128,6 +128,9 @@ describe("pollWhatsAppInbound — fila Meta com transporte Evolution", () => {
         update: customerUpdate,
       },
       job: { findMany: vi.fn(async () => []) },
+      shopSettings: {
+        findUnique: vi.fn(async () => ({ countryCode: "PT" })),
+      },
     } as never;
     mocks.cloudFetch
       .mockResolvedValueOnce({
