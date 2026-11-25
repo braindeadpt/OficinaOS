@@ -340,6 +340,8 @@ async function executeCloudAction(
   ctx: BotReplyCtx,
   res: NonNullable<Awaited<ReturnType<typeof askBotAi>>>,
   msg: InboundMessage,
+  jobs: ActiveJob[],
+  quoteDecisionsAllowed: boolean,
   customers: { id: string; name: string }[],
   replyText: string
 ): Promise<string> {
@@ -351,15 +353,34 @@ async function executeCloudAction(
   if (res.action?.kind !== "quote_decision") {
     return replyText;
   }
+  const action = res.action;
+  const failureText =
+    res.actionFailureText ??
+    "Esse orçamento já foi respondido ou substituído — a loja confirma contigo.";
+  // Defesa em profundidade: a ação só é elegível se esta interação
+  // puder decidir orçamentos e for exatamente o orçamento por responder
+  // que constava do contexto enviado à Cloud. Uma Cloud comprometida/
+  // bugada não arrasta a app a decidir outro orçamento; corridas
+  // posteriores continuam fechadas pelo respondToQuote (estado SENT +
+  // UPDATE condicional).
+  const quotedInContext = jobs.find((j) => j.jobCode === action.jobCode)
+    ?.quotes[0];
+  if (
+    !quoteDecisionsAllowed ||
+    quotedInContext?.id !== action.quoteId ||
+    quotedInContext.status !== "SENT"
+  ) {
+    return failureText;
+  }
   let applied = false;
   try {
     const result = await respondToQuote(
       ctx.prisma,
       {
-        code: res.action.jobCode,
-        decision: res.action.decision,
+        code: action.jobCode,
+        decision: action.decision,
         phone4: msg.fromPhone.slice(-4),
-        quoteId: res.action.quoteId,
+        quoteId: action.quoteId,
       },
       ctx.notifyCtx ?? { prisma: ctx.prisma }
     );
@@ -376,10 +397,7 @@ async function executeCloudAction(
   }
   // Orçamento já respondido/substituído entretanto — a Cloud compôs
   // o texto para esse caso.
-  return (
-    res.actionFailureText ??
-    "Esse orçamento já foi respondido ou substituído — a loja confirma contigo."
-  );
+  return failureText;
 }
 
 /**
@@ -415,12 +433,17 @@ export async function composeReply(
   }
 
   const ai = ctx.ai;
-  const escalateFallback = (): BotReply => ({
-    customerName,
-    escalate: true,
-    jobId: jobs[0]?.id ?? null,
-    text: `Recebemos a tua mensagem, ${customerName ?? ""} — a loja responde-te já.`,
-  });
+  const escalateFallback = (): BotReply => {
+    const name = customerName?.trim();
+    return {
+      customerName,
+      escalate: true,
+      jobId: jobs[0]?.id ?? null,
+      text: name
+        ? `Recebemos a tua mensagem, ${name} — a loja responde-te já.`
+        : "Recebemos a tua mensagem — a loja responde-te já.",
+    };
+  };
 
   // Sem configuração de canal/Cloud não há bot — enforcement: as regras
   // vivem na Cloud, não há fallback local.
@@ -480,6 +503,8 @@ export async function composeReply(
     ctx,
     res,
     msg,
+    jobs,
+    opts.allowQuoteDecision !== false,
     customers,
     res.reply
   );

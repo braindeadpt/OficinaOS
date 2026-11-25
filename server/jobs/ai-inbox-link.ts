@@ -45,13 +45,13 @@ const IDEMPOTENCY_KEY_MAX_LEN = 128;
 // nova (ex.: fechar depois de reabrir) sem a executar. A exceção é
 // marcar como lida: uma reentrega da mesma chamada não pode marcar como
 // lidas mensagens que chegaram depois da execução original.
-const IDEMPOTENT_TOOLS = new Set(["enviar_rascunho", "rascunhar_resposta"]);
+const NON_IDEMPOTENT_TOOLS = new Set(["enviar_rascunho", "rascunhar_resposta"]);
 
 function shouldUseIdempotency(tool: string, args: LinkCall["args"]): boolean {
   if (tool === "marcar") {
     return args?.estado === "lida";
   }
-  return IDEMPOTENT_TOOLS.has(tool);
+  return NON_IDEMPOTENT_TOOLS.has(tool);
 }
 
 type ToolOutcome = Awaited<ReturnType<typeof runStaffInboxTool>>;

@@ -157,13 +157,16 @@ describe("PontoQrPage — qrId e regeneração (WP0.2)", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("cai para o slug quando a Cloud ainda não devolve qrId", async () => {
+  it("sem qrId não cai no slug adivinhável — a folha fica indisponível", async () => {
     cloud.qrId = undefined;
     render(
       <MemoryRouter>
         <PontoQrPage />
       </MemoryRouter>
     );
-    await screen.findByText("https://cloud.test/ponto/oficina-x");
+    await screen.findByText("ponto.qr_unavailable");
+    expect(
+      screen.queryByText("https://cloud.test/ponto/oficina-x")
+    ).not.toBeInTheDocument();
   });
 });
