@@ -289,7 +289,11 @@ jobs:
           # Derrubar o papel primeiro: os papéis são cluster-level e
           # sobrevivem ao DROP SCHEMA — sem isto a criação do papel no
           # provisioning nunca era exercitada.
+          # Sem || true: se o DROP falhar (objetos dependentes) o passo
+          # falha — senão o provisioning reutilizava o papel existente e
+          # a criação continuava por testar em silêncio.
           psql --host=localhost --username=reparilo --dbname=reparilo_test \
-            --command="DROP ROLE IF EXISTS oficinaos_ponto_purge;" || true
+            --set=ON_ERROR_STOP=1 \
+            --command="DROP ROLE IF EXISTS oficinaos_ponto_purge;"
           bun run provision:ponto-purge
           bun scripts/test-ponto-immutability.ts
