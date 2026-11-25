@@ -10,6 +10,9 @@ on:
       - scripts/update-launch.ps1
       - scripts/update-apply.test.ps1
       - installer/oficinaos.iss
+      - installer/tray/OficinaOSTray.cs
+      - installer/build-windows.ps1
+      - .github/workflows/release.yml
       - .github/workflows/updater-check.yml
   workflow_dispatch:
 
@@ -26,13 +29,68 @@ jobs:
       - name: Install Inno Setup 6
         run: choco install innosetup --no-progress -y
 
-      - name: Compile oficinaos.iss (stage minimo — so valida sintaxe/constantes)
-        # O .iss so era compilado na release — um erro de Pascal ou de
-        # constante chegava la dentro. Fontes stub para o [Files] nao falhar.
+      - name: Compile oficinaos.iss + tray and verify version metadata
+        # Usa o mesmo script da release para validar sintaxe, calculo de versao
+        # e o contrato de metadados exigido pela SignPath nos dois .exe.
         run: |
           $s = "installer\stage-ci"
           New-Item -ItemType Directory -Force "$s\app", "$s\bun", "$s\pgsql", "$s\tools", "dist" | Out-Null
           Set-Content "$s\app\stub", "$s\bun\stub", "$s\pgsql\stub", "$s\tools\stub" x
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" `
-            "/DMyAppVersion=0.0.0-ci" "/DSourceDir=stage-ci" /Q installer\oficinaos.iss
-          if ($LASTEXITCODE -ne 0) { throw "ISCC falhou: $LASTEXITCODE" }
+          Set-Content "$s\tools\setup-service.ps1" "param([switch]`$Stop, [switch]`$Uninstall); exit 0"
+          .\installer\build-windows.ps1 -Version "v1.2.3-ci" -SourceDir "stage-ci"
+
+      - name: Smoke test rewritten OficinaOS-Setup.exe (install → verify → uninstall)
+        # Prova que a normalizacao in-place de VS_VERSION_INFO nao corrompe o
+        # loader nem o payload LZMA2 do Inno Setup: instala silenciosamente,
+        # confirma os ficheiros extraidos, desinstala e confirma a remocao.
+        run: |
+          $installDir = Join-Path $env:RUNNER_TEMP "oficinaos-install-smoke"
+          try {
+            # Start-Process -Wait no Windows espera pela arvore de processos
+            # (incl. OficinaOSTray.exe lancado no pos-install). WaitForExit()
+            # espera apenas pelo instalador.
+            $p = Start-Process -FilePath (Resolve-Path "dist\OficinaOS-Setup.exe").Path `
+              -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/NOICONS", "/DIR=`"$installDir`"" `
+              -PassThru
+            if (-not $p.WaitForExit(120000)) { throw "OficinaOS-Setup.exe expirou (>120s)" }
+            if ($p.ExitCode -ne 0) { throw "OficinaOS-Setup.exe falhou na instalacao: exit $($p.ExitCode)" }
+
+            foreach ($rel in @("app\stub", "bun\stub", "pgsql\stub", "tools\OficinaOSTray.exe", "OficinaOS.ico", "unins000.exe")) {
+              $full = Join-Path $installDir $rel
+              if (-not (Test-Path $full)) { throw "Ficheiro em falta apos instalacao: $full" }
+            }
+
+            $trayInstalled = Join-Path $installDir "tools\OficinaOSTray.exe"
+            $trayDeadline = (Get-Date).AddSeconds(15)
+            $trayProc = $null
+            while (-not $trayProc -and (Get-Date) -lt $trayDeadline) {
+              $trayProc = Get-Process OficinaOSTray -ErrorAction SilentlyContinue |
+                Where-Object { $_.Path -eq $trayInstalled }
+              if (-not $trayProc) { Start-Sleep -Milliseconds 250 }
+            }
+            if (-not $trayProc) {
+              throw "OficinaOSTray.exe nao arrancou a partir de $trayInstalled antes da desinstalacao"
+            }
+
+            $u = Start-Process -FilePath (Join-Path $installDir "unins000.exe") `
+              -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" `
+              -PassThru
+            if (-not $u.WaitForExit(120000)) { throw "unins000.exe expirou (>120s)" }
+            if ($u.ExitCode -ne 0) { throw "unins000.exe falhou: exit $($u.ExitCode)" }
+
+            # O unins000.exe apaga-se via copia em %TEMP% logo apos sair — aguardar
+            # com deadline pela remocao completa da pasta instalada.
+            $deadline = (Get-Date).AddSeconds(30)
+            while ((Test-Path $installDir) -and (Get-Date) -lt $deadline) {
+              Start-Sleep -Milliseconds 500
+            }
+            if (Test-Path $installDir) {
+              $leftovers = (Get-ChildItem $installDir -Recurse | Select-Object -ExpandProperty FullName) -join ", "
+              throw "Desinstalacao incompleta em ${installDir}: $leftovers"
+            }
+            if (Get-Process OficinaOSTray -ErrorAction SilentlyContinue) {
+              throw "OficinaOSTray.exe continuou em execucao apos desinstalacao"
+            }
+          } finally {
+            Get-Process OficinaOSTray -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          }
