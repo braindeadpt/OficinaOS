@@ -714,7 +714,10 @@ type ShopSettingsRow = NonNullable<
   Awaited<ReturnType<typeof findShopSettingsUnique>>
 >;
 
-function getSmsConfig(row: ShopSettingsRow | null): SmsChannels | null {
+// Exportada para o scheduler do livro de ponto (lembretes de saída/
+// pausa): resolve os mesmos canais SMS do outbox (Cloud primeiro,
+// gateway LAN como fallback) sem duplicar a lógica de entitlement.
+export function getSmsConfig(row: ShopSettingsRow | null): SmsChannels | null {
   // Decisão 2026-11-23: todo o SMS é Pro — ambos os transportes
   // (Cloud/pool e gateway LAN como fallback) exigem o módulo "sms" com
   // cache fresco. Sem ele resolvem null e os entries são cancelados.

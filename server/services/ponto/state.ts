@@ -1,0 +1,172 @@
+// Estado pendente do fluxo ponto — em memória, por instância.
+// Chave: `${transport}:${phoneDigits}` — um pedido de localização (3 min)
+// ou de foto (5 min) pendente; o passo seguinte (localização ou foto)
+// completa o registo. Tal como o rate limiter, reiniciar o processo
+// perde pendentes — efeito aceite: o funcionário reenvia o comando.
+//
+// TTLs do plano: localização 3 min, foto 5 min. Um comando novo
+// substitui o pendente anterior; uma foto tardia depois do timeout é
+// finalizada com hasPhoto=false (o registo não se perde — §2.1).
+
+import type { PontoCommand } from "./commands.js";
+
+export const PONTO_LOCATION_TTL_MS = 3 * 60 * 1000;
+export const PONTO_PHOTO_TTL_MS = 5 * 60 * 1000;
+/** Janela para responder ao lembrete de saída ("SIM" ou a hora) —
+ *  ~2 h conforme a spec do item 5; passado isso a presumida fica
+ *  POR_VALIDAR para o painel. */
+export const PONTO_EXIT_PENDING_TTL_MS = 2 * 60 * 60 * 1000;
+
+export interface PontoPendingLocation {
+  accuracy?: number;
+  lat: number;
+  lng: number;
+}
+
+export interface PendingPonto {
+  /** Código de 4 dígitos do QR — só ENTRADA o usa. */
+  code?: string;
+  command: Exclude<PontoCommand, "ESTADO">;
+  /** ISO do instante de envio da mensagem de COMANDO — sentAt da Meta
+   *  quando a fila oficial o traz, senão msg.createdAt (na Evolution o
+   *  createdAt já é o timestamp da mensagem). A Cloud valida o código
+   *  contra este instante (skew ≤2 min) e a frescura do registo
+   *  (≤5 min de atraso). */
+  commandAt: string;
+  expiresAt: number;
+  externalWork: boolean;
+  location?: PontoPendingLocation;
+  /** ISO do msg.createdAt da mensagem de localização — base do `at`
+   *  (hora do servidor ≈ momento da prova de presença). */
+  locationAt?: string;
+  /** ISO do último PAUSA do dia — base do "(pausa de N min)" na
+   *  confirmação de VOLTEI/Regresso. */
+  pauseSinceAt?: string;
+  stage: "location" | "photo";
+  /** Entrada já existia hoje no comando (gate PAUSA/VOLTEI/SAIDA). */
+  todayHasEntry: boolean;
+  userId: string;
+  userName: string;
+  /** ExternalWork exige foto de prova (plano §2.1). */
+  wantPhoto: boolean;
+}
+
+/** Resposta pendente ao lembrete de saída — chave: userId (o trabalhador
+ *  pode responder por qualquer canal; o pedido saiu pelo canal do
+ *  lembrete mas a resposta chega onde chegar). */
+export interface PendingPontoExit {
+  /** Candidatos de data quando a hora declarada é ambígua — resposta
+   *  depois da meia-noite em que o dia do lembrete e o dia da resposta
+   *  são ambos plausíveis. O handler pergunta ONTEM/HOJE antes de
+   *  gravar; `ymdReminder` é sempre o dia anterior a `ymdReply`.
+   *  `questionMessageIds` liga a clarificação às perguntas que a
+   *  serviram (a ONTEM/HOJE e as suas repetições): uma resposta que
+   *  cite a pergunta duma clarificação já substituída reenvia a
+   *  pergunta atual em vez de gravar a hora que lá não estava. */
+  clarifyDate?: {
+    hhmm: string;
+    questionMessageIds?: string[];
+    ymdReminder: string;
+    ymdReply: string;
+  };
+  expiresAt: number;
+  /** ISO do `at` da SAIDA presumida — a "hora assumida" que o SIM
+   *  confirma e a base do dia civil para a hora indicada. */
+  presumedAt: string;
+  presumedEntryId: string;
+  /** Ids das mensagens-pergunta desta pendência tal como o canal os
+   *  devolveu no envio (key.id da Evolution, wamid da Meta): o lembrete
+   *  inicial e cada repetição/pergunta de clarificação — a citação de
+   *  uma resposta WhatsApp (reply-quote) conta quando aponta para
+   *  QUALQUER destas mensagens; citar um lembrete mais antigo não
+   *  confirma a presumida do turno novo. Ausente quando o canal não
+   *  devolve ids (SMS, relay cloud sem wamid). */
+  sentMessageIds?: string[];
+  /** ISO da última abertura do turno (ENTRADA/VOLTEI efetiva) no
+   *  instante do lembrete — limite inferior da hora de saída
+   *  declarada: uma resposta depois da meia-noite ("00:15") resolve o
+   *  dia contra este limite (handler.ts). */
+  shiftOpenAt?: string;
+  userId: string;
+}
+
+const pending = new Map<string, PendingPonto>();
+const exitPending = new Map<string, PendingPontoExit>();
+
+export function pontoPendingKey(
+  transport: string,
+  phoneDigits: string
+): string {
+  return `${transport}:${phoneDigits}`;
+}
+
+export function setPendingPonto(key: string, value: PendingPonto): void {
+  pending.set(key, value);
+}
+
+export function clearPendingPonto(key: string): void {
+  pending.delete(key);
+}
+
+/** Pendência viva, ou null (e remove) se expirada. */
+export function getPendingPonto(
+  key: string,
+  now = Date.now()
+): PendingPonto | null {
+  const p = pending.get(key);
+  if (!p) {
+    return null;
+  }
+  if (p.expiresAt <= now) {
+    pending.delete(key);
+    return null;
+  }
+  return p;
+}
+
+/** Pendência expirada (para o handler decidir o que fazer — ex.:
+ *  finalizar foto com hasPhoto=false), ou null se viva/inexistente. */
+export function takeExpiredPonto(
+  key: string,
+  now = Date.now()
+): PendingPonto | null {
+  const p = pending.get(key);
+  if (p && p.expiresAt <= now) {
+    pending.delete(key);
+    return p;
+  }
+  return null;
+}
+
+/** Apenas para testes — esvazia os mapas entre casos. */
+export function clearAllPendingPonto(): void {
+  pending.clear();
+  exitPending.clear();
+}
+
+export function setPendingPontoExit(
+  userId: string,
+  value: PendingPontoExit
+): void {
+  exitPending.set(userId, value);
+}
+
+/** Pending de saída vivo, ou null (e remove) se expirado. */
+export function getPendingPontoExit(
+  userId: string,
+  now = Date.now()
+): PendingPontoExit | null {
+  const p = exitPending.get(userId);
+  if (!p) {
+    return null;
+  }
+  if (p.expiresAt <= now) {
+    exitPending.delete(userId);
+    return null;
+  }
+  return p;
+}
+
+export function clearPendingPontoExit(userId: string): void {
+  exitPending.delete(userId);
+}

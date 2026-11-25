@@ -7,10 +7,20 @@ import {
   updateSmsSettingsSchema,
   updateWhatsAppSettingsSchema,
 } from "@shared/schemas/settings.schema";
+import {
+  ipv4Octets,
+  isPublicIpv4Octets,
+  isPublicIpv6,
+} from "@shared/utils/ip-address.js";
 import type { FastifyPluginAsync } from "fastify";
+import { loadEnv } from "../config/env.js";
 import { decryptSecret } from "../lib/crypto.js";
 import { assertNotDemoMode } from "../lib/demo.js";
-import { primaryLanIpv4 } from "../lib/mdns.js";
+import {
+  hasIsolatedNetNs,
+  isDialableUrl,
+  primaryLanIpv4,
+} from "../lib/mdns.js";
 import { requirePermission } from "../middlewares/rbac.js";
 import {
   findShopSettingsUnique,
@@ -32,6 +42,7 @@ import {
 } from "../services/escpos.service.js";
 import {
   disconnectEvolutionInstance,
+  EVOLUTION_WEBHOOK_TOKEN_HEADER,
   type EvolutionConfig,
   getEvolutionState,
   pairEvolutionInstance,
@@ -414,19 +425,38 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
           ),
         });
       }
+      // O formulário de ponto envia sempre a hora já gravada — o sync
+      // de templates só se justifica quando `pontoExitReminderTime`
+      // MUDA (definir pela 1.ª vez ou editar): gravar o intervalo de
+      // pausa com a mesma hora não deve re-submeter os modelos todos.
+      const reminderTimeChanged =
+        parsed.data.pontoExitReminderTime !== undefined &&
+        (await getOrCreateShopSettings(app.prisma)).pontoExitReminderTime !==
+          parsed.data.pontoExitReminderTime;
       const updated = await upsertShopSettings(app.prisma, parsed.data);
       // The widget CSP caches embedAllowedOrigins for 60s — drop it so a
       // save takes effect on the next request instead of up to a minute late.
       app.resetEmbedOriginsCache();
       // reviewUrl muda os blocos {{if}} dos templates WhatsApp — sem
       // re-sync, o modelo aprovado na Meta diverge dos parâmetros
-      // enviados e as notificações falham. Só em modo Pro/cloud: sem o
-      // módulo "whatsapp-bot" o resolve devolve null e nada corre.
+      // enviados e as notificações falham. pontoExitReminderTime a
+      // definir também exige o modelo `ponto_lembrete` submetido — o
+      // sync cria-o se faltar. Só em modo Pro/cloud: sem o módulo
+      // "whatsapp-bot" o resolve devolve null e nada corre (no modo
+      // local a loja cria o modelo à mão — visível como MISSING na
+      // lista de templates).
+      const needsTemplateSync = Object.entries(parsed.data).some(
+        ([key, value]) =>
+          META_TEMPLATE_KEYS.has(key) ||
+          (key === "pontoExitReminderTime" &&
+            Boolean(value) &&
+            reminderTimeChanged)
+      );
       if (
-        Object.keys(parsed.data).some((k) => META_TEMPLATE_KEYS.has(k)) &&
+        needsTemplateSync &&
         resolveWhatsAppChannel(updated)?.mode === "cloud"
       ) {
-        syncWhatsAppTemplates(app.prisma).catch((err) =>
+        syncWhatsAppTemplates(app.prisma, app.log).catch((err) =>
           req.log.warn({ err }, "whatsapp template resync failed")
         );
       }
@@ -791,43 +821,167 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
   );
 };
 
-const LOCALHOST_RE = /^(localhost|127\.|::1|\[::1\])/i;
+// Loopback EXATO — nunca por prefixo: «localhost.evil.com» ou
+// «127.evil.com» são nomes DNS públicos legítimos e um teste de
+// prefixo tratava-os como internos, entregando o token do webhook
+// em HTTP claro no caminho de rede. O 127/8 não precisa de alternativa
+// aqui — o ramo de octetos IPv4 já o classifica como não-público.
+const LOOPBACK_HOSTS = new Set(["localhost", "::1", "[::1]"]);
 const PORT_SUFFIX_RE = /:(\d+)$/;
+const TRAILING_DOT_RE = /\.$/;
+// Endereços internos do Docker Desktop — HTTP na mesma é seguro (a
+// interface só existe dentro do host).
+const DOCKER_INTERNAL_HOSTS = new Set([
+  "gateway.docker.internal",
+  "host.docker.internal",
+]);
+
+/** host[:port] de pedido é loopback exato (com porta opcional) —
+ *  localhost, 127/8 ou ::1. */
+function isLoopbackHostPort(hostPort: string): boolean {
+  try {
+    const h = new URL(`http://${hostPort}`).hostname
+      .toLowerCase()
+      .replace(TRAILING_DOT_RE, "");
+    if (LOOPBACK_HOSTS.has(h)) {
+      return true;
+    }
+    const octets = ipv4Octets(h);
+    return octets !== null && octets[0] === 127;
+  } catch {
+    return false;
+  }
+}
 
 /**
- * §5.7 — regista o webhook MESSAGES_UPSERT na instância Evolution. Só
- * com o termo do bot aceite E o entitlement "whatsapp-bot" ativo (a
- * rota inbound nem existe sem ele — um termo aceite em tempos não pode
- * continuar a registar após o módulo expirar); o callback usa
- * `evolutionWebhookToken` — segredo próprio, separado do SMS — e o
- * Host do pedido.
+ * True quando o host do callback é LAN/interno — HTTP é aceitável
+ * (a exceção trusted-LAN de security.ts). Qualquer host público
+ * (domínio ou IP roteável) exige HTTPS: o token do webhook viaja num
+ * header e em HTTP remoto seria sniffável em trânsito.
  */
-async function tryRegisterEvolutionWebhook(
+function isPrivateCallbackHost(host: string): boolean {
+  // Ponto final DNS ("192.168.1.10.") é a mesma máquina — tira-o antes
+  // das comparações para não cair no ramo "hostname com ponto" → https.
+  const h = host.toLowerCase().replace(TRAILING_DOT_RE, "");
+  if (
+    LOOPBACK_HOSTS.has(h) ||
+    h.endsWith(".localhost") ||
+    h.endsWith(".local") ||
+    h === "0.0.0.0" ||
+    h === "::" ||
+    h === "[::]" ||
+    DOCKER_INTERNAL_HOSTS.has(h)
+  ) {
+    return true;
+  }
+  const octets = ipv4Octets(h);
+  if (octets) {
+    return !isPublicIpv4Octets(octets);
+  }
+  if (h.startsWith("[")) {
+    return !isPublicIpv6(h);
+  }
+  // Hostname sem ponto ("app", "oficinaos", NetBIOS/mDNS) — nome interno.
+  return !h.includes(".");
+}
+
+/** scheme://host[:port] a partir de um host[:port] de pedido. O host
+ *  decide o scheme: privado/LAN fica em http (a exceção trusted-LAN de
+ *  security.ts), público sobe a https — o token do webhook viaja num
+ *  header e em HTTP remoto seria sniffável em trânsito. `url.host`
+ *  normaliza (sem userinfo, porta default do http fora) — a porta
+ *  explícita não-80 mantém-se. */
+function callbackBaseForHost(hostPort: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(`http://${hostPort}`);
+  } catch {
+    return null;
+  }
+  if (!url.hostname) {
+    return null;
+  }
+  const scheme = isPrivateCallbackHost(url.hostname) ? "http" : "https";
+  return `${scheme}://${url.host}`;
+}
+
+/**
+ * Base (scheme://host[:port]) que a Evolution consegue alcançar para o
+ * callback do webhook. O Host do pedido é a primeira escolha — o staff
+ * chegou à app por ele. Em localhost num contentor com netns isolado
+ * (Docker padrão) esse nome não serve e a máquina nem expõe IPv4 LAN:
+ * caem-se para a APP_URL configurada (obrigatória em produção, valida-
+ * da não-localhost) e, em último recurso, para o nome do serviço na
+ * rede docker (`app:PORT` — o perfil wa-local põe app e Evolution na
+ * mesma network do compose).
+ */
+function resolveEvolutionCallbackBase(requestHost: string): string | null {
+  const host = requestHost.trim();
+  if (!host) {
+    return null;
+  }
+  if (!isLoopbackHostPort(host)) {
+    return callbackBaseForHost(host);
+  }
+  const ip = primaryLanIpv4();
+  if (ip) {
+    const port = PORT_SUFFIX_RE.exec(host)?.[1];
+    return callbackBaseForHost(`${ip}${port ? `:${port}` : ""}`);
+  }
+  // APP_URL configurada — em produção é obrigatória e validada
+  // não-localhost; isDialableUrl rejeita loopback/wildcard (a Evolution
+  // também não os alcança — seria o mesmo beco sem saída do pedido).
+  const appUrl = loadEnv().APP_URL;
+  if (appUrl && isDialableUrl(appUrl)) {
+    try {
+      const url = new URL(appUrl);
+      // APP_URL explícita em HTTPS nunca desce para HTTP — o token do
+      // webhook viaja num header e a loja declarou que exige TLS.
+      if (url.protocol === "https:") {
+        return `https://${url.host}`;
+      }
+      if (url.protocol === "http:") {
+        return callbackBaseForHost(url.host);
+      }
+    } catch {
+      // APP_URL malformada — segue para o fallback docker.
+    }
+  }
+  if (hasIsolatedNetNs()) {
+    return callbackBaseForHost(`app:${loadEnv().PORT}`);
+  }
+  return null;
+}
+
+/**
+ * §5.7 — regista o webhook MESSAGES_UPSERT na instância Evolution.
+ * Regista quando há consumidor: ai-inbox, bot de clientes (termo
+ * aceite + entitlement "whatsapp-bot" — a rota inbound nem existe sem
+ * ele, um termo aceite em tempos não pode continuar a registar após o
+ * módulo expirar) ou livro de ponto (módulo "ponto" + o mesmo
+ * entitlement de transporte, sem exigir o termo do bot). O callback
+ * usa `evolutionWebhookToken` num header próprio — o path não leva
+ * segredo (ver public.ts) — e o host resolvido por
+ * resolveEvolutionCallbackBase.
+ */
+export async function tryRegisterEvolutionWebhook(
   prisma: Parameters<typeof getSmsSettings>[0],
   requestHost: string
 ): Promise<boolean> {
-  let host = requestHost;
-  // Setup de um só PC: o staff abre localhost e a Evolution (mesmo PC
-  // ou outra máquina da LAN) nunca alcança esse nome — o IPv4 real da
-  // máquina sim. Sem IPv4 LAN (ex.: namespace isolado) fica por registar.
-  if (host && LOCALHOST_RE.test(host)) {
-    const ip = primaryLanIpv4();
-    if (!ip) {
-      return false;
-    }
-    const port = PORT_SUFFIX_RE.exec(host)?.[1];
-    host = `${ip}${port ? `:${port}` : ""}`;
-  }
-  if (!host) {
+  const base = resolveEvolutionCallbackBase(requestHost);
+  if (!base) {
     return false;
   }
   let row = await getOrCreateShopSettings(prisma);
-  // ai-inbox-only também precisa do webhook — a caixa de entrada recebe
-  // mensagens Evolution sem o bot (o handler grava e só processa PARAR).
+  // Consumidores do webhook Evolution: ai-inbox (caixa de entrada sem
+  // bot), o bot de clientes (precisa do termo aceite) e o livro de
+  // ponto — este corre com o bot suspenso/fechado e não exige o termo,
+  // só o entitlement de transporte "whatsapp-bot" + o módulo "ponto"
+  // (processParsed corre o handler antes do gate de clientes).
   const evolutionConsumer =
     isModuleEnabled(row, "ai-inbox") ||
     (isModuleEnabled(row, "whatsapp-bot") &&
-      Boolean(row.whatsappBotDisclaimerAt));
+      (Boolean(row.whatsappBotDisclaimerAt) || isModuleEnabled(row, "ponto")));
   // Instalações que aceitaram o termo antes do token próprio existir:
   // gera-o aqui — o token SMS não é reutilizado (§5.7, ver rota pública).
   if (
@@ -856,14 +1010,19 @@ async function tryRegisterEvolutionWebhook(
   if (!apiKey) {
     return false;
   }
-  const callbackUrl = `http://${host}/api/public/whatsapp/evolution/inbound/${row.evolutionWebhookToken}`;
+  const callbackUrl = `${base}/api/public/whatsapp/evolution/inbound`;
   const result = await setEvolutionWebhook(
     {
       apiKey,
       baseUrl: row.evolutionUrl,
       instance: row.evolutionInstance ?? "oficinaos",
     },
-    callbackUrl
+    {
+      headers: {
+        [EVOLUTION_WEBHOOK_TOKEN_HEADER]: row.evolutionWebhookToken,
+      },
+      url: callbackUrl,
+    }
   );
   return result.success;
 }

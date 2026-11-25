@@ -10,7 +10,6 @@ import {
   handleInboundMessage,
   type InboundMessage,
   isStopText,
-  rateOk,
   revokeConsentForPhone,
 } from "./bot-intents.js";
 import {
@@ -24,6 +23,8 @@ import {
   recordInboundMessage,
 } from "./inbox.service.js";
 import type { NotifyContext } from "./job.service.js";
+import { tryHandlePontoStaff } from "./ponto/handler.js";
+import { rateOk } from "./rate-limit.js";
 
 /**
  * §5.7 — bot WhatsApp sobre Evolution API (transporte não-oficial).
@@ -58,10 +59,36 @@ let dayCount = 0;
 let dayCapNotified = false;
 
 interface EvolutionUpsertData {
-  key?: { fromMe?: boolean; id?: string; remoteJid?: string };
+  key?: {
+    fromMe?: boolean;
+    id?: string;
+    remoteJid?: string;
+    remoteJidAlt?: string;
+  };
   message?: {
+    buttonsResponseMessage?: {
+      selectedButtonId?: string;
+      selectedDisplayText?: string;
+    };
     conversation?: string;
-    extendedTextMessage?: { text?: string };
+    extendedTextMessage?: {
+      // reply-quote: stanzaId é o key.id da mensagem citada — o livro
+      // de ponto correlaciona a resposta com o lembrete enviado.
+      contextInfo?: { stanzaId?: string };
+      text?: string;
+    };
+    imageMessage?: { mimetype?: string; url?: string };
+    listResponseMessage?: {
+      singleSelectReply?: {
+        selectedRowId?: string;
+        selectedRowTitle?: string;
+      };
+    };
+    locationMessage?: {
+      degreesLatitude?: number;
+      degreesLongitude?: number;
+      name?: string;
+    };
   };
   messageTimestamp?: number;
   messageType?: string;
@@ -78,7 +105,62 @@ interface ParsedInbound {
   data: EvolutionUpsertData;
   fromPhone: string;
   id: string;
+  /** Foto recebida (imageMessage) — o livro de ponto baixa via
+   *  getBase64FromMediaMessage; o pipeline de clientes nunca a usa. */
+  imageRef?: InboundMessage["imageRef"];
+  /** Id do botão/lista respondido (buttonsResponse/listResponse). */
+  interactiveId?: string | null;
+  /** Localização partilhada (locationMessage) — livro de ponto. */
+  location?: InboundMessage["location"];
+  /** stanzaId da mensagem citada (reply-quote) — livro de ponto. */
+  quotedMessageId?: string;
   text: string | null;
+}
+
+/** Campos normalizados de uma mensagem Evolution (texto, localização,
+ *  imagem, botão interativo, citação). */
+function messageFields(data: EvolutionUpsertData): {
+  imageRef?: InboundMessage["imageRef"];
+  interactiveId?: string | null;
+  location?: InboundMessage["location"];
+  quotedMessageId?: string;
+  text: string | null;
+} {
+  const msg = data.message;
+  const text =
+    msg?.conversation ??
+    msg?.extendedTextMessage?.text ??
+    msg?.buttonsResponseMessage?.selectedDisplayText ??
+    msg?.listResponseMessage?.singleSelectReply?.selectedRowTitle ??
+    null;
+  const loc = msg?.locationMessage;
+  const location =
+    typeof loc?.degreesLatitude === "number" &&
+    typeof loc?.degreesLongitude === "number"
+      ? { lat: loc.degreesLatitude, lng: loc.degreesLongitude }
+      : undefined;
+  const imageMessage = msg?.imageMessage;
+  const imageRef = imageMessage
+    ? {
+        mimetype: imageMessage.mimetype ?? null,
+        // getBase64FromMediaMessage quer a mensagem completa
+        // (key+message+timestamp) — é o `data` do upsert.
+        raw: data,
+        url: typeof imageMessage.url === "string" ? imageMessage.url : null,
+      }
+    : undefined;
+  const interactiveId =
+    msg?.buttonsResponseMessage?.selectedButtonId ??
+    msg?.listResponseMessage?.singleSelectReply?.selectedRowId ??
+    null;
+  const quotedMessageId = msg?.extendedTextMessage?.contextInfo?.stanzaId;
+  return {
+    ...(imageRef ? { imageRef } : {}),
+    ...(interactiveId ? { interactiveId } : {}),
+    ...(location ? { location } : {}),
+    ...(quotedMessageId ? { quotedMessageId } : {}),
+    text,
+  };
 }
 
 /** Envelope Evolution → mensagens normalizadas já filtradas (anti-ban). */
@@ -96,7 +178,14 @@ function parseUpserts(envelope: EvolutionEnvelope): ParsedInbound[] {
   }
   const out: ParsedInbound[] = [];
   for (const data of items) {
-    const jid = data.key?.remoteJid ?? "";
+    const rawJid = data.key?.remoteJid ?? "";
+    // WhatsApp LID: em DMs endereçadas por LID o remoteJid vem
+    // «<lid>@lid» e os seus dígitos NÃO são o telefone — a Evolution
+    // expõe o número real em remoteJidAlt. Sem esta troca o trabalhador
+    // nunca correspondia ao staff nem recebia resposta no número certo.
+    const jid = rawJid.endsWith("@lid")
+      ? (data.key?.remoteJidAlt ?? rawJid)
+      : rawJid;
     // Anti-ban: ignora o que sai do próprio número, grupos, broadcast e
     // newsletters — responder a esses é o padrão clássico de bot banido.
     if (data.key?.fromMe || !jid || GROUP_SUFFIX_RE.test(jid)) {
@@ -110,11 +199,12 @@ function parseUpserts(envelope: EvolutionEnvelope): ParsedInbound[] {
       seenMessageIds.clear();
     }
     seenMessageIds.add(id);
-    const text =
-      data.message?.conversation ??
-      data.message?.extendedTextMessage?.text ??
-      null;
-    out.push({ data, fromPhone: jid.replace(NON_DIGIT_RE, ""), id, text });
+    out.push({
+      data,
+      fromPhone: jid.replace(NON_DIGIT_RE, ""),
+      id,
+      ...messageFields(data),
+    });
   }
   return out;
 }
@@ -333,6 +423,10 @@ export async function handleEvolutionInbound(
   if (botOpen && !config) {
     return;
   }
+  // O livro de ponto é módulo próprio: corre mesmo com o bot de
+  // clientes suspenso/fechado — precisa só das credenciais Evolution
+  // (para responder) e do entitlement de transporte "whatsapp-bot".
+  const evoConfig = evolutionConfigOf(settings);
   const ctx = botOpen
     ? buildCtx(prisma, settings, log, notifyCtx, entitlementsOf(settings))
     : null;
@@ -346,9 +440,104 @@ export async function handleEvolutionInbound(
       parsed,
       inboxEnabled,
       botOpen,
-      cap
+      cap,
+      settings,
+      evoConfig
     );
   }
+}
+
+/** Envio do livro de ponto — mesmas proteções anti-ban do bot
+ *  (presença "a escrever…" + atraso humano) mas SEM o suspendBot: uma
+ *  sessão caída não pode calar o registo de ponto, e o teto diário do
+ *  bot de clientes não se aplica a comandos de staff (o rateOk "ponto"
+ *  limita o volume). Devolve o resultado completo (messageId incluído):
+ *  o caller adapta-o a `send`/`sendWithId` do transporte. */
+function makePontoSend(
+  prisma: PrismaClient,
+  log: FastifyBaseLogger,
+  config: EvolutionConfig,
+  phone: string
+): (text: string) => Promise<{
+  error?: string;
+  messageId?: string;
+  success: boolean;
+}> {
+  return async (text) => {
+    const delay = REPLY_DELAY_MIN_MS + Math.random() * REPLY_DELAY_SPREAD_MS;
+    await sendEvolutionPresence(config, phone, delay).catch(() => null);
+    await new Promise((r) => setTimeout(r, delay));
+    // Leitura fresca por envio — revogação do whatsapp-bot trava aqui.
+    const settings = await getOrCreateShopSettings(prisma);
+    const res = await sendEvolutionText(config, phone, text, settings);
+    if (!res.success) {
+      log.warn({ err: res.error, to: phone }, "evolution ponto reply failed");
+    }
+    return res;
+  };
+}
+
+/** messageType do pipeline partilhado: a Evolution etiqueta texto como
+ *  "conversation"/"extendedTextMessage" — o pipeline só reconhece
+ *  "text"; o resto escala ao staff. Localização/imagem/botões alimentam
+ *  o livro de ponto. */
+function inboundMessageType(parsed: ParsedInbound): string {
+  if (parsed.location) {
+    return "location";
+  }
+  if (parsed.imageRef) {
+    return "image";
+  }
+  return parsed.text === null ? "other" : "text";
+}
+
+/** Livro de ponto na Evolution — ANTES da inbox e do gate de clientes:
+ *  telefone de funcionário com pontoEnabled nunca é conversa de cliente
+ *  (§4). Corre com o bot suspenso/fechado; precisa das credenciais
+ *  Evolution para responder e do entitlement de transporte
+ *  "whatsapp-bot". Devolve true quando a mensagem ficou no ponto. */
+function tryPontoForEvolution(
+  prisma: PrismaClient,
+  log: FastifyBaseLogger,
+  ctx: BotReplyCtx | null,
+  parsed: ParsedInbound,
+  msg: InboundMessage,
+  inboxEnabled: boolean,
+  settings: Settings,
+  evoConfig: EvolutionConfig
+): Promise<boolean> {
+  const pontoCtx: BotReplyCtx =
+    ctx ??
+    ({
+      currency: settings.currency ?? "EUR",
+      inbox: inboxEnabled
+        ? { channel: INBOX_CHANNEL_EVOLUTION, enabled: true }
+        : undefined,
+      log,
+      notifyCtx: undefined,
+      prisma,
+      shopLabel:
+        [settings.shopName, settings.phone].filter(Boolean).join(" · ") ||
+        "a loja",
+      timezone: settings.timezone ?? undefined,
+    } satisfies BotReplyCtx);
+  // O envio devolve o key.id — `sendWithId` expõe-o às perguntas de
+  // seguimento do lembrete de saída (citação do trabalhador).
+  const pontoSend = makePontoSend(prisma, log, evoConfig, parsed.fromPhone);
+  return tryHandlePontoStaff(
+    pontoCtx,
+    msg,
+    {
+      channelLabel: "WhatsApp",
+      ponto: { transport: "whatsapp_evolution" },
+      send: async (text) => (await pontoSend(text)).success,
+      sendWithId: pontoSend,
+    },
+    { evolution: evoConfig, shopSettings: settings }
+  ).catch((err) => {
+    log.warn({ err }, "evolution ponto handler falhou");
+    return false;
+  });
 }
 
 /** Inbox-record + gate do bot por mensagem (§G.7). */
@@ -360,7 +549,9 @@ async function processParsed(
   parsed: ParsedInbound,
   inboxEnabled: boolean,
   botOpen: boolean,
-  cap: number
+  cap: number,
+  settings: Settings,
+  evoConfig: EvolutionConfig | null
 ): Promise<void> {
   const msg: InboundMessage = {
     createdAt: parsed.data.messageTimestamp
@@ -368,11 +559,40 @@ async function processParsed(
       : new Date().toISOString(),
     fromPhone: parsed.fromPhone,
     id: `evo-${parsed.id}`,
-    // A Evolution etiqueta texto como "conversation"/"extendedTextMessage"
-    // — o pipeline partilhado só reconhece "text"; o resto escala ao staff.
-    messageType: parsed.text === null ? "other" : "text",
+    messageType: inboundMessageType(parsed),
     text: parsed.text,
+    ...(parsed.location ? { location: parsed.location } : {}),
+    ...(parsed.imageRef ? { imageRef: parsed.imageRef } : {}),
+    ...(parsed.interactiveId ? { interactiveId: parsed.interactiveId } : {}),
+    ...(parsed.quotedMessageId
+      ? { quotedMessageId: parsed.quotedMessageId }
+      : {}),
   };
+
+  if (evoConfig && isModuleEnabled(settings, "whatsapp-bot")) {
+    const handled = await tryPontoForEvolution(
+      prisma,
+      log,
+      ctx,
+      parsed,
+      msg,
+      inboxEnabled,
+      settings,
+      evoConfig
+    );
+    if (handled) {
+      // Dual-role (funcionário que também é cliente): o ponto engole
+      // PARAR/STOP — a revogação de consentimento é legal e corre na
+      // mesma (§E.9/G.7), senão os avisos continuavam autorizados.
+      if (parsed.text && isStopText(parsed.text)) {
+        await revokeConsentForPhone(prisma, parsed.fromPhone).catch(
+          () => undefined
+        );
+      }
+      return;
+    }
+  }
+
   if (inboxEnabled) {
     await recordInboundMessage(prisma, log, {
       at: new Date(msg.createdAt),

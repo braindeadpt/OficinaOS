@@ -159,6 +159,28 @@ describe("sendWhatsAppText", () => {
     );
   });
 
+  it("propagates the wamid returned by the cloud relay", async () => {
+    // Correlação reply-quote: o relay devolve o wamid da Meta — o
+    // lembrete de saída precisa que ele chegue no SendResult.
+    mocks.cloudFetch.mockResolvedValue({
+      body: { messageId: "wamid.HBgMNTUx", ok: true },
+      ok: true,
+      status: 200,
+    });
+    const res = await sendWhatsAppText(
+      prisma,
+      channel,
+      "+351912345678",
+      "olá",
+      "PT",
+      { ...entitled, whatsappApiTokenEncrypted: null }
+    );
+    expect(res).toMatchObject({
+      messageId: "wamid.HBgMNTUx",
+      success: true,
+    });
+  });
+
   it("clears the local token after the first successful cloud send", async () => {
     mocks.cloudFetch.mockResolvedValue({
       body: { ok: true },
