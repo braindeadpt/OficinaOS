@@ -173,9 +173,17 @@ async function clearMigratedLocalToken(
     return;
   }
   try {
-    await prisma.shopSettings.update({
+    // O envio Cloud demora e a loja pode gravar um token de substituição
+    // entretanto. Só se apaga o token se ainda for exactamente o snapshot
+    // usado por este envio e se a migração continuar válida; caso contrário
+    // a limpeza da migração antiga destruiria o token novo.
+    await prisma.shopSettings.updateMany({
       data: { whatsappApiTokenEncrypted: null },
-      where: { id: "default" },
+      where: {
+        id: "default",
+        whatsappApiTokenEncrypted: settings.whatsappApiTokenEncrypted,
+        whatsappCredentialsAtCloud: true,
+      },
     });
   } catch {
     // best-effort: a limpeza repete-se no próximo envio bem-sucedido

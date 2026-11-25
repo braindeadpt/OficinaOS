@@ -280,9 +280,9 @@ function MetaWhatsAppFields({
 }) {
   const { t } = useTranslation();
   const cloudConsentStored = Boolean(settings?.cloudConsentAccepted);
-  const showCloudConsent = !(
-    cloudConsentStored || settings?.credentialsAtCloud
-  );
+  const showCloudConsent =
+    !cloudConsentStored &&
+    (!settings?.credentialsAtCloud || form.apiToken !== "");
   const legacyTokenMigration = Boolean(
     settings?.hasApiToken &&
       !settings?.credentialsAtCloud &&
@@ -953,6 +953,10 @@ export default function ChannelSettings({
             }
           : {}),
       });
+      // Segredos não voltam no GET. Limpar o input depois de gravar evita
+      // reenviar o mesmo token em saves seguintes (o que repõe a flag Cloud
+      // e desencadeia uploads duplicados).
+      setWhatsAppForm((f) => ({ ...f, apiToken: "", cloudConsent: false }));
       // O trackingBaseUrl muda os blocos {{if}} dos corpos a submeter —
       // sem refetch a lista continuava a mostrar os specs antigos como
       // "prontos" enquanto o backend re-sincronizava em background. Um

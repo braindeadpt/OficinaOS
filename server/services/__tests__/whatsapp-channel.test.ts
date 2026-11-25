@@ -32,7 +32,10 @@ vi.mock("../../repositories/settings.repository.js", () => ({
 }));
 
 const updateSettings = vi.fn();
-const prisma = { shopSettings: { update: updateSettings } } as never;
+const updateManySettings = vi.fn();
+const prisma = {
+  shopSettings: { update: updateSettings, updateMany: updateManySettings },
+} as never;
 
 import {
   maskPhone,
@@ -192,10 +195,48 @@ describe("sendWhatsAppText", () => {
       ...entitled,
       whatsappApiTokenEncrypted: "enc:meta",
     });
-    expect(updateSettings).toHaveBeenCalledWith({
+    expect(updateManySettings).toHaveBeenCalledWith({
       data: { whatsappApiTokenEncrypted: null },
-      where: { id: "default" },
+      where: {
+        id: "default",
+        whatsappApiTokenEncrypted: "enc:meta",
+        whatsappCredentialsAtCloud: true,
+      },
     });
+  });
+
+  it("does not delete a replacement token when an older cloud send finishes", async () => {
+    let storedToken: string | null = "enc:replacement";
+    const credentialsAtCloud = false;
+    updateManySettings.mockImplementation(
+      ({
+        data,
+        where,
+      }: {
+        data: Record<string, unknown>;
+        where: Record<string, unknown>;
+      }) => {
+        const matches =
+          storedToken === where.whatsappApiTokenEncrypted &&
+          credentialsAtCloud === where.whatsappCredentialsAtCloud;
+        if (matches) {
+          storedToken = data.whatsappApiTokenEncrypted as string | null;
+        }
+        return Promise.resolve({ count: matches ? 1 : 0 });
+      }
+    );
+    mocks.cloudFetch.mockResolvedValue({
+      body: { ok: true },
+      ok: true,
+      status: 200,
+    });
+
+    await sendWhatsAppText(prisma, channel, "+351912345678", "olá", "PT", {
+      ...entitled,
+      whatsappApiTokenEncrypted: "enc:original",
+    });
+
+    expect(storedToken).toBe("enc:replacement");
   });
 
   it("keeps the local token when the cloud send fails", async () => {
