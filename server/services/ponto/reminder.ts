@@ -496,7 +496,7 @@ async function retryDeferredExitReminder(
     // Presumida recusada pela gerência: a decisão passou para o painel
     // — re-perguntar ao trabalhador contradiz a recusa e qualquer
     // resposta cai no gate de rejeição sem efeito.
-    presumed.validations.some((v) => v.decision === "RECUSADO")
+    presumed.validations[0]?.decision === "RECUSADO"
   ) {
     return;
   }
@@ -558,7 +558,13 @@ async function processExitReminder(a: UserTickArgs): Promise<boolean> {
   const prior = a.openPresumedByUser.get(user.id);
   if (prior && (!shiftOpenAt || prior.at.getTime() >= shiftOpenAt.getTime())) {
     await retryDeferredExitReminder(a, prior);
-    return true;
+    // Presumida recusada pela gerência NÃO cobre o turno: a recusa
+    // devolve o trabalhador ao «ainda dentro» e o lembrete de pausa
+    // deste tick não pode ficar calado por causa de uma saída anulada.
+    // Também não se cria uma presumida nova por cima — a decisão
+    // pertence ao painel. A validação mais recente é a que conta
+    // (recusa seguida de re-aprovação volta a cobrir).
+    return prior.validations[0]?.decision !== "RECUSADO";
   }
 
   if (
@@ -579,8 +585,19 @@ async function processExitReminder(a: UserTickArgs): Promise<boolean> {
   // uma segunda saída sem ligação à primeira. Só contam saídas que
   // possam fechar o turno EM ABERTO — uma saída de um turno anterior
   // (saiu e voltou a entrar) não cancela o lembrete.
-  const alreadyOut = await prisma.timeEntry.findFirst({
-    select: { id: true },
+  // (em memória e pela decisão MAIS RECENTE — uma saída recusada não
+  //  fecha o turno e não bloqueia a presumida, mas uma re-aprovação
+  //  posterior volta a fechá-lo; o filtro `none` na query excluiria
+  //  a linha mesmo depois de re-aprovada)
+  const saidasSinceOpen = await prisma.timeEntry.findMany({
+    select: {
+      id: true,
+      validations: {
+        orderBy: { at: "desc" },
+        select: { decision: true },
+        take: 1,
+      },
+    },
     where: {
       at: {
         gte: dayStart,
@@ -597,9 +614,11 @@ async function processExitReminder(a: UserTickArgs): Promise<boolean> {
       corrections: { none: {} },
       type: "SAIDA",
       userId: user.id,
-      validations: { none: { decision: "RECUSADO" } },
     },
   });
+  const alreadyOut = saidasSinceOpen.some(
+    (e) => e.validations[0]?.decision !== "RECUSADO"
+  );
   if (alreadyOut) {
     return false;
   }
