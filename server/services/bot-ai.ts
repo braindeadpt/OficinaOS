@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { BotToolCtx } from "./bot-tools.js";
 import { runBotTool } from "./bot-tools.js";
 import { cloudFetch } from "./cloud.service.js";
@@ -215,9 +216,32 @@ function parseReply(body: BotAiBody, escalate: boolean): BotAiResult | null {
   };
 }
 
+// WP1 — chave opaca e estável por cliente final para a quota de conversas
+// da conta na Cloud (uma conversa = cliente numa janela de 24h). O número
+// de telefone nunca sai da loja: vai só o hash com sal por instalação —
+// o cloudShopId, que a Cloud já conhece, serve de sal e mantém a chave
+// estável entre mensagens do mesmo cliente.
+function roundZeroFields(
+  input: { context?: unknown },
+  key: string
+): Record<string, unknown> {
+  return {
+    conversationKey: key,
+    ...(input.context ? { context: input.context } : {}),
+  };
+}
+
+function conversationKey(phone: string, shopId: string | null): string {
+  const digits = phone.replace(/\D/g, "");
+  return createHash("sha256")
+    .update(`conv:${shopId ?? "local"}:${digits}`)
+    .digest("hex")
+    .slice(0, 48);
+}
+
 export async function askBotAi(
   ctx: BotToolCtx,
-  cloud: { apiUrl: string; token: string },
+  cloud: { apiUrl: string; token: string; shopId?: string | null },
   input: BotAiInput
 ): Promise<BotAiResult | null> {
   const deadline = Date.now() + TOTAL_BUDGET_MS;
@@ -235,9 +259,14 @@ export async function askBotAi(
     const res = await cloudFetch(cloud.apiUrl, "/ai/bot-reply", {
       body: {
         channel: input.channel,
-        // O contexto das regras vai só na primeira ronda — nas
-        // continuações de ferramentas não há mensagem nova do cliente.
-        ...(round === 0 && input.context ? { context: input.context } : {}),
+        // O contexto das regras e a chave da conversa vão só na primeira
+        // ronda — nas continuações de ferramentas não há mensagem nova.
+        ...(round === 0
+          ? roundZeroFields(
+              input,
+              conversationKey(input.phone, cloud.shopId ?? null)
+            )
+          : {}),
         messages,
         shopCard: ctx.shopCard,
       },

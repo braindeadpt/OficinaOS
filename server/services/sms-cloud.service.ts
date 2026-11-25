@@ -160,6 +160,7 @@ async function syncSmsInboundCycle(
       enabled: settings.botAiEnabled,
       module: "sms",
       modules,
+      shopId: settings.cloudShopId,
       token,
     },
     currency: settings.currency ?? "EUR",
