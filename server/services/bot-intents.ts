@@ -330,7 +330,10 @@ function resolveCloudJobId(
   if (res.jobId === null) {
     return null;
   }
-  return jobs[0]?.id ?? null;
+  // Cloud antiga sem nenhum dos campos: a reparação só se pode assumir
+  // quando há exatamente uma ativa — com 2+ seria adivinhação e o
+  // staff ligava a mensagem à reparação errada (null → sem vínculo).
+  return jobs.length === 1 ? (jobs[0]?.id ?? null) : null;
 }
 
 /** Executa a ação devolvida pelas regras da Cloud — a validação e os
@@ -438,7 +441,10 @@ export async function composeReply(
     return {
       customerName,
       escalate: true,
-      jobId: jobs[0]?.id ?? null,
+      // Mesma regra do resolveCloudJobId: sem qualquer indicação da
+      // Cloud, ligar o alerta a uma reparação só é seguro quando há
+      // exatamente uma ativa — com 2+ seria adivinhação.
+      jobId: jobs.length === 1 ? (jobs[0]?.id ?? null) : null,
       text: name
         ? `Recebemos a tua mensagem, ${name} — a loja responde-te já.`
         : "Recebemos a tua mensagem — a loja responde-te já.",
