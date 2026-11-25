@@ -145,6 +145,32 @@ describe("composeReply — transporte WP0.4 (regras na Cloud)", () => {
     expect(out.text).toBe("Orçamento aceite ✅");
   });
 
+  it("quote_decision recusada (SUPERSEDED) usa o texto de falha", async () => {
+    mocks.askBotAi.mockResolvedValueOnce({
+      action: {
+        decision: "approve",
+        jobCode: "REP-2024-000001-AAA",
+        kind: "quote_decision",
+        quoteId: "q1",
+      },
+      actionFailureText: "Esse orçamento já foi respondido",
+      actionSuccessText: "Orçamento aceite ✅",
+      escalate: false,
+      jobId: null,
+      reply: "",
+    });
+    // Recusas vêm como resultado, não exceção — sem este caminho o
+    // cliente recebia confirmação de um orçamento que ficou igual.
+    mocks.respondToQuote.mockResolvedValueOnce({
+      error: "QUOTE_SUPERSEDED",
+      jobExists: true,
+    });
+    const { ctx } = makeCtx({ ai: aiCfg, customers: [cust], jobs: [job()] });
+    const out = await composeReply(ctx, msg("sim"));
+    expect(out.text).toBe("Esse orçamento já foi respondido");
+    expect(out.text).not.toContain("aceite");
+  });
+
   it("quote_decision falha na BD → texto de falha composto na Cloud", async () => {
     mocks.askBotAi.mockResolvedValueOnce({
       action: {
