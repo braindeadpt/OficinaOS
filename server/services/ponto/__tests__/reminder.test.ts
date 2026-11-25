@@ -1052,6 +1052,29 @@ describe("alerta ao gestor (>60 min sem correção)", () => {
     // aqui basta verificar que o evento certo foi despachado.
   });
 
+  it("o alerta vai só para OWNER — FRONT_DESK não tem reports:viewShop", async () => {
+    const presumed = entry({
+      at: REMINDER_AT,
+      proofs: { exitReminderPresumed: true },
+      status: "POR_VALIDAR",
+      transport: "MANUAL",
+      type: "SAIDA",
+    });
+    const prisma = makePrisma(
+      [entry({ type: "ENTRADA" }), presumed],
+      [presumed]
+    );
+    const late = new Date("2026-01-10T19:30:00.000Z");
+
+    await processPontoReminders(prisma, log, undefined, late);
+
+    // O filtro do repositório tem de excluir FRONT_DESK: nome e hora de
+    // saída são dados de assiduidade que essas contas não podem ler.
+    const call = mocks.findManyUsers.mock.calls.at(-1) as unknown[] | undefined;
+    const filter = call?.[1] as { role?: unknown };
+    expect(filter?.role).toBe("OWNER");
+  });
+
   it("presumida recente (<60 min) → ainda sem alerta", async () => {
     const presumed = entry({
       at: REMINDER_AT,

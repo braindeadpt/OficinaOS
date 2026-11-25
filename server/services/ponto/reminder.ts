@@ -17,7 +17,7 @@
 // 3. Quem está em pausa há mais de pontoPauseReminderMinutes recebe
 //    "Ainda está em pausa?" UMA vez por pausa (dedupe em memória por
 //    entry — documentado abaixo).
-// 4. Presumida sem correção há >60 min → notify() aos OWNER+FRONT_DESK
+// 4. Presumida sem correção há >60 min → notify() aos OWNER (reports:viewShop)
 //    (template IN_APP ponto_saida_pendente → central + websocket).
 //    Dedupe em memória por entryId — reinício do processo pode repetir
 //    UM alerta por presumida ainda aberta (escolha aceite: a alternativa
@@ -389,7 +389,10 @@ async function alertManagers(
 ): Promise<void> {
   const managers = await findManyUsers(
     prisma,
-    { isActive: true, role: { in: [Role.OWNER, Role.FRONT_DESK] } },
+    // Só OWNER: a matriz RBAC dá reports:viewShop só ao OWNER — alertar
+    // FRONT_DESK expunha nome e hora de saída a contas sem permissão
+    // para consultar registos de ponto.
+    { isActive: true, role: Role.OWNER },
     { id: true }
   );
   const userIds = managers.map((m) => m.id);
