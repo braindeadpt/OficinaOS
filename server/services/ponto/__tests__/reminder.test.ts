@@ -1106,7 +1106,7 @@ describe("lembrete de pausa (§2.2b)", () => {
     expect(text).toContain("ainda está em pausa");
   });
 
-  it("pausa + saída por lembrar → recebe os dois lembretes", async () => {
+  it("pausa + saída por lembrar → só a pergunta de saída, sem contradição", async () => {
     const pausa = entry({
       at: new Date("2026-01-10T17:55:00.000Z"),
       id: "pause-1",
@@ -1117,10 +1117,13 @@ describe("lembrete de pausa (§2.2b)", () => {
     await processPontoReminders(prisma, log, undefined, NOW_AFTER);
 
     // §6: quem está em pausa também é "a trabalhar" para o esquecimento
-    // — presumida + pergunta de saída; §2.2b: + lembrete de pausa.
+    // — presumida + pergunta de saída. A presumida passa a cobrir o
+    // turno («saiu, por validar»), por isso o lembrete de pausa do
+    // mesmo tick seria contraditório e não sai: quando o trabalhador
+    // responder à pergunta o livro fica coerente.
     const texts = mocks.sendWhatsAppText.mock.calls.map((c) => c[3]);
     expect(texts.some((t) => t.includes("Saiu às 18:00"))).toBe(true);
-    expect(texts.some((t) => t.includes("ainda está em pausa"))).toBe(true);
+    expect(texts.some((t) => t.includes("ainda está em pausa"))).toBe(false);
   });
 
   it("pausa recente (<20 min) → sem lembrete", async () => {

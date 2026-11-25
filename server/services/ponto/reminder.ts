@@ -492,7 +492,11 @@ async function retryDeferredExitReminder(
     exitAsked.has(presumed.id) ||
     getPendingPontoExit(user.id, now.getTime()) ||
     !user.phoneE164 ||
-    !(waChannel || (user.pontoSmsAllowed && smsChannels))
+    !(waChannel || (user.pontoSmsAllowed && smsChannels)) ||
+    // Presumida recusada pela gerência: a decisão passou para o painel
+    // — re-perguntar ao trabalhador contradiz a recusa e qualquer
+    // resposta cai no gate de rejeição sem efeito.
+    presumed.validations.some((v) => v.decision === "RECUSADO")
   ) {
     return;
   }
@@ -526,8 +530,11 @@ async function retryDeferredExitReminder(
 
 /** Lembrete de saída (Esquecimentos): grava a SAIDA presumida (se ainda
  *  não saiu) e envia a pergunta pelo canal disponível. A janela de
- *  resposta só abre quando a pergunta é de facto entregue. */
-async function processExitReminder(a: UserTickArgs): Promise<void> {
+ *  resposta só abre quando a pergunta é de facto entregue. Devolve true
+ *  quando uma presumida cobre o fim do turno (criada agora ou já aberta)
+ *  — o livro passa a dizer «saiu, por validar» e o lembrete de pausa do
+ *  mesmo tick não pode contradizê-lo. */
+async function processExitReminder(a: UserTickArgs): Promise<boolean> {
   const {
     dayStart,
     exitTime,
@@ -551,7 +558,7 @@ async function processExitReminder(a: UserTickArgs): Promise<void> {
   const prior = a.openPresumedByUser.get(user.id);
   if (prior && (!shiftOpenAt || prior.at.getTime() >= shiftOpenAt.getTime())) {
     await retryDeferredExitReminder(a, prior);
-    return;
+    return true;
   }
 
   if (
@@ -564,7 +571,7 @@ async function processExitReminder(a: UserTickArgs): Promise<void> {
       last.type !== "SAIDA"
     )
   ) {
-    return;
+    return false;
   }
   // Re-leitura à chegada: a lista do dia foi lida em lote no início
   // do tick e o envio a cada colega demora — uma SAIDA real
@@ -594,7 +601,7 @@ async function processExitReminder(a: UserTickArgs): Promise<void> {
     },
   });
   if (alreadyOut) {
-    return;
+    return false;
   }
   // Nunca antes da última marcação efetiva: quem entra DEPOIS da
   // hora configurada (turno tardio) recebia uma saída presumida
@@ -641,6 +648,7 @@ async function processExitReminder(a: UserTickArgs): Promise<void> {
       "ponto: sem canal para lembrete de saída — presumida fica POR_VALIDAR"
     );
   }
+  return true;
 }
 
 /** Um utilizador num tick: lembrete de saída (Esquecimentos) e/ou de
@@ -657,10 +665,15 @@ async function processUserTick(a: UserTickArgs): Promise<void> {
     waChannel,
   } = a;
 
-  await processExitReminder(a);
+  const exitOwnsShift = await processExitReminder(a);
 
   // — Lembrete de pausa (§2.2b) — uma vez por PAUSA, nunca fecha.
+  // Nunca no mesmo tick em que uma presumida passa a cobrir o turno:
+  // o `last` foi lido ANTES da presumida existir e o trabalhador
+  // recebia a pergunta de saída e a instrução de retorno de pausa
+  // em simultâneo — duas instruções contraditórias.
   if (
+    !exitOwnsShift &&
     last?.type === "PAUSA" &&
     pauseReminderMs > 0 &&
     now.getTime() - last.at.getTime() >= pauseReminderMs &&
