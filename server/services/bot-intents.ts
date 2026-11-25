@@ -88,6 +88,7 @@ export interface BotAiChannelConfig {
   module: string;
   /** Módulos ativos conforme último sync de entitlements. */
   modules: string[];
+  /** Token da loja na Cloud (bearer do /ai/bot-reply). */
   token: string;
 }
 
