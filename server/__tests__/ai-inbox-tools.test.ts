@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   canReplayStaffInboxTool,
   runStaffInboxTool,
+  STALE_SENDING_MS,
   sendApprovedDraft,
 } from "../services/staff-inbox-tools.js";
 
@@ -445,6 +446,83 @@ describe("rascunhar_resposta / enviar_rascunho — §G.5", () => {
     ).metadata;
     expect(metadata.ok).toBe(false);
     expect(metadata.outcome).toBe("cancelado");
+  });
+
+  it("abort num SENDING stale repõe o updatedAt antigo — fica logo reclamável", async () => {
+    const controller = new AbortController();
+    mocks.resolveWhatsAppChannel.mockReturnValueOnce({
+      config: {},
+      mode: "evolution",
+    } as never);
+    mocks.sendViaEvolutionAntiBan.mockImplementationOnce(
+      async (...args: unknown[]) => {
+        const signal = args[6] as AbortSignal | undefined;
+        if (!signal) {
+          return { error: "signal em falta", success: false };
+        }
+        await new Promise<void>((resolve) => {
+          if (signal.aborted) {
+            resolve();
+            return;
+          }
+          signal.addEventListener("abort", () => resolve(), { once: true });
+        });
+        return { error: "cancelado", success: false };
+      }
+    );
+    const updateMany = vi.fn(async (_args: unknown) => ({ count: 1 }));
+    const prisma = fakePrisma({
+      inboxDraft: {
+        findUnique: vi.fn(async () => ({
+          approvedAt: new Date("2026-01-01T08:59:00Z"),
+          approvedById: "u-owner",
+          conversation: {
+            channel: "whatsapp",
+            id: "conv-1",
+            lastInboundAt: new Date(),
+            phone: "351912345678",
+          },
+          id: "draft-1",
+          status: "SENDING",
+          text: "x",
+          updatedAt: new Date("2026-01-01T09:00:00Z"),
+        })),
+        update: vi.fn(async () => ({})),
+        updateMany,
+      },
+      user: {
+        findUnique: vi.fn(async () => ({ ...OWNER, mcpDirectSend: true })),
+      },
+    });
+    const promise = runStaffInboxTool(prisma, log, {
+      args: { rascunhoId: "draft-1" },
+      signal: controller.signal,
+      tool: "enviar_rascunho",
+      userId: "u-owner",
+    });
+    await vi.waitFor(() =>
+      expect(mocks.sendViaEvolutionAntiBan).toHaveBeenCalledTimes(1)
+    );
+    controller.abort();
+    const out = await promise;
+    expect(out.error).toBe("cancelado");
+    // 1 = reclamar o SENDING stale; 2 = rollback com o updatedAt antigo,
+    // senão o rascunho ficava mais STALE_SENDING_MS invisível/bloqueado.
+    expect(updateMany).toHaveBeenCalledTimes(2);
+    expect(updateMany.mock.calls[1]?.[0]).toEqual({
+      data: {
+        approvedAt: new Date("2026-01-01T08:59:00Z"),
+        approvedById: "u-owner",
+        status: "SENDING",
+        updatedAt: new Date("2026-01-01T09:00:00Z"),
+      },
+      where: { id: "draft-1", status: "SENDING" },
+    });
+    expect(
+      (
+        updateMany.mock.calls[1]?.[0] as { data: { updatedAt: Date } }
+      ).data.updatedAt.getTime()
+    ).toBeLessThan(Date.now() - STALE_SENDING_MS);
   });
 
   it("abort depois do transporte arrancar não impede a finalização SENT", async () => {
