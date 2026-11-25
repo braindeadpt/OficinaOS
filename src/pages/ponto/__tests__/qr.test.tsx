@@ -23,8 +23,10 @@ const { apiPost, cloud } = vi.hoisted(() => ({
 vi.mock("@/lib/api", () => ({
   default: {
     get: vi.fn((url: string) => {
-      if (cloud.down) {
-        return Promise.reject(new Error("cloud em baixo"));
+      if (cloud.down && url === "/ponto/config") {
+        // O proxy da app degrada para configured:false sem rejeitar —
+        // é isto que acontece em produção com a Cloud em baixo.
+        return Promise.resolve({ data: { configured: false } });
       }
       if (url === "/ponto/status") {
         return Promise.resolve({ data: { enabled: true } });
