@@ -59,11 +59,17 @@ jobs:
 
           foreach ($exe in @("$s\tools\OficinaOSTray.exe", "dist\OficinaOS-Setup.exe")) {
             $vi = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $exe))
+            # O Inno Setup faz padding com espaços à direita nos campos de texto
+            # do SetupLdr.e32 (slots fixos na tabela de recursos PE) — fazer Trim().
+            $prodName = $vi.ProductName.Trim()
+            $prodVer = $vi.ProductVersion.Trim()
+            $fileVer = $vi.FileVersion.Trim()
             $fileNum = "$($vi.FileMajorPart).$($vi.FileMinorPart).$($vi.FileBuildPart).$($vi.FilePrivatePart)"
             $prodNum = "$($vi.ProductMajorPart).$($vi.ProductMinorPart).$($vi.ProductBuildPart).$($vi.ProductPrivatePart)"
-            if ($vi.ProductName -ne "OficinaOS") { throw "${exe}: ProductName='$($vi.ProductName)' (esperado 'OficinaOS')" }
-            if ($vi.ProductVersion -ne $v) { throw "${exe}: ProductVersion='$($vi.ProductVersion)' (esperado '$v')" }
-            if ($vi.FileVersion -ne $numVer) { throw "${exe}: FileVersion='$($vi.FileVersion)' (esperado '$numVer')" }
+            Write-Host "${exe}: ProductName='$prodName' ProductVersion='$prodVer' FileVersion='$fileVer' numeric=$fileNum/$prodNum"
+            if ($prodName -ne "OficinaOS") { throw "${exe}: ProductName='$prodName' (esperado 'OficinaOS')" }
+            if ($prodVer -ne $v) { throw "${exe}: ProductVersion='$prodVer' (esperado '$v')" }
+            if ($fileVer -ne $numVer) { throw "${exe}: FileVersion='$fileVer' (esperado '$numVer')" }
             if ($fileNum -ne $numVer) { throw "${exe}: numeric FileVersion='$fileNum' (esperado '$numVer')" }
             if ($prodNum -ne $numVer) { throw "${exe}: numeric ProductVersion='$prodNum' (esperado '$numVer')" }
           }
