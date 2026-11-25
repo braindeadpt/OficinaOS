@@ -722,7 +722,11 @@ describe("Evolution inbound webhook registration (MESSAGES_UPSERT)", () => {
   });
 
   it("APP_URL HTTP com DNS privado é usada quando o proxy termina HTTPS", async () => {
-    mocks.dnsLookup.mockResolvedValue([{ address: "192.168.1.30", family: 4 }]);
+    mocks.dnsLookup.mockImplementation((hostname?: string) =>
+      hostname === "oficina.loja.interna"
+        ? Promise.resolve([{ address: "192.168.1.30", family: 4 }])
+        : Promise.reject(new Error("ENOTFOUND"))
+    );
     process.env.APP_URL = "http://oficina.loja.interna:4000";
     resetEnvForTests();
     const app = buildApp(fakePrisma(PRO_BOT_ROW), { trustProxy: true });
