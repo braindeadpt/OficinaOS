@@ -341,6 +341,7 @@ async function executeCloudAction(
   res: NonNullable<Awaited<ReturnType<typeof askBotAi>>>,
   msg: InboundMessage,
   jobs: ActiveJob[],
+  quoteDecisionsAllowed: boolean,
   customers: { id: string; name: string }[],
   replyText: string
 ): Promise<string> {
@@ -356,14 +357,16 @@ async function executeCloudAction(
   const failureText =
     res.actionFailureText ??
     "Esse orçamento já foi respondido ou substituído — a loja confirma contigo.";
-  // Defesa em profundidade: a ação só é elegível se for exatamente o
-  // orçamento por responder que constava do contexto enviado à Cloud.
-  // Uma Cloud comprometida/bugada não arrasta a app a decidir outro
-  // orçamento; corridas posteriores continuam fechadas pelo
-  // respondToQuote (estado SENT + UPDATE condicional).
+  // Defesa em profundidade: a ação só é elegível se esta interação
+  // puder decidir orçamentos e for exatamente o orçamento por responder
+  // que constava do contexto enviado à Cloud. Uma Cloud comprometida/
+  // bugada não arrasta a app a decidir outro orçamento; corridas
+  // posteriores continuam fechadas pelo respondToQuote (estado SENT +
+  // UPDATE condicional).
   const quotedInContext = jobs.find((j) => j.jobCode === action.jobCode)
     ?.quotes[0];
   if (
+    !quoteDecisionsAllowed ||
     quotedInContext?.id !== action.quoteId ||
     quotedInContext.status !== "SENT"
   ) {
@@ -501,6 +504,7 @@ export async function composeReply(
     res,
     msg,
     jobs,
+    opts.allowQuoteDecision !== false,
     customers,
     res.reply
   );

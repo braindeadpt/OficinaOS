@@ -203,6 +203,27 @@ describe("composeReply — transporte WP0.4 (regras na Cloud)", () => {
     expect(out.text).toBe("Não consegui aplicar esse orçamento");
   });
 
+  it("quote_decision fora da janela não executa, mesmo com o quoteId real", async () => {
+    mocks.askBotAi.mockResolvedValueOnce({
+      action: {
+        decision: "approve",
+        jobCode: "REP-2024-000001-AAA",
+        kind: "quote_decision",
+        quoteId: "q1",
+      },
+      actionFailureText: "Não consegui aplicar esse orçamento",
+      escalate: false,
+      jobId: null,
+      reply: "",
+    });
+    const { ctx } = makeCtx({ ai: aiCfg, customers: [cust], jobs: [job()] });
+    const out = await composeReply(ctx, msg("sim"), false, {
+      allowQuoteDecision: false,
+    });
+    expect(mocks.respondToQuote).not.toHaveBeenCalled();
+    expect(out.text).toBe("Não consegui aplicar esse orçamento");
+  });
+
   it("quote_decision sobre orçamento já respondido no contexto não executa nada", async () => {
     mocks.askBotAi.mockResolvedValueOnce({
       action: {
