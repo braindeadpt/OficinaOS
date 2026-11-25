@@ -59,7 +59,12 @@ let dayCount = 0;
 let dayCapNotified = false;
 
 interface EvolutionUpsertData {
-  key?: { fromMe?: boolean; id?: string; remoteJid?: string };
+  key?: {
+    fromMe?: boolean;
+    id?: string;
+    remoteJid?: string;
+    remoteJidAlt?: string;
+  };
   message?: {
     buttonsResponseMessage?: {
       selectedButtonId?: string;
@@ -173,7 +178,14 @@ function parseUpserts(envelope: EvolutionEnvelope): ParsedInbound[] {
   }
   const out: ParsedInbound[] = [];
   for (const data of items) {
-    const jid = data.key?.remoteJid ?? "";
+    const rawJid = data.key?.remoteJid ?? "";
+    // WhatsApp LID: em DMs endereçadas por LID o remoteJid vem
+    // «<lid>@lid» e os seus dígitos NÃO são o telefone — a Evolution
+    // expõe o número real em remoteJidAlt. Sem esta troca o trabalhador
+    // nunca correspondia ao staff nem recebia resposta no número certo.
+    const jid = rawJid.endsWith("@lid")
+      ? (data.key?.remoteJidAlt ?? rawJid)
+      : rawJid;
     // Anti-ban: ignora o que sai do próprio número, grupos, broadcast e
     // newsletters — responder a esses é o padrão clássico de bot banido.
     if (data.key?.fromMe || !jid || GROUP_SUFFIX_RE.test(jid)) {
