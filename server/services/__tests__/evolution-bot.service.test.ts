@@ -159,6 +159,49 @@ describe("handleEvolutionInbound — proteções anti-ban", () => {
     expect(mocks.handleInboundMessage).toHaveBeenCalledTimes(1);
   });
 
+  it("DM por LID usa o telefone real de remoteJidAlt — não os dígitos do LID", async () => {
+    // WhatsApp LID: o remoteJid vem «<lid>@lid» e os seus dígitos não
+    // são o telefone — sem a troca o trabalhador nunca correspondia ao
+    // staff e a resposta ia para um número inexistente.
+    const env = envelope({
+      key: {
+        fromMe: false,
+        id: `lid-${Math.random().toString(36).slice(2)}`,
+        remoteJid: "100000000000000@lid",
+        remoteJidAlt: "351912345678@s.whatsapp.net",
+      },
+    });
+    const p = handleEvolutionInbound(prisma, log, undefined, env);
+    await vi.runAllTimersAsync();
+    await p;
+    expect(mocks.handleInboundMessage).toHaveBeenCalledTimes(1);
+    const msg = mocks.handleInboundMessage.mock.calls[0]?.[1] as {
+      fromPhone: string;
+    };
+    expect(msg.fromPhone).toBe("351912345678");
+  });
+
+  it("LID sem remoteJidAlt cai nos dígitos do LID — degradação documentada", async () => {
+    // Sem o alt não há telefone real disponível — o lookup de staff
+    // falha e a mensagem segue o caminho de número desconhecido.
+    // Melhor isso do que nunca processar a DM.
+    const env = envelope({
+      key: {
+        fromMe: false,
+        id: `lid-noalt-${Math.random().toString(36).slice(2)}`,
+        remoteJid: "100000000000000@lid",
+      },
+    });
+    const p = handleEvolutionInbound(prisma, log, undefined, env);
+    await vi.runAllTimersAsync();
+    await p;
+    expect(mocks.handleInboundMessage).toHaveBeenCalledTimes(1);
+    const msg = mocks.handleInboundMessage.mock.calls[0]?.[1] as {
+      fromPhone: string;
+    };
+    expect(msg.fromPhone).toBe("100000000000000");
+  });
+
   it("número desconhecido → notifica staff, sem resposta", async () => {
     mocks.findCustomersByPhone.mockResolvedValue([]);
     await handleEvolutionInbound(prisma, log, undefined, envelope());

@@ -3078,5 +3078,10 @@
   "bot_avg_days_help": "Utilizado para estimativas de tempo – o bot expressa-as sempre como médias, nunca como datas garantidas.",
   "bot_fallback_text_label": "Mensagem de loja fechada",
   "bot_fallback_text_help": "Enviado quando o PC da loja está offline. Vazio = mensagem padrão.",
-  "bot_fallback_text_placeholder": "Recebemos a sua mensagem. A loja responderá assim que abrir."
+  "bot_fallback_text_placeholder": "Recebemos a sua mensagem. A loja responderá assim que abrir.",
+  "ponto.decided_recent": "Decisões nos últimos 7 dias",
+  "ponto.decided_empty": "Sem decisão nos últimos 7 dias",
+  "ponto.decision_approved": "Aprovado",
+  "ponto.decision_rejected": "Rejeitado",
+  "ponto.decided_by": "por"
 }

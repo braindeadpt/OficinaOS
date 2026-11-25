@@ -25,6 +25,7 @@ import {
   listEntries,
   listNow,
   listPending,
+  listRecentDecisions,
   resolvePontoPhotoPath,
   resolvePontoRange,
 } from "../services/ponto-panel.service.js";
@@ -238,6 +239,19 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
         })
       );
     }
+  );
+
+  app.get(
+    "/decided",
+    {
+      preHandler: [requirePermission({ reports: ["viewShop"] })],
+      schema: {
+        summary:
+          "Entries decided in the last 7 days (decisions are reversible)",
+        tags: ["ponto"],
+      },
+    },
+    async (_req, reply) => reply.send(await listRecentDecisions(app.prisma))
   );
 
   app.get(

@@ -3078,5 +3078,10 @@
   "bot_avg_days_help": "Used for time estimates — the bot always phrases them as averages, never guaranteed dates.",
   "bot_fallback_text_label": "Shop closed message",
   "bot_fallback_text_help": "Sent when the shop PC is offline. Empty = default message.",
-  "bot_fallback_text_placeholder": "We received your message. The shop will reply as soon as it opens."
+  "bot_fallback_text_placeholder": "We received your message. The shop will reply as soon as it opens.",
+  "ponto.decided_recent": "Decisions in the last 7 days",
+  "ponto.decided_empty": "No decisions in the last 7 days",
+  "ponto.decision_approved": "Approved",
+  "ponto.decision_rejected": "Rejected",
+  "ponto.decided_by": "by"
 }

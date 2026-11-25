@@ -102,6 +102,55 @@ describe("parsePontoExitAnswer — ambíguo", () => {
     expect(parsePontoExitAnswer("18. 305")).toEqual({ kind: "ambiguous" });
   });
 
+  it("dia relativo por palavra — «ontem», «anteontem», «hoje» viajam na resposta", () => {
+    expect(parsePontoExitAnswer("ontem às 18:05")).toMatchObject({
+      hhmm: "18:05",
+      kind: "time",
+      relativeDay: -1,
+    });
+    expect(parsePontoExitAnswer("saí ontem às 18:05")).toMatchObject({
+      relativeDay: -1,
+    });
+    expect(parsePontoExitAnswer("anteontem às 18:05")).toMatchObject({
+      relativeDay: -2,
+    });
+    expect(parsePontoExitAnswer("hoje às 18:05")).toMatchObject({
+      relativeDay: 0,
+    });
+    // Sem palavra de dia o campo fica indefinido.
+    const sem = parsePontoExitAnswer("saí às 18:05");
+    expect(sem).toMatchObject({ hhmm: "18:05", kind: "time" });
+    expect(sem && sem.kind === "time" ? sem.relativeDay : "x").toBeUndefined();
+    // «hoje» de contexto (quando viu o lembrete) não é dia de saída.
+    expect(
+      parsePontoExitAnswer("só vi hoje o lembrete, saí ontem às 18:05")
+    ).toMatchObject({ hhmm: "18:05", kind: "time", relativeDay: -1 });
+    // A vírgula não separa o dia da hora — senão gravava hoje a
+    // saída de ontem.
+    expect(parsePontoExitAnswer("Saí ontem, às 18:05")).toMatchObject({
+      hhmm: "18:05",
+      kind: "time",
+      relativeDay: -1,
+    });
+    // «foi ontem» noutra oração continua a ligar-se à hora.
+    expect(parsePontoExitAnswer("saí às 18:05. foi ontem")).toMatchObject({
+      hhmm: "18:05",
+      kind: "time",
+      relativeDay: -1,
+    });
+    // Dois dias relativos distintos são ambíguos como duas horas.
+    expect(parsePontoExitAnswer("ontem ou hoje às 18:05")).toEqual({
+      kind: "ambiguous",
+    });
+    // Negação antes do termo anula-o — conta o dia afirmado.
+    expect(
+      parsePontoExitAnswer("não foi ontem, foi hoje às 18:05")
+    ).toMatchObject({ kind: "time", relativeDay: 0 });
+    // «ontem» sem hora nenhuma não é resposta de hora — o fluxo da
+    // clarificação ONTEM/HOJE depende disto.
+    expect(parsePontoExitAnswer("ontem")).toBeNull();
+  });
+
   it("hora solta + ponto final seguido de duração lê a hora certa", () => {
     expect(
       parsePontoExitAnswer("Saí às 18. 100 minutos depois cheguei a casa")

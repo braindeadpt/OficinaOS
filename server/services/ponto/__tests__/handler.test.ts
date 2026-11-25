@@ -826,6 +826,60 @@ describe("externos (externalWork)", () => {
     );
   });
 
+  it("foto a tempo >5 min depois do comando → messageAt é o envio da foto, não o comando", async () => {
+    // Regressão: o messageAt do comando somava comando+localização+
+    // foto (janelas da app, 3+5 min) e ultrapassava o corte de 5 min
+    // da Cloud mesmo com o funcionário a responder sempre a tempo —
+    // uma entrada aprovável caía em POR_VALIDAR «recebido com atraso».
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-10T09:00:00Z"));
+    const { ctx, phone, t } = setup({
+      staffOver: { externalWork: true },
+    });
+    mocks.todayPontoEntries.mockResolvedValue([]);
+    const commandAt = "2026-01-10T09:00:00.000Z";
+    await tryHandlePontoStaff(
+      ctx,
+      msg({ createdAt: commandAt, fromPhone: phone, text: "ENTRADA" }),
+      t
+    );
+    vi.setSystemTime(new Date("2026-01-10T09:02:30.000Z"));
+    await tryHandlePontoStaff(
+      ctx,
+      msg({
+        createdAt: "2026-01-10T09:02:30.000Z",
+        fromPhone: phone,
+        location: { lat: 41.1, lng: -8.6 },
+        messageType: "location",
+      }),
+      t
+    );
+    // Foto chega 6 min depois do comando — dentro da janela da foto.
+    vi.setSystemTime(new Date("2026-01-10T09:06:00Z"));
+    const photoAt = new Date().toISOString();
+    const png = Buffer.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4,
+    ]);
+    await tryHandlePontoStaff(
+      ctx,
+      msg({
+        createdAt: photoAt,
+        fromPhone: phone,
+        imageRef: { mimetype: "image/png", raw: { key: { id: "k" } } },
+        messageType: "image",
+      }),
+      t,
+      { fetchPhoto: async () => ({ buffer: png, mimetype: "image/png" }) }
+    );
+    const body = evaluateBody();
+    expect(body).toMatchObject({ hasPhoto: true, type: "ENTRADA" });
+    // messageAt = envio da foto — fresco na janela de 5 min da Cloud.
+    expect(body.messageAt).toBe(photoAt);
+    expect(Date.now() - Date.parse(body.messageAt as string)).toBeLessThan(
+      5 * 60 * 1000
+    );
+  });
+
   it("foto não chega em 5 min → regista com hasPhoto=false", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-10T09:00:00Z"));

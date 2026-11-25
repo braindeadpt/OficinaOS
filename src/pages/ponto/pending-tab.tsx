@@ -6,7 +6,13 @@ import { Dialog } from "@/components/ui/dialog";
 import { Field } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import api from "@/lib/api";
-import { formatClock, proofSummary, TYPE_LABEL, useShopTz } from "./shared";
+import {
+  formatClock,
+  formatDayClock,
+  proofSummary,
+  TYPE_LABEL,
+  useShopTz,
+} from "./shared";
 
 interface ShopGeo {
   lat: number | null;
@@ -153,6 +159,8 @@ export default function PendingTab() {
   const shopTz = useShopTz();
   const tz = shopTz ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   const [entries, setEntries] = useState<PontoPendingEntryDTO[] | null>(null);
+  const [decided, setDecided] = useState<PontoPendingEntryDTO[] | null>(null);
+  const [decidedError, setDecidedError] = useState(false);
   const [geo, setGeo] = useState<ShopGeo | null>(null);
   const [error, setError] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -161,11 +169,24 @@ export default function PendingTab() {
 
   const load = useCallback(async () => {
     try {
-      const [pend, geoRes] = await Promise.all([
+      const [pend, geoRes, dec] = await Promise.all([
         api.get<PontoPendingEntryDTO[]>("/ponto/pending"),
         api.get<ShopGeo>("/ponto/geo").catch(() => ({ data: null })),
+        // A lista de decididas falha em separado: as pendências
+        // continuam visíveis e a secção mostra erro com retry em vez
+        // de um vazio indistinguível de «sem decisões».
+        api
+          .get<PontoPendingEntryDTO[]>("/ponto/decided")
+          .catch(() => ({ data: "error" as const })),
       ]);
       setEntries(pend.data);
+      if (dec.data === "error") {
+        setDecided(null);
+        setDecidedError(true);
+      } else {
+        setDecided(dec.data);
+        setDecidedError(false);
+      }
       setGeo(geoRes.data);
       setError(false);
     } catch {
@@ -209,15 +230,136 @@ export default function PendingTab() {
       <div className="h-48 animate-pulse rounded-xl bg-surface-container-low" />
     );
   }
+  let decidedBody: React.ReactNode = null;
+  if (decidedError) {
+    decidedBody = (
+      <div className="rounded-2xl bg-error-container p-4 text-center text-on-error-container text-sm">
+        {t("ponto.load_failed")}
+        <Button className="ms-3" onClick={load} size="sm" variant="secondary">
+          {t("retry")}
+        </Button>
+      </div>
+    );
+  } else if (decided !== null && decided.length === 0) {
+    decidedBody = (
+      <p className="text-on-surface-variant text-sm">
+        {t("ponto.decided_empty")}
+      </p>
+    );
+  } else if (decided !== null) {
+    decidedBody = "list";
+  }
+
+  const decidedSection = (
+    <section className="space-y-3">
+      <h2 className="font-bold text-on-surface-variant text-xs uppercase tracking-wide">
+        {t("ponto.decided_recent")}
+      </h2>
+      {decidedBody === "list" ? null : decidedBody}
+      {decidedBody === "list"
+        ? (decided ?? []).map((e) => (
+            <article
+              className="rounded-2xl bg-surface-container-low p-4"
+              key={e.id}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="font-bold text-on-surface text-sm">
+                    {e.user.name || e.user.username}
+                  </p>
+                  <p className="text-on-surface-variant text-xs">
+                    {t(TYPE_LABEL[e.type])} ·{" "}
+                    {formatDayClock(e.at, i18n.language, tz)}
+                    {" · "}
+                    {e.effectiveStatus === "RECUSADO"
+                      ? t("ponto.decision_rejected")
+                      : t("ponto.decision_approved")}
+                    {e.validations[0]?.byUserName
+                      ? ` ${t("ponto.decided_by")} ${e.validations[0].byUserName}`
+                      : ""}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  {e.effectiveStatus === "RECUSADO" ? (
+                    <Button
+                      disabled={busyId === e.id}
+                      icon="check"
+                      onClick={() => validate(e.id, "APROVADO")}
+                      size="sm"
+                    >
+                      {t("ponto.approve")}
+                    </Button>
+                  ) : (
+                    <Button
+                      disabled={busyId === e.id}
+                      icon="close"
+                      onClick={() => setNoteFor(e.id)}
+                      size="sm"
+                      variant="secondary"
+                    >
+                      {t("ponto.reject")}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </article>
+          ))
+        : null}
+    </section>
+  );
+
+  const rejectDialog = (
+    <Dialog
+      onClose={() => {
+        setNoteFor(null);
+        setNote("");
+      }}
+      open={noteFor !== null}
+      title={t("ponto.reject_title")}
+    >
+      <div className="space-y-4">
+        <Field label={t("ponto.reject_note_label")}>
+          <Textarea
+            onChange={(ev) => setNote(ev.target.value)}
+            placeholder={t("ponto.reject_note_placeholder")}
+            value={note}
+          />
+        </Field>
+        <div className="flex justify-end gap-2">
+          <Button
+            onClick={() => {
+              setNoteFor(null);
+              setNote("");
+            }}
+            variant="secondary"
+          >
+            {t("cancel")}
+          </Button>
+          <Button
+            disabled={busyId === noteFor}
+            onClick={() => noteFor && validate(noteFor, "RECUSADO")}
+            variant="destructive"
+          >
+            {t("ponto.reject_confirm")}
+          </Button>
+        </div>
+      </div>
+    </Dialog>
+  );
+
   if (entries.length === 0) {
     return (
-      <div className="rounded-2xl bg-surface-container-low p-8 text-center">
-        <span className="material-symbols-outlined text-4xl text-on-surface-variant/40">
-          check_circle
-        </span>
-        <p className="mt-3 text-on-surface-variant text-sm">
-          {t("ponto.pending_empty")}
-        </p>
+      <div className="space-y-5">
+        <div className="rounded-2xl bg-surface-container-low p-8 text-center">
+          <span className="material-symbols-outlined text-4xl text-on-surface-variant/40">
+            check_circle
+          </span>
+          <p className="mt-3 text-on-surface-variant text-sm">
+            {t("ponto.pending_empty")}
+          </p>
+        </div>
+        {decidedSection}
+        {rejectDialog}
       </div>
     );
   }
@@ -300,42 +442,8 @@ export default function PendingTab() {
         })}
       </div>
 
-      <Dialog
-        onClose={() => {
-          setNoteFor(null);
-          setNote("");
-        }}
-        open={noteFor !== null}
-        title={t("ponto.reject_title")}
-      >
-        <div className="space-y-4">
-          <Field label={t("ponto.reject_note_label")}>
-            <Textarea
-              onChange={(ev) => setNote(ev.target.value)}
-              placeholder={t("ponto.reject_note_placeholder")}
-              value={note}
-            />
-          </Field>
-          <div className="flex justify-end gap-2">
-            <Button
-              onClick={() => {
-                setNoteFor(null);
-                setNote("");
-              }}
-              variant="secondary"
-            >
-              {t("cancel")}
-            </Button>
-            <Button
-              disabled={busyId === noteFor}
-              onClick={() => noteFor && validate(noteFor, "RECUSADO")}
-              variant="destructive"
-            >
-              {t("ponto.reject_confirm")}
-            </Button>
-          </div>
-        </div>
-      </Dialog>
+      {decidedSection}
+      {rejectDialog}
     </div>
   );
 }

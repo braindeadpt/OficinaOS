@@ -45,6 +45,11 @@ export type PontoExitAnswer =
       date?: { day: number; month: number; year: number | null };
       hhmm: string;
       kind: "time";
+      /** Dia relativo declarado — «hoje» 0, «ontem» -1, «anteontem» -2.
+       *  Resolve-se no handler contra o dia civil da resposta e tem de
+       *  bater num dos dias candidatos, tal como a data explícita —
+       *  sem ele «ontem às 18:05» gravava-se no dia errado. */
+      relativeDay?: number;
     }
   | null;
 
@@ -894,6 +899,88 @@ function statedDate(text: string): {
   return { ambiguous: keys.size > 1 || invalid, date };
 }
 
+// Dia relativo por palavra — «ontem», «anteontem», «hoje». A alternância
+// põe «anteontem» primeiro porque contém «ontem» como substring. A
+// negação segue a regra das datas: negada antes do termo anula-o
+// («não foi ontem, foi hoje» — o «ontem» negado não conta), âmbito
+// incerto fica ambíguo.
+const RELATIVE_DAY_RE = /\b(anteontem|ontem|hoje)\b/gi;
+const RELATIVE_DAY_OFFSET: Record<string, number> = {
+  anteontem: -2,
+  hoje: 0,
+  ontem: -1,
+};
+
+// A palavra de dia só fala da SAÍDA quando está ligada à hora: na
+// mesma oração que dígitos («ontem às 18:05», «saí ontem às 18:05»)
+// ou sozinha como afirmação do dia («foi ontem»). Num contexto sem
+// hora («só vi hoje o lembrete») a palavra refere outro
+// acontecimento e não entra — senão «só vi hoje o lembrete, saí
+// ontem às 18:05» tinha dois dias «distintos» e ficava ambíguo sem
+// razão.
+const DIGIT_RE = /\d/;
+const BARE_DAY_CLAUSE_RE = /^\s*(?:foi\s+)?(?:anteontem|ontem|hoje)[.!…]?\s*$/i;
+
+// «hoje» solto numa oração sem hora é contexto («só vi hoje o
+// lembrete») e não entra — hoje é já o dia por omissão, a palavra
+// não informa. «ontem»/«anteontem» contam em qualquer oração: nunca
+// são o default e nomeá-los é sempre informativo — senão «Saí ontem,
+// às 18:05» perdia o dia na vírgula. A negação antes do termo
+// anula-o; âmbito incerto fica inválido (pergunta-se).
+function relativeDayVerdict(
+  word: string,
+  boundToTime: boolean,
+  clauseNegated: boolean,
+  negIdx: number,
+  matchIdx: number
+): "count" | "invalid" | "skip" {
+  if (!boundToTime && word === "hoje") {
+    return "skip";
+  }
+  if (!clauseNegated) {
+    return "count";
+  }
+  if (negIdx >= 0 && negIdx < matchIdx) {
+    return "skip"; // a negação antes do termo anula-o
+  }
+  return "invalid"; // âmbito da negação incerto — pergunta-se
+}
+
+function statedRelativeDay(text: string): {
+  ambiguous: boolean;
+  offset?: number;
+} {
+  const offsets = new Set<number>();
+  let invalid = false;
+  for (const rawClause of text.split(CLAUSE_SPLIT_RE)) {
+    const clause = rawClause.normalize("NFC");
+    const boundToTime =
+      DIGIT_RE.test(clause) || BARE_DAY_CLAUSE_RE.test(clause);
+    const clauseNegated = negated(normalizePontoText(clause));
+    const negIdx = clauseNegated
+      ? clause.toLowerCase().search(NEGATION_START_RE)
+      : -1;
+    for (const m of clause.matchAll(RELATIVE_DAY_RE)) {
+      const verdict = relativeDayVerdict(
+        (m[1] ?? "").toLowerCase(),
+        boundToTime,
+        clauseNegated,
+        negIdx,
+        m.index
+      );
+      if (verdict === "skip") {
+        continue;
+      }
+      if (verdict === "invalid") {
+        invalid = true;
+        continue;
+      }
+      offsets.add(RELATIVE_DAY_OFFSET[(m[1] ?? "").toLowerCase()]);
+    }
+  }
+  return { ambiguous: offsets.size > 1 || invalid, offset: [...offsets][0] };
+}
+
 // Hora compacta malformada — minutos com 3+ dígitos («18:305»,
 // «18: 305», «18. 305»): erro de digitação. Nunca se trunca para uma
 // hora válida nem se lê o dígito extra como segunda hora — a resposta
@@ -906,6 +993,20 @@ function statedDate(text: string): {
 // minutos malformados — «Saí às 18. 100 minutos depois» lê 18:00.
 const MALFORMED_COMPACT_RE =
   /(?<![:hH.\d])\d{1,2}\s*[:hH.]\s*\d{3,}(?!\s+(?:minutos?|mins?|horas?|hrs?|segundos?|segs?)\b)/;
+
+function statedDays(text: string): {
+  ambiguous: boolean;
+  date?: { day: number; month: number; year: number | null };
+  relativeDay?: number;
+} {
+  const stated = statedDate(text);
+  const rel = statedRelativeDay(text);
+  return {
+    ambiguous: stated.ambiguous || rel.ambiguous,
+    date: stated.date,
+    relativeDay: rel.offset,
+  };
+}
 
 export function parsePontoExitAnswer(
   text: string | null | undefined
@@ -920,11 +1021,15 @@ export function parsePontoExitAnswer(
   // registada na resposta: o handler só grava se bater num dos dias
   // candidatos do turno, senão repete a pergunta. Duas datas
   // distintas («23/11 ou 24/11») são ambíguas como duas horas.
-  const stated = statedDate(text);
-  if (stated.ambiguous) {
+  // Data declarada e dia relativo por palavra («23/11», «ontem às
+  // 18:05») — viajam na resposta e o handler só grava se baterem num
+  // dos dias candidatos; duas datas ou dois dias distintos («ontem
+  // ou hoje») são ambíguos como duas horas.
+  const days = statedDays(text);
+  if (days.ambiguous) {
     return { kind: "ambiguous" };
   }
-  const date = stated.date;
+  const { date, relativeDay } = days;
   // 1) Horas por oração — uma negação só descarta a hora da própria
   //    oração: "não, saí às 18:20" afirma 18:20; "não saí às 18:00,
   //    ainda estou a trabalhar" não declara nada.
@@ -951,7 +1056,7 @@ export function parsePontoExitAnswer(
     }
   }
   if (explicit.size === 1 && bound.size === 0) {
-    return { date, hhmm: [...explicit][0], kind: "time" };
+    return { date, hhmm: [...explicit][0], kind: "time", relativeDay };
   }
   if (explicit.size > 1 || (explicit.size === 1 && bound.size > 0)) {
     // Ambíguo — duas ou mais horas declaradas (uma hora mais um
@@ -988,7 +1093,7 @@ export function parsePontoExitAnswer(
     const raw = [...bare][0];
     const hhmm = hhmmOf(Number(raw), 0, zeroPadded(raw));
     if (hhmm) {
-      return { date, hhmm, kind: "time" };
+      return { date, hhmm, kind: "time", relativeDay };
     }
   }
   if (bare.size > 1) {

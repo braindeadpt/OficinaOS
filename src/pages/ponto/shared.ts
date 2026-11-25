@@ -40,6 +40,26 @@ export function formatClock(
   });
 }
 
+/** Dia + hora — listas multi-dia (decisões recentes) onde a hora
+ *  sozinha tornava duas picagens iguais em dias diferentes
+ *  indistinguíveis. */
+export function formatDayClock(
+  iso: string | null,
+  locale: string,
+  timeZone?: string
+): string {
+  if (!iso) {
+    return "—";
+  }
+  return new Date(iso).toLocaleString(locale, {
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "2-digit",
+    ...(timeZone ? { timeZone } : {}),
+  });
+}
+
 /**
  * "YYYY-MM-DD" é um dia CIVIL da loja, não um instante — constrói-se como
  * data local para o rótulo nunca deslizar um dia em fusos extremos.

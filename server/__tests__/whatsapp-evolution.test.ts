@@ -542,6 +542,47 @@ describe("Evolution inbound webhook registration (MESSAGES_UPSERT)", () => {
     expect(mocks.setEvolutionWebhook).not.toHaveBeenCalled();
   });
 
+  it("«localhost.evil.com» NÃO é loopback — HTTPS (prefixo enganoso)", async () => {
+    // Regressão SEC: o teste de loopback por prefixo tratava qualquer
+    // nome começado por «localhost» como interno e o token do webhook
+    // seguia em HTTP claro para um host público.
+    const res = await saveWhatsApp("localhost.evil.com");
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "https://localhost.evil.com/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("«127.evil.com» NÃO é loopback — HTTPS (prefixo enganoso)", async () => {
+    const res = await saveWhatsApp("127.evil.com");
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "https://127.evil.com/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("127.0.0.1 continua loopback — substitui pelo IP LAN", async () => {
+    mocks.primaryLanIpv4.mockReturnValue("192.168.1.20");
+    const res = await saveWhatsApp("127.0.0.1:4000");
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "http://192.168.1.20:4000/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("APP_URL em HTTPS nunca desce para HTTP mesmo com host privado", async () => {
+    // O esquema derivado do host rebaixava a APP_URL configurada — a
+    // loja declarou TLS e o token não pode descer para HTTP.
+    mocks.primaryLanIpv4.mockReturnValue(null);
+    process.env.APP_URL = "https://192.168.1.10:4000";
+    resetEnvForTests();
+    const res = await saveWhatsApp("localhost:4000");
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "https://192.168.1.10:4000/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
   it("host público → callback em HTTPS (token não viaja em claro)", async () => {
     const res = await saveWhatsApp("oficinaos.example.com");
     expect(res.statusCode).toBe(200);

@@ -22,6 +22,9 @@ const mocks = vi.hoisted(() => ({
   savePontoPhotoFile: vi.fn(() =>
     Promise.resolve({ id: "photo-1", path: "ponto-photos/u1/p.jpg" })
   ),
+  timeEntryFindMany: vi.fn(
+    (_args?: unknown): Promise<unknown[]> => Promise.resolve([])
+  ),
   timeEntryFindFirst: vi.fn(
     (): Promise<{ id: string } | null> => Promise.resolve(null)
   ),
@@ -96,7 +99,10 @@ function setup(opts: { smsAllowed?: boolean; transport?: string } = {}) {
   const prisma = {
     customer: { findMany: vi.fn(() => Promise.resolve([])) },
     job: { findMany: vi.fn(() => Promise.resolve([])) },
-    timeEntry: { findFirst: mocks.timeEntryFindFirst },
+    timeEntry: {
+      findFirst: mocks.timeEntryFindFirst,
+      findMany: mocks.timeEntryFindMany,
+    },
     user: { findMany: vi.fn(() => Promise.resolve([staff])) },
   };
   const sent: string[] = [];
@@ -569,6 +575,52 @@ describe("resposta ao lembrete de saída", () => {
     });
     expect((entry.at as Date).toISOString()).toBe("2026-01-10T18:05:00.000Z");
     expect(getPendingPontoExit("user-1")).toBeNull();
+  });
+
+  it("«ontem às 18:05» no próprio dia do turno → repete a pergunta, não grava no dia errado", async () => {
+    // Regressão: a palavra «ontem» perdia-se e as 18:05 gravavam-se no
+    // dia da presumida — o trabalhador disse ONTEM e o livro marcava
+    // HOJE. Ontem não é candidato deste turno → pergunta outra vez.
+    const { ctx, message, sent, t } = setup({
+      smsAllowed: true,
+      transport: "sms",
+    });
+    armPending();
+
+    await tryHandlePontoStaff(ctx, message("ontem às 18:05"), t);
+
+    expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
+    expect(sent.at(-1)).toContain("escreva a hora de saída");
+    expect(getPendingPontoExit("user-1")).not.toBeNull();
+  });
+
+  it("«ontem às 18:05» respondido depois da meia-noite → grava no dia da presumida", async () => {
+    // Lembrete das 23:30 respondido às 00:20 — «ontem» É o dia da
+    // presumida: a palavra resolve para o dia certo e grava 18:05 lá.
+    const { ctx, message, t } = setup({
+      smsAllowed: true,
+      transport: "sms",
+    });
+    setPendingPontoExit("user-1", {
+      expiresAt: Date.now() + PONTO_EXIT_PENDING_TTL_MS,
+      presumedAt: "2026-01-10T23:30:00.000Z",
+      presumedEntryId: "presumed-1",
+      shiftOpenAt: "2026-01-10T16:00:00.000Z",
+      userId: "user-1",
+    });
+    const msg = {
+      ...message("ontem às 18:05"),
+      createdAt: "2026-01-11T00:20:00.000Z",
+    };
+
+    await tryHandlePontoStaff(ctx, msg, t);
+
+    expect(mocks.recordPontoEntry).toHaveBeenCalledTimes(1);
+    const entry = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect((entry.at as Date).toISOString()).toBe("2026-01-10T18:05:00.000Z");
   });
 
   it("resposta depois da meia-noite → hora declarada fica no dia da resposta", async () => {
@@ -1101,7 +1153,9 @@ describe("SAIDA normal após presumida", () => {
       id: "presumed-1",
     });
     // Reentrada às 18:04 — depois da presumida das 18:00.
-    mocks.timeEntryFindFirst.mockResolvedValue({ id: "entrada-2" });
+    mocks.timeEntryFindMany.mockResolvedValue([
+      { id: "entrada-2", validations: [] },
+    ] as never);
 
     await tryHandlePontoStaff(ctx, message("SAIDA"), t);
 
@@ -1111,6 +1165,59 @@ describe("SAIDA normal após presumida", () => {
     >;
     expect(entry.correctsId).toBeNull();
     expect(entry.type).toBe("SAIDA");
+  });
+
+  it("reentrada recusada e re-aprovada → turno novo conta (decisão mais recente)", async () => {
+    // Regressão: com o filtro `none` na query a reentrada re-aprovada
+    // ficava invisível (existia uma recusa no histórico) e a SAIDA
+    // substituía a presumida do turno anterior — fundia os dois turnos.
+    const { ctx, message, t } = setup({ smsAllowed: true, transport: "sms" });
+    mocks.findOpenPresumedExit.mockResolvedValue({
+      at: PRESUMED_AT,
+      id: "presumed-1",
+    });
+    mocks.timeEntryFindMany.mockResolvedValue([
+      { id: "entrada-2", validations: [{ decision: "APROVADO" }] },
+    ]);
+
+    await tryHandlePontoStaff(ctx, message("SAIDA"), t);
+
+    const entry = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect(entry.correctsId).toBeNull();
+    // A query tem de pedir a decisão MAIS RECENTE (desc, take 1) —
+    // sem esta asserção o teste passava mesmo com ordenação errada.
+    const q = mocks.timeEntryFindMany.mock.calls[0]?.[0] as unknown as {
+      select: Record<string, unknown>;
+    };
+    expect(q.select).toMatchObject({
+      validations: {
+        orderBy: { at: "desc" },
+        select: { decision: true },
+        take: 1,
+      },
+    });
+  });
+
+  it("reentrada recusada (mais recente) não abre turno — SAIDA corrige a presumida", async () => {
+    const { ctx, message, t } = setup({ smsAllowed: true, transport: "sms" });
+    mocks.findOpenPresumedExit.mockResolvedValue({
+      at: PRESUMED_AT,
+      id: "presumed-1",
+    });
+    mocks.timeEntryFindMany.mockResolvedValue([
+      { id: "entrada-2", validations: [{ decision: "RECUSADO" }] },
+    ] as never);
+
+    await tryHandlePontoStaff(ctx, message("SAIDA"), t);
+
+    const entry = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect(entry.correctsId).toBe("presumed-1");
   });
 
   it("reentrada recusada pela gerência não abre turno — SAIDA corrige a presumida", async () => {

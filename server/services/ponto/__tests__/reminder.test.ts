@@ -164,17 +164,37 @@ function entry(over: Record<string, unknown>) {
  *  POSTERIOR ao gt do turno em aberto quando presente. */
 function makePrisma(dayRows: unknown[], saidaRows: unknown[] = []) {
   mocks.timeEntryFindMany.mockImplementation(
-    (args?: { where?: { at?: { gte?: Date; lt?: Date }; type?: string } }) => {
+    (args?: {
+      where?: {
+        at?: { gt?: Date; gte?: Date; lt?: Date };
+        type?: string;
+        userId?: string;
+      };
+    }) => {
       const w = args?.where;
       const rows = (w?.type === "SAIDA" ? saidaRows : dayRows) as Record<
         string,
         unknown
       >[];
+      const gt = w?.at?.gt?.getTime();
       const gte = w?.at?.gte?.getTime();
       const lt = w?.at?.lt?.getTime();
+      // O filtro de recusa é em memória no código de produção (decisão
+      // mais recente) — o mock devolve as linhas candidatas e é o
+      // código que decide; correções continuam na query.
       return Promise.resolve(
         rows.filter(
           (r) =>
+            (w?.userId === undefined ||
+              (typeof w.userId === "string"
+                ? r.userId === w.userId
+                : (w.userId as { in?: string[] }).in?.includes(
+                    r.userId as string
+                  ))) &&
+            (w?.type !== "SAIDA" ||
+              typeof w?.userId !== "string" ||
+              (r.corrections as unknown[]).length === 0) &&
+            (gt === undefined || (r.at as Date).getTime() > gt) &&
             (gte === undefined || (r.at as Date).getTime() >= gte) &&
             (lt === undefined || (r.at as Date).getTime() < lt)
         )
@@ -421,13 +441,30 @@ describe("lembrete de saída (Esquecimentos)", () => {
       // A saída não está na leitura em lote (foi picada depois dela)
       // — só existe na base de dados que a re-leitura consulta, e o
       // mock respeita o teto `lt` da query.
-      mocks.timeEntryFindFirst.mockImplementation((args?: unknown) => {
-        const lt = (
-          args as { where?: { at?: { lt?: Date } } } | undefined
-        )?.where?.at?.lt?.getTime();
-        return Promise.resolve(
-          lt !== undefined && saidaAt < lt ? { id: "saida-1" } : null
-        );
+      const baseFindMany = mocks.timeEntryFindMany.getMockImplementation();
+      mocks.timeEntryFindMany.mockImplementation((args?: unknown) => {
+        const w = (
+          args as
+            | { where?: { at?: { lt?: Date }; type?: string; userId?: string } }
+            | undefined
+        )?.where;
+        // A re-leitura anti-duplicado (SAIDA + userId) consulta a
+        // saída que só existe na base de dados — respeita o teto `lt`.
+        if (w?.type === "SAIDA" && typeof w.userId === "string") {
+          const lt = w.at?.lt?.getTime();
+          return Promise.resolve(
+            lt !== undefined && saidaAt < lt
+              ? [
+                  entry({
+                    at: new Date(saidaAt),
+                    id: "saida-1",
+                    type: "SAIDA",
+                  }),
+                ]
+              : []
+          );
+        }
+        return (baseFindMany as (a?: unknown) => unknown)?.(args);
       });
 
       saidaAt = new Date("2026-01-10T18:31:00.000Z").getTime();
@@ -1106,7 +1143,7 @@ describe("lembrete de pausa (§2.2b)", () => {
     expect(text).toContain("ainda está em pausa");
   });
 
-  it("pausa + saída por lembrar → recebe os dois lembretes", async () => {
+  it("pausa + saída por lembrar → só a pergunta de saída, sem contradição", async () => {
     const pausa = entry({
       at: new Date("2026-01-10T17:55:00.000Z"),
       id: "pause-1",
@@ -1117,10 +1154,73 @@ describe("lembrete de pausa (§2.2b)", () => {
     await processPontoReminders(prisma, log, undefined, NOW_AFTER);
 
     // §6: quem está em pausa também é "a trabalhar" para o esquecimento
-    // — presumida + pergunta de saída; §2.2b: + lembrete de pausa.
+    // — presumida + pergunta de saída. A presumida passa a cobrir o
+    // turno («saiu, por validar»), por isso o lembrete de pausa do
+    // mesmo tick seria contraditório e não sai: quando o trabalhador
+    // responder à pergunta o livro fica coerente.
     const texts = mocks.sendWhatsAppText.mock.calls.map((c) => c[3]);
     expect(texts.some((t) => t.includes("Saiu às 18:00"))).toBe(true);
+    expect(texts.some((t) => t.includes("ainda está em pausa"))).toBe(false);
+  });
+
+  it("presumida recusada pelo gestor não cala o lembrete de pausa", async () => {
+    // Regressão: a presumida recusada continuava no mapa de «saída
+    // cobre o turno» — o trabalhador em pausa nunca recebia o aviso
+    // de pausa longa. A recusa devolve-o ao «ainda dentro»: o
+    // lembrete de pausa sai e a pergunta de saída não é repetida
+    // (a decisão pertence ao painel).
+    const pausa = entry({
+      at: new Date("2026-01-10T17:55:00.000Z"),
+      id: "pause-1",
+      type: "PAUSA",
+    });
+    const presumidaRecusada = entry({
+      at: new Date("2026-01-10T18:00:00.000Z"),
+      id: "presumida-1",
+      proofs: { exitReminderPresumed: true },
+      status: "POR_VALIDAR",
+      type: "SAIDA",
+      validations: [{ decision: "RECUSADO" }],
+    });
+    const prisma = makePrisma(
+      [entry({ type: "ENTRADA" }), pausa, presumidaRecusada],
+      [presumidaRecusada]
+    );
+
+    await processPontoReminders(prisma, log, undefined, NOW_AFTER);
+
+    const texts = mocks.sendWhatsAppText.mock.calls.map((c) => c[3]);
     expect(texts.some((t) => t.includes("ainda está em pausa"))).toBe(true);
+    expect(texts.some((t) => t.includes("Saiu às"))).toBe(false);
+    expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
+  });
+
+  it("presumida re-aprovada depois da recusa volta a cobrir o turno", async () => {
+    // A decisão mais recente é que conta: RECUSADO seguido de
+    // APROVADO no painel → o livro diz «saiu» e o lembrete de pausa
+    // seria contraditório.
+    const pausa = entry({
+      at: new Date("2026-01-10T17:55:00.000Z"),
+      id: "pause-1",
+      type: "PAUSA",
+    });
+    const presumidaReaprovada = entry({
+      at: new Date("2026-01-10T18:00:00.000Z"),
+      id: "presumida-1",
+      proofs: { exitReminderPresumed: true },
+      status: "POR_VALIDAR",
+      type: "SAIDA",
+      validations: [{ decision: "APROVADO" }],
+    });
+    const prisma = makePrisma(
+      [entry({ type: "ENTRADA" }), pausa, presumidaReaprovada],
+      [presumidaReaprovada]
+    );
+
+    await processPontoReminders(prisma, log, undefined, NOW_AFTER);
+
+    const texts = mocks.sendWhatsAppText.mock.calls.map((c) => c[3]);
+    expect(texts.some((t) => t.includes("ainda está em pausa"))).toBe(false);
   });
 
   it("pausa recente (<20 min) → sem lembrete", async () => {
