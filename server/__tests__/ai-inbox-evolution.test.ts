@@ -194,9 +194,9 @@ describe("sendViaEvolutionAntiBan — cancelamento pré-commit", () => {
     vi.useFakeTimers();
     try {
       const controller = new AbortController();
-      getSettings.mockImplementationOnce(async () => {
+      getSettings.mockImplementationOnce(() => {
         controller.abort();
-        return settingsWith(["whatsapp-bot"]);
+        return Promise.resolve(settingsWith(["whatsapp-bot"]));
       });
       const promise = sendViaEvolutionAntiBan(
         {} as never,
