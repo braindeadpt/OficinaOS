@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@generated/client";
 import { Role } from "@generated/client";
+import { effectiveDialCode } from "@shared/constants/countries.js";
 import {
   ACTIVE_STATUSES,
   COMPLETED_STATUSES,
@@ -462,12 +463,14 @@ interface CustomerMatch {
  * um +34 são iguais aos de um cliente PT e o bot daria a ficha dele a um
  * estranho (sec: a ficha leva histórico e dados da reparação).
  *
- * O sufixo de 9 dígitos só existe quando a loja é portuguesa
- * (ShopSettings.countryCode = "PT"): noutro país o número nacional do
- * cliente pode ter 9 dígitos sem ser português e um remetente +351 com
- * o mesmo sufixo herdava a ficha de um estranho. Lojas fora de Portugal
- * casam só por número completo — fichas nacionais devem guardar-se com
- * indicativo.
+ * O sufixo de 9 dígitos só existe quando o envio da loja usa o
+ * indicativo português — countryCode "PT" ou um valor legado/
+ * desconhecido que formatPhone já trata como +351 (ex.: "DZ" das
+ * primeiras instalações). Num país suportado com outro indicativo o
+ * número nacional do cliente pode ter 9 dígitos sem ser português e um
+ * remetente +351 com o mesmo sufixo herdava a ficha de um estranho.
+ * Essas lojas casam só por número completo — fichas nacionais devem
+ * guardar-se com indicativo.
  *
  * Partilhado pelo pipeline (findCustomerJobs) e pelo gate "só clientes"
  * do bot Evolution — as duas superfícies têm de casar da mesma forma.
@@ -487,7 +490,7 @@ export async function findCustomersByPhone(
     select: { countryCode: true },
     where: { id: "default" },
   });
-  const shopIsPt = (shop?.countryCode ?? "PT").toUpperCase() === "PT";
+  const shopUsesPtDialCode = effectiveDialCode(shop?.countryCode) === PT_CC;
   const last9 = senderDigits.slice(-9);
   const last4 = senderDigits.slice(-4);
   if ((isPtSender && last9.length < 9) || last4.length < 4) {
@@ -508,10 +511,12 @@ export async function findCustomersByPhone(
       if (cd === senderDigits) {
         return true;
       }
-      // Sufixo só vale entre números PT numa loja portuguesa — uma
-      // ficha estrangeira com os mesmos 9 dígitos finais não é o mesmo
-      // cliente.
-      return isPtSender && shopIsPt && ptLike(cd) && cd.slice(-9) === last9;
+      // Sufixo só vale entre números PT quando a loja envia em +351 —
+      // uma ficha estrangeira com os mesmos 9 dígitos finais não é o
+      // mesmo cliente.
+      return (
+        isPtSender && shopUsesPtDialCode && ptLike(cd) && cd.slice(-9) === last9
+      );
     })
     .map(({ id, name }) => ({ id, name }));
 }

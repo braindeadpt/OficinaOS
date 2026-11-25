@@ -673,10 +673,10 @@ describe("findCustomersByPhone — ficha com separadores", () => {
     expect(found.map((c) => c.id)).toEqual(["c0", "c1", "c3"]);
   });
 
-  it("loja fora de Portugal não casa um +351 pelo sufixo de uma ficha nacional", async () => {
-    // Loja espanhola: o cliente «912 345 678» é um nacional espanhol,
+  it("loja noutro país suportado não casa um +351 pelo sufixo de uma ficha nacional", async () => {
+    // Loja francesa: o cliente «912 345 678» é um nacional francês,
     // não um PT — um remetente português com o mesmo sufixo não é ele.
-    const prisma = phonePrisma(["912 345 678"], "ES");
+    const prisma = phonePrisma(["912 345 678"], "FR");
     const found = await findCustomersByPhone(prisma as never, "+351912345678");
     expect(found).toEqual([]);
   });
@@ -685,6 +685,18 @@ describe("findCustomersByPhone — ficha com separadores", () => {
     const prisma = phonePrisma(["+351 912 345 678"], "ES");
     const found = await findCustomersByPhone(prisma as never, "+351912345678");
     expect(found.map((c) => c.id)).toEqual(["c0"]);
+  });
+
+  it("loja legada DZ usa o fallback +351 do envio e revoga um STOP nacional", async () => {
+    // As primeiras instalações herdaram countryCode "DZ"; formatPhone não
+    // conhece esse indicativo e envia esses nacionais como +351. O STOP
+    // chega, por isso, de +351912345678 e tem de casar a ficha nacional.
+    const prisma = phonePrisma(["912 345 678"], "DZ");
+    await revokeConsentForPhone(prisma as never, "+351912345678");
+    expect(prisma.customer.update).toHaveBeenCalledWith({
+      data: { whatsappConsent: false, whatsappConsentAt: null },
+      where: { id: "c0" },
+    });
   });
 
   it("PARAR revoga o consentimento e limpa a data de opt-in", async () => {

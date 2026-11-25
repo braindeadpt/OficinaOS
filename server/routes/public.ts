@@ -321,8 +321,8 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
               text
             );
           } else if (isStopText(text)) {
-            await revokeConsentForPhone(app.prisma, from).catch(
-              () => undefined
+            await revokeConsentForPhone(app.prisma, from).catch((err) =>
+              app.log.warn({ err }, "sms: revogação PARAR falhou")
             );
           }
         }

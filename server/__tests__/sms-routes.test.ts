@@ -381,6 +381,32 @@ describe("POST /api/public/sms/inbound/:token", () => {
     });
   });
 
+  it("free mode: falha ao revogar PARAR fica registada sem quebrar o webhook", async () => {
+    // O webhook continua 200 (o gateway repetiria o POST), mas a falha da
+    // revogação legal não pode desaparecer em silêncio.
+    const row = { ...SMS_ROW, cloudEntitlements: [] };
+    const prisma = fakePrisma(row);
+    prisma.shopSettings.findUnique
+      .mockResolvedValueOnce(row)
+      .mockRejectedValueOnce(new Error("db down"));
+    const app = buildApp(prisma);
+    const warn = vi.spyOn(app.log, "warn");
+    const res = await app.inject({
+      method: "POST",
+      payload: {
+        ...inboundPayload,
+        payload: { ...inboundPayload.payload, message: "PARAR" },
+      },
+      url: "/api/public/sms/inbound/tok-abc",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(warn).toHaveBeenCalledWith(
+      { err: expect.any(Error) },
+      "sms: revogação PARAR falhou"
+    );
+    expect(prisma.customer.update).not.toHaveBeenCalled();
+  });
+
   it("free mode: texto com «parar» embutido não revoga (exact-match)", async () => {
     const prisma = fakePrisma({ ...SMS_ROW, cloudEntitlements: [] });
     const app = buildApp(prisma);
