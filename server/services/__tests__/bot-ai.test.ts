@@ -248,6 +248,56 @@ describe("conversationKey (WP1)", () => {
     expect(all[1].continuationToken).toBe("tok-abc");
   });
 
+  it("token substituído numa ronda posterior é o que segue na próxima", async () => {
+    mocks.cloudFetch
+      .mockResolvedValueOnce(
+        ok({
+          calls: [{ args: {}, id: "c1", name: "info_loja" }],
+          continuationToken: "tok-1",
+          type: "tool_calls",
+        })
+      )
+      .mockResolvedValueOnce(
+        ok({
+          calls: [{ args: {}, id: "c2", name: "info_loja" }],
+          continuationToken: "tok-2",
+          type: "tool_calls",
+        })
+      )
+      .mockResolvedValueOnce(
+        ok({ escalate: false, reply: "pronto", type: "reply" })
+      );
+    await askBotAi(ctx, cloud, input);
+    const all = bodies();
+    expect(all.length).toBeGreaterThanOrEqual(3);
+    expect(all[1].continuationToken).toBe("tok-1");
+    expect(all[2].continuationToken).toBe("tok-2");
+  });
+
+  it("ronda sem token na resposta mantém o último token conhecido", async () => {
+    mocks.cloudFetch
+      .mockResolvedValueOnce(
+        ok({
+          calls: [{ args: {}, id: "c1", name: "info_loja" }],
+          continuationToken: "tok-1",
+          type: "tool_calls",
+        })
+      )
+      .mockResolvedValueOnce(
+        ok({
+          calls: [{ args: {}, id: "c2", name: "info_loja" }],
+          type: "tool_calls",
+        })
+      )
+      .mockResolvedValueOnce(
+        ok({ escalate: false, reply: "pronto", type: "reply" })
+      );
+    await askBotAi(ctx, cloud, input);
+    const all = bodies();
+    expect(all.length).toBeGreaterThanOrEqual(3);
+    expect(all[2].continuationToken).toBe("tok-1");
+  });
+
   it("sem token emitido as rondas de ferramentas não enviam o campo", async () => {
     mocks.cloudFetch
       .mockResolvedValueOnce(

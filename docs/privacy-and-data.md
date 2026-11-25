@@ -57,7 +57,11 @@ envia, na **primeira ronda** de cada mensagem:
 - a mensagem atual do cliente; com a caixa de entrada ativa, até 6
   mensagens anteriores **dessa conversa**; nas rondas seguintes a mesma
   conversa volta a ir, acrescida dos resultados das ferramentas
-  executadas localmente nessa interação (a Cloud é stateless);
+  executadas localmente nessa interação (a Cloud é stateless) e do
+  `continuationToken` — um HMAC opaco emitido pela Cloud na ronda
+  contada, válido por 2 minutos, que prova às rondas de ferramentas
+  que a mensagem já contou para a quota de conversas da conta (não
+  contém dados do cliente nem da conversa);
 - `shopLabel` e `shopCard` (o texto público «o que o bot pode dizer» e a
   média de dias de reparação após a peça chegar), `currency`, `timezone`,
   `aiEnabled` e `allowQuoteDecision`;
