@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({
   askBotAi: vi.fn(),
   createManyAndReturnInAppNotifications: vi.fn(async () => []),
   findManyUsers: vi.fn(async () => []),
-  respondToQuote: vi.fn(async () => ({ error: undefined })),
+  respondToQuote: vi.fn(async () => ({ jobExists: true })),
 }));
 
 vi.mock("../bot-ai.js", () => ({ askBotAi: mocks.askBotAi }));
@@ -21,6 +21,7 @@ import type { BotReplyCtx } from "../bot-intents.js";
 import {
   composeReply,
   findCustomersByPhone,
+  handleInboundMessage,
   revokeConsentForPhone,
 } from "../bot-intents.js";
 
@@ -272,6 +273,48 @@ describe("composeReply — transporte WP0.4 (regras na Cloud)", () => {
     const { ctx } = makeCtx({ ai: aiCfg, customers: [cust], jobs: [job()] });
     const out = await composeReply(ctx, msg("stop"));
     expect(out.text).toContain("deixas de receber");
+  });
+
+  it("handleInboundMessage: PARAR revoga mesmo no limite de flood, sem enviar", async () => {
+    // Número único para não partilhar o balde in-memory com outros
+    // testes; limite 1 — a primeira mensagem esgota a janela.
+    const floodPhone = "351960000111";
+    const { ctx, prisma } = makeCtx({
+      ai: aiCfg,
+      customers: [{ ...cust, phone: floodPhone }],
+      jobs: [job()],
+    });
+    const send = vi.fn(async () => true);
+    const transport = {
+      channelLabel: "whatsapp",
+      plainText: false,
+      rateLimitPerHour: 1,
+      send,
+    };
+    const m = (text: string) => ({
+      createdAt: new Date().toISOString(),
+      fromPhone: floodPhone,
+      id: `m-${text}`,
+      messageType: "text",
+      text,
+    });
+    // Esgota a janela horária com uma mensagem normal.
+    await handleInboundMessage(ctx, m("olá"), transport);
+    // PARAR acima do limite: a revogação corre na mesma (obrigação
+    // legal) mas a confirmação não sai — anti-ban.
+    send.mockClear();
+    prisma.customer.update.mockClear();
+    const out = await handleInboundMessage(ctx, m("parar"), transport);
+    expect(prisma.customer.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { whatsappConsent: false, whatsappConsentAt: null },
+      })
+    );
+    expect(send).not.toHaveBeenCalled();
+    // Confirmação suprimida — a revogação fica gravada mas nada sai
+    // (anti-ban; o sent=true é o comportamento pré-existente do
+    // pipeline para textos vazios, fora do âmbito deste PR).
+    expect(out?.reply.text).toBe("");
   });
 });
 

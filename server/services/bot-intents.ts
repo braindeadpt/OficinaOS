@@ -322,6 +322,55 @@ function serializeJobs(jobs: ActiveJob[]) {
   }));
 }
 
+/** Executa a ação devolvida pelas regras da Cloud — a validação e os
+ *  efeitos na BD da loja são locais; a composição dos textos fica na
+ *  Cloud, a escolha aqui é plumbing. */
+async function executeCloudAction(
+  ctx: BotReplyCtx,
+  res: NonNullable<Awaited<ReturnType<typeof askBotAi>>>,
+  msg: InboundMessage,
+  customers: { id: string; name: string }[],
+  replyText: string
+): Promise<string> {
+  if (res.action?.kind === "stop_consent") {
+    // Belt-and-braces: o caminho normal já revogou acima; idempotente.
+    await applyStopConsent(ctx, customers);
+    return replyText;
+  }
+  if (res.action?.kind !== "quote_decision") {
+    return replyText;
+  }
+  let applied = false;
+  try {
+    const result = await respondToQuote(
+      ctx.prisma,
+      {
+        code: res.action.jobCode,
+        decision: res.action.decision,
+        phone4: msg.fromPhone.slice(-4),
+        quoteId: res.action.quoteId,
+      },
+      ctx.notifyCtx ?? { prisma: ctx.prisma }
+    );
+    // Recusas vêm como resultado, não exceção: SUPERSEDED /
+    // ALREADY_RESPONDED / PHONE_MISMATCH — confirmar o sucesso
+    // nesses casos mentia ao cliente sobre uma decisão que ficou
+    // por aplicar.
+    applied = !result.error && result.jobExists;
+  } catch {
+    applied = false;
+  }
+  if (applied) {
+    return res.actionSuccessText ?? replyText;
+  }
+  // Orçamento já respondido/substituído entretanto — a Cloud compôs
+  // o texto para esse caso.
+  return (
+    res.actionFailureText ??
+    "Esse orçamento já foi respondido ou substituído — a loja confirma contigo."
+  );
+}
+
 /**
  * Gera a resposta para uma mensagem inbound — transporte puro: monta o
  * contexto, chama a Cloud (regras + IA) e executa as ações devolvidas.
@@ -416,40 +465,21 @@ export async function composeReply(
     return escalateFallback();
   }
 
-  let replyText = res.reply;
-
-  if (res.action?.kind === "quote_decision") {
-    try {
-      await respondToQuote(
-        ctx.prisma,
-        {
-          code: res.action.jobCode,
-          decision: res.action.decision,
-          phone4: msg.fromPhone.slice(-4),
-          quoteId: res.action.quoteId,
-        },
-        ctx.notifyCtx ?? { prisma: ctx.prisma }
-      );
-      replyText = res.actionSuccessText ?? replyText;
-    } catch {
-      // Orçamento já respondido/substituído entretanto — a Cloud compôs
-      // o texto para esse caso; a escolha aqui é plumbing, não lógica.
-      replyText =
-        res.actionFailureText ??
-        "Esse orçamento já foi respondido ou substituído — a loja confirma contigo.";
-    }
-  } else if (res.action?.kind === "stop_consent") {
-    // Belt-and-braces: o caminho normal já revogou acima; idempotente.
-    await applyStopConsent(ctx, customers);
-  }
-
-  if (plainText) {
-    replyText = replyText.replace(WA_BOLD_RE, "");
-  }
+  const executed = await executeCloudAction(
+    ctx,
+    res,
+    msg,
+    customers,
+    res.reply
+  );
+  const replyText = plainText ? executed.replace(WA_BOLD_RE, "") : executed;
   return {
     customerName,
     escalate: res.escalate,
-    jobId: res.jobId ?? jobs[0]?.id ?? null,
+    // null explícito da Cloud = reparação ambígua — ligar a mais
+    // recente abria a reparação errada ao staff. undefined (Cloud
+    // antiga sem o campo) → compat com o comportamento anterior.
+    jobId: res.jobId === undefined ? (jobs[0]?.id ?? null) : res.jobId,
     text: replyText,
   };
 }

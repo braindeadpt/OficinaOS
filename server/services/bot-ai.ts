@@ -173,15 +173,26 @@ function parseAction(raw: unknown): BotAiResult["action"] {
   return;
 }
 
+function parseJobId(raw: unknown): string | null | undefined {
+  if (typeof raw === "string") {
+    return raw;
+  }
+  if (raw === null) {
+    return null;
+  }
+  return;
+}
+
 function parseReply(body: BotAiBody, escalate: boolean): BotAiResult | null {
   if (body.type !== "reply" || typeof body.reply !== "string") {
     return null;
   }
   const action = parseAction(body.action);
-  // Reply vazio só é válido com ação (decisão de orçamento escalada —
-  // a app escolhe o texto depois de a aplicar) ou em escalada pura.
+  // Reply vazio é válido com ação (decisão de orçamento — a app
+  // escolhe o texto depois de a aplicar) ou em escalada pura: um SIM
+  // stale/fora da janela escala em silêncio, sem ack ao cliente.
   if (
-    (body.reply.trim().length === 0 && !action) ||
+    (body.reply.trim().length === 0 && !action && body.escalate !== true) ||
     body.reply.length > MAX_REPLY_LEN
   ) {
     return null;
@@ -197,7 +208,9 @@ function parseReply(body: BotAiBody, escalate: boolean): BotAiResult | null {
         ? body.actionSuccessText
         : undefined,
     escalate: escalate || body.escalate === true,
-    jobId: typeof body.jobId === "string" ? body.jobId : null,
+    // undefined = a Cloud não enviou o campo (versão antiga); null é
+    // explícito — a reparação é ambígua e não se liga nenhuma.
+    jobId: parseJobId(body.jobId),
     reply: body.reply,
   };
 }

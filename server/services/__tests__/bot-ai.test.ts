@@ -45,7 +45,7 @@ describe("askBotAi", () => {
       actionFailureText: undefined,
       actionSuccessText: undefined,
       escalate: false,
-      jobId: null,
+      jobId: undefined,
       reply: "Fechamos às 18h.",
     });
   });
