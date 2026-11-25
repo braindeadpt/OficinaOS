@@ -40,7 +40,14 @@ describe("askBotAi", () => {
       ok({ escalate: false, reply: "Fechamos às 18h.", type: "reply" })
     );
     const res = await askBotAi(ctx, cloud, input);
-    expect(res).toEqual({ escalate: false, reply: "Fechamos às 18h." });
+    expect(res).toEqual({
+      action: undefined,
+      actionFailureText: undefined,
+      actionSuccessText: undefined,
+      escalate: false,
+      jobId: null,
+      reply: "Fechamos às 18h.",
+    });
   });
 
   it("executes tool calls locally and resends the conversation", async () => {

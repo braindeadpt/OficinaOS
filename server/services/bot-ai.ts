@@ -30,8 +30,39 @@ interface BotAiCall {
   name?: unknown;
 }
 
+export interface BotAiRulesContext {
+  aiEnabled?: boolean;
+  allowQuoteDecision?: boolean;
+  currency: string;
+  customers: { id: string; name: string }[];
+  jobs: {
+    customerName: string;
+    deviceName: string;
+    estimatedDate: string | null;
+    id: string;
+    jobCode: string;
+    partsWaiting: { expectedAt: string | null; partName: string }[];
+    quotes: {
+      amount: number;
+      id: string;
+      note: string | null;
+      sentAt: string | null;
+      status: string;
+      version: number;
+    }[];
+    status: string;
+  }[];
+  messageCreatedAt: string;
+  messageType: string;
+  shopLabel: string;
+  timezone?: string;
+}
+
 export interface BotAiInput {
   channel: "sms" | "whatsapp" | "evolution";
+  /** WP0.4 — contexto das regras determinísticas: só na primeira ronda
+   *  (as seguintes são continuações de ferramentas, sem texto novo). */
+  context?: BotAiRulesContext;
   /** Histórico da conversa gravada na inbox (§G.4) — últimas mensagens
    *  ANTES da atual; substitui o transporte de contexto na request. */
   history?: { content: string; role: "assistant" | "user" }[];
@@ -40,7 +71,20 @@ export interface BotAiInput {
 }
 
 export interface BotAiResult {
+  /** Ação devolvida pelas regras da Cloud — a app valida e aplica
+   *  localmente (a Cloud não toca na BD da loja). */
+  action?:
+    | {
+        decision: "approve" | "reject";
+        jobCode: string;
+        kind: "quote_decision";
+        quoteId: string;
+      }
+    | { kind: "stop_consent" };
+  actionFailureText?: string;
+  actionSuccessText?: string;
   escalate: boolean;
+  jobId?: string | null;
   reply: string;
 }
 
@@ -63,8 +107,12 @@ function parseCalls(raw: unknown): BotAiCall[] | null {
 }
 
 interface BotAiBody {
+  action?: unknown;
+  actionFailureText?: unknown;
+  actionSuccessText?: unknown;
   calls?: unknown;
   escalate?: unknown;
+  jobId?: unknown;
   reply?: unknown;
   type?: unknown;
 }
@@ -101,16 +149,57 @@ async function runToolCalls(
   return escalate;
 }
 
-function parseReply(body: BotAiBody, escalate: boolean): BotAiResult | null {
+function parseAction(raw: unknown): BotAiResult["action"] {
+  if (typeof raw !== "object" || raw === null) {
+    return;
+  }
+  const a = raw as Record<string, unknown>;
+  if (a.kind === "stop_consent") {
+    return { kind: "stop_consent" };
+  }
   if (
-    body.type !== "reply" ||
-    typeof body.reply !== "string" ||
-    body.reply.trim().length === 0 ||
+    a.kind === "quote_decision" &&
+    (a.decision === "approve" || a.decision === "reject") &&
+    typeof a.jobCode === "string" &&
+    typeof a.quoteId === "string"
+  ) {
+    return {
+      decision: a.decision,
+      jobCode: a.jobCode,
+      kind: "quote_decision",
+      quoteId: a.quoteId,
+    };
+  }
+  return;
+}
+
+function parseReply(body: BotAiBody, escalate: boolean): BotAiResult | null {
+  if (body.type !== "reply" || typeof body.reply !== "string") {
+    return null;
+  }
+  const action = parseAction(body.action);
+  // Reply vazio só é válido com ação (decisão de orçamento escalada —
+  // a app escolhe o texto depois de a aplicar) ou em escalada pura.
+  if (
+    (body.reply.trim().length === 0 && !action) ||
     body.reply.length > MAX_REPLY_LEN
   ) {
     return null;
   }
-  return { escalate: escalate || body.escalate === true, reply: body.reply };
+  return {
+    action,
+    actionFailureText:
+      typeof body.actionFailureText === "string"
+        ? body.actionFailureText
+        : undefined,
+    actionSuccessText:
+      typeof body.actionSuccessText === "string"
+        ? body.actionSuccessText
+        : undefined,
+    escalate: escalate || body.escalate === true,
+    jobId: typeof body.jobId === "string" ? body.jobId : null,
+    reply: body.reply,
+  };
 }
 
 export async function askBotAi(
@@ -133,6 +222,9 @@ export async function askBotAi(
     const res = await cloudFetch(cloud.apiUrl, "/ai/bot-reply", {
       body: {
         channel: input.channel,
+        // O contexto das regras vai só na primeira ronda — nas
+        // continuações de ferramentas não há mensagem nova do cliente.
+        ...(round === 0 && input.context ? { context: input.context } : {}),
         messages,
         shopCard: ctx.shopCard,
       },

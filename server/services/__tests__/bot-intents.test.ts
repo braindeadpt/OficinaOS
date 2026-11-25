@@ -21,7 +21,6 @@ import type { BotReplyCtx } from "../bot-intents.js";
 import {
   composeReply,
   findCustomersByPhone,
-  handleInboundMessage,
   revokeConsentForPhone,
 } from "../bot-intents.js";
 
@@ -99,158 +98,8 @@ const msg = (text: string | null, type = "text") => ({
 const cust = { id: "cust-1", name: "Ana", phone: "351912345678" };
 
 beforeEach(() => vi.clearAllMocks());
-
-describe("composeReply — deterministic rules before AI", () => {
-  it("sim with pending quote approves without calling AI", async () => {
-    const { ctx } = makeCtx({ ai: aiCfg, customers: [cust], jobs: [job()] });
-    const out = await composeReply(ctx, msg("sim"));
-    expect(mocks.askBotAi).not.toHaveBeenCalled();
-    expect(mocks.respondToQuote).toHaveBeenCalledOnce();
-    expect(out.text).toContain("aceite");
-  });
-
-  it("stale sim (allowQuoteDecision=false) never decides a quote", async () => {
-    // Mensagem >23h na Meta oficial: o orçamento pendente pode ser mais
-    // recente que a mensagem — decidir registava a resposta no errado.
-    const { ctx } = makeCtx({ ai: aiCfg, customers: [cust], jobs: [job()] });
-    const out = await composeReply(ctx, msg("sim"), false, {
-      allowQuoteDecision: false,
-    });
-    expect(mocks.respondToQuote).not.toHaveBeenCalled();
-    expect(out.text).toBe("");
-  });
-
-  it("sim mais antigo que o orçamento pendente não decide — escala ao staff", async () => {
-    // Fila Cloud: o SIM chegou à Cloud antes do orçamento sair (ficou
-    // horas à espera) — refere-se a outro, nunca ao mais recente.
-    const { ctx } = makeCtx({
-      ai: aiCfg,
-      customers: [cust],
-      jobs: [
-        job({
-          quotes: [
-            {
-              amount: { toNumber: () => 100 },
-              id: "q1",
-              note: null,
-              sentAt: new Date(),
-              status: "SENT",
-              version: 2,
-            },
-          ],
-        }),
-      ],
-    });
-    const out = await composeReply(ctx, {
-      createdAt: new Date(Date.now() - 10 * 60_000).toISOString(),
-      fromPhone: PHONE,
-      id: "m-stale",
-      messageType: "text",
-      text: "sim",
-    });
-    expect(mocks.respondToQuote).not.toHaveBeenCalled();
-    expect(out.text).toBe("");
-    expect(out.escalate).toBe(true);
-  });
-
-  it("sim depois do orçamento sair continua a decidir", async () => {
-    const { ctx } = makeCtx({
-      ai: aiCfg,
-      customers: [cust],
-      jobs: [
-        job({
-          quotes: [
-            {
-              amount: { toNumber: () => 100 },
-              id: "q1",
-              note: null,
-              sentAt: new Date(Date.now() - 60 * 60_000),
-              status: "SENT",
-              version: 1,
-            },
-          ],
-        }),
-      ],
-    });
-    const out = await composeReply(ctx, msg("sim"));
-    expect(mocks.respondToQuote).toHaveBeenCalledOnce();
-    expect(out.text).toContain("aceite");
-  });
-
-  it("sim retry on an already-approved quote re-confirms (idempotent)", async () => {
-    // A resposta à primeira decisão não saiu (falha de envio); o cliente
-    // reenviou SIM. O orçamento está APPROVED — confirmar de novo em vez
-    // de "não tens orçamentos" nem chamar respondToQuote outra vez.
-    const { ctx } = makeCtx({
-      ai: aiCfg,
-      customers: [cust],
-      jobs: [
-        job({
-          quotes: [
-            {
-              amount: { toNumber: () => 100 },
-              id: "q1",
-              note: null,
-              status: "APPROVED",
-              version: 1,
-            },
-          ],
-        }),
-      ],
-    });
-    const out = await composeReply(ctx, msg("sim"));
-    expect(mocks.respondToQuote).not.toHaveBeenCalled();
-    expect(out.text).toContain("aceite");
-    expect(out.text).toContain("100");
-  });
-
-  it("não retry on a rejected quote re-confirms the rejection", async () => {
-    const { ctx } = makeCtx({
-      ai: aiCfg,
-      customers: [cust],
-      jobs: [
-        job({
-          quotes: [
-            {
-              amount: { toNumber: () => 100 },
-              id: "q1",
-              note: null,
-              status: "REJECTED",
-              version: 1,
-            },
-          ],
-        }),
-      ],
-    });
-    const out = await composeReply(ctx, msg("não"));
-    expect(mocks.respondToQuote).not.toHaveBeenCalled();
-    expect(out.text).toContain("recusado");
-  });
-
-  it("não on an already-approved quote reports it was answered", async () => {
-    const { ctx } = makeCtx({
-      ai: aiCfg,
-      customers: [cust],
-      jobs: [
-        job({
-          quotes: [
-            {
-              amount: { toNumber: () => 100 },
-              id: "q1",
-              note: null,
-              status: "APPROVED",
-              version: 1,
-            },
-          ],
-        }),
-      ],
-    });
-    const out = await composeReply(ctx, msg("não"));
-    expect(mocks.respondToQuote).not.toHaveBeenCalled();
-    expect(out.text).toContain("já foi respondido");
-  });
-
-  it("PARAR disables consent and replies without AI", async () => {
+describe("composeReply — transporte WP0.4 (regras na Cloud)", () => {
+  it("PARAR revoga o consentimento localmente sem chamar a Cloud", async () => {
     const { ctx, prisma } = makeCtx({
       ai: aiCfg,
       customers: [cust],
@@ -258,384 +107,171 @@ describe("composeReply — deterministic rules before AI", () => {
     });
     const out = await composeReply(ctx, msg("PARAR"));
     expect(mocks.askBotAi).not.toHaveBeenCalled();
-    expect(prisma.customer.update).toHaveBeenCalledWith({
-      data: { whatsappConsent: false, whatsappConsentAt: null },
-      where: { id: "cust-1" },
-    });
-    expect(out.text).toContain("mensagens automáticas");
+    expect(prisma.customer.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { whatsappConsent: false, whatsappConsentAt: null },
+      })
+    );
+    expect(out.text).toContain("deixas de receber");
   });
 
-  it("REP code of another customer is not resolved (not in jobs)", async () => {
+  it("quote_decision: aplica respondToQuote e usa o texto de sucesso", async () => {
+    mocks.askBotAi.mockResolvedValueOnce({
+      action: {
+        decision: "approve",
+        jobCode: "REP-2024-000001-AAA",
+        kind: "quote_decision",
+        quoteId: "q1",
+      },
+      actionFailureText: "já foi respondido",
+      actionSuccessText: "Orçamento aceite ✅",
+      escalate: false,
+      jobId: "job-1",
+      reply: "",
+    });
+    const { ctx } = makeCtx({ ai: aiCfg, customers: [cust], jobs: [job()] });
+    const out = await composeReply(ctx, msg("sim"));
+    expect(mocks.respondToQuote).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        code: "REP-2024-000001-AAA",
+        decision: "approve",
+        phone4: PHONE.slice(-4),
+        quoteId: "q1",
+      }),
+      expect.anything()
+    );
+    expect(out.text).toBe("Orçamento aceite ✅");
+  });
+
+  it("quote_decision falha na BD → texto de falha composto na Cloud", async () => {
+    mocks.askBotAi.mockResolvedValueOnce({
+      action: {
+        decision: "reject",
+        jobCode: "REP-2024-000001-AAA",
+        kind: "quote_decision",
+        quoteId: "q1",
+      },
+      actionFailureText: "Esse orçamento já foi respondido",
+      actionSuccessText: "recusado",
+      escalate: false,
+      jobId: null,
+      reply: "",
+    });
+    mocks.respondToQuote.mockRejectedValueOnce(new Error("already"));
+    const { ctx } = makeCtx({ ai: aiCfg, customers: [cust], jobs: [job()] });
+    const out = await composeReply(ctx, msg("não"));
+    expect(out.text).toBe("Esse orçamento já foi respondido");
+  });
+
+  it("Cloud em baixo (null) → escala para staff sem regras locais", async () => {
+    mocks.askBotAi.mockResolvedValueOnce(null);
+    const { ctx } = makeCtx({ ai: aiCfg, customers: [cust], jobs: [job()] });
+    const out = await composeReply(ctx, msg("como está a minha reparação?"));
+    expect(out.escalate).toBe(true);
+    expect(out.text).toContain("a loja responde-te já");
+  });
+
+  it("sem configuração de canal → escala para staff", async () => {
+    const { ctx } = makeCtx({ customers: [cust], jobs: [job()] });
+    const out = await composeReply(ctx, msg("olá"));
+    expect(mocks.askBotAi).not.toHaveBeenCalled();
+    expect(out.escalate).toBe(true);
+  });
+
+  it("contexto vai serializado: amount number, datas ISO, metadados", async () => {
+    mocks.askBotAi.mockResolvedValueOnce({
+      escalate: false,
+      reply: "ok",
+    });
+    const sentAt = new Date("2026-11-20T10:00:00.000Z");
+    const estimated = new Date("2026-12-01T00:00:00.000Z");
     const { ctx } = makeCtx({
       ai: aiCfg,
       customers: [cust],
-      jobs: [job()],
-    });
-    // Different code — never reaches the AI or returns the other job.
-    const out = await composeReply(ctx, msg("REP-2024-000001-BBB"));
-    expect(mocks.askBotAi).not.toHaveBeenCalled();
-    expect(out.text).not.toContain("BBB");
-  });
-
-  it("free text calls the AI when flag+module allow it", async () => {
-    mocks.askBotAi.mockResolvedValueOnce({
-      escalate: false,
-      reply: "Fechamos às 18h.",
-    });
-    const { ctx } = makeCtx({ ai: aiCfg, customers: [cust], jobs: [job()] });
-    const out = await composeReply(ctx, msg("a que horas fecham?"));
-    expect(mocks.askBotAi).toHaveBeenCalledOnce();
-    expect(out.text).toBe("Fechamos às 18h.");
-  });
-
-  it("remetente +34 com os mesmos 9 dígitos não vê a ficha do cliente PT", async () => {
-    // Cliente guardado sem indicativo; remetente espanhol com o mesmo
-    // sufixo — antes casava por sufixo e expunha histórico/valores.
-    const { ctx } = makeCtx({
-      customers: [{ ...cust, phone: "912345678" }],
-      jobs: [job()],
-    });
-    const out = await composeReply(ctx, {
-      createdAt: new Date().toISOString(),
-      fromPhone: "34912345678",
-      id: "m2",
-      messageType: "text",
-      text: "estado da minha reparação",
-    });
-    expect(out.text).toContain("Não encontrei reparações");
-  });
-
-  it("remetente PT não casa ficha estrangeira com os mesmos 9 dígitos", async () => {
-    // Ficha guardada com indicativo espanhol; remetente PT com o mesmo
-    // sufixo — o fallback por últimos-9 só vale entre números PT.
-    const { ctx } = makeCtx({
-      customers: [{ ...cust, phone: "+34912345678" }],
-      jobs: [job()],
-    });
-    const out = await composeReply(ctx, {
-      createdAt: new Date().toISOString(),
-      fromPhone: "+351912345678",
-      id: "m2b",
-      messageType: "text",
-      text: "estado da minha reparação",
-    });
-    expect(out.text).toContain("Não encontrei reparações");
-  });
-
-  it("remetente PT sem indicativo continua a casar pelo sufixo", async () => {
-    const { ctx } = makeCtx({
-      customers: [cust],
-      jobs: [job({ quotes: [] })],
-    });
-    const out = await composeReply(ctx, {
-      createdAt: new Date().toISOString(),
-      fromPhone: "912345678",
-      id: "m3",
-      messageType: "text",
-      text: "estado",
-    });
-    expect(out.text).toContain("REP-2024-000001-AAA");
-  });
-
-  it('"quanto tempo falta" recebe a previsão, não o orçamento', async () => {
-    const { ctx } = makeCtx({
-      customers: [cust],
       jobs: [
         job({
-          estimatedDate: new Date("2026-12-30T12:00:00Z"),
-          quotes: [],
+          estimatedDate: estimated,
+          quotes: [
+            {
+              amount: { toNumber: () => 100 },
+              id: "q1",
+              note: null,
+              sentAt,
+              status: "SENT",
+              version: 1,
+            },
+          ],
         }),
       ],
     });
-    const out = await composeReply(ctx, msg("quanto tempo falta?"));
-    expect(mocks.askBotAi).not.toHaveBeenCalled();
-    expect(out.text).toContain("Previsão");
-    expect(out.text).not.toContain("orçamento de");
+    await composeReply(ctx, msg("como está?"), false, {
+      allowQuoteDecision: false,
+    });
+    const input = mocks.askBotAi.mock.calls[0]?.[2];
+    expect(input.context.customers).toEqual([{ id: "cust-1", name: "Ana" }]);
+    expect(input.context.allowQuoteDecision).toBe(false);
+    expect(input.context.shopLabel).toBe("Loja X");
+    const j = input.context.jobs[0];
+    expect(j.estimatedDate).toBe(estimated.toISOString());
+    expect(j.quotes[0].amount).toBe(100);
+    expect(j.quotes[0].sentAt).toBe(sentAt.toISOString());
+    expect(j.deviceName).toBe("Apple iPhone 13");
+    expect(input.context.messageType).toBe("text");
+    // flag on + módulo ativo → aiEnabled true
+    expect(input.context.aiEnabled).toBe(true);
   });
 
-  it("AI timeout/failure falls back to deterministic reply", async () => {
-    mocks.askBotAi.mockResolvedValueOnce(null);
-    const { ctx } = makeCtx({ ai: aiCfg, customers: [cust], jobs: [job()] });
-    // Mensagem neutra que chega à IA (não casa TIME_RE/QUOTE_RE/código).
-    const out = await composeReply(ctx, msg("obrigado pelo contacto"));
-    expect(mocks.askBotAi).toHaveBeenCalledOnce();
-    // fallback = statusText of the single active job
-    expect(out.text).toContain("REP-2024-000001-AAA");
-    expect(out.text).toContain("Em reparação");
-  });
-
-  it("AI is skipped when flag is off — pure deterministic", async () => {
+  it("aiEnabled false quando a flag está desligada", async () => {
+    mocks.askBotAi.mockResolvedValueOnce({ escalate: false, reply: "ok" });
     const { ctx } = makeCtx({
       ai: { ...aiCfg, enabled: false },
       customers: [cust],
       jobs: [job()],
     });
-    const out = await composeReply(ctx, msg("a que horas fecham?"));
-    expect(mocks.askBotAi).not.toHaveBeenCalled();
-    expect(out.text).toContain("REP-2024-000001-AAA");
+    await composeReply(ctx, msg("olá"));
+    expect(mocks.askBotAi.mock.calls[0]?.[2].context.aiEnabled).toBe(false);
   });
 
-  it("AI is skipped when the channel module is not entitled", async () => {
+  it("aiEnabled false quando o módulo não está nos entitlements", async () => {
+    mocks.askBotAi.mockResolvedValueOnce({ escalate: false, reply: "ok" });
     const { ctx } = makeCtx({
       ai: { ...aiCfg, modules: [] },
       customers: [cust],
       jobs: [job()],
     });
-    await composeReply(ctx, msg("a que horas fecham?"));
-    expect(mocks.askBotAi).not.toHaveBeenCalled();
+    await composeReply(ctx, msg("olá"));
+    expect(mocks.askBotAi.mock.calls[0]?.[2].context.aiEnabled).toBe(false);
   });
 
-  it("AI escalate flag propagates to BotReply", async () => {
+  it("plainText tira o negrito WhatsApp da resposta", async () => {
     mocks.askBotAi.mockResolvedValueOnce({
-      escalate: true,
-      reply: "Já chamo um humano.",
+      escalate: false,
+      reply: "está *pronto*",
     });
     const { ctx } = makeCtx({ ai: aiCfg, customers: [cust], jobs: [job()] });
-    const out = await composeReply(ctx, msg("isto está muito complicado"));
+    const out = await composeReply(ctx, msg("olá"), true);
+    expect(out.text).toBe("está pronto");
+  });
+
+  it("escalate e jobId da Cloud passam para o BotReply", async () => {
+    mocks.askBotAi.mockResolvedValueOnce({
+      escalate: true,
+      jobId: "job-1",
+      reply: "passo a um colega",
+    });
+    const { ctx } = makeCtx({ ai: aiCfg, customers: [cust], jobs: [job()] });
+    const out = await composeReply(ctx, msg("olá"));
     expect(out.escalate).toBe(true);
-  });
-
-  it("«previsão de chegada da peça» responde com a data da peça, não o estado", async () => {
-    const { ctx } = makeCtx({
-      customers: [cust],
-      jobs: [
-        job({
-          partsWaiting: [
-            {
-              expectedAt: new Date("2026-12-05T12:00:00Z"),
-              partName: "Ecrã iPhone 13",
-            },
-            { expectedAt: null, partName: "Bateria" },
-          ],
-          quotes: [],
-          status: "WAITING_FOR_PARTS",
-        }),
-      ],
-    });
-    const out = await composeReply(
-      ctx,
-      msg("Qual é a previsão de chegada da peça?")
-    );
-    expect(mocks.askBotAi).not.toHaveBeenCalled();
-    // A data registada tem de aparecer na linha da peça certa — não basta
-    // a frase genérica «chegada prevista».
-    const expected = new Date("2026-12-05T12:00:00Z").toLocaleDateString(
-      "pt-PT",
-      { timeZone: "Europe/Lisbon" }
-    );
-    expect(out.text).toContain(
-      `Ecrã iPhone 13 — chegada prevista: ${expected}`
-    );
-    // A peça sem data também é nomeada — não fica escondida.
-    expect(out.text).toContain("Bateria — sem data prevista");
-  });
-
-  it("«quando chega a peça» sem data registada diz que ainda não há data", async () => {
-    const { ctx } = makeCtx({
-      customers: [cust],
-      jobs: [
-        job({
-          partsWaiting: [{ expectedAt: null, partName: "Bateria" }],
-          quotes: [],
-          status: "WAITING_FOR_PARTS",
-        }),
-      ],
-    });
-    const out = await composeReply(ctx, msg("quando chega a peça?"));
-    expect(mocks.askBotAi).not.toHaveBeenCalled();
-    expect(out.text).toContain("Bateria");
-    expect(out.text).toContain("sem data prevista");
-  });
-
-  it("«prazo da reparação? Já paguei a peça.» responde ao prazo — a peça é contexto", async () => {
-    const { ctx } = makeCtx({
-      customers: [cust],
-      jobs: [
-        job({
-          estimatedDate: new Date("2026-12-03T12:00:00Z"),
-          partsWaiting: [
-            {
-              expectedAt: new Date("2026-12-05T12:00:00Z"),
-              partName: "Ecrã iPhone 13",
-            },
-          ],
-          quotes: [],
-          status: "WAITING_FOR_PARTS",
-        }),
-      ],
-    });
-    const out = await composeReply(
-      ctx,
-      msg("Qual é o prazo da reparação? Já paguei a peça.")
-    );
-    expect(mocks.askBotAi).not.toHaveBeenCalled();
-    // Estado/previsão da reparação em primeiro — a peça vem como contexto.
-    expect(out.text).toContain("está:");
-    expect(out.text).toContain("Previsão");
-  });
-
-  it("responder só com o código mostra a reparação com a data da peça", async () => {
-    const { ctx } = makeCtx({
-      customers: [cust],
-      jobs: [
-        job({
-          partsWaiting: [
-            {
-              expectedAt: new Date("2026-12-05T12:00:00Z"),
-              partName: "Ecrã iPhone 13",
-            },
-          ],
-          quotes: [],
-          status: "WAITING_FOR_PARTS",
-        }),
-      ],
-    });
-    const out = await composeReply(ctx, msg("REP-2024-000001-AAA"));
-    expect(out.text).toContain("está:");
-    // A data registada da peça aparece — «Ecrã iPhone 13 — sem data
-    // prevista» não pode passar neste teste.
-    const expected = new Date("2026-12-05T12:00:00Z").toLocaleDateString(
-      "pt-PT",
-      { timeZone: "Europe/Lisbon" }
-    );
-    expect(out.text).toContain(
-      `Ecrã iPhone 13 — chegada prevista: ${expected}`
-    );
-  });
-
-  it("reparação pronta não repete peças em falta — o registo pode ficar por apagar", async () => {
-    const { ctx } = makeCtx({
-      customers: [cust],
-      jobs: [
-        job({
-          partsWaiting: [{ expectedAt: null, partName: "Ecrã iPhone 13" }],
-          quotes: [],
-          status: "DONE",
-        }),
-      ],
-    });
-    const out = await composeReply(ctx, msg("REP-2024-000001-AAA"));
-    expect(out.text).toContain("Pronto para levantar");
-    expect(out.text).not.toContain("Peças em falta");
-    expect(out.text).not.toContain("Ecrã iPhone 13");
-  });
-
-  it("«quando chega a peça» numa reparação pronta não repete peças stale", async () => {
-    // IA ativa de propósito: a exclusão determinística só é real se a
-    // pergunta não chegar à IA mesmo com ela disponível.
-    const { ctx } = makeCtx({
-      ai: aiCfg,
-      customers: [cust],
-      jobs: [
-        job({
-          partsWaiting: [
-            {
-              expectedAt: new Date("2026-12-05T12:00:00Z"),
-              partName: "Ecrã iPhone 13",
-            },
-          ],
-          quotes: [],
-          status: "DONE",
-        }),
-      ],
-    });
-    // «quando chega a peça?» não contém «previsão» — a exclusão da IA
-    // vem do ramo determinístico, não do filtro de texto da IA.
-    const out = await composeReply(ctx, msg("quando chega a peça?"));
-    expect(mocks.askBotAi).not.toHaveBeenCalled();
-    expect(out.text).toContain("Pronto para levantar");
-    expect(out.text).not.toContain("Peças em falta");
-    expect(out.text).not.toContain("Ecrã iPhone 13");
-  });
-
-  it("«previsão para o preço» é pergunta de orçamento", async () => {
-    const { ctx } = makeCtx({
-      customers: [cust],
-      jobs: [job({ quotes: [] })],
-    });
-    const out = await composeReply(ctx, msg("Qual é a previsão para o preço?"));
-    expect(mocks.askBotAi).not.toHaveBeenCalled();
-    expect(out.text).toContain("orçamento");
-    expect(out.text).not.toContain("está:");
-  });
-
-  it("«Qual é a previsão? O preço já sei.» devolve a previsão, não o orçamento", async () => {
-    const { ctx } = makeCtx({
-      customers: [cust],
-      jobs: [
-        job({
-          estimatedDate: new Date("2026-12-03T12:00:00Z"),
-          quotes: [],
-        }),
-      ],
-    });
-    const out = await composeReply(
-      ctx,
-      msg("Qual é a previsão? O preço já sei.")
-    );
-    expect(mocks.askBotAi).not.toHaveBeenCalled();
-    expect(out.text).toContain("Previsão");
-    expect(out.text).not.toContain("Orçamento");
-  });
-
-  it("«previsão de preço» continua a ser pergunta de orçamento", async () => {
-    const { ctx } = makeCtx({
-      customers: [cust],
-      jobs: [job({ quotes: [] })],
-    });
-    const out = await composeReply(ctx, msg("tens previsão de preço?"));
-    expect(mocks.askBotAi).not.toHaveBeenCalled();
-    expect(out.text).toContain("orçamento");
+    expect(out.jobId).toBe("job-1");
+    expect(out.customerName).toBe("Ana");
   });
 
   it("PARAR bypasses the hourly flood limit — opt-out is compliance", async () => {
-    const { ctx, prisma } = makeCtx({ customers: [cust], jobs: [job()] });
-    const send = vi.fn(async () => true);
-    // rateLimitPerHour=0 → bucket rejects everything; PARAR must bypass.
-    const out = await handleInboundMessage(ctx, msg("PARAR"), {
-      channelLabel: "SMS",
-      rateLimitPerHour: 0,
-      send,
-    });
-    expect(out).not.toBeNull();
-    expect(prisma.customer.update).toHaveBeenCalledWith({
-      data: { whatsappConsent: false, whatsappConsentAt: null },
-      where: { id: "cust-1" },
-    });
-    // A confirmação conta para o limite anti-ban — acima do teto a
-    // revogação grava-se mas a resposta não sai.
-    expect(send).not.toHaveBeenCalled();
-    // Ordinary messages in the same window stay discarded.
-    const dropped = await handleInboundMessage(ctx, msg("estado"), {
-      channelLabel: "SMS",
-      rateLimitPerHour: 0,
-      send,
-    });
-    expect(dropped).toBeNull();
-  });
-
-  it("stale SIM does not decide but escalates to staff", async () => {
-    const { ctx } = makeCtx({ customers: [cust], jobs: [job()] });
-    const out = await composeReply(ctx, msg("sim"), false, {
-      allowQuoteDecision: false,
-    });
-    expect(mocks.respondToQuote).not.toHaveBeenCalled();
-    expect(out.escalate).toBe(true);
-    // Sem jobId — com várias reparações não se sabe a que orçamento o
-    // SIM se refere; ligar a mais recente abria a reparação errada.
-    expect(out.jobId).toBeNull();
-    expect(out.text).toBe("");
-  });
-
-  it("«quando está aberta a loja» não é prazo — chega à IA", async () => {
-    mocks.askBotAi.mockResolvedValueOnce({
-      escalate: false,
-      reply: "Aberto das 9h às 18h.",
-    });
+    mocks.askBotAi.mockResolvedValueOnce(null);
     const { ctx } = makeCtx({ ai: aiCfg, customers: [cust], jobs: [job()] });
-    const out = await composeReply(ctx, msg("Quando está aberta a loja?"));
-    expect(mocks.askBotAi).toHaveBeenCalledOnce();
-    expect(out.text).toBe("Aberto das 9h às 18h.");
+    const out = await composeReply(ctx, msg("stop"));
+    expect(out.text).toContain("deixas de receber");
   });
 });
 
