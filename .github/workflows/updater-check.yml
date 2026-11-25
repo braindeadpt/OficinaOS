@@ -11,6 +11,8 @@ on:
       - scripts/update-apply.test.ps1
       - installer/oficinaos.iss
       - installer/tray/OficinaOSTray.cs
+      - installer/build-windows.ps1
+      - .github/workflows/release.yml
       - .github/workflows/updater-check.yml
   workflow_dispatch:
 
@@ -28,48 +30,10 @@ jobs:
         run: choco install innosetup --no-progress -y
 
       - name: Compile oficinaos.iss + tray and verify version metadata
-        # O .iss e o tray so eram compilados na release — valida sintaxe,
-        # constantes e o contrato de metadados exigido pela SignPath
-        # (ProductName, ProductVersion e FileVersion alinhados nos dois .exe).
+        # Usa o mesmo script da release para validar sintaxe, calculo de versao
+        # e o contrato de metadados exigido pela SignPath nos dois .exe.
         run: |
-          $v = "1.2.3-ci"
-          $numVer = "1.2.3.0"
           $s = "installer\stage-ci"
           New-Item -ItemType Directory -Force "$s\app", "$s\bun", "$s\pgsql", "$s\tools", "dist" | Out-Null
           Set-Content "$s\app\stub", "$s\bun\stub", "$s\pgsql\stub", "$s\tools\stub" x
-
-          $verFile = "$env:RUNNER_TEMP\OficinaOSTrayVersion.cs"
-          @"
-          using System.Reflection;
-          [assembly: AssemblyVersion("$numVer")]
-          [assembly: AssemblyFileVersion("$numVer")]
-          [assembly: AssemblyInformationalVersion("$v")]
-          "@ | Set-Content -Encoding utf8 $verFile
-          $csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
-          & $csc /target:winexe /nologo `
-            /win32icon:"installer\OficinaOS.ico" `
-            /out:"$s\tools\OficinaOSTray.exe" `
-            /r:System.Windows.Forms.dll /r:System.Drawing.dll `
-            installer\tray\OficinaOSTray.cs $verFile
-          if ($LASTEXITCODE -ne 0) { throw "csc falhou: $LASTEXITCODE" }
-
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" `
-            "/DMyAppVersion=$v" "/DMyAppNumericVersion=$numVer" "/DSourceDir=stage-ci" /Q installer\oficinaos.iss
-          if ($LASTEXITCODE -ne 0) { throw "ISCC falhou: $LASTEXITCODE" }
-
-          foreach ($exe in @("$s\tools\OficinaOSTray.exe", "dist\OficinaOS-Setup.exe")) {
-            $vi = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $exe))
-            # O Inno Setup faz padding com espaços à direita nos campos de texto
-            # do SetupLdr.e32 (slots fixos na tabela de recursos PE) — fazer Trim().
-            $prodName = $vi.ProductName.Trim()
-            $prodVer = $vi.ProductVersion.Trim()
-            $fileVer = $vi.FileVersion.Trim()
-            $fileNum = "$($vi.FileMajorPart).$($vi.FileMinorPart).$($vi.FileBuildPart).$($vi.FilePrivatePart)"
-            $prodNum = "$($vi.ProductMajorPart).$($vi.ProductMinorPart).$($vi.ProductBuildPart).$($vi.ProductPrivatePart)"
-            Write-Host "${exe}: ProductName='$prodName' ProductVersion='$prodVer' FileVersion='$fileVer' numeric=$fileNum/$prodNum"
-            if ($prodName -ne "OficinaOS") { throw "${exe}: ProductName='$prodName' (esperado 'OficinaOS')" }
-            if ($prodVer -ne $v) { throw "${exe}: ProductVersion='$prodVer' (esperado '$v')" }
-            if ($fileVer -ne $numVer) { throw "${exe}: FileVersion='$fileVer' (esperado '$numVer')" }
-            if ($fileNum -ne $numVer) { throw "${exe}: numeric FileVersion='$fileNum' (esperado '$numVer')" }
-            if ($prodNum -ne $numVer) { throw "${exe}: numeric ProductVersion='$prodNum' (esperado '$numVer')" }
-          }
+          .\installer\build-windows.ps1 -Version "v1.2.3-ci" -SourceDir "stage-ci"
