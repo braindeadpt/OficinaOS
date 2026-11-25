@@ -8,14 +8,17 @@ import type { IntakeFormData } from "@/components/modules/jobs/intake-modal";
 import IntakeModal from "@/components/modules/jobs/intake-modal";
 import { mapServerFieldErrors } from "@/components/modules/jobs/intake-modal/types";
 import PrintPreviewDialog from "@/components/modules/jobs/print-preview-dialog";
+import NotFoundContent from "@/components/modules/not-found-content";
 import Sidebar from "@/components/modules/sidebar";
 import TopBar from "@/components/modules/top-bar";
 import UpdateBanner from "@/components/modules/update-banner";
 import { ShopSettingsProvider } from "@/components/providers/shop-settings-provider";
 import { ChunkErrorBoundary } from "@/components/ui/chunk-error-boundary";
 import { useIntakeTermsSession } from "@/hooks/use-intake-terms";
+import { useShopMode } from "@/hooks/use-shop-mode";
 import api, { getErrorMessage } from "@/lib/api";
 import { buildJobPayload } from "@/lib/build-job-payload";
+import { isPontoOnlyAllowedPath } from "@/lib/ponto-only";
 import { useJobsStore } from "@/stores/jobs";
 import { useUiStore } from "@/stores/ui";
 
@@ -42,6 +45,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   } = useIntakeTermsSession(intakeModalOpen);
   const { pathname } = useLocation();
   const { t, i18n } = useTranslation();
+  const { isLoading: shopModeLoading, isPontoOnly } = useShopMode();
 
   // The job was already created — a failed convert link shouldn't block the
   // intake flow, so this reports but never throws.
@@ -123,6 +127,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     window.location.hostname !== "localhost" &&
     window.location.hostname !== "127.0.0.1";
 
+  if (shopModeLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-16 w-16 animate-pulse rounded-2xl bg-surface-container" />
+      </div>
+    );
+  }
+
+  const blockedInPontoOnly = isPontoOnly && !isPontoOnlyAllowedPath(pathname);
+
   return (
     <ShopSettingsProvider>
       <div className="min-h-screen overflow-x-hidden bg-background text-on-background">
@@ -141,20 +155,26 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           {/* Page crashes stay inside <main> — keying by pathname also
               auto-recovers the boundary on navigation. */}
           <ChunkErrorBoundary key={pathname}>
-            <div className="animate-fade-slide-up">{children}</div>
+            <div className="animate-fade-slide-up">
+              {blockedInPontoOnly ? <NotFoundContent /> : children}
+            </div>
           </ChunkErrorBoundary>
         </main>
         <BottomNav />
-        <IntakeModal
-          intakeTerms={intakeTerms}
-          intakeTermsFailed={intakeTermsFailed}
-          onClose={closeIntakeModal}
-          onRetryIntakeTerms={retryIntakeTerms}
-          onSubmit={handleIntakeSubmit}
-          open={intakeModalOpen}
-          prefill={intakeModalPrefill ?? undefined}
-        />
-        <PrintPreviewDialog />
+        {!isPontoOnly && (
+          <>
+            <IntakeModal
+              intakeTerms={intakeTerms}
+              intakeTermsFailed={intakeTermsFailed}
+              onClose={closeIntakeModal}
+              onRetryIntakeTerms={retryIntakeTerms}
+              onSubmit={handleIntakeSubmit}
+              open={intakeModalOpen}
+              prefill={intakeModalPrefill ?? undefined}
+            />
+            <PrintPreviewDialog />
+          </>
+        )}
       </div>
     </ShopSettingsProvider>
   );

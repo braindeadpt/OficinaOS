@@ -141,6 +141,7 @@ function RemoteBackupRows({ remote }: { remote: RemoteBackupStatus }) {
 
 const SHOP_FORM_DEFAULT = {
   shopName: "",
+  shopMode: "repair_shop" as "repair_shop" | "ponto_only",
   address: "",
   phone: "",
   countryCode: "PT",
@@ -171,6 +172,7 @@ function formFromSettings(shopSettings: ShopSettings) {
   const label = shopSettings.labelSize as "40x20" | "57x32" | "62x29" | null;
   return {
     shopName: shopSettings.shopName ?? "",
+    shopMode: shopSettings.shopMode as "repair_shop" | "ponto_only",
     address: shopSettings.address ?? "",
     phone: shopSettings.phone ?? "",
     countryCode: shopSettings.countryCode ?? "PT",
@@ -220,6 +222,7 @@ export default function SettingsShopTab({
 
   const { shopSettings, fetchShopSettings, saveShopSettings } =
     useSettingsStore();
+  const isPontoOnly = shopSettings?.shopMode === "ponto_only";
 
   const [shopForm, setShopForm] = useState(SHOP_FORM_DEFAULT);
   const [shopFormInitial, setShopFormInitial] = useState(shopForm);
@@ -353,6 +356,24 @@ export default function SettingsShopTab({
           </Field>
         </div>
         <div className="mt-6">
+          <Field hint={t("shop_mode_help")} label={t("shop_mode")}>
+            <Select
+              id="shop-mode"
+              onChange={(e) => {
+                setShopForm((f) => ({
+                  ...f,
+                  shopMode: e.target.value as "repair_shop" | "ponto_only",
+                }));
+                onDirtyChange(true);
+              }}
+              value={shopForm.shopMode}
+            >
+              <option value="repair_shop">{t("shop_mode_repair_shop")}</option>
+              <option value="ponto_only">{t("shop_mode_ponto_only")}</option>
+            </Select>
+          </Field>
+        </div>
+        <div className="mt-6">
           <Field label={t("shop_address")}>
             <Textarea
               className="resize-none"
@@ -367,7 +388,7 @@ export default function SettingsShopTab({
             />
           </Field>
         </div>
-        <div className="mt-6">
+        <div className="mt-6" hidden={isPontoOnly}>
           <Field
             hint={t(
               "shop_review_url_help",
@@ -387,7 +408,10 @@ export default function SettingsShopTab({
           </Field>
         </div>
       </div>
-      <div className="rounded-2xl bg-surface-container-low p-5">
+      <div
+        className="rounded-2xl bg-surface-container-low p-5"
+        hidden={isPontoOnly}
+      >
         <p className="mb-4 font-semibold text-on-surface text-sm">
           {t("regional_settings_label")}
         </p>
@@ -463,7 +487,10 @@ export default function SettingsShopTab({
         </div>
       </div>
 
-      <div className="rounded-2xl bg-surface-container-low p-5">
+      <div
+        className="rounded-2xl bg-surface-container-low p-5"
+        hidden={isPontoOnly}
+      >
         <p className="mb-1 font-semibold text-on-surface text-sm">
           {t("intake_terms_title")}
         </p>
@@ -486,7 +513,10 @@ export default function SettingsShopTab({
         </Field>
       </div>
 
-      <div className="rounded-2xl bg-surface-container-low p-5">
+      <div
+        className="rounded-2xl bg-surface-container-low p-5"
+        hidden={isPontoOnly}
+      >
         <p className="mb-1 font-semibold text-on-surface text-sm">
           {t("print_settings_title")}
         </p>
@@ -641,7 +671,7 @@ export default function SettingsShopTab({
         </div>
       </div>
 
-      <BackupStatusCard />
+      {!isPontoOnly && <BackupStatusCard />}
     </form>
   );
 }

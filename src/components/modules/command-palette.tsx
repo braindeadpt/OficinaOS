@@ -25,6 +25,7 @@ import {
 import { useAuthStore } from "@/stores/auth";
 import { useCommandPaletteStore } from "@/stores/command-palette";
 import { usePontoStore } from "@/stores/ponto";
+import { useShopModeStore } from "@/stores/shop-mode";
 import { useUiStore } from "@/stores/ui";
 
 const DEBOUNCE_MS = 200;
@@ -96,6 +97,7 @@ export default function CommandPalette() {
   // sidebar/bottom-nav para não oferecer uma página trancada.
   const pontoEnabled = usePontoStore((s) => s.enabled);
   const fetchPontoStatus = usePontoStore((s) => s.fetchStatus);
+  const isPontoOnly = useShopModeStore((s) => s.shopMode === "ponto_only");
 
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -166,10 +168,19 @@ export default function CommandPalette() {
         navigate,
         openIntakeModal,
         pontoEnabled: pontoEnabled === true,
+        pontoOnly: isPontoOnly,
         role,
         signOut,
       }),
-    [logout, navigate, openIntakeModal, pontoEnabled, role, signOut]
+    [
+      logout,
+      navigate,
+      openIntakeModal,
+      pontoEnabled,
+      isPontoOnly,
+      role,
+      signOut,
+    ]
   );
 
   const matched = useMemo(
@@ -179,7 +190,7 @@ export default function CommandPalette() {
 
   // Records only mean something once there is a term to match, and the static
   // list is exactly what someone wants on first open.
-  const showRecords = isSearchable(query);
+  const showRecords = isSearchable(query) && !isPontoOnly;
 
   useEffect(() => {
     if (!(isOpen && showRecords)) {

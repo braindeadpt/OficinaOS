@@ -645,6 +645,27 @@ describe("composeReply — transporte WP0.4 (regras na Cloud)", () => {
     expect(out.text).toContain("deixas de receber");
   });
 
+  it("modo só ponto: mensagem não-funcionário fica sem resposta e sem registo", async () => {
+    const { ctx, prisma } = makeCtx({
+      ai: aiCfg,
+      customers: [cust],
+      jobs: [job()],
+    });
+    ctx.pontoOnly = true;
+    const send = vi.fn(async () => true);
+    const out = await handleInboundMessage(ctx, msg("olá, têm orçamento?"), {
+      channelLabel: "whatsapp",
+      plainText: false,
+      rateLimitPerHour: 10,
+      send,
+    });
+
+    expect(out).toBeNull();
+    expect(send).not.toHaveBeenCalled();
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
+    expect(mocks.askBotAi).not.toHaveBeenCalled();
+  });
+
   it("handleInboundMessage: PARAR revoga mesmo no limite de flood, sem enviar", async () => {
     // Número único para não partilhar o balde in-memory com outros
     // testes; limite 1 — a primeira mensagem esgota a janela.

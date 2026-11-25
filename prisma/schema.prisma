@@ -1197,6 +1197,10 @@ model AiInstruction {
 model ShopSettings {
   id                          String    @id
   shopName                    String    @default("")
+  // "repair_shop" = OficinaOS completa; "ponto_only" = instância alojada
+  // só com Livro de Ponto (plano-ponto-qualquer-empresa). Só o instalador
+  // no primeiro setup ou um OWNER o pode alterar via API de definições.
+  shopMode                    String    @default("repair_shop")
   logoPath                    String?
   address                     String?
   phone                       String?

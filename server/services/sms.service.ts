@@ -220,6 +220,7 @@ export async function handleInboundSms(
     notifyCtx,
     portalApiUrl: settings.cloudApiUrl,
     portalEnabled: modules.includes("portal"),
+    pontoOnly: settings.shopMode === "ponto_only",
     prisma,
     timezone: settings.timezone ?? process.env.TZ ?? "UTC",
     shopLabel:

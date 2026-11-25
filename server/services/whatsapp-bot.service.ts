@@ -299,6 +299,7 @@ async function pollWhatsAppInboundCycle(
     notifyCtx,
     portalApiUrl: apiUrl,
     portalEnabled: modules.includes("portal"),
+    pontoOnly: settings.shopMode === "ponto_only",
     prisma,
     timezone: settings.timezone ?? process.env.TZ ?? "UTC",
     settings,

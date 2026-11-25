@@ -20,6 +20,7 @@ const searchGlobalMock = vi.fn();
 const logoutMock = vi.fn();
 const openIntakeMock = vi.fn();
 const roleRef = { value: "OWNER" as string };
+const shopModeRef = { value: "repair_shop" as string };
 
 vi.mock("react-router", async () => {
   const actual =
@@ -47,6 +48,21 @@ vi.mock("@/stores/auth", () => ({
     selector({
       logout: logoutMock,
       role: roleRef.value,
+    }),
+}));
+
+vi.mock("@/stores/ponto", () => ({
+  usePontoStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({
+      enabled: true,
+      fetchStatus: () => Promise.resolve(),
+    }),
+}));
+
+vi.mock("@/stores/shop-mode", () => ({
+  useShopModeStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({
+      shopMode: shopModeRef.value,
     }),
 }));
 
@@ -140,6 +156,7 @@ beforeEach(() => {
   logoutMock.mockReset();
   openIntakeMock.mockReset();
   roleRef.value = "OWNER";
+  shopModeRef.value = "repair_shop";
   act(() => {
     useCommandPaletteStore.setState({ isOpen: false });
   });
@@ -184,6 +201,22 @@ describe("CommandPalette", () => {
 
     expect(screen.getByText("command_palette.group_pages")).toBeDefined();
     expect(screen.getByText("command_palette.group_actions")).toBeDefined();
+    expect(searchGlobalMock).not.toHaveBeenCalled();
+  });
+
+  it("modo só ponto limita páginas/ações e não pesquisa registos de oficina", async () => {
+    shopModeRef.value = "ponto_only";
+    render(<CommandPalette />);
+    openPalette();
+
+    expect(screen.getByText("ponto.nav_label")).toBeDefined();
+    expect(screen.getAllByText("settings").length).toBeGreaterThan(0);
+    expect(screen.queryByText("jobs")).toBeNull();
+    expect(screen.queryByText("pos")).toBeNull();
+    expect(screen.queryByText("new_checkin")).toBeNull();
+
+    fireEvent.change(input(), { target: { value: "ana" } });
+    await new Promise((resolve) => setTimeout(resolve, 250));
     expect(searchGlobalMock).not.toHaveBeenCalled();
   });
 

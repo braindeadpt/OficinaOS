@@ -37,6 +37,11 @@ const TAB_KEYS: SettingsTab[] = [
   "data",
 ];
 
+// Modo só ponto: empresa/loja, funcionários e ligações Cloud (WhatsApp,
+// SMS e ponto). AI, modelos de clientes e importação/exportação de
+// reparações não fazem parte da superfície standalone.
+const PONTO_ONLY_TAB_KEYS: SettingsTab[] = ["cloud", "shop", "users"];
+
 const TAB_ICONS: Record<SettingsTab, string> = {
   ai: "psychology",
   cloud: "cloud",
@@ -82,16 +87,27 @@ export default function SettingsPage() {
 
   const { notificationTemplates, fetchNotificationTemplates } =
     useSettingsStore();
+  const isPontoOnly = useSettingsStore(
+    (s) => s.shopSettings?.shopMode === "ponto_only"
+  );
+  const visibleTabKeys = isPontoOnly ? PONTO_ONLY_TAB_KEYS : TAB_KEYS;
   const navigate = useNavigate();
   const { markDirty, isDirty } = useDirtyState();
 
   useModalEffects(pendingTab !== null, () => setPendingTab(null), dialogRef);
 
+  useEffect(() => {
+    if (!visibleTabKeys.includes(activeTab)) {
+      setActiveTab("shop");
+      setSearchParams({ tab: "shop" });
+    }
+  }, [visibleTabKeys, activeTab, setSearchParams]);
+
   // Deep links (?tab=...) also drive tab switching — browser back/forward,
   // links from other pages. The dirty-form guard still applies.
   useEffect(() => {
     const requestedTab = searchParams.get("tab") as SettingsTab | null;
-    if (!(requestedTab && TAB_KEYS.includes(requestedTab))) {
+    if (!(requestedTab && visibleTabKeys.includes(requestedTab))) {
       return;
     }
     if (requestedTab === activeTab) {
@@ -102,7 +118,7 @@ export default function SettingsPage() {
       return;
     }
     setActiveTab(requestedTab);
-  }, [searchParams, activeTab, isDirty]);
+  }, [searchParams, activeTab, isDirty, visibleTabKeys]);
 
   useEffect(() => {
     if (activeTab === "notifications" && notificationTemplates.length === 0) {
@@ -116,7 +132,7 @@ export default function SettingsPage() {
   const headingId = (key: SettingsTab) => `${baseId}-heading-${key}`;
   const panelId = (key: SettingsTab) => `${baseId}-panel-${key}`;
 
-  const tabs: { key: SettingsTab; label: string }[] = [
+  const allTabs: { key: SettingsTab; label: string }[] = [
     { key: "ai", label: t("ai_settings_title") },
     { key: "cloud", label: t("cloud_settings_title") },
     { key: "shop", label: t("shop_information") },
@@ -124,6 +140,7 @@ export default function SettingsPage() {
     { key: "users", label: t("users_management") },
     { key: "data", label: t("data_io.tab") },
   ];
+  const tabs = allTabs.filter((tab) => visibleTabKeys.includes(tab.key));
 
   const sectionDescriptions: Record<SettingsTab, string> = {
     ai: t("ai_settings_description"),
@@ -165,20 +182,20 @@ export default function SettingsPage() {
   }
 
   function handleTabKeyDown(e: KeyboardEvent<HTMLButtonElement>) {
-    const idx = TAB_KEYS.indexOf(activeTab);
+    const idx = visibleTabKeys.indexOf(activeTab);
     let next: number | undefined;
     if (e.key === "ArrowRight" || e.key === "ArrowDown") {
-      next = (idx + 1) % TAB_KEYS.length;
+      next = (idx + 1) % visibleTabKeys.length;
     } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
-      next = (idx - 1 + TAB_KEYS.length) % TAB_KEYS.length;
+      next = (idx - 1 + visibleTabKeys.length) % visibleTabKeys.length;
     } else if (e.key === "Home") {
       next = 0;
     } else if (e.key === "End") {
-      next = TAB_KEYS.length - 1;
+      next = visibleTabKeys.length - 1;
     }
     if (next !== undefined) {
       e.preventDefault();
-      switchTab(TAB_KEYS[next]);
+      switchTab(visibleTabKeys[next]);
     }
   }
 

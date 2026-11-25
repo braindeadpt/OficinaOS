@@ -395,6 +395,7 @@ function buildCtx(
     notifyCtx,
     portalApiUrl: settings.cloudApiUrl,
     portalEnabled: modules.includes("portal"),
+    pontoOnly: settings.shopMode === "ponto_only",
     prisma,
     shopLabel:
       [settings.shopName, settings.phone].filter(Boolean).join(" · ") ||

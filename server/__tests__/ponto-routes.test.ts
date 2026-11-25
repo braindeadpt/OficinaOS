@@ -19,6 +19,7 @@ interface SettingsRow {
   pontoRadiusM: number;
   pontoSmsNumber: string | null;
   pontoWaNumber: string | null;
+  shopMode: string;
   timezone: string | null;
 }
 
@@ -35,6 +36,7 @@ function fakePrisma(overrides: Partial<SettingsRow> = {}) {
     pontoRadiusM: 100,
     pontoSmsNumber: "+351210000000",
     pontoWaNumber: "+351912345678",
+    shopMode: "repair_shop",
     timezone: "Europe/Lisbon",
     ...overrides,
   };
@@ -107,6 +109,19 @@ beforeEach(() => {
 afterEach(() => {
   vi.clearAllMocks();
   __resetTzCache();
+});
+
+describe("ponto — GET /mode", () => {
+  it("expõe só o modo da instância a qualquer utilizador autenticado", async () => {
+    const app = buildApp(fakePrisma({ shopMode: "ponto_only" }), {
+      id: "tech-1",
+      role: "TECHNICIAN",
+    });
+    const res = await app.inject({ method: "GET", url: "/api/ponto/mode" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ shopMode: "ponto_only" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
 
 describe("ponto — GET /status", () => {

@@ -6,10 +6,12 @@ import { Icon } from "@/components/ui/icon";
 import { Wordmark } from "@/components/ui/wordmark";
 import { can, useCan } from "@/hooks/use-can";
 import { NAV_ITEMS } from "@/lib/navigation";
+import { navItemVisibleInPontoOnly } from "@/lib/ponto-only";
 import { getInitials } from "@/lib/utils";
 import { useAiInboxStore } from "@/stores/ai-inbox";
 import { useAuthStore } from "@/stores/auth";
 import { usePontoStore } from "@/stores/ponto";
+import { useShopModeStore } from "@/stores/shop-mode";
 import { useUiStore } from "@/stores/ui";
 
 const NAV_GROUPS: { labelKey: string; paths: string[] }[] = [
@@ -98,15 +100,17 @@ export default function Sidebar() {
       fetchPonto().catch(() => undefined);
     }
   }, [pontoEnabled, fetchPonto]);
+  const isPontoOnly = useShopModeStore((s) => s.shopMode === "ponto_only");
   const navItems = useMemo(
     () =>
       NAV_ITEMS.filter(
         (item) =>
           can(role, item.perm) &&
           (item.to !== "/inbox" || aiInboxEnabled) &&
-          (item.to !== "/ponto" || pontoEnabled)
+          (item.to !== "/ponto" || pontoEnabled) &&
+          navItemVisibleInPontoOnly(item, isPontoOnly)
       ),
-    [role, aiInboxEnabled, pontoEnabled]
+    [role, aiInboxEnabled, pontoEnabled, isPontoOnly]
   );
   const navGroups = useMemo(() => {
     const groupedPaths = new Set(NAV_GROUPS.flatMap((group) => group.paths));
@@ -182,15 +186,17 @@ export default function Sidebar() {
       </div>
 
       <div className="mt-3 shrink-0 space-y-3 border-outline-variant/60 border-t pt-3">
-        <button
-          className={`flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-bold text-on-primary transition-all duration-200 active:scale-[0.98] ${canCreateJob ? "" : "cursor-not-allowed opacity-50"}`}
-          disabled={!canCreateJob}
-          onClick={() => openIntakeModal()}
-          type="button"
-        >
-          <Icon name="add_circle" size="lg" />
-          <span>{t("new_checkin")}</span>
-        </button>
+        {!isPontoOnly && (
+          <button
+            className={`flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-bold text-on-primary transition-all duration-200 active:scale-[0.98] ${canCreateJob ? "" : "cursor-not-allowed opacity-50"}`}
+            disabled={!canCreateJob}
+            onClick={() => openIntakeModal()}
+            type="button"
+          >
+            <Icon name="add_circle" size="lg" />
+            <span>{t("new_checkin")}</span>
+          </button>
+        )}
 
         <div className="flex items-center gap-1">
           <NavLink

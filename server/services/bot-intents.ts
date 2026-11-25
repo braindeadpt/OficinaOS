@@ -108,6 +108,9 @@ export interface BotReplyCtx {
   inbox?: { channel: string; enabled: boolean };
   log: FastifyBaseLogger;
   notifyCtx: NotifyContext | undefined;
+  /** Modo só ponto: funcionários passam primeiro pelo handler do ponto;
+   *  todo o resto fica sem resposta automática e sem registo de cliente. */
+  pontoOnly?: boolean;
   /** Cloud API base para o link do portal na vistaCliente (null → sem link). */
   portalApiUrl?: string | null;
   /** true quando o módulo "portal" está ativo nos entitlements. */
@@ -689,6 +692,9 @@ export async function handleInboundMessage(
   const pontoReply = await pontoClaimedReply(ctx, msg, t);
   if (pontoReply) {
     return pontoReply;
+  }
+  if (ctx.pontoOnly) {
+    return null;
   }
   // Opt-out legal: PARAR/STOP nunca morre no rate limiter — a revogação
   // do consentimento tem de correr mesmo quando o número esgotou a

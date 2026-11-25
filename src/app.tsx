@@ -2,14 +2,16 @@ import type { RoleType } from "@shared/constants";
 import { Role } from "@shared/constants";
 import { lazy, Suspense, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, Route, Routes } from "react-router";
+import { Route, Routes } from "react-router";
 import CommandPalette from "@/components/modules/command-palette";
 import DashboardLayout from "@/components/modules/dashboard-layout";
 import DemoBanner from "@/components/modules/demo-banner";
+import NotFoundContent from "@/components/modules/not-found-content";
 import ProtectedRoute, {
   RequirePermission,
 } from "@/components/modules/protected-route";
 import { ChunkErrorBoundary } from "@/components/ui/chunk-error-boundary";
+import { useShopMode } from "@/hooks/use-shop-mode";
 import { useAuthStore } from "@/stores/auth";
 
 const AiAnalystPage = lazy(() => import("@/pages/ai-analyst"));
@@ -67,26 +69,9 @@ const DASHBOARD_LAZY_MAP: Record<
 };
 
 function NotFoundPage() {
-  const { t } = useTranslation();
   return (
     <DashboardLayout>
-      <div className="flex flex-col items-center justify-center py-24">
-        <span className="material-symbols-outlined text-6xl text-on-surface-variant/40">
-          error_outline
-        </span>
-        <h1 className="mt-4 font-extrabold font-headline text-3xl text-on-surface">
-          {t("not_found.title")}
-        </h1>
-        <p className="mt-2 text-on-surface-variant">
-          {t("not_found.description")}
-        </p>
-        <Link
-          className="mt-6 inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-primary px-6 font-bold text-on-primary text-sm"
-          to="/"
-        >
-          {t("not_found.go_home")}
-        </Link>
-      </div>
+      <NotFoundContent />
     </DashboardLayout>
   );
 }
@@ -100,6 +85,26 @@ function PageSkeleton() {
       className="m-4 h-96 animate-pulse rounded-xl bg-surface-container-low"
       role="status"
     />
+  );
+}
+
+function HomePage({
+  dashboard: DashboardComponent,
+}: {
+  dashboard: React.LazyExoticComponent<() => React.JSX.Element>;
+}) {
+  const { isLoading, isPontoOnly } = useShopMode();
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <PageSkeleton />
+      </DashboardLayout>
+    );
+  }
+  return (
+    <DashboardLayout>
+      {isPontoOnly ? <PontoPage /> : <DashboardComponent />}
+    </DashboardLayout>
   );
 }
 
@@ -131,11 +136,7 @@ export default function App() {
           </Route>
           <Route element={<ProtectedRoute />}>
             <Route
-              element={
-                <DashboardLayout>
-                  <DashboardComponent />
-                </DashboardLayout>
-              }
+              element={<HomePage dashboard={DashboardComponent} />}
               path="/"
             />
             <Route

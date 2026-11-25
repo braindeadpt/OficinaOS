@@ -110,6 +110,7 @@ export interface CreateFirstOwnerInput {
   login: string;
   name: string;
   password: string;
+  shopMode?: "repair_shop" | "ponto_only";
   shopName: string;
 }
 
@@ -160,8 +161,15 @@ export async function createFirstOwner(
 
     await tx.shopSettings.upsert({
       where: { id: "default" },
-      create: { id: "default", shopName: input.shopName.trim() },
-      update: { shopName: input.shopName.trim() },
+      create: {
+        id: "default",
+        shopMode: input.shopMode ?? "repair_shop",
+        shopName: input.shopName.trim(),
+      },
+      update: {
+        shopMode: input.shopMode ?? "repair_shop",
+        shopName: input.shopName.trim(),
+      },
     });
 
     await tx.auditLog.create({
