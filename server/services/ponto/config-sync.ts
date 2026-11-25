@@ -22,7 +22,7 @@ export interface PontoStaffConfigRow {
   externalWork: boolean;
   /** Última ENTRADA efetiva local — a Cloud usa-a para validar
    *  pausa/saída após entrada manual ou corrigida. */
-  lastEntryAt?: string;
+  lastEntryAt: string | null;
   phone: string;
   smsAllowed: boolean;
 }
@@ -30,6 +30,7 @@ export interface PontoStaffConfigRow {
 export interface PontoCloudConfigPayload {
   externalAutoApprove: boolean;
   photoRequired: boolean;
+  pinSyncVersion: 1;
   shopGeo: { lat: number; lng: number; radiusM: number } | null;
   smsNumber: string | null;
   staff: PontoStaffConfigRow[];
@@ -62,6 +63,7 @@ export function buildPontoConfigPayload(
   return {
     externalAutoApprove: settings.pontoExternalAutoApprove,
     photoRequired: settings.pontoExternalPhotoRequired,
+    pinSyncVersion: 1,
     shopGeo: hasGeo
       ? {
           lat: settings.pontoGeoLat as number,
@@ -74,7 +76,7 @@ export function buildPontoConfigPayload(
       .filter((u) => u.phoneE164)
       .map((u) => ({
         externalWork: u.externalWork,
-        ...(u.lastEntryAt ? { lastEntryAt: u.lastEntryAt.toISOString() } : {}),
+        lastEntryAt: u.lastEntryAt ? u.lastEntryAt.toISOString() : null,
         phone: u.phoneE164 as string,
         smsAllowed: u.pontoSmsAllowed,
       })),

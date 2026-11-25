@@ -24,6 +24,7 @@ describe("buildPontoConfigPayload", () => {
     expect(payload).toEqual({
       externalAutoApprove: true,
       photoRequired: false,
+      pinSyncVersion: 1,
       shopGeo: { lat: 38.72, lng: -9.14, radiusM: 100 },
       smsNumber: "+351210000000",
       staff: [],
@@ -63,8 +64,18 @@ describe("buildPontoConfigPayload", () => {
       { externalWork: false, phoneE164: null, pontoSmsAllowed: false },
     ]);
     expect(payload.staff).toEqual([
-      { externalWork: false, phone: "+351911111111", smsAllowed: true },
-      { externalWork: true, phone: "+351922222222", smsAllowed: false },
+      {
+        externalWork: false,
+        lastEntryAt: null,
+        phone: "+351911111111",
+        smsAllowed: true,
+      },
+      {
+        externalWork: true,
+        lastEntryAt: null,
+        phone: "+351922222222",
+        smsAllowed: false,
+      },
     ]);
   });
 });
