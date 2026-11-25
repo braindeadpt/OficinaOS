@@ -3088,5 +3088,6 @@
   "ponto.qr_regenerate": "Régénérer le QR",
   "ponto.qr_regenerate_warning": "Les QR imprimés cessent de fonctionner immédiatement — vous devrez réimprimer cette feuille.",
   "ponto.qr_regenerate_confirm": "Régénérer maintenant",
-  "ponto.qr_regenerate_error": "Régénération impossible — le QR imprimé reste valide."
+  "ponto.qr_regenerate_error": "Régénération impossible — le QR imprimé reste valide.",
+  "ponto.qr_regenerate_unknown": "Impossible de confirmer la régénération — vérifiez la connexion et scannez le QR imprimé avant de vous y fier."
 }

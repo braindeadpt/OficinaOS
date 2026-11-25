@@ -18,11 +18,14 @@ vi.mock("qrcode", () => ({
 // Estado mutável partilhado pelos mocks: o qrId que a "Cloud" devolve.
 const { apiPost, cloud } = vi.hoisted(() => ({
   apiPost: vi.fn(() => Promise.resolve({})),
-  cloud: { qrId: "qr-one" as string | undefined },
+  cloud: { down: false, qrId: "qr-one" as string | undefined },
 }));
 vi.mock("@/lib/api", () => ({
   default: {
     get: vi.fn((url: string) => {
+      if (cloud.down) {
+        return Promise.reject(new Error("cloud em baixo"));
+      }
       if (url === "/ponto/status") {
         return Promise.resolve({ data: { enabled: true } });
       }
@@ -59,6 +62,7 @@ async function renderReady() {
 
 describe("PontoQrPage — qrId e regeneração (WP0.2)", () => {
   beforeEach(() => {
+    cloud.down = false;
     cloud.qrId = "qr-one";
     apiPost.mockClear();
     apiPost.mockImplementation(() => Promise.resolve({}));
@@ -106,6 +110,49 @@ describe("PontoQrPage — qrId e regeneração (WP0.2)", () => {
     expect(
       screen.getByText("https://cloud.test/ponto/qr-one")
     ).toBeInTheDocument();
+  });
+
+  it("rotação com resposta perdida mostra o QR novo sem erro", async () => {
+    // A Cloud rodou o qrId mas a resposta perdeu-se: a releitura traz o
+    // novo — dizer «o impresso continua válido» seria mentira.
+    apiPost.mockImplementation(() => {
+      cloud.qrId = "qr-two";
+      return Promise.reject(new Error("resposta perdida"));
+    });
+    await renderReady();
+    fireEvent.click(
+      screen.getByRole("button", { name: "ponto.qr_regenerate" })
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "ponto.qr_regenerate_confirm" })
+    );
+    await waitFor(() => {
+      expect(
+        screen.getByText("https://cloud.test/ponto/qr-two")
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByText("ponto.qr_regenerate_error")
+    ).not.toBeInTheDocument();
+  });
+
+  it("Cloud em baixo na regeneração mostra o aviso neutro mesmo sem folha", async () => {
+    apiPost.mockImplementation(() => {
+      cloud.down = true;
+      return Promise.reject(new Error("cloud em baixo"));
+    });
+    await renderReady();
+    fireEvent.click(
+      screen.getByRole("button", { name: "ponto.qr_regenerate" })
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "ponto.qr_regenerate_confirm" })
+    );
+    await screen.findByText("ponto.qr_regenerate_unknown");
+    // Sem afirmar que o impresso continua válido — não se sabe.
+    expect(
+      screen.queryByText("ponto.qr_regenerate_error")
+    ).not.toBeInTheDocument();
   });
 
   it("cai para o slug quando a Cloud ainda não devolve qrId", async () => {

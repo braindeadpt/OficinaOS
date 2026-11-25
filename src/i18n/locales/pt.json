@@ -3088,5 +3088,6 @@
   "ponto.qr_regenerate": "Regenerar QR",
   "ponto.qr_regenerate_warning": "Os QR impressos deixam de funcionar de imediato — terá de imprimir esta folha outra vez.",
   "ponto.qr_regenerate_confirm": "Regenerar agora",
-  "ponto.qr_regenerate_error": "Não foi possível regenerar — o QR impresso continua válido."
+  "ponto.qr_regenerate_error": "Não foi possível regenerar — o QR impresso continua válido.",
+  "ponto.qr_regenerate_unknown": "Não foi possível confirmar a regeneração — verifique a ligação e leia o QR impresso antes de confiar nele."
 }
