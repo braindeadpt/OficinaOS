@@ -196,6 +196,10 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
       if (parsed.data.company) {
         return reply.status(201).send({ ok: true });
       }
+      const settings = await getOrCreateShopSettings(app.prisma);
+      if (settings.shopMode === "ponto_only") {
+        throw new AppError("NOT_FOUND");
+      }
 
       const request = await submitPreCheckRequest(app.prisma, parsed.data, {
         prisma: app.prisma,

@@ -11,6 +11,7 @@ import {
   handleInboundMessage,
   isStopText,
   revokeConsentForPhone,
+  revokeConsentForStop,
 } from "./bot-intents.js";
 import { recordInboundMessage } from "./inbox.service.js";
 import type { NotifyContext } from "./job.service.js";
@@ -177,6 +178,10 @@ export async function handleInboundSms(
   // grava-se na caixa de entrada — o bot não responde. PARAR/STOP é a
   // exceção legal: revoga consentimento mesmo sem módulo.
   if (inboxEnabled && !isModuleEnabled(settings, "sms")) {
+    if (settings.shopMode === "ponto_only") {
+      await revokeConsentForStop(prisma, fromPhone, text);
+      return;
+    }
     await recordInboundMessage(prisma, log, {
       channel: "sms",
       phone: fromPhone,

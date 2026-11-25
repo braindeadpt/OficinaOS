@@ -575,6 +575,9 @@ export default function SettingsPontoSection({
           >
             {t("ponto.qr_open")}
           </Link>
+          <Link className="font-bold text-primary text-sm" to="/notifications">
+            {t("channels_settings")}
+          </Link>
           <Button
             disabled={regenerating || busy}
             onClick={() => setConfirmRegenerate(true)}

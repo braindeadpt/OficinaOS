@@ -8,6 +8,7 @@ import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import api, { getErrorMessage } from "@/lib/api";
 import { usePontoStore } from "@/stores/ponto";
+import { useShopModeStore } from "@/stores/shop-mode";
 import SettingsInvoicingSection from "./settings-invoicing-section";
 import SettingsPontoSection from "./settings-ponto-section";
 import SettingsStorefrontSection from "./settings-storefront-section";
@@ -53,6 +54,7 @@ export default function SettingsCloudTab({
   const [confirmRevokeId, setConfirmRevokeId] = useState<string | null>(null);
   const [cloudDirty, setCloudDirty] = useState(false);
   const [syncNonce, setSyncNonce] = useState(0);
+  const isPontoOnly = useShopModeStore((s) => s.shopMode === "ponto_only");
   // Cada secção reporta o seu próprio sujo — a aba fica suja enquanto
   // pelo menos uma tiver rascunho (gravar uma não limpa o aviso da outra).
   const sectionDirtyRef = useRef({ invoicing: false, ponto: false });
@@ -381,11 +383,15 @@ export default function SettingsCloudTab({
             )}
           </div>
 
-          <SettingsStorefrontSection onToast={onToast} />
-          <SettingsInvoicingSection
-            onDirtyChange={(d) => reportSectionDirty("invoicing", d)}
-            onToast={onToast}
-          />
+          {!isPontoOnly && (
+            <>
+              <SettingsStorefrontSection onToast={onToast} />
+              <SettingsInvoicingSection
+                onDirtyChange={(d) => reportSectionDirty("invoicing", d)}
+                onToast={onToast}
+              />
+            </>
+          )}
           <SettingsPontoSection
             hasUnsavedChanges={cloudDirty}
             onDirtyChange={(d) => reportSectionDirty("ponto", d)}

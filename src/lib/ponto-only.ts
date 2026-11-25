@@ -1,10 +1,11 @@
 import type { NavItem } from "@/lib/navigation";
 
-export const PONTO_ONLY_NAV_PATHS = new Set(["/ponto", "/settings"]);
+export const PONTO_ONLY_NAV_PATHS = new Set(["/", "/ponto", "/settings"]);
 
 const PONTO_ONLY_ALLOWED_PREFIXES = [
   "/ponto",
   "/settings",
+  "/notifications",
   "/profile",
   "/help",
 ];

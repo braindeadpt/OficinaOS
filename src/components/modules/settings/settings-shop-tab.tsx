@@ -15,6 +15,7 @@ import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import api from "@/lib/api";
+import { useDemoMode } from "@/lib/demo";
 import { parseRevenueGoalInput } from "@/lib/parse-revenue-goal";
 import { getPhonePlaceholder } from "@/lib/phone-formats";
 import { useSettingsStore } from "@/stores/settings";
@@ -223,6 +224,7 @@ export default function SettingsShopTab({
   const { shopSettings, fetchShopSettings, saveShopSettings } =
     useSettingsStore();
   const isPontoOnly = shopSettings?.shopMode === "ponto_only";
+  const isDemo = useDemoMode();
 
   const [shopForm, setShopForm] = useState(SHOP_FORM_DEFAULT);
   const [shopFormInitial, setShopFormInitial] = useState(shopForm);
@@ -355,7 +357,7 @@ export default function SettingsShopTab({
             />
           </Field>
         </div>
-        <div className="mt-6">
+        <div className="mt-6" hidden={isDemo}>
           <Field hint={t("shop_mode_help")} label={t("shop_mode")}>
             <Select
               id="shop-mode"

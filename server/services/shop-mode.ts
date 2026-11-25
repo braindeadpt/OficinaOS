@@ -53,7 +53,14 @@ export function isPontoOnlyBlockedApiPath(pathname: string): boolean {
 }
 
 function pathnameOf(request: FastifyRequest): string {
-  return request.url.split("?", 1)[0] ?? request.url;
+  const raw = request.url.split("?", 1)[0] ?? request.url;
+  try {
+    // Fastify compara rotas já descodificadas. Sem isto /api/jobs%2F123
+    // escapava ao prefixo e chegava ao handler de reparações.
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
 }
 
 /**

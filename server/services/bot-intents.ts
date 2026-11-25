@@ -684,6 +684,17 @@ async function pontoClaimedReply(
   };
 }
 
+export async function revokeConsentForStop(
+  prisma: PrismaClient,
+  phone: string,
+  text: string | null | undefined
+): Promise<void> {
+  if (!(text && isStopText(text))) {
+    return;
+  }
+  await revokeConsentForPhone(prisma, phone).catch(() => undefined);
+}
+
 export async function handleInboundMessage(
   ctx: BotReplyCtx,
   msg: InboundMessage,
@@ -694,6 +705,10 @@ export async function handleInboundMessage(
     return pontoReply;
   }
   if (ctx.pontoOnly) {
+    // O bot de clientes não responde nem regista neste modo, mas STOP/PARAR
+    // continua a ser uma revogação legal de consentimento de contactos já
+    // existentes — nunca pode ser engolido pela mudança de modo.
+    await revokeConsentForStop(ctx.prisma, msg.fromPhone, msg.text);
     return null;
   }
   // Opt-out legal: PARAR/STOP nunca morre no rate limiter — a revogação

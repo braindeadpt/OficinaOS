@@ -15,7 +15,7 @@ import {
 import type { FastifyPluginAsync } from "fastify";
 import { loadEnv } from "../config/env.js";
 import { decryptSecret } from "../lib/crypto.js";
-import { assertNotDemoMode } from "../lib/demo.js";
+import { assertNotDemoMode, isDemoMode } from "../lib/demo.js";
 import {
   hasIsolatedNetNs,
   isDialableUrl,
@@ -454,6 +454,14 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
         parsed.data.pontoExitReminderTime !== undefined &&
         (await getOrCreateShopSettings(app.prisma)).pontoExitReminderTime !==
           parsed.data.pontoExitReminderTime;
+      if (
+        isDemoMode() &&
+        parsed.data.shopMode !== undefined &&
+        parsed.data.shopMode !==
+          (await getOrCreateShopSettings(app.prisma)).shopMode
+      ) {
+        throw new AppError("DEMO_DISABLED");
+      }
       const updated = await upsertShopSettings(app.prisma, parsed.data);
       // The widget CSP caches embedAllowedOrigins for 60s — drop it so a
       // save takes effect on the next request instead of up to a minute late.

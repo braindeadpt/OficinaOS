@@ -373,6 +373,7 @@ async function drainInboxOnly(
     inbox: { channel: "whatsapp", enabled: true },
     log,
     notifyCtx,
+    pontoOnly: settings.shopMode === "ponto_only",
     prisma,
     shopLabel:
       [settings.shopName, settings.phone].filter(Boolean).join(" · ") ||

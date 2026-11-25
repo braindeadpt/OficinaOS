@@ -2,7 +2,7 @@ import type { RoleType } from "@shared/constants";
 import { Role } from "@shared/constants";
 import { lazy, Suspense, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Route, Routes } from "react-router";
+import { Navigate, Route, Routes } from "react-router";
 import CommandPalette from "@/components/modules/command-palette";
 import DashboardLayout from "@/components/modules/dashboard-layout";
 import DemoBanner from "@/components/modules/demo-banner";
@@ -11,6 +11,7 @@ import ProtectedRoute, {
   RequirePermission,
 } from "@/components/modules/protected-route";
 import { ChunkErrorBoundary } from "@/components/ui/chunk-error-boundary";
+import { useCan } from "@/hooks/use-can";
 import { useShopMode } from "@/hooks/use-shop-mode";
 import { useAuthStore } from "@/stores/auth";
 
@@ -94,12 +95,16 @@ function HomePage({
   dashboard: React.LazyExoticComponent<() => React.JSX.Element>;
 }) {
   const { isLoading, isPontoOnly } = useShopMode();
+  const canViewPonto = useCan({ reports: ["viewShop"] });
   if (isLoading) {
     return (
       <DashboardLayout>
         <PageSkeleton />
       </DashboardLayout>
     );
+  }
+  if (isPontoOnly && !canViewPonto) {
+    return <Navigate replace to="/profile" />;
   }
   return (
     <DashboardLayout>
