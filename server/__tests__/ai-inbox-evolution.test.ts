@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { handleEvolutionInbound } from "../services/evolution-bot.service.js";
+import {
+  handleEvolutionInbound,
+  sendViaEvolutionAntiBan,
+} from "../services/evolution-bot.service.js";
 
 /**
  * §G.7 — entitlement "ai-inbox" SEM "whatsapp-bot": o inbound Evolution
@@ -158,5 +161,32 @@ describe("handleEvolutionInbound — §G.7", () => {
     await handleEvolutionInbound({} as never, log, undefined, envelope());
     expect(mocks.recordInboundMessage).not.toHaveBeenCalled();
     expect(mocks.handleInboundMessage).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("sendViaEvolutionAntiBan — cancelamento pré-commit", () => {
+  it("abort durante o atraso anti-ban cancela antes de enviar o texto", async () => {
+    vi.useFakeTimers();
+    try {
+      const controller = new AbortController();
+      const promise = sendViaEvolutionAntiBan(
+        {} as never,
+        log,
+        { apiKey: "k", baseUrl: "http://evo", instance: "oficinaos" },
+        "351999000111",
+        "texto",
+        200,
+        controller.signal
+      );
+      await vi.advanceTimersByTimeAsync(1);
+      controller.abort();
+      await expect(promise).resolves.toEqual({
+        error: "cancelado",
+        success: false,
+      });
+      expect(mocks.sendEvolutionText).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

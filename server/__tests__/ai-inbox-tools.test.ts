@@ -13,6 +13,14 @@ import {
 const mocks = vi.hoisted(() => ({
   createAuditLog: vi.fn(async () => undefined),
   decryptSmsConfig: vi.fn(() => null),
+  getOrCreateShopSettings: vi.fn(
+    async (): Promise<Record<string, unknown>> => ({
+      cloudEntitlements: ["ai-inbox"],
+      cloudSyncedAt: new Date(),
+      countryCode: "PT",
+    })
+  ),
+  resolveWhatsAppChannel: vi.fn(() => ({ config: {}, mode: "local" })),
   sendSms: vi.fn(async () => ({ success: true })),
   sendSmsViaCloud: vi.fn(async () => ({ success: true })),
   sendViaEvolutionAntiBan: vi.fn(async () => ({ success: true })),
@@ -58,16 +66,12 @@ vi.mock("../services/sms-cloud.service.js", () => ({
 }));
 
 vi.mock("../services/whatsapp-channel.js", () => ({
-  resolveWhatsAppChannel: vi.fn(() => ({ config: {}, mode: "local" })),
+  resolveWhatsAppChannel: mocks.resolveWhatsAppChannel,
   sendWhatsAppText: mocks.sendWhatsAppText,
 }));
 
 vi.mock("../repositories/settings.repository.js", () => ({
-  getOrCreateShopSettings: vi.fn(async () => ({
-    cloudEntitlements: ["ai-inbox"],
-    cloudSyncedAt: new Date(),
-    countryCode: "PT",
-  })),
+  getOrCreateShopSettings: mocks.getOrCreateShopSettings,
 }));
 
 vi.mock("../lib/crypto.js", () => ({
@@ -342,6 +346,170 @@ describe("rascunhar_resposta / enviar_rascunho — §G.5", () => {
       },
       where: { id: "draft-1", status: "SENDING" },
     });
+  });
+
+  it("abort durante o delay anti-ban reverte o claim e audita cancelado", async () => {
+    const controller = new AbortController();
+    mocks.resolveWhatsAppChannel.mockReturnValueOnce({
+      config: {},
+      mode: "evolution",
+    } as never);
+    mocks.sendViaEvolutionAntiBan.mockImplementationOnce(
+      async (...args: unknown[]) => {
+        const signal = args[6] as AbortSignal | undefined;
+        if (!signal) {
+          return { error: "signal em falta", success: false };
+        }
+        await new Promise<void>((resolve) => {
+          if (signal.aborted) {
+            resolve();
+            return;
+          }
+          signal.addEventListener("abort", () => resolve(), { once: true });
+        });
+        return { error: "cancelado", success: false };
+      }
+    );
+    const updateMany = vi.fn(async (_args: unknown) => ({ count: 1 }));
+    const prisma = fakePrisma({
+      inboxDraft: {
+        findUnique: vi.fn(async () => ({
+          approvedAt: null,
+          approvedById: null,
+          conversation: {
+            channel: "whatsapp",
+            id: "conv-1",
+            lastInboundAt: new Date(),
+            phone: "351912345678",
+          },
+          id: "draft-1",
+          status: "PENDING",
+          text: "x",
+        })),
+        update: vi.fn(async () => ({})),
+        updateMany,
+      },
+      user: {
+        findUnique: vi.fn(async () => ({ ...OWNER, mcpDirectSend: true })),
+      },
+    });
+    const promise = runStaffInboxTool(prisma, log, {
+      args: { rascunhoId: "draft-1" },
+      signal: controller.signal,
+      tool: "enviar_rascunho",
+      userId: "u-owner",
+    });
+    await vi.waitFor(() =>
+      expect(mocks.sendViaEvolutionAntiBan).toHaveBeenCalledTimes(1)
+    );
+    controller.abort();
+    const out = await promise;
+    expect(out.error).toBe("cancelado");
+    // 1 = claim PENDING→SENDING; 2 = rollback para o estado pré-claim.
+    expect(updateMany).toHaveBeenCalledTimes(2);
+    expect(updateMany.mock.calls[1]?.[0]).toEqual({
+      data: { approvedAt: null, approvedById: null, status: "PENDING" },
+      where: { id: "draft-1", status: "SENDING" },
+    });
+    const toolAudit = mocks.createAuditLog.mock.calls.find(
+      (c) =>
+        ((c as unknown[])[1] as { action: string }).action === "INBOX_TOOL_CALL"
+    );
+    expect(toolAudit).toBeDefined();
+    const metadata = (
+      (toolAudit as unknown[])[1] as {
+        metadata: { ok: boolean; outcome: string };
+      }
+    ).metadata;
+    expect(metadata.ok).toBe(false);
+    expect(metadata.outcome).toBe("cancelado");
+  });
+
+  it("abort depois do transporte arrancar não impede a finalização SENT", async () => {
+    let finishSend: ((value: { success: boolean }) => void) | undefined;
+    mocks.sendWhatsAppText.mockImplementationOnce(
+      () =>
+        new Promise<{ success: boolean }>((resolve) => {
+          finishSend = resolve;
+        })
+    );
+    const update = vi.fn(async () => ({}));
+    const prisma = fakePrisma({
+      inboxDraft: {
+        findUnique: vi.fn(async () => ({
+          approvedAt: new Date(),
+          approvedById: "u-owner",
+          conversation: {
+            channel: "whatsapp",
+            id: "conv-1",
+            lastInboundAt: new Date(),
+            phone: "351912345678",
+          },
+          id: "draft-1",
+          status: "PENDING",
+          text: "x",
+        })),
+        update,
+        updateMany: vi.fn(async () => ({ count: 1 })),
+      },
+    });
+    const controller = new AbortController();
+    const promise = sendApprovedDraft(
+      prisma,
+      log,
+      "draft-1",
+      "u-owner",
+      false,
+      controller.signal
+    );
+    await vi.waitFor(() =>
+      expect(mocks.sendWhatsAppText).toHaveBeenCalledTimes(1)
+    );
+    controller.abort();
+    finishSend?.({ success: true });
+    const out = await promise;
+    expect(out.error).toBeUndefined();
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "SENT" }),
+        where: { id: "draft-1" },
+      })
+    );
+  });
+
+  it("SMS cloud usa dedupeId estável draft:<id> para retries do mesmo rascunho", async () => {
+    mocks.getOrCreateShopSettings.mockResolvedValueOnce({
+      cloudApiUrl: "https://cloud.example",
+      cloudEntitlements: ["sms"],
+      cloudShopTokenEncrypted: "enc:token",
+      cloudSyncedAt: new Date(),
+      countryCode: "PT",
+    });
+    const prisma = fakePrisma({
+      inboxDraft: {
+        findUnique: vi.fn(async () => ({
+          approvedAt: new Date(),
+          approvedById: "u-owner",
+          conversation: {
+            channel: "sms",
+            id: "conv-1",
+            lastInboundAt: new Date(),
+            phone: "351912345678",
+          },
+          id: "draft-1",
+          status: "PENDING",
+          text: "resposta por sms",
+        })),
+        update: vi.fn(async () => ({})),
+        updateMany: vi.fn(async () => ({ count: 1 })),
+      },
+    });
+    const out = await sendApprovedDraft(prisma, log, "draft-1", "u-owner");
+    expect(out.error).toBeUndefined();
+    expect(mocks.sendSmsViaCloud).toHaveBeenCalledWith(
+      expect.objectContaining({ apiUrl: "https://cloud.example" }),
+      expect.objectContaining({ dedupeId: "draft:draft-1" })
+    );
   });
 
   it("enviar_rascunho sem aprovação e sem mcpDirectSend → aguarda aprovação", async () => {
