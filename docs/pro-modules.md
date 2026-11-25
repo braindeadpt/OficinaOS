@@ -223,8 +223,10 @@ ESTADO) pelo WhatsApp ou SMS do número da loja e partilha a
   registos: só `PontoToken` de uso único durante ~24 h para auditoria.
 - **Na loja:** `TimeEntry` é append-only (correções são linhas novas),
   retenção de 5 anos (Código do Trabalho, art. 202.º); fotos de prova
-  apagadas aos 90 dias. O painel de validações e a exportação estão em
-  desenvolvimento.
+  apagadas aos 90 dias. O painel (agora, validar, horas, esquecimentos,
+  exportar PDF) está em Ponto no menu; as decisões do gestor são
+  reversíveis — a validação mais recente é a efetiva — e leitura e
+  exportação continuam disponíveis mesmo sem o módulo ativo.
 - **Informação ao trabalhador:** Definições → Cloud → secção Ponto tem o
   texto RGPD editável; `/ponto/info` imprime a folha para assinatura e
   `/ponto/qr` a folha do QR. Ver `docs/privacy-and-data.md`.
