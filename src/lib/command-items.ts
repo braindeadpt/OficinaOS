@@ -69,7 +69,11 @@ export function buildCommands(deps: {
   const pages: Command[] = NAV_ITEMS.filter(
     (item) =>
       (item.to !== "/ponto" || deps.pontoEnabled) &&
-      navItemVisibleInPontoOnly(item, deps.pontoOnly === true)
+      navItemVisibleInPontoOnly(
+        item,
+        deps.pontoOnly === true,
+        can(deps.role, { reports: ["viewShop"] })
+      )
   ).map((item) => ({
     keywords: PAGE_KEYWORDS[item.to] ?? [],
     kind: "page",

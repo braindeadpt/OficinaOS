@@ -1463,6 +1463,7 @@
   "pre_check_email": "E-mail",
   "pre_check_email_hint": "Facultatif — si vous préférez être contacté par e-mail",
   "pre_check_error": "Impossible d'envoyer votre demande. Veuillez réessayer.",
+  "pre_check_unavailable": "Les demandes de réparation ne sont pas disponibles sur cette installation.",
   "pre_check_name": "Votre nom",
   "pre_check_phone": "Numéro de téléphone",
   "pre_check_problem": "Décrivez le problème",

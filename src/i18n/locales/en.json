@@ -1463,6 +1463,7 @@
   "pre_check_email": "Email",
   "pre_check_email_hint": "Optional — if you'd rather be contacted by email",
   "pre_check_error": "Could not send your request. Please try again.",
+  "pre_check_unavailable": "Repair requests are not available on this installation.",
   "pre_check_name": "Your name",
   "pre_check_phone": "Phone number",
   "pre_check_problem": "Describe the problem",

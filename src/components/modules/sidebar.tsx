@@ -108,7 +108,11 @@ export default function Sidebar() {
           can(role, item.perm) &&
           (item.to !== "/inbox" || aiInboxEnabled) &&
           (item.to !== "/ponto" || pontoEnabled) &&
-          navItemVisibleInPontoOnly(item, isPontoOnly)
+          navItemVisibleInPontoOnly(
+            item,
+            isPontoOnly,
+            can(role, { reports: ["viewShop"] })
+          )
       ),
     [role, aiInboxEnabled, pontoEnabled, isPontoOnly]
   );

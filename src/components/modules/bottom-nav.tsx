@@ -208,7 +208,11 @@ export default function BottomNav() {
       item.perm &&
       can(role, item.perm) &&
       (item.to !== "/ponto" || pontoEnabled) &&
-      navItemVisibleInPontoOnly(item, isPontoOnly)
+      navItemVisibleInPontoOnly(
+        item,
+        isPontoOnly,
+        can(role, { reports: ["viewShop"] })
+      )
   );
   const primaryPaths = isPontoOnly
     ? ["/ponto", "/settings"]

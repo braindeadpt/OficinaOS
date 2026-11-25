@@ -23,7 +23,14 @@ export function isPontoOnlyAllowedPath(pathname: string): boolean {
 /** Filtro único para sidebar, bottom-nav e paleta no modo só ponto. */
 export function navItemVisibleInPontoOnly(
   item: Pick<NavItem, "to">,
-  isPontoOnly: boolean
+  isPontoOnly: boolean,
+  canViewShopPonto = true
 ): boolean {
-  return !isPontoOnly || PONTO_ONLY_NAV_PATHS.has(item.to);
+  if (!isPontoOnly) {
+    return true;
+  }
+  if (item.to === "/") {
+    return canViewShopPonto;
+  }
+  return PONTO_ONLY_NAV_PATHS.has(item.to);
 }

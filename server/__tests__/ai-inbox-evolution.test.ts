@@ -20,7 +20,9 @@ const mocks = vi.hoisted(() => ({
     created: true,
     messageId: "msg-1",
   })),
-  revokeConsentForPhone: vi.fn(async () => undefined),
+  revokeConsentForPhone: vi.fn(
+    async (_prisma?: unknown, _phone?: string) => undefined
+  ),
   sendEvolutionText: vi.fn(async () => ({ success: true })),
 }));
 
@@ -30,7 +32,15 @@ vi.mock("../services/bot-intents.js", () => ({
   handleInboundMessage: mocks.handleInboundMessage,
   isStopText: (t: string) => ["parar", "stop"].includes(t.trim().toLowerCase()),
   revokeConsentForPhone: mocks.revokeConsentForPhone,
-  revokeConsentForStop: mocks.revokeConsentForPhone,
+  revokeConsentForStop: vi.fn(async (...args: unknown[]) => {
+    const text = args[2];
+    if (
+      typeof text === "string" &&
+      ["parar", "stop"].includes(text.trim().toLowerCase())
+    ) {
+      await mocks.revokeConsentForPhone(args[0], args[1] as string);
+    }
+  }),
 }));
 
 vi.mock("../services/rate-limit.js", () => ({

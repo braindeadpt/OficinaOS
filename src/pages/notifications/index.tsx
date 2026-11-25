@@ -8,6 +8,7 @@ import OutboxLog from "@/components/modules/notifications/outbox-log";
 import { useCan } from "@/hooks/use-can";
 import { useAlertsStore } from "@/stores/alerts";
 import { useSettingsStore } from "@/stores/settings";
+import { useShopModeStore } from "@/stores/shop-mode";
 
 type FilterType = "all" | "unread" | "read";
 type NotificationMode = "alerts" | "outbox" | "setup";
@@ -94,9 +95,10 @@ export default function NotificationsPage() {
     [deleteAlert, t]
   );
 
+  const isPontoOnly = useShopModeStore((s) => s.shopMode === "ponto_only");
   const handleNavigate = useCallback(
     (jobId: string) => {
-      if (!jobId) {
+      if (!jobId || isPontoOnly) {
         return;
       }
       const alert = alerts.find((a) => a.job?.id === jobId);
@@ -105,7 +107,7 @@ export default function NotificationsPage() {
       }
       navigate(`/jobs/${jobId}`);
     },
-    [alerts, markRead, navigate]
+    [alerts, isPontoOnly, markRead, navigate]
   );
 
   const [filter, setFilter] = useState<FilterType>("all");

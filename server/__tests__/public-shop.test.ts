@@ -42,6 +42,7 @@ describe("toPublicShop", () => {
       logoUrl: null,
       name: "TecFix Benfica",
       phone: "+351 912 345 678",
+      shopMode: "repair_shop",
       warrantyDays: 30,
     });
   });

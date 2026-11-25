@@ -575,7 +575,23 @@ export default function SettingsPontoSection({
           >
             {t("ponto.qr_open")}
           </Link>
-          <Link className="font-bold text-primary text-sm" to="/notifications">
+          <Link
+            className="font-bold text-primary text-sm"
+            onClick={(e) => {
+              if (
+                e.metaKey ||
+                e.ctrlKey ||
+                e.shiftKey ||
+                e.altKey ||
+                !hasUnsavedChanges
+              ) {
+                return;
+              }
+              e.preventDefault();
+              setConfirmSheetLeave("/notifications");
+            }}
+            to="/notifications"
+          >
             {t("channels_settings")}
           </Link>
           <Button
