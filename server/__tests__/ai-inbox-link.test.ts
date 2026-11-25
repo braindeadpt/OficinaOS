@@ -305,4 +305,31 @@ describe("ai-inbox link — idempotência e cancelamento", () => {
     expect(mocks.runStaffInboxTool).toHaveBeenCalledTimes(2);
     expect(mocks.canReplayStaffInboxTool).not.toHaveBeenCalled();
   });
+
+  it("marcar como lida usa cache — a reentrega não volta a executar", async () => {
+    const frame = {
+      args: { conversaId: "conv-1", estado: "lida" },
+      idempotencyKey: "test-key-marcar-lida",
+      tool: "marcar",
+      userId: "u-owner",
+    };
+    await handleCall(app, "https://cloud.example", "tok", {
+      ...frame,
+      callId: "read-1",
+    });
+    await handleCall(app, "https://cloud.example", "tok", {
+      ...frame,
+      callId: "read-2",
+    });
+    expect(mocks.runStaffInboxTool).toHaveBeenCalledTimes(1);
+    expect(mocks.canReplayStaffInboxTool).toHaveBeenCalledWith(
+      {},
+      "marcar",
+      "u-owner"
+    );
+    expect(responseBodies()).toEqual([
+      { callId: "read-1", result: { ok: true } },
+      { callId: "read-2", result: { ok: true } },
+    ]);
+  });
 });

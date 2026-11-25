@@ -42,8 +42,17 @@ const IDEMPOTENCY_KEY_MAX_LEN = 128;
 // Só as ferramentas com efeitos não idempotentes precisam de cache:
 // marcar/atribuir são escritas de estado naturalmente repetíveis e as
 // leituras não têm efeito; reter essas chaves podia confirmar uma ação
-// nova (ex.: fechar depois de reabrir) sem a executar.
+// nova (ex.: fechar depois de reabrir) sem a executar. A exceção é
+// marcar como lida: uma reentrega da mesma chamada não pode marcar como
+// lidas mensagens que chegaram depois da execução original.
 const IDEMPOTENT_TOOLS = new Set(["enviar_rascunho", "rascunhar_resposta"]);
+
+function shouldUseIdempotency(tool: string, args: LinkCall["args"]): boolean {
+  if (tool === "marcar") {
+    return args?.estado === "lida";
+  }
+  return IDEMPOTENT_TOOLS.has(tool);
+}
 
 type ToolOutcome = Awaited<ReturnType<typeof runStaffInboxTool>>;
 
@@ -224,7 +233,7 @@ export async function handleCall(
     typeof raw.idempotencyKey === "string" &&
     raw.idempotencyKey.length > 0 &&
     raw.idempotencyKey.length <= IDEMPOTENCY_KEY_MAX_LEN &&
-    IDEMPOTENT_TOOLS.has(tool)
+    shouldUseIdempotency(tool, raw.args)
       ? raw.idempotencyKey
       : null;
   try {
