@@ -39,6 +39,11 @@ const TRAILING_SLASHES_RE = /\/+$/;
 const IDEMPOTENCY_TTL_MS = 5 * 60 * 1000;
 const IDEMPOTENCY_MAX_ENTRIES = 200;
 const IDEMPOTENCY_KEY_MAX_LEN = 128;
+// Só as ferramentas com efeitos não idempotentes precisam de cache:
+// marcar/atribuir são escritas de estado naturalmente repetíveis e as
+// leituras não têm efeito; reter essas chaves podia confirmar uma ação
+// nova (ex.: fechar depois de reabrir) sem a executar.
+const IDEMPOTENT_TOOLS = new Set(["enviar_rascunho", "rascunhar_resposta"]);
 
 type ToolOutcome = Awaited<ReturnType<typeof runStaffInboxTool>>;
 
@@ -218,7 +223,8 @@ export async function handleCall(
   const idempotencyKey =
     typeof raw.idempotencyKey === "string" &&
     raw.idempotencyKey.length > 0 &&
-    raw.idempotencyKey.length <= IDEMPOTENCY_KEY_MAX_LEN
+    raw.idempotencyKey.length <= IDEMPOTENCY_KEY_MAX_LEN &&
+    IDEMPOTENT_TOOLS.has(tool)
       ? raw.idempotencyKey
       : null;
   try {
