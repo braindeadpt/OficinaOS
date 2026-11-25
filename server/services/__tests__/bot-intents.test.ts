@@ -55,8 +55,8 @@ function makeCtx(opts: {
   jobs?: ReturnType<typeof job>[];
 }) {
   const prisma = {
+    $queryRaw: vi.fn(async () => opts.customers ?? []),
     customer: {
-      findMany: vi.fn(async () => opts.customers ?? []),
       update: vi.fn(async () => ({})),
     },
     job: {
@@ -640,7 +640,7 @@ describe("composeReply — deterministic rules before AI", () => {
 });
 
 describe("findCustomersByPhone — ficha com separadores", () => {
-  // Mock que aplica o pré-filtro endsWith como o Postgres faria.
+  // Mock que aplica o pré-filtro LIKE sobre os dígitos como o Postgres.
   function phonePrisma(phones: string[], countryCode = "PT") {
     const rows = phones.map((phone, i) => ({
       id: `c${i}`,
@@ -648,13 +648,12 @@ describe("findCustomersByPhone — ficha com separadores", () => {
       phone,
     }));
     return {
+      $queryRaw: vi.fn(async (_sql: TemplateStringsArray, like: string) =>
+        rows.filter((r) =>
+          r.phone.replace(/\D/g, "").endsWith(like.replace("%", ""))
+        )
+      ),
       customer: {
-        findMany: vi.fn(
-          async (args: { where: { OR: { phone: { endsWith: string } }[] } }) =>
-            rows.filter((r) =>
-              args.where.OR.some((o) => r.phone.endsWith(o.phone.endsWith))
-            )
-        ),
         update: vi.fn(async () => ({})),
       },
       shopSettings: {
@@ -663,12 +662,12 @@ describe("findCustomersByPhone — ficha com separadores", () => {
     };
   }
 
-  it("casa +351912345678 com «+351 912 345 678», «912 345 678» e «(912 345 678)»", async () => {
+  it("casa +351912345678 com fichas guardadas com separadores", async () => {
     const prisma = phonePrisma([
       "+351 912 345 678",
       "912 345 678",
       "+34 912 345 678",
-      "(912 345 678)",
+      "(912 345 678 )",
     ]);
     const found = await findCustomersByPhone(prisma as never, "+351912345678");
     expect(found.map((c) => c.id)).toEqual(["c0", "c1", "c3"]);

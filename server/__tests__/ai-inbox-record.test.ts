@@ -180,6 +180,7 @@ function fakePrisma() {
     ),
   };
   tx.customer = { findMany: vi.fn(() => Promise.resolve([])) };
+  tx.$queryRaw = vi.fn(() => Promise.resolve([]));
   tx.$transaction = (arg: unknown) => {
     if (typeof arg === "function") {
       return (arg as (t: unknown) => Promise<unknown>)(tx);

@@ -75,13 +75,13 @@ const SMS_ROW = {
 
 function fakePrisma(row: Record<string, unknown> = SMS_ROW) {
   return {
+    // O remetente dos testes é +351912345678 — o match real de
+    // revokeConsentForPhone filtra por sufixo; devolver esta ficha
+    // faz-a casar como na BD.
+    $queryRaw: vi.fn(async () => [
+      { id: "c1", name: "Ana", phone: "+351912345678" },
+    ]),
     customer: {
-      // O remetente dos testes é +351912345678 — o match real de
-      // revokeConsentForPhone filtra por sufixo; devolver esta ficha
-      // faz-a casar como na BD.
-      findMany: vi.fn(async () => [
-        { id: "c1", name: "Ana", phone: "+351912345678" },
-      ]),
       update: vi.fn(async () => ({})),
     },
     shopSettings: {

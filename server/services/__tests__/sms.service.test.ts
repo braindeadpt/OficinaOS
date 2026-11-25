@@ -44,6 +44,7 @@ function fetchOk(body: unknown = {}) {
 
 function fakePrisma(row: Record<string, unknown>) {
   return {
+    $queryRaw: vi.fn(async () => []),
     customer: { findMany: vi.fn(async () => []) },
     job: { findMany: vi.fn(async () => []) },
     shopSettings: {

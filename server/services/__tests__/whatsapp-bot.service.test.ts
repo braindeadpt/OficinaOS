@@ -121,10 +121,10 @@ describe("pollWhatsAppInbound — fila Meta com transporte Evolution", () => {
     );
     const customerUpdate = vi.fn(async () => ({}));
     const prismaReal = {
+      $queryRaw: vi.fn(async () => [
+        { id: "c1", name: "Ana", phone: "900000001" },
+      ]),
       customer: {
-        findMany: vi.fn(async () => [
-          { id: "c1", name: "Ana", phone: "900000001" },
-        ]),
         update: customerUpdate,
       },
       job: { findMany: vi.fn(async () => []) },
