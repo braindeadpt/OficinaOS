@@ -894,11 +894,21 @@ function statedDate(text: string): {
   return { ambiguous: keys.size > 1 || invalid, date };
 }
 
+// Hora compacta malformada — minutos com 3+ dígitos («18:305»): erro
+// de digitação. Nunca se trunca para uma hora válida nem se lê o
+// dígito extra como segunda hora — a resposta fica ambígua e o bot
+// pergunta. Com segundos («18:30:45») não há 3 dígitos seguidos —
+// não é este caso.
+const MALFORMED_COMPACT_RE = /\b\d{1,2}\s*[:hH.]\s*\d{3}/;
+
 export function parsePontoExitAnswer(
   text: string | null | undefined
 ): PontoExitAnswer {
   if (!text) {
     return null;
+  }
+  if (MALFORMED_COMPACT_RE.test(text)) {
+    return { kind: "ambiguous" };
   }
   // Data declarada («23/11») — sai do texto dos dígitos mas fica
   // registada na resposta: o handler só grava se bater num dos dias
