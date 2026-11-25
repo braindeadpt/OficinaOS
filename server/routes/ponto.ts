@@ -166,10 +166,10 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
       // definições WhatsApp (e sem termo do bot aceite), a instância
       // ainda não tem callback — sem ele as marcações nunca chegam.
       // O Host do pedido é o endereço que a Evolution alcança.
-      await tryRegisterEvolutionWebhook(
-        app.prisma,
-        req.headers.host ?? ""
-      ).catch((err) =>
+      await tryRegisterEvolutionWebhook(app.prisma, {
+        host: req.host ?? req.headers.host ?? "",
+        protocol: req.protocol,
+      }).catch((err) =>
         req.log.warn({ err }, "evolution webhook register failed")
       );
       return reply.send(

@@ -7,6 +7,10 @@ const mocks = vi.hoisted(() => ({
   decryptSecret: vi.fn((payload: string) =>
     payload === "enc:key" ? "evo-key" : null
   ),
+  dnsLookup: vi.fn(
+    (_hostname?: string): Promise<{ address: string; family: number }[]> =>
+      Promise.reject(new Error("ENOTFOUND"))
+  ),
   disconnectEvolutionInstance: vi.fn(async () => ({ success: true })),
   getEvolutionState: vi.fn(async () => "open"),
   hasIsolatedNetNs: vi.fn(() => false),
@@ -20,6 +24,10 @@ const mocks = vi.hoisted(() => ({
   setEvolutionWebhook: vi.fn(async () => ({ success: true })),
   syncWhatsAppTemplates: vi.fn(async () => ({})),
   upsertWhatsAppSettings: vi.fn(async (p: unknown) => p),
+}));
+
+vi.mock("node:dns/promises", () => ({
+  lookup: mocks.dnsLookup,
 }));
 
 vi.mock("../lib/mdns.js", async (importOriginal) => ({
@@ -137,8 +145,8 @@ vi.mock("../repositories/settings.repository.js", () => ({
   ),
 }));
 
-function buildApp(prisma: unknown) {
-  const app = Fastify();
+function buildApp(prisma: unknown, options?: { trustProxy?: boolean }) {
+  const app = Fastify({ trustProxy: options?.trustProxy ?? false });
   app.setErrorHandler((error, _request, reply) => {
     if (isAppError(error)) {
       reply.status(error.status).send({
@@ -173,6 +181,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.hasIsolatedNetNs.mockReturnValue(false);
   mocks.primaryLanIpv4.mockReturnValue(null);
+  mocks.dnsLookup.mockRejectedValue(new Error("ENOTFOUND"));
   delete process.env.APP_URL;
   resetEnvForTests();
 });
@@ -589,6 +598,259 @@ describe("Evolution inbound webhook registration (MESSAGES_UPSERT)", () => {
     expect(lastWebhookCall()?.[1].url).toBe(
       "https://oficinaos.example.com/api/public/whatsapp/evolution/inbound"
     );
+  });
+
+  it("hostname com ponto a resolver só para IPs privados → HTTP (LAN com DNS próprio)", async () => {
+    // «oficina.exemplo» tem ponto → isPrivateCallbackHost trata-o como
+    // público, mas o DNS interno só devolve IPs da LAN — o token viaja
+    // em HTTP trusted-LAN como qualquer outro host privado.
+    mocks.dnsLookup.mockResolvedValue([
+      { address: "192.168.1.30", family: 4 },
+      { address: "fd00::1", family: 6 },
+    ]);
+    const res = await saveWhatsApp("oficina.exemplo");
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "http://oficina.exemplo/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("hostname com ponto a resolver IP público → HTTPS (um público chega)", async () => {
+    mocks.dnsLookup.mockResolvedValue([
+      { address: "192.168.1.30", family: 4 },
+      { address: "8.8.8.8", family: 4 },
+    ]);
+    const res = await saveWhatsApp("oficina.exemplo");
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "https://oficina.exemplo/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("IPv6 público vindo do DNS → HTTPS (dns.lookup não usa parênteses)", async () => {
+    // Regressão SEC da revisão: lookup devolve "2001:..." sem "[]"; sem
+    // normalizar antes de isPublicIpv6, o IPv6 público passava por privado.
+    mocks.dnsLookup.mockResolvedValue([
+      { address: "2001:4860:4860::8888", family: 6 },
+    ]);
+    const res = await saveWhatsApp("oficina.exemplo");
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "https://oficina.exemplo/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("Evolution num nome DNS interno permite HTTP inferido na app", async () => {
+    mocks.dnsLookup.mockImplementation((hostname?: string) =>
+      Promise.resolve(
+        hostname === "evolution.loja.interna"
+          ? [{ address: "192.168.1.50", family: 4 }]
+          : [{ address: "192.168.1.30", family: 4 }]
+      )
+    );
+    const app = buildApp(
+      fakePrisma({
+        ...PRO_BOT_ROW,
+        evolutionUrl: "http://evolution.loja.interna:8080",
+      })
+    );
+    const res = await app.inject({
+      headers: { host: "oficina.exemplo" },
+      method: "PUT",
+      payload: { botDisclaimerAccepted: true, transport: "evolution" },
+      url: "/api/settings/whatsapp",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "http://oficina.exemplo/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("X-Forwarded-Host externo preserva o par HTTPS", async () => {
+    const app = buildApp(fakePrisma(PRO_BOT_ROW), { trustProxy: true });
+    const res = await app.inject({
+      headers: {
+        host: "app:4000",
+        "x-forwarded-host": "oficina.exemplo",
+        "x-forwarded-proto": "https",
+      },
+      method: "PUT",
+      payload: { botDisclaimerAccepted: true, transport: "evolution" },
+      url: "/api/settings/whatsapp",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "https://oficina.exemplo/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("HTTPS com Host interno reescrito cai no IP LAN alcançável", async () => {
+    mocks.primaryLanIpv4.mockReturnValue("192.168.1.20");
+    const app = buildApp(fakePrisma(PRO_BOT_ROW), { trustProxy: true });
+    const res = await app.inject({
+      headers: {
+        host: "app:4000",
+        "x-forwarded-proto": "https",
+      },
+      method: "PUT",
+      payload: { botDisclaimerAccepted: true, transport: "evolution" },
+      url: "/api/settings/whatsapp",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "http://192.168.1.20:4000/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("APP_URL HTTP privada é usada mesmo quando o pedido externo é HTTPS", async () => {
+    process.env.APP_URL = "http://192.168.1.20:4000";
+    resetEnvForTests();
+    const app = buildApp(fakePrisma(PRO_BOT_ROW), { trustProxy: true });
+    const res = await app.inject({
+      headers: {
+        host: "app:4000",
+        "x-forwarded-proto": "https",
+      },
+      method: "PUT",
+      payload: { botDisclaimerAccepted: true, transport: "evolution" },
+      url: "/api/settings/whatsapp",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "http://192.168.1.20:4000/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("APP_URL HTTP com DNS privado é usada quando o proxy termina HTTPS", async () => {
+    mocks.dnsLookup.mockImplementation((hostname?: string) =>
+      hostname === "oficina.loja.interna"
+        ? Promise.resolve([{ address: "192.168.1.30", family: 4 }])
+        : Promise.reject(new Error("ENOTFOUND"))
+    );
+    process.env.APP_URL = "http://oficina.loja.interna:4000";
+    resetEnvForTests();
+    const app = buildApp(fakePrisma(PRO_BOT_ROW), { trustProxy: true });
+    const res = await app.inject({
+      headers: {
+        host: "app:4000",
+        "x-forwarded-proto": "https",
+      },
+      method: "PUT",
+      payload: { botDisclaimerAccepted: true, transport: "evolution" },
+      url: "/api/settings/whatsapp",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "http://oficina.loja.interna:4000/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("HTTPS com Host interno e sem IP LAN usa APP_URL como par explícito", async () => {
+    process.env.APP_URL = "https://oficina.exemplo";
+    resetEnvForTests();
+    const app = buildApp(fakePrisma(PRO_BOT_ROW), { trustProxy: true });
+    const res = await app.inject({
+      headers: {
+        host: "app:4000",
+        "x-forwarded-proto": "https",
+      },
+      method: "PUT",
+      payload: { botDisclaimerAccepted: true, transport: "evolution" },
+      url: "/api/settings/whatsapp",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "https://oficina.exemplo/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("APP_URL HTTPS no mesmo hostname vence o DNS privado", async () => {
+    // Instalação HTTPS-only dentro da LAN: a configuração explícita da
+    // loja não pode ser rebaixada só porque o nome resolve um IP privado.
+    mocks.dnsLookup.mockResolvedValue([{ address: "192.168.1.30", family: 4 }]);
+    process.env.APP_URL = "https://oficina.exemplo";
+    resetEnvForTests();
+    const res = await saveWhatsApp("oficina.exemplo");
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "https://oficina.exemplo/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("APP_URL HTTPS noutra porta não rebaixa o acesso HTTP direto da LAN", async () => {
+    // O virtual host TLS pode viver na 443 enquanto a app responde em
+    // HTTP na 4000; só o mesmo host[:port] herda o esquema da APP_URL.
+    mocks.dnsLookup.mockResolvedValue([{ address: "192.168.1.30", family: 4 }]);
+    process.env.APP_URL = "https://oficina.exemplo";
+    resetEnvForTests();
+    const res = await saveWhatsApp("oficina.exemplo:4000");
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "http://oficina.exemplo:4000/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("pedido HTTPS através de proxy confiável vence o DNS privado", async () => {
+    mocks.dnsLookup.mockResolvedValue([{ address: "192.168.1.30", family: 4 }]);
+    const app = buildApp(fakePrisma(PRO_BOT_ROW), { trustProxy: true });
+    const res = await app.inject({
+      headers: {
+        host: "oficina.exemplo",
+        "x-forwarded-proto": "https",
+      },
+      method: "PUT",
+      payload: { botDisclaimerAccepted: true, transport: "evolution" },
+      url: "/api/settings/whatsapp",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "https://oficina.exemplo/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("Evolution fora da LAN não aceita HTTP inferido pelo DNS da app", async () => {
+    mocks.dnsLookup.mockImplementation((hostname?: string) =>
+      Promise.resolve(
+        hostname === "evolution.example.com"
+          ? [{ address: "8.8.8.8", family: 4 }]
+          : [{ address: "192.168.1.30", family: 4 }]
+      )
+    );
+    const app = buildApp(
+      fakePrisma({
+        ...PRO_BOT_ROW,
+        evolutionUrl: "https://evolution.example.com",
+      })
+    );
+    const res = await app.inject({
+      headers: { host: "oficina.exemplo" },
+      method: "PUT",
+      payload: { botDisclaimerAccepted: true, transport: "evolution" },
+      url: "/api/settings/whatsapp",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "https://oficina.exemplo/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("sem consumidor Evolution, não resolve DNS nem regista webhook", async () => {
+    const app = buildApp(
+      fakePrisma({
+        ...BOT_ROW,
+        cloudEntitlements: [],
+        cloudSyncedAt: new Date(),
+      })
+    );
+    const res = await app.inject({
+      headers: { host: "oficina.exemplo" },
+      method: "PUT",
+      payload: { transport: "evolution" },
+      url: "/api/settings/whatsapp",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mocks.setEvolutionWebhook).not.toHaveBeenCalled();
+    expect(mocks.dnsLookup).not.toHaveBeenCalled();
   });
 
   it("host público com porta → HTTPS preserva a porta explícita", async () => {
