@@ -11,6 +11,11 @@ import type { DbClient } from "../repositories/types.js";
 import { askBotAi } from "./bot-ai.js";
 import type { BotToolCtx } from "./bot-tools.js";
 import {
+  CUSTOMER_JOB_VIEW_SELECT,
+  type CustomerJobViewRow,
+  vistaCliente,
+} from "./customer-job-view.js";
+import {
   escalateConversation,
   getConversationHistory,
   INBOX_HANDLED_BOT,
@@ -45,6 +50,7 @@ export function isStopText(text: string): boolean {
 const INTL_PREFIX_RE = /^00/;
 const DIGITS_RE = /\D/g;
 const WA_BOLD_RE = /\*/g;
+const WHITESPACE_RE = /\s+/;
 
 export interface InboundMessage {
   createdAt: string;
@@ -160,23 +166,7 @@ export async function escalateToStaff(
   }
 }
 
-interface ActiveJob {
-  customer: { name: string };
-  device: { model: string; brand: { name: string } };
-  estimatedDate: Date | null;
-  id: string;
-  jobCode: string;
-  partsWaiting?: { expectedAt: Date | null; partName: string }[];
-  quotes: {
-    id: string;
-    version: number;
-    amount: { toNumber(): number };
-    note: string | null;
-    sentAt: Date | null;
-    status: string;
-  }[];
-  status: string;
-}
+type ActiveJob = CustomerJobViewRow & { id: string };
 
 interface CustomerMatch {
   customers: { id: string; name: string }[];
@@ -265,28 +255,8 @@ async function findCustomerJobs(
     },
     orderBy: { updatedAt: "desc" },
     select: {
+      ...CUSTOMER_JOB_VIEW_SELECT,
       id: true,
-      jobCode: true,
-      status: true,
-      estimatedDate: true,
-      customer: { select: { name: true } },
-      device: { select: { model: true, brand: { select: { name: true } } } },
-      partsWaiting: {
-        orderBy: { createdAt: "asc" as const },
-        select: { expectedAt: true, partName: true },
-      },
-      quotes: {
-        orderBy: { version: "desc" as const },
-        take: 1,
-        select: {
-          id: true,
-          version: true,
-          amount: true,
-          note: true,
-          sentAt: true,
-          status: true,
-        },
-      },
     },
   })) as unknown as ActiveJob[];
   return { customers, jobs };
@@ -299,27 +269,67 @@ export interface BotReply {
   text: string;
 }
 
-function serializeJobs(jobs: ActiveJob[]) {
-  return jobs.map((j) => ({
-    customerName: j.customer.name,
-    deviceName: `${j.device.brand.name} ${j.device.model}`,
-    estimatedDate: j.estimatedDate?.toISOString() ?? null,
-    id: j.id,
-    jobCode: j.jobCode,
-    partsWaiting: (j.partsWaiting ?? []).map((p) => ({
-      expectedAt: p.expectedAt?.toISOString() ?? null,
-      partName: p.partName,
-    })),
-    quotes: j.quotes.map((q) => ({
-      amount: q.amount.toNumber(),
-      id: q.id,
-      note: q.note,
-      sentAt: q.sentAt?.toISOString() ?? null,
-      status: q.status,
-      version: q.version,
-    })),
-    status: j.status,
-  }));
+function serializeJobs(
+  ctx: BotReplyCtx,
+  jobs: ActiveJob[],
+  includeQuoteIds: boolean
+) {
+  const viewCtx = {
+    currency: ctx.currency,
+    portalApiUrl: ctx.portalApiUrl ?? null,
+    portalEnabled: ctx.portalEnabled ?? false,
+    timezone: ctx.timezone,
+  };
+  return jobs.map((job) => {
+    const view = vistaCliente(job, viewCtx);
+    const quote = job.quotes[0];
+    return {
+      ...view,
+      orcamento: view.orcamento
+        ? {
+            ...view.orcamento,
+            // O id interno só atravessa quando o orçamento está por
+            // responder E esta interação pode decidi-lo (fora da
+            // janela de decisão nunca seria usado) — é a referência
+            // estritamente necessária à ação SIM/NÃO que a Cloud
+            // devolve para a app aplicar.
+            id: includeQuoteIds && quote?.status === "SENT" ? quote.id : null,
+          }
+        : null,
+    };
+  });
+}
+
+function firstNameOf(name: string | null): string | null {
+  const first = name?.trim().split(WHITESPACE_RE)[0];
+  return first ? first : null;
+}
+
+/** Resolve a referência devolvida pela Cloud para o id local da
+ *  reparação. Clouds novas devolvem `jobCode` (a referência pública
+ *  REP-… que consta da vistaCliente); Clouds antigas devolviam o id
+ *  interno — aceite só quando corresponde a um job do contexto. */
+function resolveCloudJobId(
+  res: NonNullable<Awaited<ReturnType<typeof askBotAi>>>,
+  jobs: ActiveJob[]
+): string | null {
+  if (typeof res.jobCode === "string") {
+    return jobs.find((j) => j.jobCode === res.jobCode)?.id ?? null;
+  }
+  if (res.jobCode === null) {
+    return null;
+  }
+  if (typeof res.jobId === "string") {
+    return (
+      jobs.find((j) => j.id === res.jobId)?.id ??
+      jobs.find((j) => j.jobCode === res.jobId)?.id ??
+      null
+    );
+  }
+  if (res.jobId === null) {
+    return null;
+  }
+  return jobs[0]?.id ?? null;
 }
 
 /** Executa a ação devolvida pelas regras da Cloud — a validação e os
@@ -447,8 +457,8 @@ export async function composeReply(
       aiEnabled: ai.enabled && ai.modules.includes(ai.module),
       allowQuoteDecision: opts.allowQuoteDecision,
       currency: ctx.currency,
-      customers,
-      jobs: serializeJobs(jobs),
+      customerFirstName: firstNameOf(customerName),
+      jobs: serializeJobs(ctx, jobs, opts.allowQuoteDecision !== false),
       messageCreatedAt: msg.sentAt ?? msg.createdAt,
       messageType: msg.messageType,
       shopLabel: ctx.shopLabel,
@@ -479,7 +489,7 @@ export async function composeReply(
     // null explícito da Cloud = reparação ambígua — ligar a mais
     // recente abria a reparação errada ao staff. undefined (Cloud
     // antiga sem o campo) → compat com o comportamento anterior.
-    jobId: res.jobId === undefined ? (jobs[0]?.id ?? null) : res.jobId,
+    jobId: resolveCloudJobId(res, jobs),
     text: replyText,
   };
 }

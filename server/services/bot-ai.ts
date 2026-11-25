@@ -1,6 +1,7 @@
 import type { BotToolCtx } from "./bot-tools.js";
 import { runBotTool } from "./bot-tools.js";
 import { cloudFetch } from "./cloud.service.js";
+import type { CustomerJobView } from "./customer-job-view.js";
 
 /**
  * askBotAi() — envia a conversa para a Cloud (POST /ai/bot-reply) e executa
@@ -30,28 +31,22 @@ interface BotAiCall {
   name?: unknown;
 }
 
+type BotContextJob = Omit<CustomerJobView, "orcamento"> & {
+  orcamento:
+    | (NonNullable<CustomerJobView["orcamento"]> & { id: string | null })
+    | null;
+};
+
 export interface BotAiRulesContext {
   aiEnabled?: boolean;
   allowQuoteDecision?: boolean;
   currency: string;
-  customers: { id: string; name: string }[];
-  jobs: {
-    customerName: string;
-    deviceName: string;
-    estimatedDate: string | null;
-    id: string;
-    jobCode: string;
-    partsWaiting: { expectedAt: string | null; partName: string }[];
-    quotes: {
-      amount: number;
-      id: string;
-      note: string | null;
-      sentAt: string | null;
-      status: string;
-      version: number;
-    }[];
-    status: string;
-  }[];
+  /** Primeiro nome do cliente casado pelo telefone — necessário às
+   *  saudações das regras; nunca a lista de clientes do número. */
+  customerFirstName: string | null;
+  /** vistaCliente() por reparação ativa + o id do orçamento apenas
+   *  quando está por responder (necessário à ação SIM/NÃO). */
+  jobs: BotContextJob[];
   messageCreatedAt: string;
   messageType: string;
   shopLabel: string;
@@ -84,6 +79,11 @@ export interface BotAiResult {
   actionFailureText?: string;
   actionSuccessText?: string;
   escalate: boolean;
+  /** Referência pública da reparação (REP-…) devolvida por Clouds que
+   *  já não recebem ids internos; a app resolve-a para o id local. */
+  jobCode?: string | null;
+  /** Compatibilidade com Clouds antigas, que devolviam o id interno
+   *  recebido no contexto. */
   jobId?: string | null;
   reply: string;
 }
@@ -112,6 +112,7 @@ interface BotAiBody {
   actionSuccessText?: unknown;
   calls?: unknown;
   escalate?: unknown;
+  jobCode?: unknown;
   jobId?: unknown;
   reply?: unknown;
   type?: unknown;
@@ -210,6 +211,7 @@ function parseReply(body: BotAiBody, escalate: boolean): BotAiResult | null {
     escalate: escalate || body.escalate === true,
     // undefined = a Cloud não enviou o campo (versão antiga); null é
     // explícito — a reparação é ambígua e não se liga nenhuma.
+    jobCode: parseJobId(body.jobCode),
     jobId: parseJobId(body.jobId),
     reply: body.reply,
   };

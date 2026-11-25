@@ -172,7 +172,8 @@ Transporte 100% LAN: o SMS em si só sai pela rede móvel — a Meta não
 intervém. **Atenção (WP0.4): a composição da resposta automática passa
 pela Cloud** mesmo neste canal — as regras do bot (estado, orçamento,
 códigos REP) vivem em `/ai/bot-reply` e a app envia-lhe o contexto da
-reparação, com ou sem IA ativa. Cloud em baixo → o cliente recebe só um ack genérico («a loja responde-te já») e a conversa escala ao staff — não há resposta de regras nem de IA. PARAR/STOP é a exceção deliberada: a
+reparação — a projeção `vistaCliente` (lista fechada de campos, sem ids
+internos exceto o do orçamento por responder) — com ou sem IA ativa. Cloud em baixo → o cliente recebe só um ack genérico («a loja responde-te já») e a conversa escala ao staff — não há resposta de regras nem de IA. PARAR/STOP é a exceção deliberada: a
 revogação do consentimento corre sempre localmente.
 Sem template SMS dedicado, o dispatch usa o corpo WhatsApp com `*bold*`
 removido (SMS não renderiza markdown). Desde a decisão do dono de
