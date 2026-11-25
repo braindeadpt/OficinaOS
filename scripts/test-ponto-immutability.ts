@@ -114,6 +114,36 @@ try {
     survivors.rows.length === 1 && survivors.rows[0]?.id === entryId
   );
 
+  // Cenário da correção retida: correção dentro do prazo a apontar para
+  // uma linha expirada — sem o UPDATE prévio o SET NULL da FK abortava
+  // a purga inteira.
+  await client.query(
+    `INSERT INTO time_entries (id, "userId", type, at, transport, status, proofs)
+     VALUES ($1, $2, 'ENTRADA', now() - interval '6 years', 'SMS', 'APROVADO', '{}')`,
+    [`${oldEntryId}-2`, userId]
+  );
+  await client.query(
+    `INSERT INTO time_entries (id, "userId", type, at, transport, status, proofs, "correctsId")
+     VALUES ($1, $2, 'SAIDA', now() - interval '2 hours', 'SMS', 'APROVADO', '{}', $3)`,
+    [`${entryId}-corr`, userId, `${oldEntryId}-2`]
+  );
+  const purge2 = await client.query<{ ponto_purge_expired: string }>(
+    "SELECT ponto_purge_expired()"
+  );
+  ok(
+    "purga com correção retida não aborta",
+    purge2.rows[0]?.ponto_purge_expired === "1",
+    `devolveu ${purge2.rows[0]?.ponto_purge_expired}`
+  );
+  const kept = await client.query<{ correctsId: string | null }>(
+    `SELECT "correctsId" FROM time_entries WHERE id = $1`,
+    [`${entryId}-corr`]
+  );
+  ok(
+    "a correção retida sobrevive com correctsId anulado",
+    kept.rows.length === 1 && kept.rows[0]?.correctsId === null
+  );
+
   const owner = await client.query<{ owner: string }>(
     `SELECT r.rolname AS owner
        FROM pg_proc p JOIN pg_roles r ON r.oid = p.proowner
@@ -127,13 +157,14 @@ try {
 } finally {
   // Limpeza best-effort: as linhas de teste não podem ser apagadas por
   // DELETE (é esse o ponto) — TRUNCATE não dispara triggers de linha.
+  await client.query("TRUNCATE time_entries CASCADE").catch(() => {
+      // limpeza best-effort
+    });
   await client
-    .query(
-      `TRUNCATE time_entries CASCADE;
-       DELETE FROM users WHERE id = $1`,
-      [userId]
-    )
-    .catch(() => {});
+    .query("DELETE FROM users WHERE id = $1", [userId])
+    .catch(() => {
+      // limpeza best-effort
+    });
   await client.end();
 }
 

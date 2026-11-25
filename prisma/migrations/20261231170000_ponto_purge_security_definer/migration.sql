@@ -38,8 +38,13 @@ DO $$
 BEGIN
   -- SELECT é mesmo preciso: o DELETE com WHERE que lê colunas (o corte
   -- dos 5 anos lê "at") exige SELECT nessas colunas — sem ele a purga
-  -- falha com "permission denied" apesar do GRANT DELETE.
+  -- falha com "permission denied" apesar do GRANT DELETE. UPDATE só na
+  -- coluna correctsId: apagar um registo expirado a que uma correção
+  -- RETIDA aponta dispararia o SET NULL da FK como dono da tabela e o
+  -- trigger rejeitava — a função anula esses links ela própria antes
+  -- (ver ponto_purge_expired), e para isso precisa deste privilégio.
   GRANT SELECT, DELETE ON time_entries TO oficinaos_ponto_purge;
+  GRANT UPDATE ("correctsId") ON time_entries TO oficinaos_ponto_purge;
   GRANT SELECT, DELETE ON time_entry_validations TO oficinaos_ponto_purge;
 EXCEPTION WHEN undefined_object OR insufficient_privilege THEN
   RAISE WARNING 'não consegui dar DELETE ao papel oficinaos_ponto_purge — a purga falha até ser corrigido';
@@ -55,6 +60,17 @@ AS $func$
 DECLARE
   n bigint;
 BEGIN
+  -- Uma correção ainda dentro do prazo que aponte para um registo
+  -- expirado perde o link ANTES do delete: o SET NULL da FK corre como
+  -- dono da tabela e o trigger de imutabilidade rejeitava-o, fazendo
+  -- abortar a purga inteira. Aqui corre como o papel da purga, que o
+  -- trigger deixa passar. A linha da correção sobrevive — só o apontador
+  -- para o registo purgado desaparece, como o SET NULL faria.
+  UPDATE time_entries
+     SET "correctsId" = NULL
+   WHERE "correctsId" IN (
+     SELECT id FROM time_entries WHERE "at" < now() - interval '5 years'
+   );
   DELETE FROM time_entries WHERE "at" < now() - interval '5 years';
   GET DIAGNOSTICS n = ROW_COUNT;
   RETURN n;
