@@ -233,6 +233,34 @@ describe("ai-inbox link — idempotência e cancelamento", () => {
     });
   });
 
+  it("falha a revalidar a conta no replay mantém a cache e não re-executa", async () => {
+    const frame = {
+      args: { texto: "olá" },
+      idempotencyKey: "test-key-replay-db-error",
+      tool: "criar_rascunho",
+      userId: "u-owner",
+    };
+    await handleCall(app, "https://cloud.example", "tok", {
+      ...frame,
+      callId: "dberr-1",
+    });
+    mocks.canReplayStaffInboxTool.mockRejectedValueOnce(new Error("db down"));
+    await handleCall(app, "https://cloud.example", "tok", {
+      ...frame,
+      callId: "dberr-2",
+    });
+    await handleCall(app, "https://cloud.example", "tok", {
+      ...frame,
+      callId: "dberr-3",
+    });
+    expect(mocks.runStaffInboxTool).toHaveBeenCalledTimes(1);
+    expect(responseBodies()).toEqual([
+      { callId: "dberr-1", result: { ok: true } },
+      { callId: "dberr-2", error: "erro interno" },
+      { callId: "dberr-3", result: { ok: true } },
+    ]);
+  });
+
   it("resultado cancelado não fica em cache — o retry volta a executar", async () => {
     const frame = {
       args: { rascunhoId: "draft-c" },

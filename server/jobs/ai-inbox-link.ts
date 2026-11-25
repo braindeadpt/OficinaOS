@@ -138,12 +138,10 @@ async function executionFor(
     }
     if (existing) {
       // Replay de um resultado já concluído: revalida conta/permissão —
-      // se falhar, executa de novo e o runStaffInboxTool recusa e audita.
-      const allowed = await canReplayStaffInboxTool(
-        app.prisma,
-        tool,
-        userId
-      ).catch(() => false);
+      // se recusar, executa de novo e o runStaffInboxTool recusa e audita.
+      // Erro na consulta propaga ("erro interno") e mantém a cache: re-executar
+      // aqui duplicaria operações não idempotentes (ex.: criar rascunho).
+      const allowed = await canReplayStaffInboxTool(app.prisma, tool, userId);
       const current = idempotentCalls.get(idempotencyKey);
       if (current && (allowed || current !== existing)) {
         return current;
