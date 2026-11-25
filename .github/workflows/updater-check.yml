@@ -42,18 +42,43 @@ jobs:
       - name: Smoke test rewritten OficinaOS-Setup.exe (install → verify → uninstall)
         # Prova que a normalizacao in-place de VS_VERSION_INFO nao corrompe o
         # loader nem o payload LZMA2 do Inno Setup: instala silenciosamente,
-        # confirma os ficheiros extraidos e desinstala.
+        # confirma os ficheiros extraidos, desinstala e confirma a remocao.
         run: |
           $installDir = Join-Path $env:RUNNER_TEMP "oficinaos-install-smoke"
-          $p = Start-Process -FilePath (Resolve-Path "dist\OficinaOS-Setup.exe").Path `
-            -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/NOICONS", "/DIR=`"$installDir`"" `
-            -Wait -PassThru
-          if ($p.ExitCode -ne 0) { throw "OficinaOS-Setup.exe falhou na instalacao: exit $($p.ExitCode)" }
-          foreach ($rel in @("app\stub", "bun\stub", "pgsql\stub", "tools\OficinaOSTray.exe", "OficinaOS.ico", "unins000.exe")) {
-            $full = Join-Path $installDir $rel
-            if (-not (Test-Path $full)) { throw "Ficheiro em falta apos instalacao: $full" }
+          try {
+            # Start-Process -Wait no Windows espera pela arvore de processos
+            # (incl. OficinaOSTray.exe lancado no pos-install). WaitForExit()
+            # espera apenas pelo instalador.
+            $p = Start-Process -FilePath (Resolve-Path "dist\OficinaOS-Setup.exe").Path `
+              -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/NOICONS", "/DIR=`"$installDir`"" `
+              -PassThru
+            if (-not $p.WaitForExit(120000)) { throw "OficinaOS-Setup.exe expirou (>120s)" }
+            if ($p.ExitCode -ne 0) { throw "OficinaOS-Setup.exe falhou na instalacao: exit $($p.ExitCode)" }
+
+            foreach ($rel in @("app\stub", "bun\stub", "pgsql\stub", "tools\OficinaOSTray.exe", "OficinaOS.ico", "unins000.exe")) {
+              $full = Join-Path $installDir $rel
+              if (-not (Test-Path $full)) { throw "Ficheiro em falta apos instalacao: $full" }
+            }
+
+            $u = Start-Process -FilePath (Join-Path $installDir "unins000.exe") `
+              -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" `
+              -PassThru
+            if (-not $u.WaitForExit(120000)) { throw "unins000.exe expirou (>120s)" }
+            if ($u.ExitCode -ne 0) { throw "unins000.exe falhou: exit $($u.ExitCode)" }
+
+            # O unins000.exe apaga-se via copia em %TEMP% logo apos sair — aguardar
+            # com deadline pela remocao completa da pasta instalada.
+            $deadline = (Get-Date).AddSeconds(30)
+            while ((Test-Path $installDir) -and (Get-Date) -lt $deadline) {
+              Start-Sleep -Milliseconds 500
+            }
+            if (Test-Path $installDir) {
+              $leftovers = (Get-ChildItem $installDir -Recurse | Select-Object -ExpandProperty FullName) -join ", "
+              throw "Desinstalacao incompleta em ${installDir}: $leftovers"
+            }
+            if (Get-Process OficinaOSTray -ErrorAction SilentlyContinue) {
+              throw "OficinaOSTray.exe continuou em execucao apos desinstalacao"
+            }
+          } finally {
+            Get-Process OficinaOSTray -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           }
-          $u = Start-Process -FilePath (Join-Path $installDir "unins000.exe") `
-            -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" `
-            -Wait -PassThru
-          if ($u.ExitCode -ne 0) { throw "unins000.exe falhou: exit $($u.ExitCode)" }
