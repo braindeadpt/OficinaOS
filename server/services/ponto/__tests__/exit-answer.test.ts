@@ -121,6 +121,23 @@ describe("parsePontoExitAnswer — ambíguo", () => {
     const sem = parsePontoExitAnswer("saí às 18:05");
     expect(sem).toMatchObject({ hhmm: "18:05", kind: "time" });
     expect(sem && sem.kind === "time" ? sem.relativeDay : "x").toBeUndefined();
+    // «hoje» de contexto (quando viu o lembrete) não é dia de saída.
+    expect(
+      parsePontoExitAnswer("só vi hoje o lembrete, saí ontem às 18:05")
+    ).toMatchObject({ hhmm: "18:05", kind: "time", relativeDay: -1 });
+    // A vírgula não separa o dia da hora — senão gravava hoje a
+    // saída de ontem.
+    expect(parsePontoExitAnswer("Saí ontem, às 18:05")).toMatchObject({
+      hhmm: "18:05",
+      kind: "time",
+      relativeDay: -1,
+    });
+    // «foi ontem» noutra oração continua a ligar-se à hora.
+    expect(parsePontoExitAnswer("saí às 18:05. foi ontem")).toMatchObject({
+      hhmm: "18:05",
+      kind: "time",
+      relativeDay: -1,
+    });
     // Dois dias relativos distintos são ambíguos como duas horas.
     expect(parsePontoExitAnswer("ontem ou hoje às 18:05")).toEqual({
       kind: "ambiguous",

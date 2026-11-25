@@ -921,6 +921,31 @@ const RELATIVE_DAY_OFFSET: Record<string, number> = {
 const DIGIT_RE = /\d/;
 const BARE_DAY_CLAUSE_RE = /^\s*(?:foi\s+)?(?:anteontem|ontem|hoje)[.!…]?\s*$/i;
 
+// «hoje» solto numa oração sem hora é contexto («só vi hoje o
+// lembrete») e não entra — hoje é já o dia por omissão, a palavra
+// não informa. «ontem»/«anteontem» contam em qualquer oração: nunca
+// são o default e nomeá-los é sempre informativo — senão «Saí ontem,
+// às 18:05» perdia o dia na vírgula. A negação antes do termo
+// anula-o; âmbito incerto fica inválido (pergunta-se).
+function relativeDayVerdict(
+  word: string,
+  boundToTime: boolean,
+  clauseNegated: boolean,
+  negIdx: number,
+  matchIdx: number
+): "count" | "invalid" | "skip" {
+  if (!boundToTime && word === "hoje") {
+    return "skip";
+  }
+  if (!clauseNegated) {
+    return "count";
+  }
+  if (negIdx >= 0 && negIdx < matchIdx) {
+    return "skip"; // a negação antes do termo anula-o
+  }
+  return "invalid"; // âmbito da negação incerto — pergunta-se
+}
+
 function statedRelativeDay(text: string): {
   ambiguous: boolean;
   offset?: number;
@@ -931,19 +956,23 @@ function statedRelativeDay(text: string): {
     const clause = rawClause.normalize("NFC");
     const boundToTime =
       DIGIT_RE.test(clause) || BARE_DAY_CLAUSE_RE.test(clause);
-    if (!boundToTime) {
-      continue;
-    }
     const clauseNegated = negated(normalizePontoText(clause));
     const negIdx = clauseNegated
       ? clause.toLowerCase().search(NEGATION_START_RE)
       : -1;
     for (const m of clause.matchAll(RELATIVE_DAY_RE)) {
-      if (clauseNegated) {
-        if (negIdx >= 0 && negIdx < m.index) {
-          continue; // a negação antes do termo anula-o
-        }
-        invalid = true; // âmbito da negação incerto — pergunta-se
+      const verdict = relativeDayVerdict(
+        (m[1] ?? "").toLowerCase(),
+        boundToTime,
+        clauseNegated,
+        negIdx,
+        m.index
+      );
+      if (verdict === "skip") {
+        continue;
+      }
+      if (verdict === "invalid") {
+        invalid = true;
         continue;
       }
       offsets.add(RELATIVE_DAY_OFFSET[(m[1] ?? "").toLowerCase()]);
