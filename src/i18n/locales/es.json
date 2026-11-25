@@ -3078,5 +3078,10 @@
   "bot_avg_days_help": "Se utiliza para estimaciones de tiempo: el robot siempre las expresa como promedios, nunca como fechas garantizadas.",
   "bot_fallback_text_label": "Mensaje de tienda cerrada",
   "bot_fallback_text_help": "Enviado cuando la PC de la tienda está fuera de línea. ",
-  "bot_fallback_text_placeholder": "Recibimos tu mensaje. "
+  "bot_fallback_text_placeholder": "Recibimos tu mensaje. ",
+  "ponto.decided_recent": "Decisiones en los últimos 7 días",
+  "ponto.decided_empty": "Sin decisiones en los últimos 7 días",
+  "ponto.decision_approved": "Aprobado",
+  "ponto.decision_rejected": "Rechazado",
+  "ponto.decided_by": "por"
 }

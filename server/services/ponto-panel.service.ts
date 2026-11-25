@@ -367,6 +367,56 @@ export async function listPending(
   }));
 }
 
+// ── GET /decided ────────────────────────────────────────────────────────
+
+/** Decisões dos últimos 7 dias — a recusa é reversível (decisão do
+ *  produto): sem esta lista a linha decidida desaparecia do painel e a
+ *  re-aprovação que a API aceita era inatingível. Mais recente primeiro,
+ *  limite 50; linhas já substituídas por correção ficam de fora — mudar
+ *  a decisão sobre elas já não muda o apuramento. */
+export async function listRecentDecisions(
+  prisma: DbClient,
+  now = new Date()
+): Promise<PontoPendingEntryDTO[]> {
+  const since = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const rows = await findEntries(
+    prisma,
+    {
+      corrections: { none: {} },
+      validations: { some: { at: { gte: since } } },
+    },
+    [{ at: "desc" }, { id: "desc" }]
+  );
+  const recent = rows
+    .filter((e) => (e.validations[0]?.at.getTime() ?? 0) >= since.getTime())
+    .slice(0, 50);
+
+  const photos = recent.length
+    ? await prisma.pontoPhoto.findMany({
+        orderBy: { createdAt: "desc" },
+        select: { entryId: true, id: true },
+        where: { entryId: { in: recent.map((r) => r.id) } },
+      })
+    : [];
+  const photosByEntry = new Map<string, { id: string }[]>();
+  for (const p of photos) {
+    if (!p.entryId) {
+      continue;
+    }
+    const list = photosByEntry.get(p.entryId) ?? [];
+    list.push({ id: p.id });
+    photosByEntry.set(p.entryId, list);
+  }
+
+  return recent.map((e) => ({
+    ...toDTO(e),
+    photos: (photosByEntry.get(e.id) ?? []).map((p) => ({
+      id: p.id,
+      url: `/api/ponto/photos/${p.id}`,
+    })),
+  }));
+}
+
 // ── POST /entries/:id/validate ──────────────────────────────────────────
 
 export async function createValidation(

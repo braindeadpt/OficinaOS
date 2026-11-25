@@ -153,6 +153,7 @@ export default function PendingTab() {
   const shopTz = useShopTz();
   const tz = shopTz ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   const [entries, setEntries] = useState<PontoPendingEntryDTO[] | null>(null);
+  const [decided, setDecided] = useState<PontoPendingEntryDTO[] | null>(null);
   const [geo, setGeo] = useState<ShopGeo | null>(null);
   const [error, setError] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -161,11 +162,15 @@ export default function PendingTab() {
 
   const load = useCallback(async () => {
     try {
-      const [pend, geoRes] = await Promise.all([
+      const [pend, geoRes, dec] = await Promise.all([
         api.get<PontoPendingEntryDTO[]>("/ponto/pending"),
         api.get<ShopGeo>("/ponto/geo").catch(() => ({ data: null })),
+        api.get<PontoPendingEntryDTO[]>("/ponto/decided").catch(() => ({
+          data: [],
+        })),
       ]);
       setEntries(pend.data);
+      setDecided(dec.data);
       setGeo(geoRes.data);
       setError(false);
     } catch {
@@ -209,15 +214,79 @@ export default function PendingTab() {
       <div className="h-48 animate-pulse rounded-xl bg-surface-container-low" />
     );
   }
+  const decidedSection = (
+    <section className="space-y-3">
+      <h2 className="font-bold text-on-surface-variant text-xs uppercase tracking-wide">
+        {t("ponto.decided_recent")}
+      </h2>
+      {(decided ?? []).length === 0 ? (
+        <p className="text-on-surface-variant text-sm">
+          {t("ponto.decided_empty")}
+        </p>
+      ) : (
+        (decided ?? []).map((e) => (
+          <article
+            className="rounded-2xl bg-surface-container-low p-4"
+            key={e.id}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="font-bold text-on-surface text-sm">
+                  {e.user.name || e.user.username}
+                </p>
+                <p className="text-on-surface-variant text-xs">
+                  {t(TYPE_LABEL[e.type])} ·{" "}
+                  {formatClock(e.at, i18n.language, tz)}
+                  {" · "}
+                  {e.effectiveStatus === "RECUSADO"
+                    ? t("ponto.decision_rejected")
+                    : t("ponto.decision_approved")}
+                  {e.validations[0]?.byUserName
+                    ? ` ${t("ponto.decided_by")} ${e.validations[0].byUserName}`
+                    : ""}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                {e.effectiveStatus === "RECUSADO" ? (
+                  <Button
+                    disabled={busyId === e.id}
+                    icon="check"
+                    onClick={() => validate(e.id, "APROVADO")}
+                    size="sm"
+                  >
+                    {t("ponto.approve")}
+                  </Button>
+                ) : (
+                  <Button
+                    disabled={busyId === e.id}
+                    icon="close"
+                    onClick={() => setNoteFor(e.id)}
+                    size="sm"
+                    variant="secondary"
+                  >
+                    {t("ponto.reject")}
+                  </Button>
+                )}
+              </div>
+            </div>
+          </article>
+        ))
+      )}
+    </section>
+  );
+
   if (entries.length === 0) {
     return (
-      <div className="rounded-2xl bg-surface-container-low p-8 text-center">
-        <span className="material-symbols-outlined text-4xl text-on-surface-variant/40">
-          check_circle
-        </span>
-        <p className="mt-3 text-on-surface-variant text-sm">
-          {t("ponto.pending_empty")}
-        </p>
+      <div className="space-y-5">
+        <div className="rounded-2xl bg-surface-container-low p-8 text-center">
+          <span className="material-symbols-outlined text-4xl text-on-surface-variant/40">
+            check_circle
+          </span>
+          <p className="mt-3 text-on-surface-variant text-sm">
+            {t("ponto.pending_empty")}
+          </p>
+        </div>
+        {decidedSection}
       </div>
     );
   }
@@ -299,6 +368,8 @@ export default function PendingTab() {
           );
         })}
       </div>
+
+      {decidedSection}
 
       <Dialog
         onClose={() => {
