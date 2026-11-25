@@ -5,6 +5,13 @@ import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import PreCheckPage from "..";
 
+vi.mock("@/lib/api", () => ({
+  default: {
+    get: vi.fn(async () => ({ data: { shopMode: "repair_shop" } })),
+    post: vi.fn(),
+  },
+}));
+
 vi.mock("react-i18next", () => ({
   initReactI18next: { type: "3rdParty", init: vi.fn() },
   useTranslation: () => ({
