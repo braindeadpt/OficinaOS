@@ -1200,6 +1200,8 @@
   "ponto.info_doc_sig_name": "Name",
   "ponto.info_doc_sig_signature": "Signature",
   "ponto.info_doc_title": "Time-clock record information",
+  "ponto.info_doc_controller_company": "The company",
+  "ponto.info_doc_controller": "The shop",
   "ponto.info_doc_what": "What is recorded",
   "ponto.info_doc_what_1": "Clock-ins, breaks, return from breaks and clock-outs, with the server time at the moment each record is made. When a worker corrects a clock-out by replying to the reminder, the time they state is stored as a correction pending validation by management.",
   "ponto.info_doc_what_2": "Location is requested only at the moment of recording, to confirm it was made within the shop or work-site area. There is no continuous location tracking or surveillance.",
@@ -3112,5 +3114,7 @@
   "ponto.qr_regenerate_warning": "Printed QR codes stop working immediately — you will have to print this sheet again.",
   "ponto.qr_regenerate_confirm": "Regenerate now",
   "ponto.qr_regenerate_error": "Could not regenerate — the printed QR is still valid.",
-  "ponto.qr_regenerate_unknown": "Could not confirm the regeneration — check the connection and scan the printed QR before relying on it."
+  "ponto.qr_regenerate_unknown": "Could not confirm the regeneration — check the connection and scan the printed QR before relying on it.",
+  "ponto.config_missing": "The shop has not configured the time-clock location yet — tell the manager.",
+  "ponto.config_missing_company": "The company has not configured the time-clock location yet — tell the manager."
 }

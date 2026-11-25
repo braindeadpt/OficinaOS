@@ -5,18 +5,23 @@ import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { usePontoT } from "@/hooks/use-ponto-t";
 import api from "@/lib/api";
-import { useShopModeStore } from "@/stores/shop-mode";
+import type { ShopMode } from "@/stores/shop-mode";
 
 interface PontoStatus {
   enabled: boolean;
 }
 
-type PontoShop = Pick<ShopSettings, "pontoInfoText" | "shopName">;
+type PontoShop = Pick<ShopSettings, "pontoInfoText" | "shopMode" | "shopName">;
 
 type PontoInfoState =
   | { kind: "loading" }
   | { kind: "unavailable" }
-  | { kind: "ready"; infoText: string | null; shopName: string };
+  | {
+      kind: "ready";
+      infoText: string | null;
+      shopMode: ShopMode;
+      shopName: string;
+    };
 
 const SIGNATURE_ROWS = 4;
 
@@ -75,7 +80,12 @@ async function loadPontoInfo(): Promise<PontoInfoState> {
   }
   const shop = shopRes.data;
   const custom = shop.pontoInfoText?.trim() ? shop.pontoInfoText : null;
-  return { infoText: custom, kind: "ready", shopName: shop.shopName ?? "" };
+  return {
+    infoText: custom,
+    kind: "ready",
+    shopMode: shop.shopMode === "ponto_only" ? "ponto_only" : "repair_shop",
+    shopName: shop.shopName ?? "",
+  };
 }
 
 function SignatureField({ label, tall }: { label: string; tall?: boolean }) {
@@ -112,9 +122,9 @@ function SignatureRow({
  */
 export default function PontoInfoPage() {
   const { t } = useTranslation();
-  const pt = usePontoT();
-  const shopMode = useShopModeStore((s) => s.shopMode);
   const [state, setState] = useState<PontoInfoState>({ kind: "loading" });
+  const loadedShopMode = state.kind === "ready" ? state.shopMode : null;
+  const pt = usePontoT(loadedShopMode);
 
   useEffect(() => {
     let cancelled = false;
@@ -139,7 +149,7 @@ export default function PontoInfoPage() {
     month: "long",
     year: "numeric",
   });
-  let controller = shopMode === "ponto_only" ? "A empresa" : "A loja";
+  let controller = pt("ponto.info_doc_controller", { lng: "pt" });
   if (state.kind === "ready" && state.shopName) {
     controller = `A ${state.shopName}`;
   }

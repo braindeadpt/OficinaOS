@@ -1200,6 +1200,8 @@
   "ponto.info_doc_sig_name": "Nome",
   "ponto.info_doc_sig_signature": "Assinatura",
   "ponto.info_doc_title": "Informação sobre o registo de ponto",
+  "ponto.info_doc_controller_company": "A empresa",
+  "ponto.info_doc_controller": "A loja",
   "ponto.info_doc_what": "O que é registado",
   "ponto.info_doc_what_1": "Entradas, pausas, regresso de pausas e saídas, com a hora do servidor no momento em que cada registo é efetuado. Quando o trabalhador corrige a saída em resposta ao lembrete, a hora por ele indicada fica registada como correção pendente de validação.",
   "ponto.info_doc_what_2": "A localização é solicitada apenas no momento do registo, para confirmar que este foi efetuado dentro da área da loja ou do local de trabalho. Não existe localização contínua nem vigilância.",
@@ -3112,5 +3114,7 @@
   "ponto.qr_regenerate_warning": "Os QR impressos deixam de funcionar de imediato — terá de imprimir esta folha outra vez.",
   "ponto.qr_regenerate_confirm": "Regenerar agora",
   "ponto.qr_regenerate_error": "Não foi possível regenerar — o QR impresso continua válido.",
-  "ponto.qr_regenerate_unknown": "Não foi possível confirmar a regeneração — verifique a ligação e leia o QR impresso antes de confiar nele."
+  "ponto.qr_regenerate_unknown": "Não foi possível confirmar a regeneração — verifique a ligação e leia o QR impresso antes de confiar nele.",
+  "ponto.config_missing": "A loja ainda não configurou a localização do livro de ponto — avise o responsável.",
+  "ponto.config_missing_company": "A empresa ainda não configurou a localização do livro de ponto — avise o responsável."
 }

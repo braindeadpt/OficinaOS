@@ -1,3 +1,5 @@
+import ptMessages from "../../../src/i18n/locales/pt.json";
+
 // Textos PT-PT do livro de ponto e construtores dos payloads
 // interativos Meta (location_request_message e botões de resposta).
 // Os canais sem interativo (Evolution, SMS) recebem o equivalente em
@@ -27,10 +29,8 @@ export const PONTO_EXIT_DATE_TERMS = {
 export const PONTO_TEXT = {
   commands:
     "Comandos do livro de ponto: ENTRADA (leia o QR), PAUSA, VOLTEI, SAIDA, ESTADO.",
-  configMissing:
-    "A loja ainda não configurou a localização do livro de ponto — avise o responsável.",
-  configMissingCompany:
-    "A empresa ainda não configurou a localização do livro de ponto — avise o responsável.",
+  configMissing: ptMessages["ponto.config_missing"],
+  configMissingCompany: ptMessages["ponto.config_missing_company"],
   entradaNeedsCode:
     "Para registar a entrada precisa do código do QR — aponte a câmara para o QR do livro de ponto.",
   evaluateFailed:

@@ -1200,6 +1200,8 @@
   "ponto.info_doc_sig_name": "Nom",
   "ponto.info_doc_sig_signature": "Signature",
   "ponto.info_doc_title": "Informations sur l'enregistrement du pointage",
+  "ponto.info_doc_controller_company": "L'entreprise",
+  "ponto.info_doc_controller": "Le magasin",
   "ponto.info_doc_what": "Ce qui est enregistré",
   "ponto.info_doc_what_1": "Entrées, pauses, retours de pause et sorties, avec l'heure du serveur au moment où chaque enregistrement est effectué. Lorsque le travailleur corrige la sortie en réponse au rappel, l'heure qu'il indique est enregistrée comme correction en attente de validation.",
   "ponto.info_doc_what_2": "La localisation n'est demandée qu'au moment de l'enregistrement, pour confirmer qu'il a été effectué dans la zone du magasin ou du lieu de travail. Il n'y a ni localisation continue ni surveillance.",
@@ -3112,5 +3114,7 @@
   "ponto.qr_regenerate_warning": "Les QR imprimés cessent de fonctionner immédiatement — vous devrez réimprimer cette feuille.",
   "ponto.qr_regenerate_confirm": "Régénérer maintenant",
   "ponto.qr_regenerate_error": "Régénération impossible — le QR imprimé reste valide.",
-  "ponto.qr_regenerate_unknown": "Impossible de confirmer la régénération — vérifiez la connexion et scannez le QR imprimé avant de vous y fier."
+  "ponto.qr_regenerate_unknown": "Impossible de confirmer la régénération — vérifiez la connexion et scannez le QR imprimé avant de vous y fier.",
+  "ponto.config_missing": "Le magasin n'a pas encore configuré la localisation du pointage — informez le responsable.",
+  "ponto.config_missing_company": "L'entreprise n'a pas encore configuré la localisation du pointage — informez le responsable."
 }

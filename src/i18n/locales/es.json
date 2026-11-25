@@ -1200,6 +1200,8 @@
   "ponto.info_doc_sig_name": "Nombre",
   "ponto.info_doc_sig_signature": "Firma",
   "ponto.info_doc_title": "Información sobre el registro de jornada",
+  "ponto.info_doc_controller_company": "La empresa",
+  "ponto.info_doc_controller": "La tienda",
   "ponto.info_doc_what": "Qué se registra",
   "ponto.info_doc_what_1": "Entradas, pausas, regresos de pausas y salidas, con la hora del servidor en el momento en que se efectúa cada registro. Cuando el trabajador corrige la salida respondiendo al recordatorio, la hora que indica queda registrada como corrección pendiente de validación.",
   "ponto.info_doc_what_2": "La ubicación solo se solicita en el momento del registro, para confirmar que se realizó dentro del área de la tienda o del lugar de trabajo. No hay ubicación continua ni vigilancia.",
@@ -3112,5 +3114,7 @@
   "ponto.qr_regenerate_warning": "Los QR impresos dejan de funcionar de inmediato — tendrá que imprimir esta hoja de nuevo.",
   "ponto.qr_regenerate_confirm": "Regenerar ahora",
   "ponto.qr_regenerate_error": "No se pudo regenerar — el QR impreso sigue siendo válido.",
-  "ponto.qr_regenerate_unknown": "No se pudo confirmar la regeneración — compruebe la conexión y lea el QR impreso antes de confiar en él."
+  "ponto.qr_regenerate_unknown": "No se pudo confirmar la regeneración — compruebe la conexión y lea el QR impreso antes de confiar en él.",
+  "ponto.config_missing": "La tienda aún no ha configurado la ubicación del registro — avise al responsable.",
+  "ponto.config_missing_company": "La empresa aún no ha configurado la ubicación del registro — avise al responsable."
 }

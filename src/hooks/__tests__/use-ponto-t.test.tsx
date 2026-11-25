@@ -40,4 +40,10 @@ describe("usePontoT", () => {
       "ponto.location_title_company"
     );
   });
+  it("aceita o modo carregado pela própria página antes da store", () => {
+    const { result } = renderHook(() => usePontoT("ponto_only"));
+    expect(result.current("ponto.location_title")).toBe(
+      "ponto.location_title_company"
+    );
+  });
 });
