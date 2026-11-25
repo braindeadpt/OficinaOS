@@ -18,7 +18,11 @@ vi.mock("../job-quote.service.js", () => ({
 }));
 
 import type { BotReplyCtx } from "../bot-intents.js";
-import { composeReply, handleInboundMessage } from "../bot-intents.js";
+import {
+  composeReply,
+  findCustomersByPhone,
+  handleInboundMessage,
+} from "../bot-intents.js";
 
 const PHONE = "351912345678";
 
@@ -628,5 +632,35 @@ describe("composeReply — deterministic rules before AI", () => {
     const out = await composeReply(ctx, msg("Quando está aberta a loja?"));
     expect(mocks.askBotAi).toHaveBeenCalledOnce();
     expect(out.text).toBe("Aberto das 9h às 18h.");
+  });
+});
+
+describe("findCustomersByPhone — ficha com separadores", () => {
+  // Mock que aplica o pré-filtro endsWith como o Postgres faria.
+  function phonePrisma(phones: string[]) {
+    const rows = phones.map((phone, i) => ({
+      id: `c${i}`,
+      name: `C${i}`,
+      phone,
+    }));
+    return {
+      customer: {
+        findMany: vi.fn(
+          async (args: { where: { phone: { endsWith: string } } }) =>
+            rows.filter((r) => r.phone.endsWith(args.where.phone.endsWith))
+        ),
+        update: vi.fn(async () => ({})),
+      },
+    };
+  }
+
+  it("casa +351912345678 com «+351 912 345 678» e «912 345 678»", async () => {
+    const prisma = phonePrisma([
+      "+351 912 345 678",
+      "912 345 678",
+      "+34 912 345 678",
+    ]);
+    const found = await findCustomersByPhone(prisma as never, "+351912345678");
+    expect(found.map((c) => c.id)).toEqual(["c0", "c1"]);
   });
 });

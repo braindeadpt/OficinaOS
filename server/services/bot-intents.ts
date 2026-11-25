@@ -481,8 +481,11 @@ export async function findCustomersByPhone(
   if ((isPtSender && last9.length < 9) || last4.length < 4) {
     return [];
   }
+  // Pré-filtro só pelo último dígito: a ficha pode ter o número com
+  // separadores («+351 912 345 678») e um endsWith dos últimos 4 dígitos
+  // falhava — o casamento exato faz-se abaixo sobre os dígitos.
   const candidates = await prisma.customer.findMany({
-    where: { phone: { endsWith: last4 } },
+    where: { phone: { endsWith: senderDigits.slice(-1) } },
     select: { id: true, name: true, phone: true },
   });
   return candidates
