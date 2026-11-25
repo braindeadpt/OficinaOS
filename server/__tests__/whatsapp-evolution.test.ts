@@ -721,6 +721,26 @@ describe("Evolution inbound webhook registration (MESSAGES_UPSERT)", () => {
     );
   });
 
+  it("APP_URL HTTP com DNS privado é usada quando o proxy termina HTTPS", async () => {
+    mocks.dnsLookup.mockResolvedValue([{ address: "192.168.1.30", family: 4 }]);
+    process.env.APP_URL = "http://oficina.loja.interna:4000";
+    resetEnvForTests();
+    const app = buildApp(fakePrisma(PRO_BOT_ROW), { trustProxy: true });
+    const res = await app.inject({
+      headers: {
+        host: "app:4000",
+        "x-forwarded-proto": "https",
+      },
+      method: "PUT",
+      payload: { botDisclaimerAccepted: true, transport: "evolution" },
+      url: "/api/settings/whatsapp",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "http://oficina.loja.interna:4000/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
   it("HTTPS com Host interno e sem IP LAN usa APP_URL como par explícito", async () => {
     process.env.APP_URL = "https://oficina.exemplo";
     resetEnvForTests();
