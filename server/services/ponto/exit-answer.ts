@@ -911,6 +911,16 @@ const RELATIVE_DAY_OFFSET: Record<string, number> = {
   ontem: -1,
 };
 
+// A palavra de dia só fala da SAÍDA quando está ligada à hora: na
+// mesma oração que dígitos («ontem às 18:05», «saí ontem às 18:05»)
+// ou sozinha como afirmação do dia («foi ontem»). Num contexto sem
+// hora («só vi hoje o lembrete») a palavra refere outro
+// acontecimento e não entra — senão «só vi hoje o lembrete, saí
+// ontem às 18:05» tinha dois dias «distintos» e ficava ambíguo sem
+// razão.
+const DIGIT_RE = /\d/;
+const BARE_DAY_CLAUSE_RE = /^\s*(?:foi\s+)?(?:anteontem|ontem|hoje)[.!…]?\s*$/i;
+
 function statedRelativeDay(text: string): {
   ambiguous: boolean;
   offset?: number;
@@ -919,6 +929,11 @@ function statedRelativeDay(text: string): {
   let invalid = false;
   for (const rawClause of text.split(CLAUSE_SPLIT_RE)) {
     const clause = rawClause.normalize("NFC");
+    const boundToTime =
+      DIGIT_RE.test(clause) || BARE_DAY_CLAUSE_RE.test(clause);
+    if (!boundToTime) {
+      continue;
+    }
     const clauseNegated = negated(normalizePontoText(clause));
     const negIdx = clauseNegated
       ? clause.toLowerCase().search(NEGATION_START_RE)
