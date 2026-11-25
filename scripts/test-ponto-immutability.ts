@@ -19,6 +19,14 @@ const url = process.env.DATABASE_URL;
 if (!url) {
   throw new Error("DATABASE_URL em falta — o teste corre contra uma BD real");
 }
+// A limpeza faz TRUNCATE do livro inteiro (é imutável — não há DELETE):
+// recusa tudo o que não pareça uma base descartável de teste.
+const dbName = new URL(url).pathname.replace("/", "");
+if (!dbName.includes("test")) {
+  throw new Error(
+    `DATABASE_URL aponta para '${dbName}' — o teste destrói os dados e só corre contra bases com 'test' no nome`
+  );
+}
 
 const client = new pg.Client({ connectionString: url });
 await client.connect();
