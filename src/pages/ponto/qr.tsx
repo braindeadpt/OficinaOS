@@ -88,6 +88,7 @@ export default function PontoQrPage() {
   const [state, setState] = useState<PontoQrState>({ kind: "loading" });
   const [confirming, setConfirming] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [regenError, setRegenError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,16 +113,25 @@ export default function PontoQrPage() {
   // confirmação em dois passos com o aviso explícito.
   const regenerate = async () => {
     setRegenerating(true);
+    setRegenError(false);
+    // O QR sai da folha antes do POST: a partir deste momento o código
+    // antigo pode já estar revogado na Cloud e não pode ser impresso
+    // por engano durante a substituição.
+    setState({ kind: "loading" });
     try {
       await api.post("/ponto/regenerate-qr");
       setConfirming(false);
-      // Recarrega já aqui — o useEffect é só para a montagem inicial.
-      setState({ kind: "loading" });
       setState(
         await loadPontoQr().catch((): PontoQrState => ({ kind: "unavailable" }))
       );
     } catch {
+      // Falhou (Cloud antiga sem o endpoint, rede, etc.) — o QR antigo
+      // continua válido: repõe a folha e diz ao dono que nada mudou.
+      setRegenError(true);
       setConfirming(false);
+      setState(
+        await loadPontoQr().catch((): PontoQrState => ({ kind: "unavailable" }))
+      );
     } finally {
       setRegenerating(false);
     }
@@ -162,17 +172,29 @@ export default function PontoQrPage() {
                 </Button>
               </>
             ) : (
-              <Button
-                onClick={() => setConfirming(true)}
-                size="sm"
-                variant="destructive-soft"
-              >
-                {t("ponto.qr_regenerate")}
-              </Button>
+              <>
+                {regenError && (
+                  <span className="max-w-56 text-danger text-xs">
+                    {t("ponto.qr_regenerate_error")}
+                  </span>
+                )}
+                <Button
+                  onClick={() => {
+                    setRegenError(false);
+                    setConfirming(true);
+                  }}
+                  size="sm"
+                  variant="destructive-soft"
+                >
+                  {t("ponto.qr_regenerate")}
+                </Button>
+              </>
             ))}
-          <Button icon="print" onClick={() => window.print()}>
-            {t("ponto.qr_print")}
-          </Button>
+          {state.kind === "ready" && (
+            <Button icon="print" onClick={() => window.print()}>
+              {t("ponto.qr_print")}
+            </Button>
+          )}
         </div>
       </div>
 

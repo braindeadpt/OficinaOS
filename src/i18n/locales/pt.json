@@ -3087,5 +3087,6 @@
   "ponto.readonly_inactive": "Módulo de relógio de ponto inativo — modo só de leitura: os registos continuam disponíveis para consulta e exportação (retenção de 5 anos), mas validar ou registar picagens exige o módulo.",
   "ponto.qr_regenerate": "Regenerar QR",
   "ponto.qr_regenerate_warning": "Os QR impressos deixam de funcionar de imediato — terá de imprimir esta folha outra vez.",
-  "ponto.qr_regenerate_confirm": "Regenerar agora"
+  "ponto.qr_regenerate_confirm": "Regenerar agora",
+  "ponto.qr_regenerate_error": "Não foi possível regenerar — o QR impresso continua válido."
 }

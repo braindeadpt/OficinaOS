@@ -3087,5 +3087,6 @@
   "ponto.readonly_inactive": "Module de pointage inactif — mode lecture seule : les enregistrements restent consultables et exportables (conservation de 5 ans), mais valider ou enregistrer des pointages exige le module.",
   "ponto.qr_regenerate": "Régénérer le QR",
   "ponto.qr_regenerate_warning": "Les QR imprimés cessent de fonctionner immédiatement — vous devrez réimprimer cette feuille.",
-  "ponto.qr_regenerate_confirm": "Régénérer maintenant"
+  "ponto.qr_regenerate_confirm": "Régénérer maintenant",
+  "ponto.qr_regenerate_error": "Régénération impossible — le QR imprimé reste valide."
 }
