@@ -47,63 +47,66 @@ describe("listRecentDecisions", () => {
     });
   });
 
-  it("decisão mais recente fora dos 7 dias fica de fora mesmo com validação antiga dentro", async () => {
-    const now = new Date("2026-01-10T12:00:00.000Z");
-    const entry = {
-      at: new Date("2026-01-01T18:00:00.000Z"),
+  it("ordena pelo instante da decisão mais recente, não da picagem", async () => {
+    // Picagem ANTIGA decidida agora tem de aparecer primeiro — por
+    // `at` ficava enterrada atrás de picagens recentes e o gestor não
+    // conseguia reverter a decisão que acabou de tomar.
+    const mk = (
+      id: string,
+      punchIso: string,
+      decisionIso: string,
+      decision: string
+    ) => ({
+      at: new Date(punchIso),
       corrections: [],
       corrects: null,
-      createdAt: new Date("2026-01-01T18:00:00.000Z"),
+      createdAt: new Date(punchIso),
       createdBy: null,
-      id: "e-1",
+      id,
       proofs: {},
       reason: null,
       status: "POR_VALIDAR",
       transport: "MANUAL",
       type: "SAIDA",
       user: { id: "u-1", name: "Ana", phoneE164: null, username: "ana" },
-      // Ordenadas desc: a mais recente (8 dias) está fora da janela
-      // mesmo havendo uma mais antiga dentro — a decisão que conta é
-      // a mais recente.
       validations: [
         {
-          at: new Date("2026-01-02T12:00:00.000Z"),
+          at: new Date(decisionIso),
           byUser: { name: "Gestor", username: "gestor" },
-          decision: "APROVADO",
-          id: "v-2",
-          note: null,
-        },
-        {
-          at: new Date("2026-01-09T12:00:00.000Z"),
-          byUser: { name: "Gestor", username: "gestor" },
-          decision: "RECUSADO",
-          id: "v-1",
+          decision,
+          id: `v-${id}`,
           note: null,
         },
       ],
-    };
-    const findMany = vi.fn(() => Promise.resolve([entry]));
+    });
+    // O Prisma devolve por `at` desc — a picagem recente vem primeiro.
+    const rows = [
+      mk(
+        "recente",
+        "2026-01-09T18:00:00.000Z",
+        "2026-01-09T18:30:00.000Z",
+        "APROVADO"
+      ),
+      mk(
+        "antiga",
+        "2026-01-05T18:00:00.000Z",
+        "2026-01-10T11:00:00.000Z",
+        "RECUSADO"
+      ),
+    ];
+    const findMany = vi.fn(() => Promise.resolve(rows));
     const prisma = {
       pontoPhoto: { findMany: vi.fn(() => Promise.resolve([])) },
       timeEntry: { findMany },
     } as unknown as DbClient;
 
-    // Com validação mais recente há 8 dias (02/01 → 10/01) — fora.
-    const rows = await listRecentDecisions(prisma, now);
-    expect(rows).toEqual([]);
+    const out = await listRecentDecisions(
+      prisma,
+      new Date("2026-01-10T12:00:00.000Z")
+    );
 
-    // Uma decisão de ontem entra e traz as fotos no formato do painel.
-    entry.validations = [
-      {
-        at: new Date("2026-01-09T12:00:00.000Z"),
-        byUser: { name: "Gestor", username: "gestor" },
-        decision: "RECUSADO",
-        id: "v-1",
-        note: null,
-      },
-    ];
-    const rows2 = await listRecentDecisions(prisma, now);
-    expect(rows2).toHaveLength(1);
-    expect(rows2[0]?.effectiveStatus).toBe("RECUSADO");
+    // A decidida AGORA (picagem antiga) lidera a lista.
+    expect(out.map((e) => e.id)).toEqual(["antiga", "recente"]);
+    expect(out[0]?.effectiveStatus).toBe("RECUSADO");
   });
 });

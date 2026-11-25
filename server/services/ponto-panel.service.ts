@@ -387,8 +387,17 @@ export async function listRecentDecisions(
     },
     [{ at: "desc" }, { id: "desc" }]
   );
+  // Ordena pelo instante da DECISÃO mais recente, não da picagem —
+  // por `at` uma decisão acabada de tomar sobre uma picagem antiga
+  // ficava enterrada (ou fora do corte de 50) e o gestor não a
+  // conseguia reverter.
   const recent = rows
     .filter((e) => (e.validations[0]?.at.getTime() ?? 0) >= since.getTime())
+    .sort(
+      (a, b) =>
+        (b.validations[0]?.at.getTime() ?? 0) -
+        (a.validations[0]?.at.getTime() ?? 0)
+    )
     .slice(0, 50);
 
   const photos = recent.length
