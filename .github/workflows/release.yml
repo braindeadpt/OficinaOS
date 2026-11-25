@@ -267,12 +267,21 @@ jobs:
 
       - name: Compile tray app (.NET Framework 4 csc — sem deps)
         run: |
+          $v = "${{ github.ref_name }}".TrimStart('v')
+          $numVer = if ($v -match '^(\d+\.\d+\.\d+)') { "$($Matches[1]).0" } else { "0.0.0.0" }
+          $verFile = "$env:RUNNER_TEMP\OficinaOSTrayVersion.cs"
+          @"
+          using System.Reflection;
+          [assembly: AssemblyVersion("$numVer")]
+          [assembly: AssemblyFileVersion("$numVer")]
+          [assembly: AssemblyInformationalVersion("$v")]
+          "@ | Set-Content -Encoding utf8 $verFile
           $csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
           & $csc /target:winexe /nologo `
             /win32icon:"installer\OficinaOS.ico" `
             /out:"installer\stage\tools\OficinaOSTray.exe" `
             /r:System.Windows.Forms.dll /r:System.Drawing.dll `
-            installer\tray\OficinaOSTray.cs
+            installer\tray\OficinaOSTray.cs $verFile
           if ($LASTEXITCODE -ne 0) { throw "csc falhou" }
 
       - name: Install Inno Setup 6
@@ -281,8 +290,9 @@ jobs:
       - name: Compile installer
         run: |
           $v = "${{ github.ref_name }}".TrimStart('v')
+          $numVer = if ($v -match '^(\d+\.\d+\.\d+)') { "$($Matches[1]).0" } else { "0.0.0.0" }
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" `
-            "/DMyAppVersion=$v" "/DSourceDir=stage" `
+            "/DMyAppVersion=$v" "/DMyAppNumericVersion=$numVer" "/DSourceDir=stage" `
             /Q installer\oficinaos.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC falhou" }
 
