@@ -27,10 +27,21 @@ function fakePrisma(overrides: Partial<SettingsRow> = {}) {
     ...overrides,
   };
   return {
+    pontoPhoto: { findMany: vi.fn(async () => []) },
     shopSettings: {
       // dashboardScope lê o fuso da loja via findFirst (cache 60s).
       findFirst: vi.fn(async () => ({ timezone: "Europe/Lisbon" })),
       findUnique: vi.fn(async () => ({ ...row })),
+    },
+    timeEntry: {
+      create: vi.fn(async () => ({})),
+      findMany: vi.fn(async () => []),
+      findUnique: vi.fn(async () => null),
+    },
+    timeEntryValidation: { create: vi.fn(async () => ({})) },
+    user: {
+      findMany: vi.fn(async () => []),
+      findUnique: vi.fn(async () => null),
     },
   };
 }
@@ -237,19 +248,23 @@ describe("ponto — gate de escrita sem módulo (WP0.5)", () => {
       payload: { decision: "APROVADO" },
       url: "/api/ponto/entries/entry-1/validate",
     });
+    // Passa o gate e morre mais à frente na entrada inexistente — nunca
+    // por falta de módulo.
     expect(res.json().code).not.toBe("CLOUD_MODULE_REQUIRED");
+    expect(res.statusCode).not.toBe(500);
   });
 
-  it("as leituras NUNCA levam gate — retenção legal de 5 anos", async () => {
+  it("as leituras NUNCA levam gate e respondem 200 — retenção legal de 5 anos", async () => {
     const app = buildApp(fakePrisma(semModulo));
     for (const url of [
       "/api/ponto/entries",
       "/api/ponto/pending",
       "/api/ponto/decided",
       "/api/ponto/now",
+      "/api/ponto/hours?from=2026-01-05&to=2026-01-11",
     ]) {
       const res = await app.inject({ method: "GET", url });
-      expect(res.json().code).not.toBe("CLOUD_MODULE_REQUIRED");
+      expect(res.statusCode).toBe(200);
     }
   });
 });

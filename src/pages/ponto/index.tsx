@@ -29,7 +29,13 @@ const TABS: { icon: string; key: TabKey }[] = [
 // Sem o módulo ativo o painel passa a leitura: consulta e exportação
 // continuam sempre possíveis (retenção legal de 5 anos), mas validar,
 // registar esquecimentos e gerir a equipa são escritas que exigem ponto.
-const READONLY_KEYS = new Set<TabKey>(["agora", "horas", "exportar"]);
+const READONLY_KEYS = new Set<TabKey>([
+  "agora",
+  "validar",
+  "horas",
+  "esquecimentos",
+  "exportar",
+]);
 
 export default function PontoPage() {
   const { t } = useTranslation();

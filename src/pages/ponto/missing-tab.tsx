@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import api from "@/lib/api";
+import { usePontoStore } from "@/stores/ponto";
 import {
   formatClock,
   formatDay,
@@ -24,6 +25,7 @@ const YMD = /^\d{4}-\d{2}-\d{2}$/;
 
 export default function MissingTab() {
   const { i18n, t } = useTranslation();
+  const readOnly = usePontoStore((s) => s.enabled) === false;
   const shopTz = useShopTz();
   const tz = shopTz ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   const [from, setFrom] = useState(() => ymdDaysAgo(30, tz));
@@ -216,14 +218,16 @@ export default function MissingTab() {
                     {formatClock(m.lastAt, i18n.language, tz)}
                   </td>
                   <td className="px-4 py-2.5 text-right">
-                    <Button
-                      icon="logout"
-                      onClick={() => openModal(m)}
-                      size="sm"
-                      variant="secondary"
-                    >
-                      {t("ponto.register_exit")}
-                    </Button>
+                    {readOnly ? null : (
+                      <Button
+                        icon="logout"
+                        onClick={() => openModal(m)}
+                        size="sm"
+                        variant="secondary"
+                      >
+                        {t("ponto.register_exit")}
+                      </Button>
+                    )}
                   </td>
                 </tr>
               ))}

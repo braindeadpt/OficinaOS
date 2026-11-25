@@ -6,6 +6,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Field } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import api from "@/lib/api";
+import { usePontoStore } from "@/stores/ponto";
 import {
   formatClock,
   formatDayClock,
@@ -156,6 +157,9 @@ function PendingMap({
 
 export default function PendingTab() {
   const { i18n, t } = useTranslation();
+  // Sem o módulo ativo o separador continua visível (leitura — retenção
+  // legal) mas os botões de decisão escondem-se: validar é escrita.
+  const readOnly = usePontoStore((s) => s.enabled) === false;
   const shopTz = useShopTz();
   const tz = shopTz ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   const [entries, setEntries] = useState<PontoPendingEntryDTO[] | null>(null);
@@ -279,28 +283,30 @@ export default function PendingTab() {
                       : ""}
                   </p>
                 </div>
-                <div className="flex gap-2">
-                  {e.effectiveStatus === "RECUSADO" ? (
-                    <Button
-                      disabled={busyId === e.id}
-                      icon="check"
-                      onClick={() => validate(e.id, "APROVADO")}
-                      size="sm"
-                    >
-                      {t("ponto.approve")}
-                    </Button>
-                  ) : (
-                    <Button
-                      disabled={busyId === e.id}
-                      icon="close"
-                      onClick={() => setNoteFor(e.id)}
-                      size="sm"
-                      variant="secondary"
-                    >
-                      {t("ponto.reject")}
-                    </Button>
-                  )}
-                </div>
+                {readOnly ? null : (
+                  <div className="flex gap-2">
+                    {e.effectiveStatus === "RECUSADO" ? (
+                      <Button
+                        disabled={busyId === e.id}
+                        icon="check"
+                        onClick={() => validate(e.id, "APROVADO")}
+                        size="sm"
+                      >
+                        {t("ponto.approve")}
+                      </Button>
+                    ) : (
+                      <Button
+                        disabled={busyId === e.id}
+                        icon="close"
+                        onClick={() => setNoteFor(e.id)}
+                        size="sm"
+                        variant="secondary"
+                      >
+                        {t("ponto.reject")}
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
             </article>
           ))
@@ -390,25 +396,27 @@ export default function PendingTab() {
                       : ""}
                   </p>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    disabled={busyId === e.id}
-                    icon="check"
-                    onClick={() => validate(e.id, "APROVADO")}
-                    size="sm"
-                  >
-                    {t("ponto.approve")}
-                  </Button>
-                  <Button
-                    disabled={busyId === e.id}
-                    icon="close"
-                    onClick={() => setNoteFor(e.id)}
-                    size="sm"
-                    variant="secondary"
-                  >
-                    {t("ponto.reject")}
-                  </Button>
-                </div>
+                {readOnly ? null : (
+                  <div className="flex gap-2">
+                    <Button
+                      disabled={busyId === e.id}
+                      icon="check"
+                      onClick={() => validate(e.id, "APROVADO")}
+                      size="sm"
+                    >
+                      {t("ponto.approve")}
+                    </Button>
+                    <Button
+                      disabled={busyId === e.id}
+                      icon="close"
+                      onClick={() => setNoteFor(e.id)}
+                      size="sm"
+                      variant="secondary"
+                    >
+                      {t("ponto.reject")}
+                    </Button>
+                  </div>
+                )}
               </div>
 
               {summary.length > 0 && (
