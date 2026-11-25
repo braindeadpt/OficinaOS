@@ -43,6 +43,11 @@ BEGIN
   -- RETIDA aponta dispararia o SET NULL da FK como dono da tabela e o
   -- trigger rejeitava — a função anula esses links ela própria antes
   -- (ver ponto_purge_expired), e para isso precisa deste privilégio.
+  -- USAGE no schema: depois de um restore (DROP/CREATE SCHEMA public)
+  -- os grants por omissão desaparecem e sem ele o papel nem chega às
+  -- tabelas. O provisioning do arranque repõe isto — aqui fica para
+  -- instalações novas.
+  GRANT USAGE ON SCHEMA public TO oficinaos_ponto_purge;
   GRANT SELECT, DELETE ON time_entries TO oficinaos_ponto_purge;
   GRANT UPDATE ("correctsId") ON time_entries TO oficinaos_ponto_purge;
   GRANT SELECT, DELETE ON time_entry_validations TO oficinaos_ponto_purge;

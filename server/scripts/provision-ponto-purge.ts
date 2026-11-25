@@ -27,6 +27,10 @@ DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'ponto_purge_expired') THEN
     EXECUTE 'ALTER FUNCTION ponto_purge_expired() OWNER TO oficinaos_ponto_purge';
+    -- O restore faz DROP/CREATE SCHEMA public como o utilizador do
+    -- restore: sem este GRANT o papel da purga fica sem USAGE no schema
+    -- e nem chega às tabelas, apesar dos grants nelas.
+    GRANT USAGE ON SCHEMA public TO oficinaos_ponto_purge;
     GRANT SELECT, DELETE ON time_entries TO oficinaos_ponto_purge;
     GRANT UPDATE ("correctsId") ON time_entries TO oficinaos_ponto_purge;
     GRANT SELECT, DELETE ON time_entry_validations TO oficinaos_ponto_purge;
