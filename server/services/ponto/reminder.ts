@@ -577,12 +577,14 @@ async function processExitReminder(a: UserTickArgs): Promise<void> {
     where: {
       at: {
         gte: dayStart,
-        // O teto é o instante do tick, não o fim do dia civil: uma
-        // correção pode empurrar a saída para depois da meia-noite
-        // (a resposta à presumida das 23:55 declara 00:30) — conta
-        // na mesma para fechar o turno, senão a recuperação da
-        // véspera gravava uma segunda presumida sobre ela.
-        lt: now,
+        // O teto é o instante DA CONSULTA, não o fim do dia civil
+        // nem o início do tick: uma correção pode empurrar a saída
+        // para depois da meia-noite (a resposta à presumida das
+        // 23:55 declara 00:30) e uma SAIDA picada a meio do ciclo
+        // (depois da leitura em lote) tem `at` posterior ao `now`
+        // injetado — ambas fecham o turno e sem isto gravava-se
+        // uma segunda saída sobre elas.
+        lt: new Date(),
         ...(shiftOpenAt ? { gt: shiftOpenAt } : {}),
       },
       corrections: { none: {} },

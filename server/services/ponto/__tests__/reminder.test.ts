@@ -191,6 +191,7 @@ function makePrisma(dayRows: unknown[], saidaRows: unknown[] = []) {
     }) => {
       const w = args?.where;
       const gt = w?.at?.gt?.getTime();
+      const lt = (w?.at as { lt?: Date } | undefined)?.lt?.getTime();
       const hit = (
         [...dayRows, ...saidaRows] as Record<string, unknown>[]
       ).find(
@@ -200,7 +201,8 @@ function makePrisma(dayRows: unknown[], saidaRows: unknown[] = []) {
           (r.corrections as unknown[]).length === 0 &&
           (r.validations as { decision: string }[])[0]?.decision !==
             "RECUSADO" &&
-          (gt === undefined || (r.at as Date).getTime() > gt)
+          (gt === undefined || (r.at as Date).getTime() > gt) &&
+          (lt === undefined || (r.at as Date).getTime() < lt)
       );
       return Promise.resolve(hit ? { id: hit.id as string } : null);
     }
@@ -398,6 +400,36 @@ describe("lembrete de saída (Esquecimentos)", () => {
 
     expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
     expect(mocks.sendWhatsAppText).not.toHaveBeenCalled();
+  });
+
+  it("SAIDA picada a meio do ciclo (depois do instante injetado) → sem presumida duplicada", async () => {
+    // O trabalhador picou SAIDA às 18:31 — um minuto DEPOIS do
+    // instante do tick (18:30) mas antes da re-leitura anti-duplicado.
+    // O teto da procura é o instante da consulta, não o do ciclo —
+    // senão o livro ficava também com uma saída presumida.
+    const entrada = entry({
+      at: new Date("2026-01-10T08:00:00.000Z"),
+      type: "ENTRADA",
+    });
+    const prisma = makePrisma([entrada], []);
+    // A saída não está na leitura em lote (foi picada depois dela) —
+    // só existe na base de dados que a re-leitura consulta. O mock
+    // respeita o teto `lt` da query: com o instante injetado do ciclo
+    // (18:30) a saída das 18:31 ficava de fora e gravava-se a
+    // presumida em cima; com o instante da consulta entra.
+    const saidaAt = new Date("2026-01-10T18:31:00.000Z").getTime();
+    mocks.timeEntryFindFirst.mockImplementation((args?: unknown) => {
+      const lt = (
+        args as { where?: { at?: { lt?: Date } } } | undefined
+      )?.where?.at?.lt?.getTime();
+      return Promise.resolve(
+        lt !== undefined && saidaAt < lt ? { id: "saida-1" } : null
+      );
+    });
+
+    await processPontoReminders(prisma, log, undefined, NOW_AFTER);
+
+    expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
   });
 
   it("presumida já perguntada (pending vivo) → não repete lembrete", async () => {
