@@ -109,4 +109,62 @@ describe("listRecentDecisions", () => {
     expect(out.map((e) => e.id)).toEqual(["antiga", "recente"]);
     expect(out[0]?.effectiveStatus).toBe("RECUSADO");
   });
+
+  it("ordena ANTES do corte de 50 — decisão nova em picagem antiga sobrevive", async () => {
+    // 51 picagens ordenadas por `at` desc (como o Prisma devolve): a
+    // 51.ª — a picagem mais antiga — tem a decisão mais RECENTE. Se o
+    // serviço cortasse antes de ordenar, essa linha nunca entrava no
+    // painel e a decisão acabada de tomar era irreversível.
+    const mk = (id: string, punchIso: string, decisionIso: string) => ({
+      at: new Date(punchIso),
+      corrections: [],
+      corrects: null,
+      createdAt: new Date(punchIso),
+      createdBy: null,
+      id,
+      proofs: {},
+      reason: null,
+      status: "POR_VALIDAR",
+      transport: "MANUAL",
+      type: "SAIDA",
+      user: { id: "u-1", name: "Ana", phoneE164: null, username: "ana" },
+      validations: [
+        {
+          at: new Date(decisionIso),
+          byUser: { name: "Gestor", username: "gestor" },
+          decision: "APROVADO",
+          id: `v-${id}`,
+          note: null,
+        },
+      ],
+    });
+    const rows: ReturnType<typeof mk>[] = [];
+    for (let i = 0; i < 51; i += 1) {
+      // picagens desc: índice maior = picagem mais antiga
+      const punch = new Date(
+        Date.UTC(2026, 0, 27, 8, 0) - i * 60_000
+      ).toISOString();
+      // decisões asc pelo índice: a picagem mais antiga (i=50) decide-se por último
+      const decision = new Date(
+        Date.UTC(2026, 0, 28, 8, 0) + i * 60_000
+      ).toISOString();
+      rows.push(mk(`e-${i}`, punch, decision));
+    }
+    const findMany = vi.fn(() => Promise.resolve(rows));
+    const prisma = {
+      pontoPhoto: { findMany: vi.fn(() => Promise.resolve([])) },
+      timeEntry: { findMany },
+    } as unknown as DbClient;
+
+    const out = await listRecentDecisions(
+      prisma,
+      new Date("2026-01-28T12:00:00.000Z")
+    );
+
+    expect(out).toHaveLength(50);
+    // a decisão mais recente — da picagem mais antiga — lidera e NÃO cai no corte
+    expect(out[0]?.id).toBe("e-50");
+    // a decisão mais antiga é a única que fica de fora
+    expect(out.some((e) => e.id === "e-0")).toBe(false);
+  });
 });
