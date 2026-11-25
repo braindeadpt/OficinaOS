@@ -385,6 +385,7 @@ describe("rascunhar_resposta / enviar_rascunho — §G.5", () => {
           id: "draft-1",
           status: "PENDING",
           text: "x",
+          updatedAt: new Date("2026-01-01T09:00:00Z"),
         })),
         update: vi.fn(async () => ({})),
         updateMany,
@@ -408,7 +409,12 @@ describe("rascunhar_resposta / enviar_rascunho — §G.5", () => {
     // 1 = claim PENDING→SENDING; 2 = rollback para o estado pré-claim.
     expect(updateMany).toHaveBeenCalledTimes(2);
     expect(updateMany.mock.calls[1]?.[0]).toEqual({
-      data: { approvedAt: null, approvedById: null, status: "PENDING" },
+      data: {
+        approvedAt: null,
+        approvedById: null,
+        status: "PENDING",
+        updatedAt: new Date("2026-01-01T09:00:00Z"),
+      },
       where: { id: "draft-1", status: "SENDING" },
     });
     const toolAudit = mocks.createAuditLog.mock.calls.find(

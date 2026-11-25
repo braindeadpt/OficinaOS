@@ -721,6 +721,7 @@ interface DraftPreClaimState {
   approvedAt: Date | null;
   approvedById: string | null;
   status: string;
+  updatedAt: Date;
 }
 
 /** Cancelamento pré-commit: o claim SENDING volta ao estado capturado. */
@@ -734,6 +735,9 @@ async function revertDraftClaim(
       approvedAt: preClaim.approvedAt,
       approvedById: preClaim.approvedById,
       status: preClaim.status,
+      // Repor também a data: um SENDING obsoleto tem de continuar
+      // visível/reclamável, não esperar mais STALE_SENDING_MS.
+      updatedAt: preClaim.updatedAt,
     },
     where: { id: draftId, status: "SENDING" },
   });
@@ -789,6 +793,7 @@ export async function sendApprovedDraft(
     approvedAt: draft.approvedAt,
     approvedById: draft.approvedById,
     status: draft.status,
+    updatedAt: draft.updatedAt,
   };
   const staleBefore = new Date(Date.now() - STALE_SENDING_MS);
   const claimed = await prisma.inboxDraft.updateMany({
