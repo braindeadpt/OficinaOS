@@ -2,8 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,6 +24,7 @@ interface ChannelSettingsProps {
   }) => Promise<void>;
   onSaveWhatsAppSettings: (data: {
     apiToken?: string;
+    cloudConsent?: boolean;
     businessId?: string;
     phoneNumberId?: string;
     enabled?: boolean;
@@ -276,6 +279,15 @@ function MetaWhatsAppFields({
   setForm: React.Dispatch<React.SetStateAction<WhatsAppFormState>>;
 }) {
   const { t } = useTranslation();
+  const cloudConsentStored = Boolean(settings?.cloudConsentAccepted);
+  const showCloudConsent =
+    !cloudConsentStored &&
+    (!settings?.credentialsAtCloud || form.apiToken !== "");
+  const legacyTokenMigration = Boolean(
+    settings?.hasApiToken &&
+      !settings?.credentialsAtCloud &&
+      !cloudConsentStored
+  );
   return (
     <>
       <div>
@@ -362,12 +374,45 @@ function MetaWhatsAppFields({
           value={form.apiToken}
         />
       </div>
+      {showCloudConsent && (
+        <div
+          className={
+            legacyTokenMigration
+              ? "rounded-xl border border-warning/40 bg-warning/5 p-4"
+              : "rounded-xl bg-surface-container p-4"
+          }
+        >
+          <p className="text-on-surface text-xs leading-relaxed">
+            {t(
+              legacyTokenMigration
+                ? "whatsapp_cloud_migration_warning"
+                : "whatsapp_cloud_consent_help"
+            )}
+          </p>
+          <div className="mt-3 flex items-center gap-1">
+            <Checkbox
+              checked={form.cloudConsent}
+              id="wa-cloud-consent"
+              onChange={(e) =>
+                setForm((f) => ({ ...f, cloudConsent: e.target.checked }))
+              }
+            />
+            <Label
+              className="cursor-pointer select-none font-medium text-sm"
+              htmlFor="wa-cloud-consent"
+            >
+              {t("whatsapp_cloud_consent_accept")}
+            </Label>
+          </div>
+        </div>
+      )}
       {settings?.credentialsAtCloud ? (
         <p className="rounded-xl bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
           {t("whatsapp_relay_active")}
         </p>
       ) : (
-        settings?.hasApiToken && (
+        settings?.hasApiToken &&
+        cloudConsentStored && (
           <p className="rounded-xl bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
             {t("whatsapp_relay_pending")}
           </p>
@@ -627,6 +672,7 @@ interface WhatsAppFormState {
   botDailyCap: string;
   botDisclaimerAccepted: boolean;
   businessId: string;
+  cloudConsent: boolean;
   disclaimerAccepted: boolean;
   enabled: boolean;
   evolutionApiKey: string;
@@ -640,6 +686,12 @@ interface WhatsAppFormState {
   remarketingTemplate: string;
   trackingBaseUrl: string;
   transport: "meta" | "evolution";
+}
+
+function cloudConsentPayload(form: WhatsAppFormState) {
+  return form.transport === "meta" && form.cloudConsent
+    ? { cloudConsent: true }
+    : {};
 }
 
 /**
@@ -795,6 +847,7 @@ export default function ChannelSettings({
   const [whatsAppForm, setWhatsAppForm] = useState<WhatsAppFormState>({
     apiToken: "",
     businessId: "",
+    cloudConsent: false,
     phoneNumberId: "",
     trackingBaseUrl: "",
     enabled: false,
@@ -836,6 +889,7 @@ export default function ChannelSettings({
       setWhatsAppForm((prev) => ({
         apiToken: prev.apiToken || "",
         businessId: whatsAppSettings.businessId ?? "",
+        cloudConsent: prev.cloudConsent,
         phoneNumberId: whatsAppSettings.phoneNumberId ?? "",
         trackingBaseUrl: whatsAppSettings.trackingBaseUrl ?? "",
         enabled: whatsAppSettings.enabled,
@@ -867,6 +921,7 @@ export default function ChannelSettings({
     try {
       await onSaveWhatsAppSettings({
         apiToken: whatsAppForm.apiToken || undefined,
+        ...cloudConsentPayload(whatsAppForm),
         businessId: whatsAppForm.businessId || undefined,
         phoneNumberId: whatsAppForm.phoneNumberId || undefined,
         enabled: whatsAppForm.enabled,
@@ -898,6 +953,10 @@ export default function ChannelSettings({
             }
           : {}),
       });
+      // Segredos não voltam no GET. Limpar o input depois de gravar evita
+      // reenviar o mesmo token em saves seguintes (o que repõe a flag Cloud
+      // e desencadeia uploads duplicados).
+      setWhatsAppForm((f) => ({ ...f, apiToken: "", cloudConsent: false }));
       // O trackingBaseUrl muda os blocos {{if}} dos corpos a submeter —
       // sem refetch a lista continuava a mostrar os specs antigos como
       // "prontos" enquanto o backend re-sincronizava em background. Um

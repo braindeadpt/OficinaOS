@@ -32,7 +32,10 @@ vi.mock("../../repositories/settings.repository.js", () => ({
 }));
 
 const updateSettings = vi.fn();
-const prisma = { shopSettings: { update: updateSettings } } as never;
+const updateManySettings = vi.fn();
+const prisma = {
+  shopSettings: { update: updateSettings, updateMany: updateManySettings },
+} as never;
 
 import {
   maskPhone,
@@ -97,10 +100,11 @@ describe("resolveWhatsAppChannel", () => {
     ).toBeNull();
   });
 
-  it("prefers the cloud relay once credentials migrated", () => {
+  it("prefers the cloud relay once credentials migrated — grandfathered without consent", () => {
     const channel = resolveWhatsAppChannel({
       ...pairedCloud,
       whatsappApiTokenEncrypted: "enc:meta",
+      whatsappCloudConsentAt: null,
     });
     expect(channel).toEqual({
       apiUrl: "https://cloud.example",
@@ -191,10 +195,50 @@ describe("sendWhatsAppText", () => {
       ...entitled,
       whatsappApiTokenEncrypted: "enc:meta",
     });
-    expect(updateSettings).toHaveBeenCalledWith({
+    expect(updateManySettings).toHaveBeenCalledWith({
       data: { whatsappApiTokenEncrypted: null },
-      where: { id: "default" },
+      where: {
+        id: "default",
+        whatsappApiTokenEncrypted: "enc:meta",
+        whatsappCredentialsAtCloud: true,
+      },
     });
+  });
+
+  it.each([
+    false,
+    true,
+  ])("does not delete a replacement token when an older cloud send finishes (cloud flag %s)", async (credentialsAtCloud) => {
+    let storedToken: string | null = "enc:replacement";
+    updateManySettings.mockImplementation(
+      ({
+        data,
+        where,
+      }: {
+        data: Record<string, unknown>;
+        where: Record<string, unknown>;
+      }) => {
+        const matches =
+          storedToken === where.whatsappApiTokenEncrypted &&
+          credentialsAtCloud === where.whatsappCredentialsAtCloud;
+        if (matches) {
+          storedToken = data.whatsappApiTokenEncrypted as string | null;
+        }
+        return Promise.resolve({ count: matches ? 1 : 0 });
+      }
+    );
+    mocks.cloudFetch.mockResolvedValue({
+      body: { ok: true },
+      ok: true,
+      status: 200,
+    });
+
+    await sendWhatsAppText(prisma, channel, "+351912345678", "olá", "PT", {
+      ...entitled,
+      whatsappApiTokenEncrypted: "enc:original",
+    });
+
+    expect(storedToken).toBe("enc:replacement");
   });
 
   it("keeps the local token when the cloud send fails", async () => {
@@ -212,7 +256,7 @@ describe("sendWhatsAppText", () => {
       { ...entitled, whatsappApiTokenEncrypted: "enc:meta" }
     );
     expect(res.success).toBe(false);
-    expect(updateSettings).not.toHaveBeenCalled();
+    expect(updateManySettings).not.toHaveBeenCalled();
   });
 
   it("reports waiting-for-cloud when unreachable", async () => {
@@ -335,6 +379,7 @@ describe("pushCredentialsToCloud", () => {
     cloudShopTokenEncrypted: "enc:shop-token",
     cloudSyncedAt: new Date(),
     whatsappApiTokenEncrypted: "enc:meta-token",
+    whatsappCloudConsentAt: new Date(),
     whatsappCredentialsAtCloud: false,
     whatsappPhoneNumberId: "1234",
   };
@@ -361,6 +406,16 @@ describe("pushCredentialsToCloud", () => {
     });
   });
 
+  it("never uploads without explicit cloud consent", async () => {
+    mocks.getOrCreateShopSettings.mockResolvedValue({
+      ...settings,
+      whatsappCloudConsentAt: null,
+    });
+    expect(await pushCredentialsToCloud(prisma)).toBe(false);
+    expect(mocks.cloudFetch).not.toHaveBeenCalled();
+    expect(updateSettings).not.toHaveBeenCalled();
+  });
+
   it("returns false when the cloud rejects — local send keeps working", async () => {
     mocks.getOrCreateShopSettings.mockResolvedValue(settings);
     mocks.cloudFetch.mockResolvedValue({ body: null, ok: false, status: 402 });
@@ -378,9 +433,10 @@ describe("pushCredentialsToCloud", () => {
     expect(updateSettings).not.toHaveBeenCalled();
   });
 
-  it("is a no-op once credentials are already at the cloud", async () => {
+  it("is a grandfathered no-op once credentials are already at the cloud", async () => {
     mocks.getOrCreateShopSettings.mockResolvedValue({
       ...settings,
+      whatsappCloudConsentAt: null,
       whatsappCredentialsAtCloud: true,
     });
     expect(await pushCredentialsToCloud(prisma)).toBe(true);

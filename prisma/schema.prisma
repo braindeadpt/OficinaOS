@@ -1237,6 +1237,13 @@ model ShopSettings {
   // outbound passa a ir por POST /whatsapp/send e o token local é
   // apagado após o primeiro envio bem-sucedido.
   whatsappCredentialsAtCloud  Boolean   @default(false)
+  // Consentimento explícito da loja para guardar o token Meta cifrado na
+  // OficinaOS Cloud e enviar pelo relay. Instalações já migradas ficam
+  // grandfathered; uploads novos exigem este timestamp.
+  whatsappCloudConsentAt      DateTime? @db.Timestamptz
+  // Início da transição de 30 dias do envio Meta direto/local — gravado
+  // uma vez, no primeiro aviso a uma instalação com token local por migrar.
+  whatsappLocalDeprecationWarnedAt DateTime? @db.Timestamptz
   // Estado por template Meta após o último sync automático:
   // { [name]: { status, reason?, syncedAt } } — lido pela UI.
   whatsappTemplatesJson       Json?

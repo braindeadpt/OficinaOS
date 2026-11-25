@@ -39,6 +39,7 @@ interface SettingsLike {
   evolutionUrl?: string | null;
   whatsappApiTokenEncrypted?: string | null;
   whatsappBusinessId?: string | null;
+  whatsappCloudConsentAt?: Date | null;
   whatsappCredentialsAtCloud?: boolean | null;
   whatsappEnabled?: boolean | null;
   whatsappLocalDisclaimerAt?: Date | null;
@@ -172,9 +173,17 @@ async function clearMigratedLocalToken(
     return;
   }
   try {
-    await prisma.shopSettings.update({
+    // O envio Cloud demora e a loja pode gravar um token de substituição
+    // entretanto. Só se apaga o token se ainda for exactamente o snapshot
+    // usado por este envio e se a migração continuar válida; caso contrário
+    // a limpeza da migração antiga destruiria o token novo.
+    await prisma.shopSettings.updateMany({
       data: { whatsappApiTokenEncrypted: null },
-      where: { id: "default" },
+      where: {
+        id: "default",
+        whatsappApiTokenEncrypted: settings.whatsappApiTokenEncrypted,
+        whatsappCredentialsAtCloud: true,
+      },
     });
   } catch {
     // best-effort: a limpeza repete-se no próximo envio bem-sucedido
@@ -274,10 +283,11 @@ export function maskPhone(to: string): string {
 }
 
 /**
- * Uploads the shop's Meta credentials to the cloud relay. Runs on every
- * WhatsApp settings save so existing installs migrate without a separate
- * step. Returns true when the cloud accepted them — on false the legacy
- * local send path keeps working (no data lost).
+ * Uploads the shop's Meta credentials to the cloud relay. New uploads
+ * require the explicit cloud-consent timestamp; installs already migrated
+ * are grandfathered and keep working while PR B surfaces the retrospective
+ * notice. Returns true when the cloud has the current credentials — on
+ * false the legacy local send path keeps working during the transition.
  */
 export async function pushCredentialsToCloud(
   prisma: DbClient
@@ -302,7 +312,17 @@ export async function pushCredentialsToCloud(
     return Boolean(settings.whatsappCredentialsAtCloud);
   }
   if (settings.whatsappCredentialsAtCloud) {
+    // Não é um early-return cego: gravar um apiToken novo repõe esta flag
+    // em upsertWhatsAppSettings. Assim, true significa "a Cloud tem as
+    // credenciais atuais"; um token local residual é só o fallback da
+    // migração à espera de ser apagado após o primeiro envio Cloud.
     return true;
+  }
+  // WP0.6 — sem consentimento explícito não há upload, nem no save nem
+  // pelo poller. O no-op é silencioso porque a UI é quem mostra o aviso
+  // e o envio local legado continua durante a transição.
+  if (!settings.whatsappCloudConsentAt) {
+    return false;
   }
   const shopToken = decryptSecret(settings.cloudShopTokenEncrypted);
   const rawToken = settings.whatsappApiTokenEncrypted;

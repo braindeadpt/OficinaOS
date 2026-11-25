@@ -188,8 +188,12 @@ export async function syncWhatsAppBot(
   }
 
   // Migração de credenciais: envia o token Meta à cloud na primeira
-  // oportunidade — não depende de o dono voltar a gravar as settings.
-  await pushCredentialsToCloud(prisma);
+  // oportunidade — mas só depois do consentimento explícito. Instalações
+  // já migradas entram no push para manter o no-op grandfathered centralizado;
+  // sem consentimento nem flag não se tenta upload nenhum neste ciclo.
+  if (settings.whatsappCloudConsentAt || settings.whatsappCredentialsAtCloud) {
+    await pushCredentialsToCloud(prisma);
+  }
 
   await pollWhatsAppInbound(prisma, apiUrl, token, log, notifyCtx, modules);
 }

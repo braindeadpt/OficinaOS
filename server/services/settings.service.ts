@@ -500,6 +500,46 @@ export async function testAiConnection(prisma: PrismaClient) {
   }
 }
 
+interface WhatsAppDeprecationWarningRow {
+  whatsappApiTokenEncrypted: string | null;
+  whatsappCloudConsentAt: Date | null;
+  whatsappCredentialsAtCloud: boolean;
+  whatsappLocalDeprecationWarnedAt: Date | null;
+}
+
+/**
+ * Marca o início da transição de 30 dias do envio Meta direto/local.
+ * O aviso aparece quando há token local por migrar e ainda não há
+ * consentimento Cloud; o timestamp é imutável porque a contagem da
+ * transição não pode reiniciar em cada gravação ou refresh da UI.
+ */
+async function markWhatsAppLocalDeprecationWarningOnce(
+  prisma: PrismaClient,
+  row: WhatsAppDeprecationWarningRow
+): Promise<Date | null> {
+  const existing = row.whatsappLocalDeprecationWarnedAt ?? null;
+  const needsWarning = Boolean(
+    row.whatsappApiTokenEncrypted &&
+      !row.whatsappCredentialsAtCloud &&
+      !row.whatsappCloudConsentAt
+  );
+  if (!needsWarning || existing) {
+    return existing;
+  }
+  const warnedAt = new Date();
+  const result = await prisma.shopSettings.updateMany({
+    data: { whatsappLocalDeprecationWarnedAt: warnedAt },
+    where: { id: "default", whatsappLocalDeprecationWarnedAt: null },
+  });
+  if (result.count === 0) {
+    // Outro request ganhou a corrida — o valor dele é o início canónico
+    // da transição, não o nosso timestamp concorrente.
+    const fresh = await findShopSettingsUnique(prisma);
+    return fresh?.whatsappLocalDeprecationWarnedAt ?? warnedAt;
+  }
+  return warnedAt;
+}
+
 export async function getWhatsAppSettings(prisma: PrismaClient) {
   const row = await findShopSettingsUnique(prisma);
   if (!row) {
@@ -508,6 +548,7 @@ export async function getWhatsAppSettings(prisma: PrismaClient) {
       botDisclaimerAccepted: false,
       botSuspendedAt: null,
       businessId: null,
+      cloudConsentAccepted: false,
       credentialsAtCloud: false,
       disclaimerAccepted: false,
       enabled: false,
@@ -515,6 +556,7 @@ export async function getWhatsAppSettings(prisma: PrismaClient) {
       evolutionUrl: null,
       hasApiToken: false,
       hasEvolutionApiKey: false,
+      localDeprecationWarnedAt: null,
       phoneNumberId: null,
       remarketingCooldownDays: 180,
       remarketingDays: 90,
@@ -527,11 +569,14 @@ export async function getWhatsAppSettings(prisma: PrismaClient) {
       whatsappModule: false,
     };
   }
+  const localDeprecationWarnedAt =
+    await markWhatsAppLocalDeprecationWarningOnce(prisma, row);
   return {
     botDailyCap: row.whatsappBotDailyCap,
     botDisclaimerAccepted: Boolean(row.whatsappBotDisclaimerAt),
     botSuspendedAt: row.whatsappBotSuspendedAt,
     businessId: row.whatsappBusinessId,
+    cloudConsentAccepted: Boolean(row.whatsappCloudConsentAt),
     credentialsAtCloud: row.whatsappCredentialsAtCloud,
     disclaimerAccepted: Boolean(row.whatsappLocalDisclaimerAt),
     enabled: row.whatsappEnabled,
@@ -539,6 +584,7 @@ export async function getWhatsAppSettings(prisma: PrismaClient) {
     evolutionUrl: row.evolutionUrl,
     hasApiToken: Boolean(row.whatsappApiTokenEncrypted),
     hasEvolutionApiKey: Boolean(row.evolutionApiKeyEncrypted),
+    localDeprecationWarnedAt,
     phoneNumberId: row.whatsappPhoneNumberId,
     remarketingCooldownDays: row.remarketingCooldownDays,
     remarketingDays: row.remarketingDays,
@@ -568,6 +614,7 @@ interface WhatsAppUpsertData {
   whatsappBotDisclaimerUserId?: string | null;
   whatsappBotSuspendedAt?: Date | null;
   whatsappBusinessId?: string;
+  whatsappCredentialsAtCloud?: boolean;
   whatsappEnabled?: boolean;
   whatsappLocalDisclaimerAt?: Date;
   whatsappPhoneNumberId?: string;
@@ -608,6 +655,32 @@ function applyEvolutionFields(
   }
 }
 
+/**
+ * Regista o consentimento Cloud Meta uma única vez. O timestamp é parte
+ * da auditoria do aceite e não pode ser reiniciado por PUTs repetidos ou
+ * por uma corrida entre dois requests concorrentes.
+ */
+async function recordWhatsAppCloudConsentOnce(
+  prisma: PrismaClient,
+  consentInput: boolean | undefined,
+  current: Date | null
+): Promise<Date | null> {
+  if (consentInput !== true || current) {
+    return current;
+  }
+  const consentAt = new Date();
+  const result = await prisma.shopSettings.updateMany({
+    data: { whatsappCloudConsentAt: consentAt },
+    where: { id: "default", whatsappCloudConsentAt: null },
+  });
+  if (result.count !== 0) {
+    return consentAt;
+  }
+  // Outro request ganhou a corrida — preserva o aceite canónico.
+  const fresh = await findShopSettingsUnique(prisma);
+  return fresh?.whatsappCloudConsentAt ?? consentAt;
+}
+
 export async function upsertWhatsAppSettings(
   prisma: PrismaClient,
   input: UpdateWhatsAppSettingsInput,
@@ -643,6 +716,10 @@ export async function upsertWhatsAppSettings(
   }
   if (input.apiToken !== undefined && input.apiToken !== "") {
     data.whatsappApiTokenEncrypted = encryptSecret(input.apiToken);
+    // Um token novo ainda não está na Cloud. Repor a flag aqui é o que
+    // permite um re-upload futuro; enquanto a flag estiver true, o push
+    // pode tratar o token local residual como o mesmo já migrado.
+    data.whatsappCredentialsAtCloud = false;
   }
   applyEvolutionFields(data, input, userId);
 
@@ -658,11 +735,29 @@ export async function upsertWhatsAppSettings(
     });
   }
 
-  return await upsertShopSettingsRepo(prisma, {
+  const updated = await upsertShopSettingsRepo(prisma, {
     create: whatsAppCreateData(data),
     update: data as Record<string, unknown>,
     where: { id: "default" },
   });
+
+  const whatsappCloudConsentAt = await recordWhatsAppCloudConsentOnce(
+    prisma,
+    input.cloudConsent,
+    updated.whatsappCloudConsentAt ?? null
+  );
+
+  const whatsappLocalDeprecationWarnedAt =
+    await markWhatsAppLocalDeprecationWarningOnce(prisma, {
+      ...updated,
+      whatsappCloudConsentAt,
+    });
+
+  return {
+    ...updated,
+    whatsappCloudConsentAt,
+    whatsappLocalDeprecationWarnedAt,
+  };
 }
 
 function whatsAppCreateData(data: WhatsAppUpsertData) {
