@@ -7,6 +7,10 @@ const mocks = vi.hoisted(() => ({
   decryptSecret: vi.fn((payload: string) =>
     payload === "enc:key" ? "evo-key" : null
   ),
+  dnsLookup: vi.fn(
+    (): Promise<{ address: string; family: number }[]> =>
+      Promise.reject(new Error("ENOTFOUND"))
+  ),
   disconnectEvolutionInstance: vi.fn(async () => ({ success: true })),
   getEvolutionState: vi.fn(async () => "open"),
   hasIsolatedNetNs: vi.fn(() => false),
@@ -20,6 +24,10 @@ const mocks = vi.hoisted(() => ({
   setEvolutionWebhook: vi.fn(async () => ({ success: true })),
   syncWhatsAppTemplates: vi.fn(async () => ({})),
   upsertWhatsAppSettings: vi.fn(async (p: unknown) => p),
+}));
+
+vi.mock("node:dns/promises", () => ({
+  lookup: mocks.dnsLookup,
 }));
 
 vi.mock("../lib/mdns.js", async (importOriginal) => ({
@@ -173,6 +181,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.hasIsolatedNetNs.mockReturnValue(false);
   mocks.primaryLanIpv4.mockReturnValue(null);
+  mocks.dnsLookup.mockRejectedValue(new Error("ENOTFOUND"));
   delete process.env.APP_URL;
   resetEnvForTests();
 });
@@ -588,6 +597,33 @@ describe("Evolution inbound webhook registration (MESSAGES_UPSERT)", () => {
     expect(res.statusCode).toBe(200);
     expect(lastWebhookCall()?.[1].url).toBe(
       "https://oficinaos.example.com/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("hostname com ponto a resolver só para IPs privados → HTTP (LAN com DNS próprio)", async () => {
+    // «oficina.exemplo» tem ponto → isPrivateCallbackHost trata-o como
+    // público, mas o DNS interno só devolve IPs da LAN — o token viaja
+    // em HTTP trusted-LAN como qualquer outro host privado.
+    mocks.dnsLookup.mockResolvedValue([
+      { address: "192.168.1.30", family: 4 },
+      { address: "fd00::1", family: 6 },
+    ]);
+    const res = await saveWhatsApp("oficina.exemplo");
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "http://oficina.exemplo/api/public/whatsapp/evolution/inbound"
+    );
+  });
+
+  it("hostname com ponto a resolver IP público → HTTPS (um público chega)", async () => {
+    mocks.dnsLookup.mockResolvedValue([
+      { address: "192.168.1.30", family: 4 },
+      { address: "8.8.8.8", family: 4 },
+    ]);
+    const res = await saveWhatsApp("oficina.exemplo");
+    expect(res.statusCode).toBe(200);
+    expect(lastWebhookCall()?.[1].url).toBe(
+      "https://oficina.exemplo/api/public/whatsapp/evolution/inbound"
     );
   });
 

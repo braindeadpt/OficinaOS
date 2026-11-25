@@ -1,3 +1,4 @@
+import { lookup } from "node:dns/promises";
 import { AppError } from "@shared/errors/app-error.js";
 import {
   pairCloudSchema,
@@ -905,6 +906,56 @@ function callbackBaseForHost(hostPort: string): string | null {
   return `${scheme}://${url.host}`;
 }
 
+/** Verdadeiro quando o IP literal é privado/LAN (não roteável). */
+function isPrivateIpLiteral(address: string): boolean {
+  const octets = ipv4Octets(address);
+  if (octets) {
+    return !isPublicIpv4Octets(octets);
+  }
+  if (address.includes(":")) {
+    return !isPublicIpv6(address);
+  }
+  return false;
+}
+
+/**
+ * Hostnames com ponto ("loja.exemplo.pt") podem resolver só para IPs
+ * privados — LAN com DNS próprio. isPrivateCallbackHost não os apanha
+ * (precisa de ser síncrono para o caminho quente); aqui resolve-se o
+ * nome e um hostname só-privado conta como privado. Falha de DNS ou
+ * qualquer endereço público → falso (https, lado seguro para o token).
+ */
+async function resolvesToPrivateOnly(hostname: string): Promise<boolean> {
+  try {
+    const addrs = await lookup(hostname, { all: true });
+    return (
+      addrs.length > 0 && addrs.every((a) => isPrivateIpLiteral(a.address))
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** callbackBaseForHost + resolução DNS para hostnames com ponto. */
+async function callbackBaseForHostResolved(
+  hostPort: string
+): Promise<string | null> {
+  let url: URL;
+  try {
+    url = new URL(`http://${hostPort}`);
+  } catch {
+    return null;
+  }
+  if (!url.hostname) {
+    return null;
+  }
+  const privateHost =
+    isPrivateCallbackHost(url.hostname) ||
+    (url.hostname.includes(".") && (await resolvesToPrivateOnly(url.hostname)));
+  const scheme = privateHost ? "http" : "https";
+  return `${scheme}://${url.host}`;
+}
+
 /**
  * Base (scheme://host[:port]) que a Evolution consegue alcançar para o
  * callback do webhook. O Host do pedido é a primeira escolha — o staff
@@ -915,18 +966,22 @@ function callbackBaseForHost(hostPort: string): string | null {
  * rede docker (`app:PORT` — o perfil wa-local põe app e Evolution na
  * mesma network do compose).
  */
-function resolveEvolutionCallbackBase(requestHost: string): string | null {
+function resolveEvolutionCallbackBase(
+  requestHost: string
+): Promise<string | null> {
   const host = requestHost.trim();
   if (!host) {
-    return null;
+    return Promise.resolve(null);
   }
   if (!isLoopbackHostPort(host)) {
-    return callbackBaseForHost(host);
+    return callbackBaseForHostResolved(host);
   }
   const ip = primaryLanIpv4();
   if (ip) {
     const port = PORT_SUFFIX_RE.exec(host)?.[1];
-    return callbackBaseForHost(`${ip}${port ? `:${port}` : ""}`);
+    return Promise.resolve(
+      callbackBaseForHost(`${ip}${port ? `:${port}` : ""}`)
+    );
   }
   // APP_URL configurada — em produção é obrigatória e validada
   // não-localhost; isDialableUrl rejeita loopback/wildcard (a Evolution
@@ -938,19 +993,19 @@ function resolveEvolutionCallbackBase(requestHost: string): string | null {
       // APP_URL explícita em HTTPS nunca desce para HTTP — o token do
       // webhook viaja num header e a loja declarou que exige TLS.
       if (url.protocol === "https:") {
-        return `https://${url.host}`;
+        return Promise.resolve(`https://${url.host}`);
       }
       if (url.protocol === "http:") {
-        return callbackBaseForHost(url.host);
+        return callbackBaseForHostResolved(url.host);
       }
     } catch {
       // APP_URL malformada — segue para o fallback docker.
     }
   }
   if (hasIsolatedNetNs()) {
-    return callbackBaseForHost(`app:${loadEnv().PORT}`);
+    return Promise.resolve(callbackBaseForHost(`app:${loadEnv().PORT}`));
   }
-  return null;
+  return Promise.resolve(null);
 }
 
 /**
@@ -968,7 +1023,7 @@ export async function tryRegisterEvolutionWebhook(
   prisma: Parameters<typeof getSmsSettings>[0],
   requestHost: string
 ): Promise<boolean> {
-  const base = resolveEvolutionCallbackBase(requestHost);
+  const base = await resolveEvolutionCallbackBase(requestHost);
   if (!base) {
     return false;
   }
