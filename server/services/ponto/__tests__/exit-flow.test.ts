@@ -1250,17 +1250,13 @@ describe("workedMs — sem overnight (decisão do dono 2026-11-25)", () => {
   const NOW = new Date("2026-01-10T00:20:00.000Z"); // sábado 00:20 UTC
 
   it("fecho noutro dia civil nunca emparelha — corta no fim do dia da entrada", () => {
-    // Entrada 16:00 sexta · saída 00:15 sábado ligada à presumida das
-    // 23:30: a correção conta no SEU dia civil como qualquer registo —
-    // sexta fecha à meia-noite (8h), sábado tem saída sem entrada.
+    // Entrada 16:00 sexta · saída 00:15 sábado (correção ao lembrete):
+    // conta no SEU dia civil como qualquer registo — sexta fecha à
+    // meia-noite (8h), sábado tem saída sem entrada.
     const ms = workedMs(
       [
         { at: new Date("2026-01-09T16:00:00.000Z"), type: "ENTRADA" },
-        {
-          at: new Date("2026-01-10T00:15:00.000Z"),
-          corrects: { at: new Date("2026-01-09T23:30:00.000Z") },
-          type: "SAIDA",
-        },
+        { at: new Date("2026-01-10T00:15:00.000Z"), type: "SAIDA" },
       ],
       TZ,
       NOW

@@ -53,11 +53,6 @@ export function recordPontoEntry(prisma: DbClient, input: PontoTimeEntryInput) {
 
 export interface PontoTodayEntry {
   at: Date;
-  /** A correção aponta para a linha que substitui — o `at` dela é o dia
-   *  civil do turno a que a correção pertence (uma saída corrigida para
-   *  depois da meia-noite continua a fechar o turno do dia em que
-   *  abriu). */
-  corrects?: { at: Date } | null;
   status: string;
   type: TimeEntryType;
   /** Decisão mais recente do painel — presente só em pontoEntriesSince
@@ -164,7 +159,6 @@ export async function pontoEntriesSince(
     orderBy: [{ at: "asc" }, { createdAt: "asc" }],
     select: {
       at: true,
-      corrects: { select: { at: true } },
       status: true,
       type: true,
       validations: {

@@ -185,7 +185,7 @@ function workedIntervalsMs(
  *  fechava o turno anterior no resumo e cortava à meia-noite no
  *  painel, e os dois contadores divergiam. Exportada para testes. */
 export function workedMs(
-  entries: { at: Date; corrects?: { at: Date } | null; type: string }[],
+  entries: { at: Date; type: string }[],
   tz: string,
   now: Date = new Date()
 ): number {
