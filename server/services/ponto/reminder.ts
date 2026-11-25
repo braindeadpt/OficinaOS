@@ -182,6 +182,41 @@ function prevYmd(ymd: string): string {
   return new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10);
 }
 
+/** SMS do ponto — cloud primeiro, local quando a cloud não serve ou
+ *  falha de forma definitiva. Lança quando nenhuma via entrega: o
+ *  erro sobe ao tick e o envio re-tenta no ciclo seguinte. */
+async function sendPontoSms(
+  smsChannels: NonNullable<ReturnType<typeof getSmsConfig>>,
+  user: StaffUser,
+  text: string,
+  dedupeId: string,
+  countryCode: string
+): Promise<void> {
+  const to = formatPhone(user.phoneE164 as string, countryCode);
+  let result = smsChannels.cloud
+    ? await sendSmsViaCloud(smsChannels.cloud, {
+        dedupeId,
+        text,
+        to,
+      }).catch(() => ({ error: "NETWORK", success: false }))
+    : null;
+  if (
+    !result?.success &&
+    smsChannels.local &&
+    (result === null || isDefinitiveCloudError(result.error))
+  ) {
+    result = await sendSms(
+      smsChannels.local,
+      user.phoneE164 as string,
+      text,
+      countryCode
+    );
+  }
+  if (!result?.success) {
+    throw new Error(result?.error ?? "SMS falhou");
+  }
+}
+
 /** Envia texto livre pelo canal do ponto: SMS se permitido E
  *  configurado, senão WhatsApp (Evolution texto; Meta oficial também
  *  aceita freeform dentro da janela de 24 h — a pausa implica mensagem
@@ -202,26 +237,8 @@ async function sendPontoText(
   if (!phone) {
     return false;
   }
-  const countryCode = settings.countryCode;
   if (user.pontoSmsAllowed && smsChannels) {
-    const to = formatPhone(phone, countryCode);
-    let result = smsChannels.cloud
-      ? await sendSmsViaCloud(smsChannels.cloud, {
-          dedupeId,
-          text,
-          to,
-        }).catch(() => ({ error: "NETWORK", success: false }))
-      : null;
-    if (
-      !result?.success &&
-      smsChannels.local &&
-      (result === null || isDefinitiveCloudError(result.error))
-    ) {
-      result = await sendSms(smsChannels.local, phone, text, countryCode);
-    }
-    if (!result?.success) {
-      throw new Error(result?.error ?? "SMS falhou");
-    }
+    await sendPontoSms(smsChannels, user, text, dedupeId, settings.countryCode);
     return true;
   }
   if (!waChannel) {
@@ -232,7 +249,7 @@ async function sendPontoText(
     waChannel,
     phone,
     text,
-    countryCode,
+    settings.countryCode,
     settings
   );
   if (!result.success) {
@@ -266,17 +283,21 @@ async function sendExitReminder(
     return { sent: false };
   }
   const countryCode = settings.countryCode;
-  if (user.pontoSmsAllowed) {
-    const sent = await sendPontoText(
-      prisma,
-      settings,
-      waChannel,
+  if (user.pontoSmsAllowed && smsChannels) {
+    // SMS só quando há canal configurado — «Permitir SMS» sem canal
+    // cai no WhatsApp em baixo: Evolution texto livre, oficial Meta
+    // com o template aprovado. NUNCA texto livre no oficial — fora
+    // da janela de 24 h a Meta rejeita e o trabalhador não recebe
+    // nem pode responder (o template é a única via business-
+    // initiated).
+    await sendPontoSms(
       smsChannels,
       user,
       pontoExitReminderText(exitTime),
-      dedupeId
+      dedupeId,
+      countryCode
     );
-    return { sent };
+    return { sent: true };
   }
   if (!waChannel) {
     return { sent: false };
@@ -391,7 +412,6 @@ async function alertManagers(
 }
 
 interface UserTickArgs {
-  dayEnd: Date;
   dayStart: Date;
   exitTime: string | null;
   last: DayEntry | undefined;
@@ -509,7 +529,6 @@ async function retryDeferredExitReminder(
  *  resposta só abre quando a pergunta é de facto entregue. */
 async function processExitReminder(a: UserTickArgs): Promise<void> {
   const {
-    dayEnd,
     dayStart,
     exitTime,
     last,
@@ -558,7 +577,12 @@ async function processExitReminder(a: UserTickArgs): Promise<void> {
     where: {
       at: {
         gte: dayStart,
-        lt: dayEnd,
+        // O teto é o instante do tick, não o fim do dia civil: uma
+        // correção pode empurrar a saída para depois da meia-noite
+        // (a resposta à presumida das 23:55 declara 00:30) — conta
+        // na mesma para fechar o turno, senão a recuperação da
+        // véspera gravava uma segunda presumida sobre ela.
+        lt: now,
         ...(shiftOpenAt ? { gt: shiftOpenAt } : {}),
       },
       corrections: { none: {} },
@@ -715,7 +739,6 @@ async function processUserPasses(p: UserPassesArgs): Promise<void> {
       .find((e) => e.type === "ENTRADA" || e.type === "VOLTEI")?.at;
     await processExitReminder({
       ...base,
-      dayEnd: p.start,
       dayStart: p.prevRange.start,
       last: yLast,
       reminderInstant: p.prevReminderInstant,
@@ -725,7 +748,6 @@ async function processUserPasses(p: UserPassesArgs): Promise<void> {
   }
   await processUserTick({
     ...base,
-    dayEnd: p.end,
     dayStart: p.start,
     last,
     reminderInstant: p.reminderInstant,
@@ -867,9 +889,15 @@ export async function processPontoReminders(
     exitTimeValid && exitTime
       ? zonedDateTimeToUtc(tz, prevYmd(range.date), exitTime)
       : null;
+  // …mas só dentro da janela em que a resposta ainda serviria (o
+  // TTL do pending, ~2 h): passado esse tempo o comboio já partiu —
+  // ativar o lembrete de manhã não pode preencher retroativamente o
+  // dia de ontem, quando a configuração nem existia.
   const catchUpYesterday =
     prevReminderInstant !== null &&
     now.getTime() >= prevReminderInstant.getTime() &&
+    now.getTime() - prevReminderInstant.getTime() <=
+      PONTO_EXIT_PENDING_TTL_MS &&
     now.getTime() < end.getTime();
   const waChannel = resolveWhatsAppChannel(settings);
   const smsChannels = getSmsConfig(settings);

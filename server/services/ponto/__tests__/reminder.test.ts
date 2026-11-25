@@ -347,6 +347,59 @@ describe("lembrete de saída (Esquecimentos)", () => {
     expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
   });
 
+  it("correção depois da meia-noite fecha o turno — recuperação não duplica a presumida", async () => {
+    // A resposta à presumida das 23:55 declarou 00:30 — a correção
+    // ficou no dia civil seguinte. Sem o teto no instante do tick,
+    // a recuperação relia só a véspera e gravava outra presumida.
+    mocks.findShopSettingsUnique.mockResolvedValue(
+      makeSettings({ pontoExitReminderTime: "23:55" })
+    );
+    const entrada = entry({
+      at: new Date("2026-01-10T09:00:00.000Z"),
+      type: "ENTRADA",
+    });
+    const correcao = entry({
+      at: new Date("2026-01-11T00:30:00.000Z"),
+      type: "SAIDA",
+    });
+    const prisma = makePrisma([entrada, correcao], [correcao]);
+
+    await processPontoReminders(
+      prisma,
+      log,
+      undefined,
+      new Date("2026-01-11T00:35:00.000Z")
+    );
+
+    expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
+  });
+
+  it("lembrete ativado de manhã não preenche retroatamente a véspera", async () => {
+    // A recuperação existe para a janela minúscula entre o último
+    // ciclo do dia e a meia-noite — passado o TTL da resposta (~2 h)
+    // não faz sentido perguntar, e uma configuração ligada agora não
+    // pode ter efeito retroativo sobre ontem.
+    mocks.findShopSettingsUnique.mockResolvedValue(
+      makeSettings({ pontoExitReminderTime: "23:55" })
+    );
+    const entrada = entry({
+      at: new Date("2026-01-10T09:00:00.000Z"),
+      type: "ENTRADA",
+    });
+    const prisma = makePrisma([entrada], []);
+
+    // 09:00 do dia seguinte — 9 h depois da hora perdida.
+    await processPontoReminders(
+      prisma,
+      log,
+      undefined,
+      new Date("2026-01-11T09:00:00.000Z")
+    );
+
+    expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
+    expect(mocks.sendWhatsAppText).not.toHaveBeenCalled();
+  });
+
   it("presumida já perguntada (pending vivo) → não repete lembrete", async () => {
     const presumed = entry({
       at: REMINDER_AT,
@@ -791,6 +844,27 @@ describe("roteamento do lembrete por canal", () => {
     expect(mocks.sendWhatsAppText).toHaveBeenCalledTimes(1);
     const text = mocks.sendWhatsAppText.mock.calls[0]?.[3] ?? "";
     expect(text).toContain("Saiu às 18:00");
+    expect(getPendingPontoExit("user-1", NOW_AFTER.getTime())).not.toBeNull();
+  });
+
+  it("pontoSmsAllowed sem canal SMS no oficial Meta → template, nunca texto livre", async () => {
+    // Fora da janela de 24 h a Meta rejeita texto livre — o lembrete
+    // business-initiated tem de ir pelo template aprovado mesmo
+    // quando o trabalhador tem «Permitir SMS» e a loja não tem canal
+    // SMS configurado.
+    mocks.userFindMany.mockResolvedValue([
+      staffUser({ pontoSmsAllowed: true }),
+    ]);
+    mocks.getSmsConfig.mockReturnValue(null);
+    mocks.resolveWhatsAppChannel.mockReturnValue(OFFICIAL_CHANNEL);
+    const prisma = makePrisma([entry({ type: "ENTRADA" })]);
+
+    await processPontoReminders(prisma, log, undefined, NOW_AFTER);
+
+    expect(mocks.sendWhatsAppText).not.toHaveBeenCalled();
+    expect(mocks.sendWhatsAppTemplateVia).toHaveBeenCalledTimes(1);
+    const params = mocks.sendWhatsAppTemplateVia.mock.calls[0]?.[5] ?? [];
+    expect(params).toContain("18:00");
     expect(getPendingPontoExit("user-1", NOW_AFTER.getTime())).not.toBeNull();
   });
 
