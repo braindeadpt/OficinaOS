@@ -12,6 +12,7 @@ interface PontoStatus {
 
 interface PontoConfig {
   configured?: boolean;
+  qrId?: string;
   slug?: string;
   smsNumber?: string | null;
   waNumber?: string | null;
@@ -50,15 +51,18 @@ async function loadPontoQr(): Promise<PontoQrState> {
   ]);
   const config = configRes.data;
   const shop = shopRes.data;
+  // WP0.2 — o QR aponta para o qrId aleatório (128 bits); o slug só
+  // serve de fallback enquanto a Cloud deployada não devolver qrId.
+  const qrRef = config.qrId ?? config.slug;
   if (
     !statusRes.data.enabled ||
     config.configured === false ||
-    !config.slug ||
+    !qrRef ||
     !shop.cloudApiUrl
   ) {
     return { kind: "unavailable" };
   }
-  const url = `${shop.cloudApiUrl.replace(TRAILING_SLASHES, "")}/ponto/${config.slug}`;
+  const url = `${shop.cloudApiUrl.replace(TRAILING_SLASHES, "")}/ponto/${qrRef}`;
   const qrUrl = await QRCode.toDataURL(url, {
     margin: 1,
     width: 640,
@@ -82,6 +86,8 @@ async function loadPontoQr(): Promise<PontoQrState> {
 export default function PontoQrPage() {
   const { t } = useTranslation();
   const [state, setState] = useState<PontoQrState>({ kind: "loading" });
+  const [confirming, setConfirming] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,6 +107,26 @@ export default function PontoQrPage() {
     };
   }, []);
 
+  // WP0.2 — regenerar invalida o QR anterior de imediato: os impressos
+  // deixam de abrir a página e é preciso imprimir outra vez. Daí a
+  // confirmação em dois passos com o aviso explícito.
+  const regenerate = async () => {
+    setRegenerating(true);
+    try {
+      await api.post("/ponto/regenerate-qr");
+      setConfirming(false);
+      // Recarrega já aqui — o useEffect é só para a montagem inicial.
+      setState({ kind: "loading" });
+      setState(
+        await loadPontoQr().catch((): PontoQrState => ({ kind: "unavailable" }))
+      );
+    } catch {
+      setConfirming(false);
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col gap-6 bg-surface p-6 print:max-w-none print:bg-white print:p-0">
       <style>{PRINT_CSS}</style>
@@ -111,9 +137,43 @@ export default function PontoQrPage() {
         >
           ← {t("ponto.qr_back")}
         </Link>
-        <Button icon="print" onClick={() => window.print()}>
-          {t("ponto.qr_print")}
-        </Button>
+        <div className="flex items-center gap-2">
+          {state.kind === "ready" &&
+            (confirming ? (
+              <>
+                <span className="max-w-56 text-danger text-xs">
+                  {t("ponto.qr_regenerate_warning")}
+                </span>
+                <Button
+                  disabled={regenerating}
+                  onClick={regenerate}
+                  size="sm"
+                  variant="destructive"
+                >
+                  {t("ponto.qr_regenerate_confirm")}
+                </Button>
+                <Button
+                  disabled={regenerating}
+                  onClick={() => setConfirming(false)}
+                  size="sm"
+                  variant="ghost"
+                >
+                  {t("cancel")}
+                </Button>
+              </>
+            ) : (
+              <Button
+                onClick={() => setConfirming(true)}
+                size="sm"
+                variant="destructive-soft"
+              >
+                {t("ponto.qr_regenerate")}
+              </Button>
+            ))}
+          <Button icon="print" onClick={() => window.print()}>
+            {t("ponto.qr_print")}
+          </Button>
+        </div>
       </div>
 
       {state.kind === "loading" && (
