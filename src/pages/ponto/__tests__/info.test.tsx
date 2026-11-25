@@ -8,7 +8,7 @@ import PontoInfoPage from "../info";
 
 const COMPANY_INTRO = /A empresa utiliza um sistema eletrónico/;
 const COMPANY_QR = /código QR afixado na empresa/;
-const SHOP_WORDING = /na loja/;
+const REPAIR_WORDING = /\bloja\b|\boficina\b/i;
 
 function translate(key: string, options?: Record<string, unknown>): string {
   const raw = ptMessages[key as keyof typeof ptMessages] ?? key;
@@ -53,7 +53,7 @@ vi.mock("@/lib/api", () => ({
 
 describe("PontoInfoPage em entrada direta", () => {
   it("usa a terminologia de empresa mesmo com a store de modo ainda vazia", async () => {
-    render(
+    const { container } = render(
       <MemoryRouter>
         <PontoInfoPage />
       </MemoryRouter>
@@ -61,6 +61,6 @@ describe("PontoInfoPage em entrada direta", () => {
 
     expect(await screen.findByText(COMPANY_INTRO)).toBeInTheDocument();
     expect(screen.getByText(COMPANY_QR)).toBeInTheDocument();
-    expect(screen.queryByText(SHOP_WORDING)).not.toBeInTheDocument();
+    expect(container.textContent).not.toMatch(REPAIR_WORDING);
   });
 });
