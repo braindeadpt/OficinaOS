@@ -160,6 +160,7 @@ async function audit(
     metadata: {
       ...sanitizeArgs(tool, args),
       ok: outcome.error === undefined,
+      outcome: outcome.error ?? "ok",
     },
     userId,
   }).catch(() => undefined);
@@ -169,7 +170,8 @@ type Runner = (
   prisma: PrismaClient,
   log: FastifyBaseLogger,
   user: ToolUser,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
+  signal?: AbortSignal
 ) => Promise<ToolOutcome>;
 
 /**
@@ -179,7 +181,12 @@ type Runner = (
 export async function runStaffInboxTool(
   prisma: PrismaClient,
   log: FastifyBaseLogger,
-  input: { args?: Record<string, unknown>; tool: string; userId: string }
+  input: {
+    args?: Record<string, unknown>;
+    signal?: AbortSignal;
+    tool: string;
+    userId: string;
+  }
 ): Promise<ToolOutcome> {
   const tool = input.tool as StaffInboxTool;
   const args = input.args ?? {};
@@ -203,7 +210,13 @@ export async function runStaffInboxTool(
       outcome = err("conta desativada");
     } else if (can(user, permFor(tool))) {
       try {
-        outcome = await TOOL_RUNNERS[tool](prisma, log, user, args);
+        outcome = await TOOL_RUNNERS[tool](
+          prisma,
+          log,
+          user,
+          args,
+          input.signal
+        );
       } catch (e) {
         log.warn({ err: e, tool, userId: user.id }, "staffInboxTool falhou");
         outcome = err("erro interno ao executar a ferramenta");
@@ -216,6 +229,32 @@ export async function runStaffInboxTool(
   }
   await audit(prisma, input.userId, tool, args, outcome);
   return outcome;
+}
+
+/**
+ * Replay de um resultado em cache (idempotência da ligação 2b): a conta
+ * tem de continuar ativa e com permissão — um token MCP de quem foi
+ * desativado entretanto não pode repetir dados já lidos.
+ */
+export async function canReplayStaffInboxTool(
+  prisma: PrismaClient,
+  tool: string,
+  userId: string
+): Promise<boolean> {
+  if (!STAFF_INBOX_TOOLS.includes(tool as StaffInboxTool)) {
+    return false;
+  }
+  const user = await prisma.user.findUnique({
+    select: {
+      active: true,
+      id: true,
+      mcpDirectSend: true,
+      name: true,
+      role: true,
+    },
+    where: { id: userId },
+  });
+  return Boolean(user?.active && can(user, permFor(tool as StaffInboxTool)));
 }
 
 function permFor(tool: StaffInboxTool): "manage" | "send" | "view" {
@@ -668,7 +707,8 @@ async function rascunharResposta(
 async function sendSmsForConversation(
   settings: Awaited<ReturnType<typeof getOrCreateShopSettings>>,
   to: string,
-  text: string
+  text: string,
+  draftId: string
 ): Promise<SmsSendResult> {
   // SEC #164 — o gateway LAN também é Pro: com o módulo sms revogado a
   // resposta da caixa de entrada não sai por transporte nenhum.
@@ -681,7 +721,7 @@ async function sendSmsForConversation(
   if (isModuleEnabled(settings, "sms") && settings.cloudApiUrl && cloudToken) {
     const res = await sendSmsViaCloud(
       { apiUrl: settings.cloudApiUrl, token: cloudToken },
-      { dedupeId: `inbox-${Date.now()}`, text, to }
+      { dedupeId: `draft:${draftId}`, text, to }
     );
     if (res.success) {
       return { success: true };
@@ -703,6 +743,32 @@ async function sendSmsForConversation(
   return sendSms(local, to, text, settings.countryCode ?? undefined);
 }
 
+interface DraftPreClaimState {
+  approvedAt: Date | null;
+  approvedById: string | null;
+  status: string;
+  updatedAt: Date;
+}
+
+/** Cancelamento pré-commit: o claim SENDING volta ao estado capturado. */
+async function revertDraftClaim(
+  prisma: PrismaClient,
+  draftId: string,
+  preClaim: DraftPreClaimState
+): Promise<void> {
+  await prisma.inboxDraft.updateMany({
+    data: {
+      approvedAt: preClaim.approvedAt,
+      approvedById: preClaim.approvedById,
+      status: preClaim.status,
+      // Repor também a data: um SENDING obsoleto tem de continuar
+      // visível/reclamável, não esperar mais STALE_SENDING_MS.
+      updatedAt: preClaim.updatedAt,
+    },
+    where: { id: draftId, status: "SENDING" },
+  });
+}
+
 /**
  * Envia o rascunho aprovado — EXATAMENTE uma vez (§G.5): o updateMany
  * guardado por status é o lock; só quem ganha a corrida envia.
@@ -712,7 +778,8 @@ export async function sendApprovedDraft(
   log: FastifyBaseLogger,
   draftId: string,
   approvedById: string,
-  direct = false
+  direct = false,
+  signal?: AbortSignal
 ): Promise<ToolOutcome> {
   const draft = await prisma.inboxDraft.findUnique({
     include: { conversation: true },
@@ -738,6 +805,9 @@ export async function sendApprovedDraft(
   if (!(draft.approvedAt || direct)) {
     return err("aguarda aprovação humana na aplicação");
   }
+  if (signal?.aborted) {
+    return err("cancelado");
+  }
   // Transição atómica para o estado reservado SENDING — dois cliques
   // concorrentes em «Aprovar e enviar» não podem enviar duas vezes: o
   // segundo perde a corrida no updateMany e nunca chega ao transporte.
@@ -745,6 +815,12 @@ export async function sendApprovedDraft(
   // do envio — volta a ser reclamável, senão o rascunho ficava preso
   // (invisível na lista de pendentes) e o retry reportava "a enviar"
   // para sempre sem nunca enviar.
+  const preClaim: DraftPreClaimState = {
+    approvedAt: draft.approvedAt,
+    approvedById: draft.approvedById,
+    status: draft.status,
+    updatedAt: draft.updatedAt,
+  };
   const staleBefore = new Date(Date.now() - STALE_SENDING_MS);
   const claimed = await prisma.inboxDraft.updateMany({
     data: {
@@ -763,8 +839,16 @@ export async function sendApprovedDraft(
   if (claimed.count !== 1) {
     return err("rascunho já está a ser enviado");
   }
+  if (signal?.aborted) {
+    await revertDraftClaim(prisma, draftId, preClaim);
+    return err("cancelado");
+  }
   const settings = await getOrCreateShopSettings(prisma);
   const conv = draft.conversation;
+  if (signal?.aborted) {
+    await revertDraftClaim(prisma, draftId, preClaim);
+    return err("cancelado");
+  }
   const result = await sendConversationText(
     prisma,
     log,
@@ -772,9 +856,15 @@ export async function sendApprovedDraft(
     conv.channel,
     conv.phone,
     conv.lastInboundAt,
-    draft.text
+    draft.text,
+    draftId,
+    signal
   );
   if (!result.success) {
+    if (result.error === "cancelado") {
+      await revertDraftClaim(prisma, draftId, preClaim);
+      return err("cancelado");
+    }
     await prisma.inboxDraft.update({
       data: { error: result.error ?? "send failed", status: "FAILED" },
       where: { id: draftId },
@@ -820,13 +910,16 @@ async function sendConversationText(
   channel: string,
   phone: string,
   lastInboundAt: Date | null,
-  text: string
+  text: string,
+  draftId: string,
+  signal?: AbortSignal
 ): Promise<{ error?: string; success: boolean }> {
   if (channel === INBOX_CHANNEL_SMS) {
     return sendSmsForConversation(
       settings,
       `+${phone.replace(LEADING_PLUS_RE, "")}`,
-      text
+      text,
+      draftId
     );
   }
   const resolved = resolveWhatsAppChannel(settings);
@@ -845,7 +938,8 @@ async function sendConversationText(
       config,
       phone,
       text,
-      settings.whatsappBotDailyCap ?? 200
+      settings.whatsappBotDailyCap ?? 200,
+      signal
     );
   }
   // Meta oficial: texto livre só dentro da janela de 24h — fora dela o
@@ -874,7 +968,8 @@ async function enviarRascunho(
   prisma: PrismaClient,
   log: FastifyBaseLogger,
   user: ToolUser,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
+  signal?: AbortSignal
 ): Promise<ToolOutcome> {
   const rascunhoId = s(args.rascunhoId) || s(args.id);
   if (!rascunhoId) {
@@ -894,7 +989,7 @@ async function enviarRascunho(
   if (!(draft.approvedAt || direct) && draft.status !== "SENT") {
     return err("aguarda aprovação humana na aplicação");
   }
-  return sendApprovedDraft(prisma, log, rascunhoId, user.id, direct);
+  return sendApprovedDraft(prisma, log, rascunhoId, user.id, direct, signal);
 }
 
 const TOOL_RUNNERS: Record<StaffInboxTool, Runner> = {

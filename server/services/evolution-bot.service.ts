@@ -288,6 +288,29 @@ export function evolutionConfigFor(settings: Settings): EvolutionConfig | null {
   return evolutionConfigOf(settings);
 }
 
+/** Sleep do atraso humano — a única parte pré-commit cancelável do envio. */
+function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (!signal) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(signal.reason);
+      return;
+    }
+    let timer: ReturnType<typeof setTimeout>;
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal.reason);
+    };
+    timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 /**
  * Envio staff via Evolution com as MESMAS proteções anti-ban do bot
  * (§G.5): partilha o limiter horário e o teto diário da instância, faz
@@ -299,8 +322,12 @@ export async function sendViaEvolutionAntiBan(
   config: EvolutionConfig,
   phone: string,
   text: string,
-  cap: number
+  cap: number,
+  signal?: AbortSignal
 ): Promise<{ error?: string; success: boolean }> {
+  if (signal?.aborted) {
+    return { error: "cancelado", success: false };
+  }
   if (dailyCapExceeded(cap)) {
     return { error: "teto_diario_evolution", success: false };
   }
@@ -310,8 +337,22 @@ export async function sendViaEvolutionAntiBan(
   dayCount += 1;
   const delay = REPLY_DELAY_MIN_MS + Math.random() * REPLY_DELAY_SPREAD_MS;
   await sendEvolutionPresence(config, phone, delay).catch(() => null);
-  await new Promise((r) => setTimeout(r, delay));
+  try {
+    await abortableSleep(delay, signal);
+  } catch {
+    dayCount -= 1;
+    return { error: "cancelado", success: false };
+  }
+  if (signal?.aborted) {
+    dayCount -= 1;
+    return { error: "cancelado", success: false };
+  }
   const settings = await getOrCreateShopSettings(prisma);
+  // O prazo pode expirar durante a leitura — a Evolution ainda não tem o texto.
+  if (signal?.aborted) {
+    dayCount -= 1;
+    return { error: "cancelado", success: false };
+  }
   const res = await sendEvolutionText(config, phone, text, settings);
   if (!res.success) {
     dayCount -= 1;

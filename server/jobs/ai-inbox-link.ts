@@ -3,7 +3,10 @@ import { decryptSecret } from "../lib/crypto.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import { cloudFetch } from "../services/cloud.service.js";
 import { cleanupInboxRetention } from "../services/inbox.service.js";
-import { runStaffInboxTool } from "../services/staff-inbox-tools.js";
+import {
+  canReplayStaffInboxTool,
+  runStaffInboxTool,
+} from "../services/staff-inbox-tools.js";
 import { isModuleEnabled } from "../utils/modules.js";
 
 /**
@@ -11,7 +14,7 @@ import { isModuleEnabled } from "../utils/modules.js";
  *
  * A app abre um GET /ai-inbox/link (SSE) autenticado com o shop token
  * cifrado e espera chamadas de ferramenta:
- *   Cloud → app : {callId, tool, args, userId}
+ *   Cloud → app : {callId, tool, args, userId, idempotencyKey?}
  *   app → Cloud : POST /ai-inbox/link/respond {callId,result} |
  *                 {callId,error}
  * Cada chamada corre com as permissões do userId fornecido e tem um
@@ -33,6 +36,18 @@ const BACKOFF_MAX_MS = 60_000;
 // janela — a sweep propriamente dita só roda 1×/dia).
 const RETENTION_INTERVAL_MS = 24 * 3600 * 1000;
 const TRAILING_SLASHES_RE = /\/+$/;
+const IDEMPOTENCY_TTL_MS = 5 * 60 * 1000;
+const IDEMPOTENCY_MAX_ENTRIES = 200;
+const IDEMPOTENCY_KEY_MAX_LEN = 128;
+
+type ToolOutcome = Awaited<ReturnType<typeof runStaffInboxTool>>;
+
+interface IdempotentExecution {
+  controller: AbortController;
+  expiresAt: number;
+  promise: Promise<ToolOutcome>;
+  settled: boolean;
+}
 
 let stopped = false;
 let supervisor: ReturnType<typeof setInterval> | null = null;
@@ -42,9 +57,15 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let backoffMs = BACKOFF_MIN_MS;
 let lastRetentionAt = 0;
 
+// Chaves de idempotência da Cloud (sha256 — por isso cap de tamanho só
+// defensivo). Em memória por natureza: a ligação 2b já é efémera e um
+// restart da app cai no claim atómico/estado do rascunho como antes.
+const idempotentCalls = new Map<string, IdempotentExecution>();
+
 interface LinkCall {
   args?: Record<string, unknown>;
   callId?: unknown;
+  idempotencyKey?: unknown;
   tool?: unknown;
   userId?: unknown;
 }
@@ -73,17 +94,116 @@ function nextBackoff(): number {
   return out;
 }
 
-/** Timeout duro de 10 s por chamada — contrato §G.6. */
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error("timeout")), ms)
-    ),
-  ]);
+/** Limpeza lazy: completadas expiram; in-flight ficam até ao cap duro. */
+function pruneIdempotentCalls(): void {
+  const now = Date.now();
+  for (const [key, entry] of idempotentCalls) {
+    if (entry.settled && entry.expiresAt <= now) {
+      idempotentCalls.delete(key);
+    }
+  }
+  while (idempotentCalls.size > IDEMPOTENCY_MAX_ENTRIES) {
+    let keyToEvict: string | undefined;
+    for (const [key, entry] of idempotentCalls) {
+      if (entry.settled) {
+        keyToEvict = key;
+        break;
+      }
+    }
+    keyToEvict ??= idempotentCalls.keys().next().value;
+    if (keyToEvict === undefined) {
+      break;
+    }
+    idempotentCalls.delete(keyToEvict);
+  }
 }
 
-async function handleCall(
+/**
+ * Arranca (ou reutiliza) a execução da chamada. A promise guardada é a
+ * execução real — não o race do timeout — porque uma chamada que já
+ * respondeu timeout pode ainda assim terminar e ser replayed ao retry.
+ */
+async function executionFor(
+  app: FastifyInstance,
+  raw: LinkCall,
+  tool: string,
+  userId: string,
+  idempotencyKey: string | null
+): Promise<IdempotentExecution> {
+  if (idempotencyKey) {
+    pruneIdempotentCalls();
+    const existing = idempotentCalls.get(idempotencyKey);
+    if (existing && !existing.settled) {
+      return existing;
+    }
+    if (existing) {
+      // Replay de um resultado já concluído: revalida conta/permissão —
+      // se recusar, executa de novo e o runStaffInboxTool recusa e audita.
+      // Erro na consulta propaga ("erro interno") e mantém a cache: re-executar
+      // aqui duplicaria operações não idempotentes (ex.: criar rascunho).
+      const allowed = await canReplayStaffInboxTool(app.prisma, tool, userId);
+      const current = idempotentCalls.get(idempotencyKey);
+      if (current && (allowed || current !== existing)) {
+        return current;
+      }
+      idempotentCalls.delete(idempotencyKey);
+    }
+  }
+  const controller = new AbortController();
+  const promise = runStaffInboxTool(app.prisma, app.log, {
+    args: raw.args,
+    signal: controller.signal,
+    tool,
+    userId,
+  });
+  const execution: IdempotentExecution = {
+    controller,
+    expiresAt: Date.now() + IDEMPOTENCY_TTL_MS,
+    promise,
+    settled: false,
+  };
+  const markSettled = (out?: ToolOutcome) => {
+    execution.settled = true;
+    execution.expiresAt = Date.now() + IDEMPOTENCY_TTL_MS;
+    // Cancelado = nada foi feito (claim revertido): o retry com a mesma
+    // chave tem de voltar a executar, não repetir o cancelamento.
+    if (
+      idempotencyKey &&
+      out?.error === "cancelado" &&
+      idempotentCalls.get(idempotencyKey) === execution
+    ) {
+      idempotentCalls.delete(idempotencyKey);
+    }
+  };
+  promise.then(markSettled, () => markSettled());
+  if (idempotencyKey) {
+    idempotentCalls.set(idempotencyKey, execution);
+    pruneIdempotentCalls();
+  }
+  return execution;
+}
+
+/** Timeout duro de 10 s por chamada — contrato §G.6. */
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  onTimeout: () => void
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<T>((_, reject) => {
+    timer = setTimeout(() => {
+      onTimeout();
+      reject(new Error("timeout"));
+    }, ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  });
+}
+
+export async function handleCall(
   app: FastifyInstance,
   apiUrl: string,
   token: string,
@@ -95,14 +215,22 @@ async function handleCall(
   }
   const tool = typeof raw.tool === "string" ? raw.tool : "";
   const userId = typeof raw.userId === "string" ? raw.userId : "";
+  const idempotencyKey =
+    typeof raw.idempotencyKey === "string" &&
+    raw.idempotencyKey.length > 0 &&
+    raw.idempotencyKey.length <= IDEMPOTENCY_KEY_MAX_LEN
+      ? raw.idempotencyKey
+      : null;
   try {
-    const out = await withTimeout(
-      runStaffInboxTool(app.prisma, app.log, {
-        args: raw.args,
-        tool,
-        userId,
-      }),
-      CALL_TIMEOUT_MS
+    const execution = await executionFor(
+      app,
+      raw,
+      tool,
+      userId,
+      idempotencyKey
+    );
+    const out = await withTimeout(execution.promise, CALL_TIMEOUT_MS, () =>
+      execution.controller.abort()
     );
     await respond(
       apiUrl,
