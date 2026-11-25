@@ -271,8 +271,17 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
         summary: "Refresh OficinaOS Cloud entitlements",
       },
     },
-    async (_req, reply) =>
-      reply.send(await syncCloudEntitlements(app.prisma, app.log))
+    async (_req, reply) => {
+      const status = await syncCloudEntitlements(app.prisma, app.log);
+      // Ativação manual do módulo: sem este push o poller seguinte já
+      // encontra o entitlement fresco e não voltaria a enviar a escala.
+      if (status.modules.includes("ponto")) {
+        await pushPontoCloudConfig(app.prisma, app.log).catch((err) =>
+          app.log.warn({ err }, "ponto config sync após sync manual falhou")
+        );
+      }
+      return reply.send(status);
+    }
   );
 
   app.get(
