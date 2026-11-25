@@ -3,12 +3,26 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
+import ptMessages from "../../../i18n/locales/pt.json";
 import PontoInfoPage from "../info";
+
+const COMPANY_INTRO = /A empresa utiliza um sistema eletrónico/;
+const COMPANY_QR = /código QR afixado na empresa/;
+const SHOP_WORDING = /na loja/;
+
+function translate(key: string, options?: Record<string, unknown>): string {
+  const raw = ptMessages[key as keyof typeof ptMessages] ?? key;
+  let text = String(raw);
+  if (typeof options?.controller === "string") {
+    text = text.replaceAll("{{controller}}", options.controller);
+  }
+  return text;
+}
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
-    i18n: { exists: (key: string) => key.endsWith("_company") },
-    t: (key: string) => key,
+    i18n: { exists: (key: string) => key in ptMessages },
+    t: translate,
   }),
 }));
 
@@ -45,9 +59,8 @@ describe("PontoInfoPage em entrada direta", () => {
       </MemoryRouter>
     );
 
-    expect(
-      await screen.findByText("ponto.info_doc_how_1_company")
-    ).toBeInTheDocument();
-    expect(screen.queryByText("ponto.info_doc_how_1")).not.toBeInTheDocument();
+    expect(await screen.findByText(COMPANY_INTRO)).toBeInTheDocument();
+    expect(screen.getByText(COMPANY_QR)).toBeInTheDocument();
+    expect(screen.queryByText(SHOP_WORDING)).not.toBeInTheDocument();
   });
 });
