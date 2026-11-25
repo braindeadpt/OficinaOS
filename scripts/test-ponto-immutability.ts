@@ -366,11 +366,15 @@ try {
     // que não se criou, mesmo numa base de testes reutilizada.
     const evilSchema = `probe_evil_${Date.now()}`;
     const evilConn = new pg.Client({ connectionString: url });
+    // A limpeza só corre se o CREATE passou — um CREATE falhado (nome já
+    // existente) significa que o schema é de outra corrida e não se toca.
+    let evilCreated = false;
     try {
       // A preparação inteira fica dentro do try: se um passo falhar a
       // meio, o finally limpa o schema na mesma — não ficam restos numa
       // base de testes reutilizada.
       await client.query(`CREATE SCHEMA ${evilSchema}`);
+      evilCreated = true;
       await client.query(`CREATE TABLE ${evilSchema}.time_entries (id text)`);
       await client.query(
         `GRANT USAGE ON SCHEMA ${evilSchema} TO oficinaos_ponto_purge`
@@ -403,11 +407,13 @@ try {
       await evilConn.end().catch(() => {
         // encerramento best-effort
       });
-      await client
-        .query(`DROP SCHEMA IF EXISTS ${evilSchema} CASCADE`)
-        .catch(() => {
-          // limpeza best-effort — base descartável
-        });
+      if (evilCreated) {
+        await client
+          .query(`DROP SCHEMA IF EXISTS ${evilSchema} CASCADE`)
+          .catch(() => {
+            // limpeza best-effort — base descartável
+          });
+      }
     }
   } finally {
     await purgeConn.end().catch(() => {
