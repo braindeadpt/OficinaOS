@@ -9,8 +9,9 @@ import type { CustomerJobView } from "./customer-job-view.js";
  * localmente as ferramentas que ela pedir. A Cloud é stateless: cada ronda
  * leva a conversa completa. Limites do plano (§E.5):
  *   - máx. 3 rondas de ferramentas;
- *   - 15 s no total (depois → fallback determinístico);
- *   - resposta ou erro inválido → null → regras determinísticas respondem.
+ *   - 15 s no total (depois → null);
+ *   - resposta inválida ou erro → null → o chamador escala para staff
+ *     (não há fallback determinístico local: as regras vivem na Cloud).
  * A Cloud nunca executa ferramentas — pede, a app corre, o resultado volta.
  */
 

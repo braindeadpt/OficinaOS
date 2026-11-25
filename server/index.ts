@@ -13,6 +13,7 @@ import { startCloudPoller } from "./jobs/cloud-poller.js";
 import { startMessagingPoller } from "./jobs/messaging-poller.js";
 import { startOverdueScheduler } from "./jobs/overdue-scheduler.js";
 import { startPickupReminderScheduler } from "./jobs/pickup-reminder-scheduler.js";
+import { startPontoPurgeScheduler } from "./jobs/ponto-purge-scheduler.js";
 import { startPontoReminderScheduler } from "./jobs/ponto-reminder-scheduler.js";
 import { startMdnsResponder } from "./lib/mdns.js";
 import { isFileRequestPath } from "./lib/spa-fallback.js";
@@ -163,6 +164,9 @@ const stopRemarketing = env.DEMO_MODE ? noop : startRemarketingScheduler(app);
 const stopPontoReminder = env.DEMO_MODE
   ? noop
   : startPontoReminderScheduler(app);
+// Retenção legal do livro de ponto — job local-only, necessário mesmo
+// se o módulo entretanto for desligado.
+const stopPontoPurge = startPontoPurgeScheduler(app);
 // Livro de ponto — a configuração autoritativa vive na Cloud (WP0.1):
 // geo, flags e a escala de staff. O arranque é o momento de recuperação
 // dos syncs falhados (Cloud em baixo quando o dono gravou definições)
@@ -295,6 +299,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
     stopLowStock();
     stopRemarketing();
     stopPontoReminder();
+    stopPontoPurge();
     stopOutboxWorker();
     stopAiInboxLink();
     clearInterval(cleanupHandle);

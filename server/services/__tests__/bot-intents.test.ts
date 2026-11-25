@@ -184,6 +184,60 @@ describe("composeReply — transporte WP0.4 (regras na Cloud)", () => {
     expect(out.text).toBe("Orçamento aceite ✅");
   });
 
+  it("quote_decision com quoteId fora do contexto não executa nada", async () => {
+    mocks.askBotAi.mockResolvedValueOnce({
+      action: {
+        decision: "approve",
+        jobCode: "REP-2024-000001-AAA",
+        kind: "quote_decision",
+        quoteId: "q-inventado",
+      },
+      actionFailureText: "Não consegui aplicar esse orçamento",
+      escalate: false,
+      jobId: null,
+      reply: "",
+    });
+    const { ctx } = makeCtx({ ai: aiCfg, customers: [cust], jobs: [job()] });
+    const out = await composeReply(ctx, msg("sim"));
+    expect(mocks.respondToQuote).not.toHaveBeenCalled();
+    expect(out.text).toBe("Não consegui aplicar esse orçamento");
+  });
+
+  it("quote_decision sobre orçamento já respondido no contexto não executa nada", async () => {
+    mocks.askBotAi.mockResolvedValueOnce({
+      action: {
+        decision: "approve",
+        jobCode: "REP-2024-000001-AAA",
+        kind: "quote_decision",
+        quoteId: "q1",
+      },
+      actionFailureText: "Esse orçamento já foi respondido",
+      escalate: false,
+      jobId: null,
+      reply: "",
+    });
+    const respondedJob = job({
+      quotes: [
+        {
+          amount: { toNumber: () => 100 },
+          id: "q1",
+          note: null,
+          sentAt: new Date("2026-11-20T10:00:00.000Z"),
+          status: "APPROVED",
+          version: 1,
+        },
+      ],
+    });
+    const { ctx } = makeCtx({
+      ai: aiCfg,
+      customers: [cust],
+      jobs: [respondedJob],
+    });
+    const out = await composeReply(ctx, msg("sim"));
+    expect(mocks.respondToQuote).not.toHaveBeenCalled();
+    expect(out.text).toBe("Esse orçamento já foi respondido");
+  });
+
   it("quote_decision recusada (SUPERSEDED) usa o texto de falha", async () => {
     mocks.askBotAi.mockResolvedValueOnce({
       action: {
@@ -243,6 +297,13 @@ describe("composeReply — transporte WP0.4 (regras na Cloud)", () => {
     const out = await composeReply(ctx, msg("olá"));
     expect(mocks.askBotAi).not.toHaveBeenCalled();
     expect(out.escalate).toBe(true);
+  });
+
+  it("fallback sem cliente casado não deixa vírgula pendurada nem espaço duplo", async () => {
+    const { ctx } = makeCtx({ customers: [], jobs: [] });
+    const out = await composeReply(ctx, msg("olá"));
+    expect(out.escalate).toBe(true);
+    expect(out.text).toBe("Recebemos a tua mensagem — a loja responde-te já.");
   });
 
   it("dataPrevista segue o fuso do contexto quando o dia da loja difere do dia UTC", async () => {
