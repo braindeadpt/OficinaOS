@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   savePontoPhotoFile: vi.fn(() =>
     Promise.resolve({ id: "photo-1", path: "ponto-photos/u1/p.jpg" })
   ),
+  timeEntryFindMany: vi.fn((): Promise<unknown[]> => Promise.resolve([])),
   timeEntryFindFirst: vi.fn(
     (): Promise<{ id: string } | null> => Promise.resolve(null)
   ),
@@ -96,7 +97,10 @@ function setup(opts: { smsAllowed?: boolean; transport?: string } = {}) {
   const prisma = {
     customer: { findMany: vi.fn(() => Promise.resolve([])) },
     job: { findMany: vi.fn(() => Promise.resolve([])) },
-    timeEntry: { findFirst: mocks.timeEntryFindFirst },
+    timeEntry: {
+      findFirst: mocks.timeEntryFindFirst,
+      findMany: mocks.timeEntryFindMany,
+    },
     user: { findMany: vi.fn(() => Promise.resolve([staff])) },
   };
   const sent: string[] = [];
@@ -1147,7 +1151,9 @@ describe("SAIDA normal após presumida", () => {
       id: "presumed-1",
     });
     // Reentrada às 18:04 — depois da presumida das 18:00.
-    mocks.timeEntryFindFirst.mockResolvedValue({ id: "entrada-2" });
+    mocks.timeEntryFindMany.mockResolvedValue([
+      { id: "entrada-2", validations: [] },
+    ] as never);
 
     await tryHandlePontoStaff(ctx, message("SAIDA"), t);
 
@@ -1157,6 +1163,47 @@ describe("SAIDA normal após presumida", () => {
     >;
     expect(entry.correctsId).toBeNull();
     expect(entry.type).toBe("SAIDA");
+  });
+
+  it("reentrada recusada e re-aprovada → turno novo conta (decisão mais recente)", async () => {
+    // Regressão: com o filtro `none` na query a reentrada re-aprovada
+    // ficava invisível (existia uma recusa no histórico) e a SAIDA
+    // substituía a presumida do turno anterior — fundia os dois turnos.
+    const { ctx, message, t } = setup({ smsAllowed: true, transport: "sms" });
+    mocks.findOpenPresumedExit.mockResolvedValue({
+      at: PRESUMED_AT,
+      id: "presumed-1",
+    });
+    mocks.timeEntryFindMany.mockResolvedValue([
+      { id: "entrada-2", validations: [{ decision: "APROVADO" }] },
+    ]);
+
+    await tryHandlePontoStaff(ctx, message("SAIDA"), t);
+
+    const entry = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect(entry.correctsId).toBeNull();
+  });
+
+  it("reentrada recusada (mais recente) não abre turno — SAIDA corrige a presumida", async () => {
+    const { ctx, message, t } = setup({ smsAllowed: true, transport: "sms" });
+    mocks.findOpenPresumedExit.mockResolvedValue({
+      at: PRESUMED_AT,
+      id: "presumed-1",
+    });
+    mocks.timeEntryFindMany.mockResolvedValue([
+      { id: "entrada-2", validations: [{ decision: "RECUSADO" }] },
+    ] as never);
+
+    await tryHandlePontoStaff(ctx, message("SAIDA"), t);
+
+    const entry = mocks.recordPontoEntry.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect(entry.correctsId).toBe("presumed-1");
   });
 
   it("reentrada recusada pela gerência não abre turno — SAIDA corrige a presumida", async () => {

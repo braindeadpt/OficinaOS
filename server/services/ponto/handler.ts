@@ -1250,18 +1250,32 @@ async function presumedCorrectionFor(
   // Uma reentrada recusada pela gerência não abre turno nenhum —
   // sem o filtro ela impedia a SAIDA de corrigir a presumida e o
   // apuramento ignorava a saída real do turno anterior.
-  const reentry = await ctx.prisma.timeEntry
-    .findFirst({
-      select: { id: true },
+  // (em memória e pela decisão MAIS RECENTE — uma reentrada recusada
+  //  não abre turno, mas uma re-aprovação posterior volta a abri-la;
+  //  o filtro `none` na query escondia-a mesmo depois de re-aprovada
+  //  e a SAIDA substituía a presumida do turno anterior, fundindo os
+  //  dois turnos)
+  const reentries = await ctx.prisma.timeEntry
+    .findMany({
+      select: {
+        id: true,
+        validations: {
+          orderBy: { at: "desc" },
+          select: { decision: true },
+          take: 1,
+        },
+      },
       where: {
         at: { gt: presumed.at },
         corrections: { none: {} },
         type: "ENTRADA",
         userId: staff.user.id,
-        validations: { none: { decision: "RECUSADO" } },
       },
     })
-    .catch(() => null);
+    .catch(() => []);
+  const reentry = reentries.some(
+    (e) => e.validations[0]?.decision !== "RECUSADO"
+  );
   return reentry ? null : presumed.id;
 }
 
