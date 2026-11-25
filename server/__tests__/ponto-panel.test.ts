@@ -463,9 +463,10 @@ describe("ponto panel — GET /hours + /missing-exits", () => {
     expect(body[0].lastType).toBe("ENTRADA");
   });
 
-  it("keeps overnight-shift hours: intervals pair before civil-day split", async () => {
-    // Turno 22:00 → 07:00 do dia seguinte (UTC; Lisboa em junho = UTC+1,
-    // o que só desloca as horas de cada dia civil, não o total).
+  it("turno overnight NÃO emparelha: corta no fim do dia civil (decisão 2026-11-25)", async () => {
+    // ENTRADA 22:00 → SAIDA 07:00 do dia seguinte. Sem overnight (§2.2):
+    // o dia da entrada corta à meia-noite e fica esquecimento para o
+    // gestor fechar à mão; a saída do dia seguinte fica órfã.
     const nightIn = entryRow({
       at: new Date("2025-06-10T22:00:00Z"),
       id: "n1",
@@ -484,25 +485,29 @@ describe("ponto panel — GET /hours + /missing-exits", () => {
     });
     expect(res.statusCode).toBe(200);
     const days = res.json().days;
-    expect(days).toHaveLength(2);
-    // 9h de intervalo repartidas pelos dois dias civis — antes da
-    // correção o dia da saída não encontrava a entrada e perdia tudo.
     const total = days.reduce(
       (acc: number, d: { hours: { workedMinutes: number } }) =>
         acc + d.hours.workedMinutes,
       0
     );
-    expect(total).toBe(540);
-    for (const d of days) {
-      expect(d.hours.workedMinutes).toBeGreaterThan(0);
-      expect(d.hours.missingExit).toBe(false);
-    }
-    // E nenhum dos dois dias aparece como saída em falta.
+    // Em Lisboa (UTC+1 em junho) a entrada é 23:00 local: 23:00→24:00
+    // = 60 min no dia da entrada; nada no dia seguinte.
+    expect(total).toBe(60);
+    const diaEntrada = days.find(
+      (d: { date: string }) => d.date === "2025-06-10"
+    );
+    expect(diaEntrada.hours.missingExit).toBe(true);
+
     const miss = await app.inject({
       method: "GET",
       url: "/api/ponto/missing-exits?from=2025-06-10&to=2025-06-11",
     });
-    expect(miss.json()).toHaveLength(0);
+    expect(miss.statusCode).toBe(200);
+    // O dia da entrada aparece como saída em falta — um fecho no dia
+    // civil seguinte nunca resolve.
+    expect(
+      miss.json().some((m: { date: string }) => m.date === "2025-06-10")
+    ).toBe(true);
   });
 
   it("caps a forgotten-exit shift at day end; a next-day ENTRADA opens a new shift", async () => {

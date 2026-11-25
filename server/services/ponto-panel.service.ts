@@ -631,10 +631,19 @@ function pairWorkIntervals(
       open ??= { atMs: e.at.getTime(), entry: e };
       continue;
     }
-    // PAUSA e SAIDA fecham o intervalo aberto — inclusive no dia civil
-    // seguinte, que é como o turno overnight se completa.
+    // PAUSA e SAIDA fecham o intervalo aberto — só no MESMO dia civil.
+    // Um fecho noutro dia civil nunca emparelha (decisão do dono,
+    // 2026-11-25, alinhada com o §2.2: entradas não atravessam a
+    // meia-noite): o turno corta no fim do dia em que abriu e o dia fica
+    // esquecimento para o gestor fechar à mão — sem este corte a SAIDA
+    // de terça fechava a ENTRADA de segunda e contava a noite (~33 h).
     if (open) {
-      intervals.push({ endMs: e.at.getTime(), startMs: open.atMs });
+      const openDay = localDateKey(tz, open.entry.at);
+      const endMs =
+        localDateKey(tz, e.at) === openDay
+          ? e.at.getTime()
+          : localDayRange(tz, openDay).end.getTime();
+      intervals.push({ endMs, startMs: open.atMs });
       open = null;
     }
   }
@@ -716,25 +725,9 @@ function inRange(ymd: string, fromDate: string, toDate: string): boolean {
   return ymd >= fromDate && ymd <= toDate;
 }
 
-/**
- * O turno do dia fica "resolvido" quando o evento útil SEGUINTE já fecha
- * o intervalo (PAUSA/SAIDA — típico de turno overnight que termina no dia
- * civil seguinte). Sem isso, o dia anterior ao fecho parecia esquecido.
- */
-function resolvedByFollowingClose(
-  allUsable: ComputeRow[],
-  usablePos: Map<ComputeRow, number>,
-  entry: ComputeRow
-): boolean {
-  const pos = usablePos.get(entry);
-  const next = pos === undefined ? undefined : allUsable[pos + 1];
-  return next !== undefined && (next.type === "PAUSA" || next.type === "SAIDA");
-}
-
 function pushDayHours(
   days: PontoUserDayHoursDTO[],
   args: {
-    allUsable: ComputeRow[];
     date: string;
     dayUsable: ComputeRow[];
     intervals: WorkInterval[];
@@ -743,13 +736,11 @@ function pushDayHours(
     scheduleStart: string | null;
     todayKey: string;
     tz: string;
-    usablePos: Map<ComputeRow, number>;
     userId: string;
     userName: string;
   }
 ) {
   const {
-    allUsable,
     date,
     dayUsable,
     intervals,
@@ -758,7 +749,6 @@ function pushDayHours(
     scheduleStart,
     todayKey,
     tz,
-    usablePos,
     userId,
     userName,
   } = args;
@@ -782,15 +772,14 @@ function pushDayHours(
       ? Math.max(0, endMin - localMinutesOfDay(tz, scan.lastSaidaAt))
       : 0;
 
-  // "Saída em falta" = o dia acaba sem SAIDA e o turno aberto não é
-  // resolvido pelo evento útil seguinte (uma PAUSA/SAIDA no dia seguinte
-  // — típico de turno overnight — já conta como fecho). O dia civil atual
+  // "Saída em falta" = o dia acaba sem SAIDA. Um fecho no dia civil
+  // seguinte nunca resolve (sem overnight — decisão 2026-11-25): o dia
+  // fica esquecimento até o gestor o fechar à mão. O dia civil atual
   // fica de fora: um turno em curso não é um esquecimento.
   const missingExit =
     scan.lastType !== null &&
     scan.lastType !== "SAIDA" &&
     scan.lastEntry !== null &&
-    !resolvedByFollowingClose(allUsable, usablePos, scan.lastEntry) &&
     date !== todayKey;
 
   days.push({
@@ -871,7 +860,6 @@ export async function getHours(
   for (const [uid, rows] of byUser) {
     const u = userById.get(uid);
     const allUsable = usableEntries(rows);
-    const usablePos = new Map(allUsable.map((e, i) => [e, i]));
     const intervals = pairWorkIntervals(allUsable, tz, now);
     const rawByDay = groupByDay(rows, tz);
     const usableByDay = groupByDay(allUsable, tz);
@@ -882,7 +870,6 @@ export async function getHours(
         continue;
       }
       pushDayHours(days, {
-        allUsable,
         date,
         dayUsable: usableByDay.get(date) ?? [],
         intervals,
@@ -891,7 +878,6 @@ export async function getHours(
         scheduleStart: u?.pontoScheduleStart ?? null,
         todayKey,
         tz,
-        usablePos,
         userId: uid,
         userName,
       });
@@ -932,7 +918,6 @@ export async function getMissingExits(
   const items: PontoMissingExitDTO[] = [];
   for (const [uid, rows] of byUser) {
     const allUsable = usableEntries(rows);
-    const usablePos = new Map(allUsable.map((e, i) => [e, i]));
     const usableByDay = groupByDay(allUsable, tz);
 
     for (const [date, dayUsable] of usableByDay) {
@@ -943,7 +928,6 @@ export async function getMissingExits(
       if (
         !last ||
         last.type === "SAIDA" ||
-        resolvedByFollowingClose(allUsable, usablePos, last) ||
         // O dia civil atual fica de fora — um turno em curso não é uma
         // saída esquecida.
         date === todayKey

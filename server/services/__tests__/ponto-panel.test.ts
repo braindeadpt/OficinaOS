@@ -6,7 +6,12 @@ import { describe, expect, it, vi } from "vitest";
 // escondia a correção que realmente precisa de decisão.
 
 import type { DbClient } from "../../repositories/types.js";
-import { listPending, listRecentDecisions } from "../ponto-panel.service.js";
+import {
+  getHours,
+  getMissingExits,
+  listPending,
+  listRecentDecisions,
+} from "../ponto-panel.service.js";
 
 describe("listPending", () => {
   it("exclui linhas já corrigidas da fila de validação", async () => {
@@ -166,5 +171,94 @@ describe("listRecentDecisions", () => {
     expect(out[0]?.id).toBe("e-50");
     // a decisão mais antiga é a única que fica de fora
     expect(out.some((e) => e.id === "e-0")).toBe(false);
+  });
+});
+
+describe("emparelhamento sem overnight (decisão 2026-11-25)", () => {
+  // Cenário do review: ENTRADA seg 09:00 sem saída; ENTRADA ter 09:00
+  // REJEITADA; SAIDA ter 18:00 válida. Antes a SAIDA de terça fechava o
+  // turno de segunda e contava a noite inteira (~33 h).
+  const TZ = "Europe/Lisbon";
+
+  function row(id: string, iso: string, type: string, decision: string | null) {
+    return {
+      at: new Date(iso),
+      corrections: [],
+      corrects: null,
+      createdAt: new Date(iso),
+      id,
+      proofs: {},
+      status: decision ? "POR_VALIDAR" : "APROVADO",
+      type,
+      userId: "u1",
+      validations: decision
+        ? [{ at: new Date(iso), decision, id: `v-${id}` }]
+        : [],
+    };
+  }
+
+  function prismaCom(rows: unknown[]) {
+    return {
+      timeEntry: {
+        findMany: vi.fn((args?: { distinct?: unknown }) =>
+          Promise.resolve(args?.distinct ? [{ userId: "u1" }] : rows)
+        ),
+      },
+      user: {
+        findMany: vi.fn(() =>
+          Promise.resolve([{ id: "u1", name: "Zé", username: "ze" }])
+        ),
+      },
+    } as unknown as DbClient;
+  }
+
+  const rows = [
+    row("e1", "2026-01-05T09:00:00.000Z", "ENTRADA", null), // seg
+    row("e2", "2026-01-06T09:00:00.000Z", "ENTRADA", "RECUSADO"), // ter — rejeitada
+    row("e3", "2026-01-06T18:00:00.000Z", "SAIDA", null), // ter
+  ];
+  const range = {
+    end: new Date("2026-01-12T00:00:00.000Z"),
+    fromDate: "2026-01-05",
+    start: new Date("2026-01-05T00:00:00.000Z"),
+    toDate: "2026-01-11",
+  };
+
+  it("a SAIDA de terça NUNCA fecha o turno de segunda — sem as ~33 h", async () => {
+    const out = await getHours(prismaCom(rows), TZ, range, undefined);
+    const seg = out.days.find(
+      (d) => d.date === "2026-01-05" && d.userId === "u1"
+    );
+    // Segunda corta no fim do próprio dia (09:00→24:00 = 900 min),
+    // nunca atravessa a meia-noite.
+    expect(seg?.hours.workedMinutes).toBe(900);
+    // E fica esquecimento para o gestor fechar à mão.
+    expect(seg?.hours.missingExit).toBe(true);
+    // Terça não tem intervalo utilizável (ENTRADA rejeitada) — a SAIDA
+    // órfã não conta horas nem para trás nem para a frente.
+    const ter = out.days.find(
+      (d) => d.date === "2026-01-06" && d.userId === "u1"
+    );
+    expect(ter?.hours.workedMinutes ?? 0).toBe(0);
+  });
+
+  it("fecho no MESMO dia civil continua a emparelhar (caso preservado)", async () => {
+    const normais = [
+      row("n1", "2026-01-05T09:00:00.000Z", "ENTRADA", null),
+      row("n2", "2026-01-05T18:00:00.000Z", "SAIDA", null),
+    ];
+    const out = await getHours(prismaCom(normais), TZ, range, undefined);
+    const seg = out.days.find(
+      (d) => d.date === "2026-01-05" && d.userId === "u1"
+    );
+    expect(seg?.hours.workedMinutes).toBe(540);
+    expect(seg?.hours.missingExit).toBe(false);
+  });
+
+  it("missing-exits lista a segunda — o fecho de terça não a resolve", async () => {
+    const out = await getMissingExits(prismaCom(rows), TZ, range);
+    expect(out.some((m) => m.date === "2026-01-05" && m.userId === "u1")).toBe(
+      true
+    );
   });
 });
