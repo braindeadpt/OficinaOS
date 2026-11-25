@@ -257,7 +257,13 @@ beforeEach(() => {
   clearAllPendingPonto();
   clearPontoReminderState();
   vi.clearAllMocks();
-  mocks.findShopSettingsUnique.mockResolvedValue(makeSettings());
+  // makeSettings avalia-se na chamada, não aqui: os testes com timers
+  // falsos recuam o relógio para janeiro e um cloudSyncedAt criado em
+  // tempo real ficaria meses no futuro — isModuleEnabled rejeita
+  // syncs futuros (skew >5 min) e o gate do ponto fechava.
+  mocks.findShopSettingsUnique.mockImplementation(() =>
+    Promise.resolve(makeSettings())
+  );
   mocks.userFindMany.mockResolvedValue([staffUser()]);
   mocks.resolveWhatsAppChannel.mockReturnValue(EVOLUTION_CHANNEL);
   mocks.getSmsConfig.mockReturnValue(null);

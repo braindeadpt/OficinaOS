@@ -112,11 +112,18 @@ function makeSettings(over: Record<string, unknown> = {}) {
 
 function makePrisma(staffUsers: unknown[] = [], customers: unknown[] = []) {
   return {
+    // findCustomersByPhone (bot-intents) pré-filtra em SQL sobre os
+    // dígitos e lê o país da loja em shopSettings — o mock devolve as
+    // fichas ao $queryRaw e deixa o casamento exato em memória decidir.
+    $queryRaw: vi.fn(() => Promise.resolve(customers)),
     customer: {
       findMany: vi.fn(() => Promise.resolve(customers)),
       update: vi.fn(() => Promise.resolve({})),
     },
     job: { findMany: vi.fn(() => Promise.resolve([])) },
+    shopSettings: {
+      findUnique: vi.fn(() => Promise.resolve({ countryCode: "PT" })),
+    },
     user: { findMany: vi.fn(() => Promise.resolve(staffUsers)) },
   };
 }
@@ -218,7 +225,13 @@ function evaluateBody(): Record<string, unknown> {
 beforeEach(() => {
   vi.clearAllMocks();
   clearAllPendingPonto();
-  mocks.getOrCreateShopSettings.mockResolvedValue(makeSettings());
+  // makeSettings avalia-se na chamada, não aqui: os testes com timers
+  // falsos recuam o relógio para janeiro e um cloudSyncedAt criado em
+  // tempo real ficaria meses no futuro — isModuleEnabled rejeita
+  // syncs futuros (skew >5 min) e o gate do ponto fechava.
+  mocks.getOrCreateShopSettings.mockImplementation(() =>
+    Promise.resolve(makeSettings())
+  );
   cloudOk();
 });
 
@@ -1176,7 +1189,7 @@ describe("separação staff ↔ clientes (handleInboundMessage)", () => {
     // …mas a revogação de consentimento corre na mesma — sem ela os
     // avisos automáticos continuavam autorizados.
     expect(prisma.customer.update).toHaveBeenCalledWith({
-      data: { whatsappConsent: false },
+      data: { whatsappConsent: false, whatsappConsentAt: null },
       where: { id: "cust-1" },
     });
     // E nunca chegou ao pipeline de clientes.
