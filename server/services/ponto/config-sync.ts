@@ -15,10 +15,14 @@ import type { FastifyBaseLogger } from "fastify";
 import { decryptSecret } from "../../lib/crypto.js";
 import { getOrCreateShopSettings } from "../../repositories/settings.repository.js";
 import type { DbClient } from "../../repositories/types.js";
+import { isModuleEnabled } from "../../utils/modules.js";
 import { cloudFetch } from "../cloud.service.js";
 
 export interface PontoStaffConfigRow {
   externalWork: boolean;
+  /** Última ENTRADA efetiva local — a Cloud usa-a para validar
+   *  pausa/saída após entrada manual ou corrigida. */
+  lastEntryAt?: string;
   phone: string;
   smsAllowed: boolean;
 }
@@ -49,6 +53,7 @@ export function buildPontoConfigPayload(
   settings: PontoSettingsRow,
   staffUsers: {
     externalWork: boolean;
+    lastEntryAt?: Date | null;
     phoneE164: string | null;
     pontoSmsAllowed: boolean;
   }[]
@@ -69,6 +74,7 @@ export function buildPontoConfigPayload(
       .filter((u) => u.phoneE164)
       .map((u) => ({
         externalWork: u.externalWork,
+        ...(u.lastEntryAt ? { lastEntryAt: u.lastEntryAt.toISOString() } : {}),
         phone: u.phoneE164 as string,
         smsAllowed: u.pontoSmsAllowed,
       })),
@@ -82,14 +88,30 @@ export function buildPontoConfigPayload(
 
 /** Escala completa: Users ativos com pontoEnabled e telefone registado. */
 async function fetchPontoStaffUsers(prisma: DbClient) {
-  return await prisma.user.findMany({
+  const users = await prisma.user.findMany({
     select: {
       externalWork: true,
+      id: true,
       phoneE164: true,
       pontoSmsAllowed: true,
     },
     where: { isActive: true, pontoEnabled: true },
   });
+  const ids = users.map((u) => u.id);
+  const entries = ids.length
+    ? await prisma.timeEntry.findMany({
+        orderBy: { at: "desc" },
+        select: { at: true, userId: true },
+        where: { type: "ENTRADA", userId: { in: ids } },
+      })
+    : [];
+  const latest = new Map<string, Date>();
+  for (const entry of entries) {
+    if (!latest.has(entry.userId)) {
+      latest.set(entry.userId, entry.at);
+    }
+  }
+  return users.map((u) => ({ ...u, lastEntryAt: latest.get(u.id) ?? null }));
 }
 
 export interface PontoConfigPushResult {
@@ -110,6 +132,11 @@ export async function pushPontoCloudConfig(
 ): Promise<PontoConfigPushResult | null> {
   const settings = await getOrCreateShopSettings(prisma).catch(() => null);
   if (!(settings?.cloudApiUrl && settings.cloudShopTokenEncrypted)) {
+    return null;
+  }
+  // Privacidade/minimização: sem entitlement fresco de ponto não há
+  // finalidade para enviar a lista de telefones à Cloud.
+  if (!isModuleEnabled(settings, "ponto")) {
     return null;
   }
   const staff = await fetchPontoStaffUsers(prisma);

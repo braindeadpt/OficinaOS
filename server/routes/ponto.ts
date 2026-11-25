@@ -375,6 +375,10 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
         getUserId(req),
         body.data
       );
+      // Entradas manuais/correções mudam o estado que a Cloud usa para
+      // validar pausas/saídas. Best-effort e fora da resposta: uma Cloud
+      // em baixo não pode impedir o livro legal local.
+      pushPontoCloudConfig(app.prisma, req.log).catch(() => null);
       return reply.status(201).send(result);
     }
   );

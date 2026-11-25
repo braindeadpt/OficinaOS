@@ -320,7 +320,11 @@ export default function SettingsPontoSection({
     setRegenerating(true);
     try {
       await api.post("/ponto/regenerate-qr");
-      await refresh();
+      // Só o qrId/config mudou — refresh() reescreveria o rascunho por
+      // guardar da secção. As definições locais continuam exatamente como
+      // o utilizador as tinha.
+      const cfg = await api.get<PontoConfig>("/ponto/config");
+      setConfig(cfg.data);
       onToast(t("ponto.qr_regenerated"), "success");
     } catch (err) {
       onToast(getErrorMessage(err, t("ponto.qr_regenerate_failed")), "error");
