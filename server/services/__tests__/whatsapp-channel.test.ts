@@ -205,9 +205,11 @@ describe("sendWhatsAppText", () => {
     });
   });
 
-  it("does not delete a replacement token when an older cloud send finishes", async () => {
+  it.each([
+    false,
+    true,
+  ])("does not delete a replacement token when an older cloud send finishes (cloud flag %s)", async (credentialsAtCloud) => {
     let storedToken: string | null = "enc:replacement";
-    const credentialsAtCloud = false;
     updateManySettings.mockImplementation(
       ({
         data,
@@ -254,7 +256,7 @@ describe("sendWhatsAppText", () => {
       { ...entitled, whatsappApiTokenEncrypted: "enc:meta" }
     );
     expect(res.success).toBe(false);
-    expect(updateSettings).not.toHaveBeenCalled();
+    expect(updateManySettings).not.toHaveBeenCalled();
   });
 
   it("reports waiting-for-cloud when unreachable", async () => {
