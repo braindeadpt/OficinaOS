@@ -262,6 +262,7 @@ describe("ponto — gate de escrita sem módulo (WP0.5)", () => {
       "/api/ponto/decided",
       "/api/ponto/now",
       "/api/ponto/hours?from=2026-01-05&to=2026-01-11",
+      "/api/ponto/missing-exits?from=2026-01-05&to=2026-01-11",
     ]) {
       const res = await app.inject({ method: "GET", url });
       expect(res.statusCode).toBe(200);
