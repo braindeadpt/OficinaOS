@@ -232,4 +232,30 @@ describe("ai-inbox link — idempotência e cancelamento", () => {
       error: "conta desativada",
     });
   });
+
+  it("resultado cancelado não fica em cache — o retry volta a executar", async () => {
+    const frame = {
+      args: { rascunhoId: "draft-c" },
+      idempotencyKey: "test-key-cancelled",
+      tool: "enviar_rascunho",
+      userId: "u-owner",
+    };
+    mocks.runStaffInboxTool.mockResolvedValueOnce({
+      error: "cancelado",
+    } as never);
+    await handleCall(app, "https://cloud.example", "tok", {
+      ...frame,
+      callId: "cancel-1",
+    });
+    await handleCall(app, "https://cloud.example", "tok", {
+      ...frame,
+      callId: "cancel-2",
+    });
+    expect(mocks.runStaffInboxTool).toHaveBeenCalledTimes(2);
+    expect(mocks.canReplayStaffInboxTool).not.toHaveBeenCalled();
+    expect(responseBodies()).toEqual([
+      { callId: "cancel-1", error: "cancelado" },
+      { callId: "cancel-2", result: { ok: true } },
+    ]);
+  });
 });

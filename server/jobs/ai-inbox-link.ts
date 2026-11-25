@@ -164,11 +164,20 @@ async function executionFor(
     promise,
     settled: false,
   };
-  const markSettled = () => {
+  const markSettled = (out?: ToolOutcome) => {
     execution.settled = true;
     execution.expiresAt = Date.now() + IDEMPOTENCY_TTL_MS;
+    // Cancelado = nada foi feito (claim revertido): o retry com a mesma
+    // chave tem de voltar a executar, não repetir o cancelamento.
+    if (
+      idempotencyKey &&
+      out?.error === "cancelado" &&
+      idempotentCalls.get(idempotencyKey) === execution
+    ) {
+      idempotentCalls.delete(idempotencyKey);
+    }
   };
-  promise.then(markSettled, markSettled);
+  promise.then(markSettled, () => markSettled());
   if (idempotencyKey) {
     idempotentCalls.set(idempotencyKey, execution);
     pruneIdempotentCalls();
