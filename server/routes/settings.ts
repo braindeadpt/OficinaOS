@@ -1061,7 +1061,14 @@ async function resolveEvolutionCallbackBase(
         return Promise.resolve(`https://${url.host}`);
       }
       if (url.protocol === "http:") {
-        return callbackBaseForHostResolved(url.host, context);
+        // APP_URL é um par endereço+esquema explícito: o protocolo do
+        // pedido (potencialmente HTTPS externo reescrito por proxy) não se
+        // aplica a este endereço. Um IP privado configurado em HTTP fica em
+        // HTTP; um host público continua a falhar fechado para HTTPS.
+        return callbackBaseForHostResolved(url.host, {
+          ...context,
+          protocol: "http",
+        });
       }
     } catch {
       // APP_URL malformada — segue para o fallback docker.
