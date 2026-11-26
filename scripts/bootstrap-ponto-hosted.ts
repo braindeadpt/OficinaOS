@@ -185,10 +185,22 @@ export async function bootstrapPontoHosted(
     );
   }
 
-  const shopSettings = await api("/api/settings/shop");
-  const actualMode = (shopSettings.body as { shopMode?: unknown } | null)
+  let shopSettings = await api("/api/settings/shop");
+  let actualMode = (shopSettings.body as { shopMode?: unknown } | null)
     ?.shopMode;
   if (shopSettings.ok && actualMode !== options.shopMode) {
+    // Instalador/admin: se o setup inicial correu com uma imagem antiga,
+    // ainda conseguimos corrigir antes do emparelhamento. Numa imagem sem
+    // suporte a shopMode o PUT é ignorado e a segunda leitura falha fechada.
+    await api("/api/settings/shop", {
+      body: { shopMode: options.shopMode },
+      method: "PUT",
+    });
+    shopSettings = await api("/api/settings/shop");
+    actualMode = (shopSettings.body as { shopMode?: unknown } | null)
+      ?.shopMode;
+  }
+  if (!(shopSettings.ok && actualMode === options.shopMode)) {
     throw new Error(
       `a imagem instalada não aplicou shopMode=${options.shopMode} (atual: ${String(actualMode)}) — atualize PONTO_IMAGE antes de emparelhar`
     );
