@@ -1,0 +1,9 @@
+[Unit]
+Description=Agendamento mensal do teste de restauro dos backups do ponto
+
+[Timer]
+OnCalendar=*-*-01 04:11:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

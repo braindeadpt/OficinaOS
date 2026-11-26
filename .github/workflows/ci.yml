@@ -204,80 +204,115 @@ jobs:
         run: |
           psql --host=localhost --username=reparilo --dbname=reparilo_test \
             --command="CREATE TABLE backup_probe (id serial primary key, marker text);" \
-            --command="INSERT INTO backup_probe (marker) VALUES ('round-trip-marker');"
+            --command="INSERT INTO backup_probe (marker) VALUES ('round-trip-marker');" \
+            --command="INSERT INTO users(id, username, email, password, role, \"isActive\", \"createdAt\", \"updatedAt\") VALUES ('backup-user', 'backupuser', 'backup@example.invalid', 'not-a-real-password', 'TECHNICIAN', true, now(), now());" \
+            --command="INSERT INTO time_entries(id, \"userId\", type, at, transport, status, proofs, \"createdAt\") VALUES ('backup-entry', 'backup-user', 'ENTRADA', now(), 'MANUAL', 'APROVADO', '{}', now());"
       - name: Start S3-compatible object store (rclone serve s3)
         run: |
           curl -s https://rclone.org/install.sh | sudo bash
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq age
           rclone version
+          age-keygen -o /tmp/ponto-backup-age-key.txt
+          chmod 600 /tmp/ponto-backup-age-key.txt
+          grep 'public key:' /tmp/ponto-backup-age-key.txt
+          S3_ACCESS_KEY="ci$(openssl rand -hex 8)"
+          S3_SECRET_KEY="$(openssl rand -hex 32)"
           mkdir -p /tmp/offsite-store
           # Background server: detach stdin/stdout/stderr so the step can
           # finish while the server keeps running.
           nohup rclone serve s3 /tmp/offsite-store \
             --addr 127.0.0.1:9000 \
-            --auth-key minio,miniosecret \
+            --auth-key "${S3_ACCESS_KEY},${S3_SECRET_KEY}" \
             > /tmp/rclone-s3.log 2>&1 < /dev/null &
           sleep 2
           echo "--- serve s3 log ---"
           cat /tmp/rclone-s3.log
           pgrep -fa "rclone serve" || { echo "server died at boot"; exit 1; }
-          export RCLONE_CONFIG_MINIO_TYPE=s3 \
-            RCLONE_CONFIG_MINIO_ACCESS_KEY_ID=minio \
-            RCLONE_CONFIG_MINIO_SECRET_ACCESS_KEY=miniosecret \
-            RCLONE_CONFIG_MINIO_ENDPOINT=http://127.0.0.1:9000 \
-            RCLONE_CONFIG_MINIO_FORCE_PATH_STYLE=true
+          export RCLONE_CONFIG_PONTOBACKUP_TYPE=s3 \
+            RCLONE_CONFIG_PONTOBACKUP_PROVIDER=Other \
+            RCLONE_CONFIG_PONTOBACKUP_ACCESS_KEY_ID="${S3_ACCESS_KEY}" \
+            RCLONE_CONFIG_PONTOBACKUP_SECRET_ACCESS_KEY="${S3_SECRET_KEY}" \
+            RCLONE_CONFIG_PONTOBACKUP_ENDPOINT=http://127.0.0.1:9000 \
+            RCLONE_CONFIG_PONTOBACKUP_FORCE_PATH_STYLE=true
           # Bounded readiness probe: never hang the step.
           timeout 60 bash -c '
-            until rclone lsd minio: --contimeout 2s --timeout 5s --retries 1 \
+            until rclone lsd pontobackup: --contimeout 2s --timeout 5s --retries 1 \
               >/dev/null 2>&1; do sleep 2; done
           ' || {
             echo "--- probe failed, server log: ---"
             tail -30 /tmp/rclone-s3.log
             exit 1
           }
-          timeout 30 rclone mkdir minio:oficinaos-backups \
+          timeout 30 rclone mkdir pontobackup:oficinaos-backups \
             --contimeout 2s --timeout 5s --retries 1
           {
-            echo "RCLONE_CONFIG_MINIO_TYPE=s3"
-            echo "RCLONE_CONFIG_MINIO_ACCESS_KEY_ID=minio"
-            echo "RCLONE_CONFIG_MINIO_SECRET_ACCESS_KEY=miniosecret"
-            echo "RCLONE_CONFIG_MINIO_ENDPOINT=http://127.0.0.1:9000"
-            echo "RCLONE_CONFIG_MINIO_FORCE_PATH_STYLE=true"
-            echo "BACKUP_RCLONE_REMOTE=minio:oficinaos-backups"
+            echo "RCLONE_CONFIG_PONTOBACKUP_TYPE=s3"
+            echo "RCLONE_CONFIG_PONTOBACKUP_PROVIDER=Other"
+            echo "RCLONE_CONFIG_PONTOBACKUP_ACCESS_KEY_ID=${S3_ACCESS_KEY}"
+            echo "RCLONE_CONFIG_PONTOBACKUP_SECRET_ACCESS_KEY=${S3_SECRET_KEY}"
+            echo "RCLONE_CONFIG_PONTOBACKUP_ENDPOINT=http://127.0.0.1:9000"
+            echo "RCLONE_CONFIG_PONTOBACKUP_FORCE_PATH_STYLE=true"
+            echo "BACKUP_S3_ENDPOINT=http://127.0.0.1:9000"
+            echo "BACKUP_S3_BUCKET=oficinaos-backups"
+            echo "BACKUP_S3_ACCESS_KEY_ID=${S3_ACCESS_KEY}"
+            echo "BACKUP_S3_SECRET_ACCESS_KEY=${S3_SECRET_KEY}"
+            echo "BACKUP_AGE_KEY_FILE=/tmp/ponto-backup-age-key.txt"
+            echo "BACKUP_AGE_PUBLIC_KEY=$(grep 'public key:' /tmp/ponto-backup-age-key.txt | awk '{print $4}')"
           } >> "$GITHUB_ENV"
           echo "object store ready"
-      - name: Backup with off-site copy and restore verification
+      - name: Encrypted backup with off-site copy and restore verification
         run: |
           BACKUP_DIR=/tmp/backups HEARTBEAT_DIR=/tmp/heartbeat \
-            BACKUP_REMOTE_ENABLED=true \
-            RESTORE_CHECK_SCRIPT="$PWD/scripts/db-restore-check.sh" \
+            BACKUP_REMOTE_ENABLED=true BACKUP_REQUIRE_ENCRYPTION=true \
+            BACKUP_ONCE_PER_DAY=true \
             PGHOST=localhost PGUSER=reparilo PGDATABASE=reparilo_test \
             bash scripts/db-backup.sh
           test -f /tmp/heartbeat/last-backup.txt
           echo "heartbeat: $(cat /tmp/heartbeat/last-backup.txt)"
-          # Second destination: object stored in MinIO with its own heartbeat.
           test -f /tmp/heartbeat/last-remote-copy.txt
           echo "remote copy: $(cat /tmp/heartbeat/last-remote-copy.txt)"
-          rclone lsf minio:oficinaos-backups --include 'oficinaos-*.sql.gz'
-          # Weekly restore verification ran against the remote copy.
-          test -f /tmp/heartbeat/last-restore-check.txt
-          echo "restore check: $(cat /tmp/heartbeat/last-restore-check.txt)"
+          object="$(rclone lsf pontobackup:oficinaos-backups --include 'oficinaos-*.dump.age' | sort | tail -1)"
+          test -n "$object"
+          echo "remote object: $object"
+          rclone copyto "pontobackup:oficinaos-backups/$object" /tmp/remote-backup.dump.age
+          magic="$(head -c 21 /tmp/remote-backup.dump.age)"
+          echo "remote magic: $magic"
+          [ "$magic" = "age-encryption.org/v1" ]
+          before="$(rclone lsf pontobackup:oficinaos-backups --include 'oficinaos-*.dump.age' | wc -l)"
+          BACKUP_DIR=/tmp/backups HEARTBEAT_DIR=/tmp/heartbeat \
+            BACKUP_REMOTE_ENABLED=true BACKUP_REQUIRE_ENCRYPTION=true \
+            BACKUP_ONCE_PER_DAY=true \
+            PGHOST=localhost PGUSER=reparilo PGDATABASE=reparilo_test \
+            bash scripts/db-backup.sh | tee /tmp/backup-second.log
+          grep -q 'já existe um backup concluído hoje' /tmp/backup-second.log
+          after="$(rclone lsf pontobackup:oficinaos-backups --include 'oficinaos-*.dump.age' | wc -l)"
+          echo "objects before/after idempotent rerun: $before/$after"
+          [ "$before" = "$after" ]
+          BACKUP_DIR=/tmp/restore-check HEARTBEAT_DIR=/tmp/restore-check-heartbeat \
+            PGHOST=localhost PGUSER=reparilo \
+            bash scripts/db-restore-check.sh
+          test -f /tmp/restore-check-heartbeat/last-restore-check.txt
+          echo "restore check: $(cat /tmp/restore-check-heartbeat/last-restore-check.txt)"
       - name: Wipe the database
         run: |
           psql --host=localhost --username=reparilo --dbname=reparilo_test \
             --set=ON_ERROR_STOP=1 \
             --command="DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
-      - name: Restore from the off-site copy and verify
+      - name: Restore from the encrypted off-site copy and verify
         run: |
-          # Re-download from the object store: proves the off-site copy is
-          # usable end-to-end, not just the local dump.
-          rclone copy "minio:oficinaos-backups" /tmp/offsite --include 'oficinaos-*.sql.gz'
+          mkdir -p /tmp/offsite
+          object="$(rclone lsf pontobackup:oficinaos-backups --include 'oficinaos-*.dump.age' | sort | tail -1)"
+          rclone copyto "pontobackup:oficinaos-backups/$object" /tmp/offsite/backup.dump.age
+          age -d -i /tmp/ponto-backup-age-key.txt -o /tmp/offsite/backup.dump /tmp/offsite/backup.dump.age
+          chmod 600 /tmp/offsite/backup.dump
           RESTORE_AUTO_CONFIRM=1 BACKUP_DIR=/tmp/backups \
             PGHOST=localhost PGUSER=reparilo PGDATABASE=reparilo_test \
-            bash scripts/db-restore.sh "$(ls -1t /tmp/offsite/oficinaos-*.sql.gz | head -1)"
+            bash scripts/db-restore.sh /tmp/offsite/backup.dump
           COUNT=$(psql --host=localhost --username=reparilo --dbname=reparilo_test \
             --tuples-only --no-align \
             --command="SELECT count(*) FROM backup_probe WHERE marker = 'round-trip-marker';")
-          echo "probe rows after off-site restore: $COUNT"
+          echo "probe rows after encrypted off-site restore: $COUNT"
           [ "$COUNT" = "1" ]
       - name: Ponto purge survives the restore (WP0.3)
         # O dump não traz papéis, donos nem grants — é o provisioning do

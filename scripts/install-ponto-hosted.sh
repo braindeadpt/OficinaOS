@@ -40,6 +40,26 @@ ensure_env_secret() {
   printf '%s=%s\n' "$key" "$current" >>"$file.tmp"
 }
 
+copy_env_setting() {
+  local key="$1" file="$2" value
+  value="${!key:-}"
+  if [ -z "$value" ]; then
+    value="$(env_value "$key" "$file")"
+  fi
+  if [ -n "$value" ]; then
+    printf '%s=%s\n' "$key" "$value" >>"$file.tmp"
+  fi
+}
+
+configured_value() {
+  local key="$1" file="$2" value
+  value="${!key:-}"
+  if [ -z "$value" ]; then
+    value="$(env_value "$key" "$file")"
+  fi
+  printf '%s' "$value"
+}
+
 b64() {
   printf '%s' "$1" | base64 | tr -d '\n'
 }
@@ -75,6 +95,10 @@ PONTO_ENABLE_EVOLUTION="${PONTO_ENABLE_EVOLUTION:-true}"
 PONTO_ACME_EMAIL="${PONTO_ACME_EMAIL:-admin@oficinaos.app}"
 PONTO_NETWORK="${PONTO_NETWORK:-oficinaos-ponto-proxy}"
 PONTO_EXISTING_AI_ENCRYPTION_KEY="${PONTO_EXISTING_AI_ENCRYPTION_KEY:-}"
+PONTO_BACKUP_ONCALENDAR="${PONTO_BACKUP_ONCALENDAR:-*-*-* 03:17:00}"
+PONTO_SCHEDULER="${PONTO_SCHEDULER:-auto}"
+PONTO_SYSTEMD_DIR="${PONTO_SYSTEMD_DIR:-}"
+PONTO_CRON_DIR="${PONTO_CRON_DIR:-}"
 
 case "$PONTO_CLIENT_SLUG" in
   *[!a-z0-9-]*|"") die "PONTO_CLIENT_SLUG só pode ter minúsculas, dígitos e hífenes" ;;
@@ -103,11 +127,15 @@ esac
 case "$PONTO_BASE_DOMAIN" in
   *[!a-zA-Z0-9.-]*|""|.*|*-|*.-*|*..*) die "PONTO_BASE_DOMAIN inválido" ;;
 esac
-for var in PONTO_BASE_DOMAIN PONTO_CLOUD_API_URL PONTO_IMAGE PONTO_TZ; do
+for var in PONTO_BASE_DOMAIN PONTO_CLOUD_API_URL PONTO_IMAGE PONTO_TZ PONTO_BACKUP_ONCALENDAR; do
   case "${!var}" in
     *$'\n'*|*$'\r'*) die "$var não pode ter quebras de linha" ;;
   esac
 done
+case "$PONTO_SCHEDULER" in
+  auto|systemd|cron|none) ;;
+  *) die "PONTO_SCHEDULER tem de ser auto, systemd, cron ou none" ;;
+esac
 
 HOSTNAME_CLIENTE="${PONTO_CLIENT_SLUG}.${PONTO_BASE_DOMAIN}"
 CLIENT_DIR="${PONTO_HOST_ROOT}/clientes/${PONTO_CLIENT_SLUG}"
@@ -119,6 +147,7 @@ mkdir -p "$CLIENT_DIR/scripts" "$PROXY_DIR"
 chmod 700 "$PONTO_HOST_ROOT" "$PONTO_HOST_ROOT/clientes" "$CLIENT_DIR" 2>/dev/null || true
 
 install -m 0755 "$REPO_ROOT/scripts/db-backup.sh" "$CLIENT_DIR/scripts/db-backup.sh"
+install -m 0755 "$REPO_ROOT/scripts/db-backup-remote.sh" "$CLIENT_DIR/scripts/db-backup-remote.sh"
 install -m 0755 "$REPO_ROOT/scripts/db-restore.sh" "$CLIENT_DIR/scripts/db-restore.sh"
 install -m 0755 "$REPO_ROOT/scripts/db-restore-check.sh" "$CLIENT_DIR/scripts/db-restore-check.sh"
 install -m 0644 "$REPO_ROOT/scripts/bootstrap-ponto-hosted.ts" "$CLIENT_DIR/bootstrap-ponto-hosted.ts"
@@ -150,6 +179,14 @@ fi
 # Credenciais rclone exportadas no operador entram no .env gerado; o
 # db-backup só as usa quando BACKUP_REMOTE_ENABLED=true.
 { env | grep '^RCLONE_CONFIG_' || true; grep '^RCLONE_CONFIG_' "$ENV_FILE" 2>/dev/null || true; } | awk -F= '!seen[$1]++' >>"$ENV_FILE.tmp"
+for key in BACKUP_AGE_PUBLIC_KEY BACKUP_ALERT_WEBHOOK_URL BACKUP_ALERT_LABEL BACKUP_S3_ENDPOINT BACKUP_S3_BUCKET BACKUP_S3_ACCESS_KEY_ID BACKUP_S3_SECRET_ACCESS_KEY BACKUP_S3_REGION BACKUP_S3_PROVIDER BACKUP_S3_FORCE_PATH_STYLE; do
+  copy_env_setting "$key" "$ENV_FILE"
+done
+BACKUP_REMOTE_ENABLED_VALUE="$(configured_value BACKUP_REMOTE_ENABLED "$ENV_FILE")"
+BACKUP_REMOTE_ENABLED_VALUE="${BACKUP_REMOTE_ENABLED_VALUE:-true}"
+BACKUP_RCLONE_REMOTE_VALUE="$(configured_value BACKUP_RCLONE_REMOTE "$ENV_FILE")"
+BACKUP_S3_PREFIX_VALUE="$(configured_value BACKUP_S3_PREFIX "$ENV_FILE")"
+BACKUP_S3_PREFIX_VALUE="${BACKUP_S3_PREFIX_VALUE:-clientes/${PONTO_CLIENT_SLUG}}"
 cat >>"$ENV_FILE.tmp" <<EOF
 COMPOSE_PROJECT_NAME=ponto-${PONTO_CLIENT_SLUG}
 COMPOSE_PROFILES=wa-local
@@ -161,13 +198,49 @@ TZ=${PONTO_TZ}
 APP_URL=https://${HOSTNAME_CLIENTE}
 API_URL=https://${HOSTNAME_CLIENTE}
 TRUST_PROXY=true
-BACKUP_REMOTE_ENABLED=${BACKUP_REMOTE_ENABLED:-false}
-BACKUP_RCLONE_REMOTE=${BACKUP_RCLONE_REMOTE:-}
-RESTORE_CHECK_INTERVAL_DAYS=${RESTORE_CHECK_INTERVAL_DAYS:-7}
+BACKUP_REMOTE_ENABLED=${BACKUP_REMOTE_ENABLED_VALUE}
+BACKUP_RCLONE_REMOTE=${BACKUP_RCLONE_REMOTE_VALUE}
+BACKUP_REQUIRE_ENCRYPTION=true
+BACKUP_S3_PREFIX=${BACKUP_S3_PREFIX_VALUE}
 EOF
 cat "$ENV_FILE.tmp" >"$ENV_FILE"
 rm -f "$ENV_FILE.tmp"
 chmod 600 "$ENV_FILE"
+
+for key in BACKUP_AGE_PUBLIC_KEY BACKUP_ALERT_WEBHOOK_URL BACKUP_ALERT_LABEL BACKUP_S3_ENDPOINT BACKUP_S3_BUCKET BACKUP_S3_PREFIX BACKUP_S3_ACCESS_KEY_ID BACKUP_S3_SECRET_ACCESS_KEY BACKUP_S3_REGION BACKUP_S3_PROVIDER BACKUP_S3_FORCE_PATH_STYLE; do
+  value="$(env_value "$key" "$ENV_FILE")"
+  case "$value" in
+    *$'\n'*|*$'\r'*) die "$key não pode ter quebras de linha" ;;
+  esac
+done
+backup_s3_endpoint="$(env_value BACKUP_S3_ENDPOINT "$ENV_FILE")"
+if [ -n "$backup_s3_endpoint" ]; then
+  case "$backup_s3_endpoint" in
+    https://*|http://localhost*|http://127.0.0.1*) ;;
+    *) die "BACKUP_S3_ENDPOINT tem de ser https (ou loopback em testes)" ;;
+  esac
+fi
+backup_age_key="$(env_value BACKUP_AGE_PUBLIC_KEY "$ENV_FILE")"
+if [ -z "$backup_age_key" ]; then
+  die "BACKUP_AGE_PUBLIC_KEY é obrigatória; gera uma chave age na máquina de operador e exporta só a chave pública"
+fi
+case "$backup_age_key" in
+  age1*) ;;
+  *) die "BACKUP_AGE_PUBLIC_KEY tem de começar por age1" ;;
+esac
+case "$backup_age_key" in
+  *$'\n'*|*$'\r'*) die "BACKUP_AGE_PUBLIC_KEY não pode ter quebras de linha" ;;
+esac
+if [ "$(env_value BACKUP_REMOTE_ENABLED "$ENV_FILE")" != "true" ]; then
+  die "o ponto alojado exige BACKUP_REMOTE_ENABLED=true para enviar o backup cifrado para fora do servidor"
+fi
+if [ -z "$(env_value BACKUP_RCLONE_REMOTE "$ENV_FILE")" ]; then
+  for key in BACKUP_S3_ENDPOINT BACKUP_S3_BUCKET BACKUP_S3_ACCESS_KEY_ID BACKUP_S3_SECRET_ACCESS_KEY; do
+    if [ -z "$(env_value "$key" "$ENV_FILE")" ]; then
+      die "variável obrigatória de backup remoto em falta: $key"
+    fi
+  done
+fi
 
 cat >"$CLIENT_DIR/docker-compose.yml" <<'EOF'
 services:
@@ -236,28 +309,30 @@ services:
       PGDATABASE: reparilo
       BACKUP_DIR: /backups
       RETENTION_DAYS: "30"
+      BACKUP_ONCE_PER_DAY: "true"
       HEARTBEAT_DIR: /backups-status
       BACKUP_REMOTE_ENABLED: ${BACKUP_REMOTE_ENABLED:-false}
       BACKUP_RCLONE_REMOTE: ${BACKUP_RCLONE_REMOTE:-}
-      RESTORE_CHECK_INTERVAL_DAYS: ${RESTORE_CHECK_INTERVAL_DAYS:-7}
     volumes:
       - backups:/backups
       - backups-heartbeat:/backups-status
       - ./scripts/db-backup.sh:/scripts/run-backup.sh:ro
+      - ./scripts/db-backup-remote.sh:/scripts/db-backup-remote.sh:ro
       - ./scripts/db-restore.sh:/scripts/run-restore.sh:ro
       - ./scripts/db-restore-check.sh:/scripts/run-restore-check.sh:ro
     entrypoint:
       - sh
       - -c
       - |
-        for i in 1 2 3 4 5; do apk add --no-cache bash >/dev/null 2>&1 && break; sleep 5; done
+        for i in 1 2 3 4 5; do apk add --no-cache bash age curl >/dev/null 2>&1 && break; sleep 5; done
         if [ "${BACKUP_REMOTE_ENABLED:-false}" = "true" ]; then
           apk add --no-cache rclone >/dev/null 2>&1 || echo '[db-backup] WARN: rclone install failed'
         fi
-        while true; do
-          bash /scripts/run-backup.sh || echo '[db-backup] failed, retrying tomorrow'
-          sleep 86400
-        done
+        # O agendamento fica no systemd/cron do anfitrião: assim o código de
+        # saída, o estado e os logs do backup não dependem deste contentor
+        # estar continuamente acordado. Ele fica como caixa de ferramentas
+        # para execuções manuais e para o timer.
+        while true; do sleep 86400; done
 
   evolution:
     image: evoapicloud/evolution-api:v2.3.6
@@ -489,19 +564,114 @@ backup_container="$(cd "$CLIENT_DIR" && docker compose ps -q db-backup 2>/dev/nu
 # idempotentes não mudaram dados e dumps extra competiam com a retenção diária.
 latest_backup=""
 if [ -n "$backup_container" ]; then
-  latest_backup="$(docker exec "$backup_container" sh -c "find /backups -maxdepth 1 -type f -name 'oficinaos-*.sql.gz' -mtime -1 -print -quit" 2>/dev/null || true)"
+  latest_backup="$(docker exec "$backup_container" sh -c "find /backups -maxdepth 1 -type f \( -name 'oficinaos-*.dump.age' -o -name 'oficinaos-*.sql.gz' \) -mtime -1 -print -quit" 2>/dev/null || true)"
 fi
 # Na primeira instalação forçar um dump depois do bootstrap: o dump de arranque
 # do contentor ainda não tem proprietário nem emparelhamento. Em reexecuções,
 # um backup nas últimas 24h chega.
 if [ -n "$backup_container" ] && { [ ! -f "$CLIENT_DIR/.bootstrap-backup-done" ] || [ -z "$latest_backup" ]; }; then
-  if docker exec "$backup_container" bash /scripts/run-backup.sh >/dev/null 2>&1; then
+  # O contentor instala age/rclone no arranque. Esperar um curto período para
+  # o primeiro backup pós-bootstrap não falhar só por essa corrida.
+  for attempt in $(seq 1 30); do
+    if docker exec "$backup_container" sh -c 'command -v age >/dev/null 2>&1 && command -v rclone >/dev/null 2>&1' >/dev/null 2>&1; then
+      break
+    fi
+    sleep 2
+  done
+  if docker exec -e BACKUP_FORCE=true "$backup_container" bash /scripts/run-backup.sh >/dev/null 2>&1; then
     touch "$CLIENT_DIR/.bootstrap-backup-done"
     chmod 600 "$CLIENT_DIR/.bootstrap-backup-done"
   else
     echo "AVISO: o backup pós-bootstrap falhou; verificar db-backup." >&2
   fi
 fi
+
+# Agendamento diário no anfitrião. systemd é preferido; cron é a alternativa
+# em VPS sem systemd. Em ambos os casos a execução entra pelo contentor
+# db-backup e o código de saída real do script é preservado.
+install_backup_scheduler() {
+  local docker_bin scheduler systemd_dir cron_dir service timer cronfile wrapper
+  docker_bin="$(command -v docker)"
+  scheduler="$PONTO_SCHEDULER"
+  service="oficinaos-ponto-backup-${PONTO_CLIENT_SLUG}.service"
+  timer="oficinaos-ponto-backup-${PONTO_CLIENT_SLUG}.timer"
+  wrapper="$CLIENT_DIR/scripts/run-scheduled-backup.sh"
+
+  cat >"$wrapper" <<EOF
+#!/bin/sh
+# Gerado pelo instalador: preserva o código de saída e regista um alerta
+# no anfitrião mesmo quando o contentor db-backup não pode ser executado.
+if (cd "${CLIENT_DIR}" && "${docker_bin}" compose --env-file .env exec -T db-backup bash /scripts/run-backup.sh); then
+  rm -f "${CLIENT_DIR}/backup-scheduler-alert.txt"
+  exit 0
+else
+  rc=\$?
+  printf '%s exit_code=%s\n' "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" "\$rc" >"${CLIENT_DIR}/backup-scheduler-alert.txt"
+  exit "\$rc"
+fi
+EOF
+  chmod 0700 "$wrapper"
+
+  if [ "$scheduler" = "none" ]; then
+    echo "AVISO: agendamento de backup desligado explicitamente (PONTO_SCHEDULER=none)." >&2
+    return 0
+  fi
+  if [ "$scheduler" = "auto" ]; then
+    if [ -n "$PONTO_SYSTEMD_DIR" ] || [ -d /run/systemd/system ]; then
+      scheduler="systemd"
+    else
+      scheduler="cron"
+    fi
+  fi
+
+  if [ "$scheduler" = "systemd" ]; then
+    systemd_dir="${PONTO_SYSTEMD_DIR:-/etc/systemd/system}"
+    mkdir -p "$systemd_dir"
+    cat >"$systemd_dir/$service" <<EOF
+[Unit]
+Description=Backup diário cifrado do ponto ${PONTO_CLIENT_SLUG}
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=${CLIENT_DIR}
+ExecStart=${wrapper}
+EOF
+    cat >"$systemd_dir/$timer" <<EOF
+[Unit]
+Description=Agendamento do backup diário do ponto ${PONTO_CLIENT_SLUG}
+
+[Timer]
+OnCalendar=${PONTO_BACKUP_ONCALENDAR}
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+    chmod 0644 "$systemd_dir/$service" "$systemd_dir/$timer"
+    if command -v systemctl >/dev/null 2>&1; then
+      systemctl daemon-reload >/dev/null 2>&1 || true
+      systemctl enable --now "$timer" >/dev/null
+    fi
+    return 0
+  fi
+
+  cron_dir="${PONTO_CRON_DIR:-/etc/cron.d}"
+  if [ ! -d "$cron_dir" ] && ! mkdir -p "$cron_dir" 2>/dev/null; then
+    die "não foi possível instalar timer systemd nem cron para o backup diário"
+  fi
+  mkdir -p "$CLIENT_DIR/logs"
+  chmod 700 "$CLIENT_DIR/logs"
+  cronfile="$cron_dir/oficinaos-ponto-backup-${PONTO_CLIENT_SLUG}"
+  cat >"$cronfile" <<EOF
+SHELL=/bin/sh
+17 3 * * * root ${wrapper} >> ${CLIENT_DIR}/logs/backup.log 2>&1
+EOF
+  chmod 0644 "$cronfile"
+}
+
+install_backup_scheduler
 
 printf '\nInstância pronta: https://%s\n' "$HOSTNAME_CLIENTE"
 printf 'Diretório: %s\n' "$CLIENT_DIR"
