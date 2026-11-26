@@ -2340,7 +2340,7 @@
   "whatsapp_revoke_cloud_button": "Revoke cloud credentials",
   "whatsapp_revoke_cloud_confirm_help": "This deletes the encrypted copy stored in OficinaOS Cloud and withdraws your consent. Any local Meta token still saved is also removed. To use official WhatsApp through the cloud again, enter a new token and accept the migration again.",
   "whatsapp_official_disconnected": "Official WhatsApp will not send until you reconnect the Meta account.",
-  "whatsapp_revoke_cloud_success": "Official WhatsApp will not send until you reconnect the Meta account.",
+  "whatsapp_revoke_cloud_success": "The credentials were deleted from the Cloud. Messages will no longer be sent until you reconnect WhatsApp.",
   "whatsapp_cloud_action_failed": "The WhatsApp cloud action failed. Try again.",
   "whatsapp_cloud_migration_notice_title": "Your Meta credentials are in OficinaOS Cloud",
   "whatsapp_cloud_migration_notice_body": "This shop was migrated before the explicit consent step existed. Your Meta credentials are stored encrypted in OficinaOS Cloud and WhatsApp messages are sent through the cloud relay. You can revoke them in Notifications → Channel settings.",

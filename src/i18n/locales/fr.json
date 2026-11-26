@@ -2340,7 +2340,7 @@
   "whatsapp_revoke_cloud_button": "Révoquer les identifiants du cloud",
   "whatsapp_revoke_cloud_confirm_help": "Cela supprime la copie chiffrée stockée dans OficinaOS Cloud et retire votre consentement. Tout jeton Meta local encore enregistré est également supprimé. Pour réutiliser WhatsApp officiel via le cloud, saisissez un nouveau jeton et acceptez à nouveau la migration.",
   "whatsapp_official_disconnected": "WhatsApp officiel n'enverra plus rien tant que vous n'aurez pas reconnecté le compte Meta.",
-  "whatsapp_revoke_cloud_success": "WhatsApp officiel n'enverra plus rien tant que vous n'aurez pas reconnecté le compte Meta.",
+  "whatsapp_revoke_cloud_success": "Les identifiants ont été supprimés du Cloud. Les messages ne seront plus envoyés tant que vous n'aurez pas reconnecté WhatsApp.",
   "whatsapp_cloud_action_failed": "L'action cloud WhatsApp a échoué. Réessayez.",
   "whatsapp_cloud_migration_notice_title": "Vos identifiants Meta sont dans OficinaOS Cloud",
   "whatsapp_cloud_migration_notice_body": "Cette boutique a été migrée avant que l'étape de consentement explicite n'existe. Vos identifiants Meta sont stockés chiffrés dans OficinaOS Cloud et les messages WhatsApp sont envoyés par le relais cloud. Vous pouvez les révoquer dans Notifications → Paramètres des canaux.",

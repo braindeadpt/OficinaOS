@@ -2340,7 +2340,7 @@
   "whatsapp_revoke_cloud_button": "Revogar credenciais da Cloud",
   "whatsapp_revoke_cloud_confirm_help": "Isto elimina a cópia cifrada guardada na OficinaOS Cloud e retira o seu consentimento. Qualquer token Meta ainda guardado localmente também é removido. Para voltar a utilizar o WhatsApp oficial através da Cloud, introduza um novo token e aceite novamente a migração.",
   "whatsapp_official_disconnected": "O WhatsApp oficial deixa de enviar até voltares a ligar a conta Meta.",
-  "whatsapp_revoke_cloud_success": "O WhatsApp oficial deixa de enviar até voltares a ligar a conta Meta.",
+  "whatsapp_revoke_cloud_success": "As credenciais foram apagadas da Cloud. As mensagens deixam de ser enviadas até ligares o WhatsApp de novo.",
   "whatsapp_cloud_action_failed": "A ação na Cloud do WhatsApp falhou. Tente novamente.",
   "whatsapp_cloud_migration_notice_title": "As suas credenciais Meta estão na OficinaOS Cloud",
   "whatsapp_cloud_migration_notice_body": "Esta loja foi migrada antes de existir o passo de consentimento explícito. As suas credenciais Meta estão guardadas cifradas na OficinaOS Cloud e as mensagens de WhatsApp são enviadas através do relay da Cloud. Pode revogá-las em Notificações → Definições do canal.",
