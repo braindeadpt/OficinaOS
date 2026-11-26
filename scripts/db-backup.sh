@@ -3,7 +3,7 @@
 # Runs inside the db-backup container (postgres:16-alpine) on a daily cron,
 # or manually: docker compose exec db-backup /scripts/run-backup.sh
 #
-# Output: gzipped plain-format SQL dumps named oficinaos-<UTC stamp>.sql.gz
+# Output: gzipped plain-format SQL dumps named oficinaos-<UTC stamp>-<pid>.sql.gz
 # plus a heartbeat file the app reads for the "last backup" indicator.
 # When BACKUP_REMOTE_ENABLED=true, every dump is also copied to an S3-compatible
 # object store via rclone (second destination) and a weekly restore verification
@@ -34,7 +34,7 @@ RESTORE_CHECK_STATE="$HEARTBEAT_DIR/last-restore-check-attempt.txt"
 mkdir -p "$BACKUP_DIR" "$HEARTBEAT_DIR"
 
 STAMP="$(date -u +%Y%m%d-%H%M%S)"
-TARGET="$BACKUP_DIR/oficinaos-$STAMP.sql.gz"
+TARGET="$BACKUP_DIR/oficinaos-$STAMP-$$.sql.gz"
 
 echo "[backup] dumping $PGDATABASE@$PGHOST:$PGPORT -> $TARGET"
 pg_dump \
