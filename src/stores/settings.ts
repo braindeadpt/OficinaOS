@@ -56,6 +56,7 @@ interface WhatsAppSettings {
   botSuspendedAt: string | null;
   businessId: string | null;
   cloudConsentAccepted: boolean;
+  cloudMigrationNoticePending: boolean;
   credentialsAtCloud: boolean;
   disclaimerAccepted: boolean;
   enabled: boolean;
@@ -107,6 +108,7 @@ interface SettingsState {
   ) => Promise<{ success: boolean; message?: string }>;
   clearError: () => void;
   disconnectWhatsAppLocal: () => Promise<{ ok: boolean }>;
+  dismissWhatsAppCloudMigrationNotice: () => Promise<void>;
   error: string | null;
   fetchAiSettings: () => Promise<void>;
   fetchInvoicingSettings: () => Promise<void>;
@@ -124,6 +126,7 @@ interface SettingsState {
   notificationTemplates: NotificationTemplate[];
   outboxLogs: OutboxLog[];
   pairWhatsAppLocal: () => Promise<EvolutionPairingResult>;
+  revokeWhatsAppCloudCredentials: () => Promise<void>;
 
   saveAiSettings: (data: {
     endpointUrl?: string;
@@ -473,6 +476,43 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       await useSettingsStore.getState().fetchWhatsAppSettings();
     } catch (err: unknown) {
       const message = getErrorMessage(err, i18n.t("errors.save_shop_settings"));
+      set({ error: message });
+      throw new Error(message);
+    }
+  },
+
+  revokeWhatsAppCloudCredentials: async () => {
+    set({ error: null });
+    try {
+      await api.post("/settings/whatsapp/cloud/revoke");
+      await useSettingsStore.getState().fetchWhatsAppSettings();
+    } catch (err: unknown) {
+      const message = getErrorMessage(
+        err,
+        i18n.t("whatsapp_cloud_action_failed")
+      );
+      set({ error: message });
+      throw new Error(message);
+    }
+  },
+
+  dismissWhatsAppCloudMigrationNotice: async () => {
+    set({ error: null });
+    try {
+      await api.post("/settings/whatsapp/migration-notice/seen");
+      set((state) => ({
+        whatsAppSettings: state.whatsAppSettings
+          ? {
+              ...state.whatsAppSettings,
+              cloudMigrationNoticePending: false,
+            }
+          : state.whatsAppSettings,
+      }));
+    } catch (err: unknown) {
+      const message = getErrorMessage(
+        err,
+        i18n.t("whatsapp_cloud_action_failed")
+      );
       set({ error: message });
       throw new Error(message);
     }

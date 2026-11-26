@@ -55,6 +55,7 @@ import {
   getShopSettings,
   getSmsSettings,
   getWhatsAppSettings,
+  markWhatsAppCloudMigrationNoticeSeenOnce,
   testAiConnection,
   upsertAiSettings,
   upsertInvoicingSettings,
@@ -72,6 +73,7 @@ import { getUpdateState, startUpdate } from "../services/update.service.js";
 import {
   pushCredentialsToCloud,
   resolveWhatsAppChannel,
+  revokeWhatsAppCloudCredentials,
 } from "../services/whatsapp-channel.js";
 
 // Campos de definições que mudam o corpo Meta dos templates WhatsApp
@@ -581,6 +583,43 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
         }
       }
       return reply.send({ ...updated, credentialsAtCloud });
+    }
+  );
+
+  // Revogação explícita da cópia Cloud das credenciais Meta. O service só
+  // limpa o estado local depois de a Cloud confirmar o DELETE (ou 404
+  // idempotente); qualquer falha de rede/5xx chega à UI sem tocar no token.
+  app.post(
+    "/whatsapp/cloud/revoke",
+    {
+      preHandler: [requirePermission({ settings: ["edit"] })],
+      schema: {
+        tags: ["settings"],
+        summary: "Revoke Meta WhatsApp credentials stored in OficinaOS Cloud",
+      },
+    },
+    async (_req, reply) => {
+      assertNotDemoMode();
+      await revokeWhatsAppCloudCredentials(app.prisma);
+      return reply.send({ ok: true });
+    }
+  );
+
+  // O aviso retrospetivo grandfathered é único: esta gravação é idempotente
+  // e race-safe no service; repetir o dismiss não volta a escrever a data.
+  app.post(
+    "/whatsapp/migration-notice/seen",
+    {
+      preHandler: [requirePermission({ settings: ["edit"] })],
+      schema: {
+        tags: ["settings"],
+        summary: "Mark the WhatsApp Cloud migration notice as seen",
+      },
+    },
+    async (_req, reply) => {
+      assertNotDemoMode();
+      const seenAt = await markWhatsAppCloudMigrationNoticeSeenOnce(app.prisma);
+      return reply.send({ ok: true, seenAt });
     }
   );
 

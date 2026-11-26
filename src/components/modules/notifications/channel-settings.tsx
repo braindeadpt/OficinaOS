@@ -288,6 +288,79 @@ function whatsappLocalDeprecationDaysLeft(
   return Math.max(0, DEPRECATION_TRANSITION_DAYS - elapsedDays);
 }
 
+/**
+ * Revogação explícita da cópia Cloud das credenciais Meta. Fica fora dos
+ * campos Meta e do gate Pro de propósito: mesmo com o transporte desligado,
+ * em Evolution ou sem entitlement fresco, a loja tem de conseguir retirar a
+ * cópia que já está na Cloud. A confirmação em dois passos evita o clique
+ * acidental sem abrir um modal que bloqueie o resto das definições.
+ */
+function CloudCredentialsRevokeBlock() {
+  const { t } = useTranslation();
+  const revokeWhatsAppCloudCredentials = useSettingsStore(
+    (s) => s.revokeWhatsAppCloudCredentials
+  );
+  const [confirming, setConfirming] = useState(false);
+  const [revoking, setRevoking] = useState(false);
+
+  const handleRevoke = useCallback(async () => {
+    setRevoking(true);
+    try {
+      await revokeWhatsAppCloudCredentials();
+      toast.success(t("whatsapp_revoke_cloud_success"));
+      setConfirming(false);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : t("whatsapp_cloud_action_failed")
+      );
+    } finally {
+      setRevoking(false);
+    }
+  }, [revokeWhatsAppCloudCredentials, t]);
+
+  return (
+    <div className="rounded-xl border border-warning/40 bg-warning/5 p-4">
+      <p className="text-on-surface text-xs leading-relaxed">
+        {t("whatsapp_relay_active")}
+      </p>
+      {confirming ? (
+        <div className="mt-3">
+          <p className="font-medium text-on-surface text-xs leading-relaxed">
+            {t("whatsapp_revoke_cloud_confirm_help")}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              loading={revoking}
+              onClick={handleRevoke}
+              size="sm"
+              variant="destructive"
+            >
+              {t("whatsapp_revoke_cloud_button")}
+            </Button>
+            <Button
+              disabled={revoking}
+              onClick={() => setConfirming(false)}
+              size="sm"
+              variant="secondary"
+            >
+              {t("cancel")}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button
+          className="mt-3"
+          onClick={() => setConfirming(true)}
+          size="sm"
+          variant="destructive-soft"
+        >
+          {t("whatsapp_revoke_cloud_button")}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 /** Campos do transporte oficial Meta (IDs, token, relay, remarketing). */
 function MetaWhatsAppFields({
   form,
@@ -433,18 +506,13 @@ function MetaWhatsAppFields({
           </div>
         </div>
       )}
-      {settings?.credentialsAtCloud ? (
-        <p className="rounded-xl bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
-          {t("whatsapp_relay_active")}
-        </p>
-      ) : (
+      {!settings?.credentialsAtCloud &&
         settings?.hasApiToken &&
         cloudConsentStored && (
           <p className="rounded-xl bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
             {t("whatsapp_relay_pending")}
           </p>
-        )
-      )}
+        )}
       {settings?.remarketingModule ? (
         <div className="rounded-xl bg-surface-container p-4">
           <div className="flex items-center gap-3">
@@ -1049,6 +1117,12 @@ export default function ChannelSettings({
           <p className="mt-2 rounded-xl bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
             {t("pro_only_upsell")}
           </p>
+        )}
+
+        {whatsAppSettings?.credentialsAtCloud && (
+          <div className="mt-4">
+            <CloudCredentialsRevokeBlock />
+          </div>
         )}
 
         {whatsAppForm.enabled && (

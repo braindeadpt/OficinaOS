@@ -50,6 +50,7 @@ import { syncWhatsAppBot } from "../services/whatsapp-bot.service.js";
 interface TestSettingsRow extends Record<string, unknown> {
   whatsappApiTokenEncrypted: string | null;
   whatsappCloudConsentAt: Date | null;
+  whatsappCloudMigrationNoticeSeenAt: Date | null;
   whatsappCredentialsAtCloud: boolean;
   whatsappEnabled: boolean;
   whatsappLocalDeprecationStartedAt: Date | null;
@@ -66,6 +67,7 @@ function baseRow(overrides: Partial<TestSettingsRow> = {}): TestSettingsRow {
     whatsappApiTokenEncrypted: null,
     whatsappBusinessId: null,
     whatsappCloudConsentAt: null,
+    whatsappCloudMigrationNoticeSeenAt: null,
     whatsappCredentialsAtCloud: false,
     whatsappEnabled: true,
     whatsappLocalDeprecationStartedAt: null,
@@ -97,17 +99,19 @@ function createStatefulPrisma(initial: TestSettingsRow | null) {
         if (!current) {
           return Promise.resolve({ count: 0 });
         }
-        const blocked = Object.entries(where ?? {}).some(
-          ([key, value]) =>
-            key !== "id" &&
-            value === null &&
-            current[key] !== null &&
-            current[key] !== undefined
-        );
-        if (!blocked) {
+        const matches = Object.entries(where ?? {}).every(([key, value]) => {
+          if (key === "id") {
+            return true;
+          }
+          // No Postgres uma coluna nullable sem valor é NULL; o stub omite a
+          // chave quando a row é criada de raiz.
+          const currentValue = current[key] === undefined ? null : current[key];
+          return currentValue === value;
+        });
+        if (matches) {
           row = { ...current, ...data } as TestSettingsRow;
         }
-        return Promise.resolve({ count: blocked ? 0 : 1 });
+        return Promise.resolve({ count: matches ? 1 : 0 });
       }
     ),
     upsert: vi.fn(
@@ -372,5 +376,231 @@ describe("WP0.6 — consentimento Cloud do token Meta", () => {
       startedAt.getTime()
     );
     expect(state.updateManyMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("WP0.6 PR B — rotação, revogação e aviso grandfathered", () => {
+  const migratedRow = () =>
+    baseRow({
+      whatsappApiTokenEncrypted: "enc:meta-token",
+      whatsappBusinessId: "business-1",
+      whatsappCloudConsentAt: new Date("2026-01-03T10:00:00.000Z"),
+      whatsappCredentialsAtCloud: true,
+      whatsappPhoneNumberId: "1234",
+    });
+
+  it("rodar o token repõe a credencial na Cloud — sem upload a rotação ficaria morta", async () => {
+    const state = createStatefulPrisma(migratedRow());
+    const app = buildApp(state.prisma);
+
+    const res = await app.inject({
+      method: "PUT",
+      payload: { apiToken: "meta-token-novo" },
+      url: "/api/settings/whatsapp",
+    });
+
+    expect(res.statusCode).toBe(200);
+    const uploads = credentialsUploadCalls().filter(
+      (call) => (call[2] as { method?: string }).method === "POST"
+    );
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0][2]).toMatchObject({
+      body: { accessToken: "meta-token-novo", phoneNumberId: "1234" },
+    });
+    expect(state.getRow()?.whatsappCredentialsAtCloud).toBe(true);
+    expect(state.getRow()?.whatsappApiTokenEncrypted).toBe(
+      "enc:meta-token-novo"
+    );
+  });
+
+  it("mudar só o phoneNumberId também reenvia o par token+phoneNumberId", async () => {
+    const state = createStatefulPrisma(migratedRow());
+    const app = buildApp(state.prisma);
+
+    const res = await app.inject({
+      method: "PUT",
+      payload: { phoneNumberId: "5678" },
+      url: "/api/settings/whatsapp",
+    });
+
+    expect(res.statusCode).toBe(200);
+    const uploads = credentialsUploadCalls().filter(
+      (call) => (call[2] as { method?: string }).method === "POST"
+    );
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0][2]).toMatchObject({
+      body: { accessToken: "meta-token", phoneNumberId: "5678" },
+    });
+    expect(state.getRow()?.whatsappCredentialsAtCloud).toBe(true);
+    expect(state.getRow()?.whatsappPhoneNumberId).toBe("5678");
+  });
+
+  it("revogação chama DELETE na Cloud, apaga o token local e limpa o consentimento", async () => {
+    const state = createStatefulPrisma(migratedRow());
+    const app = buildApp(state.prisma);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/settings/whatsapp/cloud/revoke",
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mocks.cloudFetch).toHaveBeenCalledWith(
+      "https://cloud.example",
+      "/shops/whatsapp-credentials",
+      { method: "DELETE", token: "shop-token" }
+    );
+    expect(state.getRow()).toMatchObject({
+      whatsappApiTokenEncrypted: null,
+      whatsappCloudConsentAt: null,
+      whatsappCredentialsAtCloud: false,
+      whatsappPhoneNumberId: "1234",
+    });
+  });
+
+  it("404 no DELETE da Cloud é sucesso idempotente", async () => {
+    const state = createStatefulPrisma(migratedRow());
+    const app = buildApp(state.prisma);
+    mocks.cloudFetch.mockImplementation(async () => ({
+      body: null,
+      ok: false,
+      status: 404,
+    }));
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/settings/whatsapp/cloud/revoke",
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(state.getRow()?.whatsappApiTokenEncrypted).toBeNull();
+    expect(state.getRow()?.whatsappCloudConsentAt).toBeNull();
+  });
+
+  it("5xx na Cloud não apaga nada localmente e uma nova tentativa consegue concluir", async () => {
+    const state = createStatefulPrisma(migratedRow());
+    const app = buildApp(state.prisma);
+    mocks.cloudFetch
+      .mockImplementationOnce(async () => ({
+        body: null,
+        ok: false,
+        status: 500,
+      }))
+      .mockImplementation(async (_apiUrl: string, path: string) => ({
+        body: path === "/whatsapp/inbound" ? { messages: [] } : {},
+        ok: true,
+        status: 200,
+      }));
+
+    const failed = await app.inject({
+      method: "POST",
+      url: "/api/settings/whatsapp/cloud/revoke",
+    });
+    expect(failed.statusCode).toBe(502);
+    expect(state.getRow()).toMatchObject({
+      whatsappApiTokenEncrypted: "enc:meta-token",
+      whatsappCredentialsAtCloud: true,
+    });
+    expect(state.getRow()?.whatsappCloudConsentAt).toBeInstanceOf(Date);
+
+    const retry = await app.inject({
+      method: "POST",
+      url: "/api/settings/whatsapp/cloud/revoke",
+    });
+    expect(retry.statusCode).toBe(200);
+    expect(state.getRow()?.whatsappApiTokenEncrypted).toBeNull();
+    expect(state.getRow()?.whatsappCloudConsentAt).toBeNull();
+  });
+
+  it("falha de rede na Cloud também não apaga nada localmente", async () => {
+    const state = createStatefulPrisma(migratedRow());
+    const app = buildApp(state.prisma);
+    mocks.cloudFetch.mockRejectedValue(new Error("ECONNREFUSED"));
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/settings/whatsapp/cloud/revoke",
+    });
+
+    expect(res.statusCode).toBe(502);
+    expect(res.json().code).toBe("CLOUD_UNREACHABLE");
+    expect(state.getRow()?.whatsappApiTokenEncrypted).toBe("enc:meta-token");
+    expect(state.getRow()?.whatsappCloudConsentAt).toBeInstanceOf(Date);
+    expect(state.getRow()?.whatsappCredentialsAtCloud).toBe(true);
+  });
+
+  it("GET expõe o aviso apenas para loja migrada sem consentimento e sem seenAt", async () => {
+    const state = createStatefulPrisma(
+      baseRow({
+        whatsappCloudConsentAt: null,
+        whatsappCloudMigrationNoticeSeenAt: null,
+        whatsappCredentialsAtCloud: true,
+      })
+    );
+    const app = buildApp(state.prisma);
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/settings/whatsapp",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().cloudMigrationNoticePending).toBe(true);
+  });
+
+  it.each([
+    ["consentida", { whatsappCloudConsentAt: new Date() }],
+    ["não migrada", { whatsappCredentialsAtCloud: false }],
+    [
+      "já avisada",
+      {
+        whatsappCloudMigrationNoticeSeenAt: new Date(),
+        whatsappCredentialsAtCloud: true,
+      },
+    ],
+  ])("GET não mostra o aviso numa loja %s", async (_label, overrides) => {
+    const state = createStatefulPrisma(baseRow(overrides));
+    const app = buildApp(state.prisma);
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/settings/whatsapp",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().cloudMigrationNoticePending).toBe(false);
+  });
+
+  it("dismiss grava seenAt uma única vez e a corrida devolve o timestamp canónico", async () => {
+    const state = createStatefulPrisma(
+      baseRow({
+        whatsappCloudConsentAt: null,
+        whatsappCloudMigrationNoticeSeenAt: null,
+        whatsappCredentialsAtCloud: true,
+      })
+    );
+    const app = buildApp(state.prisma);
+
+    const [first, second] = await Promise.all([
+      app.inject({
+        method: "POST",
+        url: "/api/settings/whatsapp/migration-notice/seen",
+      }),
+      app.inject({
+        method: "POST",
+        url: "/api/settings/whatsapp/migration-notice/seen",
+      }),
+    ]);
+
+    expect(first.statusCode).toBe(200);
+    expect(second.statusCode).toBe(200);
+    const firstSeenAt = first.json().seenAt;
+    expect(firstSeenAt).toBeTruthy();
+    expect(second.json().seenAt).toBe(firstSeenAt);
+
+    const after = await app.inject({
+      method: "GET",
+      url: "/api/settings/whatsapp",
+    });
+    expect(after.json().cloudMigrationNoticePending).toBe(false);
+    expect(state.updateManyMock).toHaveBeenCalledTimes(2);
   });
 });

@@ -1,3 +1,4 @@
+import { AppError } from "@shared/errors/app-error.js";
 import { decryptSecret, isEncrypted } from "../lib/crypto.js";
 import { assertNotDemoMode } from "../lib/demo.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
@@ -343,6 +344,30 @@ async function pushCredentialsToCloudOnce(prisma: DbClient): Promise<boolean> {
     }
   ).catch(() => null);
   if (!res?.ok) {
+    // Caminhos de recuperação por resposta da Cloud (contrato em
+    // oficinaos-cloud/src/routes/whatsapp.ts):
+    // - 400 INVALID_BODY/INVALID_CREDENTIALS: o par token+phone_number_id é
+    //   rejeitado; a loja corrige o ID ou roda o token, o save repõe a flag e
+    //   esta fila reenvia o snapshot novo.
+    // - 401/403: o token da loja na Cloud foi revogado/substituído; o
+    //   re-pairing grava um token novo e o próximo ciclo reenvia.
+    // - 402: o módulo ficou inativo; a reativação na subscrição permite a
+    //   próxima tentativa. 429/5xx/rede são transitórios — o poller é a rede.
+    // - 409 PHONE_NUMBER_ID_TAKEN: outra loja na Cloud detém este
+    //   phone_number_id. Reenviar o mesmo pedido só resolve depois de o ID ser
+    //   libertado lá; corrigir o ID localmente também rota as credenciais.
+    //   Nunca marcamos o upload como atual e reafirmamos a flag local como
+    //   false para o envio legado continuar disponível durante a transição.
+    if (res?.status === 409) {
+      await prisma.shopSettings.updateMany({
+        data: { whatsappCredentialsAtCloud: false },
+        where: {
+          id: "default",
+          whatsappApiTokenEncrypted: rawToken,
+          whatsappPhoneNumberId: settings.whatsappPhoneNumberId,
+        },
+      });
+    }
     return false;
   }
   // O upload demora e a loja pode gravar um token/phone_number_id de
@@ -360,22 +385,80 @@ async function pushCredentialsToCloudOnce(prisma: DbClient): Promise<boolean> {
   return marked.count > 0;
 }
 
-// O save das definições e o poller podem chamar o upload em simultâneo.
-// Serializar dentro do processo garante que cada chamada relê as credenciais
-// atuais e que a Cloud recebe substituições pela ordem em que foram aceites —
-// caso contrário um upload antigo mais lento podia terminar depois e gravar
-// credenciais obsoletas por cima das novas.
-let credentialsPushQueue: Promise<void> = Promise.resolve();
+// O save das definições, o poller e a revogação podem mexer nas credenciais
+// em simultâneo. Uma única fila process-wide garante que cada operação relê o
+// estado atual quando arranca e que a Cloud recebe as mutações por ordem —
+// caso contrário um upload antigo mais lento podia terminar depois de um
+// token novo (ou depois do DELETE da revogação) e repor credenciais obsoletas.
+let credentialsMutationQueue: Promise<void> = Promise.resolve();
 
-export function pushCredentialsToCloud(prisma: DbClient): Promise<boolean> {
-  const run = credentialsPushQueue.then(() =>
-    pushCredentialsToCloudOnce(prisma)
-  );
-  credentialsPushQueue = run.then(
+function enqueueCredentialsMutation<T>(
+  operation: () => Promise<T>
+): Promise<T> {
+  const run = credentialsMutationQueue.then(operation);
+  credentialsMutationQueue = run.then(
     () => undefined,
     () => undefined
   );
   return run;
+}
+
+export function pushCredentialsToCloud(prisma: DbClient): Promise<boolean> {
+  return enqueueCredentialsMutation(() => pushCredentialsToCloudOnce(prisma));
+}
+
+/**
+ * Revoga a cópia das credenciais Meta guardada na Cloud. A limpeza local só
+ * acontece depois de a Cloud confirmar (2xx) ou responder 404 — esse 404 é
+ * idempotente porque significa que a cópia já lá não está. Em rede/5xx/outro
+ * erro nada é apagado localmente: a loja nunca fica sem o token local enquanto
+ * a Cloud possa ainda ter a cópia.
+ */
+async function revokeWhatsAppCloudCredentialsOnce(
+  prisma: DbClient
+): Promise<void> {
+  const settings = await getOrCreateShopSettings(prisma);
+  if (!(settings.cloudApiUrl && settings.cloudShopTokenEncrypted)) {
+    throw new AppError("CLOUD_NOT_PAIRED");
+  }
+  const shopToken = decryptSecret(settings.cloudShopTokenEncrypted);
+  if (!shopToken) {
+    throw new AppError("CLOUD_NOT_PAIRED");
+  }
+  const res = await cloudFetch(
+    settings.cloudApiUrl,
+    "/shops/whatsapp-credentials",
+    { method: "DELETE", token: shopToken }
+  ).catch(() => null);
+  if (!res) {
+    throw new AppError("CLOUD_UNREACHABLE");
+  }
+  if (!(res.ok || res.status === 404)) {
+    throw new AppError("CLOUD_REQUEST_FAILED", { status: res.status });
+  }
+
+  // A revogação é uma retirada explícita do consentimento e tem de ganhar
+  // a qualquer gravação concorrente: se uma substituição ficasse de fora,
+  // o upload seguinte na fila podia re-migrar silenciosamente com o aceite
+  // antigo. Voltar ao relay exige introduzir um token novo e consentir outra
+  // vez. O telefone/ID Meta ficam configurados para essa reativação; o
+  // segredo local é removido.
+  await prisma.shopSettings.updateMany({
+    data: {
+      whatsappApiTokenEncrypted: null,
+      whatsappCloudConsentAt: null,
+      whatsappCredentialsAtCloud: false,
+    },
+    where: { id: "default" },
+  });
+}
+
+export function revokeWhatsAppCloudCredentials(
+  prisma: DbClient
+): Promise<void> {
+  return enqueueCredentialsMutation(() =>
+    revokeWhatsAppCloudCredentialsOnce(prisma)
+  );
 }
 
 export async function sendWhatsAppTemplateVia(
