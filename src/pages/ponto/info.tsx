@@ -3,18 +3,25 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
+import { usePontoT } from "@/hooks/use-ponto-t";
 import api from "@/lib/api";
+import type { ShopMode } from "@/stores/shop-mode";
 
 interface PontoStatus {
   enabled: boolean;
 }
 
-type PontoShop = Pick<ShopSettings, "pontoInfoText" | "shopName">;
+type PontoShop = Pick<ShopSettings, "pontoInfoText" | "shopMode" | "shopName">;
 
 type PontoInfoState =
   | { kind: "loading" }
   | { kind: "unavailable" }
-  | { kind: "ready"; infoText: string | null; shopName: string };
+  | {
+      kind: "ready";
+      infoText: string | null;
+      shopMode: ShopMode;
+      shopName: string;
+    };
 
 const SIGNATURE_ROWS = 4;
 
@@ -73,7 +80,12 @@ async function loadPontoInfo(): Promise<PontoInfoState> {
   }
   const shop = shopRes.data;
   const custom = shop.pontoInfoText?.trim() ? shop.pontoInfoText : null;
-  return { infoText: custom, kind: "ready", shopName: shop.shopName ?? "" };
+  return {
+    infoText: custom,
+    kind: "ready",
+    shopMode: shop.shopMode === "ponto_only" ? "ponto_only" : "repair_shop",
+    shopName: shop.shopName ?? "",
+  };
 }
 
 function SignatureField({ label, tall }: { label: string; tall?: boolean }) {
@@ -111,6 +123,8 @@ function SignatureRow({
 export default function PontoInfoPage() {
   const { t } = useTranslation();
   const [state, setState] = useState<PontoInfoState>({ kind: "loading" });
+  const loadedShopMode = state.kind === "ready" ? state.shopMode : null;
+  const pt = usePontoT(loadedShopMode);
 
   useEffect(() => {
     let cancelled = false;
@@ -135,15 +149,17 @@ export default function PontoInfoPage() {
     month: "long",
     year: "numeric",
   });
-  const controller =
-    state.kind === "ready" && state.shopName ? `A ${state.shopName}` : "A loja";
+  let controller = pt("ponto.info_doc_controller", { lng: "pt" });
+  if (state.kind === "ready" && state.shopName) {
+    controller = `A ${state.shopName}`;
+  }
 
   // Folha A4 «Informação aos trabalhadores» — o documento impresso é
   // sempre em PT-PT (público-alvo: trabalhadores da loja; os comandos do
   // ponto são eles próprios PT), independentemente do idioma da
   // interface. Só o chrome do ecrã (voltar/imprimir/indisponível) segue o
   // idioma da app.
-  const docT = (key: string) => t(key, { controller, lng: "pt" });
+  const docT = (key: string) => pt(key, { controller, lng: "pt" });
   const signatureLabels = {
     date: docT("ponto.info_doc_date"),
     name: docT("ponto.info_doc_sig_name"),

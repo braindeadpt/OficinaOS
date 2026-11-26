@@ -57,6 +57,7 @@ import {
 import {
   PONTO_EXIT_DATE_TERMS,
   PONTO_TEXT,
+  pontoConfigMissingText,
   pontoExitDateQuestion,
   pontoExitReminderText,
   pontoLocationRequestInteractive,
@@ -1317,7 +1318,7 @@ async function finalizePonto(
     geoLng === undefined
   ) {
     ctx.log.warn("ponto: shopGeo por configurar — registo ignorado");
-    await say(PONTO_TEXT.configMissing);
+    await say(pontoConfigMissingText(settings.shopMode));
     return;
   }
 
