@@ -1,3 +1,7 @@
+import {
+  isWhatsAppLocalDeprecationExpired,
+  isWhatsAppLocalTransitionActive,
+} from "@shared/constants/whatsapp-migration.js";
 import { AppError } from "@shared/errors/app-error.js";
 import { decryptSecret, isEncrypted } from "../lib/crypto.js";
 import { assertNotDemoMode } from "../lib/demo.js";
@@ -17,13 +21,16 @@ import {
   sendWhatsAppTemplate,
   type WhatsAppConfig,
 } from "./notification-sender.js";
+import { recordWhatsAppMigrationEvent } from "./whatsapp-local-sunset.service.js";
 
 /**
  * Where a WhatsApp message actually leaves: cloud relay or direct Graph
  * API. Shops that uploaded their Meta credentials to the cloud send via
  * POST /whatsapp/send — the entitlement is enforced server-side, so a
  * patched app can't bypass it. Shops on the legacy setup keep sending
- * directly until their credentials migrate.
+ * directly only during the shared 30-day migration window; after it,
+ * official WhatsApp either goes through the consented Cloud relay or does
+ * not leave at all.
  */
 export type WhatsAppChannel =
   | { apiUrl: string; mode: "cloud"; shopToken: string }
@@ -43,6 +50,7 @@ interface SettingsLike {
   whatsappCloudConsentAt?: Date | null;
   whatsappCredentialsAtCloud?: boolean | null;
   whatsappEnabled?: boolean | null;
+  whatsappLocalDeprecationStartedAt?: Date | null;
   whatsappLocalDisclaimerAt?: Date | null;
   whatsappPhoneNumberId?: string | null;
   whatsappTransport?: string | null;
@@ -55,6 +63,36 @@ export interface SendResult {
    *  ponto correlaciona a resposta citada com a pergunta enviada. */
   messageId?: string;
   success: boolean;
+}
+
+// Defesa em profundidade no envio: um channel resolvido antes do fim da
+// transição não pode continuar a enviar Meta depois do prazo. Evolution é um
+// transporte separado e não entra neste sunset.
+function metaSunsetBlock(
+  channel: WhatsAppChannel,
+  settings: SettingsLike | null
+): SendResult | null {
+  if (
+    channel.mode === "evolution" ||
+    !isWhatsAppLocalDeprecationExpired(
+      settings?.whatsappLocalDeprecationStartedAt
+    )
+  ) {
+    return null;
+  }
+  if (!settings?.whatsappCloudConsentAt) {
+    return {
+      error: "WHATSAPP_CLOUD_AUTHORIZATION_REQUIRED",
+      success: false,
+    };
+  }
+  if (channel.mode === "local") {
+    return {
+      error: "WHATSAPP_LOCAL_DIRECT_SEND_ENDED",
+      success: false,
+    };
+  }
+  return null;
 }
 
 /**
@@ -90,7 +128,11 @@ function resolveEvolutionChannel(
   };
 }
 
-/** Cloud first when credentials migrated; otherwise the legacy local config. */
+/**
+ * Cloud first when credentials migrated; otherwise the legacy local config
+ * only while the migration window is open. Evolution is a separate transport
+ * and is not part of the Meta-direct sunset.
+ */
 export function resolveWhatsAppChannel(
   settings: SettingsLike
 ): WhatsAppChannel | null {
@@ -106,6 +148,16 @@ export function resolveWhatsAppChannel(
   if (settings.whatsappTransport === "evolution") {
     return resolveEvolutionChannel(settings);
   }
+
+  const migrationExpired = isWhatsAppLocalDeprecationExpired(
+    settings.whatsappLocalDeprecationStartedAt
+  );
+  if (migrationExpired && !settings.whatsappCloudConsentAt) {
+    // Lojas migradas antes de existir consentimento eram grandfathered só
+    // durante a transição. Depois do prazo não há Meta — nem Cloud nem
+    // fallback local — até autorizarem explicitamente a OficinaOS Cloud.
+    return null;
+  }
   if (
     settings.whatsappCredentialsAtCloud &&
     settings.cloudApiUrl &&
@@ -119,6 +171,11 @@ export function resolveWhatsAppChannel(
         shopToken,
       };
     }
+  }
+  if (migrationExpired) {
+    // Sunset: mesmo com consentimento, sem credenciais válidas na Cloud não
+    // existe caminho Meta direto/local — o SMS configurado é o canal reserva.
+    return null;
   }
   const config = decryptWhatsAppConfig({
     apiTokenEncrypted: settings.whatsappApiTokenEncrypted ?? "",
@@ -139,21 +196,85 @@ function cloudError(status: number, body: unknown): string {
   return msg ?? `Cloud devolveu ${status}`;
 }
 
+type CloudFallbackReason = "cloud_http_5xx" | "cloud_network_error";
+type CloudSendResult = SendResult & { fallbackReason?: CloudFallbackReason };
+type LegacyLocalSender = (config: WhatsAppConfig) => Promise<SendResult>;
+
+// Um timeout/abort é ambíguo: a Cloud pode já ter aceite a mensagem antes de
+// a resposta se perder. Só falhas de estabelecimento da ligação permitem
+// fallback direto sem reintroduzir um risco evitável de duplicação.
+const FALLBACK_SAFE_NETWORK_CODES = new Set([
+  "EAI_AGAIN",
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "ENOTFOUND",
+]);
+
+function networkErrorCode(error: unknown): string | null {
+  let current = error;
+  for (let depth = 0; depth < 4 && current; depth += 1) {
+    if (typeof current === "object" && "code" in current) {
+      const code = (current as { code?: unknown }).code;
+      if (typeof code === "string") {
+        return code;
+      }
+    }
+    current =
+      typeof current === "object" && "cause" in current
+        ? (current as { cause?: unknown }).cause
+        : null;
+  }
+  return null;
+}
+
+function canFallbackAfterNetworkError(error: unknown): boolean {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    (error as { name?: unknown }).name === "AbortError"
+  ) {
+    return false;
+  }
+  const code = networkErrorCode(error);
+  return code !== null && FALLBACK_SAFE_NETWORK_CODES.has(code);
+}
+
 async function sendViaCloud(
   channel: Extract<WhatsAppChannel, { mode: "cloud" }>,
   body: Record<string, unknown>
-): Promise<SendResult> {
+): Promise<CloudSendResult> {
+  let networkFailure: unknown = null;
   const res = await cloudFetch(channel.apiUrl, "/whatsapp/send", {
     body,
     method: "POST",
     token: channel.shopToken,
     timeoutMs: 20_000,
-  }).catch(() => null);
+  }).catch((error: unknown) => {
+    networkFailure = error;
+    return null;
+  });
   if (!res) {
-    return { error: "a aguardar ligação à cloud", success: false };
+    return {
+      error: "a aguardar ligação à cloud",
+      ...(canFallbackAfterNetworkError(networkFailure)
+        ? { fallbackReason: "cloud_network_error" as const }
+        : {}),
+      success: false,
+    };
   }
   if (!res.ok) {
-    return { error: cloudError(res.status, res.body), success: false };
+    const result: CloudSendResult = {
+      error: cloudError(res.status, res.body),
+      success: false,
+    };
+    // Só indisponibilidade da infraestrutura/relay permite fallback. Erros
+    // definitivos de subscrição/autorização/pedido (402 e restantes 4xx)
+    // nunca podem ressuscitar o envio direto legado.
+    if (res.status >= 500 && res.status < 600) {
+      result.fallbackReason = "cloud_http_5xx";
+    }
+    return result;
   }
   const messageId = (res.body as { messageId?: unknown } | null)?.messageId;
   return {
@@ -163,32 +284,81 @@ async function sendViaCloud(
 }
 
 /**
- * The local token only exists for the migration window — once a cloud
- * send succeeds, it serves no purpose and deleting it closes the bypass.
+ * Fallback estritamente transitório para o token Meta local. O estado é relido
+ * na hora do envio: uma revogação/limpeza concorrente ou o fim da janela não
+ * podem ser contornados por um channel/settings resolvidos minutos antes.
+ * Também não há envio local sem o evento persistido — a auditoria é parte do
+ * próprio uso do fallback.
  */
-async function clearMigratedLocalToken(
+async function tryLegacyLocalFallback(
   prisma: DbClient,
-  settings: SettingsLike | null
-): Promise<void> {
-  if (!settings?.whatsappApiTokenEncrypted) {
-    return;
-  }
+  reason: CloudFallbackReason,
+  sendLocal: LegacyLocalSender
+): Promise<SendResult | null> {
+  let fresh: SettingsLike | null;
   try {
-    // O envio Cloud demora e a loja pode gravar um token de substituição
-    // entretanto. Só se apaga o token se ainda for exactamente o snapshot
-    // usado por este envio e se a migração continuar válida; caso contrário
-    // a limpeza da migração antiga destruiria o token novo.
-    await prisma.shopSettings.updateMany({
-      data: { whatsappApiTokenEncrypted: null },
-      where: {
-        id: "default",
-        whatsappApiTokenEncrypted: settings.whatsappApiTokenEncrypted,
+    fresh = await prisma.shopSettings.findUnique({
+      select: {
+        cloudEntitlements: true,
+        cloudSyncedAt: true,
+        whatsappApiTokenEncrypted: true,
+        whatsappBusinessId: true,
         whatsappCredentialsAtCloud: true,
+        whatsappEnabled: true,
+        whatsappLocalDeprecationStartedAt: true,
+        whatsappPhoneNumberId: true,
+        whatsappTransport: true,
       },
+      where: { id: "default" },
     });
   } catch {
-    // best-effort: a limpeza repete-se no próximo envio bem-sucedido
+    // Sem conseguir reler o estado autorizador não há fallback — falha fechada.
+    return null;
   }
+  if (
+    !(
+      fresh &&
+      isModuleEnabled(fresh, "whatsapp-bot") &&
+      fresh.whatsappEnabled
+    ) ||
+    fresh.whatsappTransport === "evolution" ||
+    fresh.whatsappCredentialsAtCloud !== true ||
+    !isWhatsAppLocalTransitionActive(fresh.whatsappLocalDeprecationStartedAt)
+  ) {
+    return null;
+  }
+  const config = decryptWhatsAppConfig({
+    apiTokenEncrypted: fresh.whatsappApiTokenEncrypted ?? "",
+    businessId: fresh.whatsappBusinessId ?? "",
+    phoneNumberId: fresh.whatsappPhoneNumberId ?? "",
+  });
+  if (!config) {
+    return null;
+  }
+  try {
+    await recordWhatsAppMigrationEvent(prisma, "LOCAL_FALLBACK", reason);
+  } catch {
+    // Sem evento persistido não há fallback: a auditoria é parte do uso.
+    return null;
+  }
+  return await sendLocal(config);
+}
+
+async function sendCloudWithLegacyFallback(
+  prisma: DbClient,
+  channel: Extract<WhatsAppChannel, { mode: "cloud" }>,
+  body: Record<string, unknown>,
+  sendLocal: LegacyLocalSender
+): Promise<SendResult> {
+  const cloudResult = await sendViaCloud(channel, body);
+  const { fallbackReason, ...publicCloudResult } = cloudResult;
+  if (cloudResult.success || !fallbackReason) {
+    return publicCloudResult;
+  }
+  return (
+    (await tryLegacyLocalFallback(prisma, fallbackReason, sendLocal)) ??
+    publicCloudResult
+  );
 }
 
 export async function sendWhatsAppText(
@@ -209,6 +379,10 @@ export async function sendWhatsAppText(
       success: false,
     };
   }
+  const sunsetBlock = metaSunsetBlock(channel, settings);
+  if (sunsetBlock) {
+    return sunsetBlock;
+  }
   if (channel.mode === "local") {
     return sendWhatsApp(channel.config, to, message, countryCode);
   }
@@ -220,14 +394,15 @@ export async function sendWhatsAppText(
       settings
     );
   }
-  const res = await sendViaCloud(channel, {
-    text: message,
-    to: formatPhone(to, countryCode),
-  });
-  if (res.success) {
-    await clearMigratedLocalToken(prisma, settings);
-  }
-  return res;
+  return await sendCloudWithLegacyFallback(
+    prisma,
+    channel,
+    {
+      text: message,
+      to: formatPhone(to, countryCode),
+    },
+    (config) => sendWhatsApp(config, to, message, countryCode)
+  );
 }
 
 /**
@@ -250,6 +425,10 @@ export async function sendWhatsAppInteractive(
       success: false,
     };
   }
+  const sunsetBlock = metaSunsetBlock(channel, settings);
+  if (sunsetBlock) {
+    return sunsetBlock;
+  }
   if (channel.mode === "local") {
     return sendWhatsAppInteractiveMessage(
       channel.config,
@@ -264,14 +443,16 @@ export async function sendWhatsAppInteractive(
       success: false,
     };
   }
-  const res = await sendViaCloud(channel, {
-    interactive,
-    to: formatPhone(to, countryCode),
-  });
-  if (res.success) {
-    await clearMigratedLocalToken(prisma, settings);
-  }
-  return res;
+  return await sendCloudWithLegacyFallback(
+    prisma,
+    channel,
+    {
+      interactive,
+      to: formatPhone(to, countryCode),
+    },
+    (config) =>
+      sendWhatsAppInteractiveMessage(config, to, interactive, countryCode)
+  );
 }
 
 /** "+351912345678" → "+351***5678" — logs nunca levam o número completo. */
@@ -332,8 +513,8 @@ async function pushCredentialsToCloudOnce(
   if (settings.whatsappCredentialsAtCloud) {
     // Não é um early-return cego: gravar um apiToken novo repõe esta flag
     // em upsertWhatsAppSettings. Assim, true significa "a Cloud tem as
-    // credenciais atuais"; um token local residual é só o fallback da
-    // migração à espera de ser apagado após o primeiro envio Cloud.
+    // credenciais atuais"; um token local residual é só o fallback
+    // transitório da migração até ao purge depois do prazo.
     return true;
   }
   // WP0.6 — sem consentimento explícito não há upload, nem no save nem
@@ -471,6 +652,7 @@ async function revokeWhatsAppCloudCredentialsOnce(
   await prisma.shopSettings.updateMany({
     data: {
       whatsappApiTokenEncrypted: null,
+      whatsappApiTokenWrittenAt: null,
       whatsappCloudConsentAt: null,
       whatsappCredentialsAtCloud: false,
     },
@@ -503,6 +685,10 @@ export async function sendWhatsAppTemplateVia(
       success: false,
     };
   }
+  const sunsetBlock = metaSunsetBlock(channel, settings);
+  if (sunsetBlock) {
+    return sunsetBlock;
+  }
   if (channel.mode === "local") {
     return sendWhatsAppTemplate(
       channel.config,
@@ -521,12 +707,21 @@ export async function sendWhatsAppTemplateVia(
       success: false,
     };
   }
-  const res = await sendViaCloud(channel, {
-    template: { language: languageCode, name: templateName, params },
-    to: formatPhone(to, countryCode),
-  });
-  if (res.success) {
-    await clearMigratedLocalToken(prisma, settings);
-  }
-  return res;
+  return await sendCloudWithLegacyFallback(
+    prisma,
+    channel,
+    {
+      template: { language: languageCode, name: templateName, params },
+      to: formatPhone(to, countryCode),
+    },
+    (config) =>
+      sendWhatsAppTemplate(
+        config,
+        to,
+        templateName,
+        languageCode,
+        params,
+        countryCode
+      )
+  );
 }

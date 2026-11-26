@@ -27,6 +27,7 @@ import { isModuleEnabled } from "../utils/modules.js";
 import { cloudFetch } from "./cloud.service.js";
 import { STAFF_INITIATED_TEMPLATES } from "./notification-outbox.service.js";
 import { generateSmsWebhookToken } from "./sms.service.js";
+import { listWhatsAppMigrationEvents } from "./whatsapp-local-sunset.service.js";
 import { templateStatusOf } from "./whatsapp-templates.service.js";
 
 // Variáveis sem as quais o modelo staff-initiated sai inútil —
@@ -585,7 +586,10 @@ export async function markWhatsAppCloudMigrationNoticeSeenOnce(
 }
 
 export async function getWhatsAppSettings(prisma: PrismaClient) {
-  const row = await findShopSettingsUnique(prisma);
+  const [row, migrationEvents] = await Promise.all([
+    findShopSettingsUnique(prisma),
+    listWhatsAppMigrationEvents(prisma),
+  ]);
   if (!row) {
     return {
       botDailyCap: 200,
@@ -602,6 +606,7 @@ export async function getWhatsAppSettings(prisma: PrismaClient) {
       hasApiToken: false,
       hasEvolutionApiKey: false,
       localDeprecationStartedAt: null,
+      migrationEvents,
       phoneNumberId: null,
       remarketingCooldownDays: 180,
       remarketingDays: 90,
@@ -633,6 +638,7 @@ export async function getWhatsAppSettings(prisma: PrismaClient) {
     hasApiToken: Boolean(row.whatsappApiTokenEncrypted),
     hasEvolutionApiKey: Boolean(row.evolutionApiKeyEncrypted),
     localDeprecationStartedAt: row.whatsappLocalDeprecationStartedAt,
+    migrationEvents,
     phoneNumberId: row.whatsappPhoneNumberId,
     remarketingCooldownDays: row.remarketingCooldownDays,
     remarketingDays: row.remarketingDays,
@@ -657,6 +663,7 @@ interface WhatsAppUpsertData {
   remarketingTemplate?: string | null;
   trackingBaseUrl?: string | null;
   whatsappApiTokenEncrypted?: string;
+  whatsappApiTokenWrittenAt?: Date | null;
   whatsappBotDailyCap?: number;
   whatsappBotDisclaimerAt?: Date;
   whatsappBotDisclaimerUserId?: string | null;
@@ -782,6 +789,9 @@ export async function upsertWhatsAppSettings(
   }
   if (input.apiToken !== undefined && input.apiToken !== "") {
     data.whatsappApiTokenEncrypted = encryptSecret(input.apiToken);
+    // A data distingue tokens legados de tokens introduzidos depois do
+    // sunset apenas para completar o upload consentido para a Cloud.
+    data.whatsappApiTokenWrittenAt = new Date();
     // Um token novo ainda não está na Cloud. Repor a flag aqui é o que
     // permite um re-upload futuro; enquanto a flag estiver true, o push
     // pode tratar o token local residual como o mesmo já migrado.
@@ -828,6 +838,7 @@ function whatsAppCreateData(data: WhatsAppUpsertData) {
     shopName: "",
     trackingBaseUrl: data.trackingBaseUrl ?? null,
     whatsappApiTokenEncrypted: data.whatsappApiTokenEncrypted ?? null,
+    whatsappApiTokenWrittenAt: data.whatsappApiTokenWrittenAt ?? null,
     whatsappBusinessId: data.whatsappBusinessId ?? null,
     whatsappEnabled: data.whatsappEnabled ?? false,
     whatsappLocalDisclaimerAt: data.whatsappLocalDisclaimerAt ?? null,

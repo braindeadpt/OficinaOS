@@ -185,7 +185,7 @@ describe("sendWhatsAppText", () => {
     });
   });
 
-  it("clears the local token after the first successful cloud send", async () => {
+  it("keeps the local token after a successful cloud send — it remains the audited transition fallback", async () => {
     mocks.cloudFetch.mockResolvedValue({
       body: { ok: true },
       ok: true,
@@ -195,50 +195,7 @@ describe("sendWhatsAppText", () => {
       ...entitled,
       whatsappApiTokenEncrypted: "enc:meta",
     });
-    expect(updateManySettings).toHaveBeenCalledWith({
-      data: { whatsappApiTokenEncrypted: null },
-      where: {
-        id: "default",
-        whatsappApiTokenEncrypted: "enc:meta",
-        whatsappCredentialsAtCloud: true,
-      },
-    });
-  });
-
-  it.each([
-    false,
-    true,
-  ])("does not delete a replacement token when an older cloud send finishes (cloud flag %s)", async (credentialsAtCloud) => {
-    let storedToken: string | null = "enc:replacement";
-    updateManySettings.mockImplementation(
-      ({
-        data,
-        where,
-      }: {
-        data: Record<string, unknown>;
-        where: Record<string, unknown>;
-      }) => {
-        const matches =
-          storedToken === where.whatsappApiTokenEncrypted &&
-          credentialsAtCloud === where.whatsappCredentialsAtCloud;
-        if (matches) {
-          storedToken = data.whatsappApiTokenEncrypted as string | null;
-        }
-        return Promise.resolve({ count: matches ? 1 : 0 });
-      }
-    );
-    mocks.cloudFetch.mockResolvedValue({
-      body: { ok: true },
-      ok: true,
-      status: 200,
-    });
-
-    await sendWhatsAppText(prisma, channel, "+351912345678", "olá", "PT", {
-      ...entitled,
-      whatsappApiTokenEncrypted: "enc:original",
-    });
-
-    expect(storedToken).toBe("enc:replacement");
+    expect(updateManySettings).not.toHaveBeenCalled();
   });
 
   it("keeps the local token when the cloud send fails", async () => {
@@ -559,6 +516,7 @@ describe("revokeWhatsAppCloudCredentials", () => {
     expect(updateManySettings).toHaveBeenCalledWith({
       data: {
         whatsappApiTokenEncrypted: null,
+        whatsappApiTokenWrittenAt: null,
         whatsappCloudConsentAt: null,
         whatsappCredentialsAtCloud: false,
       },

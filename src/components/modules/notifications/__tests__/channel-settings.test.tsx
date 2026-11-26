@@ -18,7 +18,12 @@ const storeMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    t: (key: string, options?: { count?: number }) =>
+      options && typeof options.count === "number"
+        ? `${key}:${options.count}`
+        : key,
+  }),
 }));
 
 vi.mock("@/stores/settings", () => ({
@@ -130,5 +135,113 @@ describe("ChannelSettings — estado pós-revogação", () => {
     expect(
       onSaveWhatsAppSettings.mock.calls[0]?.[0]?.phoneNumberId
     ).toBeUndefined();
+  });
+
+  it("mostra o aviso obrigatório depois do prazo de 30 dias sem consentimento Cloud", async () => {
+    renderChannelSettings(
+      whatsAppSettings({
+        cloudConsentAccepted: false,
+        localDeprecationStartedAt: new Date(
+          Date.now() - 31 * 24 * 60 * 60 * 1000
+        ).toISOString(),
+      })
+    );
+
+    expect(
+      await screen.findByText("whatsapp_cloud_authorization_required")
+    ).toBeInTheDocument();
+  });
+
+  it("não mostra o aviso pós-prazo quando o consentimento Cloud já existe", async () => {
+    renderChannelSettings(
+      whatsAppSettings({
+        cloudConsentAccepted: true,
+        credentialsAtCloud: true,
+        hasApiToken: false,
+        localDeprecationStartedAt: new Date(
+          Date.now() - 31 * 24 * 60 * 60 * 1000
+        ).toISOString(),
+      })
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(
+      screen.queryByText("whatsapp_cloud_authorization_required")
+    ).not.toBeInTheDocument();
+  });
+
+  it("usa a fonte única de 30 dias na contagem decrescente da migração", async () => {
+    const { container } = renderChannelSettings(
+      whatsAppSettings({
+        cloudConsentAccepted: false,
+        enabled: true,
+        hasApiToken: true,
+        localDeprecationStartedAt: new Date().toISOString(),
+      })
+    );
+
+    await waitFor(() =>
+      expect(container.textContent).toContain(
+        "whatsapp_cloud_migration_days_left:30"
+      )
+    );
+  });
+
+  it("mostra a contagem também a uma loja grandfathered já na Cloud mas sem consentimento explícito", async () => {
+    const { container } = renderChannelSettings(
+      whatsAppSettings({
+        cloudConsentAccepted: false,
+        credentialsAtCloud: true,
+        enabled: true,
+        hasApiToken: false,
+        localDeprecationStartedAt: new Date().toISOString(),
+      })
+    );
+
+    await waitFor(() =>
+      expect(container.textContent).toContain(
+        "whatsapp_cloud_migration_days_left:30"
+      )
+    );
+  });
+
+  it("mostra os eventos auditados da transição com tipo, motivo e data", async () => {
+    const createdAt = new Date("2026-03-01T10:30:00.000Z").toISOString();
+    renderChannelSettings(
+      whatsAppSettings({
+        migrationEvents: [
+          {
+            createdAt,
+            id: "evt-1",
+            reason: "cloud_http_5xx",
+            type: "LOCAL_FALLBACK",
+          },
+          {
+            createdAt,
+            id: "evt-2",
+            reason: "transition_deadline_reached",
+            type: "LOCAL_TOKEN_PURGED",
+          },
+        ],
+      })
+    );
+
+    expect(
+      await screen.findByText("whatsapp_migration_events_title")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("whatsapp_migration_event_local_fallback")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("whatsapp_migration_reason_cloud_5xx")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("whatsapp_migration_event_token_purged")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("whatsapp_migration_reason_deadline")
+    ).toBeInTheDocument();
   });
 });

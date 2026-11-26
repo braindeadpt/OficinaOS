@@ -1,6 +1,7 @@
 import { buildLoanerAgreementDocument } from "@shared/loaner-agreement-document.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resetEnvForTests } from "../config/env.js";
+import { encryptSecret } from "../lib/crypto.js";
 import {
   SIGNATURE_LINK_EVENT,
   sendSignatureLink,
@@ -112,7 +113,10 @@ function defaultSettings(overrides: Record<string, unknown> = {}) {
     // Decisão 2026-11-23: signature_link é Pro — a loja default dos
     // testes tem ambos os módulos de mensagens com cache fresco.
     cloudEntitlements: ["whatsapp-bot", "sms"],
+    cloudShopTokenEncrypted: encryptSecret("shop-token"),
     cloudSyncedAt: new Date(),
+    whatsappCloudConsentAt: new Date(),
+    whatsappCredentialsAtCloud: true,
     shopName: "Oficina XPTO",
     currency: "EUR",
     ...overrides,
@@ -245,6 +249,25 @@ describe("sendSignatureLink — remote URL resolution", () => {
     );
     prisma.shopSettings.findUnique.mockResolvedValue(
       defaultSettings({ whatsappEnabled: false, smsEnabled: false })
+    );
+
+    await expect(
+      sendSignatureLink(app, TOKEN, "staff-1")
+    ).rejects.toMatchObject({ code: "SIGNATURE_LINK_NO_CHANNEL" });
+    expect(prisma.notificationOutbox.create).not.toHaveBeenCalled();
+  });
+
+  it("WhatsApp bloqueado pelo sunset sem consentimento Cloud → recusa em vez de confirmar envio impossível", async () => {
+    prisma.signatureSession.findUnique.mockResolvedValue(
+      intakeSession({ relayed: true })
+    );
+    prisma.shopSettings.findUnique.mockResolvedValue(
+      defaultSettings({
+        whatsappCloudConsentAt: null,
+        whatsappLocalDeprecationStartedAt: new Date(
+          Date.now() - 31 * 24 * 60 * 60 * 1000
+        ),
+      })
     );
 
     await expect(

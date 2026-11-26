@@ -13,6 +13,7 @@ import { isModuleEnabled } from "../utils/modules.js";
 import { createAuditLog } from "./audit.service.js";
 import { notify } from "./notification-dispatch.js";
 import { getSmsDeviceStatus } from "./sms-cloud.service.js";
+import { resolveWhatsAppChannel } from "./whatsapp-channel.js";
 
 // Sending a signing link is a staff-initiated action: the employee at the
 // counter would otherwise copy the URL into the shop's own WhatsApp or an
@@ -60,11 +61,7 @@ async function signatureChannelReady(
   // utilizável com o módulo correspondente ativo (cache <24h). Sem ele
   // o diálogo falha com SIGNATURE_LINK_NO_CHANNEL em vez de confirmar
   // um envio que ficaria para sempre na fila.
-  if (
-    hasWa &&
-    settings?.whatsappEnabled &&
-    isModuleEnabled(settings, "whatsapp-bot")
-  ) {
+  if (hasWa && settings && resolveWhatsAppChannel(settings)) {
     return true;
   }
   const hasSms = templates.some((t) => t.channel === "SMS");

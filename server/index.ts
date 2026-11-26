@@ -36,6 +36,7 @@ import { cleanupPontoPhotos } from "./services/ponto-photos.service.js";
 import { startRemarketingScheduler } from "./services/remarketing.service.js";
 import { stampWhatsAppLocalDeprecationStartedAtOnce } from "./services/settings.service.js";
 import { applyTaskRules } from "./services/tasks.service.js";
+import { purgeExpiredWhatsAppLocalToken } from "./services/whatsapp-local-sunset.service.js";
 import { initValidationI18n } from "./utils/resolve-validation-messages.js";
 
 const env = loadEnv();
@@ -128,12 +129,21 @@ await app.register(localePlugin);
 
 await app.register(prismaPlugin);
 
-// WP0.6 — sunset do envio Meta local: a contagem de 30 dias arranca no
+// Sunset do envio Meta local: a contagem de 30 dias arranca no
 // primeiro boot da versão nova, incondicionalmente (decisão do dono). Não
 // depende de token, consentimento, Cloud pairing ou de alguém abrir as
 // Definições. Awaited aqui para garantir que uma instalação nova fica com a
 // data antes de servir requests.
 await stampWhatsAppLocalDeprecationStartedAtOnce(app.prisma);
+// Se a instalação já passou o prazo enquanto esteve desligada, o purge corre
+// logo no arranque; o cloud-poller repete-o enquanto a app estiver ativa.
+// Falhas de BD não impedem o boot — o poller volta a tentar e o envio direto
+// já está bloqueado pelo gate de resolução.
+try {
+  await purgeExpiredWhatsAppLocalToken(app.prisma);
+} catch (err) {
+  app.log.error(err, "whatsapp local token purge failed at boot");
+}
 
 // DEMO_MODE first boot: an empty database would leave the demo dead —
 // /setup is disabled and nobody could sign in. Seed the fictional

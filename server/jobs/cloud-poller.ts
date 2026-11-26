@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { AppError } from "../../shared/errors/app-error.js";
 import { syncCloudEntitlements } from "../services/cloud.service.js";
 import { pushPontoCloudConfig } from "../services/ponto/config-sync.js";
+import { purgeExpiredWhatsAppLocalToken } from "../services/whatsapp-local-sunset.service.js";
 import { isModuleEnabled } from "../utils/modules.js";
 
 const INTERVAL_MS = 2 * 60 * 1000;
@@ -20,6 +21,14 @@ export function startCloudPoller(app: FastifyInstance): () => void {
     }
     ticking = true;
     try {
+      // Sunset Meta local — a limpeza é local e independente do pairing da
+      // Cloud. Falha aqui não pode adiar o sync de entitlements; o próximo
+      // tick volta a tentar de forma idempotente.
+      try {
+        await purgeExpiredWhatsAppLocalToken(app.prisma);
+      } catch (err) {
+        app.log.warn({ err }, "whatsapp local token purge failed");
+      }
       const before = await app.prisma.shopSettings.findUnique({
         where: { id: "default" },
       });
