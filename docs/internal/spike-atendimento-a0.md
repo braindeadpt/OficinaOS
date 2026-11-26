@@ -55,18 +55,24 @@ não podemos medir sem ligar um número real. Para esse custo usamos números pu
 
 Referências: CX22 2vCPU/4 GB €4,49; CX32 4vCPU/8 GB €8,49; CX43 8vCPU/16 GB €15,99
 ([cloudtally.eu, verificado 2026-11-10](https://cloudtally.eu/hetzner-cloud-prices), consultado 2026-11-26).
-Contas: consumo cru de 120 MB/sessão (meio do intervalo publicado em uso moderado) + 1 GB fixo,
-e dimensionamento com **~50 % de margem** para picos e leak — **só servidor, sem custo operacional**:
+Contas: consumo cru de **160 MB/sessão** (ponto médio do intervalo publicado para uso moderado,
+120–200 MB) + 1 GB fixo por host, e dimensionamento com **~50 % de margem** para picos e leak —
+**só servidor, sem custo operacional**:
 
 | Clientes | RAM crua | Com margem ×1,5 | Servidor | Custo/mês | Por cliente/mês |
 |---|---|---|---|---|---|
-| 10 | 1 + 1,2 ≈ 2,2 GB | 3,3 GB | CX22 (4 GB) €4,49 | ~€4,50 | **~€0,45** |
-| 50 | 1 + 6 ≈ 7 GB | 10,5 GB | CX43 (16 GB) €15,99 | ~€16 | **~€0,32** |
-| 200 | 1 + 24 ≈ 25 GB | 37,5 GB | 3× CX43 (48 GB) com sharding | ~€48 | **~€0,24** |
+| 10 | 1 + 1,6 ≈ 2,6 GB | 3,9 GB | CX22 (4 GB) €4,49 — no limite, sem folga operacional | ~€4,50–8,50 | **~€0,45–0,85** |
+| 50 | 1 + 8 ≈ 9 GB | 13,5 GB | CX43 (16 GB) €15,99 | ~€16 | **~€0,32** |
+| 200 | 1 + 32 ≈ 33 GB | 49,5 GB | 4× CX43 (64 GB) com sharding | ~€64 | **~€0,32** |
 
-Nota de honestidade nas contas: se as sessões em uso moderado ficarem no topo do intervalo
-publicado (200 MB em vez de 120 MB), o cenário de 200 clientes sobe para 4 hosts; a margem de
-50 % cobre o meio do intervalo, não o pior caso. É mais uma razão para medir RAM real no piloto.
+Notas de honestidade nas contas:
+- o consumo real por sessão emparelhada é **a maior incógnita do modelo de custo** — se ficar no
+  topo do intervalo (200 MB), nem 4 hosts de 16 GB cobrem 200 clientes com a margem (precisaria de
+  5); se ficar no fundo (120 MB), 3 chegam. O intervalo por cliente é por isso **~€0,24–0,40** no
+  cenário grande. Medir RAM real no piloto não é opcional: é o que decide estas contas.
+- o CX22 no cenário de 10 clientes fica sem folga operacional com o ponto médio — na prática o
+  primeiro host deve ser um CX32 (8 GB), o que duplica o custo por cliente nos primeiros 10
+  clientes. Os primeiros clientes subsidiam-se a si próprios: é o preço de arrancar.
 
 Aos preços comerciais do plano (dezenas de €/mês por cliente), o custo de infraestrutura WhatsApp é
 **irrelevante** — o custo real desta opção não é dinheiro, é risco (ver abaixo).
@@ -173,6 +179,11 @@ pgvector cobre** — embeddings capturam "cão ≈ animais", "sem marcar ≈ urg
 - As 40 perguntas fui eu que as escrevi — não são tráfego real. O número absoluto (95 %) é
   **otimista**; o que interessa é a *forma* dos erros (paráfrase sem overlap), que é estrutural.
 - Dataset pequeno (30 P/R por negócio) — com 100+ P/R o ruído de ranking aumenta um pouco.
+- O benchmark mede **recall de retrieval**: se a resposta certa chega ao LLM no top-3. **Não mede**
+  se o LLM a escolhe e usa corretamente — isso depende do prompt e do modelo e fica por testar no
+  A2. Pela mesma razão, a afirmação de que a ordem dentro do top-3 é irrelevante é um **pressuposto
+  razoável mas não verificado** (LLMs têm algum viés de posição); a decisão de não otimizar hit@1
+  deve ser revista se no piloto o assistente escolher a candidata errada com as três à frente.
 - O assistente nunca responde diretamente da pesquisa: o LLM recebe as 3 candidatas **e a ficha** —
   um top-3 imperfeito com um "não inventes" bem posto degrada com graciosidade para `pedir_humano`,
   não para resposta errada.
@@ -247,7 +258,7 @@ fica fora do A4 exceto se o mentor decidir o contrário.
 
 | Pergunta | Recomendação | Confiança |
 |---|---|---|
-| 1. Evolution multi-sessão | **Avançar** para piloto; custo ~€0,16–0,45/cliente/mês; risco de banimento declarado no contrato; oficial Meta como upgrade no A5; medir RAM real de sessões emparelhadas no A3 | Média-alta (evidência própria + publicada) |
+| 1. Evolution multi-sessão | **Avançar** para piloto; custo ~€0,24–0,45/cliente/mês conforme escala e consumo real (até ~€0,85 nos primeiros 10 clientes sem folga); risco de banimento declarado no contrato; oficial Meta como upgrade no A5; medir RAM real de sessões emparelhadas no A3 | Média-alta (evidência própria + publicada) |
 | 2. procurar_faq | **Sem pgvector**: trigram simples sobre pergunta+resposta (95 % top-3); pgvector como upgrade decidido por dados do piloto | Alta no mecanismo; média nos números (dataset sintético) |
 | 3. Google Places | **Proibido** pré-preencher a partir do perfil público. Fonte = site da empresa + perguntas; GBP API do próprio dono como caminho legal posterior | Alta (texto dos termos é explícito) |
 
