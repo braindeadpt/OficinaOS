@@ -607,6 +607,19 @@ describe("WP0.6 PR B — rotação, revogação e aviso grandfathered", () => {
         whatsappPhoneNumberId: "1234",
       });
     } finally {
+      // Se uma asserção falhar a meio, uploads simulados ficariam pendentes
+      // e bloqueariam para sempre a fila partilhada (e os testes seguintes).
+      // Repomos a implementação que resolve de imediato — uploads que ainda
+      // não arrancaram deixam de ficar retidos — e libertamos os que já
+      // estão pendentes, garantindo que a fila drena.
+      mocks.cloudFetch.mockImplementation(async () => ({
+        body: {},
+        ok: true,
+        status: 200,
+      }));
+      for (const release of rejectUploads) {
+        release();
+      }
       parseSpy.mockRestore();
     }
   });
