@@ -8,7 +8,7 @@ set -euo pipefail
 
 BACKUP_DIR="${BACKUP_DIR:-/tmp/oficinaos-restore-check}"
 HEARTBEAT_DIR="${HEARTBEAT_DIR:-$BACKUP_DIR/heartbeat}"
-CHECK_DB="${RESTORE_CHECK_DB:-restore_check}"
+CHECK_DB="${RESTORE_CHECK_DB:-restore_check_$$}"
 MAX_ENTRY_AGE_DAYS="${RESTORE_CHECK_MAX_ENTRY_AGE_DAYS:-35}"
 
 PGHOST="${PGHOST:-db}"
@@ -51,6 +51,7 @@ STAMP="$(date -u +%Y%m%d-%H%M%S)"
 DOWNLOAD_PATH="$BACKUP_DIR/restore-check-$STAMP-$TARGET_FILE"
 PLAIN_PATH=""
 TMP_KEY=""
+SIG_PATH=""
 umask 077
 
 cleanup() {
@@ -58,7 +59,7 @@ cleanup() {
   psql --host="$PGHOST" --port="$PGPORT" --username="$PGUSER" \
     --dbname=postgres --set=ON_ERROR_STOP=1 --quiet \
     --command="DROP DATABASE IF EXISTS \"$CHECK_DB\";" >/dev/null 2>&1
-  rm -f "$DOWNLOAD_PATH" "$PLAIN_PATH" "$TMP_KEY"
+  rm -f "$DOWNLOAD_PATH" "$PLAIN_PATH" "$TMP_KEY" "$SIG_PATH"
 }
 trap cleanup EXIT
 
@@ -84,6 +85,29 @@ case "$TARGET_FILE" in
     fi
     if [ -z "$KEY_FILE" ] || [ ! -r "$KEY_FILE" ]; then
       echo "[restore-check] ERROR: define BACKUP_AGE_KEY_FILE (recomendado) ou BACKUP_AGE_PRIVATE_KEY" >&2
+      exit 2
+    fi
+    command -v minisign >/dev/null 2>&1 || {
+      echo "[restore-check] ERROR: minisign não está instalado" >&2
+      exit 1
+    }
+    SIG_PATH="$DOWNLOAD_PATH.minisig"
+    if ! rclone copyto "$REMOTE/$TARGET_FILE.minisig" "$SIG_PATH" 2>/dev/null; then
+      echo "[restore-check] ERROR: assinatura do backup em falta no destino remoto" >&2
+      exit 1
+    fi
+    if [ -n "${BACKUP_SIGN_PUBLIC_KEY_FILE:-}" ]; then
+      minisign -qV -m "$DOWNLOAD_PATH" -p "$BACKUP_SIGN_PUBLIC_KEY_FILE" -x "$SIG_PATH" || {
+        echo "[restore-check] ERROR: assinatura do backup inválida" >&2
+        exit 1
+      }
+    elif [ -n "${BACKUP_SIGN_PUBLIC_KEY:-}" ]; then
+      minisign -qV -m "$DOWNLOAD_PATH" -P "$BACKUP_SIGN_PUBLIC_KEY" -x "$SIG_PATH" || {
+        echo "[restore-check] ERROR: assinatura do backup inválida" >&2
+        exit 1
+      }
+    else
+      echo "[restore-check] ERROR: define BACKUP_SIGN_PUBLIC_KEY_FILE ou BACKUP_SIGN_PUBLIC_KEY" >&2
       exit 2
     fi
     PLAIN_PATH="$BACKUP_DIR/restore-check-$STAMP.dump"
@@ -114,10 +138,14 @@ case "$TARGET_FILE" in
       echo "[restore-check] ERROR: pg_restore não está instalado" >&2
       exit 1
     }
-    pg_restore \
-      --host="$PGHOST" --port="$PGPORT" --username="$PGUSER" \
-      --dbname="$CHECK_DB" --no-owner --no-privileges --exit-on-error \
-      "$PLAIN_PATH"
+    # Gerar SQL a partir do formato custom em vez de ligar pg_restore
+    # diretamente à BD: pg_dump/pg_restore 18+ emitem `SET transaction_timeout`,
+    # um GUC que não existe em Postgres <= 16. Sem ligação é só texto e pode
+    # ser filtrado como já fazíamos nos dumps plain legados.
+    pg_restore --no-owner --no-privileges -f - "$PLAIN_PATH" \
+      | sed '/^SET transaction_timeout\b/d' \
+      | psql --host="$PGHOST" --port="$PGPORT" --username="$PGUSER" \
+        --dbname="$CHECK_DB" --set=ON_ERROR_STOP=1 --quiet
     ;;
   *.sql.gz)
     # Backups legados plain SQL. pg_dump >= 17 escreve um GUC que não existe
@@ -161,7 +189,18 @@ else
   VERIFY_MESSAGE="$TABLE_COUNT tabelas públicas"
 fi
 
-printf '%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+RESTORE_CHECK_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+printf '%s\n' "$RESTORE_CHECK_AT" \
   > "$HEARTBEAT_DIR/last-restore-check.txt"
+# Marcador remoto pequeno e sem dados: o servidor espelha-o para o painel de
+# backups. Fica fora dos padrões de retenção dos dumps.
+printf '%s\n' "$RESTORE_CHECK_AT" > "$BACKUP_DIR/last-restore-check-remote.txt"
+if ! rclone copyto "$BACKUP_DIR/last-restore-check-remote.txt" \
+  "$REMOTE/restore-check-status/last-restore-check.txt" 2>/dev/null; then
+  echo "[restore-check] ERROR: não foi possível publicar o marcador remoto de verificação" >&2
+  rm -f "$BACKUP_DIR/last-restore-check-remote.txt"
+  exit 1
+fi
+rm -f "$BACKUP_DIR/last-restore-check-remote.txt"
 
 echo "[restore-check] ok: $VERIFY_MESSAGE restaurados de $TARGET_FILE; base temporária removida"

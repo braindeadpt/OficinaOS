@@ -55,8 +55,19 @@ trap 'rc=$?; if [ "$rc" -ne 0 ]; then write_failure_alert "$rc"; fi' EXIT
 if [ "${BACKUP_ONCE_PER_DAY:-false}" = "true" ] && [ "${BACKUP_FORCE:-false}" != "true" ] && [ -f "$HEARTBEAT_DIR/last-backup.txt" ]; then
   LAST_BACKUP_DATE="$(cut -c1-10 "$HEARTBEAT_DIR/last-backup.txt" 2>/dev/null || true)"
   if [ "$LAST_BACKUP_DATE" = "$(date -u +%F)" ]; then
-    echo "[backup] já existe um backup concluído hoje; nada a fazer"
-    exit 0
+    ALREADY_DONE=true
+    if [ -n "${BACKUP_AGE_PUBLIC_KEY:-}" ]; then
+      TODAY_COMPACT="$(date -u +%Y%m%d)"
+      TODAY_ENCRYPTED=false
+      for existing in "$BACKUP_DIR"/oficinaos-"$TODAY_COMPACT"-*.dump.age; do
+        [ -f "$existing" ] && TODAY_ENCRYPTED=true && break
+      done
+      [ "$TODAY_ENCRYPTED" != "true" ] && ALREADY_DONE=false
+    fi
+    if [ "$ALREADY_DONE" = "true" ]; then
+      echo "[backup] já existe um backup concluído hoje; nada a fazer"
+      exit 0
+    fi
   fi
 fi
 
@@ -73,6 +84,27 @@ if [ "$ENCRYPTED" = "true" ]; then
     echo "[backup] ERROR: age não está instalado" >&2
     exit 1
   }
+  # age autentica o conteúdo mas não o produtor: qualquer escritor do bucket
+  # pode cifrar com a chave pública. minisign autentica este servidor com um
+  # par de chaves separado da chave privada age (que nunca entra aqui).
+  BACKUP_SIGN_SECRET_KEY_FILE="${BACKUP_SIGN_SECRET_KEY_FILE:-/backup-keys/backup-signing.key}"
+  BACKUP_SIGN_PUBLIC_KEY_FILE="${BACKUP_SIGN_PUBLIC_KEY_FILE:-/backup-keys/backup-signing.pub}"
+  command -v minisign >/dev/null 2>&1 || {
+    echo "[backup] ERROR: minisign não está instalado" >&2
+    exit 1
+  }
+  if [ ! -s "$BACKUP_SIGN_SECRET_KEY_FILE" ] && [ ! -s "$BACKUP_SIGN_PUBLIC_KEY_FILE" ]; then
+    # Primeira execução num volume persistente: gerar uma vez. O instalador
+    # alojado também o faz, mas isto mantém o compose genérico funcional.
+    mkdir -p "$(dirname "$BACKUP_SIGN_SECRET_KEY_FILE")"
+    (umask 077; minisign -G -W -f \
+      -p "$BACKUP_SIGN_PUBLIC_KEY_FILE" \
+      -s "$BACKUP_SIGN_SECRET_KEY_FILE" >/dev/null 2>&1)
+  fi
+  if [ ! -s "$BACKUP_SIGN_SECRET_KEY_FILE" ] || [ ! -s "$BACKUP_SIGN_PUBLIC_KEY_FILE" ]; then
+    echo "[backup] ERROR: par de chaves de assinatura em /backup-keys incompleto ou não gerado" >&2
+    exit 1
+  fi
 fi
 
 STAMP="$(date -u +%Y%m%d-%H%M%S)"
@@ -91,6 +123,8 @@ if [ "$ENCRYPTED" = "true" ]; then
     --no-privileges \
     | age -r "$BACKUP_AGE_PUBLIC_KEY" >"$TMP_TARGET"
   mv "$TMP_TARGET" "$TARGET"
+  rm -f "$TARGET.minisig"
+  minisign -qS -m "$TARGET" -s "$BACKUP_SIGN_SECRET_KEY_FILE" -x "$TARGET.minisig"
 else
   TARGET="$BACKUP_DIR/oficinaos-$STAMP-$$.sql.gz"
   echo "[backup] dumping $PGDATABASE@$PGHOST:$PGPORT -> $TARGET"
@@ -114,6 +148,20 @@ fi
 
 echo "[backup] ok: $(du -h "$TARGET" | cut -f1)"
 
+# Retenção local antes do envio remoto: falhas de rede/credenciais não podem
+# deixar acumular dumps diários até encher o disco.
+shopt -s nullglob
+backup_files=( "$BACKUP_DIR"/oficinaos-*.dump.age "$BACKUP_DIR"/oficinaos-*.sql.gz )
+if [ "${#backup_files[@]}" -gt 0 ]; then
+  printf '%s\n' "${backup_files[@]}" |
+    sort -r |
+    tail -n +$((RETENTION_DAYS + 1)) |
+    while IFS= read -r old; do
+      echo "[backup] pruning $old"
+      rm -f "$old" "$old.minisig"
+    done
+fi
+
 if [ "$BACKUP_REMOTE_ENABLED" = "true" ]; then
   # shellcheck source=db-backup-remote.sh
   . "$(dirname "$0")/db-backup-remote.sh"
@@ -129,6 +177,13 @@ if [ "$BACKUP_REMOTE_ENABLED" = "true" ]; then
     echo "[backup] ERROR: remote copy failed" >&2
     exit 1
   fi
+  if [ "$ENCRYPTED" = "true" ] && ! rclone copyto "$TARGET.minisig" "$REMOTE/$(basename "$TARGET").minisig"; then
+    # Não deixar um objeto sem assinatura como "mais recente": o verificador
+    # rejeita-o corretamente, mas escondia o backup assinado anterior.
+    rclone deletefile "$REMOTE/$(basename "$TARGET")" >/dev/null 2>&1 || true
+    echo "[backup] ERROR: remote signature copy failed" >&2
+    exit 1
+  fi
   echo "[backup] remote copy ok"
   printf '%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     > "$HEARTBEAT_DIR/last-remote-copy.txt"
@@ -138,10 +193,17 @@ if [ "$BACKUP_REMOTE_ENABLED" = "true" ]; then
   if ! rclone delete "$REMOTE" \
     --include 'oficinaos-*.dump.age' \
     --include 'oficinaos-*.sql.gz' \
+    --include 'oficinaos-*.minisig' \
     --min-age "${RETENTION_DAYS}d"; then
     echo "[backup] ERROR: remote retention pass failed" >&2
     exit 1
   fi
+
+  # O teste mensal corre noutra máquina; o marcador remoto é a única ponte
+  # possível para o painel local saber que esse teste passou. Best-effort:
+  # nunca falha o backup só porque ainda não há verificação publicada.
+  rclone copyto "$REMOTE/restore-check-status/last-restore-check.txt" \
+    "$HEARTBEAT_DIR/last-restore-check.txt" >/dev/null 2>&1 || true
 fi
 
 # Nas instalações legadas sem cifragem, preservar a verificação periódica que
@@ -167,19 +229,6 @@ if [ "$BACKUP_REMOTE_ENABLED" = "true" ] && [ "$ENCRYPTED" != "true" ]; then
       echo "[backup] warn: restore-check script not found at $RESTORE_CHECK_SCRIPT" >&2
     fi
   fi
-fi
-
-# Retenção local: mantém os ficheiros mais recentes (cifrado e legado).
-shopt -s nullglob
-backup_files=( "$BACKUP_DIR"/oficinaos-*.dump.age "$BACKUP_DIR"/oficinaos-*.sql.gz )
-if [ "${#backup_files[@]}" -gt 0 ]; then
-  printf '%s\n' "${backup_files[@]}" |
-    sort -r |
-    tail -n +$((RETENTION_DAYS + 1)) |
-    while IFS= read -r old; do
-      echo "[backup] pruning $old"
-      rm -f "$old"
-    done
 fi
 
 # Heartbeat read by the app for the settings "last backup" indicator. Só é

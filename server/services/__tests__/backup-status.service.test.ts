@@ -95,6 +95,7 @@ describe("getBackupStatus", () => {
     mockFs(files(), [
       "oficinaos-20260929-030000.sql.gz",
       "oficinaos-20260928-030000.sql.gz",
+      "oficinaos-20260929-040000-1.dump.age",
       "unrelated.txt",
     ]);
 
@@ -103,7 +104,7 @@ describe("getBackupStatus", () => {
     expect(status.lastBackupAt).not.toBeNull();
     expect(status.hoursAgo).toBeLessThanOrEqual(3);
     expect(status.stale).toBe(false);
-    expect(status.dumpCount).toBe(2);
+    expect(status.dumpCount).toBe(3);
   });
 
   it("degrades to missing state without a heartbeat file", async () => {
@@ -160,6 +161,20 @@ describe("getBackupStatus", () => {
 
     expect(status.remote.remoteCopyStale).toBe(true);
     expect(status.remote.restoreCheckStale).toBe(true);
+  });
+
+  it("uses the monthly window when encrypted backups are present", async () => {
+    mockFs(
+      files({
+        "last-remote-copy.txt": isoHoursAgo(3),
+        "last-restore-check.txt": isoHoursAgo(24 * 10),
+      }),
+      ["oficinaos-20260929-030000.dump.age"]
+    );
+
+    const status = await getBackupStatus();
+
+    expect(status.remote.restoreCheckStale).toBe(false);
   });
 
   it("treats a failed check (attempt without success) as never verified", async () => {

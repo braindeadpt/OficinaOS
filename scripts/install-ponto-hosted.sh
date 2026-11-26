@@ -143,7 +143,8 @@ PROXY_DIR="${PONTO_HOST_ROOT}/proxy"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 
-mkdir -p "$CLIENT_DIR/scripts" "$PROXY_DIR"
+mkdir -p "$CLIENT_DIR/scripts" "$CLIENT_DIR/backup-keys" "$PROXY_DIR"
+chmod 700 "$CLIENT_DIR/backup-keys"
 chmod 700 "$PONTO_HOST_ROOT" "$PONTO_HOST_ROOT/clientes" "$CLIENT_DIR" 2>/dev/null || true
 
 install -m 0755 "$REPO_ROOT/scripts/db-backup.sh" "$CLIENT_DIR/scripts/db-backup.sh"
@@ -184,6 +185,11 @@ for key in BACKUP_AGE_PUBLIC_KEY BACKUP_ALERT_WEBHOOK_URL BACKUP_ALERT_LABEL BAC
 done
 BACKUP_REMOTE_ENABLED_VALUE="$(configured_value BACKUP_REMOTE_ENABLED "$ENV_FILE")"
 BACKUP_REMOTE_ENABLED_VALUE="${BACKUP_REMOTE_ENABLED_VALUE:-true}"
+# Se o operador forneceu um bucket S3 novo, isso é uma migração explícita —
+# não deixar um BACKUP_REMOTE_ENABLED=false legado anular essa intenção.
+if [ -n "${BACKUP_S3_BUCKET:-}" ]; then
+  BACKUP_REMOTE_ENABLED_VALUE=true
+fi
 BACKUP_RCLONE_REMOTE_VALUE="$(configured_value BACKUP_RCLONE_REMOTE "$ENV_FILE")"
 BACKUP_S3_PREFIX_VALUE="$(configured_value BACKUP_S3_PREFIX "$ENV_FILE")"
 BACKUP_S3_PREFIX_VALUE="${BACKUP_S3_PREFIX_VALUE:-clientes/${PONTO_CLIENT_SLUG}}"
@@ -316,6 +322,7 @@ services:
     volumes:
       - backups:/backups
       - backups-heartbeat:/backups-status
+      - ./backup-keys:/backup-keys
       - ./scripts/db-backup.sh:/scripts/run-backup.sh:ro
       - ./scripts/db-backup-remote.sh:/scripts/db-backup-remote.sh:ro
       - ./scripts/db-restore.sh:/scripts/run-restore.sh:ro
@@ -324,7 +331,7 @@ services:
       - sh
       - -c
       - |
-        for i in 1 2 3 4 5; do apk add --no-cache bash age curl >/dev/null 2>&1 && break; sleep 5; done
+        for i in 1 2 3 4 5; do apk add --no-cache bash age curl minisign >/dev/null 2>&1 && break; sleep 5; done
         if [ "${BACKUP_REMOTE_ENABLED:-false}" = "true" ]; then
           apk add --no-cache rclone >/dev/null 2>&1 || echo '[db-backup] WARN: rclone install failed'
         fi
@@ -564,7 +571,7 @@ backup_container="$(cd "$CLIENT_DIR" && docker compose ps -q db-backup 2>/dev/nu
 # idempotentes não mudaram dados e dumps extra competiam com a retenção diária.
 latest_backup=""
 if [ -n "$backup_container" ]; then
-  latest_backup="$(docker exec "$backup_container" sh -c "find /backups -maxdepth 1 -type f \( -name 'oficinaos-*.dump.age' -o -name 'oficinaos-*.sql.gz' \) -mtime -1 -print -quit" 2>/dev/null || true)"
+  latest_backup="$(docker exec "$backup_container" sh -c "find /backups -maxdepth 1 -type f -name 'oficinaos-*.dump.age' -mtime -1 -print -quit" 2>/dev/null || true)"
 fi
 # Na primeira instalação forçar um dump depois do bootstrap: o dump de arranque
 # do contentor ainda não tem proprietário nem emparelhamento. Em reexecuções,
@@ -573,11 +580,15 @@ if [ -n "$backup_container" ] && { [ ! -f "$CLIENT_DIR/.bootstrap-backup-done" ]
   # O contentor instala age/rclone no arranque. Esperar um curto período para
   # o primeiro backup pós-bootstrap não falhar só por essa corrida.
   for attempt in $(seq 1 30); do
-    if docker exec "$backup_container" sh -c 'command -v age >/dev/null 2>&1 && command -v rclone >/dev/null 2>&1' >/dev/null 2>&1; then
+    if docker exec "$backup_container" sh -c 'command -v age >/dev/null 2>&1 && command -v minisign >/dev/null 2>&1 && command -v rclone >/dev/null 2>&1' >/dev/null 2>&1; then
       break
     fi
     sleep 2
   done
+  # O par de assinatura é gerado uma vez e preservado no volume da instância.
+  # A chave privada de assinatura fica no servidor (autentica o produtor); a
+  # chave privada age de restauro continua proibida aqui.
+  docker exec "$backup_container" sh -c 'umask 077; if [ ! -s /backup-keys/backup-signing.key ] && [ ! -s /backup-keys/backup-signing.pub ]; then minisign -G -W -f -p /backup-keys/backup-signing.pub -s /backup-keys/backup-signing.key >/dev/null 2>&1; fi; chmod 600 /backup-keys/backup-signing.key 2>/dev/null || true' >/dev/null 2>&1 || true
   if docker exec -e BACKUP_FORCE=true "$backup_container" bash /scripts/run-backup.sh >/dev/null 2>&1; then
     touch "$CLIENT_DIR/.bootstrap-backup-done"
     chmod 600 "$CLIENT_DIR/.bootstrap-backup-done"
@@ -590,7 +601,7 @@ fi
 # em VPS sem systemd. Em ambos os casos a execução entra pelo contentor
 # db-backup e o código de saída real do script é preservado.
 install_backup_scheduler() {
-  local docker_bin scheduler systemd_dir cron_dir service timer cronfile wrapper
+  local docker_bin scheduler systemd_dir cron_dir periodic_dir service timer cronfile wrapper installed marker
   docker_bin="$(command -v docker)"
   scheduler="$PONTO_SCHEDULER"
   service="oficinaos-ponto-backup-${PONTO_CLIENT_SLUG}.service"
@@ -657,18 +668,47 @@ EOF
     return 0
   fi
 
-  cron_dir="${PONTO_CRON_DIR:-/etc/cron.d}"
-  if [ ! -d "$cron_dir" ] && ! mkdir -p "$cron_dir" 2>/dev/null; then
-    die "não foi possível instalar timer systemd nem cron para o backup diário"
-  fi
   mkdir -p "$CLIENT_DIR/logs"
   chmod 700 "$CLIENT_DIR/logs"
-  cronfile="$cron_dir/oficinaos-ponto-backup-${PONTO_CLIENT_SLUG}"
-  cat >"$cronfile" <<EOF
+  cron_dir="${PONTO_CRON_DIR:-/etc/cron.d}"
+  periodic_dir="${PONTO_CRON_PERIODIC_DIR:-/etc/periodic/daily}"
+  installed=false
+  if [ -d "$periodic_dir" ]; then
+    cronfile="$periodic_dir/oficinaos-ponto-backup-${PONTO_CLIENT_SLUG}"
+    cat >"$cronfile" <<EOF
+#!/bin/sh
+exec ${wrapper} >> ${CLIENT_DIR}/logs/backup.log 2>&1
+EOF
+    chmod 0755 "$cronfile"
+    installed=true
+  fi
+  if [ -n "$PONTO_CRON_DIR" ] || [ -d "$cron_dir" ]; then
+    mkdir -p "$cron_dir" 2>/dev/null || true
+  fi
+  if [ -d "$cron_dir" ]; then
+    cronfile="$cron_dir/oficinaos-ponto-backup-${PONTO_CLIENT_SLUG}"
+    cat >"$cronfile" <<EOF
 SHELL=/bin/sh
 17 3 * * * root ${wrapper} >> ${CLIENT_DIR}/logs/backup.log 2>&1
 EOF
-  chmod 0644 "$cronfile"
+    chmod 0644 "$cronfile"
+    installed=true
+  fi
+  if [ "$installed" != "true" ] && command -v crontab >/dev/null 2>&1; then
+    marker="oficinaos-ponto-backup-${PONTO_CLIENT_SLUG}"
+    { crontab -l 2>/dev/null | grep -v "$marker" || true; printf '17 3 * * * %s >> %s/logs/backup.log 2>&1 # %s\n' "$wrapper" "$CLIENT_DIR" "$marker"; } | crontab -
+    installed=true
+  fi
+  if [ "$installed" != "true" ] && mkdir -p "$cron_dir" 2>/dev/null; then
+    cronfile="$cron_dir/oficinaos-ponto-backup-${PONTO_CLIENT_SLUG}"
+    cat >"$cronfile" <<EOF
+SHELL=/bin/sh
+17 3 * * * root ${wrapper} >> ${CLIENT_DIR}/logs/backup.log 2>&1
+EOF
+    chmod 0644 "$cronfile"
+    installed=true
+  fi
+  [ "$installed" = "true" ] || die "não foi possível instalar timer systemd nem cron para o backup diário"
 }
 
 install_backup_scheduler

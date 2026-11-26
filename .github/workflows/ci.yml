@@ -211,11 +211,16 @@ jobs:
         run: |
           curl -s https://rclone.org/install.sh | sudo bash
           sudo apt-get update -qq
-          sudo apt-get install -y -qq age
+          sudo apt-get install -y -qq age minisign
           rclone version
           age-keygen -o /tmp/ponto-backup-age-key.txt
           chmod 600 /tmp/ponto-backup-age-key.txt
           grep 'public key:' /tmp/ponto-backup-age-key.txt
+          mkdir -p /tmp/ponto-backup-signing
+          minisign -G -W -f \
+            -p /tmp/ponto-backup-signing/backup-signing.pub \
+            -s /tmp/ponto-backup-signing/backup-signing.key
+          chmod 600 /tmp/ponto-backup-signing/backup-signing.key
           S3_ACCESS_KEY="ci$(openssl rand -hex 8)"
           S3_SECRET_KEY="$(openssl rand -hex 32)"
           mkdir -p /tmp/offsite-store
@@ -259,6 +264,8 @@ jobs:
             echo "BACKUP_S3_SECRET_ACCESS_KEY=${S3_SECRET_KEY}"
             echo "BACKUP_AGE_KEY_FILE=/tmp/ponto-backup-age-key.txt"
             echo "BACKUP_AGE_PUBLIC_KEY=$(grep 'public key:' /tmp/ponto-backup-age-key.txt | awk '{print $4}')"
+            echo "BACKUP_SIGN_SECRET_KEY_FILE=/tmp/ponto-backup-signing/backup-signing.key"
+            echo "BACKUP_SIGN_PUBLIC_KEY_FILE=/tmp/ponto-backup-signing/backup-signing.pub"
           } >> "$GITHUB_ENV"
           echo "object store ready"
       - name: Encrypted backup with off-site copy and restore verification

@@ -107,13 +107,23 @@ O backup operacional do ponto alojado usa este modelo:
 1. `pg_dump -Fc` dentro do contentor `db-backup`;
 2. cifragem imediata com age, usando apenas
    a **chave pública** em `BACKUP_AGE_PUBLIC_KEY`;
-3. envio do ficheiro `.dump.age` para um destino S3-compatível;
-4. retenção de 30 dias no destino;
-5. alerta em falha num ficheiro de estado e, opcionalmente, num webhook.
+3. assinatura minisign do ficheiro, para o restauro conseguir distinguir um
+   backup produzido pelo servidor de um objeto substituído no bucket;
+4. envio do ficheiro `.dump.age` e da assinatura `.minisig` para um destino
+   S3-compatível;
+5. retenção de 30 dias no destino;
+6. alerta em falha num ficheiro de estado e, opcionalmente, num webhook.
 
-A **chave privada nunca fica no servidor**. Nem em `.env`, nem no compose, nem
-em volume Docker. Sem ela, um atacante com acesso ao VPS ou ao bucket não consegue
-ler os dados dos funcionários.
+A **chave privada age nunca fica no servidor**. Nem em `.env`, nem no compose,
+nem em volume Docker. Sem ela, um atacante com acesso ao VPS ou ao bucket não
+consegue ler os dados dos funcionários.
+
+O servidor tem, isso sim, uma **chave privada minisign separada** em
+`backup-keys/backup-signing.key` dentro do diretório da instância. Ela não
+decifra backups: só prova que o ficheiro foi produzido por aquele servidor. A
+respetiva chave pública (`backup-signing.pub`) deve ser copiada para a máquina
+de restauro, por exemplo para `/etc/oficinaos/ponto-backup-signing.pub`. Se o servidor for comprometido, o atacante pode assinar backups
+novos, mas continua sem conseguir ler backups antigos nem o conteúdo dos dados.
 
 ### Gerar a chave (na máquina de operador, não no VPS)
 
@@ -159,7 +169,8 @@ sudo systemctl list-timers 'oficinaos-ponto-backup-*'
 sudo journalctl -u oficinaos-ponto-backup-<slug>.service -n 100 --no-pager
 ```
 
-Sem systemd, o instalador usa `/etc/cron.d/oficinaos-ponto-backup-<slug>` e os
+Sem systemd, o instalador usa `/etc/cron.d/oficinaos-ponto-backup-<slug>` ou,
+quando existe, o diretório nativo `/etc/periodic/daily` do BusyBox cron; os
 logs ficam em `logs/backup.log` dentro do diretório da instância.
 
 Quando o backup falha, o serviço sai com código diferente de zero. O wrapper do
@@ -191,12 +202,13 @@ sudo docker compose exec -T -e BACKUP_FORCE=true db-backup bash /scripts/run-bac
 O teste deve correr **noutra máquina** que tenha a chave privada — por exemplo a
 máquina de operação ou um pequeno servidor de manutenção. Nunca no VPS de
 produção. Essa máquina precisa de `age`, `rclone` e cliente PostgreSQL
-(`psql`/`pg_restore`), além de acesso a um PostgreSQL descartável.
+(`psql`/`pg_restore`) e `minisign`, além de acesso a um PostgreSQL descartável.
 
 Criar `/etc/oficinaos/ponto-restore-check.env` com permissões 0600:
 
 ```bash
 BACKUP_AGE_KEY_FILE=/etc/oficinaos/ponto-backup-age-key.txt
+BACKUP_SIGN_PUBLIC_KEY_FILE=/etc/oficinaos/ponto-backup-signing.pub
 BACKUP_S3_ENDPOINT=https://<endpoint-s3>
 BACKUP_S3_BUCKET=<bucket>
 BACKUP_S3_PREFIX=clientes/<slug>
@@ -211,9 +223,10 @@ RESTORE_CHECK_MAX_ENTRY_AGE_DAYS=35
 
 O script `scripts/db-restore-check.sh`:
 
-- descarrega o objeto mais recente;
+- descarrega o objeto mais recente e a assinatura;
+- rejeita o backup se a assinatura estiver em falta ou for inválida;
 - decifra para um ficheiro temporário 0600;
-- restaura numa base `restore_check` descartável;
+- restaura numa base descartável única por execução (`restore_check_<pid>`);
 - exige `count(*) > 0` em `time_entries`;
 - exige que a última picagem esteja dentro do limite configurado;
 - apaga a base temporária e os ficheiros temporários no fim, mesmo em erro.
@@ -236,7 +249,9 @@ systemctl list-timers ponto-restore-check.timer
 ```
 
 O importante é ser mensal, automático, fora do servidor de produção e com a
-chave privada protegida.
+chave privada protegida. Quando passa, publica também um marcador remoto
+`restore-check-status/last-restore-check.txt`; o backup diário seguinte espelha
+esse marcador para o painel local da instância.
 
 ### Restauro manual passo a passo
 
@@ -255,10 +270,15 @@ chave privada protegida.
    ```
 
    `BACKUP_REMOTE_TARGET` já inclui `BACKUP_S3_PREFIX`, quando existir.
-3. Decifrar localmente:
+3. Verificar a assinatura e decifrar localmente:
 
    ```bash
-   age -d -i /etc/oficinaos/ponto-backup-age-key.txt      -o restore-tmp/backup.dump restore-tmp/backup.dump.age
+   rclone copyto "$BACKUP_REMOTE_TARGET/<objeto>.minisig" restore-tmp/backup.dump.age.minisig
+   minisign -V -m restore-tmp/backup.dump.age \
+     -p /etc/oficinaos/ponto-backup-signing.pub \
+     -x restore-tmp/backup.dump.age.minisig
+   age -d -i /etc/oficinaos/ponto-backup-age-key.txt \
+     -o restore-tmp/backup.dump restore-tmp/backup.dump.age
    chmod 600 restore-tmp/backup.dump
    ```
 

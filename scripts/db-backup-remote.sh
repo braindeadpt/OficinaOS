@@ -3,12 +3,14 @@
 # Não contém credenciais: lê apenas variáveis de ambiente fornecidas pelo operador.
 
 backup_remote_target() {
-  if [ -n "${BACKUP_RCLONE_REMOTE:-}" ]; then
-    BACKUP_REMOTE_TARGET="$BACKUP_RCLONE_REMOTE"
-    return 0
-  fi
-
+  # S3 explícito tem prioridade sobre o destino legado: numa migração o .env
+  # pode ainda ter BACKUP_RCLONE_REMOTE antigo, mas o operador forneceu o novo
+  # endpoint/bucket documentado.
   if [ -z "${BACKUP_S3_BUCKET:-}" ]; then
+    if [ -n "${BACKUP_RCLONE_REMOTE:-}" ]; then
+      BACKUP_REMOTE_TARGET="$BACKUP_RCLONE_REMOTE"
+      return 0
+    fi
     echo "[backup-remote] erro: define BACKUP_RCLONE_REMOTE ou BACKUP_S3_BUCKET" >&2
     return 1
   fi

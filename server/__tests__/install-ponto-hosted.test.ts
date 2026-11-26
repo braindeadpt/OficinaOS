@@ -30,7 +30,7 @@ case "$args" in
   "exec --env-file"*) echo '{"paired":true}'; exit 0 ;;
   *"ps -q db-backup"*) echo fake-backup; exit 0 ;;
   "exec fake-backup sh -c find"*)
-    if [ -s "$backup_count" ]; then echo /backups/oficinaos-fake.sql.gz; fi
+    if [ -s "$backup_count" ]; then echo /backups/oficinaos-fake.dump.age; fi
     exit 0
     ;;
   "exec -e BACKUP_FORCE=true fake-backup bash /scripts/run-backup.sh"*)

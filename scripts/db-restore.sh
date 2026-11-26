@@ -36,6 +36,13 @@ if [ "${RESTORE_AUTO_CONFIRM:-0}" != "1" ]; then
   sleep 10
 fi
 
+case "$SOURCE" in
+  *.age)
+    echo "ERROR: o backup está cifrado. Decifra-o primeiro numa máquina com a chave privada age." >&2
+    exit 2
+    ;;
+esac
+
 echo "[restore] dropping and recreating schema public"
 psql \
   --host="$PGHOST" --port="$PGPORT" --username="$PGUSER" \
@@ -50,20 +57,15 @@ GRANT ALL ON SCHEMA public TO CURRENT_USER;
 DROP SCHEMA IF EXISTS analyst CASCADE;
 SQL
 
-case "$SOURCE" in
-  *.age)
-    echo "ERROR: o backup está cifrado. Decifra-o primeiro numa máquina com a chave privada age." >&2
-    exit 2
-    ;;
-esac
-
 echo "[restore] applying backup"
 case "$SOURCE" in
   *.dump)
-    pg_restore \
-      --host="$PGHOST" --port="$PGPORT" --username="$PGUSER" \
-      --dbname="$PGDATABASE" --no-owner --no-privileges --exit-on-error \
-      "$SOURCE"
+    # Ver nota em db-restore-check.sh: pg_restore 18+ emite um GUC que
+    # Postgres <= 16 não conhece; gerar SQL e filtrar evita a incompatibilidade.
+    pg_restore --no-owner --no-privileges -f - "$SOURCE" \
+      | sed '/^SET transaction_timeout\b/d' \
+      | psql --host="$PGHOST" --port="$PGPORT" --username="$PGUSER" \
+        --dbname="$PGDATABASE" --set=ON_ERROR_STOP=1 --quiet
     ;;
   *.sql.gz)
     # pg_dump >= 17 escreve `SET transaction_timeout = 0;` em todos os dumps —

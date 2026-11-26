@@ -61,27 +61,34 @@ export async function getBackupStatus(): Promise<BackupStatus> {
       () => null
     );
 
-  const [heartbeat, dumpCount, remoteCopy, restoreCheck, restoreCheckAttempt] =
-    await Promise.all([
-      readText(heartbeatFile),
-      fs.readdir(dumpDir).then(
-        (files) =>
-          files.filter(
-            (f) => f.startsWith("oficinaos-") && f.endsWith(".sql.gz")
-          ).length,
-        () => 0
-      ),
-      readText(remoteCopyFile),
-      readText(restoreCheckFile),
-      readText(restoreCheckAttemptFile),
-    ]);
+  const [
+    heartbeat,
+    backupFiles,
+    remoteCopy,
+    restoreCheck,
+    restoreCheckAttempt,
+  ] = await Promise.all([
+    readText(heartbeatFile),
+    fs.readdir(dumpDir).then(
+      (files) =>
+        files.filter(
+          (f) =>
+            f.startsWith("oficinaos-") &&
+            (f.endsWith(".sql.gz") || f.endsWith(".dump.age"))
+        ),
+      () => [] as string[]
+    ),
+    readText(remoteCopyFile),
+    readText(restoreCheckFile),
+    readText(restoreCheckAttemptFile),
+  ]);
 
   if (!heartbeat) {
     return {
       lastBackupAt: null,
       hoursAgo: null,
       stale: true,
-      dumpCount,
+      dumpCount: backupFiles.length,
       remoteConfigured: false,
       remote: emptyRemote(),
     };
@@ -96,8 +103,13 @@ export async function getBackupStatus(): Promise<BackupStatus> {
     lastBackupAt: valid ? last.toISOString() : null,
     hoursAgo: valid ? hoursAgo : null,
     stale: !valid || hoursAgo > 26,
-    dumpCount,
-    ...remoteStatus(remoteCopy, restoreCheck, restoreCheckAttempt),
+    dumpCount: backupFiles.length,
+    ...remoteStatus(
+      remoteCopy,
+      restoreCheck,
+      restoreCheckAttempt,
+      backupFiles.some((file) => file.endsWith(".dump.age"))
+    ),
   };
 }
 
@@ -120,7 +132,8 @@ function emptyRemote(): RemoteBackupStatus {
 function remoteStatus(
   remoteCopy: string | null,
   restoreCheck: string | null,
-  restoreCheckAttempt: string | null
+  restoreCheckAttempt: string | null,
+  encryptedBackups = false
 ): { remoteConfigured: boolean; remote: RemoteBackupStatus } {
   const remoteConfigured = Boolean(
     remoteCopy || restoreCheck || restoreCheckAttempt
@@ -144,8 +157,11 @@ function remoteStatus(
       remoteCopyStale: copy === null || copy.hours > 26,
       lastRestoreCheckAt: check?.iso ?? null,
       restoreCheckDaysAgo: daysAgo,
-      // 7-day cadence + 1 day of grace before the UI complains.
-      restoreCheckStale: check === null || (daysAgo !== null && daysAgo > 8),
+      // Legado semanal: 7+1 dias. Ponto cifrado: verificação mensal + 1 dia
+      // de graça. O formato presente no volume é o sinal disponível na app.
+      restoreCheckStale:
+        check === null ||
+        (daysAgo !== null && daysAgo > (encryptedBackups ? 32 : 8)),
     },
   };
 }
