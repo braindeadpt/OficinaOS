@@ -3,6 +3,7 @@ import path from "node:path";
 import type { PrismaClient } from "@generated/client";
 import { AppError } from "@shared/errors/app-error.js";
 import {
+  pontoActExportQuerySchema,
   pontoEntriesQuerySchema,
   pontoEntryIdParamSchema,
   pontoHoursQuerySchema,
@@ -17,6 +18,7 @@ import { requirePermission } from "../middlewares/rbac.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import { cloudFetch } from "../services/cloud.service.js";
 import { pushPontoCloudConfig } from "../services/ponto/config-sync.js";
+import { getPontoActExport } from "../services/ponto-act-export.service.js";
 import {
   createManualEntry,
   createValidation,
@@ -497,6 +499,45 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
       const range = resolvePontoRange(parsed.data.from, parsed.data.to, tz);
       return reply.send(
         await getHours(app.prisma, tz, range, parsed.data.userId)
+      );
+    }
+  );
+
+  // Exportação ACT: deliberadamente fora de requirePonto/requirePontoModule
+  // e sem qualquer chamada à Cloud — consulta legal imediata mesmo offline
+  // ou depois do entitlement terminar.
+  app.get(
+    "/act-export",
+    {
+      preHandler: [
+        requirePermission({ reports: ["viewShop"] }),
+        dashboardScope,
+      ],
+      schema: {
+        querystring: { type: "object", additionalProperties: true },
+        summary: "Canonical local dataset for the ACT time-record export",
+        tags: ["ponto"],
+      },
+    },
+    async (req, reply) => {
+      const parsed = pontoActExportQuerySchema.safeParse(req.query);
+      if (!parsed.success) {
+        throw new AppError("VALIDATION_ERROR", {
+          errors: resolveZodErrors(
+            parsed.error.flatten().fieldErrors,
+            req.locale
+          ),
+        });
+      }
+      const tz = shopTz(req);
+      const range = resolvePontoRange(parsed.data.from, parsed.data.to, tz);
+      return reply.send(
+        await getPontoActExport(app.prisma, {
+          actorId: getUserId(req),
+          range,
+          tz,
+          userId: parsed.data.userId,
+        })
       );
     }
   );

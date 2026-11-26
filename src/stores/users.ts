@@ -15,6 +15,7 @@ interface UserRow {
   phoneE164: string | null;
   pontoEnabled: boolean;
   pontoScheduleEnd: string | null;
+  pontoScheduleExempt: boolean;
   pontoScheduleStart: string | null;
   pontoSmsAllowed: boolean;
   role: RoleType;
@@ -28,6 +29,7 @@ export interface PontoUserPayload {
   phoneE164?: string | null;
   pontoEnabled?: boolean;
   pontoScheduleEnd?: string | null;
+  pontoScheduleExempt?: boolean;
   pontoScheduleStart?: string | null;
   pontoSmsAllowed?: boolean;
 }

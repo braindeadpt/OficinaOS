@@ -317,6 +317,7 @@ export const usersRoutes: FastifyPluginAsync = async (app) => {
             pontoSmsAllowed: _p4,
             pontoScheduleStart: _p5,
             pontoScheduleEnd: _p6,
+            pontoScheduleExempt: _p7,
             ...rest
           } = parsed.data;
           profileData = rest;

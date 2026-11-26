@@ -6,6 +6,7 @@ import { __resetTzCache } from "../middlewares/dashboard-scope.js";
 import { pontoRoutes } from "../routes/ponto.js";
 
 const CLOUD_URL = "https://cloud.test";
+const SHA256_HEX = /^[0-9a-f]{64}$/;
 
 interface SettingsRow {
   cloudApiUrl: string | null;
@@ -57,7 +58,7 @@ function fakePrisma(overrides: Partial<SettingsRow> = {}) {
     timeEntryValidation: { create: vi.fn(async () => ({})) },
     user: {
       findMany: vi.fn(async () => []),
-      findUnique: vi.fn(async () => null),
+      findUnique: vi.fn(async (): Promise<unknown> => null),
     },
   };
 }
@@ -593,5 +594,37 @@ describe("ponto — gate de escrita sem módulo (WP0.5)", () => {
       const res = await app.inject({ method: "GET", url });
       expect(res.statusCode).toBe(200);
     }
+  });
+});
+
+describe("ponto — GET /act-export", () => {
+  it.each([
+    [
+      "sem emparelhamento Cloud",
+      { cloudApiUrl: null, cloudShopTokenEncrypted: null },
+    ],
+    ["com entitlement expirado", { cloudEntitlements: [] }],
+  ])("funciona %s, sem chamar a Cloud", async (_label, overrides) => {
+    const prisma = fakePrisma(overrides);
+    prisma.user.findUnique.mockResolvedValue({
+      id: "u1",
+      name: "Dono",
+      username: "dono",
+    });
+    const app = buildApp(prisma);
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/ponto/act-export?from=2026-01-01&to=2026-01-31",
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.contentHash).toMatch(SHA256_HEX);
+    expect(body.period).toEqual({
+      from: "2026-01-01",
+      timeZone: "Europe/Lisbon",
+      to: "2026-01-31",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
