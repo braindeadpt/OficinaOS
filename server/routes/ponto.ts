@@ -595,6 +595,7 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
           actorId: getUserId(req),
           deliveredAt: parsed.data.deliveredAt,
           signed: parsed.data.signed,
+          tz: shopTz(req),
           userId,
         })
       );

@@ -83,6 +83,7 @@ describe("registo de entrega da folha de informação do ponto", () => {
     const out = await upsertPontoInfoDelivery(prisma, {
       actorId: "owner",
       deliveredAt: "2026-01-08",
+      tz: "Europe/Lisbon",
       signed: false,
       userId: "u1",
     });
@@ -109,5 +110,23 @@ describe("registo de entrega da folha de informação do ponto", () => {
       registeredByName: "Dono",
       signed: false,
     });
+  });
+
+  it("recusa data de entrega no futuro (dia da loja)", async () => {
+    const { prisma, upsert } = prismaFake();
+    const tomorrow = new Date(Date.now() + 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+
+    await expect(
+      upsertPontoInfoDelivery(prisma, {
+        actorId: "owner",
+        deliveredAt: tomorrow,
+        signed: false,
+        tz: "Europe/Lisbon",
+        userId: "u1",
+      })
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    expect(upsert).not.toHaveBeenCalled();
   });
 });

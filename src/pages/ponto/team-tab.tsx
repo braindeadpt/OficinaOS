@@ -103,6 +103,9 @@ export default function TeamTab() {
       };
       await updateUserProfile(editing.userId, payload);
       setEditing(null);
+      // Ativar/desativar o ponto muda quem precisa da folha RGPD — o
+      // aviso do painel e a lista de entregas refrescam sem recarregar.
+      window.dispatchEvent(new Event("ponto-info-deliveries-changed"));
     } catch {
       setFormError(t("ponto.err_save"));
     } finally {

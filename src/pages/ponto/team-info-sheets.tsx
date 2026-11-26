@@ -11,22 +11,30 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import api from "@/lib/api";
+import { usePontoStore } from "@/stores/ponto";
 
-function todayYmd(): string {
-  const now = new Date();
-  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 10);
+/** Dia civil de hoje no fuso DA LOJA — o dia do dispositivo pode já ser
+ *  amanhã (ou ainda ontem) e gravava a entrega na data errada. */
+function todayYmd(tz: string | null): string {
+  if (!tz) {
+    const now = new Date();
+    const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+    return local.toISOString().slice(0, 10);
+  }
+  return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
 }
 
 export default function TeamInfoSheets() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const shopTz = usePontoStore((s) => s.tz);
   const [data, setData] = useState<PontoInfoDeliveriesResponse | null>(null);
   const [editing, setEditing] = useState<PontoInfoDeliveryRowDTO | null>(null);
-  const [deliveredAt, setDeliveredAt] = useState(todayYmd());
+  const [deliveredAt, setDeliveredAt] = useState(() => todayYmd(null));
   const [signed, setSigned] = useState("no");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
+  const [printAllEmpty, setPrintAllEmpty] = useState(false);
 
   const load = useCallback(async () => {
     const res = await api.get<PontoInfoDeliveriesResponse>(
@@ -41,7 +49,7 @@ export default function TeamInfoSheets() {
 
   const open = (row: PontoInfoDeliveryRowDTO) => {
     setEditing(row);
-    setDeliveredAt(row.delivery?.deliveredAt ?? todayYmd());
+    setDeliveredAt(row.delivery?.deliveredAt ?? todayYmd(shopTz));
     setSigned(row.delivery?.signed ? "yes" : "no");
     setError(false);
   };
@@ -89,7 +97,13 @@ export default function TeamInfoSheets() {
         <Button
           className="ml-auto"
           icon="print"
-          onClick={() => navigate("/ponto/info?all=1")}
+          onClick={() => {
+            if (data.rows.length === 0) {
+              setPrintAllEmpty(true);
+              return;
+            }
+            navigate("/ponto/info?all=1");
+          }}
           size="sm"
           type="button"
           variant="secondary"
@@ -97,6 +111,11 @@ export default function TeamInfoSheets() {
           {t("ponto.sheet_print_all")}
         </Button>
       </div>
+      {printAllEmpty && data.rows.length === 0 && (
+        <p className="mt-2 text-error text-xs" role="alert">
+          {t("ponto.sheet_print_all_empty")}
+        </p>
+      )}
       <div className="mt-4 divide-y divide-outline-variant">
         {data.rows.map((row) => (
           <div

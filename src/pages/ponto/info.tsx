@@ -174,7 +174,7 @@ function InfoDocument({
           <p className="font-semibold text-lg">{shop.shopName}</p>
         )}
         <p className="text-neutral-600 text-sm">
-          {shop.shopTaxId ? `NIF: ${shop.shopTaxId} · ` : ""}
+          {shop.shopTaxId ? `${docT("shop_tax_id")}: ${shop.shopTaxId} · ` : ""}
           {shop.address ?? ""}
           {shop.shopLocality ? `, ${shop.shopLocality}` : ""}
           {shop.phone ? ` · ${shop.phone}` : ""}
