@@ -81,7 +81,7 @@ describe("install-ponto-hosted.sh", () => {
   });
 
   it.skipIf(isWindows)(
-    "corre duas vezes sem duplicar configuração nem rodar segredos",
+    "corre três vezes sem duplicar configuração nem repetir backup recente",
     () => {
       const root = mkdtempSync(join(tmpdir(), "ponto-hosted-test-"));
       const binDir = join(root, "bin");
@@ -114,6 +114,12 @@ describe("install-ponto-hosted.sh", () => {
       expect(envAfter).toContain("COMPOSE_PROJECT_NAME=ponto-empresa-teste");
       expect(envAfter).toContain("APP_URL=https://empresa-teste.clientes.test");
       expect(existsSync(join(clientDir, ".bootstrap-backup-done"))).toBe(true);
+      expect(
+        readFileSync(join(root, "backup-count"), "utf8").trim().split("\n")
+      ).toHaveLength(1);
+
+      const third = runInstaller(root, binDir);
+      expect(third.status, third.stderr).toBe(0);
       expect(
         readFileSync(join(root, "backup-count"), "utf8").trim().split("\n")
       ).toHaveLength(1);
