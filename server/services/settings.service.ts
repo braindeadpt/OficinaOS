@@ -229,15 +229,19 @@ const pontoUpdate = (input: UpdateShopSettingsInput) => ({
       : input.pontoSmsNumber?.trim() || null,
 });
 
+const nullable = <T>(value: T | null | undefined): T | null => value ?? null;
+
 const shopCreate = (input: UpdateShopSettingsInput) => ({
-  address: input.address ?? null,
+  address: nullable(input.address),
+  shopTaxId: nullable(input.shopTaxId),
+  shopLocality: nullable(input.shopLocality),
   // `undefined` é omitido pelo Prisma e cai no default "repair_shop".
   shopMode: input.shopMode,
   countryCode: input.countryCode ?? "PT",
   currency: input.currency ?? "EUR",
   id: "default",
-  phone: input.phone ?? null,
-  receiptFooter: input.receiptFooter ?? null,
+  phone: nullable(input.phone),
+  receiptFooter: nullable(input.receiptFooter),
   inboxRetentionDays: input.inboxRetentionDays ?? 365,
   intakeTerms: input.intakeTerms?.trim() || null,
   ...botCreate(input),
@@ -249,10 +253,10 @@ const shopCreate = (input: UpdateShopSettingsInput) => ({
   receiptShowWarranty: input.receiptShowWarranty ?? true,
   labelSize: input.labelSize ?? "40x20",
   printerMode: input.printerMode ?? "browser",
-  printerHost: input.printerHost ?? null,
+  printerHost: nullable(input.printerHost),
   printerPort: input.printerPort ?? 9100,
   printerHighContrast: input.printerHighContrast ?? false,
-  monthlyRevenueGoal: input.monthlyRevenueGoal ?? null,
+  monthlyRevenueGoal: nullable(input.monthlyRevenueGoal),
   reviewUrl: input.reviewUrl?.trim() || null,
   embedAllowedOrigins: normalizeOriginList(input.embedAllowedOrigins),
   ...pontoCreate(input),
@@ -261,6 +265,8 @@ const shopCreate = (input: UpdateShopSettingsInput) => ({
 
 const shopUpdate = (input: UpdateShopSettingsInput) => ({
   address: input.address,
+  shopTaxId: input.shopTaxId,
+  shopLocality: input.shopLocality,
   shopMode: input.shopMode,
   countryCode: input.countryCode,
   currency: input.currency,

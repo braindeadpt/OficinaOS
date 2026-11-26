@@ -38,6 +38,7 @@ const pontoUserFields = {
   pontoEnabled: z.boolean().optional(),
   externalWork: z.boolean().optional(),
   pontoSmsAllowed: z.boolean().optional(),
+  pontoScheduleExempt: z.boolean().optional(),
   pontoScheduleStart: pontoScheduleField,
   pontoScheduleEnd: pontoScheduleField,
 };

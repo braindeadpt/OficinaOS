@@ -28,6 +28,12 @@ export const pontoHoursQuerySchema = z.object({
   userId: z.string().optional(),
 });
 
+export const pontoActExportQuerySchema = z.object({
+  from: isoDate,
+  to: isoDate,
+  userId: z.string().optional(),
+});
+
 export const pontoMissingExitsQuerySchema = z.object({
   from: isoDate,
   to: isoDate,
@@ -57,6 +63,9 @@ export const pontoEntryIdParamSchema = z.object({
 
 export type PontoEntriesQueryInput = z.infer<typeof pontoEntriesQuerySchema>;
 export type PontoHoursQueryInput = z.infer<typeof pontoHoursQuerySchema>;
+export type PontoActExportQueryInput = z.infer<
+  typeof pontoActExportQuerySchema
+>;
 export type PontoMissingExitsQueryInput = z.infer<
   typeof pontoMissingExitsQuerySchema
 >;

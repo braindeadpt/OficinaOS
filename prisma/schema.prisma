@@ -217,6 +217,9 @@ model User {
   pontoSmsAllowed     Boolean           @default(false)
   pontoScheduleStart  String?
   pontoScheduleEnd    String?
+  // Isenção de horário de trabalho (art. 219.º CT): mesmo isento,
+  // o trabalhador tem registo — a exportação ACT assinala o regime.
+  pontoScheduleExempt Boolean           @default(false)
   createdAt           DateTime          @default(now()) @db.Timestamptz
   updatedAt           DateTime          @updatedAt @db.Timestamptz
 
@@ -1203,6 +1206,10 @@ model ShopSettings {
   shopMode                    String    @default("repair_shop")
   logoPath                    String?
   address                     String?
+  // Identificação fiscal/localidade usadas no cabeçalho legal da
+  // exportação ACT do Livro de Ponto (consulta imediata, art. 202.º).
+  shopTaxId                   String?
+  shopLocality                String?
   phone                       String?
   countryCode                 String    @default("PT")
   currency                    String    @default("EUR")

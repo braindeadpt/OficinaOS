@@ -50,6 +50,9 @@ export const updateShopSettingsSchema = z
     // por isso não fica ao alcance de técnicos/front-desk.
     shopMode: z.enum(["repair_shop", "ponto_only"]).optional(),
     address: z.string().max(255).optional(),
+    // NIF/localidade da empresa — cabeçalho legal da exportação ACT.
+    shopTaxId: z.string().max(20).optional(),
+    shopLocality: z.string().max(120).optional(),
     phone: z.string().max(32).optional(),
     currency: z.string().max(8).optional(),
     receiptFooter: z.string().max(2000).optional(),

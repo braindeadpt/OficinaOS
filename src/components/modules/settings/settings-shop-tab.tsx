@@ -144,6 +144,8 @@ const SHOP_FORM_DEFAULT = {
   shopName: "",
   shopMode: "repair_shop" as "repair_shop" | "ponto_only",
   address: "",
+  shopTaxId: "",
+  shopLocality: "",
   phone: "",
   countryCode: "PT",
   currency: "EUR",
@@ -168,18 +170,24 @@ function formsEqual(a: typeof SHOP_FORM_DEFAULT, b: typeof SHOP_FORM_DEFAULT) {
   return (Object.keys(a) as (keyof typeof a)[]).every((k) => a[k] === b[k]);
 }
 
+function textOrEmpty(value: string | null | undefined): string {
+  return value ?? "";
+}
+
 function formFromSettings(shopSettings: ShopSettings) {
   const paper = shopSettings.receiptPaper as "58mm" | "80mm" | "a4" | null;
   const label = shopSettings.labelSize as "40x20" | "57x32" | "62x29" | null;
   return {
-    shopName: shopSettings.shopName ?? "",
+    shopName: textOrEmpty(shopSettings.shopName),
     shopMode: shopSettings.shopMode as "repair_shop" | "ponto_only",
-    address: shopSettings.address ?? "",
-    phone: shopSettings.phone ?? "",
+    address: textOrEmpty(shopSettings.address),
+    shopTaxId: textOrEmpty(shopSettings.shopTaxId),
+    shopLocality: textOrEmpty(shopSettings.shopLocality),
+    phone: textOrEmpty(shopSettings.phone),
     countryCode: shopSettings.countryCode ?? "PT",
     currency: shopSettings.currency ?? "EUR",
-    receiptFooter: shopSettings.receiptFooter ?? "",
-    intakeTerms: shopSettings.intakeTerms ?? "",
+    receiptFooter: textOrEmpty(shopSettings.receiptFooter),
+    intakeTerms: textOrEmpty(shopSettings.intakeTerms),
     receiptPaper: paper ?? "80mm",
     receiptShowImei: shopSettings.receiptShowImei ?? true,
     receiptShowProblem: shopSettings.receiptShowProblem ?? true,
@@ -190,13 +198,13 @@ function formFromSettings(shopSettings: ShopSettings) {
     printerMode: (shopSettings.printerMode === "escpos"
       ? "escpos"
       : "browser") as "browser" | "escpos",
-    printerHost: shopSettings.printerHost ?? "",
+    printerHost: textOrEmpty(shopSettings.printerHost),
     // Kept as a string so clearing the field doesn't snap back to 9100 —
     // coerced to a number only on save / printer test.
     printerPort: String(shopSettings.printerPort ?? 9100),
     printerHighContrast: shopSettings.printerHighContrast ?? false,
     monthlyRevenueGoal: shopSettings.monthlyRevenueGoal?.toString() ?? "",
-    reviewUrl: shopSettings.reviewUrl ?? "",
+    reviewUrl: textOrEmpty(shopSettings.reviewUrl),
   };
 }
 
@@ -354,6 +362,30 @@ export default function SettingsShopTab({
               placeholder={getPhonePlaceholder(shopForm.countryCode)}
               type="tel"
               value={shopForm.phone}
+            />
+          </Field>
+          <Field label={t("shop_tax_id")}>
+            <Input
+              id="shop-tax-id"
+              onChange={(e) => {
+                setShopForm((f) => ({ ...f, shopTaxId: e.target.value }));
+                onDirtyChange(true);
+              }}
+              placeholder="501234567"
+              type="text"
+              value={shopForm.shopTaxId}
+            />
+          </Field>
+          <Field label={t("shop_locality")}>
+            <Input
+              id="shop-locality"
+              onChange={(e) => {
+                setShopForm((f) => ({ ...f, shopLocality: e.target.value }));
+                onDirtyChange(true);
+              }}
+              placeholder="Porto"
+              type="text"
+              value={shopForm.shopLocality}
             />
           </Field>
         </div>
