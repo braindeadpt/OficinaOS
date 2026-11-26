@@ -32,17 +32,24 @@ function loadDatabaseUrl(): string {
   if (process.env.DATABASE_URL) {
     return process.env.DATABASE_URL;
   }
-  try {
-    // .env da instalação — parser mínimo, sem dependências.
-    const envFile = readFileSync(".env", "utf8");
-    for (const line of envFile.split("\n")) {
-      const match = DATABASE_URL_LINE.exec(line);
-      if (match) {
-        return match[1];
+  // .env da instalação — primeiro ao lado da raiz da app (onde o binário
+  // vive, independentemente do cwd do cliente), depois no cwd.
+  const candidates = [
+    new URL("../../.env", import.meta.url),
+    new URL(`${"file://"}${process.cwd()}/.env`),
+  ];
+  for (const candidate of candidates) {
+    try {
+      const envFile = readFileSync(candidate, "utf8");
+      for (const line of envFile.split("\n")) {
+        const match = DATABASE_URL_LINE.exec(line);
+        if (match) {
+          return match[1];
+        }
       }
+    } catch {
+      // tenta o próximo
     }
-  } catch {
-    // cai no erro abaixo
   }
   process.stderr.write(
     "oficinaos-mcp: DATABASE_URL não encontrada (nem no ambiente nem no .env)\n"
@@ -70,7 +77,9 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const server = buildMcpServer(prisma, auth);
+  const server = buildMcpServer(prisma, auth, () =>
+    authenticateToken(prisma, token)
+  );
   const transport = new StdioServerTransport();
   await server.connect(transport);
   process.stderr.write("oficinaos-mcp: ligado (só leitura)\n");

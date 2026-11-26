@@ -70,6 +70,8 @@ function mockPrisma(overrides: Record<string, unknown> = {}): PrismaClient {
       findMany: vi.fn().mockResolvedValue([]),
       count: vi.fn().mockResolvedValue(0),
     },
+    payment: { groupBy: vi.fn().mockResolvedValue([]) },
+    shopSettings: { findUnique: vi.fn().mockResolvedValue(null) },
     ...overrides,
   };
   return base as unknown as PrismaClient;
@@ -249,7 +251,13 @@ describe("tokens", () => {
       revokedAt: new Date(),
       expiresAt: null,
       showPii: false,
-      user: { id: "u1", role: "OWNER", name: "Dono" },
+      user: {
+        id: "u1",
+        role: "OWNER",
+        name: "Dono",
+        isActive: true,
+        banned: false,
+      },
     });
     expect(await authenticateToken(prisma, plaintext)).toBeNull();
   });
@@ -263,7 +271,13 @@ describe("tokens", () => {
       revokedAt: null,
       expiresAt: new Date(Date.now() - 1000),
       showPii: false,
-      user: { id: "u1", role: "OWNER", name: "Dono" },
+      user: {
+        id: "u1",
+        role: "OWNER",
+        name: "Dono",
+        isActive: true,
+        banned: false,
+      },
     });
     expect(await authenticateToken(prisma, plaintext)).toBeNull();
   });
@@ -277,7 +291,13 @@ describe("tokens", () => {
       revokedAt: null,
       expiresAt: null,
       showPii: true,
-      user: { id: "u1", role: "TECHNICIAN", name: "Téc" },
+      user: {
+        id: "u1",
+        role: "TECHNICIAN",
+        name: "Téc",
+        isActive: true,
+        banned: false,
+      },
     });
     const auth = await authenticateToken(prisma, plaintext);
     expect(auth?.userRole).toBe("TECHNICIAN");
@@ -331,6 +351,112 @@ describe("servidor HTTP só em loopback", () => {
     expect(noAuth.status).toBe(401);
     const health = await fetch(`http://127.0.0.1:${addr.port}/mcp/health`);
     expect(health.status).toBe(200);
+    await new Promise((resolve) => server.close(resolve));
+  });
+});
+
+describe("contas desativadas", () => {
+  it("isActive=false → null (401)", async () => {
+    const prisma = mockPrisma();
+    const { plaintext, tokenHash } = generateToken();
+    (prisma.mcpToken.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "t1",
+      tokenHash,
+      revokedAt: null,
+      expiresAt: null,
+      showPii: false,
+      user: {
+        id: "u1",
+        role: "OWNER",
+        name: "Dono",
+        isActive: false,
+        banned: false,
+      },
+    });
+    expect(await authenticateToken(prisma, plaintext)).toBeNull();
+  });
+});
+
+describe("stripSecrets preserva dados reais", () => {
+  it("datas e decimais não são destruídos", () => {
+    const date = new Date("2026-01-15T10:00:00Z");
+    const out = stripSecrets({ createdAt: date, total: 25.5 }) as Record<
+      string,
+      unknown
+    >;
+    expect(out.createdAt).toBe(date);
+    expect(out.total).toBe(25.5);
+  });
+});
+
+describe("modo só-ponto", () => {
+  it("bloqueia áreas de oficina mas permite o ponto", async () => {
+    const prisma = mockPrisma();
+    (
+      prisma.shopSettings.findUnique as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({ shopMode: "ponto_only" });
+    const jobs = await executeTool(prisma, OWNER_AUTH, "search_jobs", {});
+    expect(jobs.isError).toBe(true);
+    expect(jobs.text).toContain("só livro de ponto");
+    const ponto = await executeTool(
+      prisma,
+      OWNER_AUTH,
+      "list_time_entries",
+      {}
+    );
+    expect(ponto.isError).toBe(false);
+  });
+});
+
+describe("protocolo HTTP autenticado", () => {
+  it("initialize + tools/list + tools/call com token válido", async () => {
+    const prisma = mockPrisma();
+    const { plaintext, tokenHash } = generateToken();
+    (prisma.mcpToken.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "t1",
+      tokenHash,
+      revokedAt: null,
+      expiresAt: null,
+      showPii: false,
+      user: {
+        id: "u1",
+        role: "OWNER",
+        name: "Dono",
+        isActive: true,
+        banned: false,
+      },
+    });
+    const server = createMcpHttpServer(prisma);
+    await new Promise<void>((resolve) => {
+      server.listen(0, "127.0.0.1", resolve);
+    });
+    const addr = server.address() as { port: number };
+    const rpc = async (method: string, params?: unknown) => {
+      const res = await fetch(`http://127.0.0.1:${addr.port}/mcp`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${plaintext}`,
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+        },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+      });
+      const text = await res.text();
+      const dataLine = text.split("\n").find((l) => l.startsWith("data:"));
+      return dataLine ? JSON.parse(dataLine.slice(5)) : JSON.parse(text);
+    };
+    const init = await rpc("initialize", {
+      protocolVersion: "2025-03-26",
+      capabilities: {},
+      clientInfo: { name: "test", version: "1" },
+    });
+    expect(init.result?.serverInfo?.name).toBe("oficinaos");
+    const list = await rpc("tools/list");
+    expect(list.result?.tools?.length).toBeGreaterThan(10);
+    const call = await rpc("tools/call", { name: "create_job", arguments: {} });
+    expect(call.result?.content?.[0]?.text).toBe("Escrita só no OficinaOS Pro");
+    // auditoria registada
+    expect(prisma.auditLog.create).toHaveBeenCalled();
     await new Promise((resolve) => server.close(resolve));
   });
 });

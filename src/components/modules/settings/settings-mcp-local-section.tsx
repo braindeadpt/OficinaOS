@@ -6,6 +6,7 @@ import { Field } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import api, { getErrorMessage } from "@/lib/api";
+import { copyTextToClipboard } from "@/lib/clipboard";
 
 /**
  * «Ligar o seu LLM» — MCP grátis SÓ DE LEITURA (issue #74). Tokens pessoais
@@ -59,10 +60,13 @@ function CopyButton({ text, t }: { text: string; t: (k: string) => string }) {
     <button
       className="flex min-h-9 items-center gap-1.5 rounded-lg bg-surface-container px-3 py-1.5 font-medium text-on-surface-variant text-xs transition-colors hover:bg-surface-container-high"
       onClick={() => {
-        navigator.clipboard.writeText(text).then(
-          () => toast.success(t("mcp.copied")),
-          () => toast.error(t("mcp.action_error"))
-        );
+        copyTextToClipboard(text).then((ok) => {
+          if (ok) {
+            toast.success(t("mcp.copied"));
+          } else {
+            toast.error(t("mcp.action_error"));
+          }
+        });
       }}
       type="button"
     >

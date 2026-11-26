@@ -44,6 +44,78 @@ interface Ctx {
   prisma: PrismaClient;
 }
 
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// ── Fuso da loja (ShopSettings.timezone; fallback = servidor) ─────────────
+
+async function shopTz(prisma: PrismaClient): Promise<string> {
+  try {
+    const row = await prisma.shopSettings.findUnique({
+      select: { timezone: true },
+      where: { id: "default" },
+    });
+    return (
+      row?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+    );
+  } catch {
+    return "UTC";
+  }
+}
+
+function tzOffsetMs(at: Date, tz: string): number {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  const parts: Record<string, string> = {};
+  for (const p of dtf.formatToParts(at)) {
+    if (p.type !== "literal") {
+      parts[p.type] = p.value;
+    }
+  }
+  const hour = Number(parts.hour) % 24;
+  const asUtc = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    hour,
+    Number(parts.minute),
+    Number(parts.second)
+  );
+  return asUtc - at.getTime();
+}
+
+/** Início/fim do dia no fuso da loja, como instantes UTC. */
+function dayBoundsInTz(
+  dateStr: string | undefined,
+  tz: string
+): { start: Date; end: Date } {
+  let y: number;
+  let m: number;
+  let d: number;
+  if (dateStr && ISO_DATE_RE.test(dateStr)) {
+    [y, m, d] = dateStr.split("-").map(Number) as [number, number, number];
+  } else {
+    const now = new Date();
+    const local = new Date(now.getTime() + tzOffsetMs(now, tz));
+    y = local.getUTCFullYear();
+    m = local.getUTCMonth() + 1;
+    d = local.getUTCDate();
+  }
+  const guess = Date.UTC(y, m - 1, d);
+  // Duas passagens: o offset pode mudar exatamente na transição DST.
+  const startMs =
+    guess - tzOffsetMs(new Date(guess - tzOffsetMs(new Date(guess), tz)), tz);
+  const start = new Date(startMs);
+  return { start, end: new Date(startMs + 24 * 3600 * 1000 - 1) };
+}
+
 function page(args: Record<string, unknown>): {
   skip: number;
   take: number;
@@ -51,10 +123,10 @@ function page(args: Record<string, unknown>): {
   pageSize: number;
 } {
   const pageSize = Math.min(
-    Math.max(Number(args.pageSize) || 25, 1),
+    Math.max(Math.floor(Number(args.pageSize)) || 25, 1),
     MAX_PAGE_SIZE
   );
-  const pageNum = Math.max(Number(args.page) || 1, 1);
+  const pageNum = Math.max(Math.floor(Number(args.page)) || 1, 1);
   return {
     skip: (pageNum - 1) * pageSize,
     take: pageSize,
@@ -230,15 +302,24 @@ async function searchCustomers(
 ): Promise<ToolResult> {
   const p = page(args);
   const query = typeof args.query === "string" ? args.query.trim() : "";
-  const where = query
-    ? {
-        OR: [
-          { name: { contains: query, mode: "insensitive" as const } },
-          { phone: { contains: query } },
-          { email: { contains: query, mode: "insensitive" as const } },
-        ],
-      }
-    : {};
+  // Com a máscara RGPD ligada não se pesquisa por telefone/email: o
+  // resultado confirmaria que um contacto mascarado existe na base (oracle)
+  // — e os contactos mascarados são precisamente o que se protege.
+  let where: Record<string, unknown> = {};
+  if (query) {
+    const byName = {
+      name: { contains: query, mode: "insensitive" as const },
+    };
+    where = ctx.auth.showPii
+      ? {
+          OR: [
+            byName,
+            { phone: { contains: query } },
+            { email: { contains: query, mode: "insensitive" as const } },
+          ],
+        }
+      : byName;
+  }
   const [rows, total] = await Promise.all([
     ctx.prisma.customer.findMany({
       where,
@@ -303,7 +384,6 @@ async function searchInventory(
 ): Promise<ToolResult> {
   const p = page(args);
   const query = typeof args.query === "string" ? args.query.trim() : "";
-  const withCost = can(ctx.auth.userRole, "parts", "viewCost");
   const where = {
     isActive: true,
     ...(query
@@ -319,7 +399,6 @@ async function searchInventory(
     reorderLevel: true,
     supplier: true,
     listedOnline: true,
-    ...(withCost ? {} : {}),
   } as const;
   const [rows, total] = await Promise.all([
     ctx.prisma.partsCatalog.findMany({
@@ -344,8 +423,10 @@ async function lowStock(
   const p = page(args);
   const [rows, total] = await Promise.all([
     ctx.prisma.partsCatalog.findMany({
+      // reorderLevel 0 = sem alerta configurado (regra do inventário da app).
       where: {
         isActive: true,
+        reorderLevel: { gt: 0 },
         stockQuantity: { lte: ctx.prisma.partsCatalog.fields.reorderLevel },
       },
       select: {
@@ -360,8 +441,10 @@ async function lowStock(
       take: p.take,
     }),
     ctx.prisma.partsCatalog.count({
+      // reorderLevel 0 = sem alerta configurado (regra do inventário da app).
       where: {
         isActive: true,
+        reorderLevel: { gt: 0 },
         stockQuantity: { lte: ctx.prisma.partsCatalog.fields.reorderLevel },
       },
     }),
@@ -626,12 +709,12 @@ async function cashSummary(
   ctx: Ctx,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
-  const day = typeof args.date === "string" ? new Date(args.date) : new Date();
-  const start = new Date(day);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(day);
-  end.setHours(23, 59, 59, 999);
-  const [sales, payments] = await Promise.all([
+  const tz = await shopTz(ctx.prisma);
+  const { start, end } = dayBoundsInTz(
+    typeof args.date === "string" ? args.date : undefined,
+    tz
+  );
+  const [sales, salePayments, repairPayments] = await Promise.all([
     ctx.prisma.sale.aggregate({
       where: { createdAt: { gte: start, lte: end } },
       _sum: { total: true },
@@ -642,15 +725,29 @@ async function cashSummary(
       where: { createdAt: { gte: start, lte: end } },
       _sum: { amount: true },
     }),
+    // Pagamentos de reparações — o relatório de caixa da app inclui os dois.
+    ctx.prisma.payment.groupBy({
+      by: ["method"],
+      where: { createdAt: { gte: start, lte: end } },
+      _sum: { amount: true },
+    }),
   ]);
+  const byMethod = new Map<string, number>();
+  for (const row of [...salePayments, ...repairPayments]) {
+    const amount = Number(row._sum.amount ?? 0);
+    byMethod.set(row.method, (byMethod.get(row.method) ?? 0) + amount);
+  }
   return {
     data: {
-      date: start.toISOString().slice(0, 10),
+      date: new Date(start.getTime() + tzOffsetMs(start, tz))
+        .toISOString()
+        .slice(0, 10),
+      timeZone: tz,
       salesCount: sales._count,
       salesTotal: sales._sum.total,
-      paymentsByMethod: payments.map((row) => ({
-        method: row.method,
-        total: row._sum.amount,
+      paymentsByMethod: [...byMethod.entries()].map(([method, total]) => ({
+        method,
+        total,
       })),
     },
     records: 1,
@@ -692,17 +789,18 @@ async function dailySummary(
   ctx: Ctx,
   _args: Record<string, unknown>
 ): Promise<ToolResult> {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
+  const tz = await shopTz(ctx.prisma);
+  const { start, end } = dayBoundsInTz(undefined, tz);
   const [byStatus, jobsToday, salesToday, waitingParts] = await Promise.all([
     ctx.prisma.job.groupBy({
       by: ["status"],
-      where: { status: { notIn: ["DELIVERED", "CANCELLED"] } },
+      // Abertos = nem entregues, nem cancelados, nem devolvidos (métricas da app).
+      where: { status: { notIn: ["DELIVERED", "CANCELLED", "RETURNED"] } },
       _count: true,
     }),
-    ctx.prisma.job.count({ where: { createdAt: { gte: start } } }),
+    ctx.prisma.job.count({ where: { createdAt: { gte: start, lte: end } } }),
     ctx.prisma.sale.aggregate({
-      where: { createdAt: { gte: start } },
+      where: { createdAt: { gte: start, lte: end } },
       _sum: { total: true },
       _count: true,
     }),
@@ -710,7 +808,10 @@ async function dailySummary(
   ]);
   return {
     data: {
-      date: start.toISOString().slice(0, 10),
+      date: new Date(start.getTime() + tzOffsetMs(start, tz))
+        .toISOString()
+        .slice(0, 10),
+      timeZone: tz,
       openJobsByStatus: byStatus.map((s) => ({
         status: s.status,
         count: s._count,
@@ -737,12 +838,32 @@ interface ToolDef {
   };
 }
 
+const PAGE_PROPS = {
+  page: { type: "integer", minimum: 1 },
+  pageSize: {
+    type: "integer",
+    minimum: 1,
+    maximum: MAX_PAGE_SIZE,
+    description: `Máximo ${MAX_PAGE_SIZE}`,
+  },
+} as const;
+
+const JOB_STATUSES = [
+  "INTAKE",
+  "WAITING_FOR_PARTS",
+  "IN_REPAIR",
+  "ON_HOLD",
+  "DONE",
+  "DELIVERED",
+  "RETURNED",
+  "CANCELLED",
+] as const;
+
 const QUERY_SCHEMA = {
   type: "object",
   properties: {
     query: { type: "string", description: "Texto livre de pesquisa" },
-    page: { type: "number" },
-    pageSize: { type: "number", description: `Máximo ${MAX_PAGE_SIZE}` },
+    ...PAGE_PROPS,
   },
 } as const;
 
@@ -789,9 +910,8 @@ export const TOOLS: Record<string, ToolDef> = {
     {
       type: "object",
       properties: {
-        status: { type: "string" },
-        page: { type: "number" },
-        pageSize: { type: "number" },
+        status: { type: "string", enum: [...JOB_STATUSES] },
+        ...PAGE_PROPS,
       },
       required: ["status"],
     }
@@ -916,6 +1036,21 @@ export async function executeTool(
     // Qualquer ferramenta que não exista — incluindo as de escrita que um
     // utilizador possa tentar — recebe a mesma resposta: escrever é Pro.
     return { isError: true, text: WRITE_ERROR, records: 0, toolFound: false };
+  }
+  // Modo só-ponto: as áreas de oficina não existem nesta instalação — a app
+  // bloqueia as mesmas rotas com o guard de modo.
+  if (name !== "list_time_entries") {
+    const settings = await prisma.shopSettings
+      .findUnique({ select: { shopMode: true }, where: { id: "default" } })
+      .catch(() => null);
+    if (settings?.shopMode === "ponto_only") {
+      return {
+        isError: true,
+        text: "Não disponível — esta instalação é só livro de ponto.",
+        records: 0,
+        toolFound: true,
+      };
+    }
   }
   const perm = tool.permission;
   const allowed =

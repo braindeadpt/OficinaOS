@@ -23,6 +23,22 @@ import { authenticateToken, rateLimitOk } from "./tokens.js";
 export const MCP_BIND_HOST = "127.0.0.1";
 export const MCP_DEFAULT_PORT = 4100;
 
+// Rate limit PRÉ-autenticação por IP (janela deslizante em memória) — mesmo
+// em loopback, um processo local não pode forçar tokens ilimitadamente.
+const ipWindows = new Map<string, number[]>();
+const IP_RATE_LIMIT_PER_MINUTE = 60;
+
+function ipRateLimitOk(ip: string, now = Date.now()): boolean {
+  const stamps = (ipWindows.get(ip) ?? []).filter((t) => now - t < 60_000);
+  if (stamps.length >= IP_RATE_LIMIT_PER_MINUTE) {
+    ipWindows.set(ip, stamps);
+    return false;
+  }
+  stamps.push(now);
+  ipWindows.set(ip, stamps);
+  return true;
+}
+
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { "content-type": "application/json" });
   res.end(JSON.stringify(body));
@@ -40,6 +56,11 @@ export function createMcpHttpServer(prisma: PrismaClient): Server {
   return createServer((req, res) => {
     const handle = async () => {
       const url = new URL(req.url ?? "/", `http://${MCP_BIND_HOST}`);
+      const ip = req.socket.remoteAddress ?? "unknown";
+      if (!ipRateLimitOk(ip)) {
+        sendJson(res, 429, { error: "rate_limited", limit: "60/min" });
+        return;
+      }
       if (url.pathname === "/mcp/health") {
         sendJson(res, 200, { ok: true });
         return;
@@ -67,7 +88,9 @@ export function createMcpHttpServer(prisma: PrismaClient): Server {
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
       });
-      const mcpServer = buildMcpServer(prisma, auth);
+      const mcpServer = buildMcpServer(prisma, auth, async () =>
+        plaintext ? authenticateToken(prisma, plaintext) : null
+      );
       res.on("close", () => {
         transport.close().catch(() => undefined);
         mcpServer.close().catch(() => undefined);
@@ -99,7 +122,20 @@ export function startMcpHttpServer(
   if (process.env.MCP_DISABLED === "true") {
     return null;
   }
+  // Porta inválida ou ocupada nunca pode derrubar a app — o MCP é um extra.
+  const validPort =
+    Number.isInteger(port) && port > 0 && port < 65_536
+      ? port
+      : MCP_DEFAULT_PORT;
   const server = createMcpHttpServer(prisma);
-  server.listen(port, MCP_BIND_HOST);
-  return { server, port };
+  server.on("error", () => {
+    // erro tratado pelo caller via evento — aqui só se garante que nada
+    // lança fora do listener.
+  });
+  try {
+    server.listen(validPort, MCP_BIND_HOST);
+  } catch {
+    return null;
+  }
+  return { server, port: validPort };
 }

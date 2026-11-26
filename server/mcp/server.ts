@@ -15,7 +15,12 @@ import type { McpAuth } from "./tokens.js";
 
 export const MCP_SERVER_INFO = { name: "oficinaos", version: "1.0.0" } as const;
 
-export function buildMcpServer(prisma: PrismaClient, auth: McpAuth): Server {
+export function buildMcpServer(
+  prisma: PrismaClient,
+  auth: McpAuth,
+  reauth?: () => Promise<McpAuth | null>
+): Server {
+  let currentAuth = auth;
   const server = new Server(MCP_SERVER_INFO, {
     capabilities: { tools: {} },
   });
@@ -31,10 +36,27 @@ export function buildMcpServer(prisma: PrismaClient, auth: McpAuth): Server {
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const name = request.params.name;
     const args = (request.params.arguments ?? {}) as Record<string, unknown>;
-    const result = await executeTool(prisma, auth, name, args);
+    // Revalidação por chamada: revogação, expiração, desativação da conta ou
+    // mudança de papel têm efeito imediato — mesmo numa ligação stdio aberta.
+    if (reauth) {
+      const fresh = await reauth();
+      if (!fresh) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: "Token revogado, expirado ou conta desativada.",
+            },
+          ],
+          isError: true,
+        };
+      }
+      currentAuth = fresh;
+    }
+    const result = await executeTool(prisma, currentAuth, name, args);
     // Auditoria por chamada — inclui tentativas de escrita e acessos
     // negados (ok=false), nunca os argumentos em texto livre.
-    await auditCall(prisma, auth, name, result.records, !result.isError);
+    await auditCall(prisma, currentAuth, name, result.records, !result.isError);
     return {
       content: [{ type: "text" as const, text: result.text }],
       isError: result.isError,

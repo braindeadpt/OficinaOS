@@ -54,6 +54,13 @@ export function stripSecrets(value: unknown): unknown {
     return value.map(stripSecrets);
   }
   if (value !== null && typeof value === "object") {
+    // Só se percorrem objectos planos — Date, Decimal do Prisma e afins
+    // passam intactos (JSON.stringify trata-os); destruí-los apagava datas
+    // e montantes de todas as respostas.
+    const proto = Object.getPrototypeOf(value);
+    if (proto !== Object.prototype && proto !== null) {
+      return value;
+    }
     const out: Record<string, unknown> = {};
     for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
       if (SECRET_KEY_RE.test(key)) {

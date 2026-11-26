@@ -47,9 +47,23 @@ export async function authenticateToken(
   }
   const row = await prisma.mcpToken.findUnique({
     where: { tokenHash: hashToken(plaintext) },
-    include: { user: { select: { id: true, role: true, name: true } } },
+    include: {
+      user: {
+        select: {
+          id: true,
+          role: true,
+          name: true,
+          isActive: true,
+          banned: true,
+        },
+      },
+    },
   });
   if (!row || row.revokedAt) {
+    return null;
+  }
+  // Conta desativada ou banida: os tokens morrem com ela.
+  if (!row.user.isActive || row.user.banned) {
     return null;
   }
   if (row.expiresAt && row.expiresAt.getTime() < Date.now()) {
