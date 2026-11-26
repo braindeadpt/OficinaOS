@@ -48,8 +48,9 @@ activities (Art. 30):
 ## WhatsApp Meta credentials — lifecycle
 
 - You can save the Meta token in the app without sending it anywhere: it is
-  encrypted locally and the settings API never returns it (only booleans such
-  as "a token exists").
+  encrypted locally and the settings API never returns its value — the token
+  itself is represented only by a presence flag, while non-secret IDs and
+  migration state may still be shown.
 - The token leaves the shop only after someone with settings permission ticks
   the explicit consent for encrypted storage in OficinaOS Cloud and sending
   through the Cloud relay. The app records that consent once; the Cloud
@@ -58,10 +59,13 @@ activities (Art. 30):
 - On the Cloud the token is stored with AES-256-GCM. The key material comes
   from the server `SECRETS_KEY` environment variable — it is not stored in the
   database — and no endpoint returns the token to the app.
-- Sending then goes through the Cloud relay. During the 30-day migration
-  window, an older encrypted local token can be used only as an audited
-  fallback when the relay returns a temporary server error or clearly cannot
-  be reached; after the deadline, direct app→Meta sending ends.
+- Sending then goes through the Cloud relay. The shared 30-day migration
+  window starts on the first boot of the app version that introduces the
+  migration, even before WhatsApp setup is opened. During that window a shop
+  whose upload is not yet confirmed can still send directly with its encrypted
+  local token; once the Cloud has the current credentials, direct app→Meta is
+  only an audited fallback when the relay returns a temporary server error or
+  clearly cannot be reached. After the deadline, direct app→Meta sending ends.
 - **Revoke cloud credentials** asks the Cloud to delete its copy first. When
   deletion is confirmed (or the copy is already gone), the app deletes the
   local encrypted copy and clears the consent. Using official WhatsApp again

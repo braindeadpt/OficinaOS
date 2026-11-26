@@ -110,21 +110,28 @@ accepts Cloud storage and relay in **Notifications → Setup → WhatsApp**
 token + `phone_number_id` pair against the Graph API before replacing the
 stored credential. Sending is authorized server-side by entitlement — the
 local module cache is only a UI hint (expires 24h after the last sync).
-Older installs keep the local token (`whatsappApiTokenEncrypted`, AES-256-GCM
-under `AI_ENCRYPTION_KEY`) only during the 30-day transition: it may be used
-as an audited fallback when the Cloud relay returns 5xx or the connection
-clearly cannot be established (DNS/refused/reset). A timeout is deliberately
-ambiguous — the relay may already have accepted the message — so it does not
-fall back and risk a duplicate. 402/other 4xx, revocation and post-deadline
-sends never fall back. When the deadline ends, direct Meta sending stops. The
-boot/poller purge wipes legacy tokens with an audit event; a token typed after
-the deadline is retained only while its consented Cloud upload is still pending
-(it can never send directly) and is wiped once the Cloud confirms those
-credentials. The Cloud neither stores nor logs message bodies; logs carry
-only id/state/error and masked phone.
+The shared 30-day transition starts on the first boot of the app version
+that introduces the migration — even before anyone opens WhatsApp setup —
+and the settings screen shows the remaining days. While that window is open,
+a shop whose consented upload is not yet confirmed can still send directly
+with the local token (`whatsappApiTokenEncrypted`, AES-256-GCM under
+`AI_ENCRYPTION_KEY`). Once the Cloud has the current credentials, that
+retained token is only an audited fallback when the relay returns 5xx or the
+connection clearly cannot be established (DNS/refused/reset). A timeout is
+deliberately ambiguous — the relay may already have accepted the message —
+so it does not fall back and risk a duplicate. 402/other 4xx, revocation and
+post-deadline sends never fall back. When the deadline ends, direct Meta
+sending stops. The boot/poller purge wipes legacy tokens with an audit event;
+a token typed after the deadline is retained only while its consented Cloud
+upload is still pending (it can never send directly) and is wiped once the
+Cloud confirms those credentials. The Cloud neither stores nor logs message
+bodies; logs carry only id/state/error and masked phone.
 
-The settings API never returns the token — GET/PUT expose only booleans and
-timestamps such as `hasApiToken`, `credentialsAtCloud` and the consent state.
+The settings API never returns the token — it represents the secret only as
+the `hasApiToken` presence flag. The rest of the response can still include
+the non-secret phone/business IDs, transport state, migration timestamps and
+migration events needed by the settings UI.
+
 **Revoke cloud credentials** in the same screen calls
 `POST /settings/whatsapp/cloud/revoke`: after the Cloud confirms
 `DELETE /shops/whatsapp-credentials` (or reports it already gone), the app
@@ -322,7 +329,7 @@ shop's responsibility (SIM, carrier, ban/ToS) remain.
 
 | Channel | Free | Pro |
 |---|---|---|
-| WhatsApp | nothing — channel resolves `null`, routes 402, UI locked | `whatsapp-bot`: Meta Business API relay (`POST /whatsapp/send`) or Evolution (unofficial, disclaimer); direct local Meta exists only as the audited 30-day migration fallback; templates auto-synced on the Cloud |
+| WhatsApp | nothing — channel resolves `null`, routes 402, UI locked | `whatsapp-bot`: Meta Business API relay (`POST /whatsapp/send`) or Evolution (unofficial, disclaimer); direct local Meta exists only during the 30-day migration — until the upload is confirmed, then as audited fallback; templates auto-synced on the Cloud |
 | SMS | nothing — config resolves `null`, routes 402, UI locked | `sms`: Android connected to the Cloud (`SmsDevice`/`SmsRoute`, multi-shop) or LAN gateway as fallback |
 
 Rules:
@@ -444,7 +451,7 @@ requires `whatsapp-bot`).
 ## Where everything lives (for those arriving at the code)
 
 - **App security**: `server/plugins/security.ts` (SSOT — relaxed for LAN HTTP on purpose, see CLAUDE.md)
-- **WhatsApp token**: on the Cloud (`shops.whatsappAccessToken`, AES-256-GCM keyed from the `SECRETS_KEY` env var, outside the database); local legacy `whatsappApiTokenEncrypted` (AES-256-GCM, `server/lib/crypto.ts`) only for the consented upload and the audited migration fallback
+- **WhatsApp token**: on the Cloud (`shops.whatsappAccessToken`, AES-256-GCM keyed from the `SECRETS_KEY` env var, outside the database); local legacy `whatsappApiTokenEncrypted` (AES-256-GCM, `server/lib/crypto.ts`) only for pre-upload migration sending, the consented upload and the audited fallback
 - **WhatsApp channel (cloud vs local)**: `server/services/whatsapp-channel.ts`
 - **Entitlements + poller**: `server/services/cloud.service.ts`
 - **WhatsApp credentials in the UI**: menu **Notifications → Setup → WhatsApp** (`src/components/modules/notifications/channel-settings.tsx`), API `PUT /api/settings/whatsapp`
