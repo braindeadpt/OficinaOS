@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { Prisma } from "@generated/client";
+import { Prisma } from "@generated/client";
 import { AppError } from "@shared/errors/app-error.js";
 import type {
   PontoActDayDTO,
@@ -36,8 +36,12 @@ const LINKED_ENTRY_INCLUDE = {
   createdBy: { select: USER_SELECT },
   validations: {
     orderBy: [{ at: "desc" }, { id: "desc" }],
-    select: { decision: true },
-    take: 1,
+    select: {
+      at: true,
+      byUser: { select: USER_SELECT },
+      decision: true,
+      note: true,
+    },
   },
 } satisfies Prisma.TimeEntryInclude;
 
@@ -64,17 +68,9 @@ type ActEntryRow = Prisma.TimeEntryGetPayload<{
   include: typeof ACT_ENTRY_INCLUDE;
 }>;
 
-interface LinkedEntryRow {
-  at: Date;
-  createdAt: Date;
-  createdBy: { name: string; username: string } | null;
-  id: string;
-  reason: string | null;
-  status: ActEntryRow["status"];
-  transport: ActEntryRow["transport"];
-  type: ActEntryRow["type"];
-  validations: { decision: ActEntryRow["validations"][number]["decision"] }[];
-}
+type LinkedEntryRow = Prisma.TimeEntryGetPayload<{
+  include: typeof LINKED_ENTRY_INCLUDE;
+}>;
 
 /** JSON canónico estável: chaves ordenadas, sem undefined, UTF-8. */
 export function canonicalJson(value: unknown): string {
@@ -104,6 +100,17 @@ function displayName(user: { name: string; username: string }): string {
   return user.name || user.username;
 }
 
+function validationsDTO(
+  entry: LinkedEntryRow | ActEntryRow
+): PontoActValidationDTO[] {
+  return entry.validations.map((validation) => ({
+    at: validation.at.toISOString(),
+    byUserName: validation.byUser ? displayName(validation.byUser) : null,
+    decision: validation.decision,
+    note: validation.note,
+  }));
+}
+
 function linkedDTO(entry: LinkedEntryRow): PontoActLinkedEntryDTO {
   return {
     at: entry.at.toISOString(),
@@ -115,16 +122,8 @@ function linkedDTO(entry: LinkedEntryRow): PontoActLinkedEntryDTO {
     status: entry.status,
     transport: entry.transport,
     type: entry.type,
+    validations: validationsDTO(entry),
   };
-}
-
-function validationsDTO(entry: ActEntryRow): PontoActValidationDTO[] {
-  return entry.validations.map((validation) => ({
-    at: validation.at.toISOString(),
-    byUserName: validation.byUser ? displayName(validation.byUser) : null,
-    decision: validation.decision,
-    note: validation.note,
-  }));
 }
 
 function entryDTO(entry: ActEntryRow): PontoActEntryDTO {
@@ -247,35 +246,44 @@ export async function getPontoActExport(
         ],
       };
 
-  const [settings, actor, users, rows, hours] = await Promise.all([
-    prisma.shopSettings.findUnique({ where: { id: "default" } }),
-    prisma.user.findUnique({
-      select: USER_SELECT,
-      where: { id: args.actorId },
-    }),
-    prisma.user.findMany({
-      orderBy: [{ name: "asc" }, { username: "asc" }],
-      select: {
-        externalWork: true,
-        id: true,
-        name: true,
-        pontoScheduleEnd: true,
-        pontoScheduleExempt: true,
-        pontoScheduleStart: true,
-        username: true,
-      },
-      where: workerWhere,
-    }),
-    prisma.timeEntry.findMany({
-      include: ACT_ENTRY_INCLUDE,
-      orderBy: [{ at: "asc" }, { id: "asc" }],
-      where: {
-        at: { gte: args.range.start, lt: args.range.end },
-        ...(args.userId ? { userId: args.userId } : {}),
-      },
-    }),
-    getHours(prisma, args.tz, args.range, args.userId),
-  ]);
+  // Snapshot consistente (REPEATABLE READ): as picagens listadas, as
+  // validações e os totais saem todos da MESMA leitura. Sem isto, uma
+  // picagem/validação que entrasse a meio da exportação podia entrar nos
+  // totais mas não nas linhas (ou vice-versa) — e o hash SHA-256 passava
+  // a "certificar" um documento internamente contraditório.
+  const [settings, actor, users, rows, hours] = await prisma.$transaction(
+    async (tx) =>
+      Promise.all([
+        tx.shopSettings.findUnique({ where: { id: "default" } }),
+        tx.user.findUnique({
+          select: USER_SELECT,
+          where: { id: args.actorId },
+        }),
+        tx.user.findMany({
+          orderBy: [{ name: "asc" }, { username: "asc" }],
+          select: {
+            externalWork: true,
+            id: true,
+            name: true,
+            pontoScheduleEnd: true,
+            pontoScheduleExempt: true,
+            pontoScheduleStart: true,
+            username: true,
+          },
+          where: workerWhere,
+        }),
+        tx.timeEntry.findMany({
+          include: ACT_ENTRY_INCLUDE,
+          orderBy: [{ at: "asc" }, { id: "asc" }],
+          where: {
+            at: { gte: args.range.start, lt: args.range.end },
+            ...(args.userId ? { userId: args.userId } : {}),
+          },
+        }),
+        getHours(tx, args.tz, args.range, args.userId),
+      ]),
+    { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead }
+  );
 
   if (!actor) {
     throw new AppError("USER_NOT_FOUND");

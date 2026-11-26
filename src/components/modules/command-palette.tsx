@@ -98,6 +98,7 @@ export default function CommandPalette() {
   const pontoEnabled = usePontoStore((s) => s.enabled);
   const pontoCleanup = usePontoStore((s) => s.photoCleanupWarnings);
   const pontoCleanupPending = pontoCleanup.length > 0;
+  const pontoHasRecords = usePontoStore((s) => s.hasRecords);
   const fetchPontoStatus = usePontoStore((s) => s.fetchStatus);
   const isPontoOnly = useShopModeStore((s) => s.shopMode === "ponto_only");
 
@@ -170,6 +171,7 @@ export default function CommandPalette() {
         navigate,
         openIntakeModal,
         pontoEnabled: pontoEnabled === true || pontoCleanupPending,
+        pontoHasRecords: pontoHasRecords === true,
         pontoOnly: isPontoOnly,
         role,
         signOut,
@@ -180,6 +182,7 @@ export default function CommandPalette() {
       openIntakeModal,
       pontoEnabled,
       pontoCleanupPending,
+      pontoHasRecords,
       isPontoOnly,
       role,
       signOut,

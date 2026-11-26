@@ -176,3 +176,29 @@ export const NAV_ITEMS: NavItem[] = [
  * destination shows up in the sheet automatically.
  */
 export const BOTTOM_NAV_PRIMARY: string[] = ["/", "/jobs", "/settings"];
+
+/**
+ * Entrada /ponto na navegação com o entitlement terminado: existindo
+ * registos guardados, o destino tem de continuar visível como "Registos
+ * de ponto (ACT)" — a lei obriga a conservar e apresentar o registo
+ * durante 5 anos, mesmo depois de o plano Pro terminar. A página abre
+ * nesse caso só o separador de exportação (só leitura). Sem entitlement
+ * nem registos, a entrada fica escondida como antes.
+ */
+export function resolvePontoNavItems<
+  T extends { labelKey: string; to: string },
+>(
+  items: T[],
+  pontoEnabled: boolean | null,
+  pontoHasRecords: boolean | null
+): T[] {
+  return items.flatMap((item) => {
+    if (item.to !== "/ponto" || pontoEnabled) {
+      return [item];
+    }
+    if (!pontoHasRecords) {
+      return [];
+    }
+    return [{ ...item, labelKey: "ponto.act_nav_label" }];
+  });
+}

@@ -60,15 +60,35 @@ function linkedLine(args: {
   const e = args.entry;
   const author = e.createdByName ?? args.t("ponto.act_system_author");
   const reason = e.reason ? ` — ${e.reason}` : "";
-  return `${args.label}: ${typeLabel(e.type, args.t)} ${formatClock(
+  return `${args.label}: ${typeLabel(e.type, args.t)} ${formatDateTime(
     e.at,
     args.locale,
     args.timeZone
-  )} (${e.at.slice(0, 10)}) · ${author} · ${formatDateTime(
+  )} · ${statusText(e.effectiveStatus, args.t)} · ${author} · ${formatDateTime(
     e.createdAt,
     args.locale,
     args.timeZone
   )}${reason}`;
+}
+
+function pushValidationLines(
+  lines: string[],
+  validations: PontoActLinkedEntryDTO["validations"],
+  locale: string,
+  timeZone: string | undefined,
+  t: TFunction
+): void {
+  for (const validation of validations) {
+    const author = validation.byUserName ?? t("ponto.act_system_author");
+    const note = validation.note ? ` — ${validation.note}` : "";
+    lines.push(
+      `${t("ponto.act_validation")}: ${validation.decision} · ${author} · ${formatDateTime(
+        validation.at,
+        locale,
+        timeZone
+      )}${note}`
+    );
+  }
 }
 
 export function actEntryDetails(
@@ -88,6 +108,7 @@ export function actEntryDetails(
         timeZone,
       })
     );
+    pushValidationLines(lines, entry.corrects.validations, locale, timeZone, t);
     const author = entry.createdByName ?? t("ponto.act_system_author");
     const reason = entry.reason ? ` — ${entry.reason}` : "";
     lines.push(
@@ -108,22 +129,33 @@ export function actEntryDetails(
         timeZone,
       })
     );
+    pushValidationLines(lines, correction.validations, locale, timeZone, t);
   }
   if (entry.reason && !entry.corrects) {
     lines.push(`${t("ponto.act_reason")}: ${entry.reason}`);
   }
-  for (const validation of entry.validations) {
-    const author = validation.byUserName ?? t("ponto.act_system_author");
-    const note = validation.note ? ` — ${validation.note}` : "";
-    lines.push(
-      `${t("ponto.act_validation")}: ${validation.decision} · ${author} · ${formatDateTime(
-        validation.at,
-        locale,
-        timeZone
-      )}${note}`
-    );
-  }
+  pushValidationLines(lines, entry.validations, locale, timeZone, t);
   return lines.join("\n");
+}
+
+function ddmm(ymd: string): string {
+  return `${ymd.slice(8, 10)}/${ymd.slice(5, 7)}`;
+}
+
+function weekRangeLabel(
+  week: PontoActWorkerDTO["weeks"][number],
+  period: { from: string; to: string },
+  t: TFunction
+): string {
+  // Semana cortada pelo período exportado: o total cobre só os dias dentro
+  // do período e o rótulo tem de o dizer — apresentar segunda–domingo como
+  // se fosse a semana inteira induz a ACT em erro sobre o total semanal.
+  if (week.start >= period.from && week.end <= period.to) {
+    return `${week.start} → ${week.end}`;
+  }
+  const from = week.start < period.from ? period.from : week.start;
+  const to = week.end > period.to ? period.to : week.end;
+  return t("ponto.act_week_partial", { from: ddmm(from), to: ddmm(to) });
 }
 
 function workerRows(
@@ -131,10 +163,11 @@ function workerRows(
   locale: string,
   timeZone: string | undefined,
   t: TFunction,
-  includeWorker: boolean
+  includeWorker: boolean,
+  period: { from: string; to: string }
 ): string[][] {
   const rows: string[][] = [];
-  const prefix = includeWorker ? [worker.name] : [];
+  const prefix = includeWorker ? [`${worker.name} (@${worker.username})`] : [];
   if (worker.days.length === 0) {
     rows.push([...prefix, "", "", "", "", "", t("ponto.act_no_records")]);
     return rows;
@@ -166,7 +199,7 @@ function workerRows(
       if (week) {
         rows.push([
           ...prefix,
-          `${week.start} → ${week.end}`,
+          weekRangeLabel(week, period, t),
           "",
           t("ponto.act_week_total"),
           "",
@@ -183,7 +216,9 @@ function workerRows(
     t("ponto.act_worker_total"),
     "",
     formatMinutes(worker.totalMinutes),
-    worker.scheduleExempt ? t("ponto.act_schedule_exempt") : "",
+    worker.scheduleExempt
+      ? `${t("ponto.act_schedule_exempt")} (${t("ponto.act_regime_at_export")})`
+      : "",
   ]);
   return rows;
 }
@@ -192,9 +227,10 @@ export function buildActPdfRows(
   worker: PontoActWorkerDTO,
   locale: string,
   timeZone: string | undefined,
-  t: TFunction
+  t: TFunction,
+  period: { from: string; to: string }
 ): string[][] {
-  return workerRows(worker, locale, timeZone, t, false);
+  return workerRows(worker, locale, timeZone, t, false, period);
 }
 
 export function buildActSheetRows(
@@ -227,7 +263,7 @@ export function buildActSheetRows(
     ],
   ];
   const rows = data.workers.flatMap((worker) =>
-    workerRows(worker, locale, data.period.timeZone, t, true)
+    workerRows(worker, locale, data.period.timeZone, t, true, data.period)
   );
   return [...meta, ...rows].map((row) =>
     row.map((value) => ({ type: String, value }))
@@ -237,7 +273,7 @@ export function buildActSheetRows(
 function workerHeading(worker: PontoActWorkerDTO, t: TFunction): string {
   let schedule = t("ponto.act_schedule_unset");
   if (worker.scheduleExempt) {
-    schedule = t("ponto.act_schedule_exempt");
+    schedule = `${t("ponto.act_schedule_exempt")} (${t("ponto.act_regime_at_export")})`;
   } else if (worker.scheduleStart && worker.scheduleEnd) {
     schedule = `${worker.scheduleStart}–${worker.scheduleEnd}`;
   }
@@ -321,7 +357,13 @@ export async function downloadActPdf(
     doc.setFontSize(10);
     doc.text(workerHeading(worker, t), 14, startY - 3);
     autoTable(doc, {
-      body: buildActPdfRows(worker, locale, data.period.timeZone, t),
+      body: buildActPdfRows(
+        worker,
+        locale,
+        data.period.timeZone,
+        t,
+        data.period
+      ),
       head: [head],
       startY,
       styles: { fontSize: 7 },

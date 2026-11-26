@@ -164,6 +164,12 @@ export interface PontoActLinkedEntryDTO {
   status: PontoEntryStatus;
   transport: PontoTransport;
   type: PontoEntryType;
+  /**
+   * Validações desta linha, da mais recente para a mais antiga — uma
+   * correção ligada pode ser o único registo visível de uma picagem fora
+   * do período, por isso o estado/autor da decisão viajam sempre junto.
+   */
+  validations: PontoActValidationDTO[];
 }
 
 export interface PontoActEntryDTO extends PontoActLinkedEntryDTO {

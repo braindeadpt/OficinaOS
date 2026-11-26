@@ -71,20 +71,26 @@ function prismaWith(rows: unknown[], users: ReturnType<typeof user>[]) {
     shopName: "Oficina Teste",
     shopTaxId: "501234567",
   };
-  return {
+  // Linhas "vivas": escritas a meio da exportação entram aqui. A transação
+  // emulada tira um snapshot no INÍCIO (semântica REPEATABLE READ) e todas
+  // as leituras dentro dela veem o snapshot — nunca as escritas posteriores.
+  const liveRows = [...rows];
+  const client = {
+    __isolationLevel: undefined as unknown,
     shopSettings: {
       findUnique: vi.fn(() => Promise.resolve(settings)),
     },
     timeEntry: {
       findMany: vi.fn((args?: { distinct?: unknown }) => {
+        const source = client.__snapshot ?? liveRows;
         if (args?.distinct) {
           return Promise.resolve(
-            [...new Set(rows.map((r) => (r as { userId: string }).userId))].map(
-              (userId) => ({ userId })
-            )
+            [
+              ...new Set(source.map((r) => (r as { userId: string }).userId)),
+            ].map((userId) => ({ userId }))
           );
         }
-        return Promise.resolve(rows);
+        return Promise.resolve(source);
       }),
     },
     user: {
@@ -93,7 +99,27 @@ function prismaWith(rows: unknown[], users: ReturnType<typeof user>[]) {
         Promise.resolve({ id: "owner-1", name: "Dono", username: "dono" })
       ),
     },
-  } as unknown as DbClient;
+    __snapshot: null as unknown[] | null,
+    $transaction: vi.fn(
+      async (
+        callback: (tx: unknown) => Promise<unknown>,
+        options?: { isolationLevel?: unknown }
+      ) => {
+        client.__isolationLevel = options?.isolationLevel;
+        client.__snapshot = [...liveRows];
+        try {
+          return await callback(client);
+        } finally {
+          client.__snapshot = null;
+        }
+      }
+    ),
+    __liveRows: liveRows,
+  };
+  return client as unknown as DbClient & {
+    __isolationLevel: unknown;
+    __liveRows: unknown[];
+  };
 }
 
 describe("exportação ACT do livro de ponto", () => {
@@ -228,6 +254,113 @@ describe("exportação ACT do livro de ponto", () => {
     expect(
       out.workers[0]?.days[0]?.entries.some((e) => e.id === "late-correction")
     ).toBe(false);
+  });
+
+  it("uma picagem nova a meio da exportação não entra nem nas linhas nem nos totais", async () => {
+    // O snapshot REPEATABLE READ é tirado no início da transação: um INSERT
+    // concorrente não pode aparecer nos totais sem aparecer nas linhas (ou
+    // vice-versa). Se alguma leitura fugir para fora da transação, este
+    // teste falha — as linhas e os totais divergem.
+    const rows = [
+      entry({
+        at: "2026-01-05T09:00:00.000Z",
+        id: "in",
+        type: "ENTRADA",
+        userId: "u1",
+      }),
+      entry({
+        at: "2026-01-05T17:00:00.000Z",
+        id: "out",
+        type: "SAIDA",
+        userId: "u1",
+      }),
+    ];
+    const prisma = prismaWith(rows, [user("u1", "Ana")]);
+    // A "escrita concorrente" acontece na primeira leitura da exportação —
+    // depois de o snapshot estar tirado, a meio das consultas.
+    const insertMidExport = () => {
+      prisma.__liveRows.push(
+        entry({
+          at: "2026-01-05T18:00:00.000Z",
+          id: "late-in",
+          type: "ENTRADA",
+          userId: "u1",
+        }),
+        entry({
+          at: "2026-01-05T19:00:00.000Z",
+          id: "late-out",
+          type: "SAIDA",
+          userId: "u1",
+        })
+      );
+    };
+    const originalFindUnique = prisma.shopSettings.findUnique;
+    prisma.shopSettings.findUnique = vi.fn((...findArgs: unknown[]) => {
+      insertMidExport();
+      return (originalFindUnique as (...a: unknown[]) => unknown)(...findArgs);
+    }) as never;
+
+    const out = await getPontoActExport(
+      prisma,
+      { actorId: "owner-1", range: RANGE, tz: TZ },
+      NOW
+    );
+
+    expect(prisma.__isolationLevel).toBe("RepeatableRead");
+    const worker = out.workers[0];
+    const day = worker?.days[0];
+    // Nem as linhas nem os totais veem a picagem tardia: 2 eventos, 8 h.
+    expect(day?.entries.map((e) => e.id)).toEqual(["in", "out"]);
+    expect(day?.workedMinutes).toBe(480);
+    expect(worker?.totalMinutes).toBe(480);
+  });
+
+  it("as correções ligadas trazem o estado de validação, o autor e a data", async () => {
+    const validation = {
+      at: new Date("2026-01-06T10:00:00.000Z"),
+      byUser: { name: "Dono", username: "dono" },
+      decision: "APROVADO",
+      note: "conferido com o trabalhador",
+    };
+    const correction = {
+      ...entry({
+        at: "2026-01-06T09:00:00.000Z",
+        createdAt: "2026-01-06T08:30:00.000Z",
+        correctsId: "original",
+        id: "correction",
+        type: "SAIDA",
+        userId: "u1",
+      }),
+      validations: [validation],
+    };
+    const original = {
+      ...entry({
+        at: "2026-01-05T17:00:00.000Z",
+        id: "original",
+        type: "SAIDA",
+        userId: "u1",
+      }),
+      corrections: [correction],
+    };
+    const out = await getPontoActExport(
+      prismaWith([original], [user("u1", "Ana")]),
+      { actorId: "owner-1", range: RANGE, tz: TZ },
+      NOW
+    );
+
+    const exported = out.workers[0]?.days[0]?.entries.find(
+      (e) => e.id === "original"
+    );
+    // A correção cai fora do período (6 jan) — mesmo assim o estado da
+    // decisão, quem decidiu e quando viajam no documento.
+    expect(exported?.corrections[0]?.validations).toEqual([
+      {
+        at: "2026-01-06T10:00:00.000Z",
+        byUserName: "Dono",
+        decision: "APROVADO",
+        note: "conferido com o trabalhador",
+      },
+    ]);
   });
 
   it("30 trabalhadores × 1 mês são agregados em menos de 5 segundos", async () => {

@@ -191,9 +191,16 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
       } catch {
         // Sem relatório — as linhas da BD já estão no aviso.
       }
+      // Acesso legal à exportação ACT: mesmo com o entitlement terminado,
+      // existindo registos os menus têm de continuar a mostrar o destino
+      // (retenção/consulta de 5 anos). `hasRecords` é o sinal barato.
+      const firstEntry = await app.prisma.timeEntry.findFirst({
+        select: { id: true },
+      });
       return reply.send({
         enabled: isModuleEnabled(settings, MODULE),
         photoCleanupWarnings,
+        hasRecords: firstEntry !== null,
         tz: shopTz(req),
       });
     }

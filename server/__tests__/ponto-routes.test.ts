@@ -41,7 +41,8 @@ function fakePrisma(overrides: Partial<SettingsRow> = {}) {
     timezone: "Europe/Lisbon",
     ...overrides,
   };
-  return {
+  const client = {
+    pontoPhoto: { findMany: vi.fn(async () => []) },
     // /ponto/status lê as linhas legadas de ponto_photos por SQL cru —
     // sem tabela (ou sem mock) o aviso fica vazio.
     $queryRaw: vi.fn(async () => [{ reg: null }]),
@@ -52,6 +53,7 @@ function fakePrisma(overrides: Partial<SettingsRow> = {}) {
     },
     timeEntry: {
       create: vi.fn(async () => ({})),
+      findFirst: vi.fn(async () => null),
       findMany: vi.fn(async () => []),
       findUnique: vi.fn(async () => null),
     },
@@ -60,7 +62,14 @@ function fakePrisma(overrides: Partial<SettingsRow> = {}) {
       findMany: vi.fn(async () => []),
       findUnique: vi.fn(async (): Promise<unknown> => null),
     },
+    // A exportação ACT lê tudo dentro de uma transação REPEATABLE READ —
+    // o mock corre o callback com o próprio cliente.
+    $transaction: vi.fn(
+      async (callback: (tx: unknown) => Promise<unknown>, _options?: unknown) =>
+        callback(client)
+    ),
   };
+  return client;
 }
 
 const fetchMock = vi.fn();
@@ -143,6 +152,7 @@ describe("ponto — GET /status", () => {
     expect(res.json()).toEqual({
       enabled: true,
       photoCleanupWarnings: [],
+      hasRecords: false,
       tz: "Europe/Lisbon",
     });
     expect(fetchMock).not.toHaveBeenCalled();
@@ -155,6 +165,22 @@ describe("ponto — GET /status", () => {
     expect(res.json()).toEqual({
       enabled: false,
       photoCleanupWarnings: [],
+      hasRecords: false,
+      tz: "Europe/Lisbon",
+    });
+  });
+
+  it("hasRecords true com entitlement expirado mas registos guardados", async () => {
+    // Acesso legal de 5 anos: é este sinal que mantém a exportação ACT
+    // visível nos menus mesmo depois de o plano terminar.
+    const prisma = fakePrisma({ cloudEntitlements: [] });
+    prisma.timeEntry.findFirst.mockResolvedValue({ id: "entry-1" });
+    const app = buildApp(prisma);
+    const res = await app.inject({ method: "GET", url: "/api/ponto/status" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      enabled: false,
+      hasRecords: true,
       tz: "Europe/Lisbon",
     });
   });

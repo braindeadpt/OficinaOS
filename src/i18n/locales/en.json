@@ -3185,5 +3185,8 @@
   "ponto.act_status_recusado": "Rejected",
   "ponto.act_method_manual": "Manual",
   "ponto.act_method_sms": "SMS",
-  "ponto.act_method_whatsapp": "WhatsApp"
+  "ponto.act_method_whatsapp": "WhatsApp",
+  "ponto.act_nav_label": "Time records (ACT)",
+  "ponto.act_regime_at_export": "regime at export date",
+  "ponto.act_week_partial": "Partial week ({{from}}–{{to}}, days within the period)"
 }

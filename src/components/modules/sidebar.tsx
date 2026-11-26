@@ -5,7 +5,7 @@ import { NavLink } from "react-router";
 import { Icon } from "@/components/ui/icon";
 import { Wordmark } from "@/components/ui/wordmark";
 import { can, useCan } from "@/hooks/use-can";
-import { NAV_ITEMS } from "@/lib/navigation";
+import { NAV_ITEMS, resolvePontoNavItems } from "@/lib/navigation";
 import { navItemVisibleInPontoOnly } from "@/lib/ponto-only";
 import { getInitials } from "@/lib/utils";
 import { useAiInboxStore } from "@/stores/ai-inbox";
@@ -91,9 +91,11 @@ export default function Sidebar() {
       fetchAiInbox().catch(() => undefined);
     }
   }, [aiInboxEnabled, fetchAiInbox]);
-  // "ponto" é um entitlement Cloud — a entrada só aparece com o módulo
-  // ativo (mesmo padrão do ai-inbox).
+  // "ponto" é um entitlement Cloud — com o módulo inativo a entrada só
+  // sobrevive como "Registos de ponto (ACT)" quando há registos guardados
+  // (acesso legal de 5 anos à exportação); ver resolvePontoNavItems.
   const pontoEnabled = usePontoStore((s) => s.enabled);
+  const pontoHasRecords = usePontoStore((s) => s.hasRecords);
   const fetchPonto = usePontoStore((s) => s.fetchStatus);
   useEffect(() => {
     if (pontoEnabled === null) {
@@ -103,18 +105,21 @@ export default function Sidebar() {
   const isPontoOnly = useShopModeStore((s) => s.shopMode === "ponto_only");
   const navItems = useMemo(
     () =>
-      NAV_ITEMS.filter(
-        (item) =>
-          can(role, item.perm) &&
-          (item.to !== "/inbox" || aiInboxEnabled) &&
-          (item.to !== "/ponto" || pontoEnabled) &&
-          navItemVisibleInPontoOnly(
-            item,
-            isPontoOnly,
-            can(role, { reports: ["viewShop"] })
-          )
+      resolvePontoNavItems(
+        NAV_ITEMS.filter(
+          (item) =>
+            can(role, item.perm) &&
+            (item.to !== "/inbox" || aiInboxEnabled) &&
+            navItemVisibleInPontoOnly(
+              item,
+              isPontoOnly,
+              can(role, { reports: ["viewShop"] })
+            )
+        ),
+        pontoEnabled,
+        pontoHasRecords
       ),
-    [role, aiInboxEnabled, pontoEnabled, isPontoOnly]
+    [role, aiInboxEnabled, pontoEnabled, pontoHasRecords, isPontoOnly]
   );
   const navGroups = useMemo(() => {
     const groupedPaths = new Set(NAV_GROUPS.flatMap((group) => group.paths));

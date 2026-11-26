@@ -1,6 +1,6 @@
 import type { PermissionCheck } from "@shared/permissions";
 import { can } from "@/hooks/use-can";
-import { NAV_ITEMS } from "@/lib/navigation";
+import { NAV_ITEMS, resolvePontoNavItems } from "@/lib/navigation";
 import { navItemVisibleInPontoOnly } from "@/lib/ponto-only";
 
 export type Translate = (key: string) => string;
@@ -59,6 +59,8 @@ export function buildCommands(deps: {
   openIntakeModal: () => void;
   /** Entitlement do módulo Pro "ponto" — sem ele /ponto não aparece. */
   pontoEnabled: boolean;
+  /** Há registos guardados: a exportação ACT continua acessível (5 anos). */
+  pontoHasRecords?: boolean;
   /** Instância standalone de ponto: só as páginas permitidas e nada de intake. */
   pontoOnly?: boolean;
   role: string;
@@ -66,14 +68,16 @@ export function buildCommands(deps: {
 }): Command[] {
   // /ponto é gated por entitlement Cloud, não só por permissão — o mesmo
   // filtro que sidebar e bottom-nav aplicam via usePontoStore.
-  const pages: Command[] = NAV_ITEMS.filter(
-    (item) =>
-      (item.to !== "/ponto" || deps.pontoEnabled) &&
+  const pages: Command[] = resolvePontoNavItems(
+    NAV_ITEMS.filter((item) =>
       navItemVisibleInPontoOnly(
         item,
         deps.pontoOnly === true,
         can(deps.role, { reports: ["viewShop"] })
       )
+    ),
+    deps.pontoEnabled,
+    deps.pontoHasRecords ?? false
   ).map((item) => ({
     keywords: PAGE_KEYWORDS[item.to] ?? [],
     kind: "page",
