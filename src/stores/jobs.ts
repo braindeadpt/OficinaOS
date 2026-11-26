@@ -73,7 +73,6 @@ interface JobsState {
     intakeChecklist?: Record<string, "ok" | "fail" | null>;
     intakeSignatureDataUrl?: string;
     signatureSessionToken?: string;
-    intakeTermsText?: string;
     intakeLocale?: string;
     estimatedCost?: number;
     estimatedDate?: string;

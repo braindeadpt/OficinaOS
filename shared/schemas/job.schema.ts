@@ -69,8 +69,8 @@ export const createJobSchema = z.object({
     .string()
     .regex(/^[a-f0-9]{64}$/)
     .optional(),
-  // The exact terms text shown to the customer (in-person signing) — stored
-  // verbatim in the signed document snapshot.
+  // Legacy clients may still send this field. The server deliberately ignores
+  // it and resolves the legal text from shop settings before signing.
   intakeTermsText: z.string().max(4000).optional(),
   intakeLocale: z.string().max(10).optional(),
   // Optional — many shops only price a repair after diagnosis. Omitted/null

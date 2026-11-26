@@ -302,9 +302,23 @@ export async function upsertShopSettings(
   prisma: PrismaClient,
   input: UpdateShopSettingsInput
 ) {
+  const existing = await findShopSettingsUnique(prisma);
+  const update: Record<string, unknown> = shopUpdate(input);
+  if (input.intakeTerms !== undefined) {
+    const nextTerms = input.intakeTerms.trim() || null;
+    const currentTerms = existing?.intakeTerms?.trim() || null;
+    if (nextTerms !== currentTerms) {
+      update.intakeTermsUpdatedAt = new Date();
+      update.intakeTermsVersion = (existing?.intakeTermsVersion ?? 0) + 1;
+    }
+  }
+  const create = {
+    ...shopCreate(input),
+    intakeTermsUpdatedAt: input.intakeTerms?.trim() ? new Date() : null,
+  };
   const saved = await upsertShopSettingsRepo(prisma, {
-    create: shopCreate(input),
-    update: shopUpdate(input),
+    create,
+    update,
     where: { id: "default" },
   });
   // O texto "loja fechada" também vive na Cloud — o fallback do §E.10

@@ -50,9 +50,15 @@ export function documentMatches(
   return canonicalize(rebuilt) === canonicalize(frozen);
 }
 
+export interface IntakeTermsProvenance {
+  updatedAt: Date | null;
+  version: number;
+}
+
 export async function createSignatureSession(
   prisma: PrismaClient,
-  document?: IntakeDocument | LoanerAgreementDocument
+  document?: IntakeDocument | LoanerAgreementDocument,
+  termsProvenance?: IntakeTermsProvenance
 ) {
   // Lazy cleanup — dead sessions hold a signature image and are worthless.
   await prisma.signatureSession.deleteMany({
@@ -65,6 +71,8 @@ export async function createSignatureSession(
       // LAN links live 15 min; a cloud-relayed session is extended to the
       // remote TTL by the route once the cloud accepts it.
       expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+      intakeTermsUpdatedAt: termsProvenance?.updatedAt ?? null,
+      intakeTermsVersion: termsProvenance?.version ?? null,
     },
   });
   return { token: session.token, expiresAt: session.expiresAt };

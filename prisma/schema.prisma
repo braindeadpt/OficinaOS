@@ -502,6 +502,9 @@ model Job {
   // signed jobs keep the snapshot they were signed over.
   intakeTermsSnapshot    Json?
   intakeDocumentHash     String?
+  // Proveniência dos termos resolvidos no servidor no momento da assinatura.
+  intakeTermsVersion       Int?
+  intakeTermsUpdatedAt     DateTime? @db.Timestamptz
   signedAt               DateTime? @db.Timestamptz
   signedVia              String? // in_person | remote
   // Remote-signing provenance, captured when the signature is submitted.
@@ -1212,6 +1215,9 @@ model ShopSettings {
   // Custom clauses shown on the repair intake ficha and frozen into the
   // signed document. Null/empty = the app's built-in terms_text default.
   intakeTerms                 String?   @db.Text
+  // Versão/data da cláusula resolvida no servidor e congelada na assinatura.
+  intakeTermsVersion          Int       @default(1)
+  intakeTermsUpdatedAt        DateTime? @db.Timestamptz
   // Printing — presets applied by the server-rendered receipt/label HTML.
   // receiptPaper: "58mm" | "80mm" (thermal roll) | "a4" (full document).
   receiptPaper                String    @default("80mm")
@@ -1573,6 +1579,9 @@ model SignatureSession {
   // sha256(canonical(snapshot) + signature image) + provenance, set when the
   // signature lands — copied onto the job at intake.
   documentHash     String?
+  // Proveniência dos termos no momento em que a sessão foi congelada.
+  intakeTermsVersion Int?
+  intakeTermsUpdatedAt DateTime? @db.Timestamptz
   signedAt         DateTime? @db.Timestamptz
   signerIp         String?
   signerUserAgent  String?   @db.Text

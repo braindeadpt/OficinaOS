@@ -3,6 +3,7 @@ import { createSignatureSessionSchema } from "@shared/schemas/signature.schema.j
 import type { FastifyPluginAsync } from "fastify";
 import { resolveRemoteSignUrl } from "../lib/remote-sign-url.js";
 import { requirePermission } from "../middlewares/rbac.js";
+import { resolveIntakeTerms } from "../services/intake-terms.service.js";
 import { sendSignatureLink } from "../services/signature-link.service.js";
 import {
   deleteSignatureRelay,
@@ -41,10 +42,17 @@ export const signatureSessionRoutes: FastifyPluginAsync = async (app) => {
       // remote TTL only applies when the cloud actually accepted the relay —
       // otherwise an unpaired/offline shop would silently get longer links.
       const relay = await remoteSignatureCreds(app.prisma);
-      const session = await createSignatureSession(
+      // A cláusula é legalmente parte do documento: mesmo que o cliente a
+      // envie no payload, o servidor substitui-a sempre pela versão em vigor.
+      const terms = await resolveIntakeTerms(
         app.prisma,
-        parsed.data.document
+        parsed.data.document.locale
       );
+      const document = { ...parsed.data.document, termsText: terms.text };
+      const session = await createSignatureSession(app.prisma, document, {
+        updatedAt: terms.updatedAt,
+        version: terms.version,
+      });
       let cloudSignUrl: string | null = null;
       if (relay && parsed.data.document) {
         // Cloud link and local session must expire together — the reply
@@ -53,7 +61,7 @@ export const signatureSessionRoutes: FastifyPluginAsync = async (app) => {
         cloudSignUrl = await publishSignatureRelay(
           relay,
           {
-            document: parsed.data.document,
+            document,
             expiresAt: remoteExpiresAt,
             token: session.token,
           },

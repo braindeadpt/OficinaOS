@@ -69,17 +69,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const handleIntakeSubmit = useCallback(
     async (data: IntakeFormData) => {
       try {
-        // The terms text is frozen into the signed document — send exactly
-        // what the signature pad showed, in the UI language the customer saw.
-        // Shop-editable clauses (settings.intakeTerms) win over the default.
+        // O servidor resolve e congela os termos legais; o cliente envia
+        // apenas a língua em que a ficha foi apresentada.
         const job = await createJob({
           ...buildJobPayload(data),
-          // undefined while terms are loading/failed — never freeze the
-          // built-in default into a document the shop did not configure.
-          intakeTermsText:
-            intakeTerms === undefined
-              ? undefined
-              : intakeTerms?.trim() || t("intake.terms_text"),
           intakeLocale: i18n.language,
         });
         toast.success(t("jobs_created_success", { id: job.jobCode || job.id }));
@@ -116,7 +109,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       fetchMetrics,
       showPrintPreview,
       markRequestConverted,
-      intakeTerms,
       t,
       i18n.language,
     ]

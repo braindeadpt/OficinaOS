@@ -122,6 +122,7 @@ export interface ReceiptStrings {
   items: string;
   job: string;
   label: string;
+  legacySignedDoc: string;
   loaner: string;
   loanerYes: string;
   paid: string;
@@ -174,6 +175,7 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     scanQr: "Leia o código QR para acompanhar a sua reparação",
     servedBy: "Atendido por",
     signatureLabel: "Assinatura do cliente",
+    legacySignedDoc: "Assinatura anterior a {date}",
     signedDoc: "Documento assinado",
     termsSigned:
       "Declaro que o equipamento descrito é meu e aceito os termos de reparação da loja.",
@@ -211,6 +213,7 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     scanQr: "Scan QR to track your repair",
     servedBy: "Served by",
     signatureLabel: "Customer signature",
+    legacySignedDoc: "Signature predating {date}",
     signedDoc: "Signed document",
     termsSigned:
       "I declare the described device is mine and accept the shop's repair terms.",
@@ -248,6 +251,7 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     scanQr: "Scannez le QR pour suivre votre réparation",
     servedBy: "Servi par",
     signatureLabel: "Signature du client",
+    legacySignedDoc: "Signature antérieure au {date}",
     signedDoc: "Document signé",
     termsSigned:
       "Je déclare que l'appareil décrit m'appartient et j'accepte les conditions de réparation.",
@@ -285,6 +289,7 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     scanQr: "Escanea el QR para seguir tu reparación",
     servedBy: "Atendido por",
     signatureLabel: "Firma del cliente",
+    legacySignedDoc: "Firma anterior al {date}",
     signedDoc: "Documento firmado",
     termsSigned:
       "Declaro que el dispositivo descrito es mío y acepto las condiciones de reparación.",
@@ -500,10 +505,18 @@ function loanerDivHtml(job: LoanerJob, s: ReceiptStrings): string {
 /** "Signed document a1b2c3d4e5f6 · 03/11/2026 14:22" — the integrity seal. */
 function signatureSealHtml(
   job: { intakeDocumentHash?: string | null; signedAt?: Date | null },
-  s: ReceiptStrings
+  s: ReceiptStrings,
+  hasSignature: boolean
 ): string {
   if (!job.intakeDocumentHash) {
-    return "";
+    if (!(hasSignature && job.signedAt)) {
+      return "";
+    }
+    const legacy = s.legacySignedDoc.replace(
+      "{date}",
+      new Date(job.signedAt).toLocaleDateString(s.dateLocale)
+    );
+    return `<p style="text-align:left;font-size:9px;color:#777">${esc(legacy)}</p>`;
   }
   const when = job.signedAt
     ? ` · ${new Date(job.signedAt).toLocaleString(s.dateLocale)}`
@@ -691,11 +704,20 @@ function renderThermalReceiptDocument(ctx: ReceiptRenderContext): string {
         s
       )
     : "";
+  const hasSignature = Boolean(
+    job.intakeSignatureDataUrl?.startsWith("data:image/")
+  );
+  const termsText = receiptTermsText(
+    job.intakeTermsSnapshot,
+    settings?.intakeTerms,
+    s.termsSigned,
+    hasSignature
+  );
   const signatureHtml = prefs.showSignature
     ? signatureSectionHtml(
         job.intakeSignatureDataUrl,
-        s.termsSigned,
-        signatureSealHtml(job, s)
+        termsText,
+        signatureSealHtml(job, s, hasSignature)
       )
     : "";
   const qrImg = ctx.qrBuf
@@ -818,7 +840,11 @@ ${
     hasSignature
   );
   const signatureHtml = prefs.showSignature
-    ? `<div class="sign"><p class="terms">${escMultiline(termsText)}</p><div class="box">${signatureBox}</div>${signatureSealHtml(job, s)}</div>`
+    ? `<div class="sign"><p class="terms">${escMultiline(termsText)}</p><div class="box">${signatureBox}</div>${signatureSealHtml(
+        job,
+        s,
+        hasSignature
+      )}</div>`
     : "";
 
   const qrHtml =

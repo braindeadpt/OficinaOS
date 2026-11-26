@@ -170,6 +170,47 @@ describe("upsertShopSettings", () => {
     expect(result).toHaveProperty("shopName", "New Shop");
   });
 
+  it("increments terms version and date when the legal text changes", async () => {
+    (
+      prisma.shopSettings.findUnique as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      id: "default",
+      intakeTerms: "Termos antigos",
+      intakeTermsUpdatedAt: new Date("2026-01-01T00:00:00Z"),
+      intakeTermsVersion: 3,
+    });
+    (prisma.shopSettings.upsert as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {}
+    );
+
+    await upsertShopSettings(prisma, { intakeTerms: "Termos novos" });
+
+    const update = (prisma.shopSettings.upsert as ReturnType<typeof vi.fn>).mock
+      .calls[0][0].update;
+    expect(update.intakeTermsVersion).toBe(4);
+    expect(update.intakeTermsUpdatedAt).toBeInstanceOf(Date);
+  });
+
+  it("does not increment the version when unrelated settings change", async () => {
+    (
+      prisma.shopSettings.findUnique as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      id: "default",
+      intakeTerms: "Termos antigos",
+      intakeTermsVersion: 3,
+    });
+    (prisma.shopSettings.upsert as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {}
+    );
+
+    await upsertShopSettings(prisma, { shopName: "Outra loja" });
+
+    const update = (prisma.shopSettings.upsert as ReturnType<typeof vi.fn>).mock
+      .calls[0][0].update;
+    expect(update).not.toHaveProperty("intakeTermsVersion");
+    expect(update).not.toHaveProperty("intakeTermsUpdatedAt");
+  });
+
   it("uses defaults for create", async () => {
     (prisma.shopSettings.upsert as ReturnType<typeof vi.fn>).mockResolvedValue(
       {}

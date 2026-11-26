@@ -59,6 +59,7 @@ import { assertJobMutable } from "../utils/job-mutations.js";
 import { logger } from "../utils/logger.js";
 import { toPublicShop } from "../utils/public-shop.js";
 import { createAuditLog } from "./audit.service.js";
+import { resolveIntakeTerms } from "./intake-terms.service.js";
 import {
   assertLoanerAssignable,
   checkoutLoanerDevice,
@@ -366,6 +367,8 @@ interface JobSignatureData {
   intakeDocumentHash?: string | null;
   intakeSignatureDataUrl: string | null;
   intakeTermsSnapshot?: Prisma.InputJsonValue;
+  intakeTermsUpdatedAt?: Date | null;
+  intakeTermsVersion?: number | null;
   signedAt?: Date | null;
   signedIp?: string | null;
   signedUserAgent?: string | null;
@@ -374,15 +377,17 @@ interface JobSignatureData {
 
 // In-person signature: the document is rebuilt from the same payload being
 // submitted, so the hash on the job proves what was signed.
-function inPersonSignatureData(input: CreateJobInput): JobSignatureData {
+async function inPersonSignatureData(
+  prisma: PrismaClient,
+  input: CreateJobInput
+): Promise<JobSignatureData> {
   if (!input.intakeSignatureDataUrl || input.signatureSessionToken) {
     return { intakeSignatureDataUrl: input.intakeSignatureDataUrl ?? null };
   }
-  const document = buildIntakeDocument(
-    input,
-    input.intakeTermsText ?? "",
-    input.intakeLocale ?? "pt"
-  );
+  // intakeTermsText do payload é deliberadamente ignorado: o texto legal
+  // vem das definições da loja no servidor, na língua pedida para a ficha.
+  const terms = await resolveIntakeTerms(prisma, input.intakeLocale);
+  const document = buildIntakeDocument(input, terms.text, terms.locale);
   return {
     intakeSignatureDataUrl: input.intakeSignatureDataUrl,
     intakeTermsSnapshot: document as unknown as Prisma.InputJsonValue,
@@ -390,6 +395,8 @@ function inPersonSignatureData(input: CreateJobInput): JobSignatureData {
       document,
       input.intakeSignatureDataUrl
     ),
+    intakeTermsUpdatedAt: terms.updatedAt,
+    intakeTermsVersion: terms.version,
     signedAt: new Date(),
     signedVia: "in_person",
   };
@@ -414,6 +421,8 @@ async function remoteSignatureData(
     intakeSignatureDataUrl: session.signatureDataUrl,
     intakeTermsSnapshot: session.snapshot as unknown as Prisma.InputJsonValue,
     intakeDocumentHash: session.documentHash,
+    intakeTermsUpdatedAt: session.intakeTermsUpdatedAt,
+    intakeTermsVersion: session.intakeTermsVersion,
     signedAt: session.signedAt,
     signedVia: "remote",
     signedIp: session.signerIp,
@@ -510,7 +519,7 @@ export async function create(
   // customer saw: a remote session carries the frozen snapshot (and its
   // signer IP/user-agent), in-person signing snapshots the ficha being
   // submitted. Either way the hash on the job proves the document.
-  const signatureData = inPersonSignatureData(input);
+  const signatureData = await inPersonSignatureData(prisma, input);
 
   const job = await prisma.$transaction(async (tx) => {
     // Throws SIGNATURE_STALE when the ficha drifted since the link was
