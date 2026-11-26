@@ -452,6 +452,11 @@ export async function create(
   userId: string,
   notifyCtx: NotifyContext
 ) {
+  // Signature provenance — the signature is bound to the document the
+  // customer saw: a remote session carries the frozen snapshot (and its
+  // signer IP/user-agent), in-person signing snapshots the ficha being
+  // submitted. Either way the hash on the job proves the document.
+  const signatureData = await inPersonSignatureData(prisma, input);
   if (input.warrantyForJobId) {
     const warrantyJob = await findUniqueWithCustomer(
       prisma,
@@ -517,12 +522,6 @@ export async function create(
   const { device, identifier: deviceIdentifier } = resolved;
 
   const { accessCode, jobCode } = await generateJobCode(prisma);
-
-  // Signature provenance — the signature is bound to the document the
-  // customer saw: a remote session carries the frozen snapshot (and its
-  // signer IP/user-agent), in-person signing snapshots the ficha being
-  // submitted. Either way the hash on the job proves the document.
-  const signatureData = await inPersonSignatureData(prisma, input);
 
   const job = await prisma.$transaction(async (tx) => {
     // Throws SIGNATURE_STALE when the ficha drifted since the link was
