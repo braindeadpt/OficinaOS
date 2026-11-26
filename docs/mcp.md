@@ -11,7 +11,7 @@ client — to your shop's data. **Read-only, free, no Cloud required.**
   (loopback) — never on the shop network. The stdio transport talks directly
   to the database on the same machine.
 - **Personal tokens.** Tokens (`oos_*`) are created in
-  **Settings → AI → Connect your LLM**, stored as a SHA-256 hash and shown
+  **Profile → Security → Connect your LLM**, stored as a SHA-256 hash and shown
   only once. They inherit the user's permissions — a technician can't read
   what the app doesn't show them. Each token can expire and can be revoked.
 - **GDPR by default.** Phone, email and tax ID are masked unless you
@@ -24,7 +24,7 @@ client — to your shop's data. **Read-only, free, no Cloud required.**
 
 ## Quick start
 
-1. In the app, open **Settings → AI → Connect your LLM** and create a token.
+1. In the app, open **Profile → Security → Connect your LLM** and create a token.
    Copy it — it is shown only once.
 2. Copy the ready-made configuration for your client (the UI offers Claude
    Desktop, Cursor and LM Studio) and replace `<TOKEN>` with your token.

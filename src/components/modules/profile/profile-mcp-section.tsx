@@ -7,6 +7,7 @@ import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import api, { getErrorMessage } from "@/lib/api";
 import { copyTextToClipboard } from "@/lib/clipboard";
+import { useDemoMode } from "@/lib/demo";
 
 /**
  * «Ligar o seu LLM» — MCP grátis SÓ DE LEITURA (issue #74). Tokens pessoais
@@ -94,6 +95,7 @@ function tokenStatusText(tok: LocalMcpToken, t: (k: string) => string): string {
 
 export default function ProfileMcpSection() {
   const { t } = useTranslation();
+  const isDemo = useDemoMode();
 
   const [tokens, setTokens] = useState<LocalMcpToken[]>([]);
   const [name, setName] = useState("");
@@ -183,61 +185,64 @@ export default function ProfileMcpSection() {
         </p>
       </div>
 
-      {/* Criar token */}
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-48 flex-1">
-            <Field id="mcp-token-name" label={t("mcp.name_label")}>
-              <Input
-                onChange={(e) => setName(e.target.value)}
-                placeholder={t("mcp.name_placeholder")}
-                value={name}
-              />
-            </Field>
-          </div>
-          <div>
-            <Field id="mcp-token-expiry" label={t("mcp.expiry_label")}>
-              <Input
-                onChange={(e) => setExpiresAt(e.target.value)}
-                type="date"
-                value={expiresAt}
-              />
-            </Field>
-          </div>
-          <button
-            className="flex min-h-10 items-center gap-2 rounded-xl bg-primary px-4 py-2 font-medium text-on-primary text-sm transition-opacity disabled:opacity-50"
-            disabled={busy || !name.trim()}
-            onClick={createToken}
-            type="button"
-          >
-            <Icon name="add" size="sm" />
-            {t("mcp.create")}
-          </button>
-        </div>
-
-        <Field horizontal label={t("mcp.show_pii_label")}>
-          <Checkbox
-            checked={showPii}
-            onChange={(e) => setShowPii(e.target.checked)}
-          />
-        </Field>
-        {showPii && (
-          <div className="rounded-xl border border-warning/40 bg-warning/10 p-3 text-on-surface text-sm">
-            <p className="font-medium">{t("mcp.pii_warning_title")}</p>
-            <p className="mt-1 text-on-surface-variant">
-              {t("mcp.pii_warning_body")}
-            </p>
-            <div className="mt-2">
-              <Field horizontal label={t("mcp.pii_ack_label")}>
-                <Checkbox
-                  checked={piiAck}
-                  onChange={(e) => setPiiAck(e.target.checked)}
+      {/* Criar token — em modo demo a criação está bloqueada no servidor,
+          por isso o formulário nem aparece */}
+      {!isDemo && (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-48 flex-1">
+              <Field id="mcp-token-name" label={t("mcp.name_label")}>
+                <Input
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder={t("mcp.name_placeholder")}
+                  value={name}
                 />
               </Field>
             </div>
+            <div>
+              <Field id="mcp-token-expiry" label={t("mcp.expiry_label")}>
+                <Input
+                  onChange={(e) => setExpiresAt(e.target.value)}
+                  type="date"
+                  value={expiresAt}
+                />
+              </Field>
+            </div>
+            <button
+              className="flex min-h-10 items-center gap-2 rounded-xl bg-primary px-4 py-2 font-medium text-on-primary text-sm transition-opacity disabled:opacity-50"
+              disabled={busy || !name.trim()}
+              onClick={createToken}
+              type="button"
+            >
+              <Icon name="add" size="sm" />
+              {t("mcp.create")}
+            </button>
           </div>
-        )}
-      </div>
+
+          <Field horizontal label={t("mcp.show_pii_label")}>
+            <Checkbox
+              checked={showPii}
+              onChange={(e) => setShowPii(e.target.checked)}
+            />
+          </Field>
+          {showPii && (
+            <div className="rounded-xl border border-warning/40 bg-warning/10 p-3 text-on-surface text-sm">
+              <p className="font-medium">{t("mcp.pii_warning_title")}</p>
+              <p className="mt-1 text-on-surface-variant">
+                {t("mcp.pii_warning_body")}
+              </p>
+              <div className="mt-2">
+                <Field horizontal label={t("mcp.pii_ack_label")}>
+                  <Checkbox
+                    checked={piiAck}
+                    onChange={(e) => setPiiAck(e.target.checked)}
+                  />
+                </Field>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Token novo — mostrado uma única vez */}
       {newToken && (

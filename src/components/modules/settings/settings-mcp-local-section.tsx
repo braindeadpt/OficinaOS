@@ -89,7 +89,11 @@ export default function SettingsMcpAdminSection() {
         >
           <div className="min-w-0 flex-1">
             <p className="font-medium text-on-surface text-sm">
-              {tok.userName ?? tok.userUsername ?? "—"} · {tok.name}{" "}
+              {tok.userName ?? tok.userUsername ?? "—"}
+              {tok.userName && tok.userUsername
+                ? ` (@${tok.userUsername})`
+                : ""}{" "}
+              · {tok.name}{" "}
               <span className="font-mono text-on-surface-variant text-xs">
                 {tok.prefix}…
               </span>
