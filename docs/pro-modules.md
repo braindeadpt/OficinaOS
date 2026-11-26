@@ -142,8 +142,9 @@ Done in the "OficinaOS" Meta App (developers.facebook.com):
    (`POST /shops/whatsapp-credentials`; AES-256-GCM, key material in the
    `SECRETS_KEY` environment variable, outside the database). The shared
    30-day migration window starts on the first boot of the app version that
-   introduces the migration — even before this setup is opened — and the
-   WhatsApp settings screen shows how many days remain. While that window is
+   introduces the migration — even before this setup is opened. Shops still
+   missing explicit consent see how many days remain in the WhatsApp settings.
+   While that window is
    open, a shop whose upload is not yet confirmed can still send directly
    with the local token. Once the Cloud confirms the current credentials,
    sends go out through the relay `POST /whatsapp/send` and the retained

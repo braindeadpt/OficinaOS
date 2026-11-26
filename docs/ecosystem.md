@@ -112,7 +112,8 @@ stored credential. Sending is authorized server-side by entitlement — the
 local module cache is only a UI hint (expires 24h after the last sync).
 The shared 30-day transition starts on the first boot of the app version
 that introduces the migration — even before anyone opens WhatsApp setup —
-and the settings screen shows the remaining days. While that window is open,
+and shops still missing explicit consent see the remaining days in settings.
+While that window is open,
 a shop whose consented upload is not yet confirmed can still send directly
 with the local token (`whatsappApiTokenEncrypted`, AES-256-GCM under
 `AI_ENCRYPTION_KEY`). Once the Cloud has the current credentials, that
