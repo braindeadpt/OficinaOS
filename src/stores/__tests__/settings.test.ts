@@ -306,6 +306,48 @@ describe("useSettingsStore", () => {
     });
   });
 
+  describe("dismissWhatsAppCloudMigrationNotice", () => {
+    it("posts the dismissal without replacing the settings object used by forms", async () => {
+      const settings = {
+        botDailyCap: 200,
+        botDisclaimerAccepted: false,
+        botSuspendedAt: null,
+        businessId: null,
+        cloudConsentAccepted: false,
+        cloudMigrationNoticePending: true,
+        credentialsAtCloud: true,
+        disclaimerAccepted: false,
+        enabled: true,
+        evolutionInstance: null,
+        evolutionUrl: null,
+        hasApiToken: false,
+        hasEvolutionApiKey: false,
+        localDeprecationStartedAt: null,
+        phoneNumberId: "1234",
+        pickupReminderTemplate: null,
+        remarketingCooldownDays: 180,
+        remarketingDays: 90,
+        remarketingEnabled: false,
+        remarketingModule: false,
+        remarketingTemplate: null,
+        trackingBaseUrl: null,
+        transport: "meta" as const,
+        whatsappModule: true,
+      };
+      useSettingsStore.setState({ whatsAppSettings: settings });
+      mockPost.mockResolvedValue({ data: { ok: true } });
+
+      await act(() =>
+        useSettingsStore.getState().dismissWhatsAppCloudMigrationNotice()
+      );
+
+      expect(mockPost).toHaveBeenCalledWith(
+        "/settings/whatsapp/migration-notice/seen"
+      );
+      expect(useSettingsStore.getState().whatsAppSettings).toBe(settings);
+    });
+  });
+
   describe("clearError", () => {
     it("resets error state", () => {
       useSettingsStore.setState({ error: "Some error" });

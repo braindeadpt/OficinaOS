@@ -356,18 +356,8 @@ async function pushCredentialsToCloudOnce(prisma: DbClient): Promise<boolean> {
     // - 409 PHONE_NUMBER_ID_TAKEN: outra loja na Cloud detém este
     //   phone_number_id. Reenviar o mesmo pedido só resolve depois de o ID ser
     //   libertado lá; corrigir o ID localmente também rota as credenciais.
-    //   Nunca marcamos o upload como atual e reafirmamos a flag local como
-    //   false para o envio legado continuar disponível durante a transição.
-    if (res?.status === 409) {
-      await prisma.shopSettings.updateMany({
-        data: { whatsappCredentialsAtCloud: false },
-        where: {
-          id: "default",
-          whatsappApiTokenEncrypted: rawToken,
-          whatsappPhoneNumberId: settings.whatsappPhoneNumberId,
-        },
-      });
-    }
+    //   Nunca marcamos o upload como atual — a flag já está false neste ramo,
+    //   por isso o envio legado continua disponível durante a transição.
     return false;
   }
   // O upload demora e a loja pode gravar um token/phone_number_id de

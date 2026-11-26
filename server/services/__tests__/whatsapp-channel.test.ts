@@ -494,7 +494,7 @@ describe("pushCredentialsToCloud", () => {
     expect(updateManySettings).not.toHaveBeenCalled();
   });
 
-  it("reaffirms the not-current flag on 409 instead of trapping the shop", async () => {
+  it("returns false on 409 without trapping the shop or rewriting state", async () => {
     mocks.getOrCreateShopSettings.mockResolvedValue(settings);
     mocks.cloudFetch.mockResolvedValue({
       body: { error: { code: "PHONE_NUMBER_ID_TAKEN" } },
@@ -503,14 +503,7 @@ describe("pushCredentialsToCloud", () => {
     });
 
     expect(await pushCredentialsToCloud(prisma)).toBe(false);
-    expect(updateManySettings).toHaveBeenCalledWith({
-      data: { whatsappCredentialsAtCloud: false },
-      where: {
-        id: "default",
-        whatsappApiTokenEncrypted: "enc:meta-token",
-        whatsappPhoneNumberId: "1234",
-      },
-    });
+    expect(updateManySettings).not.toHaveBeenCalled();
   });
 
   it("never uploads without the whatsapp-bot entitlement — free stays local", async () => {

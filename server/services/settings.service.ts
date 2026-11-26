@@ -43,6 +43,29 @@ function endpointOrigin(endpoint: string) {
   }
 }
 
+function assertCloudPhoneRotationPossible(
+  current: {
+    whatsappApiTokenEncrypted: string | null;
+    whatsappCredentialsAtCloud: boolean;
+    whatsappPhoneNumberId: string | null;
+  } | null,
+  input: UpdateWhatsAppSettingsInput
+) {
+  const needsToken = Boolean(
+    input.phoneNumberId !== undefined &&
+      current?.whatsappPhoneNumberId !== input.phoneNumberId &&
+      current?.whatsappCredentialsAtCloud &&
+      !current.whatsappApiTokenEncrypted &&
+      !input.apiToken
+  );
+  if (!needsToken) {
+    return;
+  }
+  throw new AppError("VALIDATION_ERROR", {
+    errors: { apiToken: ["required_for_phone_number_rotation"] },
+  });
+}
+
 function publicAiSettings<
   T extends { apiKeyEncrypted: string } | null | undefined,
 >(row: T) {
@@ -738,12 +761,19 @@ export async function upsertWhatsAppSettings(
     data.whatsappBusinessId = input.businessId;
   }
   if (input.phoneNumberId !== undefined) {
+    const phoneNumberChanged =
+      current?.whatsappPhoneNumberId !== input.phoneNumberId;
+    // Depois do primeiro envio Cloud o token local é apagado de propósito.
+    // Nesse estado já não há segredo para associar a um phone_number_id novo;
+    // aceitar a mudança sem token de substituição apagava o relay sem deixar
+    // caminho de envio. A UI mostra o mesmo requisito antes do save.
+    assertCloudPhoneRotationPossible(current, input);
     data.whatsappPhoneNumberId = input.phoneNumberId;
     // O phone_number_id faz parte da credencial guardada na Cloud. Mudar
     // para um ID novo invalida a migração anterior mesmo quando o token se
     // mantém — a gravação seguinte (e o poller como rede) volta a enviar o
     // par token+phone_number_id pela fila serializada.
-    if (current?.whatsappPhoneNumberId !== input.phoneNumberId) {
+    if (phoneNumberChanged) {
       data.whatsappCredentialsAtCloud = false;
     }
   }

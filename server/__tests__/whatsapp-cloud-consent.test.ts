@@ -388,6 +388,10 @@ describe("WP0.6 PR B — rotação, revogação e aviso grandfathered", () => {
       whatsappCredentialsAtCloud: true,
       whatsappPhoneNumberId: "1234",
     });
+  const migratedRowWith = (overrides: Partial<TestSettingsRow>) => ({
+    ...migratedRow(),
+    ...overrides,
+  });
 
   it("rodar o token repõe a credencial na Cloud — sem upload a rotação ficaria morta", async () => {
     const state = createStatefulPrisma(migratedRow());
@@ -433,6 +437,53 @@ describe("WP0.6 PR B — rotação, revogação e aviso grandfathered", () => {
     });
     expect(state.getRow()?.whatsappCredentialsAtCloud).toBe(true);
     expect(state.getRow()?.whatsappPhoneNumberId).toBe("5678");
+  });
+
+  it("rejeita mudar só o phoneNumberId quando o token local já foi apagado", async () => {
+    const state = createStatefulPrisma(
+      migratedRowWith({ whatsappApiTokenEncrypted: null })
+    );
+    const app = buildApp(state.prisma);
+
+    const res = await app.inject({
+      method: "PUT",
+      payload: { phoneNumberId: "5678" },
+      url: "/api/settings/whatsapp",
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(state.getRow()).toMatchObject({
+      whatsappCredentialsAtCloud: true,
+      whatsappPhoneNumberId: "1234",
+    });
+    expect(
+      credentialsUploadCalls().filter(
+        (call) => (call[2] as { method?: string }).method === "POST"
+      )
+    ).toHaveLength(0);
+  });
+
+  it("aceita mudar o phoneNumberId sem token local quando vem token de substituição", async () => {
+    const state = createStatefulPrisma(
+      migratedRowWith({ whatsappApiTokenEncrypted: null })
+    );
+    const app = buildApp(state.prisma);
+
+    const res = await app.inject({
+      method: "PUT",
+      payload: { apiToken: "meta-token-novo", phoneNumberId: "5678" },
+      url: "/api/settings/whatsapp",
+    });
+
+    expect(res.statusCode).toBe(200);
+    const uploads = credentialsUploadCalls().filter(
+      (call) => (call[2] as { method?: string }).method === "POST"
+    );
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0][2]).toMatchObject({
+      body: { accessToken: "meta-token-novo", phoneNumberId: "5678" },
+    });
+    expect(state.getRow()?.whatsappCredentialsAtCloud).toBe(true);
   });
 
   it("revogação chama DELETE na Cloud, apaga o token local e limpa o consentimento", async () => {

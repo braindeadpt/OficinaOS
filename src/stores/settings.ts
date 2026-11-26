@@ -500,14 +500,6 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     set({ error: null });
     try {
       await api.post("/settings/whatsapp/migration-notice/seen");
-      set((state) => ({
-        whatsAppSettings: state.whatsAppSettings
-          ? {
-              ...state.whatsAppSettings,
-              cloudMigrationNoticePending: false,
-            }
-          : state.whatsAppSettings,
-      }));
     } catch (err: unknown) {
       const message = getErrorMessage(
         err,

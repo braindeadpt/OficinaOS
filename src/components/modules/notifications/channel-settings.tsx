@@ -45,6 +45,55 @@ interface ChannelSettingsProps {
   whatsAppSettings: Store["whatsAppSettings"];
 }
 
+function phoneRotationNeedsReplacementToken(
+  form: WhatsAppFormState,
+  settings: Store["whatsAppSettings"]
+): boolean {
+  return Boolean(
+    settings?.credentialsAtCloud &&
+      !settings.hasApiToken &&
+      form.phoneNumberId !== (settings.phoneNumberId ?? "") &&
+      !form.apiToken
+  );
+}
+
+function buildWhatsAppSavePayload(
+  form: WhatsAppFormState,
+  remarketingModule: boolean | undefined
+) {
+  return {
+    apiToken: form.apiToken || undefined,
+    ...cloudConsentPayload(form),
+    businessId: form.businessId || undefined,
+    phoneNumberId: form.phoneNumberId || undefined,
+    enabled: form.enabled,
+    trackingBaseUrl: form.trackingBaseUrl,
+    pickupReminderTemplate: form.pickupReminderTemplate,
+    ...(remarketingModule
+      ? {
+          remarketingEnabled: form.remarketingEnabled,
+          remarketingDays: Number.parseInt(form.remarketingDays, 10) || 90,
+          remarketingCooldownDays:
+            Number.parseInt(form.remarketingCooldownDays, 10) || 180,
+          remarketingTemplate: form.remarketingTemplate,
+        }
+      : {}),
+    transport: form.transport,
+    ...(form.transport === "evolution"
+      ? {
+          evolutionUrl: form.evolutionUrl,
+          evolutionInstance: form.evolutionInstance,
+          evolutionApiKey: form.evolutionApiKey || undefined,
+          disclaimerAccepted: form.disclaimerAccepted,
+          ...(form.botDisclaimerAccepted
+            ? { botDisclaimerAccepted: true }
+            : {}),
+          botDailyCap: Number.parseInt(form.botDailyCap, 10) || undefined,
+        }
+      : {}),
+  };
+}
+
 function SmsCard({
   smsSettings,
   onSave,
@@ -321,7 +370,7 @@ function CloudCredentialsRevokeBlock() {
   return (
     <div className="rounded-xl border border-warning/40 bg-warning/5 p-4">
       <p className="text-on-surface text-xs leading-relaxed">
-        {t("whatsapp_relay_active")}
+        {t("whatsapp_cloud_credentials_stored")}
       </p>
       {confirming ? (
         <div className="mt-3">
@@ -384,6 +433,9 @@ function MetaWhatsAppFields({
   const migrationDaysLeft = whatsappLocalDeprecationDaysLeft(
     settings?.localDeprecationStartedAt
   );
+  const phoneRotationNeedsToken = Boolean(
+    settings?.credentialsAtCloud && !settings.hasApiToken
+  );
   return (
     <>
       <div>
@@ -441,6 +493,11 @@ function MetaWhatsAppFields({
           type="text"
           value={form.phoneNumberId}
         />
+        {phoneRotationNeedsToken && (
+          <p className="mt-1.5 text-on-surface-variant text-xs">
+            {t("whatsapp_phone_rotation_token_help")}
+          </p>
+        )}
       </div>
       <div>
         <div className="flex items-center gap-2">
@@ -1007,47 +1064,28 @@ export default function ChannelSettings({
     }
   }, [whatsAppSettings, whatsAppSaving]);
 
+  const rotationNeedsToken = phoneRotationNeedsReplacementToken(
+    whatsAppForm,
+    whatsAppSettings
+  );
+
   const handleWhatsAppSave = useCallback(async () => {
+    if (rotationNeedsToken) {
+      toast.error(t("whatsapp_phone_rotation_token_required"));
+      return;
+    }
     if (waLocked && whatsAppForm.enabled) {
       toast.info(t("pro_only_upsell"));
       return;
     }
     setWhatsAppSaving(true);
     try {
-      await onSaveWhatsAppSettings({
-        apiToken: whatsAppForm.apiToken || undefined,
-        ...cloudConsentPayload(whatsAppForm),
-        businessId: whatsAppForm.businessId || undefined,
-        phoneNumberId: whatsAppForm.phoneNumberId || undefined,
-        enabled: whatsAppForm.enabled,
-        trackingBaseUrl: whatsAppForm.trackingBaseUrl,
-        pickupReminderTemplate: whatsAppForm.pickupReminderTemplate,
-        ...(whatsAppSettings?.remarketingModule
-          ? {
-              remarketingEnabled: whatsAppForm.remarketingEnabled,
-              remarketingDays:
-                Number.parseInt(whatsAppForm.remarketingDays, 10) || 90,
-              remarketingCooldownDays:
-                Number.parseInt(whatsAppForm.remarketingCooldownDays, 10) ||
-                180,
-              remarketingTemplate: whatsAppForm.remarketingTemplate,
-            }
-          : {}),
-        transport: whatsAppForm.transport,
-        ...(whatsAppForm.transport === "evolution"
-          ? {
-              evolutionUrl: whatsAppForm.evolutionUrl,
-              evolutionInstance: whatsAppForm.evolutionInstance,
-              evolutionApiKey: whatsAppForm.evolutionApiKey || undefined,
-              disclaimerAccepted: whatsAppForm.disclaimerAccepted,
-              ...(whatsAppForm.botDisclaimerAccepted
-                ? { botDisclaimerAccepted: true }
-                : {}),
-              botDailyCap:
-                Number.parseInt(whatsAppForm.botDailyCap, 10) || undefined,
-            }
-          : {}),
-      });
+      await onSaveWhatsAppSettings(
+        buildWhatsAppSavePayload(
+          whatsAppForm,
+          whatsAppSettings?.remarketingModule
+        )
+      );
       // Segredos não voltam no GET. Limpar o input depois de gravar evita
       // reenviar o mesmo token em saves seguintes (o que repõe a flag Cloud
       // e desencadeia uploads duplicados).
@@ -1069,6 +1107,7 @@ export default function ChannelSettings({
     whatsAppForm,
     onSaveWhatsAppSettings,
     whatsAppSettings?.remarketingModule,
+    rotationNeedsToken,
     waLocked,
     fetchWaTemplates,
     t,
