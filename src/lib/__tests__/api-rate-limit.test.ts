@@ -7,7 +7,15 @@ vi.mock("@/i18n", () => ({
   },
 }));
 
-import { rateLimitMessage } from "@/lib/api";
+import { isRequestTimeout, rateLimitMessage } from "@/lib/api";
+
+describe("isRequestTimeout", () => {
+  it("identifica o timeout do Axios sem confundir erros da API", () => {
+    expect(isRequestTimeout({ code: "ECONNABORTED" })).toBe(true);
+    expect(isRequestTimeout({ code: "CLOUD_UNREACHABLE" })).toBe(false);
+    expect(isRequestTimeout(new Error("timeout"))).toBe(false);
+  });
+});
 
 describe("rateLimitMessage", () => {
   it("falls back to the generic text without a usable wait", () => {

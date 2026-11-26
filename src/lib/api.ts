@@ -18,6 +18,16 @@ export function getErrorMessage(err: unknown, fallback: string): string {
   return fallback;
 }
 
+/** Axios usa ECONNABORTED quando o temporizador do browser vence antes da resposta. */
+export function isRequestTimeout(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: unknown }).code === "ECONNABORTED"
+  );
+}
+
 /**
  * Friendly, localized text for a 429: how long to wait, from the Retry-After
  * header (or the body's details.retryAfter), rounded to something a person

@@ -45,6 +45,56 @@ interface ChannelSettingsProps {
   whatsAppSettings: Store["whatsAppSettings"];
 }
 
+function phoneRotationNeedsReplacementToken(
+  form: WhatsAppFormState,
+  settings: Store["whatsAppSettings"]
+): boolean {
+  return Boolean(
+    settings?.credentialsAtCloud &&
+      !settings.hasApiToken &&
+      form.phoneNumberId !== "" &&
+      form.phoneNumberId !== (settings.phoneNumberId ?? "") &&
+      !form.apiToken
+  );
+}
+
+function buildWhatsAppSavePayload(
+  form: WhatsAppFormState,
+  remarketingModule: boolean | undefined
+) {
+  return {
+    apiToken: form.apiToken || undefined,
+    ...cloudConsentPayload(form),
+    businessId: form.businessId || undefined,
+    phoneNumberId: form.phoneNumberId || undefined,
+    enabled: form.enabled,
+    trackingBaseUrl: form.trackingBaseUrl,
+    pickupReminderTemplate: form.pickupReminderTemplate,
+    ...(remarketingModule
+      ? {
+          remarketingEnabled: form.remarketingEnabled,
+          remarketingDays: Number.parseInt(form.remarketingDays, 10) || 90,
+          remarketingCooldownDays:
+            Number.parseInt(form.remarketingCooldownDays, 10) || 180,
+          remarketingTemplate: form.remarketingTemplate,
+        }
+      : {}),
+    transport: form.transport,
+    ...(form.transport === "evolution"
+      ? {
+          evolutionUrl: form.evolutionUrl,
+          evolutionInstance: form.evolutionInstance,
+          evolutionApiKey: form.evolutionApiKey || undefined,
+          disclaimerAccepted: form.disclaimerAccepted,
+          ...(form.botDisclaimerAccepted
+            ? { botDisclaimerAccepted: true }
+            : {}),
+          botDailyCap: Number.parseInt(form.botDailyCap, 10) || undefined,
+        }
+      : {}),
+  };
+}
+
 function SmsCard({
   smsSettings,
   onSave,
@@ -288,6 +338,79 @@ function whatsappLocalDeprecationDaysLeft(
   return Math.max(0, DEPRECATION_TRANSITION_DAYS - elapsedDays);
 }
 
+/**
+ * Revogação explícita da cópia Cloud das credenciais Meta. Fica fora dos
+ * campos Meta e do gate Pro de propósito: mesmo com o transporte desligado,
+ * em Evolution ou sem entitlement fresco, a loja tem de conseguir retirar a
+ * cópia que já está na Cloud. A confirmação em dois passos evita o clique
+ * acidental sem abrir um modal que bloqueie o resto das definições.
+ */
+function CloudCredentialsRevokeBlock() {
+  const { t } = useTranslation();
+  const revokeWhatsAppCloudCredentials = useSettingsStore(
+    (s) => s.revokeWhatsAppCloudCredentials
+  );
+  const [confirming, setConfirming] = useState(false);
+  const [revoking, setRevoking] = useState(false);
+
+  const handleRevoke = useCallback(async () => {
+    setRevoking(true);
+    try {
+      await revokeWhatsAppCloudCredentials();
+      toast.success(t("whatsapp_revoke_cloud_success"));
+      setConfirming(false);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : t("whatsapp_cloud_action_failed")
+      );
+    } finally {
+      setRevoking(false);
+    }
+  }, [revokeWhatsAppCloudCredentials, t]);
+
+  return (
+    <div className="rounded-xl border border-warning/40 bg-warning/5 p-4">
+      <p className="text-on-surface text-xs leading-relaxed">
+        {t("whatsapp_cloud_credentials_stored")}
+      </p>
+      {confirming ? (
+        <div className="mt-3">
+          <p className="font-medium text-on-surface text-xs leading-relaxed">
+            {t("whatsapp_revoke_cloud_confirm_help")}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              loading={revoking}
+              onClick={handleRevoke}
+              size="sm"
+              variant="destructive"
+            >
+              {t("whatsapp_revoke_cloud_button")}
+            </Button>
+            <Button
+              disabled={revoking}
+              onClick={() => setConfirming(false)}
+              size="sm"
+              variant="secondary"
+            >
+              {t("cancel")}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button
+          className="mt-3"
+          onClick={() => setConfirming(true)}
+          size="sm"
+          variant="destructive-soft"
+        >
+          {t("whatsapp_revoke_cloud_button")}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 /** Campos do transporte oficial Meta (IDs, token, relay, remarketing). */
 function MetaWhatsAppFields({
   form,
@@ -310,6 +433,9 @@ function MetaWhatsAppFields({
   );
   const migrationDaysLeft = whatsappLocalDeprecationDaysLeft(
     settings?.localDeprecationStartedAt
+  );
+  const phoneRotationNeedsToken = Boolean(
+    settings?.credentialsAtCloud && !settings.hasApiToken
   );
   return (
     <>
@@ -368,6 +494,11 @@ function MetaWhatsAppFields({
           type="text"
           value={form.phoneNumberId}
         />
+        {phoneRotationNeedsToken && (
+          <p className="mt-1.5 text-on-surface-variant text-xs">
+            {t("whatsapp_phone_rotation_token_help")}
+          </p>
+        )}
       </div>
       <div>
         <div className="flex items-center gap-2">
@@ -433,18 +564,13 @@ function MetaWhatsAppFields({
           </div>
         </div>
       )}
-      {settings?.credentialsAtCloud ? (
-        <p className="rounded-xl bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
-          {t("whatsapp_relay_active")}
-        </p>
-      ) : (
+      {!settings?.credentialsAtCloud &&
         settings?.hasApiToken &&
         cloudConsentStored && (
           <p className="rounded-xl bg-surface-container px-3 py-2 text-on-surface-variant text-xs">
             {t("whatsapp_relay_pending")}
           </p>
-        )
-      )}
+        )}
       {settings?.remarketingModule ? (
         <div className="rounded-xl bg-surface-container p-4">
           <div className="flex items-center gap-3">
@@ -939,47 +1065,28 @@ export default function ChannelSettings({
     }
   }, [whatsAppSettings, whatsAppSaving]);
 
+  const rotationNeedsToken = phoneRotationNeedsReplacementToken(
+    whatsAppForm,
+    whatsAppSettings
+  );
+
   const handleWhatsAppSave = useCallback(async () => {
+    if (rotationNeedsToken) {
+      toast.error(t("whatsapp_phone_rotation_token_required"));
+      return;
+    }
     if (waLocked && whatsAppForm.enabled) {
       toast.info(t("pro_only_upsell"));
       return;
     }
     setWhatsAppSaving(true);
     try {
-      await onSaveWhatsAppSettings({
-        apiToken: whatsAppForm.apiToken || undefined,
-        ...cloudConsentPayload(whatsAppForm),
-        businessId: whatsAppForm.businessId || undefined,
-        phoneNumberId: whatsAppForm.phoneNumberId || undefined,
-        enabled: whatsAppForm.enabled,
-        trackingBaseUrl: whatsAppForm.trackingBaseUrl,
-        pickupReminderTemplate: whatsAppForm.pickupReminderTemplate,
-        ...(whatsAppSettings?.remarketingModule
-          ? {
-              remarketingEnabled: whatsAppForm.remarketingEnabled,
-              remarketingDays:
-                Number.parseInt(whatsAppForm.remarketingDays, 10) || 90,
-              remarketingCooldownDays:
-                Number.parseInt(whatsAppForm.remarketingCooldownDays, 10) ||
-                180,
-              remarketingTemplate: whatsAppForm.remarketingTemplate,
-            }
-          : {}),
-        transport: whatsAppForm.transport,
-        ...(whatsAppForm.transport === "evolution"
-          ? {
-              evolutionUrl: whatsAppForm.evolutionUrl,
-              evolutionInstance: whatsAppForm.evolutionInstance,
-              evolutionApiKey: whatsAppForm.evolutionApiKey || undefined,
-              disclaimerAccepted: whatsAppForm.disclaimerAccepted,
-              ...(whatsAppForm.botDisclaimerAccepted
-                ? { botDisclaimerAccepted: true }
-                : {}),
-              botDailyCap:
-                Number.parseInt(whatsAppForm.botDailyCap, 10) || undefined,
-            }
-          : {}),
-      });
+      await onSaveWhatsAppSettings(
+        buildWhatsAppSavePayload(
+          whatsAppForm,
+          whatsAppSettings?.remarketingModule
+        )
+      );
       // Segredos não voltam no GET. Limpar o input depois de gravar evita
       // reenviar o mesmo token em saves seguintes (o que repõe a flag Cloud
       // e desencadeia uploads duplicados).
@@ -992,8 +1099,10 @@ export default function ChannelSettings({
       setTimeout(() => {
         fetchWaTemplates().catch(() => null);
       }, 4000);
-    } catch {
-      // Error is stored in Zustand state
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : t("errors.save_shop_settings")
+      );
     } finally {
       setWhatsAppSaving(false);
     }
@@ -1001,6 +1110,7 @@ export default function ChannelSettings({
     whatsAppForm,
     onSaveWhatsAppSettings,
     whatsAppSettings?.remarketingModule,
+    rotationNeedsToken,
     waLocked,
     fetchWaTemplates,
     t,
@@ -1050,6 +1160,28 @@ export default function ChannelSettings({
             {t("pro_only_upsell")}
           </p>
         )}
+
+        {whatsAppSettings?.credentialsAtCloud && (
+          <div className="mt-4">
+            <CloudCredentialsRevokeBlock />
+          </div>
+        )}
+
+        {whatsAppSettings?.phoneNumberId &&
+          !whatsAppSettings.credentialsAtCloud &&
+          !whatsAppSettings.hasApiToken && (
+            <div
+              className="mt-4 flex items-start gap-3 rounded-xl border border-warning/40 bg-warning/5 p-4"
+              role="status"
+            >
+              <span className="material-symbols-outlined text-warning text-xl">
+                warning
+              </span>
+              <p className="text-on-surface text-sm leading-relaxed">
+                {t("whatsapp_official_disconnected")}
+              </p>
+            </div>
+          )}
 
         {whatsAppForm.enabled && (
           <div className="mt-5 space-y-4">

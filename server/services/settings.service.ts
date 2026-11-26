@@ -43,6 +43,29 @@ function endpointOrigin(endpoint: string) {
   }
 }
 
+function assertCloudPhoneRotationPossible(
+  current: {
+    whatsappApiTokenEncrypted: string | null;
+    whatsappCredentialsAtCloud: boolean;
+    whatsappPhoneNumberId: string | null;
+  } | null,
+  input: UpdateWhatsAppSettingsInput
+) {
+  const needsToken = Boolean(
+    input.phoneNumberId !== undefined &&
+      current?.whatsappPhoneNumberId !== input.phoneNumberId &&
+      current?.whatsappCredentialsAtCloud &&
+      !current.whatsappApiTokenEncrypted &&
+      !input.apiToken
+  );
+  if (!needsToken) {
+    return;
+  }
+  throw new AppError("VALIDATION_ERROR", {
+    errors: { apiToken: ["required_for_phone_number_rotation"] },
+  });
+}
+
 function publicAiSettings<
   T extends { apiKeyEncrypted: string } | null | undefined,
 >(row: T) {
@@ -532,6 +555,35 @@ export async function stampWhatsAppLocalDeprecationStartedAtOnce(
   return fresh?.whatsappLocalDeprecationStartedAt ?? startedAt;
 }
 
+/**
+ * Marca o aviso retrospetivo das lojas grandfathered como visto/dispensado
+ * uma única vez. O updateMany leva a própria condição do aviso — duas
+ * confirmações concorrentes não se sobrescrevem e uma loja que entretanto
+ * consentiu/revogou não ganha um timestamp que não lhe pertence.
+ */
+export async function markWhatsAppCloudMigrationNoticeSeenOnce(
+  prisma: PrismaClient
+): Promise<Date | null> {
+  await getOrCreateShopSettings(prisma);
+  const seenAt = new Date();
+  const result = await prisma.shopSettings.updateMany({
+    data: { whatsappCloudMigrationNoticeSeenAt: seenAt },
+    where: {
+      id: "default",
+      whatsappCloudConsentAt: null,
+      whatsappCloudMigrationNoticeSeenAt: null,
+      whatsappCredentialsAtCloud: true,
+    },
+  });
+  if (result.count !== 0) {
+    return seenAt;
+  }
+  // Outro pedido ganhou a corrida — o timestamp dele é o aceite canónico.
+  // Se não houver timestamp, a condição do aviso já não se verifica.
+  const fresh = await findShopSettingsUnique(prisma);
+  return fresh?.whatsappCloudMigrationNoticeSeenAt ?? null;
+}
+
 export async function getWhatsAppSettings(prisma: PrismaClient) {
   const row = await findShopSettingsUnique(prisma);
   if (!row) {
@@ -541,6 +593,7 @@ export async function getWhatsAppSettings(prisma: PrismaClient) {
       botSuspendedAt: null,
       businessId: null,
       cloudConsentAccepted: false,
+      cloudMigrationNoticePending: false,
       credentialsAtCloud: false,
       disclaimerAccepted: false,
       enabled: false,
@@ -567,6 +620,11 @@ export async function getWhatsAppSettings(prisma: PrismaClient) {
     botSuspendedAt: row.whatsappBotSuspendedAt,
     businessId: row.whatsappBusinessId,
     cloudConsentAccepted: Boolean(row.whatsappCloudConsentAt),
+    cloudMigrationNoticePending: Boolean(
+      row.whatsappCredentialsAtCloud &&
+        !row.whatsappCloudConsentAt &&
+        !row.whatsappCloudMigrationNoticeSeenAt
+    ),
     credentialsAtCloud: row.whatsappCredentialsAtCloud,
     disclaimerAccepted: Boolean(row.whatsappLocalDisclaimerAt),
     enabled: row.whatsappEnabled,
@@ -677,6 +735,10 @@ export async function upsertWhatsAppSettings(
   userId?: string
 ) {
   const data: WhatsAppUpsertData = {};
+  const current =
+    input.phoneNumberId === undefined
+      ? null
+      : await findShopSettingsUnique(prisma);
   if (input.enabled !== undefined) {
     data.whatsappEnabled = input.enabled;
   }
@@ -699,7 +761,21 @@ export async function upsertWhatsAppSettings(
     data.whatsappBusinessId = input.businessId;
   }
   if (input.phoneNumberId !== undefined) {
+    const phoneNumberChanged =
+      current?.whatsappPhoneNumberId !== input.phoneNumberId;
+    // Depois do primeiro envio Cloud o token local é apagado de propósito.
+    // Nesse estado já não há segredo para associar a um phone_number_id novo;
+    // aceitar a mudança sem token de substituição apagava o relay sem deixar
+    // caminho de envio. A UI mostra o mesmo requisito antes do save.
+    assertCloudPhoneRotationPossible(current, input);
     data.whatsappPhoneNumberId = input.phoneNumberId;
+    // O phone_number_id faz parte da credencial guardada na Cloud. Mudar
+    // para um ID novo invalida a migração anterior mesmo quando o token se
+    // mantém — a gravação seguinte (e o poller como rede) volta a enviar o
+    // par token+phone_number_id pela fila serializada.
+    if (phoneNumberChanged) {
+      data.whatsappCredentialsAtCloud = false;
+    }
   }
   if (input.trackingBaseUrl !== undefined) {
     data.trackingBaseUrl = input.trackingBaseUrl.trim() || null;

@@ -1,9 +1,12 @@
 import { isAppError } from "@shared/errors/app-error.js";
+import { updateWhatsAppSettingsSchema } from "@shared/schemas/settings.schema";
 import Fastify from "fastify";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  assertNotDemoMode: vi.fn(),
   cloudFetch: vi.fn(),
+  setEvolutionWebhook: vi.fn(),
   syncWhatsAppTemplates: vi.fn(),
 }));
 
@@ -28,6 +31,23 @@ vi.mock("../services/cloud.service.js", () => ({
   unpairCloud: vi.fn(async () => ({})),
 }));
 
+vi.mock("../lib/demo.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/demo.js")>();
+  return {
+    ...actual,
+    assertNotDemoMode: mocks.assertNotDemoMode,
+  };
+});
+
+vi.mock("../services/evolution.service.js", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../services/evolution.service.js")>();
+  return {
+    ...actual,
+    setEvolutionWebhook: mocks.setEvolutionWebhook,
+  };
+});
+
 vi.mock("../services/whatsapp-templates.service.js", () => ({
   approvedTemplateBodyOf: vi.fn(() => null),
   deriveMetaTemplate: vi.fn(),
@@ -50,6 +70,7 @@ import { syncWhatsAppBot } from "../services/whatsapp-bot.service.js";
 interface TestSettingsRow extends Record<string, unknown> {
   whatsappApiTokenEncrypted: string | null;
   whatsappCloudConsentAt: Date | null;
+  whatsappCloudMigrationNoticeSeenAt: Date | null;
   whatsappCredentialsAtCloud: boolean;
   whatsappEnabled: boolean;
   whatsappLocalDeprecationStartedAt: Date | null;
@@ -66,6 +87,7 @@ function baseRow(overrides: Partial<TestSettingsRow> = {}): TestSettingsRow {
     whatsappApiTokenEncrypted: null,
     whatsappBusinessId: null,
     whatsappCloudConsentAt: null,
+    whatsappCloudMigrationNoticeSeenAt: null,
     whatsappCredentialsAtCloud: false,
     whatsappEnabled: true,
     whatsappLocalDeprecationStartedAt: null,
@@ -97,17 +119,19 @@ function createStatefulPrisma(initial: TestSettingsRow | null) {
         if (!current) {
           return Promise.resolve({ count: 0 });
         }
-        const blocked = Object.entries(where ?? {}).some(
-          ([key, value]) =>
-            key !== "id" &&
-            value === null &&
-            current[key] !== null &&
-            current[key] !== undefined
-        );
-        if (!blocked) {
+        const matches = Object.entries(where ?? {}).every(([key, value]) => {
+          if (key === "id") {
+            return true;
+          }
+          // No Postgres uma coluna nullable sem valor é NULL; o stub omite a
+          // chave quando a row é criada de raiz.
+          const currentValue = current[key] === undefined ? null : current[key];
+          return currentValue === value;
+        });
+        if (matches) {
           row = { ...current, ...data } as TestSettingsRow;
         }
-        return Promise.resolve({ count: blocked ? 0 : 1 });
+        return Promise.resolve({ count: matches ? 1 : 0 });
       }
     ),
     upsert: vi.fn(
@@ -170,7 +194,38 @@ function credentialsUploadCalls() {
   );
 }
 
+async function waitForCondition(
+  condition: () => boolean,
+  description: string
+): Promise<void> {
+  for (let i = 0; i < 200 && !condition(); i++) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  if (!condition()) {
+    throw new Error(`Timed out waiting for ${description}`);
+  }
+}
+
+function mockCloudInvalidCredentials() {
+  mocks.cloudFetch.mockImplementation((_apiUrl: string, path: string) => {
+    if (path === "/shops/whatsapp-credentials") {
+      return Promise.resolve({
+        body: {
+          error: {
+            code: "INVALID_CREDENTIALS",
+            message: "Meta rejected",
+          },
+        },
+        ok: false,
+        status: 400,
+      });
+    }
+    return Promise.resolve({ body: {}, ok: true, status: 200 });
+  });
+}
+
 beforeEach(() => {
+  mocks.assertNotDemoMode.mockReset();
   mocks.cloudFetch.mockReset();
   mocks.cloudFetch.mockImplementation(
     async (_apiUrl: string, path: string) => ({
@@ -179,6 +234,8 @@ beforeEach(() => {
       status: 200,
     })
   );
+  mocks.setEvolutionWebhook.mockReset();
+  mocks.setEvolutionWebhook.mockResolvedValue({ success: true });
   mocks.syncWhatsAppTemplates.mockReset();
   mocks.syncWhatsAppTemplates.mockResolvedValue({});
 });
@@ -372,5 +429,550 @@ describe("WP0.6 — consentimento Cloud do token Meta", () => {
       startedAt.getTime()
     );
     expect(state.updateManyMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("WP0.6 PR B — rotação, revogação e aviso grandfathered", () => {
+  const migratedRow = () =>
+    baseRow({
+      whatsappApiTokenEncrypted: "enc:meta-token",
+      whatsappBusinessId: "business-1",
+      whatsappCloudConsentAt: new Date("2026-01-03T10:00:00.000Z"),
+      whatsappCredentialsAtCloud: true,
+      whatsappPhoneNumberId: "1234",
+    });
+  const migratedRowWith = (overrides: Partial<TestSettingsRow>) => ({
+    ...migratedRow(),
+    ...overrides,
+  });
+
+  it("rodar o token repõe a credencial na Cloud — sem upload a rotação ficaria morta", async () => {
+    const state = createStatefulPrisma(migratedRow());
+    const app = buildApp(state.prisma);
+
+    const res = await app.inject({
+      method: "PUT",
+      payload: { apiToken: "meta-token-novo" },
+      url: "/api/settings/whatsapp",
+    });
+
+    expect(res.statusCode).toBe(200);
+    const uploads = credentialsUploadCalls().filter(
+      (call) => (call[2] as { method?: string }).method === "POST"
+    );
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0][2]).toMatchObject({
+      body: { accessToken: "meta-token-novo", phoneNumberId: "1234" },
+    });
+    expect(state.getRow()?.whatsappCredentialsAtCloud).toBe(true);
+    expect(state.getRow()?.whatsappApiTokenEncrypted).toBe(
+      "enc:meta-token-novo"
+    );
+  });
+
+  it("mudar só o phoneNumberId também reenvia o par token+phoneNumberId", async () => {
+    const state = createStatefulPrisma(migratedRow());
+    const app = buildApp(state.prisma);
+
+    const res = await app.inject({
+      method: "PUT",
+      payload: { phoneNumberId: "5678" },
+      url: "/api/settings/whatsapp",
+    });
+
+    expect(res.statusCode).toBe(200);
+    const uploads = credentialsUploadCalls().filter(
+      (call) => (call[2] as { method?: string }).method === "POST"
+    );
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0][2]).toMatchObject({
+      body: { accessToken: "meta-token", phoneNumberId: "5678" },
+    });
+    expect(state.getRow()?.whatsappCredentialsAtCloud).toBe(true);
+    expect(state.getRow()?.whatsappPhoneNumberId).toBe("5678");
+  });
+
+  it("rejeita mudar só o phoneNumberId quando o token local já foi apagado", async () => {
+    const state = createStatefulPrisma(
+      migratedRowWith({ whatsappApiTokenEncrypted: null })
+    );
+    const app = buildApp(state.prisma);
+
+    const res = await app.inject({
+      method: "PUT",
+      payload: { phoneNumberId: "5678" },
+      url: "/api/settings/whatsapp",
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(state.getRow()).toMatchObject({
+      whatsappCredentialsAtCloud: true,
+      whatsappPhoneNumberId: "1234",
+    });
+    expect(
+      credentialsUploadCalls().filter(
+        (call) => (call[2] as { method?: string }).method === "POST"
+      )
+    ).toHaveLength(0);
+  });
+
+  it("aceita mudar o phoneNumberId sem token local quando vem token de substituição", async () => {
+    const state = createStatefulPrisma(
+      migratedRowWith({ whatsappApiTokenEncrypted: null })
+    );
+    const app = buildApp(state.prisma);
+
+    const res = await app.inject({
+      method: "PUT",
+      payload: { apiToken: "meta-token-novo", phoneNumberId: "5678" },
+      url: "/api/settings/whatsapp",
+    });
+
+    expect(res.statusCode).toBe(200);
+    const uploads = credentialsUploadCalls().filter(
+      (call) => (call[2] as { method?: string }).method === "POST"
+    );
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0][2]).toMatchObject({
+      body: { accessToken: "meta-token-novo", phoneNumberId: "5678" },
+    });
+    expect(state.getRow()?.whatsappCredentialsAtCloud).toBe(true);
+  });
+
+  it("duas rotações rejeitadas em paralelo repõem a configuração Cloud original", async () => {
+    const state = createStatefulPrisma(
+      migratedRowWith({ whatsappApiTokenEncrypted: null })
+    );
+    const app = buildApp(state.prisma);
+    const rejectUploads: Array<() => void> = [];
+    mocks.cloudFetch.mockImplementation((_apiUrl: string, path: string) => {
+      if (path === "/shops/whatsapp-credentials") {
+        return new Promise((resolve) => {
+          rejectUploads.push(() =>
+            resolve({
+              body: {
+                error: {
+                  code: "INVALID_CREDENTIALS",
+                  message: "Meta rejected",
+                },
+              },
+              ok: false,
+              status: 400,
+            })
+          );
+        });
+      }
+      return Promise.resolve({ body: {}, ok: true, status: 200 });
+    });
+    const parseSpy = vi.spyOn(updateWhatsAppSettingsSchema, "safeParse");
+
+    try {
+      const first = app.inject({
+        method: "PUT",
+        payload: { apiToken: "meta-token-invalido-a" },
+        url: "/api/settings/whatsapp",
+      });
+      await waitForCondition(
+        () => rejectUploads.length === 1,
+        "o primeiro upload ficar pendente"
+      );
+      const second = app.inject({
+        method: "PUT",
+        payload: { apiToken: "meta-token-invalido-b" },
+        url: "/api/settings/whatsapp",
+      });
+      // safeParse é a primeira operação do handler; como não há await entre
+      // ela e a entrada na fila, este sinal garante que o segundo PUT já está
+      // retido antes de libertarmos a validação do primeiro.
+      await waitForCondition(
+        () => parseSpy.mock.calls.length === 2,
+        "o segundo PUT entrar no handler"
+      );
+      expect(rejectUploads).toHaveLength(1);
+
+      rejectUploads[0]?.();
+      const firstRes = await first;
+      expect(firstRes.statusCode).toBe(400);
+      await waitForCondition(
+        () => rejectUploads.length === 2,
+        "o segundo upload ficar pendente"
+      );
+      rejectUploads[1]?.();
+      const secondRes = await second;
+
+      expect(secondRes.statusCode).toBe(400);
+      expect(state.getRow()).toMatchObject({
+        whatsappApiTokenEncrypted: null,
+        whatsappCredentialsAtCloud: true,
+        whatsappPhoneNumberId: "1234",
+      });
+    } finally {
+      // Se uma asserção falhar a meio, uploads simulados ficariam pendentes
+      // e bloqueariam para sempre a fila partilhada (e os testes seguintes).
+      // Repomos a implementação que resolve de imediato — uploads que ainda
+      // não arrancaram deixam de ficar retidos — e libertamos os que já
+      // estão pendentes, garantindo que a fila drena.
+      mocks.cloudFetch.mockImplementation(async () => ({
+        body: {},
+        ok: true,
+        status: 200,
+      }));
+      for (const release of rejectUploads) {
+        release();
+      }
+      parseSpy.mockRestore();
+    }
+  });
+
+  it("revogação espera por gravações em fila e nenhuma rotação pendente repõe o token depois dela", async () => {
+    const state = createStatefulPrisma(migratedRow());
+    const app = buildApp(state.prisma);
+    const parseSpy = vi.spyOn(updateWhatsAppSettingsSchema, "safeParse");
+    let releaseWebhook!: () => void;
+    const webhookGate = new Promise<void>((resolve) => {
+      releaseWebhook = resolve;
+    });
+    mocks.setEvolutionWebhook.mockImplementation(async () => {
+      await webhookGate;
+      return { success: true };
+    });
+
+    try {
+      const evolutionSave = app.inject({
+        headers: { host: "192.168.1.50:4000" },
+        method: "PUT",
+        payload: {
+          botDisclaimerAccepted: true,
+          disclaimerAccepted: true,
+          enabled: true,
+          evolutionApiKey: "evo-key",
+          evolutionInstance: "oficinaos",
+          evolutionUrl: "http://evolution.local:8080",
+          transport: "evolution",
+        },
+        url: "/api/settings/whatsapp",
+      });
+      await waitForCondition(
+        () => mocks.setEvolutionWebhook.mock.calls.length === 1,
+        "a gravação Evolution ficar retida no webhook"
+      );
+
+      const rotation = app.inject({
+        method: "PUT",
+        payload: { apiToken: "meta-token-novo", transport: "meta" },
+        url: "/api/settings/whatsapp",
+      });
+      await waitForCondition(
+        () => parseSpy.mock.calls.length === 2,
+        "a rotação entrar no handler e ficar na fila"
+      );
+
+      const handlerEntriesBeforeRevoke =
+        mocks.assertNotDemoMode.mock.calls.length;
+      const revoke = app.inject({
+        method: "POST",
+        url: "/api/settings/whatsapp/cloud/revoke",
+      });
+      await waitForCondition(
+        () =>
+          mocks.assertNotDemoMode.mock.calls.length ===
+          handlerEntriesBeforeRevoke + 1,
+        "a revogação entrar no handler e ficar na fila"
+      );
+      // Antes de libertar o webhook nenhuma operação de credenciais pode
+      // passar à frente da gravação que já ocupava a fila.
+      expect(credentialsUploadCalls()).toHaveLength(0);
+
+      releaseWebhook();
+      const [evolutionRes, rotationRes, revokeRes] = await Promise.all([
+        evolutionSave,
+        rotation,
+        revoke,
+      ]);
+
+      expect(evolutionRes.statusCode).toBe(200);
+      expect(rotationRes.statusCode).toBe(200);
+      expect(revokeRes.statusCode).toBe(200);
+      expect(
+        credentialsUploadCalls().map(
+          (call) => (call[2] as { method?: string }).method
+        )
+      ).toEqual(["POST", "DELETE"]);
+      expect(credentialsUploadCalls()[0]?.[2]).toMatchObject({
+        body: { accessToken: "meta-token-novo", phoneNumberId: "1234" },
+      });
+      expect(state.getRow()).toMatchObject({
+        whatsappApiTokenEncrypted: null,
+        whatsappCloudConsentAt: null,
+        whatsappCredentialsAtCloud: false,
+      });
+    } finally {
+      releaseWebhook();
+      parseSpy.mockRestore();
+    }
+  });
+
+  it("rotação com token inválido mostra erro e mantém a configuração Cloud que estava a funcionar", async () => {
+    const state = createStatefulPrisma(
+      migratedRowWith({
+        whatsappApiTokenEncrypted: null,
+        whatsappBusinessId: "waba-antigo",
+      })
+    );
+    const app = buildApp(state.prisma);
+    mockCloudInvalidCredentials();
+
+    const res = await app.inject({
+      method: "PUT",
+      payload: { apiToken: "meta-token-invalido", businessId: "waba-novo" },
+      url: "/api/settings/whatsapp",
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({
+      code: "CLOUD_INVALID_CREDENTIALS",
+      message: "errors.cloud_invalid_credentials",
+    });
+    expect(state.getRow()).toMatchObject({
+      whatsappApiTokenEncrypted: null,
+      whatsappBusinessId: "waba-antigo",
+      whatsappCredentialsAtCloud: true,
+      whatsappPhoneNumberId: "1234",
+    });
+    expect(
+      credentialsUploadCalls().filter(
+        (call) => (call[2] as { method?: string }).method === "POST"
+      )
+    ).toHaveLength(1);
+  });
+
+  it("rotação inválida antes do primeiro upload mantém o token local e não marca a flag Cloud", async () => {
+    const state = createStatefulPrisma(
+      baseRow({
+        whatsappApiTokenEncrypted: "enc:meta-token-antigo",
+        whatsappCloudConsentAt: new Date("2026-01-03T10:00:00.000Z"),
+        whatsappCredentialsAtCloud: false,
+        whatsappPhoneNumberId: "1234",
+      })
+    );
+    const app = buildApp(state.prisma);
+    mockCloudInvalidCredentials();
+
+    const res = await app.inject({
+      method: "PUT",
+      payload: { apiToken: "meta-token-invalido" },
+      url: "/api/settings/whatsapp",
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({
+      code: "CLOUD_INVALID_CREDENTIALS",
+    });
+    expect(state.getRow()).toMatchObject({
+      whatsappApiTokenEncrypted: "enc:meta-token-antigo",
+      whatsappCredentialsAtCloud: false,
+      whatsappPhoneNumberId: "1234",
+    });
+  });
+
+  it("revogação chama DELETE na Cloud, apaga o token local e limpa o consentimento", async () => {
+    const state = createStatefulPrisma(migratedRow());
+    const app = buildApp(state.prisma);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/settings/whatsapp/cloud/revoke",
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mocks.cloudFetch).toHaveBeenCalledWith(
+      "https://cloud.example",
+      "/shops/whatsapp-credentials",
+      { method: "DELETE", token: "shop-token" }
+    );
+    expect(state.getRow()).toMatchObject({
+      whatsappApiTokenEncrypted: null,
+      whatsappCloudConsentAt: null,
+      whatsappCredentialsAtCloud: false,
+      whatsappPhoneNumberId: "1234",
+    });
+  });
+
+  it("404 no DELETE da Cloud é sucesso idempotente", async () => {
+    const state = createStatefulPrisma(migratedRow());
+    const app = buildApp(state.prisma);
+    mocks.cloudFetch.mockImplementation(async () => ({
+      body: null,
+      ok: false,
+      status: 404,
+    }));
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/settings/whatsapp/cloud/revoke",
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(state.getRow()?.whatsappApiTokenEncrypted).toBeNull();
+    expect(state.getRow()?.whatsappCloudConsentAt).toBeNull();
+  });
+
+  it("revogar duas vezes é idempotente: o segundo 404 mantém o mesmo estado final", async () => {
+    const state = createStatefulPrisma(migratedRow());
+    const app = buildApp(state.prisma);
+
+    const first = await app.inject({
+      method: "POST",
+      url: "/api/settings/whatsapp/cloud/revoke",
+    });
+    expect(first.statusCode).toBe(200);
+    const afterFirst = state.getRow();
+
+    mocks.cloudFetch.mockImplementation(async () => ({
+      body: null,
+      ok: false,
+      status: 404,
+    }));
+    const second = await app.inject({
+      method: "POST",
+      url: "/api/settings/whatsapp/cloud/revoke",
+    });
+
+    expect(second.statusCode).toBe(200);
+    expect(state.getRow()).toEqual(afterFirst);
+    expect(
+      mocks.cloudFetch.mock.calls.filter(
+        (call) =>
+          call[1] === "/shops/whatsapp-credentials" &&
+          (call[2] as { method?: string }).method === "DELETE"
+      )
+    ).toHaveLength(2);
+  });
+
+  it("5xx na Cloud não apaga nada localmente e uma nova tentativa consegue concluir", async () => {
+    const state = createStatefulPrisma(migratedRow());
+    const app = buildApp(state.prisma);
+    mocks.cloudFetch
+      .mockImplementationOnce(async () => ({
+        body: null,
+        ok: false,
+        status: 500,
+      }))
+      .mockImplementation(async (_apiUrl: string, path: string) => ({
+        body: path === "/whatsapp/inbound" ? { messages: [] } : {},
+        ok: true,
+        status: 200,
+      }));
+
+    const failed = await app.inject({
+      method: "POST",
+      url: "/api/settings/whatsapp/cloud/revoke",
+    });
+    expect(failed.statusCode).toBe(502);
+    expect(state.getRow()).toMatchObject({
+      whatsappApiTokenEncrypted: "enc:meta-token",
+      whatsappCredentialsAtCloud: true,
+    });
+    expect(state.getRow()?.whatsappCloudConsentAt).toBeInstanceOf(Date);
+
+    const retry = await app.inject({
+      method: "POST",
+      url: "/api/settings/whatsapp/cloud/revoke",
+    });
+    expect(retry.statusCode).toBe(200);
+    expect(state.getRow()?.whatsappApiTokenEncrypted).toBeNull();
+    expect(state.getRow()?.whatsappCloudConsentAt).toBeNull();
+  });
+
+  it("falha de rede na Cloud também não apaga nada localmente", async () => {
+    const state = createStatefulPrisma(migratedRow());
+    const app = buildApp(state.prisma);
+    mocks.cloudFetch.mockRejectedValue(new Error("ECONNREFUSED"));
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/settings/whatsapp/cloud/revoke",
+    });
+
+    expect(res.statusCode).toBe(502);
+    expect(res.json().code).toBe("CLOUD_UNREACHABLE");
+    expect(state.getRow()?.whatsappApiTokenEncrypted).toBe("enc:meta-token");
+    expect(state.getRow()?.whatsappCloudConsentAt).toBeInstanceOf(Date);
+    expect(state.getRow()?.whatsappCredentialsAtCloud).toBe(true);
+  });
+
+  it("GET expõe o aviso apenas para loja migrada sem consentimento e sem seenAt", async () => {
+    const state = createStatefulPrisma(
+      baseRow({
+        whatsappCloudConsentAt: null,
+        whatsappCloudMigrationNoticeSeenAt: null,
+        whatsappCredentialsAtCloud: true,
+      })
+    );
+    const app = buildApp(state.prisma);
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/settings/whatsapp",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().cloudMigrationNoticePending).toBe(true);
+  });
+
+  it.each([
+    ["consentida", { whatsappCloudConsentAt: new Date() }],
+    ["não migrada", { whatsappCredentialsAtCloud: false }],
+    [
+      "já avisada",
+      {
+        whatsappCloudMigrationNoticeSeenAt: new Date(),
+        whatsappCredentialsAtCloud: true,
+      },
+    ],
+  ])("GET não mostra o aviso numa loja %s", async (_label, overrides) => {
+    const state = createStatefulPrisma(baseRow(overrides));
+    const app = buildApp(state.prisma);
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/settings/whatsapp",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().cloudMigrationNoticePending).toBe(false);
+  });
+
+  it("dismiss grava seenAt uma única vez e a corrida devolve o timestamp canónico", async () => {
+    const state = createStatefulPrisma(
+      baseRow({
+        whatsappCloudConsentAt: null,
+        whatsappCloudMigrationNoticeSeenAt: null,
+        whatsappCredentialsAtCloud: true,
+      })
+    );
+    const app = buildApp(state.prisma);
+
+    const [first, second] = await Promise.all([
+      app.inject({
+        method: "POST",
+        url: "/api/settings/whatsapp/migration-notice/seen",
+      }),
+      app.inject({
+        method: "POST",
+        url: "/api/settings/whatsapp/migration-notice/seen",
+      }),
+    ]);
+
+    expect(first.statusCode).toBe(200);
+    expect(second.statusCode).toBe(200);
+    const firstSeenAt = first.json().seenAt;
+    expect(firstSeenAt).toBeTruthy();
+    expect(second.json().seenAt).toBe(firstSeenAt);
+
+    const after = await app.inject({
+      method: "GET",
+      url: "/api/settings/whatsapp",
+    });
+    expect(after.json().cloudMigrationNoticePending).toBe(false);
+    expect(state.updateManyMock).toHaveBeenCalledTimes(2);
   });
 });

@@ -1,4 +1,4 @@
-import { AppError } from "@shared/errors/app-error.js";
+import { AppError, isAppError } from "@shared/errors/app-error.js";
 import {
   pairCloudSchema,
   updateAiSettingsSchema,
@@ -26,6 +26,7 @@ import {
   findShopSettingsUnique,
   getOrCreateShopSettings,
 } from "../repositories/settings.repository.js";
+import type { DbClient } from "../repositories/types.js";
 import { getBackupStatus } from "../services/backup-status.service.js";
 import {
   generateDiagPairingCode,
@@ -55,6 +56,7 @@ import {
   getShopSettings,
   getSmsSettings,
   getWhatsAppSettings,
+  markWhatsAppCloudMigrationNoticeSeenOnce,
   testAiConnection,
   upsertAiSettings,
   upsertInvoicingSettings,
@@ -72,6 +74,7 @@ import { getUpdateState, startUpdate } from "../services/update.service.js";
 import {
   pushCredentialsToCloud,
   resolveWhatsAppChannel,
+  revokeWhatsAppCloudCredentials,
 } from "../services/whatsapp-channel.js";
 
 // Campos de definições que mudam o corpo Meta dos templates WhatsApp
@@ -134,6 +137,88 @@ function assertEvolutionGates(
     throw new AppError("VALIDATION_ERROR", {
       errors: { remarketingEnabled: ["validations.invalid_option"] },
     });
+  }
+}
+
+interface WhatsAppCredentialSnapshot {
+  whatsappApiTokenEncrypted: string | null;
+  whatsappBusinessId: string | null;
+  whatsappCredentialsAtCloud: boolean;
+  whatsappPhoneNumberId: string | null;
+}
+
+/**
+ * Rotação segura: a Cloud valida o par novo antes de substituir o antigo.
+ * Se rejeitar, o save já tinha gravado o candidato localmente; esta escrita
+ * condicionada repõe apenas o snapshot anterior de credenciais para a loja
+ * continuar a usar o que estava a funcionar. count=0 significa que outro
+ * save entretanto substituiu esse candidato — nesse caso não se pisa nada.
+ */
+async function restoreWorkingWhatsAppCredentials(
+  prisma: DbClient,
+  before: WhatsAppCredentialSnapshot,
+  rejected: WhatsAppCredentialSnapshot,
+  input: { apiToken?: string; phoneNumberId?: string }
+): Promise<void> {
+  const tokenTouched = input.apiToken !== undefined && input.apiToken !== "";
+  const phoneTouched =
+    input.phoneNumberId !== undefined &&
+    input.phoneNumberId !== before.whatsappPhoneNumberId;
+  const hadWorkingCredentials = Boolean(
+    before.whatsappCredentialsAtCloud || before.whatsappApiTokenEncrypted
+  );
+  if (!((tokenTouched || phoneTouched) && hadWorkingCredentials)) {
+    return;
+  }
+  await prisma.shopSettings.updateMany({
+    data: {
+      whatsappApiTokenEncrypted: before.whatsappApiTokenEncrypted,
+      whatsappBusinessId: before.whatsappBusinessId,
+      whatsappCredentialsAtCloud: before.whatsappCredentialsAtCloud,
+      whatsappPhoneNumberId: before.whatsappPhoneNumberId,
+    },
+    where: {
+      id: "default",
+      whatsappApiTokenEncrypted: rejected.whatsappApiTokenEncrypted,
+      whatsappBusinessId: rejected.whatsappBusinessId,
+      whatsappPhoneNumberId: rejected.whatsappPhoneNumberId,
+    },
+  });
+}
+
+let whatsAppSettingsMutationQueue: Promise<unknown> = Promise.resolve();
+
+/**
+ * Saves de WhatsApp são raros, mas a validação externa é demorada. Serializar
+ * a leitura do snapshot + escrita do candidato + validação/rollback evita que
+ * um segundo save leia um candidato ainda por validar como se fosse a
+ * configuração anteriormente válida. A revogação entra na mesma fila: uma
+ * gravação já aceite termina antes do DELETE e nunca pode regravar o token
+ * depois de a loja o ter retirado.
+ */
+function enqueueWhatsAppSettingsMutation<T>(
+  operation: () => Promise<T>
+): Promise<T> {
+  const run = whatsAppSettingsMutationQueue.then(operation, operation);
+  whatsAppSettingsMutationQueue = run.catch(() => undefined);
+  return run;
+}
+
+async function pushWhatsAppCredentialsAfterSave(
+  prisma: DbClient,
+  before: WhatsAppCredentialSnapshot,
+  updated: WhatsAppCredentialSnapshot,
+  input: { apiToken?: string; phoneNumberId?: string }
+): Promise<boolean> {
+  try {
+    return await pushCredentialsToCloud(prisma, {
+      surfaceInvalidCredentials: true,
+    });
+  } catch (err) {
+    if (isAppError(err) && err.code === "CLOUD_INVALID_CREDENTIALS") {
+      await restoreWorkingWhatsAppCredentials(prisma, before, updated, input);
+    }
+    throw err;
   }
 }
 
@@ -523,49 +608,60 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
           ),
         });
       }
-      // Toda a mensagem WhatsApp é Pro (decisão 2026-11-23): ativar o
-      // transporte — Meta local, Evolution ou relay cloud — e aceitar o
-      // termo do bot exigem o módulo "whatsapp-bot" fresco.
-      const s = await getOrCreateShopSettings(app.prisma);
-      if (
-        (parsed.data.enabled || parsed.data.botDisclaimerAccepted) &&
-        !isModuleEnabled(s, "whatsapp-bot")
-      ) {
-        throw new AppError("CLOUD_MODULE_REQUIRED");
-      }
-      // Enabling remarketing requires the Pro module — enforced again by
-      // the sweep on the cached entitlements.
-      if (
-        parsed.data.remarketingEnabled &&
-        !isModuleEnabled(s, "remarketing")
-      ) {
-        throw new AppError("CLOUD_MODULE_REQUIRED");
-      }
-      assertEvolutionGates(parsed.data, s);
-      const updated = await upsertWhatsAppSettings(
-        app.prisma,
-        parsed.data,
-        req.user?.id
-      );
-      // §5.7 — com o bot Evolution habilitado pelo termo, regista o
-      // webhook inbound na instância (mesmo truque do SMS: o Host que o
-      // browser do staff usou é o endereço que a Evolution alcança).
-      if (
-        parsed.data.botDisclaimerAccepted === true ||
-        parsed.data.transport === "evolution"
-      ) {
-        await tryRegisterEvolutionWebhook(
-          app.prisma,
-          req.headers.host ?? ""
-        ).catch((err) =>
-          app.log.warn({ err }, "evolution webhook register failed")
-        );
-      }
-      // Migração consentida: envia as credenciais Meta para o relay da
-      // cloud apenas quando whatsappCloudConsentAt existe (gate central no
-      // push). Se falhar fica para a próxima gravação/ciclo — o envio local
-      // continua durante a transição.
-      const credentialsAtCloud = await pushCredentialsToCloud(app.prisma);
+      const { credentialsAtCloud, updated } =
+        await enqueueWhatsAppSettingsMutation(async () => {
+          // Toda a mensagem WhatsApp é Pro (decisão 2026-11-23): ativar o
+          // transporte — Meta local, Evolution ou relay cloud — e aceitar o
+          // termo do bot exigem o módulo "whatsapp-bot" fresco.
+          const s = await getOrCreateShopSettings(app.prisma);
+          if (
+            (parsed.data.enabled || parsed.data.botDisclaimerAccepted) &&
+            !isModuleEnabled(s, "whatsapp-bot")
+          ) {
+            throw new AppError("CLOUD_MODULE_REQUIRED");
+          }
+          // Enabling remarketing requires the Pro module — enforced again by
+          // the sweep on the cached entitlements.
+          if (
+            parsed.data.remarketingEnabled &&
+            !isModuleEnabled(s, "remarketing")
+          ) {
+            throw new AppError("CLOUD_MODULE_REQUIRED");
+          }
+          assertEvolutionGates(parsed.data, s);
+          const updated = await upsertWhatsAppSettings(
+            app.prisma,
+            parsed.data,
+            req.user?.id
+          );
+          // §5.7 — com o bot Evolution habilitado pelo termo, regista o
+          // webhook inbound na instância (mesmo truque do SMS: o Host que o
+          // browser do staff usou é o endereço que a Evolution alcança).
+          if (
+            parsed.data.botDisclaimerAccepted === true ||
+            parsed.data.transport === "evolution"
+          ) {
+            await tryRegisterEvolutionWebhook(
+              app.prisma,
+              req.headers.host ?? ""
+            ).catch((err) =>
+              app.log.warn({ err }, "evolution webhook register failed")
+            );
+          }
+          // Migração consentida: envia as credenciais Meta para o relay da
+          // cloud apenas quando whatsappCloudConsentAt existe (gate central no
+          // push). Falhas transitórias ficam para a próxima gravação/ciclo; uma
+          // rejeição de validação da Meta sobe para a UI e repõe o snapshot de
+          // credenciais que estava a funcionar.
+          const pushedCredentialsAtCloud =
+            await pushWhatsAppCredentialsAfterSave(
+              app.prisma,
+              s,
+              updated,
+              parsed.data
+            );
+          return { credentialsAtCloud: pushedCredentialsAtCloud, updated };
+        });
       // §5.6 C.2 — ao ligar/configurar o WhatsApp, corre o sync de
       // templates Meta em background (GET primeiro, cria o que falta).
       // trackingBaseUrl controla um bloco {{if}} do corpo aprovado —
@@ -581,6 +677,45 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
         }
       }
       return reply.send({ ...updated, credentialsAtCloud });
+    }
+  );
+
+  // Revogação explícita da cópia Cloud das credenciais Meta. O service só
+  // limpa o estado local depois de a Cloud confirmar o DELETE (ou 404
+  // idempotente); qualquer falha de rede/5xx chega à UI sem tocar no token.
+  app.post(
+    "/whatsapp/cloud/revoke",
+    {
+      preHandler: [requirePermission({ settings: ["edit"] })],
+      schema: {
+        tags: ["settings"],
+        summary: "Revoke Meta WhatsApp credentials stored in OficinaOS Cloud",
+      },
+    },
+    async (_req, reply) => {
+      assertNotDemoMode();
+      await enqueueWhatsAppSettingsMutation(() =>
+        revokeWhatsAppCloudCredentials(app.prisma)
+      );
+      return reply.send({ ok: true });
+    }
+  );
+
+  // O aviso retrospetivo grandfathered é único: esta gravação é idempotente
+  // e race-safe no service; repetir o dismiss não volta a escrever a data.
+  app.post(
+    "/whatsapp/migration-notice/seen",
+    {
+      preHandler: [requirePermission({ settings: ["edit"] })],
+      schema: {
+        tags: ["settings"],
+        summary: "Mark the WhatsApp Cloud migration notice as seen",
+      },
+    },
+    async (_req, reply) => {
+      assertNotDemoMode();
+      const seenAt = await markWhatsAppCloudMigrationNoticeSeenOnce(app.prisma);
+      return reply.send({ ok: true, seenAt });
     }
   );
 

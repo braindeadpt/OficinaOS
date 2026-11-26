@@ -9,6 +9,7 @@ import IntakeModal from "@/components/modules/jobs/intake-modal";
 import { mapServerFieldErrors } from "@/components/modules/jobs/intake-modal/types";
 import PrintPreviewDialog from "@/components/modules/jobs/print-preview-dialog";
 import NotFoundContent from "@/components/modules/not-found-content";
+import WhatsAppCloudMigrationNotice from "@/components/modules/notifications/whatsapp-cloud-migration-notice";
 import Sidebar from "@/components/modules/sidebar";
 import TopBar from "@/components/modules/top-bar";
 import UpdateBanner from "@/components/modules/update-banner";
@@ -152,6 +153,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         <TopBar />
         <main className="min-h-screen p-4 pt-20 pb-24 md:p-8 md:pt-24 md:pb-24 lg:ms-64 lg:pb-8">
           <UpdateBanner />
+          <WhatsAppCloudMigrationNotice />
           {/* Page crashes stay inside <main> — keying by pathname also
               auto-recovers the boundary on navigation. */}
           <ChunkErrorBoundary key={pathname}>

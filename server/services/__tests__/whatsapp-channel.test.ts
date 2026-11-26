@@ -40,6 +40,7 @@ import {
   maskPhone,
   pushCredentialsToCloud,
   resolveWhatsAppChannel,
+  revokeWhatsAppCloudCredentials,
   sendWhatsAppTemplateVia,
   sendWhatsAppText,
 } from "../whatsapp-channel.js";
@@ -493,6 +494,18 @@ describe("pushCredentialsToCloud", () => {
     expect(updateManySettings).not.toHaveBeenCalled();
   });
 
+  it("returns false on 409 without trapping the shop or rewriting state", async () => {
+    mocks.getOrCreateShopSettings.mockResolvedValue(settings);
+    mocks.cloudFetch.mockResolvedValue({
+      body: { error: { code: "PHONE_NUMBER_ID_TAKEN" } },
+      ok: false,
+      status: 409,
+    });
+
+    expect(await pushCredentialsToCloud(prisma)).toBe(false);
+    expect(updateManySettings).not.toHaveBeenCalled();
+  });
+
   it("never uploads without the whatsapp-bot entitlement — free stays local", async () => {
     mocks.getOrCreateShopSettings.mockResolvedValue({
       ...settings,
@@ -511,6 +524,83 @@ describe("pushCredentialsToCloud", () => {
     });
     expect(await pushCredentialsToCloud(prisma)).toBe(true);
     expect(mocks.cloudFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("revokeWhatsAppCloudCredentials", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    updateManySettings.mockReset();
+    updateManySettings.mockResolvedValue({ count: 1 });
+  });
+
+  const settings = {
+    cloudApiUrl: "https://cloud.example",
+    cloudShopTokenEncrypted: "enc:shop-token",
+    whatsappApiTokenEncrypted: "enc:meta-token",
+    whatsappCloudConsentAt: new Date("2026-01-03T10:00:00.000Z"),
+  };
+
+  it("deletes the cloud copy before wiping the local token and consent", async () => {
+    mocks.getOrCreateShopSettings.mockResolvedValue(settings);
+    mocks.cloudFetch.mockResolvedValue({
+      body: { ok: true },
+      ok: true,
+      status: 200,
+    });
+
+    await revokeWhatsAppCloudCredentials(prisma);
+
+    expect(mocks.cloudFetch).toHaveBeenCalledWith(
+      "https://cloud.example",
+      "/shops/whatsapp-credentials",
+      { method: "DELETE", token: "shop-token" }
+    );
+    expect(updateManySettings).toHaveBeenCalledWith({
+      data: {
+        whatsappApiTokenEncrypted: null,
+        whatsappCloudConsentAt: null,
+        whatsappCredentialsAtCloud: false,
+      },
+      where: { id: "default" },
+    });
+  });
+
+  it("treats cloud 404 as idempotent success", async () => {
+    mocks.getOrCreateShopSettings.mockResolvedValue(settings);
+    mocks.cloudFetch.mockResolvedValue({ body: null, ok: false, status: 404 });
+
+    await expect(
+      revokeWhatsAppCloudCredentials(prisma)
+    ).resolves.toBeUndefined();
+    expect(updateManySettings).toHaveBeenCalledTimes(1);
+  });
+
+  it("deletes nothing locally on cloud 5xx and the shop can retry", async () => {
+    mocks.getOrCreateShopSettings.mockResolvedValue(settings);
+    mocks.cloudFetch
+      .mockResolvedValueOnce({ body: null, ok: false, status: 500 })
+      .mockResolvedValueOnce({ body: { ok: true }, ok: true, status: 200 });
+
+    await expect(revokeWhatsAppCloudCredentials(prisma)).rejects.toMatchObject({
+      code: "CLOUD_REQUEST_FAILED",
+    });
+    expect(updateManySettings).not.toHaveBeenCalled();
+
+    await expect(
+      revokeWhatsAppCloudCredentials(prisma)
+    ).resolves.toBeUndefined();
+    expect(updateManySettings).toHaveBeenCalledTimes(1);
+  });
+
+  it("deletes nothing locally when the cloud is unreachable", async () => {
+    mocks.getOrCreateShopSettings.mockResolvedValue(settings);
+    mocks.cloudFetch.mockRejectedValue(new Error("ECONNREFUSED"));
+
+    await expect(revokeWhatsAppCloudCredentials(prisma)).rejects.toMatchObject({
+      code: "CLOUD_UNREACHABLE",
+    });
+    expect(updateManySettings).not.toHaveBeenCalled();
   });
 });
 

@@ -20,6 +20,11 @@ vi.mock("@/lib/api", () => ({
     }
     return fallback;
   },
+  isRequestTimeout: (err: unknown) =>
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: unknown }).code === "ECONNABORTED",
 }));
 
 vi.mock("@/i18n", () => ({
@@ -35,6 +40,7 @@ beforeEach(() => {
     shopSettings: null,
     notificationTemplates: [],
     outboxLogs: [],
+    whatsAppCloudMigrationNoticeDismissed: false,
     whatsAppSettings: null,
     isLoading: false,
     error: null,
@@ -283,11 +289,15 @@ describe("useSettingsStore", () => {
         })
       );
 
-      expect(mockPut).toHaveBeenCalledWith("/settings/whatsapp", {
-        businessId: "biz-new",
-        phoneNumberId: "phone-new",
-        enabled: true,
-      });
+      expect(mockPut).toHaveBeenCalledWith(
+        "/settings/whatsapp",
+        {
+          businessId: "biz-new",
+          phoneNumberId: "phone-new",
+          enabled: true,
+        },
+        { timeout: 60_000 }
+      );
       expect(useSettingsStore.getState().whatsAppSettings).toEqual(refreshed);
     });
 
@@ -303,6 +313,89 @@ describe("useSettingsStore", () => {
       ).rejects.toThrow("WA save failed");
 
       expect(useSettingsStore.getState().error).toBe("WA save failed");
+    });
+
+    it("distingue um timeout do browser de uma rejeição do servidor", async () => {
+      mockPut.mockRejectedValue({
+        code: "ECONNABORTED",
+        message: "timeout of 60000ms exceeded",
+      });
+
+      await expect(
+        act(() =>
+          useSettingsStore.getState().saveWhatsAppSettings({
+            enabled: false,
+          })
+        )
+      ).rejects.toThrow("errors.whatsapp_mutation_timeout");
+
+      expect(useSettingsStore.getState().error).toBe(
+        "errors.whatsapp_mutation_timeout"
+      );
+    });
+  });
+
+  describe("revokeWhatsAppCloudCredentials", () => {
+    it("usa o timeout alargado e refresca as definições", async () => {
+      mockPost.mockResolvedValue({});
+      const refreshed = { credentialsAtCloud: false, hasApiToken: false };
+      mockGet.mockResolvedValue({ data: refreshed });
+
+      await act(() =>
+        useSettingsStore.getState().revokeWhatsAppCloudCredentials()
+      );
+
+      expect(mockPost).toHaveBeenCalledWith(
+        "/settings/whatsapp/cloud/revoke",
+        undefined,
+        { timeout: 60_000 }
+      );
+      expect(useSettingsStore.getState().whatsAppSettings).toEqual(refreshed);
+    });
+  });
+
+  describe("dismissWhatsAppCloudMigrationNotice", () => {
+    it("posts the dismissal without replacing the settings object used by forms", async () => {
+      const settings = {
+        botDailyCap: 200,
+        botDisclaimerAccepted: false,
+        botSuspendedAt: null,
+        businessId: null,
+        cloudConsentAccepted: false,
+        cloudMigrationNoticePending: true,
+        credentialsAtCloud: true,
+        disclaimerAccepted: false,
+        enabled: true,
+        evolutionInstance: null,
+        evolutionUrl: null,
+        hasApiToken: false,
+        hasEvolutionApiKey: false,
+        localDeprecationStartedAt: null,
+        phoneNumberId: "1234",
+        pickupReminderTemplate: null,
+        remarketingCooldownDays: 180,
+        remarketingDays: 90,
+        remarketingEnabled: false,
+        remarketingModule: false,
+        remarketingTemplate: null,
+        trackingBaseUrl: null,
+        transport: "meta" as const,
+        whatsappModule: true,
+      };
+      useSettingsStore.setState({ whatsAppSettings: settings });
+      mockPost.mockResolvedValue({ data: { ok: true } });
+
+      await act(() =>
+        useSettingsStore.getState().dismissWhatsAppCloudMigrationNotice()
+      );
+
+      expect(mockPost).toHaveBeenCalledWith(
+        "/settings/whatsapp/migration-notice/seen"
+      );
+      expect(useSettingsStore.getState().whatsAppSettings).toBe(settings);
+      expect(
+        useSettingsStore.getState().whatsAppCloudMigrationNoticeDismissed
+      ).toBe(true);
     });
   });
 
