@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import api from "@/lib/api";
 import { formatClock, formatMinutes, useShopTz, ymdDaysAgo } from "./shared";
 
-async function downloadPdf(
+export async function downloadPdf(
   data: PontoHoursResponse,
   title: string,
   timeZone: string | undefined,
