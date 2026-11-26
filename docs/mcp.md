@@ -84,7 +84,7 @@ listener off.
 | Repairs | `search_jobs`, `get_job`, `list_jobs_by_status` | jobs:view |
 | Customers | `search_customers`, `get_customer` | customers:view |
 | Inventory | `search_inventory`, `low_stock` | parts:viewCatalog |
-| Sales & cash | `search_sales`, `get_sale`, `cash_summary` | sales:view / payments:view |
+| Sales & cash | `search_sales`, `get_sale`, `cash_summary` | sales:view / reports:viewShop |
 | Quotes | `list_quotes` | jobs:view |
 | Suppliers & RMAs | `search_suppliers`, `list_supplier_rmas` | parts:viewCatalog |
 | Reference catalogues | `search_repairs`, `search_device_models` | repairs:viewCatalog / jobs:view |

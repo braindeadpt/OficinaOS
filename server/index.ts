@@ -336,7 +336,10 @@ try {
   const mcp = startMcpHttpServer(app.prisma);
   if (mcp) {
     mcp.server.on("listening", () => {
-      app.log.info(`MCP (só leitura) a escutar em 127.0.0.1:${mcp.port}`);
+      const bound = mcp.server.address();
+      const realPort =
+        bound && typeof bound === "object" ? bound.port : mcp.port;
+      app.log.info(`MCP (só leitura) a escutar em 127.0.0.1:${realPort}`);
     });
     mcp.server.on("error", (err) => {
       app.log.warn({ err }, "MCP listener falhou — a app continua sem ele");

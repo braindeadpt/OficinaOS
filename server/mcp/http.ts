@@ -36,9 +36,17 @@ function ipRateLimitOk(ip: string, now = Date.now()): boolean {
 
 // Em loopback todos os clientes partilham o mesmo IP — a quota só é consumida
 // por falhanços de autenticação (força bruta), nunca por tráfego legítimo.
+// O consumo é síncrono ANTES da consulta à BD (reembolsado no sucesso), para
+// que tentativas sobrepostas não passem todas antes da primeira falha contar.
 function consumeIpAttempt(ip: string, now = Date.now()): void {
   const stamps = (ipWindows.get(ip) ?? []).filter((t) => now - t < 60_000);
   stamps.push(now);
+  ipWindows.set(ip, stamps);
+}
+
+function refundIpAttempt(ip: string, now = Date.now()): void {
+  const stamps = (ipWindows.get(ip) ?? []).filter((t) => now - t < 60_000);
+  stamps.pop();
   ipWindows.set(ip, stamps);
 }
 
@@ -74,14 +82,15 @@ export function createMcpHttpServer(prisma: PrismaClient): Server {
       }
 
       const plaintext = bearerToken(req);
+      consumeIpAttempt(ip);
       const auth = plaintext
         ? await authenticateToken(prisma, plaintext)
         : null;
       if (!auth) {
-        consumeIpAttempt(ip);
         sendJson(res, 401, { error: "unauthorized" });
         return;
       }
+      refundIpAttempt(ip);
       if (!rateLimitOk(auth.tokenId)) {
         sendJson(res, 429, { error: "rate_limited", limit: "60/min" });
         return;
@@ -119,9 +128,18 @@ export function createMcpHttpServer(prisma: PrismaClient): Server {
  * Arranca o listener loopback. Devolve a porta efetiva (0 = aleatória, usado
  * nos testes) ou null quando MCP_DISABLED=true.
  */
+function defaultMcpPort(): number {
+  const raw = process.env.MCP_PORT;
+  if (raw === undefined || raw === "") {
+    return MCP_DEFAULT_PORT;
+  }
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) ? parsed : MCP_DEFAULT_PORT;
+}
+
 export function startMcpHttpServer(
   prisma: PrismaClient,
-  port = Number(process.env.MCP_PORT) || MCP_DEFAULT_PORT
+  port = defaultMcpPort()
 ): { server: Server; port: number } | null {
   if (process.env.MCP_DISABLED === "true") {
     return null;
