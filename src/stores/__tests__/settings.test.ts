@@ -371,6 +371,7 @@ describe("useSettingsStore", () => {
         hasApiToken: false,
         hasEvolutionApiKey: false,
         localDeprecationStartedAt: null,
+        migrationEvents: [],
         phoneNumberId: "1234",
         pickupReminderTemplate: null,
         remarketingCooldownDays: 180,

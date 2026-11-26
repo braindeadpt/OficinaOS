@@ -1237,15 +1237,16 @@ model ShopSettings {
   whatsappBusinessId          String?
   whatsappPhoneNumberId       String?
   whatsappEnabled             Boolean   @default(false)
-  // True quando as credenciais Meta foram aceites pela cloud —
-  // outbound passa a ir por POST /whatsapp/send e o token local é
-  // apagado após o primeiro envio bem-sucedido.
+  // True quando as credenciais Meta foram aceites pela cloud — outbound
+  // passa a ir por POST /whatsapp/send. Durante a transição o token local
+  // é mantido apenas como fallback transitório para falhas de rede/5xx da
+  // Cloud; depois do prazo é removido pela tarefa de purge auditado.
   whatsappCredentialsAtCloud  Boolean   @default(false)
   // Consentimento explícito da loja para guardar o token Meta cifrado na
   // OficinaOS Cloud e enviar pelo relay. Instalações já migradas ficam
-  // grandfathered; uploads novos exigem este timestamp.
+  // grandfathered durante a transição; uploads novos exigem este timestamp.
   whatsappCloudConsentAt      DateTime? @db.Timestamptz
-  // Início da transição de 30 dias do envio Meta direto/local — gravado
+  // Início da transição de 60 dias do envio Meta direto/local — gravado
   // uma vez, incondicionalmente, no primeiro arranque da versão nova.
   whatsappLocalDeprecationStartedAt DateTime? @db.Timestamptz
   // Aviso retrospetivo único às lojas migradas para a Cloud antes do
@@ -1379,6 +1380,23 @@ model ShopSettings {
   updatedAt                   DateTime  @updatedAt @db.Timestamptz
 
   @@map("shop_settings")
+}
+
+enum WhatsAppMigrationEventType {
+  LOCAL_FALLBACK
+  LOCAL_TOKEN_PURGED
+}
+
+// Eventos visíveis/auditáveis da transição WhatsApp Cloud. Não contêm
+// segredos nem payload de mensagens — apenas tipo, motivo estável e timestamp.
+model WhatsAppMigrationEvent {
+  id        String                     @id @default(cuid())
+  type      WhatsAppMigrationEventType
+  reason    String
+  createdAt DateTime                   @default(now()) @db.Timestamptz
+
+  @@index([createdAt])
+  @@map("whatsapp_migration_events")
 }
 
 // ─────────────────────────────────────────────

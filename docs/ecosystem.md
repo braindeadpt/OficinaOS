@@ -104,11 +104,14 @@ Outbound: app → POST /whatsapp/send (Cloud relay, no credentials in the
 `SECRETS_KEY`): the app uploads it once via `POST /shops/whatsapp-credentials`
 (at setup or on the bot's first cycle) and never gets it back. Sending is
 authorized server-side by entitlement — the local module cache is only a
-UI hint (expires 24h after the last sync). Older installs keep sending with
-the local token (`whatsappApiTokenEncrypted`, AES-256-GCM under
-`AI_ENCRYPTION_KEY`) until the first successful Cloud send — at which point
-the local token is wiped. The Cloud neither stores nor logs message bodies;
-logs carry only id/state/error and masked phone.
+UI hint (expires 24h after the last sync). Older installs keep the local
+token (`whatsappApiTokenEncrypted`, AES-256-GCM under `AI_ENCRYPTION_KEY`)
+only during the 60-day transition: it may be used as an audited fallback
+when the Cloud relay is unreachable or returns 5xx, never for 402/other 4xx
+or after revocation. When the deadline ends, direct Meta sending stops and a
+boot/poller task wipes the local token with an audit event. The Cloud neither
+stores nor logs message bodies; logs carry only id/state/error and masked
+phone.
 
 **Unpair**: the app calls `DELETE /shops/me` — the Cloud deletes the `Shop` row and the
 cascade (`onDelete: Cascade`) takes everything it owns: tokens, entitlements,
@@ -312,9 +315,10 @@ Rules:
   and the notification test return 402 `CLOUD_MODULE_REQUIRED` without
   a module. In the UI the cards/buttons stay visible but locked —
   clicking shows "This option only exists in OficinaOS Pro.".
-- Direct local Meta (`whatsappApiTokenEncrypted`) is an alternative Pro
-  transport to the relay — the local token is wiped on the first
-  successful Cloud send.
+- Direct local Meta (`whatsappApiTokenEncrypted`) is only a transitional
+  Pro transport/fallback during the 60-day migration window. After the
+  deadline direct Meta sending stops and the local token is wiped with an
+  audit event.
 - `customer.whatsappConsent` is the single opt-in for all automated
   messaging — recorded even without Pro (ready for when it activates).
 - Opt-out ("PARAR"/"STOP") on free: the LAN webhooks (SMS and

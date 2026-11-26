@@ -1,7 +1,7 @@
 /**
  * Integration test: upgrading from the short-lived WarnedAt semantics must
  * not carry the old warning timestamp into StartedAt. The migration NULLs the
- * renamed column so the first boot of this version starts the full 30-day
+ * renamed column so the first boot of this version starts the full 60-day
  * transition. Uses the same throwaway-database harness as the other migration
  * tests and skips when no PostgreSQL is reachable.
  */

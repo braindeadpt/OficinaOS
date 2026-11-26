@@ -27,6 +27,7 @@ import { isModuleEnabled } from "../utils/modules.js";
 import { cloudFetch } from "./cloud.service.js";
 import { STAFF_INITIATED_TEMPLATES } from "./notification-outbox.service.js";
 import { generateSmsWebhookToken } from "./sms.service.js";
+import { listWhatsAppMigrationEvents } from "./whatsapp-local-sunset.service.js";
 import { templateStatusOf } from "./whatsapp-templates.service.js";
 
 // Variáveis sem as quais o modelo staff-initiated sai inútil —
@@ -528,7 +529,7 @@ export async function testAiConnection(prisma: PrismaClient) {
 }
 
 /**
- * Marca o início da transição de 30 dias do envio Meta direto/local no
+ * Marca o início da transição de 60 dias do envio Meta direto/local no
  * primeiro arranque da versão nova. A decisão de produto é gravar a data
  * incondicionalmente — mesmo sem token Meta, consentimento Cloud ou qualquer
  * abertura das Definições. O updateMany condicional só protege a
@@ -585,7 +586,10 @@ export async function markWhatsAppCloudMigrationNoticeSeenOnce(
 }
 
 export async function getWhatsAppSettings(prisma: PrismaClient) {
-  const row = await findShopSettingsUnique(prisma);
+  const [row, migrationEvents] = await Promise.all([
+    findShopSettingsUnique(prisma),
+    listWhatsAppMigrationEvents(prisma),
+  ]);
   if (!row) {
     return {
       botDailyCap: 200,
@@ -602,6 +606,7 @@ export async function getWhatsAppSettings(prisma: PrismaClient) {
       hasApiToken: false,
       hasEvolutionApiKey: false,
       localDeprecationStartedAt: null,
+      migrationEvents,
       phoneNumberId: null,
       remarketingCooldownDays: 180,
       remarketingDays: 90,
@@ -633,6 +638,7 @@ export async function getWhatsAppSettings(prisma: PrismaClient) {
     hasApiToken: Boolean(row.whatsappApiTokenEncrypted),
     hasEvolutionApiKey: Boolean(row.evolutionApiKeyEncrypted),
     localDeprecationStartedAt: row.whatsappLocalDeprecationStartedAt,
+    migrationEvents,
     phoneNumberId: row.whatsappPhoneNumberId,
     remarketingCooldownDays: row.remarketingCooldownDays,
     remarketingDays: row.remarketingDays,

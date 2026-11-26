@@ -138,8 +138,10 @@ Done in the "OficinaOS" Meta App (developers.facebook.com):
    Phone Number ID + Business ID → the app uploads the credentials to the
    Cloud (`POST /shops/whatsapp-credentials`, validated against the Graph API
    before being stored encrypted). From then on sends go out through the
-   relay `POST /whatsapp/send` — the Meta token stops living on the shop PC
-   (wiped after the first successful Cloud send)
+   relay `POST /whatsapp/send`. During the 60-day transition the local token
+   is kept only as an audited fallback for Cloud network/5xx failures; after
+   the deadline direct Meta sending ends and the local token is wiped with an
+   audit event
 2. Meta test number: only talks to verified numbers (max 5) —
    add them in WhatsApp → API setup → "To"
 3. Real shop number (coexistence): requires Meta **business verification**

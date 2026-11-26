@@ -55,6 +55,13 @@ export interface SmsCloudDevice {
   reachable: boolean;
 }
 
+export interface WhatsAppMigrationEvent {
+  createdAt: string;
+  id: string;
+  reason: string;
+  type: "LOCAL_FALLBACK" | "LOCAL_TOKEN_PURGED";
+}
+
 interface WhatsAppSettings {
   botDailyCap: number;
   botDisclaimerAccepted: boolean;
@@ -70,6 +77,7 @@ interface WhatsAppSettings {
   hasApiToken: boolean;
   hasEvolutionApiKey: boolean;
   localDeprecationStartedAt: string | null;
+  migrationEvents: WhatsAppMigrationEvent[];
   phoneNumberId: string | null;
   pickupReminderTemplate: string | null;
   remarketingCooldownDays: number;

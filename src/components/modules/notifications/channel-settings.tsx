@@ -1,3 +1,7 @@
+import {
+  isWhatsAppLocalDeprecationExpired,
+  whatsappLocalDeprecationDaysLeft,
+} from "@shared/constants/whatsapp-migration";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -9,7 +13,10 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { useSettingsStore } from "@/stores/settings";
+import {
+  useSettingsStore,
+  type WhatsAppMigrationEvent,
+} from "@/stores/settings";
 import { EvolutionSection } from "./evolution-section";
 
 type Store = ReturnType<typeof useSettingsStore.getState>;
@@ -55,6 +62,20 @@ function phoneRotationNeedsReplacementToken(
       form.phoneNumberId !== "" &&
       form.phoneNumberId !== (settings.phoneNumberId ?? "") &&
       !form.apiToken
+  );
+}
+
+function cloudAuthorizationRequiredAfterSunset(
+  settings: Store["whatsAppSettings"],
+  transport: "meta" | "evolution"
+): boolean {
+  return Boolean(
+    transport === "meta" &&
+      isWhatsAppLocalDeprecationExpired(settings?.localDeprecationStartedAt) &&
+      !settings?.cloudConsentAccepted &&
+      (settings?.phoneNumberId ||
+        settings?.credentialsAtCloud ||
+        settings?.hasApiToken)
   );
 }
 
@@ -318,26 +339,6 @@ function SmsCard({
   );
 }
 
-const DEPRECATION_TRANSITION_DAYS = 30;
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-function whatsappLocalDeprecationDaysLeft(
-  startedAt: string | null | undefined
-) {
-  if (!startedAt) {
-    return DEPRECATION_TRANSITION_DAYS;
-  }
-  const startedAtMs = new Date(startedAt).getTime();
-  if (Number.isNaN(startedAtMs)) {
-    return DEPRECATION_TRANSITION_DAYS;
-  }
-  const elapsedDays = Math.max(
-    0,
-    Math.floor((Date.now() - startedAtMs) / MS_PER_DAY)
-  );
-  return Math.max(0, DEPRECATION_TRANSITION_DAYS - elapsedDays);
-}
-
 /**
  * Revogação explícita da cópia Cloud das credenciais Meta. Fica fora dos
  * campos Meta e do gate Pro de propósito: mesmo com o transporte desligado,
@@ -411,6 +412,88 @@ function CloudCredentialsRevokeBlock() {
   );
 }
 
+const MIGRATION_EVENT_TYPE_KEYS: Record<
+  WhatsAppMigrationEvent["type"],
+  string
+> = {
+  LOCAL_FALLBACK: "whatsapp_migration_event_local_fallback",
+  LOCAL_TOKEN_PURGED: "whatsapp_migration_event_token_purged",
+};
+
+const MIGRATION_EVENT_REASON_KEYS: Record<string, string> = {
+  cloud_http_5xx: "whatsapp_migration_reason_cloud_5xx",
+  cloud_network_error: "whatsapp_migration_reason_cloud_network",
+  transition_deadline_reached: "whatsapp_migration_reason_deadline",
+};
+
+function CloudAuthorizationRequiredWarning({ visible }: { visible: boolean }) {
+  const { t } = useTranslation();
+  if (!visible) {
+    return null;
+  }
+  return (
+    <div
+      className="mt-4 flex items-start gap-3 rounded-xl border border-error/40 bg-error/5 p-4"
+      role="alert"
+    >
+      <span className="material-symbols-outlined text-error text-xl">
+        error
+      </span>
+      <p className="text-on-surface text-sm leading-relaxed">
+        {t("whatsapp_cloud_authorization_required")}
+      </p>
+    </div>
+  );
+}
+
+/** Histórico visível da transição Cloud — sem segredos nem conteúdo de mensagens. */
+function WhatsAppMigrationEventsBlock({
+  events,
+}: {
+  events: WhatsAppMigrationEvent[];
+}) {
+  const { t } = useTranslation();
+  if (events.length === 0) {
+    return null;
+  }
+  return (
+    <div className="rounded-xl border border-outline-variant bg-surface-container p-4">
+      <p className="font-medium text-on-surface text-sm">
+        {t("whatsapp_migration_events_title")}
+      </p>
+      <p className="mt-1 text-on-surface-variant text-xs leading-relaxed">
+        {t("whatsapp_migration_events_help")}
+      </p>
+      <ul className="mt-3 space-y-2">
+        {events.map((event) => (
+          <li
+            className="rounded-lg bg-surface-container-low px-3 py-2"
+            key={event.id}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-medium text-on-surface text-xs">
+                {t(MIGRATION_EVENT_TYPE_KEYS[event.type])}
+              </span>
+              <time
+                className="text-on-surface-variant text-xs"
+                dateTime={event.createdAt}
+              >
+                {new Date(event.createdAt).toLocaleString()}
+              </time>
+            </div>
+            <p className="mt-1 text-on-surface-variant text-xs">
+              {t(
+                MIGRATION_EVENT_REASON_KEYS[event.reason] ??
+                  "whatsapp_migration_reason_unknown"
+              )}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** Campos do transporte oficial Meta (IDs, token, relay, remarketing). */
 function MetaWhatsAppFields({
   form,
@@ -423,9 +506,12 @@ function MetaWhatsAppFields({
 }) {
   const { t } = useTranslation();
   const cloudConsentStored = Boolean(settings?.cloudConsentAccepted);
+  const migrationExpired = isWhatsAppLocalDeprecationExpired(
+    settings?.localDeprecationStartedAt
+  );
   const showCloudConsent =
     !cloudConsentStored &&
-    (!settings?.credentialsAtCloud || form.apiToken !== "");
+    (!settings?.credentialsAtCloud || form.apiToken !== "" || migrationExpired);
   const legacyTokenMigration = Boolean(
     settings?.hasApiToken &&
       !settings?.credentialsAtCloud &&
@@ -1069,6 +1155,11 @@ export default function ChannelSettings({
     whatsAppForm,
     whatsAppSettings
   );
+  const migrationEvents = whatsAppSettings?.migrationEvents ?? [];
+  const cloudAuthorizationRequired = cloudAuthorizationRequiredAfterSunset(
+    whatsAppSettings,
+    whatsAppForm.transport
+  );
 
   const handleWhatsAppSave = useCallback(async () => {
     if (rotationNeedsToken) {
@@ -1164,6 +1255,16 @@ export default function ChannelSettings({
         {whatsAppSettings?.credentialsAtCloud && (
           <div className="mt-4">
             <CloudCredentialsRevokeBlock />
+          </div>
+        )}
+
+        <CloudAuthorizationRequiredWarning
+          visible={cloudAuthorizationRequired}
+        />
+
+        {migrationEvents.length > 0 && (
+          <div className="mt-4">
+            <WhatsAppMigrationEventsBlock events={migrationEvents} />
           </div>
         )}
 

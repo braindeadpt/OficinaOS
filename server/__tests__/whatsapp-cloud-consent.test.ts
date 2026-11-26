@@ -6,6 +6,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   assertNotDemoMode: vi.fn(),
   cloudFetch: vi.fn(),
+  sendWhatsApp: vi.fn(),
+  sendWhatsAppInteractiveMessage: vi.fn(),
+  sendWhatsAppTemplate: vi.fn(),
   setEvolutionWebhook: vi.fn(),
   syncWhatsAppTemplates: vi.fn(),
 }));
@@ -17,6 +20,17 @@ vi.mock("../lib/crypto.js", () => ({
   encryptSecret: vi.fn((value: string) => `enc:${value}`),
   isEncrypted: vi.fn((value: string) => value.startsWith("enc:")),
 }));
+
+vi.mock("../services/notification-sender.js", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../services/notification-sender.js")>();
+  return {
+    ...actual,
+    sendWhatsApp: mocks.sendWhatsApp,
+    sendWhatsAppInteractiveMessage: mocks.sendWhatsAppInteractiveMessage,
+    sendWhatsAppTemplate: mocks.sendWhatsAppTemplate,
+  };
+});
 
 vi.mock("../services/cloud.service.js", () => ({
   cloudFetch: mocks.cloudFetch,
@@ -66,6 +80,11 @@ vi.mock("../services/whatsapp-templates.service.js", () => ({
 import { settingsRoutes } from "../routes/settings.js";
 import { stampWhatsAppLocalDeprecationStartedAtOnce } from "../services/settings.service.js";
 import { syncWhatsAppBot } from "../services/whatsapp-bot.service.js";
+import {
+  resolveWhatsAppChannel,
+  sendWhatsAppText,
+} from "../services/whatsapp-channel.js";
+import { purgeExpiredWhatsAppLocalToken } from "../services/whatsapp-local-sunset.service.js";
 
 interface TestSettingsRow extends Record<string, unknown> {
   whatsappApiTokenEncrypted: string | null;
@@ -99,6 +118,7 @@ function baseRow(overrides: Partial<TestSettingsRow> = {}): TestSettingsRow {
 
 function createStatefulPrisma(initial: TestSettingsRow | null) {
   let row: TestSettingsRow | null = initial ? { ...initial } : null;
+  const migrationEvents: Record<string, unknown>[] = [];
   const shopSettings = {
     findUnique: vi.fn(() => Promise.resolve(row ? { ...row } : null)),
     update: vi.fn(({ data }: { data: Record<string, unknown> }) => {
@@ -126,6 +146,19 @@ function createStatefulPrisma(initial: TestSettingsRow | null) {
           // No Postgres uma coluna nullable sem valor é NULL; o stub omite a
           // chave quando a row é criada de raiz.
           const currentValue = current[key] === undefined ? null : current[key];
+          if (
+            value &&
+            typeof value === "object" &&
+            !(value instanceof Date) &&
+            "lte" in value
+          ) {
+            const upper = (value as { lte?: unknown }).lte;
+            return (
+              currentValue instanceof Date &&
+              upper instanceof Date &&
+              currentValue.getTime() <= upper.getTime()
+            );
+          }
           return currentValue === value;
         });
         if (matches) {
@@ -149,9 +182,34 @@ function createStatefulPrisma(initial: TestSettingsRow | null) {
       }
     ),
   };
+  const whatsAppMigrationEvent = {
+    create: vi.fn(({ data }: { data: Record<string, unknown> }) => {
+      const event = {
+        createdAt: new Date(),
+        id: `event-${migrationEvents.length + 1}`,
+        ...data,
+      };
+      migrationEvents.push(event);
+      return Promise.resolve(event);
+    }),
+    findMany: vi.fn(() => Promise.resolve([...migrationEvents].reverse())),
+  };
   return {
+    getMigrationEvents: () => [...migrationEvents],
     getRow: () => (row ? { ...row } : null),
-    prisma: { shopSettings },
+    migrationEventCreateMock: whatsAppMigrationEvent.create,
+    prisma: {
+      $transaction: vi.fn(
+        (
+          callback: (tx: {
+            shopSettings: typeof shopSettings;
+            whatsAppMigrationEvent: typeof whatsAppMigrationEvent;
+          }) => Promise<unknown>
+        ) => callback({ shopSettings, whatsAppMigrationEvent })
+      ),
+      shopSettings,
+      whatsAppMigrationEvent,
+    },
     updateManyMock: shopSettings.updateMany,
   };
 }
@@ -234,6 +292,12 @@ beforeEach(() => {
       status: 200,
     })
   );
+  mocks.sendWhatsApp.mockReset();
+  mocks.sendWhatsApp.mockResolvedValue({ success: true });
+  mocks.sendWhatsAppInteractiveMessage.mockReset();
+  mocks.sendWhatsAppInteractiveMessage.mockResolvedValue({ success: true });
+  mocks.sendWhatsAppTemplate.mockReset();
+  mocks.sendWhatsAppTemplate.mockResolvedValue({ success: true });
   mocks.setEvolutionWebhook.mockReset();
   mocks.setEvolutionWebhook.mockResolvedValue({ success: true });
   mocks.syncWhatsAppTemplates.mockReset();
@@ -974,5 +1038,353 @@ describe("WP0.6 PR B — rotação, revogação e aviso grandfathered", () => {
     });
     expect(after.json().cloudMigrationNoticePending).toBe(false);
     expect(state.updateManyMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("fallback transitório, sunset e purge auditado", () => {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const activeTransitionRow = (overrides: Partial<TestSettingsRow> = {}) =>
+    baseRow({
+      whatsappApiTokenEncrypted: "enc:meta-token",
+      whatsappBusinessId: "business-1",
+      whatsappCloudConsentAt: new Date("2026-01-03T10:00:00.000Z"),
+      whatsappCredentialsAtCloud: true,
+      whatsappLocalDeprecationStartedAt: new Date(Date.now() - 10 * DAY_MS),
+      whatsappPhoneNumberId: "1234",
+      ...overrides,
+    });
+  const cloudChannel = {
+    apiUrl: "https://cloud.example",
+    mode: "cloud" as const,
+    shopToken: "shop-token",
+  };
+
+  it("durante a transição, falha de rede da Cloud cai no token local mesmo sem consentimento (grandfathered) e persiste o evento", async () => {
+    const row = activeTransitionRow({ whatsappCloudConsentAt: null });
+    const state = createStatefulPrisma(row);
+    mocks.cloudFetch.mockRejectedValueOnce(new Error("ECONNREFUSED"));
+
+    const result = await sendWhatsAppText(
+      state.prisma as never,
+      cloudChannel,
+      "912345678",
+      "A reparação está pronta",
+      "PT",
+      row
+    );
+
+    expect(result.success).toBe(true);
+    expect(mocks.sendWhatsApp).toHaveBeenCalledWith(
+      {
+        apiToken: "meta-token",
+        businessId: "business-1",
+        phoneNumberId: "1234",
+      },
+      "912345678",
+      "A reparação está pronta",
+      "PT"
+    );
+    expect(state.getMigrationEvents()).toEqual([
+      expect.objectContaining({
+        reason: "cloud_network_error",
+        type: "LOCAL_FALLBACK",
+      }),
+    ]);
+  });
+
+  it("durante a transição, 5xx da Cloud cai no token local com motivo auditável", async () => {
+    const row = activeTransitionRow();
+    const state = createStatefulPrisma(row);
+    mocks.cloudFetch.mockResolvedValueOnce({
+      body: { error: { message: "relay down" } },
+      ok: false,
+      status: 503,
+    });
+
+    const result = await sendWhatsAppText(
+      state.prisma as never,
+      cloudChannel,
+      "912345678",
+      "A reparação está pronta",
+      "PT",
+      row
+    );
+
+    expect(result.success).toBe(true);
+    expect(mocks.sendWhatsApp).toHaveBeenCalledTimes(1);
+    expect(state.getMigrationEvents()).toEqual([
+      expect.objectContaining({
+        reason: "cloud_http_5xx",
+        type: "LOCAL_FALLBACK",
+      }),
+    ]);
+  });
+
+  it.each([
+    400, 402, 429,
+  ])("%i da Cloud nunca usa fallback local nem persiste evento", async (status) => {
+    const row = activeTransitionRow();
+    const state = createStatefulPrisma(row);
+    mocks.cloudFetch.mockResolvedValueOnce({
+      body: { error: { message: `HTTP ${status}` } },
+      ok: false,
+      status,
+    });
+
+    const result = await sendWhatsAppText(
+      state.prisma as never,
+      cloudChannel,
+      "912345678",
+      "A reparação está pronta",
+      "PT",
+      row
+    );
+
+    expect(result.success).toBe(false);
+    expect(mocks.sendWhatsApp).not.toHaveBeenCalled();
+    expect(state.getMigrationEvents()).toHaveLength(0);
+  });
+
+  it("depois de uma revogação, mesmo com settings/cloud channel em stale cache, não há fallback local", async () => {
+    const staleRow = activeTransitionRow();
+    const state = createStatefulPrisma(
+      activeTransitionRow({
+        whatsappApiTokenEncrypted: null,
+        whatsappCloudConsentAt: null,
+        whatsappCredentialsAtCloud: false,
+      })
+    );
+    mocks.cloudFetch.mockResolvedValueOnce({
+      body: {},
+      ok: false,
+      status: 500,
+    });
+
+    const result = await sendWhatsAppText(
+      state.prisma as never,
+      cloudChannel,
+      "912345678",
+      "A reparação está pronta",
+      "PT",
+      staleRow
+    );
+
+    expect(result.success).toBe(false);
+    expect(mocks.sendWhatsApp).not.toHaveBeenCalled();
+    expect(state.getMigrationEvents()).toHaveLength(0);
+  });
+
+  it("depois do fim da transição não há fallback local, mesmo com token e consentimento ainda presentes", async () => {
+    const row = activeTransitionRow({
+      whatsappLocalDeprecationStartedAt: new Date(Date.now() - 61 * DAY_MS),
+    });
+    const state = createStatefulPrisma(row);
+    mocks.cloudFetch.mockResolvedValueOnce({
+      body: {},
+      ok: false,
+      status: 500,
+    });
+
+    const result = await sendWhatsAppText(
+      state.prisma as never,
+      cloudChannel,
+      "912345678",
+      "A reparação está pronta",
+      "PT",
+      row
+    );
+
+    expect(result.success).toBe(false);
+    expect(mocks.sendWhatsApp).not.toHaveBeenCalled();
+    expect(state.getMigrationEvents()).toHaveLength(0);
+  });
+
+  it("se o evento de auditoria não puder ser persistido, o fallback local também não é usado", async () => {
+    const row = activeTransitionRow();
+    const state = createStatefulPrisma(row);
+    state.migrationEventCreateMock.mockRejectedValueOnce(new Error("db down"));
+    mocks.cloudFetch.mockResolvedValueOnce({
+      body: {},
+      ok: false,
+      status: 500,
+    });
+
+    const result = await sendWhatsAppText(
+      state.prisma as never,
+      cloudChannel,
+      "912345678",
+      "A reparação está pronta",
+      "PT",
+      row
+    );
+
+    expect(result.success).toBe(false);
+    expect(mocks.sendWhatsApp).not.toHaveBeenCalled();
+  });
+
+  it("defesa no envio bloqueia um channel local stale depois do prazo, mesmo com consentimento", async () => {
+    const row = activeTransitionRow({
+      whatsappLocalDeprecationStartedAt: new Date(Date.now() - 61 * DAY_MS),
+    });
+    const state = createStatefulPrisma(row);
+
+    const result = await sendWhatsAppText(
+      state.prisma as never,
+      {
+        config: {
+          apiToken: "meta-token",
+          businessId: "business-1",
+          phoneNumberId: "1234",
+        },
+        mode: "local",
+      },
+      "912345678",
+      "A reparação está pronta",
+      "PT",
+      row
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("envio direto Meta terminou");
+    expect(mocks.sendWhatsApp).not.toHaveBeenCalled();
+  });
+
+  it("defesa no envio bloqueia um channel Cloud stale depois do prazo sem consentimento", async () => {
+    const row = activeTransitionRow({
+      whatsappCloudConsentAt: null,
+      whatsappLocalDeprecationStartedAt: new Date(Date.now() - 61 * DAY_MS),
+    });
+    const state = createStatefulPrisma(row);
+
+    const result = await sendWhatsAppText(
+      state.prisma as never,
+      cloudChannel,
+      "912345678",
+      "A reparação está pronta",
+      "PT",
+      row
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("autorize a OficinaOS Cloud");
+    expect(mocks.cloudFetch).not.toHaveBeenCalled();
+    expect(mocks.sendWhatsApp).not.toHaveBeenCalled();
+  });
+
+  it("depois do prazo sem consentimento não resolve Meta — nem Cloud nem local", () => {
+    const row = activeTransitionRow({
+      whatsappCloudConsentAt: null,
+      whatsappLocalDeprecationStartedAt: new Date(Date.now() - 61 * DAY_MS),
+    });
+
+    expect(resolveWhatsAppChannel(row)).toBeNull();
+  });
+
+  it("depois do prazo, consentimento sem credenciais na Cloud não ressuscita o envio local", () => {
+    const row = activeTransitionRow({
+      whatsappCredentialsAtCloud: false,
+      whatsappLocalDeprecationStartedAt: new Date(Date.now() - 61 * DAY_MS),
+    });
+
+    expect(resolveWhatsAppChannel(row)).toBeNull();
+  });
+
+  it("dentro do prazo uma loja grandfathered continua a resolver o relay Cloud", () => {
+    const row = activeTransitionRow({ whatsappCloudConsentAt: null });
+
+    expect(resolveWhatsAppChannel(row)).toEqual({
+      apiUrl: "https://cloud.example",
+      mode: "cloud",
+      shopToken: "shop-token",
+    });
+  });
+
+  it("depois do prazo uma loja consentida com credenciais na Cloud continua pelo relay", () => {
+    const row = activeTransitionRow({
+      whatsappLocalDeprecationStartedAt: new Date(Date.now() - 61 * DAY_MS),
+    });
+
+    expect(resolveWhatsAppChannel(row)).toEqual({
+      apiUrl: "https://cloud.example",
+      mode: "cloud",
+      shopToken: "shop-token",
+    });
+  });
+
+  it("purge depois do prazo apaga o token uma única vez e grava o evento de auditoria", async () => {
+    const now = new Date("2026-04-01T12:00:00.000Z");
+    const state = createStatefulPrisma(
+      activeTransitionRow({
+        whatsappLocalDeprecationStartedAt: new Date(
+          now.getTime() - 61 * DAY_MS
+        ),
+      })
+    );
+
+    await expect(
+      purgeExpiredWhatsAppLocalToken(state.prisma as never, now)
+    ).resolves.toBe(true);
+
+    expect(state.getRow()?.whatsappApiTokenEncrypted).toBeNull();
+    expect(state.getMigrationEvents()).toEqual([
+      expect.objectContaining({
+        reason: "transition_deadline_reached",
+        type: "LOCAL_TOKEN_PURGED",
+      }),
+    ]);
+    expect(state.updateManyMock).toHaveBeenCalledWith({
+      data: { whatsappApiTokenEncrypted: null },
+      where: expect.objectContaining({
+        id: "default",
+        whatsappApiTokenEncrypted: "enc:meta-token",
+      }),
+    });
+
+    await expect(
+      purgeExpiredWhatsAppLocalToken(state.prisma as never, now)
+    ).resolves.toBe(false);
+    expect(state.getMigrationEvents()).toHaveLength(1);
+  });
+
+  it("purge antes do fim do prazo não apaga o token nem grava evento", async () => {
+    const now = new Date("2026-04-01T12:00:00.000Z");
+    const state = createStatefulPrisma(
+      activeTransitionRow({
+        whatsappLocalDeprecationStartedAt: new Date(
+          now.getTime() - 59 * DAY_MS
+        ),
+      })
+    );
+
+    await expect(
+      purgeExpiredWhatsAppLocalToken(state.prisma as never, now)
+    ).resolves.toBe(false);
+
+    expect(state.getRow()?.whatsappApiTokenEncrypted).toBe("enc:meta-token");
+    expect(state.getMigrationEvents()).toHaveLength(0);
+  });
+
+  it("GET das settings expõe os eventos de migração para as Definições", async () => {
+    const state = createStatefulPrisma(activeTransitionRow());
+    await state.prisma.whatsAppMigrationEvent.create({
+      data: {
+        reason: "transition_deadline_reached",
+        type: "LOCAL_TOKEN_PURGED",
+      },
+    });
+    const app = buildApp(state.prisma);
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/settings/whatsapp",
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().migrationEvents).toEqual([
+      expect.objectContaining({
+        reason: "transition_deadline_reached",
+        type: "LOCAL_TOKEN_PURGED",
+      }),
+    ]);
   });
 });

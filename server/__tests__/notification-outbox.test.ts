@@ -446,6 +446,81 @@ describe("processOutbox", () => {
     );
   });
 
+  it("after the Meta sunset without consent, no direct/local WhatsApp is sent and SMS remains the reserve channel", async () => {
+    mocks.findManyOutboxEntries.mockResolvedValue([
+      {
+        id: "out-wa-sunset",
+        channel: "WHATSAPP",
+        createdAt: new Date(),
+        recipientPhone: "0912345678",
+        renderedBody: "Reparação pronta",
+        retryCount: 0,
+      },
+      {
+        id: "out-sms-reserve",
+        channel: "SMS",
+        createdAt: new Date(),
+        recipientPhone: "0912345678",
+        renderedBody: "Reparação pronta",
+        retryCount: 0,
+      },
+    ]);
+    mocks.findShopSettingsUnique.mockResolvedValue({
+      cloudEntitlements: ["sms", "whatsapp-bot"],
+      cloudSyncedAt: new Date(),
+      countryCode: "PT",
+      smsEnabled: true,
+      smsGatewayPasswordEncrypted: "v1:enc",
+      smsGatewayUrl: "http://192.168.1.50:8080",
+      smsGatewayUser: "sms",
+      whatsappApiTokenEncrypted: "enc-token",
+      whatsappBusinessId: "biz-1",
+      whatsappCloudConsentAt: null,
+      whatsappEnabled: true,
+      whatsappLocalDeprecationStartedAt: new Date(
+        Date.now() - 61 * 24 * 60 * 60 * 1000
+      ),
+      whatsappPhoneNumberId: "phone-1",
+    });
+    mocks.decryptSmsConfig.mockReturnValue({
+      password: "p",
+      url: "http://192.168.1.50:8080",
+      user: "sms",
+    });
+    mocks.sendSms.mockResolvedValue({ success: true });
+    mocks.findCustomerByPhone.mockResolvedValue({
+      phone: "0912345678",
+      whatsappConsent: true,
+    });
+
+    await processOutbox(prisma);
+
+    expect(mocks.decryptWhatsAppConfig).not.toHaveBeenCalled();
+    expect(mocks.sendWhatsApp).not.toHaveBeenCalled();
+    expect(mocks.sendWhatsAppTemplate).not.toHaveBeenCalled();
+    expect(mocks.transitionOutboxEntry).toHaveBeenCalledWith(
+      prisma,
+      "out-wa-sunset",
+      OutboxStatus.QUEUED,
+      expect.objectContaining({
+        error: expect.stringContaining("unavailable"),
+        status: OutboxStatus.CANCELLED,
+      })
+    );
+    expect(mocks.sendSms).toHaveBeenCalledWith(
+      { password: "p", url: "http://192.168.1.50:8080", user: "sms" },
+      "0912345678",
+      "Reparação pronta",
+      "PT"
+    );
+    expect(mocks.transitionOutboxEntry).toHaveBeenCalledWith(
+      prisma,
+      "out-sms-reserve",
+      OutboxStatus.QUEUED,
+      expect.objectContaining({ status: OutboxStatus.SENT })
+    );
+  });
+
   it("cancels SMS entries without the sms module (LAN is also Pro)", async () => {
     mocks.findManyOutboxEntries.mockResolvedValue([
       {
