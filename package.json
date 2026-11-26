@@ -125,6 +125,7 @@
     "brace-expansion": "^5.0.12",
     "deepmerge-ts": "^8.0.0",
     "dompurify": "^3.4.17",
+    "effect": "3.22.5",
     "fflate": "^0.8.3",
     "follow-redirects": "^1.16.1",
     "form-data": "^4.0.6",
