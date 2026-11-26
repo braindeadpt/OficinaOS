@@ -205,6 +205,21 @@ if [ -n "${BACKUP_SIGN_SECRET_KEY_FILE:-}" ]; then
   minisign -qS -m "$BACKUP_DIR/last-restore-check-remote.txt" \
     -s "$BACKUP_SIGN_SECRET_KEY_FILE" \
     -x "$BACKUP_DIR/last-restore-check-remote.txt.minisig"
+  if [ -n "${BACKUP_SIGN_PUBLIC_KEY_FILE:-}" ]; then
+    minisign -qV -m "$BACKUP_DIR/last-restore-check-remote.txt" \
+      -p "$BACKUP_SIGN_PUBLIC_KEY_FILE" \
+      -x "$BACKUP_DIR/last-restore-check-remote.txt.minisig" || {
+      echo "[restore-check] ERROR: chaves minisign pública/privada não correspondem" >&2
+      exit 2
+    }
+  else
+    minisign -qV -m "$BACKUP_DIR/last-restore-check-remote.txt" \
+      -P "$BACKUP_SIGN_PUBLIC_KEY" \
+      -x "$BACKUP_DIR/last-restore-check-remote.txt.minisig" || {
+      echo "[restore-check] ERROR: chaves minisign pública/privada não correspondem" >&2
+      exit 2
+    }
+  fi
   if ! rclone copyto "$BACKUP_DIR/last-restore-check-remote.txt" \
     "$REMOTE/restore-check-status/last-restore-check.txt" 2>/dev/null || \
      ! rclone copyto "$BACKUP_DIR/last-restore-check-remote.txt.minisig" \

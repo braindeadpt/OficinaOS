@@ -55,7 +55,11 @@ function writeFakeDocker(binDir: string): void {
   chmodSync(systemctlPath, 0o755);
 }
 
-function runInstaller(root: string, binDir: string) {
+function runInstaller(
+  root: string,
+  binDir: string,
+  overrides: Record<string, string | undefined> = {}
+) {
   return spawnSync("bash", [installerPath], {
     encoding: "utf8",
     env: {
@@ -77,6 +81,7 @@ function runInstaller(root: string, binDir: string) {
       BACKUP_S3_ENDPOINT: "https://s3.example.invalid",
       BACKUP_S3_SECRET_ACCESS_KEY: "test-secret-key",
       PONTO_SYSTEMD_DIR: join(root, "systemd"),
+      ...overrides,
     },
   });
 }
@@ -157,6 +162,29 @@ describe("install-ponto-hosted.sh", () => {
           "utf8"
         )
       ).toContain("backup-scheduler-alert.txt");
+    }
+  );
+
+  it.skipIf(isWindows)(
+    "não grava uma configuração S3 parcial rejeitada",
+    () => {
+      const root = mkdtempSync(join(tmpdir(), "ponto-hosted-test-"));
+      const binDir = join(root, "bin");
+      dirs.push(root);
+      mkdirSync(binDir);
+      writeFakeDocker(binDir);
+
+      const result = runInstaller(root, binDir, {
+        BACKUP_S3_SECRET_ACCESS_KEY: "",
+      });
+
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain("configuração S3 parcial");
+      const envText = readFileSync(
+        join(root, "clientes", "empresa-teste", ".env"),
+        "utf8"
+      );
+      expect(envText).not.toContain("BACKUP_S3_BUCKET=backups-teste");
     }
   );
 });

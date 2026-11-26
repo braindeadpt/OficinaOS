@@ -209,24 +209,21 @@ BACKUP_RCLONE_REMOTE=${BACKUP_RCLONE_REMOTE_VALUE}
 BACKUP_REQUIRE_ENCRYPTION=true
 BACKUP_S3_PREFIX=${BACKUP_S3_PREFIX_VALUE}
 EOF
-cat "$ENV_FILE.tmp" >"$ENV_FILE"
-rm -f "$ENV_FILE.tmp"
-chmod 600 "$ENV_FILE"
 
 for key in BACKUP_AGE_PUBLIC_KEY BACKUP_ALERT_WEBHOOK_URL BACKUP_ALERT_LABEL BACKUP_S3_ENDPOINT BACKUP_S3_BUCKET BACKUP_S3_PREFIX BACKUP_S3_ACCESS_KEY_ID BACKUP_S3_SECRET_ACCESS_KEY BACKUP_S3_REGION BACKUP_S3_PROVIDER BACKUP_S3_FORCE_PATH_STYLE; do
-  value="$(env_value "$key" "$ENV_FILE")"
+  value="$(env_value "$key" "$ENV_FILE.tmp")"
   case "$value" in
     *$'\n'*|*$'\r'*) die "$key não pode ter quebras de linha" ;;
   esac
 done
-backup_s3_endpoint="$(env_value BACKUP_S3_ENDPOINT "$ENV_FILE")"
+backup_s3_endpoint="$(env_value BACKUP_S3_ENDPOINT "$ENV_FILE.tmp")"
 if [ -n "$backup_s3_endpoint" ]; then
   case "$backup_s3_endpoint" in
     https://*|http://localhost*|http://127.0.0.1*) ;;
     *) die "BACKUP_S3_ENDPOINT tem de ser https (ou loopback em testes)" ;;
   esac
 fi
-backup_age_key="$(env_value BACKUP_AGE_PUBLIC_KEY "$ENV_FILE")"
+backup_age_key="$(env_value BACKUP_AGE_PUBLIC_KEY "$ENV_FILE.tmp")"
 if [ -z "$backup_age_key" ]; then
   die "BACKUP_AGE_PUBLIC_KEY é obrigatória; gera uma chave age na máquina de operador e exporta só a chave pública"
 fi
@@ -237,13 +234,13 @@ esac
 case "$backup_age_key" in
   *$'\n'*|*$'\r'*) die "BACKUP_AGE_PUBLIC_KEY não pode ter quebras de linha" ;;
 esac
-if [ "$(env_value BACKUP_REMOTE_ENABLED "$ENV_FILE")" != "true" ]; then
+if [ "$(env_value BACKUP_REMOTE_ENABLED "$ENV_FILE.tmp")" != "true" ]; then
   die "o ponto alojado exige BACKUP_REMOTE_ENABLED=true para enviar o backup cifrado para fora do servidor"
 fi
 s3_seen=false
 s3_missing=false
 for key in BACKUP_S3_ENDPOINT BACKUP_S3_BUCKET BACKUP_S3_ACCESS_KEY_ID BACKUP_S3_SECRET_ACCESS_KEY; do
-  if [ -n "$(env_value "$key" "$ENV_FILE")" ]; then
+  if [ -n "$(env_value "$key" "$ENV_FILE.tmp")" ]; then
     s3_seen=true
   else
     s3_missing=true
@@ -252,9 +249,13 @@ done
 if [ "$s3_seen" = "true" ] && [ "$s3_missing" = "true" ]; then
   die "configuração S3 parcial: define BACKUP_S3_ENDPOINT, BACKUP_S3_BUCKET, BACKUP_S3_ACCESS_KEY_ID e BACKUP_S3_SECRET_ACCESS_KEY"
 fi
-if [ -z "$(env_value BACKUP_RCLONE_REMOTE "$ENV_FILE")" ] && [ "$s3_seen" != "true" ]; then
+if [ -z "$(env_value BACKUP_RCLONE_REMOTE "$ENV_FILE.tmp")" ] && [ "$s3_seen" != "true" ]; then
   die "configura um destino remoto: BACKUP_RCLONE_REMOTE ou as quatro variáveis BACKUP_S3_*"
 fi
+
+cat "$ENV_FILE.tmp" >"$ENV_FILE"
+rm -f "$ENV_FILE.tmp"
+chmod 600 "$ENV_FILE"
 
 cat >"$CLIENT_DIR/docker-compose.yml" <<'EOF'
 services:

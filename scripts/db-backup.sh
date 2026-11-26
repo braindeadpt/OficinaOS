@@ -71,6 +71,12 @@ if [ "${BACKUP_ONCE_PER_DAY:-false}" = "true" ] && [ "${BACKUP_FORCE:-false}" !=
   fi
 fi
 
+if [ -z "${BACKUP_AGE_PUBLIC_KEY:-}" ]; then
+  # Uma instalação que volte ao modo legado também volta à verificação semanal:
+  # o heartbeat de upload cifrado não pode continuar a alargar a janela.
+  rm -f "$HEARTBEAT_DIR/last-encrypted-copy.txt"
+fi
+
 ENCRYPTED=false
 if [ -n "$BACKUP_AGE_PUBLIC_KEY" ]; then
   ENCRYPTED=true

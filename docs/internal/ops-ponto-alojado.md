@@ -219,7 +219,8 @@ BACKUP_S3_PREFIX=clientes/<slug>
 BACKUP_S3_ACCESS_KEY_ID=<access-key>
 BACKUP_S3_SECRET_ACCESS_KEY=<secret-key>
 # Estas credenciais precisam de leitura e também de escrita só para publicar
-# o pequeno marcador assinado restore-check-status/last-restore-check.txt.
+# restore-check-status/last-restore-check.txt e a respetiva assinatura .minisig
+# (se limitares por prefixo, usa restore-check-status/last-restore-check.txt*).
 PGHOST=<postgres-temporario>
 PGPORT=5432
 PGUSER=<utilizador>
@@ -259,7 +260,8 @@ chaves privadas protegidas.
 
 Num VPS de substituição, preserva `backup-signing.key`/`backup-signing.pub` do
 cofre antes da primeira execução: sem a chave original o instalador gera um par
-novo e tens de atualizar a chave pública confiada na máquina de restauro. Nunca
+novo e tens de atualizar conscientemente o par confiado na máquina de restauro
+(pública para validar, privada para assinar o marcador). Nunca
 aceites uma chave nova só porque apareceu no bucket — isso removeria a proteção
 contra substituição de backups.
 
