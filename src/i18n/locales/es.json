@@ -3140,5 +3140,30 @@
   "ponto.qr_regenerate_error": "No se pudo regenerar — el QR impreso sigue siendo válido.",
   "ponto.qr_regenerate_unknown": "No se pudo confirmar la regeneración — compruebe la conexión y lea el QR impreso antes de confiar en él.",
   "ponto.config_missing": "La tienda aún no ha configurado la ubicación del registro — avise al responsable.",
-  "ponto.config_missing_company": "La empresa aún no ha configurado la ubicación del registro — avise al responsable."
+  "ponto.config_missing_company": "La empresa aún no ha configurado la ubicación del registro — avise al responsable.",
+  "mcp": {
+    "title": "Conectar tu LLM",
+    "subtitle": "Acceso gratuito de solo lectura — Claude Desktop, Cursor, LM Studio o cualquier cliente MCP en este ordenador.",
+    "readonly_note": "Solo lectura: el asistente puede consultar reparaciones, clientes, stock, ventas, presupuestos y estadísticas — nunca escribir. La escritura es solo en OficinaOS Pro. El servidor solo escucha en este ordenador (127.0.0.1), nunca en la red de la tienda.",
+    "name_label": "Nombre del token",
+    "name_placeholder": "Ej.: Claude en el PC de recepción",
+    "expiry_label": "Caduca el (opcional)",
+    "create": "Crear token",
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "action_error": "Algo salió mal — inténtalo de nuevo.",
+    "token_once": "Este token solo se muestra una vez — cópialo ahora:",
+    "revoke": "Revocar",
+    "revoked": "Revocado",
+    "last_used": "Último uso",
+    "never_used": "Nunca usado",
+    "expires": "caduca",
+    "pii_badge": "datos personales visibles",
+    "show_pii_label": "Mostrar datos personales (teléfono, email, NIF) sin máscara",
+    "pii_warning_title": "Aviso RGPD — los datos personales salen de la tienda",
+    "pii_warning_body": "Con esta opción, nombres, teléfonos, emails y NIF de los clientes se envían completos al proveedor del LLM que uses (Anthropic, OpenAI, …). Sigues siendo responsable de este tratamiento según el RGPD. Déjalo apagado salvo que sea necesario — los datos enmascarados bastan para la mayoría de las preguntas.",
+    "pii_ack_label": "Entiendo que los datos personales se enviarán al proveedor del LLM",
+    "pii_ack_required": "Confirma el aviso RGPD para crear un token con datos personales visibles.",
+    "config_hint": "Sustituye <TOKEN> por el token que creaste. En Docker, usa el comando docker compose exec de docs/mcp.md. Reinicia el cliente después de guardar la configuración."
+  }
 }
