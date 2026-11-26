@@ -73,7 +73,7 @@ sends nor receives any message.)
 | | Free | Pro |
 |---|---|---|
 | **SMS** | nothing | `sms`: Android connected to the Cloud (`SmsDevice`/`SmsRoute`) — multi-shop, inbound/outbound with PC off, automatic replies + AI — or LAN gateway as fallback |
-| **Official WhatsApp** | nothing | `whatsapp-bot`: Meta Cloud API — send `POST /whatsapp/send` or direct app→Meta, auto-synced templates, 24 h window, AI |
+| **Official WhatsApp** | nothing | `whatsapp-bot`: Meta Cloud API through the Cloud relay `POST /whatsapp/send` (direct app→Meta only as the audited 30-day migration fallback), auto-synced templates, 24 h window, AI |
 | **Evolution WhatsApp** | nothing | `whatsapp-bot`: local transport (unofficial, disclaimer) + inbound bot with its own term + anti-ban protections (10/h per number, daily cap, dedupe, 3–8 s delay) |
 | **Inbox + staff AI** | nothing | `ai-inbox` *(in development)*: unified WhatsApp/SMS inbox, tools in the app, AI chat in the app (`/ai/staff-reply`) and MCP on the Cloud (`/mcp`) — sending always with human approval |
 | **Time tracking (`ponto`)** | nothing | time records enter through the Pro receiving channels above — official WhatsApp (interactive messages + template), Evolution (text + location/photo) and SMS; **requires at least one active Pro receiving channel** |
@@ -135,16 +135,22 @@ Done in the "OficinaOS" Meta App (developers.facebook.com):
 ### Setup — per shop
 
 1. Notifications → **Setup** → WhatsApp: `enabled` + API Token +
-   Phone Number ID + Business ID → the app uploads the credentials to the
-   Cloud (`POST /shops/whatsapp-credentials`, validated against the Graph API
-   before being stored encrypted). From then on sends go out through the
-   relay `POST /whatsapp/send`. During the 30-day transition the local token
-   is kept only as an audited fallback for Cloud 5xx or clear connection
-   failures; timeouts are ambiguous and do not fall back, avoiding duplicate
-   customer messages. After the deadline direct Meta sending ends. Legacy
-   tokens are wiped with an audit event; a token entered after the deadline is
-   retained only while its consented Cloud upload is pending and is wiped once
-   the Cloud confirms it
+   Phone Number ID + Business ID. Saving keeps the token encrypted locally;
+   it is uploaded to the Cloud only when staff ticks the explicit consent box
+   for Cloud storage and relay. The Cloud validates the token +
+   `phone_number_id` pair against the Graph API before storing it encrypted
+   (`POST /shops/whatsapp-credentials`; AES-256-GCM, key material in the
+   `SECRETS_KEY` environment variable, outside the database). From then on
+   sends go out through the relay `POST /whatsapp/send`. During the 30-day
+   transition the local token is kept only as an audited fallback for Cloud
+   5xx or clear connection failures; timeouts are ambiguous and do not fall
+   back, avoiding duplicate customer messages. After the deadline direct Meta
+   sending ends. Legacy tokens are wiped with an audit event; a token entered
+   after the deadline is retained only while its consented Cloud upload is
+   pending and is wiped once the Cloud confirms it. The same screen can revoke
+   the Cloud credentials: once the Cloud confirms deletion (or that they are
+   already gone), the app deletes the local encrypted copy and clears consent;
+   reactivation requires re-entering a token and accepting the relay again.
 2. Meta test number: only talks to verified numbers (max 5) —
    add them in WhatsApp → API setup → "To"
 3. Real shop number (coexistence): requires Meta **business verification**
