@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -17,12 +18,26 @@ const installerPath = join(process.cwd(), "scripts", "install-ponto-hosted.sh");
 const fakeDocker = `#!/usr/bin/env bash
 set -euo pipefail
 args="$*"
+script_dir="$(cd -- "$(dirname -- "$0")" && pwd)"
+root_dir="$(dirname "$script_dir")"
+backup_count="$root_dir/backup-count"
+fail_backup="$root_dir/fail-backup"
 case "$args" in
   "compose version"*) exit 0 ;;
   "network inspect"*) exit 1 ;;
   "network create"*) exit 0 ;;
   "cp "*) exit 0 ;;
   "exec --env-file"*) echo '{"paired":true}'; exit 0 ;;
+  *"ps -q db-backup"*) echo fake-backup; exit 0 ;;
+  "exec fake-backup sh -c find"*)
+    if [ -s "$backup_count" ]; then echo /backups/oficinaos-fake.sql.gz; fi
+    exit 0
+    ;;
+  "exec fake-backup bash /scripts/run-backup.sh"*)
+    if [ -f "$fail_backup" ]; then rm -f "$fail_backup"; exit 1; fi
+    echo backup >>"$backup_count"
+    exit 0
+    ;;
   "exec "*) exit 0 ;;
   *"ps -q caddy"*) echo fake-caddy; exit 0 ;;
   *"ps -q app"*) echo fake-app; exit 0 ;;
@@ -74,9 +89,12 @@ describe("install-ponto-hosted.sh", () => {
       mkdirSync(binDir);
       writeFakeDocker(binDir);
 
+      writeFileSync(join(root, "fail-backup"), "1");
       const first = runInstaller(root, binDir);
       expect(first.status, first.stderr).toBe(0);
+      expect(first.stderr).toContain("backup pós-bootstrap falhou");
       const clientDir = join(root, "clientes", "empresa-teste");
+      expect(existsSync(join(clientDir, ".bootstrap-backup-done"))).toBe(false);
       const envBefore = readFileSync(join(clientDir, ".env"), "utf8");
       const caddyBefore = readFileSync(
         join(root, "proxy", "Caddyfile"),
@@ -95,6 +113,10 @@ describe("install-ponto-hosted.sh", () => {
       ).toHaveLength(1);
       expect(envAfter).toContain("COMPOSE_PROJECT_NAME=ponto-empresa-teste");
       expect(envAfter).toContain("APP_URL=https://empresa-teste.clientes.test");
+      expect(existsSync(join(clientDir, ".bootstrap-backup-done"))).toBe(true);
+      expect(
+        readFileSync(join(root, "backup-count"), "utf8").trim().split("\n")
+      ).toHaveLength(1);
       expect(
         readFileSync(join(clientDir, "docker-compose.yml"), "utf8")
       ).toContain("name: \u0024{PONTO_PROXY_NETWORK}");
