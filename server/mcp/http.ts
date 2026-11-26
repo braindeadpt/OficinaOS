@@ -63,6 +63,11 @@ function refundIpAttempt(ip: string, id: symbol, now = Date.now()): void {
   );
 }
 
+/** Só para testes — limpa as janelas de quota por IP. */
+export function resetIpRateLimits(): void {
+  ipWindows.clear();
+}
+
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { "content-type": "application/json" });
   res.end(JSON.stringify(body));

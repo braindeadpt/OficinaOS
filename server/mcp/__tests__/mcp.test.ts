@@ -1,7 +1,7 @@
 import type { PrismaClient } from "@generated/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { executeTool, WRITE_ERROR, wrapData } from "../core.js";
-import { createMcpHttpServer } from "../http.js";
+import { createMcpHttpServer, resetIpRateLimits } from "../http.js";
 import { maskEmail, maskPhone, maskTaxId, stripSecrets } from "../mask.js";
 import {
   authenticateToken,
@@ -482,6 +482,103 @@ describe("protocolo HTTP autenticado", () => {
     expect(call.result?.content?.[0]?.text).toBe("Escrita só no OficinaOS Pro");
     // auditoria registada
     expect(prisma.auditLog.create).toHaveBeenCalled();
+    await new Promise((resolve) => server.close(resolve));
+  });
+});
+
+describe("quota HTTP de força bruta", () => {
+  async function serveAndFetch(
+    prisma: ReturnType<typeof mockPrisma>,
+    token: string,
+    count: number
+  ) {
+    resetIpRateLimits();
+    const server = createMcpHttpServer(prisma);
+    await new Promise<void>((resolve) => {
+      server.listen(0, "127.0.0.1", resolve);
+    });
+    const addr = server.address() as { port: number };
+    const results: number[] = [];
+    for (let i = 0; i < count; i++) {
+      const res = await fetch(`http://127.0.0.1:${addr.port}/mcp`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "initialize",
+          params: {},
+        }),
+      });
+      results.push(res.status);
+    }
+    await new Promise((resolve) => server.close(resolve));
+    return results;
+  }
+
+  it("tokens inválidos repetidos acabam em 429", async () => {
+    const prisma = mockPrisma();
+    (prisma.mcpToken.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(
+      null
+    );
+    const statuses = await serveAndFetch(prisma, "oos_invalido", 70);
+    expect(statuses.filter((s) => s === 401).length).toBeGreaterThan(0);
+    expect(statuses).toContain(429);
+  });
+
+  it("erros de BD devolvem 500 e não consomem a quota", async () => {
+    const prisma = mockPrisma();
+    const findUnique = prisma.mcpToken.findUnique as ReturnType<typeof vi.fn>;
+    findUnique.mockRejectedValue(new Error("db down"));
+    resetIpRateLimits();
+    const server = createMcpHttpServer(prisma);
+    await new Promise<void>((resolve) => {
+      server.listen(0, "127.0.0.1", resolve);
+    });
+    const addr = server.address() as { port: number };
+    const post = (token: string) =>
+      fetch(`http://127.0.0.1:${addr.port}/mcp`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "initialize",
+          params: {},
+        }),
+      });
+    // 70 erros de BD seguidos — se contassem, a quota enchia.
+    for (let i = 0; i < 70; i++) {
+      const res = await post("oos_qualquer");
+      expect(res.status).toBe(500);
+    }
+    // recuperada a BD, um token válido entra sem 429
+    const { plaintext, tokenHash } = generateToken();
+    findUnique.mockResolvedValue({
+      id: "t1",
+      tokenHash,
+      revokedAt: null,
+      expiresAt: null,
+      showPii: false,
+      user: {
+        id: "u1",
+        role: "OWNER",
+        name: "Dono",
+        isActive: true,
+        banned: false,
+      },
+    });
+    const res = await post(plaintext);
+    expect(res.status).not.toBe(429);
+    expect(res.status).not.toBe(401);
     await new Promise((resolve) => server.close(resolve));
   });
 });
