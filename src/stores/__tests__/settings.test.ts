@@ -35,6 +35,7 @@ beforeEach(() => {
     shopSettings: null,
     notificationTemplates: [],
     outboxLogs: [],
+    whatsAppCloudMigrationNoticeDismissed: false,
     whatsAppSettings: null,
     isLoading: false,
     error: null,
@@ -345,6 +346,9 @@ describe("useSettingsStore", () => {
         "/settings/whatsapp/migration-notice/seen"
       );
       expect(useSettingsStore.getState().whatsAppSettings).toBe(settings);
+      expect(
+        useSettingsStore.getState().whatsAppCloudMigrationNoticeDismissed
+      ).toBe(true);
     });
   });
 

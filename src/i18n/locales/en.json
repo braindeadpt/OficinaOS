@@ -614,7 +614,7 @@
     "cloud_unreachable": "Could not reach the OficinaOS Cloud server. Check the URL and your connection.",
     "cloud_not_paired": "This installation is not paired with OficinaOS Cloud.",
     "cloud_invalid_code": "Invalid or expired pairing code.",
-    "cloud_invalid_credentials": "Meta rejected these credentials. Check the access token and phone number ID; the previous working configuration was kept.",
+    "cloud_invalid_credentials": "Meta rejected these credentials. Check the access token and phone number ID.",
     "cloud_pairing_failed": "The cloud server rejected the pairing request.",
     "cloud_token_rejected": "The cloud rejected this shop token. Pair again.",
     "cloud_request_failed": "The cloud request failed. Try again.",

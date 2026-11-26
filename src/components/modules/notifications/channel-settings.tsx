@@ -52,6 +52,7 @@ function phoneRotationNeedsReplacementToken(
   return Boolean(
     settings?.credentialsAtCloud &&
       !settings.hasApiToken &&
+      form.phoneNumberId !== "" &&
       form.phoneNumberId !== (settings.phoneNumberId ?? "") &&
       !form.apiToken
   );
@@ -1098,8 +1099,10 @@ export default function ChannelSettings({
       setTimeout(() => {
         fetchWaTemplates().catch(() => null);
       }, 4000);
-    } catch {
-      // Error is stored in Zustand state
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : t("errors.save_shop_settings")
+      );
     } finally {
       setWhatsAppSaving(false);
     }

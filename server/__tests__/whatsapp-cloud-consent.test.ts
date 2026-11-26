@@ -504,16 +504,82 @@ describe("WP0.6 PR B — rotação, revogação e aviso grandfathered", () => {
     expect(state.getRow()?.whatsappCredentialsAtCloud).toBe(true);
   });
 
-  it("rotação com token inválido mostra erro e mantém a configuração Cloud que estava a funcionar", async () => {
+  it("duas rotações rejeitadas em paralelo repõem a configuração Cloud original", async () => {
     const state = createStatefulPrisma(
       migratedRowWith({ whatsappApiTokenEncrypted: null })
+    );
+    const app = buildApp(state.prisma);
+    const rejectUploads: Array<() => void> = [];
+    mocks.cloudFetch.mockImplementation((_apiUrl: string, path: string) => {
+      if (path === "/shops/whatsapp-credentials") {
+        return new Promise((resolve) => {
+          rejectUploads.push(() =>
+            resolve({
+              body: {
+                error: {
+                  code: "INVALID_CREDENTIALS",
+                  message: "Meta rejected",
+                },
+              },
+              ok: false,
+              status: 400,
+            })
+          );
+        });
+      }
+      return Promise.resolve({ body: {}, ok: true, status: 200 });
+    });
+    const waitForUploads = async (count: number) => {
+      for (let i = 0; i < 50 && rejectUploads.length < count; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+      }
+      expect(rejectUploads).toHaveLength(count);
+    };
+
+    const first = app.inject({
+      method: "PUT",
+      payload: { apiToken: "meta-token-invalido-a" },
+      url: "/api/settings/whatsapp",
+    });
+    await waitForUploads(1);
+    const second = app.inject({
+      method: "PUT",
+      payload: { apiToken: "meta-token-invalido-b" },
+      url: "/api/settings/whatsapp",
+    });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    // O segundo save espera pela validação/rollback do primeiro em vez de
+    // ler o candidato A como se fosse a configuração válida anterior.
+    expect(rejectUploads).toHaveLength(1);
+
+    rejectUploads[0]?.();
+    const firstRes = await first;
+    expect(firstRes.statusCode).toBe(400);
+    await waitForUploads(2);
+    rejectUploads[1]?.();
+    const secondRes = await second;
+
+    expect(secondRes.statusCode).toBe(400);
+    expect(state.getRow()).toMatchObject({
+      whatsappApiTokenEncrypted: null,
+      whatsappCredentialsAtCloud: true,
+      whatsappPhoneNumberId: "1234",
+    });
+  });
+
+  it("rotação com token inválido mostra erro e mantém a configuração Cloud que estava a funcionar", async () => {
+    const state = createStatefulPrisma(
+      migratedRowWith({
+        whatsappApiTokenEncrypted: null,
+        whatsappBusinessId: "waba-antigo",
+      })
     );
     const app = buildApp(state.prisma);
     mockCloudInvalidCredentials();
 
     const res = await app.inject({
       method: "PUT",
-      payload: { apiToken: "meta-token-invalido" },
+      payload: { apiToken: "meta-token-invalido", businessId: "waba-novo" },
       url: "/api/settings/whatsapp",
     });
 
@@ -524,6 +590,7 @@ describe("WP0.6 PR B — rotação, revogação e aviso grandfathered", () => {
     });
     expect(state.getRow()).toMatchObject({
       whatsappApiTokenEncrypted: null,
+      whatsappBusinessId: "waba-antigo",
       whatsappCredentialsAtCloud: true,
       whatsappPhoneNumberId: "1234",
     });

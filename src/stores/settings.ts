@@ -229,6 +229,7 @@ interface SettingsState {
     }
   ) => Promise<NotificationTemplate>;
   waTemplates: WaTemplateStatus[];
+  whatsAppCloudMigrationNoticeDismissed: boolean;
   whatsAppSettings: WhatsAppSettings | null;
 }
 
@@ -241,6 +242,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   smsCloudDevice: null,
   smsSettings: null,
   waTemplates: [],
+  whatsAppCloudMigrationNoticeDismissed: false,
   whatsAppSettings: null,
   isLoading: false,
   error: null,
@@ -500,6 +502,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     set({ error: null });
     try {
       await api.post("/settings/whatsapp/migration-notice/seen");
+      set({ whatsAppCloudMigrationNoticeDismissed: true });
     } catch (err: unknown) {
       const message = getErrorMessage(
         err,

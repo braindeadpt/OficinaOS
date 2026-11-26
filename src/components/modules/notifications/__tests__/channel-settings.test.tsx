@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 
-import { act, render, screen } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -25,6 +31,7 @@ vi.mock("@/stores/settings", () => ({
       shopSettings: null,
       smsCloudDevice: null,
       smsSettings: null,
+      waTemplates: [],
       whatsAppSettings: null,
     }),
 }));
@@ -33,6 +40,7 @@ import ChannelSettings from "../channel-settings";
 
 type ChannelSettingsProps = ComponentProps<typeof ChannelSettings>;
 type WhatsAppSettings = NonNullable<ChannelSettingsProps["whatsAppSettings"]>;
+type SaveWhatsAppSettings = ChannelSettingsProps["onSaveWhatsAppSettings"];
 
 function whatsAppSettings(
   patch: Partial<WhatsAppSettings> = {}
@@ -48,17 +56,25 @@ function whatsAppSettings(
   } as WhatsAppSettings;
 }
 
-function renderChannelSettings(settings: WhatsAppSettings) {
-  return render(
-    <ChannelSettings
-      onFetchWhatsAppSettings={vi.fn(() => Promise.resolve())}
-      onSaveSmsSettings={vi.fn(() => Promise.resolve())}
-      onSaveWhatsAppSettings={vi.fn(() => Promise.resolve())}
-      onSendSmsTest={vi.fn(() => Promise.resolve({ ok: true }))}
-      smsSettings={null}
-      whatsAppSettings={settings}
-    />
-  );
+function renderChannelSettings(
+  settings: WhatsAppSettings,
+  onSaveWhatsAppSettings: SaveWhatsAppSettings = vi.fn<SaveWhatsAppSettings>(
+    () => Promise.resolve()
+  )
+) {
+  return {
+    onSaveWhatsAppSettings,
+    ...render(
+      <ChannelSettings
+        onFetchWhatsAppSettings={vi.fn(() => Promise.resolve())}
+        onSaveSmsSettings={vi.fn(() => Promise.resolve())}
+        onSaveWhatsAppSettings={onSaveWhatsAppSettings}
+        onSendSmsTest={vi.fn(() => Promise.resolve({ ok: true }))}
+        smsSettings={null}
+        whatsAppSettings={settings}
+      />
+    ),
+  };
 }
 
 beforeEach(() => {
@@ -85,5 +101,34 @@ describe("ChannelSettings — estado pós-revogação", () => {
     expect(
       screen.queryByText("whatsapp_official_disconnected")
     ).not.toBeInTheDocument();
+  });
+
+  it("um ID em branco não bloqueia outras gravações porque o PUT o trata como inalterado", async () => {
+    const onSaveWhatsAppSettings = vi.fn<SaveWhatsAppSettings>(() =>
+      Promise.resolve()
+    );
+    renderChannelSettings(
+      whatsAppSettings({
+        credentialsAtCloud: true,
+        enabled: true,
+        hasApiToken: false,
+      }),
+      onSaveWhatsAppSettings
+    );
+
+    const phoneInput = await screen.findByLabelText("whatsapp_phone_number_id");
+    fireEvent.change(phoneInput, { target: { value: "" } });
+    const [saveButton] = screen.getAllByRole("button", {
+      name: "save_changes",
+    });
+    if (!saveButton) {
+      throw new Error("save button missing");
+    }
+    fireEvent.click(saveButton);
+
+    await waitFor(() => expect(onSaveWhatsAppSettings).toHaveBeenCalled());
+    expect(
+      onSaveWhatsAppSettings.mock.calls[0]?.[0]?.phoneNumberId
+    ).toBeUndefined();
   });
 });

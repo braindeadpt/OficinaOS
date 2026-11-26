@@ -614,7 +614,7 @@
     "cloud_unreachable": "Impossible d'atteindre le serveur OficinaOS Cloud. Vérifiez l'URL et votre connexion.",
     "cloud_not_paired": "Cette installation n'est pas associée à OficinaOS Cloud.",
     "cloud_invalid_code": "Code de couplage invalide ou expiré.",
-    "cloud_invalid_credentials": "Meta a rejeté ces identifiants. Vérifiez le jeton d'accès et l'ID du numéro de téléphone ; la configuration précédente qui fonctionnait a été conservée.",
+    "cloud_invalid_credentials": "Meta a rejeté ces identifiants. Vérifiez le jeton d'accès et l'ID du numéro de téléphone.",
     "cloud_pairing_failed": "Le serveur cloud a rejeté la demande de couplage.",
     "cloud_token_rejected": "Le cloud a rejeté ce jeton de boutique. Effectuez à nouveau l'appairage.",
     "cloud_request_failed": "La requête cloud a échoué. Réessayez.",

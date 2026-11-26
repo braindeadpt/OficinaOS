@@ -22,11 +22,10 @@ export default function WhatsAppCloudMigrationNotice() {
   const dismissNotice = useSettingsStore(
     (s) => s.dismissWhatsAppCloudMigrationNotice
   );
+  const noticeDismissed = useSettingsStore(
+    (s) => s.whatsAppCloudMigrationNoticeDismissed
+  );
   const [dismissing, setDismissing] = useState(false);
-  // Estado local de propósito: atualizar o objeto whatsAppSettings só para
-  // esconder o banner repõe o formulário do canal e apagava edições por
-  // guardar. No arranque seguinte é o servidor que devolve o estado persistido.
-  const [dismissedLocally, setDismissedLocally] = useState(false);
 
   useEffect(() => {
     if (canViewSettings) {
@@ -41,7 +40,6 @@ export default function WhatsAppCloudMigrationNotice() {
     setDismissing(true);
     try {
       await dismissNotice();
-      setDismissedLocally(true);
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : t("whatsapp_cloud_action_failed")
@@ -52,7 +50,7 @@ export default function WhatsAppCloudMigrationNotice() {
   }, [dismissNotice, t]);
 
   if (
-    dismissedLocally ||
+    noticeDismissed ||
     !(canViewSettings && whatsAppSettings?.cloudMigrationNoticePending)
   ) {
     return null;

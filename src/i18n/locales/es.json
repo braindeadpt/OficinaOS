@@ -614,7 +614,7 @@
     "cloud_unreachable": "No se pudo acceder al servidor de OficinaOS Cloud. Compruebe la URL y su conexión.",
     "cloud_not_paired": "Esta instalación no está emparejada con OficinaOS Cloud.",
     "cloud_invalid_code": "Código de emparejamiento no válido o caducado.",
-    "cloud_invalid_credentials": "Meta rechazó estas credenciales. Comprueba el token de acceso y el ID del número de teléfono; se mantuvo la configuración anterior que funcionaba.",
+    "cloud_invalid_credentials": "Meta rechazó estas credenciales. Comprueba el token de acceso y el ID del número de teléfono.",
     "cloud_pairing_failed": "El servidor de la nube rechazó la solicitud de emparejamiento.",
     "cloud_token_rejected": "La nube rechazó este token de tienda. Empareje de nuevo.",
     "cloud_request_failed": "La solicitud de la nube falló. Inténtelo de nuevo.",

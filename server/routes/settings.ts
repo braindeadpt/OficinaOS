@@ -142,6 +142,7 @@ function assertEvolutionGates(
 
 interface WhatsAppCredentialSnapshot {
   whatsappApiTokenEncrypted: string | null;
+  whatsappBusinessId: string | null;
   whatsappCredentialsAtCloud: boolean;
   whatsappPhoneNumberId: string | null;
 }
@@ -172,15 +173,33 @@ async function restoreWorkingWhatsAppCredentials(
   await prisma.shopSettings.updateMany({
     data: {
       whatsappApiTokenEncrypted: before.whatsappApiTokenEncrypted,
+      whatsappBusinessId: before.whatsappBusinessId,
       whatsappCredentialsAtCloud: before.whatsappCredentialsAtCloud,
       whatsappPhoneNumberId: before.whatsappPhoneNumberId,
     },
     where: {
       id: "default",
       whatsappApiTokenEncrypted: rejected.whatsappApiTokenEncrypted,
+      whatsappBusinessId: rejected.whatsappBusinessId,
       whatsappPhoneNumberId: rejected.whatsappPhoneNumberId,
     },
   });
+}
+
+let whatsAppSettingsSaveQueue: Promise<unknown> = Promise.resolve();
+
+/**
+ * Saves de WhatsApp são raros, mas a validação externa é demorada. Serializar
+ * a leitura do snapshot + escrita do candidato + validação/rollback evita que
+ * um segundo save leia um candidato ainda por validar como se fosse a
+ * configuração anteriormente válida.
+ */
+function enqueueWhatsAppSettingsSave<T>(
+  operation: () => Promise<T>
+): Promise<T> {
+  const run = whatsAppSettingsSaveQueue.then(operation, operation);
+  whatsAppSettingsSaveQueue = run.catch(() => undefined);
+  return run;
 }
 
 async function pushWhatsAppCredentialsAfterSave(
@@ -587,54 +606,60 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
           ),
         });
       }
-      // Toda a mensagem WhatsApp é Pro (decisão 2026-11-23): ativar o
-      // transporte — Meta local, Evolution ou relay cloud — e aceitar o
-      // termo do bot exigem o módulo "whatsapp-bot" fresco.
-      const s = await getOrCreateShopSettings(app.prisma);
-      if (
-        (parsed.data.enabled || parsed.data.botDisclaimerAccepted) &&
-        !isModuleEnabled(s, "whatsapp-bot")
-      ) {
-        throw new AppError("CLOUD_MODULE_REQUIRED");
-      }
-      // Enabling remarketing requires the Pro module — enforced again by
-      // the sweep on the cached entitlements.
-      if (
-        parsed.data.remarketingEnabled &&
-        !isModuleEnabled(s, "remarketing")
-      ) {
-        throw new AppError("CLOUD_MODULE_REQUIRED");
-      }
-      assertEvolutionGates(parsed.data, s);
-      const updated = await upsertWhatsAppSettings(
-        app.prisma,
-        parsed.data,
-        req.user?.id
-      );
-      // §5.7 — com o bot Evolution habilitado pelo termo, regista o
-      // webhook inbound na instância (mesmo truque do SMS: o Host que o
-      // browser do staff usou é o endereço que a Evolution alcança).
-      if (
-        parsed.data.botDisclaimerAccepted === true ||
-        parsed.data.transport === "evolution"
-      ) {
-        await tryRegisterEvolutionWebhook(
-          app.prisma,
-          req.headers.host ?? ""
-        ).catch((err) =>
-          app.log.warn({ err }, "evolution webhook register failed")
-        );
-      }
-      // Migração consentida: envia as credenciais Meta para o relay da
-      // cloud apenas quando whatsappCloudConsentAt existe (gate central no
-      // push). Falhas transitórias ficam para a próxima gravação/ciclo; uma
-      // rejeição de validação da Meta sobe para a UI e repõe o snapshot de
-      // credenciais que estava a funcionar.
-      const credentialsAtCloud = await pushWhatsAppCredentialsAfterSave(
-        app.prisma,
-        s,
-        updated,
-        parsed.data
+      const { credentialsAtCloud, updated } = await enqueueWhatsAppSettingsSave(
+        async () => {
+          // Toda a mensagem WhatsApp é Pro (decisão 2026-11-23): ativar o
+          // transporte — Meta local, Evolution ou relay cloud — e aceitar o
+          // termo do bot exigem o módulo "whatsapp-bot" fresco.
+          const s = await getOrCreateShopSettings(app.prisma);
+          if (
+            (parsed.data.enabled || parsed.data.botDisclaimerAccepted) &&
+            !isModuleEnabled(s, "whatsapp-bot")
+          ) {
+            throw new AppError("CLOUD_MODULE_REQUIRED");
+          }
+          // Enabling remarketing requires the Pro module — enforced again by
+          // the sweep on the cached entitlements.
+          if (
+            parsed.data.remarketingEnabled &&
+            !isModuleEnabled(s, "remarketing")
+          ) {
+            throw new AppError("CLOUD_MODULE_REQUIRED");
+          }
+          assertEvolutionGates(parsed.data, s);
+          const updated = await upsertWhatsAppSettings(
+            app.prisma,
+            parsed.data,
+            req.user?.id
+          );
+          // §5.7 — com o bot Evolution habilitado pelo termo, regista o
+          // webhook inbound na instância (mesmo truque do SMS: o Host que o
+          // browser do staff usou é o endereço que a Evolution alcança).
+          if (
+            parsed.data.botDisclaimerAccepted === true ||
+            parsed.data.transport === "evolution"
+          ) {
+            await tryRegisterEvolutionWebhook(
+              app.prisma,
+              req.headers.host ?? ""
+            ).catch((err) =>
+              app.log.warn({ err }, "evolution webhook register failed")
+            );
+          }
+          // Migração consentida: envia as credenciais Meta para o relay da
+          // cloud apenas quando whatsappCloudConsentAt existe (gate central no
+          // push). Falhas transitórias ficam para a próxima gravação/ciclo; uma
+          // rejeição de validação da Meta sobe para a UI e repõe o snapshot de
+          // credenciais que estava a funcionar.
+          const pushedCredentialsAtCloud =
+            await pushWhatsAppCredentialsAfterSave(
+              app.prisma,
+              s,
+              updated,
+              parsed.data
+            );
+          return { credentialsAtCloud: pushedCredentialsAtCloud, updated };
+        }
       );
       // §5.6 C.2 — ao ligar/configurar o WhatsApp, corre o sync de
       // templates Meta em background (GET primeiro, cria o que falta).
