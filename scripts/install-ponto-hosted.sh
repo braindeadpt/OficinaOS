@@ -491,9 +491,16 @@ latest_backup=""
 if [ -n "$backup_container" ]; then
   latest_backup="$(docker exec "$backup_container" sh -c "find /backups -maxdepth 1 -type f -name 'oficinaos-*.sql.gz' -mtime -1 -print -quit" 2>/dev/null || true)"
 fi
-if [ -n "$backup_container" ] && [ -z "$latest_backup" ]; then
-  docker exec "$backup_container" bash /scripts/run-backup.sh >/dev/null 2>&1 ||
+# Na primeira instalação forçar um dump depois do bootstrap: o dump de arranque
+# do contentor ainda não tem proprietário nem emparelhamento. Em reexecuções,
+# um backup nas últimas 24h chega.
+if [ -n "$backup_container" ] && { [ ! -f "$CLIENT_DIR/.bootstrap-backup-done" ] || [ -z "$latest_backup" ]; }; then
+  if docker exec "$backup_container" bash /scripts/run-backup.sh >/dev/null 2>&1; then
+    touch "$CLIENT_DIR/.bootstrap-backup-done"
+    chmod 600 "$CLIENT_DIR/.bootstrap-backup-done"
+  else
     echo "AVISO: o backup pós-bootstrap falhou; verificar db-backup." >&2
+  fi
 fi
 
 printf '\nInstância pronta: https://%s\n' "$HOSTNAME_CLIENTE"
