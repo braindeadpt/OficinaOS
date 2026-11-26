@@ -121,8 +121,11 @@ consegue ler os dados dos funcionários.
 O servidor tem, isso sim, uma **chave privada minisign separada** em
 `backup-keys/backup-signing.key` dentro do diretório da instância. Ela não
 decifra backups: só prova que o ficheiro foi produzido por aquele servidor. A
-respetiva chave pública (`backup-signing.pub`) deve ser copiada para a máquina
-de restauro, por exemplo para `/etc/oficinaos/ponto-backup-signing.pub`. Se o servidor for comprometido, o atacante pode assinar backups
+respetivo par deve ser copiado para a máquina de restauro: a pública
+(`backup-signing.pub`) para validar backups no restauro manual e a privada
+(`backup-signing.key`, 0600) para assinar o marcador mensal de verificação.
+Esta chave privada não decifra dados, mas permite assinar marcadores/backups;
+guarda-a no mesmo cofre da chave age privada. Se o servidor for comprometido, o atacante pode assinar backups
 novos, mas continua sem conseguir ler backups antigos nem o conteúdo dos dados.
 
 ### Gerar a chave (na máquina de operador, não no VPS)
@@ -209,11 +212,14 @@ Criar `/etc/oficinaos/ponto-restore-check.env` com permissões 0600:
 ```bash
 BACKUP_AGE_KEY_FILE=/etc/oficinaos/ponto-backup-age-key.txt
 BACKUP_SIGN_PUBLIC_KEY_FILE=/etc/oficinaos/ponto-backup-signing.pub
+BACKUP_SIGN_SECRET_KEY_FILE=/etc/oficinaos/ponto-backup-signing.key
 BACKUP_S3_ENDPOINT=https://<endpoint-s3>
 BACKUP_S3_BUCKET=<bucket>
 BACKUP_S3_PREFIX=clientes/<slug>
 BACKUP_S3_ACCESS_KEY_ID=<access-key>
 BACKUP_S3_SECRET_ACCESS_KEY=<secret-key>
+# Estas credenciais precisam de leitura e também de escrita só para publicar
+# o pequeno marcador assinado restore-check-status/last-restore-check.txt.
 PGHOST=<postgres-temporario>
 PGPORT=5432
 PGUSER=<utilizador>
@@ -248,10 +254,18 @@ sudo systemctl enable --now ponto-restore-check.timer
 systemctl list-timers ponto-restore-check.timer
 ```
 
-O importante é ser mensal, automático, fora do servidor de produção e com a
-chave privada protegida. Quando passa, publica também um marcador remoto
-`restore-check-status/last-restore-check.txt`; o backup diário seguinte espelha
-esse marcador para o painel local da instância.
+O importante é ser mensal, automático, fora do servidor de produção e com as
+chaves privadas protegidas.
+
+Num VPS de substituição, preserva `backup-signing.key`/`backup-signing.pub` do
+cofre antes da primeira execução: sem a chave original o instalador gera um par
+novo e tens de atualizar a chave pública confiada na máquina de restauro. Nunca
+aceites uma chave nova só porque apareceu no bucket — isso removeria a proteção
+contra substituição de backups.
+
+Quando o teste mensal passa, publica um marcador remoto assinado
+`restore-check-status/last-restore-check.txt`; o backup diário seguinte valida
+a assinatura e só então espelha esse marcador para o painel local da instância.
 
 ### Restauro manual passo a passo
 
@@ -273,6 +287,7 @@ esse marcador para o painel local da instância.
 3. Verificar a assinatura e decifrar localmente:
 
    ```bash
+   set -e
    rclone copyto "$BACKUP_REMOTE_TARGET/<objeto>.minisig" restore-tmp/backup.dump.age.minisig
    minisign -V -m restore-tmp/backup.dump.age \
      -p /etc/oficinaos/ponto-backup-signing.pub \

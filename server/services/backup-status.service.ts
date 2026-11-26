@@ -54,6 +54,7 @@ export async function getBackupStatus(): Promise<BackupStatus> {
     heartbeatDir,
     "last-restore-check-attempt.txt"
   );
+  const encryptedCopyFile = path.join(heartbeatDir, "last-encrypted-copy.txt");
 
   const readText = (file: string) =>
     fs.readFile(file, "utf8").then(
@@ -67,6 +68,7 @@ export async function getBackupStatus(): Promise<BackupStatus> {
     remoteCopy,
     restoreCheck,
     restoreCheckAttempt,
+    encryptedCopy,
   ] = await Promise.all([
     readText(heartbeatFile),
     fs.readdir(dumpDir).then(
@@ -81,6 +83,7 @@ export async function getBackupStatus(): Promise<BackupStatus> {
     readText(remoteCopyFile),
     readText(restoreCheckFile),
     readText(restoreCheckAttemptFile),
+    readText(encryptedCopyFile),
   ]);
 
   if (!heartbeat) {
@@ -108,7 +111,7 @@ export async function getBackupStatus(): Promise<BackupStatus> {
       remoteCopy,
       restoreCheck,
       restoreCheckAttempt,
-      backupFiles.some((file) => file.endsWith(".dump.age"))
+      encryptedCopy !== null
     ),
   };
 }

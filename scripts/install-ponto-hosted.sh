@@ -240,12 +240,20 @@ esac
 if [ "$(env_value BACKUP_REMOTE_ENABLED "$ENV_FILE")" != "true" ]; then
   die "o ponto alojado exige BACKUP_REMOTE_ENABLED=true para enviar o backup cifrado para fora do servidor"
 fi
-if [ -z "$(env_value BACKUP_RCLONE_REMOTE "$ENV_FILE")" ]; then
-  for key in BACKUP_S3_ENDPOINT BACKUP_S3_BUCKET BACKUP_S3_ACCESS_KEY_ID BACKUP_S3_SECRET_ACCESS_KEY; do
-    if [ -z "$(env_value "$key" "$ENV_FILE")" ]; then
-      die "variável obrigatória de backup remoto em falta: $key"
-    fi
-  done
+s3_seen=false
+s3_missing=false
+for key in BACKUP_S3_ENDPOINT BACKUP_S3_BUCKET BACKUP_S3_ACCESS_KEY_ID BACKUP_S3_SECRET_ACCESS_KEY; do
+  if [ -n "$(env_value "$key" "$ENV_FILE")" ]; then
+    s3_seen=true
+  else
+    s3_missing=true
+  fi
+done
+if [ "$s3_seen" = "true" ] && [ "$s3_missing" = "true" ]; then
+  die "configuração S3 parcial: define BACKUP_S3_ENDPOINT, BACKUP_S3_BUCKET, BACKUP_S3_ACCESS_KEY_ID e BACKUP_S3_SECRET_ACCESS_KEY"
+fi
+if [ -z "$(env_value BACKUP_RCLONE_REMOTE "$ENV_FILE")" ] && [ "$s3_seen" != "true" ]; then
+  die "configura um destino remoto: BACKUP_RCLONE_REMOTE ou as quatro variáveis BACKUP_S3_*"
 fi
 
 cat >"$CLIENT_DIR/docker-compose.yml" <<'EOF'
@@ -317,8 +325,6 @@ services:
       RETENTION_DAYS: "30"
       BACKUP_ONCE_PER_DAY: "true"
       HEARTBEAT_DIR: /backups-status
-      BACKUP_REMOTE_ENABLED: ${BACKUP_REMOTE_ENABLED:-false}
-      BACKUP_RCLONE_REMOTE: ${BACKUP_RCLONE_REMOTE:-}
     volumes:
       - backups:/backups
       - backups-heartbeat:/backups-status
@@ -696,7 +702,7 @@ EOF
   fi
   if [ "$installed" != "true" ] && command -v crontab >/dev/null 2>&1; then
     marker="oficinaos-ponto-backup-${PONTO_CLIENT_SLUG}"
-    { crontab -l 2>/dev/null | grep -v "$marker" || true; printf '17 3 * * * %s >> %s/logs/backup.log 2>&1 # %s\n' "$wrapper" "$CLIENT_DIR" "$marker"; } | crontab -
+    { crontab -l 2>/dev/null | grep -v "# ${marker}$" || true; printf '17 3 * * * %s >> %s/logs/backup.log 2>&1 # %s\n' "$wrapper" "$CLIENT_DIR" "$marker"; } | crontab -
     installed=true
   fi
   if [ "$installed" != "true" ] && mkdir -p "$cron_dir" 2>/dev/null; then

@@ -87,6 +87,11 @@ case "$TARGET_FILE" in
       echo "[restore-check] ERROR: define BACKUP_AGE_KEY_FILE (recomendado) ou BACKUP_AGE_PRIVATE_KEY" >&2
       exit 2
     fi
+    BACKUP_SIGN_SECRET_KEY_FILE="${BACKUP_SIGN_SECRET_KEY_FILE:-}"
+    if [ -z "$BACKUP_SIGN_SECRET_KEY_FILE" ] || [ ! -r "$BACKUP_SIGN_SECRET_KEY_FILE" ]; then
+      echo "[restore-check] ERROR: define BACKUP_SIGN_SECRET_KEY_FILE com a chave minisign da instância" >&2
+      exit 2
+    fi
     command -v minisign >/dev/null 2>&1 || {
       echo "[restore-check] ERROR: minisign não está instalado" >&2
       exit 1
@@ -192,15 +197,23 @@ fi
 RESTORE_CHECK_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 printf '%s\n' "$RESTORE_CHECK_AT" \
   > "$HEARTBEAT_DIR/last-restore-check.txt"
-# Marcador remoto pequeno e sem dados: o servidor espelha-o para o painel de
-# backups. Fica fora dos padrões de retenção dos dumps.
+# Marcador remoto pequeno e sem dados, fora dos padrões de retenção dos dumps.
+# É assinado antes de sair: o servidor só o aceita com assinatura
+# válida, por isso um escritor do bucket não consegue forjar "restauro OK".
 printf '%s\n' "$RESTORE_CHECK_AT" > "$BACKUP_DIR/last-restore-check-remote.txt"
-if ! rclone copyto "$BACKUP_DIR/last-restore-check-remote.txt" \
-  "$REMOTE/restore-check-status/last-restore-check.txt" 2>/dev/null; then
-  echo "[restore-check] ERROR: não foi possível publicar o marcador remoto de verificação" >&2
-  rm -f "$BACKUP_DIR/last-restore-check-remote.txt"
-  exit 1
+if [ -n "${BACKUP_SIGN_SECRET_KEY_FILE:-}" ]; then
+  minisign -qS -m "$BACKUP_DIR/last-restore-check-remote.txt" \
+    -s "$BACKUP_SIGN_SECRET_KEY_FILE" \
+    -x "$BACKUP_DIR/last-restore-check-remote.txt.minisig"
+  if ! rclone copyto "$BACKUP_DIR/last-restore-check-remote.txt" \
+    "$REMOTE/restore-check-status/last-restore-check.txt" 2>/dev/null || \
+     ! rclone copyto "$BACKUP_DIR/last-restore-check-remote.txt.minisig" \
+    "$REMOTE/restore-check-status/last-restore-check.txt.minisig" 2>/dev/null; then
+    echo "[restore-check] ERROR: não foi possível publicar o marcador assinado de verificação" >&2
+    rm -f "$BACKUP_DIR/last-restore-check-remote.txt" "$BACKUP_DIR/last-restore-check-remote.txt.minisig"
+    exit 1
+  fi
+  rm -f "$BACKUP_DIR/last-restore-check-remote.txt" "$BACKUP_DIR/last-restore-check-remote.txt.minisig"
 fi
-rm -f "$BACKUP_DIR/last-restore-check-remote.txt"
 
 echo "[restore-check] ok: $VERIFY_MESSAGE restaurados de $TARGET_FILE; base temporária removida"

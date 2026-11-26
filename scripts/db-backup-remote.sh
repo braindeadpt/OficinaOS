@@ -3,23 +3,27 @@
 # Não contém credenciais: lê apenas variáveis de ambiente fornecidas pelo operador.
 
 backup_remote_target() {
-  # S3 explícito tem prioridade sobre o destino legado: numa migração o .env
-  # pode ainda ter BACKUP_RCLONE_REMOTE antigo, mas o operador forneceu o novo
-  # endpoint/bucket documentado.
+  s3_complete=true
   if [ -z "${BACKUP_S3_BUCKET:-}" ]; then
+    s3_complete=false
+  fi
+  for required in BACKUP_S3_ENDPOINT BACKUP_S3_ACCESS_KEY_ID BACKUP_S3_SECRET_ACCESS_KEY; do
+    if [ -z "${!required:-}" ]; then
+      s3_complete=false
+    fi
+  done
+
+  # S3 completo tem prioridade sobre o destino legado numa migração. Se só há
+  # parte da configuração S3 e existe um remote legado funcional, não partir o
+  # backup: usa-se o legado e o instalador valida a configuração parcial.
+  if [ "$s3_complete" != "true" ]; then
     if [ -n "${BACKUP_RCLONE_REMOTE:-}" ]; then
       BACKUP_REMOTE_TARGET="$BACKUP_RCLONE_REMOTE"
       return 0
     fi
-    echo "[backup-remote] erro: define BACKUP_RCLONE_REMOTE ou BACKUP_S3_BUCKET" >&2
+    echo "[backup-remote] erro: define BACKUP_RCLONE_REMOTE ou a configuração S3 completa" >&2
     return 1
   fi
-  for required in BACKUP_S3_ENDPOINT BACKUP_S3_ACCESS_KEY_ID BACKUP_S3_SECRET_ACCESS_KEY; do
-    if [ -z "${!required:-}" ]; then
-      echo "[backup-remote] erro: variável obrigatória em falta: $required" >&2
-      return 1
-    fi
-  done
 
   # As credenciais nunca vão em argumentos: o rclone lê esta configuração do ambiente.
   export RCLONE_CONFIG_PONTOBACKUP_TYPE=s3

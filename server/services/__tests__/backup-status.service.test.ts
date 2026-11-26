@@ -163,7 +163,22 @@ describe("getBackupStatus", () => {
     expect(status.remote.restoreCheckStale).toBe(true);
   });
 
-  it("uses the monthly window when encrypted backups are present", async () => {
+  it("uses the monthly window after a successful encrypted upload", async () => {
+    mockFs(
+      files({
+        "last-remote-copy.txt": isoHoursAgo(3),
+        "last-encrypted-copy.txt": isoHoursAgo(3),
+        "last-restore-check.txt": isoHoursAgo(24 * 10),
+      }),
+      ["oficinaos-20260929-030000.dump.age"]
+    );
+
+    const status = await getBackupStatus();
+
+    expect(status.remote.restoreCheckStale).toBe(false);
+  });
+
+  it("keeps the weekly window when an encrypted dump never left the server", async () => {
     mockFs(
       files({
         "last-remote-copy.txt": isoHoursAgo(3),
@@ -174,7 +189,7 @@ describe("getBackupStatus", () => {
 
     const status = await getBackupStatus();
 
-    expect(status.remote.restoreCheckStale).toBe(false);
+    expect(status.remote.restoreCheckStale).toBe(true);
   });
 
   it("treats a failed check (attempt without success) as never verified", async () => {

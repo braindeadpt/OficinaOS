@@ -187,6 +187,10 @@ if [ "$BACKUP_REMOTE_ENABLED" = "true" ]; then
   echo "[backup] remote copy ok"
   printf '%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     > "$HEARTBEAT_DIR/last-remote-copy.txt"
+  if [ "$ENCRYPTED" = "true" ]; then
+    printf '%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      > "$HEARTBEAT_DIR/last-encrypted-copy.txt"
+  fi
 
   # Retenção no destino: apaga objetos mais velhos que RETENTION_DAYS. É
   # propositadamente independente da retenção local.
@@ -200,10 +204,24 @@ if [ "$BACKUP_REMOTE_ENABLED" = "true" ]; then
   fi
 
   # O teste mensal corre noutra máquina; o marcador remoto é a única ponte
-  # possível para o painel local saber que esse teste passou. Best-effort:
-  # nunca falha o backup só porque ainda não há verificação publicada.
-  rclone copyto "$REMOTE/restore-check-status/last-restore-check.txt" \
-    "$HEARTBEAT_DIR/last-restore-check.txt" >/dev/null 2>&1 || true
+  # possível para o painel local saber que esse teste passou. Só é espelhado
+  # depois de validar a assinatura — um escritor do bucket não pode forjar
+  # uma verificação bem-sucedida. Best-effort: nunca falha o backup só porque
+  # ainda não há verificação publicada.
+  if [ "$ENCRYPTED" = "true" ]; then
+    STATUS_TMP="$HEARTBEAT_DIR/.last-restore-check.remote.tmp"
+    STATUS_SIG_TMP="$HEARTBEAT_DIR/.last-restore-check.remote.tmp.minisig"
+    rm -f "$STATUS_TMP" "$STATUS_SIG_TMP"
+    if rclone copyto "$REMOTE/restore-check-status/last-restore-check.txt" \
+      "$STATUS_TMP" >/dev/null 2>&1 && \
+       rclone copyto "$REMOTE/restore-check-status/last-restore-check.txt.minisig" \
+      "$STATUS_SIG_TMP" >/dev/null 2>&1; then
+      if minisign -qV -m "$STATUS_TMP" -p "$BACKUP_SIGN_PUBLIC_KEY_FILE" -x "$STATUS_SIG_TMP" >/dev/null 2>&1; then
+        mv "$STATUS_TMP" "$HEARTBEAT_DIR/last-restore-check.txt"
+      fi
+    fi
+    rm -f "$STATUS_TMP" "$STATUS_SIG_TMP"
+  fi
 fi
 
 # Nas instalações legadas sem cifragem, preservar a verificação periódica que
