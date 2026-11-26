@@ -552,7 +552,11 @@ describe("quota HTTP de força bruta", () => {
           jsonrpc: "2.0",
           id: 1,
           method: "initialize",
-          params: {},
+          params: {
+            protocolVersion: "2025-03-26",
+            capabilities: {},
+            clientInfo: { name: "test", version: "1" },
+          },
         }),
       });
     // 70 erros de BD seguidos — se contassem, a quota enchia.
@@ -577,8 +581,7 @@ describe("quota HTTP de força bruta", () => {
       },
     });
     const res = await post(plaintext);
-    expect(res.status).not.toBe(429);
-    expect(res.status).not.toBe(401);
+    expect(res.status).toBe(200);
     await new Promise((resolve) => server.close(resolve));
   });
 });
