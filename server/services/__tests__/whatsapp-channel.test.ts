@@ -516,6 +516,7 @@ describe("revokeWhatsAppCloudCredentials", () => {
     expect(updateManySettings).toHaveBeenCalledWith({
       data: {
         whatsappApiTokenEncrypted: null,
+        whatsappApiTokenWrittenAt: null,
         whatsappCloudConsentAt: null,
         whatsappCredentialsAtCloud: false,
       },

@@ -28,7 +28,7 @@ import { recordWhatsAppMigrationEvent } from "./whatsapp-local-sunset.service.js
  * API. Shops that uploaded their Meta credentials to the cloud send via
  * POST /whatsapp/send — the entitlement is enforced server-side, so a
  * patched app can't bypass it. Shops on the legacy setup keep sending
- * directly only during the shared 60-day migration window; after it,
+ * directly only during the shared 30-day migration window; after it,
  * official WhatsApp either goes through the consented Cloud relay or does
  * not leave at all.
  */
@@ -82,14 +82,13 @@ function metaSunsetBlock(
   }
   if (!settings?.whatsappCloudConsentAt) {
     return {
-      error:
-        "WhatsApp oficial indisponível: autorize a OficinaOS Cloud para continuar.",
+      error: "WHATSAPP_CLOUD_AUTHORIZATION_REQUIRED",
       success: false,
     };
   }
   if (channel.mode === "local") {
     return {
-      error: "O envio direto Meta terminou; configure a OficinaOS Cloud.",
+      error: "WHATSAPP_LOCAL_DIRECT_SEND_ENDED",
       success: false,
     };
   }
@@ -201,20 +200,66 @@ type CloudFallbackReason = "cloud_http_5xx" | "cloud_network_error";
 type CloudSendResult = SendResult & { fallbackReason?: CloudFallbackReason };
 type LegacyLocalSender = (config: WhatsAppConfig) => Promise<SendResult>;
 
+// Um timeout/abort é ambíguo: a Cloud pode já ter aceite a mensagem antes de
+// a resposta se perder. Só falhas de estabelecimento da ligação permitem
+// fallback direto sem reintroduzir um risco evitável de duplicação.
+const FALLBACK_SAFE_NETWORK_CODES = new Set([
+  "EAI_AGAIN",
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "ENOTFOUND",
+]);
+
+function networkErrorCode(error: unknown): string | null {
+  let current = error;
+  for (let depth = 0; depth < 4 && current; depth += 1) {
+    if (typeof current === "object" && "code" in current) {
+      const code = (current as { code?: unknown }).code;
+      if (typeof code === "string") {
+        return code;
+      }
+    }
+    current =
+      typeof current === "object" && "cause" in current
+        ? (current as { cause?: unknown }).cause
+        : null;
+  }
+  return null;
+}
+
+function canFallbackAfterNetworkError(error: unknown): boolean {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    (error as { name?: unknown }).name === "AbortError"
+  ) {
+    return false;
+  }
+  const code = networkErrorCode(error);
+  return code !== null && FALLBACK_SAFE_NETWORK_CODES.has(code);
+}
+
 async function sendViaCloud(
   channel: Extract<WhatsAppChannel, { mode: "cloud" }>,
   body: Record<string, unknown>
 ): Promise<CloudSendResult> {
+  let networkFailure: unknown = null;
   const res = await cloudFetch(channel.apiUrl, "/whatsapp/send", {
     body,
     method: "POST",
     token: channel.shopToken,
     timeoutMs: 20_000,
-  }).catch(() => null);
+  }).catch((error: unknown) => {
+    networkFailure = error;
+    return null;
+  });
   if (!res) {
     return {
       error: "a aguardar ligação à cloud",
-      fallbackReason: "cloud_network_error",
+      ...(canFallbackAfterNetworkError(networkFailure)
+        ? { fallbackReason: "cloud_network_error" as const }
+        : {}),
       success: false,
     };
   }
@@ -607,6 +652,7 @@ async function revokeWhatsAppCloudCredentialsOnce(
   await prisma.shopSettings.updateMany({
     data: {
       whatsappApiTokenEncrypted: null,
+      whatsappApiTokenWrittenAt: null,
       whatsappCloudConsentAt: null,
       whatsappCredentialsAtCloud: false,
     },

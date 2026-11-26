@@ -297,3 +297,55 @@ describe("pollWhatsAppInbound — contrato da fila oficial", () => {
     });
   });
 });
+
+describe("pollWhatsAppInbound — sunset sem canal nem ai-inbox", () => {
+  it("consome só PARAR/STOP, revoga consentimento e deixa mensagens normais na fila", async () => {
+    mocks.getOrCreateShopSettings.mockResolvedValue({
+      cloudEntitlements: ["whatsapp-bot"],
+      cloudSyncedAt: new Date(),
+      whatsappEnabled: true,
+      whatsappTransport: "meta",
+    });
+    mocks.resolveWhatsAppChannel.mockReturnValue(null);
+    const customerUpdate = vi.fn(async () => ({}));
+    const prismaReal = {
+      $queryRaw: vi.fn(async () => [
+        { id: "c1", name: "Ana", phone: "900000001" },
+      ]),
+      customer: { update: customerUpdate },
+      shopSettings: {
+        findUnique: vi.fn(async () => ({ countryCode: "PT" })),
+      },
+    } as never;
+    mocks.cloudFetch
+      .mockResolvedValueOnce({
+        body: {
+          messages: [
+            { fromPhone: "351900000001", id: "m-stop", text: "PARAR" },
+            { fromPhone: "351900000002", id: "m-ask", text: "está pronto?" },
+          ],
+        },
+        ok: true,
+      })
+      .mockResolvedValueOnce({ body: {}, ok: true });
+
+    await pollWhatsAppInbound(
+      prismaReal,
+      "https://cloud",
+      "tok",
+      log,
+      undefined
+    );
+
+    expect(customerUpdate).toHaveBeenCalledWith({
+      data: { whatsappConsent: false, whatsappConsentAt: null },
+      where: { id: "c1" },
+    });
+    expect(mocks.handleInboundMessage).not.toHaveBeenCalled();
+    expect(mocks.cloudFetch).toHaveBeenLastCalledWith(
+      "https://cloud",
+      "/whatsapp/inbound/ack",
+      expect.objectContaining({ body: { ids: ["m-stop"] } })
+    );
+  });
+});

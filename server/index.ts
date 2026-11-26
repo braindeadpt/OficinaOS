@@ -129,7 +129,7 @@ await app.register(localePlugin);
 
 await app.register(prismaPlugin);
 
-// Sunset do envio Meta local: a contagem de 60 dias arranca no
+// Sunset do envio Meta local: a contagem de 30 dias arranca no
 // primeiro boot da versão nova, incondicionalmente (decisão do dono). Não
 // depende de token, consentimento, Cloud pairing ou de alguém abrir as
 // Definições. Awaited aqui para garantir que uma instalação nova fica com a

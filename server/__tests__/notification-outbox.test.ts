@@ -478,7 +478,7 @@ describe("processOutbox", () => {
       whatsappCloudConsentAt: null,
       whatsappEnabled: true,
       whatsappLocalDeprecationStartedAt: new Date(
-        Date.now() - 61 * 24 * 60 * 60 * 1000
+        Date.now() - 31 * 24 * 60 * 60 * 1000
       ),
       whatsappPhoneNumberId: "phone-1",
     });

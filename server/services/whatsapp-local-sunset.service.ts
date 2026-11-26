@@ -29,10 +29,15 @@ export async function listWhatsAppMigrationEvents(
 }
 
 /**
- * Remove o token Meta local depois do fim da janela de transição. O apagamento
- * é idempotente e usa o padrão updateMany-condicional da casa: só escreve o
- * evento de auditoria na mesma transação quando esta instância ganhou a corrida
- * e removeu exatamente o snapshot do token lido antes.
+ * Remove o token Meta local depois do fim da janela de transição. Um token
+ * introduzido DEPOIS do prazo não é apagado enquanto estiver pendente de
+ * upload consentido para a Cloud — esse segredo nunca pode enviar diretamente,
+ * mas sem ele a loja teria de o reintroduzir a cada falha transitória. Quando
+ * a Cloud confirma essas credenciais, ou quando o token já existia antes do
+ * fim do prazo, o purge continua a aplicar-se. O apagamento é idempotente e
+ * usa o padrão updateMany-condicional da casa: só escreve o evento de auditoria
+ * na mesma transação quando esta instância ganhou a corrida e removeu exatamente
+ * o snapshot do token lido antes.
  */
 export async function purgeExpiredWhatsAppLocalToken(
   prisma: DbClient,
@@ -42,6 +47,9 @@ export async function purgeExpiredWhatsAppLocalToken(
   const row = await prisma.shopSettings.findUnique({
     select: {
       whatsappApiTokenEncrypted: true,
+      whatsappApiTokenWrittenAt: true,
+      whatsappCloudConsentAt: true,
+      whatsappCredentialsAtCloud: true,
       whatsappLocalDeprecationStartedAt: true,
     },
     where: { id: "default" },
@@ -51,11 +59,32 @@ export async function purgeExpiredWhatsAppLocalToken(
   if (!(tokenSnapshot && startedAt) || startedAt > cutoff) {
     return false;
   }
+  const transitionDeadline = new Date(
+    startedAt.getTime() + WHATSAPP_LOCAL_DEPRECATION_MS
+  );
+  const legacyToken =
+    !row.whatsappApiTokenWrittenAt ||
+    row.whatsappApiTokenWrittenAt < transitionDeadline;
+  const postDeadlineUploadPending =
+    !(legacyToken || row.whatsappCredentialsAtCloud) &&
+    row.whatsappCloudConsentAt !== null;
+  if (postDeadlineUploadPending) {
+    return false;
+  }
 
   return await prisma.$transaction(async (tx) => {
     const purged = await tx.shopSettings.updateMany({
-      data: { whatsappApiTokenEncrypted: null },
+      data: {
+        whatsappApiTokenEncrypted: null,
+        whatsappApiTokenWrittenAt: null,
+      },
       where: {
+        OR: [
+          { whatsappApiTokenWrittenAt: null },
+          { whatsappApiTokenWrittenAt: { lt: transitionDeadline } },
+          { whatsappCloudConsentAt: null },
+          { whatsappCredentialsAtCloud: true },
+        ],
         id: "default",
         whatsappApiTokenEncrypted: tokenSnapshot,
         whatsappLocalDeprecationStartedAt: { lte: cutoff },

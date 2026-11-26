@@ -509,14 +509,25 @@ function MetaWhatsAppFields({
   const migrationExpired = isWhatsAppLocalDeprecationExpired(
     settings?.localDeprecationStartedAt
   );
-  const showCloudConsent =
-    !cloudConsentStored &&
-    (!settings?.credentialsAtCloud || form.apiToken !== "" || migrationExpired);
   const legacyTokenMigration = Boolean(
     settings?.hasApiToken &&
       !settings?.credentialsAtCloud &&
       !cloudConsentStored
   );
+  // Uma loja grandfathered já envia via Cloud, mas depois do fim da transição
+  // também fica bloqueada sem consentimento explícito — por isso precisa da
+  // mesma contagem decrescente antes do prazo.
+  const migrationConsentNeeded = Boolean(
+    !cloudConsentStored &&
+      (legacyTokenMigration ||
+        (settings?.credentialsAtCloud && settings.localDeprecationStartedAt))
+  );
+  const showCloudConsent =
+    !cloudConsentStored &&
+    (!settings?.credentialsAtCloud ||
+      form.apiToken !== "" ||
+      migrationExpired ||
+      migrationConsentNeeded);
   const migrationDaysLeft = whatsappLocalDeprecationDaysLeft(
     settings?.localDeprecationStartedAt
   );
@@ -617,18 +628,18 @@ function MetaWhatsAppFields({
       {showCloudConsent && (
         <div
           className={
-            legacyTokenMigration
+            migrationConsentNeeded
               ? "rounded-xl border border-warning/40 bg-warning/5 p-4"
               : "rounded-xl bg-surface-container p-4"
           }
         >
           <p className="text-on-surface text-xs leading-relaxed">
             {t(
-              legacyTokenMigration
+              migrationConsentNeeded
                 ? "whatsapp_cloud_migration_warning"
                 : "whatsapp_cloud_consent_help"
             )}
-            {legacyTokenMigration &&
+            {migrationConsentNeeded &&
               ` ${t("whatsapp_cloud_migration_days_left", {
                 count: migrationDaysLeft,
               })}`}

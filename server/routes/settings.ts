@@ -142,6 +142,7 @@ function assertEvolutionGates(
 
 interface WhatsAppCredentialSnapshot {
   whatsappApiTokenEncrypted: string | null;
+  whatsappApiTokenWrittenAt?: Date | null;
   whatsappBusinessId: string | null;
   whatsappCredentialsAtCloud: boolean;
   whatsappPhoneNumberId: string | null;
@@ -164,15 +165,16 @@ async function restoreWorkingWhatsAppCredentials(
   const phoneTouched =
     input.phoneNumberId !== undefined &&
     input.phoneNumberId !== before.whatsappPhoneNumberId;
-  const hadWorkingCredentials = Boolean(
-    before.whatsappCredentialsAtCloud || before.whatsappApiTokenEncrypted
-  );
-  if (!((tokenTouched || phoneTouched) && hadWorkingCredentials)) {
+  // Mesmo sem credenciais anteriores, um candidato rejeitado definitivamente
+  // tem de sair: caso contrário ficaria retido como "upload pendente" e cada
+  // save/poller voltaria a submeter a mesma configuração inválida.
+  if (!(tokenTouched || phoneTouched)) {
     return;
   }
   await prisma.shopSettings.updateMany({
     data: {
       whatsappApiTokenEncrypted: before.whatsappApiTokenEncrypted,
+      whatsappApiTokenWrittenAt: before.whatsappApiTokenWrittenAt ?? null,
       whatsappBusinessId: before.whatsappBusinessId,
       whatsappCredentialsAtCloud: before.whatsappCredentialsAtCloud,
       whatsappPhoneNumberId: before.whatsappPhoneNumberId,
@@ -608,60 +610,57 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
           ),
         });
       }
-      const { credentialsAtCloud, updated } =
-        await enqueueWhatsAppSettingsMutation(async () => {
-          // Toda a mensagem WhatsApp é Pro (decisão 2026-11-23): ativar o
-          // transporte — Meta local, Evolution ou relay cloud — e aceitar o
-          // termo do bot exigem o módulo "whatsapp-bot" fresco.
-          const s = await getOrCreateShopSettings(app.prisma);
-          if (
-            (parsed.data.enabled || parsed.data.botDisclaimerAccepted) &&
-            !isModuleEnabled(s, "whatsapp-bot")
-          ) {
-            throw new AppError("CLOUD_MODULE_REQUIRED");
-          }
-          // Enabling remarketing requires the Pro module — enforced again by
-          // the sweep on the cached entitlements.
-          if (
-            parsed.data.remarketingEnabled &&
-            !isModuleEnabled(s, "remarketing")
-          ) {
-            throw new AppError("CLOUD_MODULE_REQUIRED");
-          }
-          assertEvolutionGates(parsed.data, s);
-          const updated = await upsertWhatsAppSettings(
+      await enqueueWhatsAppSettingsMutation(async () => {
+        // Toda a mensagem WhatsApp é Pro (decisão 2026-11-23): ativar o
+        // transporte — Meta local, Evolution ou relay cloud — e aceitar o
+        // termo do bot exigem o módulo "whatsapp-bot" fresco.
+        const s = await getOrCreateShopSettings(app.prisma);
+        if (
+          (parsed.data.enabled || parsed.data.botDisclaimerAccepted) &&
+          !isModuleEnabled(s, "whatsapp-bot")
+        ) {
+          throw new AppError("CLOUD_MODULE_REQUIRED");
+        }
+        // Enabling remarketing requires the Pro module — enforced again by
+        // the sweep on the cached entitlements.
+        if (
+          parsed.data.remarketingEnabled &&
+          !isModuleEnabled(s, "remarketing")
+        ) {
+          throw new AppError("CLOUD_MODULE_REQUIRED");
+        }
+        assertEvolutionGates(parsed.data, s);
+        const updated = await upsertWhatsAppSettings(
+          app.prisma,
+          parsed.data,
+          req.user?.id
+        );
+        // §5.7 — com o bot Evolution habilitado pelo termo, regista o
+        // webhook inbound na instância (mesmo truque do SMS: o Host que o
+        // browser do staff usou é o endereço que a Evolution alcança).
+        if (
+          parsed.data.botDisclaimerAccepted === true ||
+          parsed.data.transport === "evolution"
+        ) {
+          await tryRegisterEvolutionWebhook(
             app.prisma,
-            parsed.data,
-            req.user?.id
+            req.headers.host ?? ""
+          ).catch((err) =>
+            app.log.warn({ err }, "evolution webhook register failed")
           );
-          // §5.7 — com o bot Evolution habilitado pelo termo, regista o
-          // webhook inbound na instância (mesmo truque do SMS: o Host que o
-          // browser do staff usou é o endereço que a Evolution alcança).
-          if (
-            parsed.data.botDisclaimerAccepted === true ||
-            parsed.data.transport === "evolution"
-          ) {
-            await tryRegisterEvolutionWebhook(
-              app.prisma,
-              req.headers.host ?? ""
-            ).catch((err) =>
-              app.log.warn({ err }, "evolution webhook register failed")
-            );
-          }
-          // Migração consentida: envia as credenciais Meta para o relay da
-          // cloud apenas quando whatsappCloudConsentAt existe (gate central no
-          // push). Falhas transitórias ficam para a próxima gravação/ciclo; uma
-          // rejeição de validação da Meta sobe para a UI e repõe o snapshot de
-          // credenciais que estava a funcionar.
-          const pushedCredentialsAtCloud =
-            await pushWhatsAppCredentialsAfterSave(
-              app.prisma,
-              s,
-              updated,
-              parsed.data
-            );
-          return { credentialsAtCloud: pushedCredentialsAtCloud, updated };
-        });
+        }
+        // Migração consentida: envia as credenciais Meta para o relay da
+        // cloud apenas quando whatsappCloudConsentAt existe (gate central no
+        // push). Falhas transitórias ficam para a próxima gravação/ciclo; uma
+        // rejeição de validação da Meta sobe para a UI e repõe o snapshot de
+        // credenciais que estava a funcionar.
+        await pushWhatsAppCredentialsAfterSave(
+          app.prisma,
+          s,
+          updated,
+          parsed.data
+        );
+      });
       // §5.6 C.2 — ao ligar/configurar o WhatsApp, corre o sync de
       // templates Meta em background (GET primeiro, cria o que falta).
       // trackingBaseUrl controla um bloco {{if}} do corpo aprovado —
@@ -676,7 +675,9 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
           );
         }
       }
-      return reply.send({ ...updated, credentialsAtCloud });
+      // Nunca devolver a row Prisma crua: ela contém tokens e blobs cifrados
+      // de vários módulos. O PUT responde com o mesmo contrato sanitizado do GET.
+      return reply.send(await getWhatsAppSettings(app.prisma));
     }
   );
 

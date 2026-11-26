@@ -137,12 +137,12 @@ describe("ChannelSettings — estado pós-revogação", () => {
     ).toBeUndefined();
   });
 
-  it("mostra o aviso obrigatório depois do prazo de 60 dias sem consentimento Cloud", async () => {
+  it("mostra o aviso obrigatório depois do prazo de 30 dias sem consentimento Cloud", async () => {
     renderChannelSettings(
       whatsAppSettings({
         cloudConsentAccepted: false,
         localDeprecationStartedAt: new Date(
-          Date.now() - 61 * 24 * 60 * 60 * 1000
+          Date.now() - 31 * 24 * 60 * 60 * 1000
         ).toISOString(),
       })
     );
@@ -159,7 +159,7 @@ describe("ChannelSettings — estado pós-revogação", () => {
         credentialsAtCloud: true,
         hasApiToken: false,
         localDeprecationStartedAt: new Date(
-          Date.now() - 61 * 24 * 60 * 60 * 1000
+          Date.now() - 31 * 24 * 60 * 60 * 1000
         ).toISOString(),
       })
     );
@@ -172,7 +172,7 @@ describe("ChannelSettings — estado pós-revogação", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("usa a fonte única de 60 dias na contagem decrescente da migração", async () => {
+  it("usa a fonte única de 30 dias na contagem decrescente da migração", async () => {
     const { container } = renderChannelSettings(
       whatsAppSettings({
         cloudConsentAccepted: false,
@@ -184,7 +184,25 @@ describe("ChannelSettings — estado pós-revogação", () => {
 
     await waitFor(() =>
       expect(container.textContent).toContain(
-        "whatsapp_cloud_migration_days_left:60"
+        "whatsapp_cloud_migration_days_left:30"
+      )
+    );
+  });
+
+  it("mostra a contagem também a uma loja grandfathered já na Cloud mas sem consentimento explícito", async () => {
+    const { container } = renderChannelSettings(
+      whatsAppSettings({
+        cloudConsentAccepted: false,
+        credentialsAtCloud: true,
+        enabled: true,
+        hasApiToken: false,
+        localDeprecationStartedAt: new Date().toISOString(),
+      })
+    );
+
+    await waitFor(() =>
+      expect(container.textContent).toContain(
+        "whatsapp_cloud_migration_days_left:30"
       )
     );
   });

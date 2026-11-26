@@ -106,12 +106,17 @@ Outbound: app → POST /whatsapp/send (Cloud relay, no credentials in the
 authorized server-side by entitlement — the local module cache is only a
 UI hint (expires 24h after the last sync). Older installs keep the local
 token (`whatsappApiTokenEncrypted`, AES-256-GCM under `AI_ENCRYPTION_KEY`)
-only during the 60-day transition: it may be used as an audited fallback
-when the Cloud relay is unreachable or returns 5xx, never for 402/other 4xx
-or after revocation. When the deadline ends, direct Meta sending stops and a
-boot/poller task wipes the local token with an audit event. The Cloud neither
-stores nor logs message bodies; logs carry only id/state/error and masked
-phone.
+only during the 30-day transition: it may be used as an audited fallback
+when the Cloud relay returns 5xx or the connection clearly cannot be
+established (DNS/refused/reset). A timeout is deliberately ambiguous — the
+relay may already have accepted the message — so it does not fall back and
+risk a duplicate. 402/other 4xx, revocation and post-deadline sends never
+fall back. When the deadline ends, direct Meta sending stops. The boot/poller
+purge wipes legacy tokens with an audit event; a token typed after the
+deadline is retained only while its consented Cloud upload is still pending
+(it can never send directly) and is wiped once the Cloud confirms those
+credentials. The Cloud neither stores nor logs message bodies; logs carry
+only id/state/error and masked phone.
 
 **Unpair**: the app calls `DELETE /shops/me` — the Cloud deletes the `Shop` row and the
 cascade (`onDelete: Cascade`) takes everything it owns: tokens, entitlements,
@@ -316,9 +321,13 @@ Rules:
   a module. In the UI the cards/buttons stay visible but locked —
   clicking shows "This option only exists in OficinaOS Pro.".
 - Direct local Meta (`whatsappApiTokenEncrypted`) is only a transitional
-  Pro transport/fallback during the 60-day migration window. After the
-  deadline direct Meta sending stops and the local token is wiped with an
-  audit event.
+  Pro transport/fallback during the 30-day migration window. After the
+  deadline direct Meta sending stops. Legacy tokens are wiped with an audit
+  event; a post-deadline token remains only while pending its consented Cloud
+  upload and is wiped after confirmation. Even with no outbound Meta channel,
+  inbound `PARAR`/`STOP` messages are still consumed for consent revocation —
+  without `ai-inbox`, only those legal commands are acked and normal inbound
+  messages stay queued rather than disappearing unanswered.
 - `customer.whatsappConsent` is the single opt-in for all automated
   messaging — recorded even without Pro (ready for when it activates).
 - Opt-out ("PARAR"/"STOP") on free: the LAN webhooks (SMS and

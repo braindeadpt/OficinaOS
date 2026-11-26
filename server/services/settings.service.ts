@@ -529,7 +529,7 @@ export async function testAiConnection(prisma: PrismaClient) {
 }
 
 /**
- * Marca o início da transição de 60 dias do envio Meta direto/local no
+ * Marca o início da transição de 30 dias do envio Meta direto/local no
  * primeiro arranque da versão nova. A decisão de produto é gravar a data
  * incondicionalmente — mesmo sem token Meta, consentimento Cloud ou qualquer
  * abertura das Definições. O updateMany condicional só protege a
@@ -663,6 +663,7 @@ interface WhatsAppUpsertData {
   remarketingTemplate?: string | null;
   trackingBaseUrl?: string | null;
   whatsappApiTokenEncrypted?: string;
+  whatsappApiTokenWrittenAt?: Date | null;
   whatsappBotDailyCap?: number;
   whatsappBotDisclaimerAt?: Date;
   whatsappBotDisclaimerUserId?: string | null;
@@ -788,6 +789,9 @@ export async function upsertWhatsAppSettings(
   }
   if (input.apiToken !== undefined && input.apiToken !== "") {
     data.whatsappApiTokenEncrypted = encryptSecret(input.apiToken);
+    // A data distingue tokens legados de tokens introduzidos depois do
+    // sunset apenas para completar o upload consentido para a Cloud.
+    data.whatsappApiTokenWrittenAt = new Date();
     // Um token novo ainda não está na Cloud. Repor a flag aqui é o que
     // permite um re-upload futuro; enquanto a flag estiver true, o push
     // pode tratar o token local residual como o mesmo já migrado.
@@ -834,6 +838,7 @@ function whatsAppCreateData(data: WhatsAppUpsertData) {
     shopName: "",
     trackingBaseUrl: data.trackingBaseUrl ?? null,
     whatsappApiTokenEncrypted: data.whatsappApiTokenEncrypted ?? null,
+    whatsappApiTokenWrittenAt: data.whatsappApiTokenWrittenAt ?? null,
     whatsappBusinessId: data.whatsappBusinessId ?? null,
     whatsappEnabled: data.whatsappEnabled ?? false,
     whatsappLocalDisclaimerAt: data.whatsappLocalDisclaimerAt ?? null,

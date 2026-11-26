@@ -3,6 +3,8 @@ import { updateWhatsAppSettingsSchema } from "@shared/schemas/settings.schema";
 import Fastify from "fastify";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const ENCRYPTED_SETTINGS_KEY_RE = /Encrypted/i;
+
 const mocks = vi.hoisted(() => ({
   assertNotDemoMode: vi.fn(),
   cloudFetch: vi.fn(),
@@ -88,6 +90,7 @@ import { purgeExpiredWhatsAppLocalToken } from "../services/whatsapp-local-sunse
 
 interface TestSettingsRow extends Record<string, unknown> {
   whatsappApiTokenEncrypted: string | null;
+  whatsappApiTokenWrittenAt: Date | null;
   whatsappCloudConsentAt: Date | null;
   whatsappCloudMigrationNoticeSeenAt: Date | null;
   whatsappCredentialsAtCloud: boolean;
@@ -104,6 +107,7 @@ function baseRow(overrides: Partial<TestSettingsRow> = {}): TestSettingsRow {
     cloudShopTokenEncrypted: "enc:shop-token",
     cloudSyncedAt: new Date(),
     whatsappApiTokenEncrypted: null,
+    whatsappApiTokenWrittenAt: null,
     whatsappBusinessId: null,
     whatsappCloudConsentAt: null,
     whatsappCloudMigrationNoticeSeenAt: null,
@@ -139,28 +143,55 @@ function createStatefulPrisma(initial: TestSettingsRow | null) {
         if (!current) {
           return Promise.resolve({ count: 0 });
         }
-        const matches = Object.entries(where ?? {}).every(([key, value]) => {
-          if (key === "id") {
-            return true;
-          }
-          // No Postgres uma coluna nullable sem valor é NULL; o stub omite a
-          // chave quando a row é criada de raiz.
-          const currentValue = current[key] === undefined ? null : current[key];
-          if (
-            value &&
-            typeof value === "object" &&
-            !(value instanceof Date) &&
-            "lte" in value
-          ) {
-            const upper = (value as { lte?: unknown }).lte;
-            return (
-              currentValue instanceof Date &&
-              upper instanceof Date &&
-              currentValue.getTime() <= upper.getTime()
-            );
-          }
-          return currentValue === value;
-        });
+        const matchesCondition = (
+          condition: Record<string, unknown>
+        ): boolean =>
+          Object.entries(condition).every(([key, value]) => {
+            if (key === "id") {
+              return true;
+            }
+            // No Postgres uma coluna nullable sem valor é NULL; o stub omite a
+            // chave quando a row é criada de raiz.
+            const currentValue =
+              current[key] === undefined ? null : current[key];
+            if (
+              value &&
+              typeof value === "object" &&
+              !(value instanceof Date) &&
+              "lte" in value
+            ) {
+              const upper = (value as { lte?: unknown }).lte;
+              return (
+                currentValue instanceof Date &&
+                upper instanceof Date &&
+                currentValue.getTime() <= upper.getTime()
+              );
+            }
+            if (
+              value &&
+              typeof value === "object" &&
+              !(value instanceof Date) &&
+              "lt" in value
+            ) {
+              const upper = (value as { lt?: unknown }).lt;
+              return (
+                currentValue instanceof Date &&
+                upper instanceof Date &&
+                currentValue.getTime() < upper.getTime()
+              );
+            }
+            return currentValue === value;
+          });
+        const directCondition = Object.fromEntries(
+          Object.entries(where ?? {}).filter(([key]) => key !== "OR")
+        );
+        const orClauses = where?.OR;
+        const matches =
+          matchesCondition(directCondition) &&
+          (!Array.isArray(orClauses) ||
+            orClauses.some((clause) =>
+              matchesCondition(clause as Record<string, unknown>)
+            ));
         if (matches) {
           row = { ...current, ...data } as TestSettingsRow;
         }
@@ -389,6 +420,46 @@ describe("WP0.6 — consentimento Cloud do token Meta", () => {
     );
     expect(state.getRow()?.whatsappCredentialsAtCloud).toBe(true);
     expect(state.getRow()?.whatsappCloudConsentAt).toBeInstanceOf(Date);
+  });
+
+  it("rejeição definitiva no primeiro setup remove o candidato em vez de o reter como upload pendente", async () => {
+    const state = createStatefulPrisma(baseRow());
+    const app = buildApp(state.prisma);
+    mocks.cloudFetch.mockImplementation((_apiUrl: string, path: string) => {
+      if (path === "/shops/whatsapp-credentials") {
+        return Promise.resolve({
+          body: {
+            error: {
+              code: "INVALID_CREDENTIALS",
+              message: "Meta rejected",
+            },
+          },
+          ok: false,
+          status: 400,
+        });
+      }
+      return Promise.resolve({ body: {}, ok: true, status: 200 });
+    });
+
+    const res = await app.inject({
+      method: "PUT",
+      payload: {
+        apiToken: "meta-token-invalido",
+        businessId: "business-1",
+        cloudConsent: true,
+        phoneNumberId: "1234",
+      },
+      url: "/api/settings/whatsapp",
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("CLOUD_INVALID_CREDENTIALS");
+    expect(state.getRow()).toMatchObject({
+      whatsappApiTokenEncrypted: null,
+      whatsappApiTokenWrittenAt: null,
+      whatsappCredentialsAtCloud: false,
+    });
+    expect(credentialsUploadCalls()).toHaveLength(1);
   });
 
   it("o consentimento é imutável num segundo save", async () => {
@@ -1062,7 +1133,9 @@ describe("fallback transitório, sunset e purge auditado", () => {
   it("durante a transição, falha de rede da Cloud cai no token local mesmo sem consentimento (grandfathered) e persiste o evento", async () => {
     const row = activeTransitionRow({ whatsappCloudConsentAt: null });
     const state = createStatefulPrisma(row);
-    mocks.cloudFetch.mockRejectedValueOnce(new Error("ECONNREFUSED"));
+    mocks.cloudFetch.mockRejectedValueOnce(
+      Object.assign(new Error("connect refused"), { code: "ECONNREFUSED" })
+    );
 
     const result = await sendWhatsAppText(
       state.prisma as never,
@@ -1176,7 +1249,7 @@ describe("fallback transitório, sunset e purge auditado", () => {
 
   it("depois do fim da transição não há fallback local, mesmo com token e consentimento ainda presentes", async () => {
     const row = activeTransitionRow({
-      whatsappLocalDeprecationStartedAt: new Date(Date.now() - 61 * DAY_MS),
+      whatsappLocalDeprecationStartedAt: new Date(Date.now() - 31 * DAY_MS),
     });
     const state = createStatefulPrisma(row);
     mocks.cloudFetch.mockResolvedValueOnce({
@@ -1224,7 +1297,7 @@ describe("fallback transitório, sunset e purge auditado", () => {
 
   it("defesa no envio bloqueia um channel local stale depois do prazo, mesmo com consentimento", async () => {
     const row = activeTransitionRow({
-      whatsappLocalDeprecationStartedAt: new Date(Date.now() - 61 * DAY_MS),
+      whatsappLocalDeprecationStartedAt: new Date(Date.now() - 31 * DAY_MS),
     });
     const state = createStatefulPrisma(row);
 
@@ -1245,14 +1318,14 @@ describe("fallback transitório, sunset e purge auditado", () => {
     );
 
     expect(result.success).toBe(false);
-    expect(result.error).toContain("envio direto Meta terminou");
+    expect(result.error).toBe("WHATSAPP_LOCAL_DIRECT_SEND_ENDED");
     expect(mocks.sendWhatsApp).not.toHaveBeenCalled();
   });
 
   it("defesa no envio bloqueia um channel Cloud stale depois do prazo sem consentimento", async () => {
     const row = activeTransitionRow({
       whatsappCloudConsentAt: null,
-      whatsappLocalDeprecationStartedAt: new Date(Date.now() - 61 * DAY_MS),
+      whatsappLocalDeprecationStartedAt: new Date(Date.now() - 31 * DAY_MS),
     });
     const state = createStatefulPrisma(row);
 
@@ -1266,7 +1339,7 @@ describe("fallback transitório, sunset e purge auditado", () => {
     );
 
     expect(result.success).toBe(false);
-    expect(result.error).toContain("autorize a OficinaOS Cloud");
+    expect(result.error).toBe("WHATSAPP_CLOUD_AUTHORIZATION_REQUIRED");
     expect(mocks.cloudFetch).not.toHaveBeenCalled();
     expect(mocks.sendWhatsApp).not.toHaveBeenCalled();
   });
@@ -1274,7 +1347,7 @@ describe("fallback transitório, sunset e purge auditado", () => {
   it("depois do prazo sem consentimento não resolve Meta — nem Cloud nem local", () => {
     const row = activeTransitionRow({
       whatsappCloudConsentAt: null,
-      whatsappLocalDeprecationStartedAt: new Date(Date.now() - 61 * DAY_MS),
+      whatsappLocalDeprecationStartedAt: new Date(Date.now() - 31 * DAY_MS),
     });
 
     expect(resolveWhatsAppChannel(row)).toBeNull();
@@ -1283,7 +1356,7 @@ describe("fallback transitório, sunset e purge auditado", () => {
   it("depois do prazo, consentimento sem credenciais na Cloud não ressuscita o envio local", () => {
     const row = activeTransitionRow({
       whatsappCredentialsAtCloud: false,
-      whatsappLocalDeprecationStartedAt: new Date(Date.now() - 61 * DAY_MS),
+      whatsappLocalDeprecationStartedAt: new Date(Date.now() - 31 * DAY_MS),
     });
 
     expect(resolveWhatsAppChannel(row)).toBeNull();
@@ -1301,7 +1374,7 @@ describe("fallback transitório, sunset e purge auditado", () => {
 
   it("depois do prazo uma loja consentida com credenciais na Cloud continua pelo relay", () => {
     const row = activeTransitionRow({
-      whatsappLocalDeprecationStartedAt: new Date(Date.now() - 61 * DAY_MS),
+      whatsappLocalDeprecationStartedAt: new Date(Date.now() - 31 * DAY_MS),
     });
 
     expect(resolveWhatsAppChannel(row)).toEqual({
@@ -1316,7 +1389,7 @@ describe("fallback transitório, sunset e purge auditado", () => {
     const state = createStatefulPrisma(
       activeTransitionRow({
         whatsappLocalDeprecationStartedAt: new Date(
-          now.getTime() - 61 * DAY_MS
+          now.getTime() - 31 * DAY_MS
         ),
       })
     );
@@ -1333,7 +1406,10 @@ describe("fallback transitório, sunset e purge auditado", () => {
       }),
     ]);
     expect(state.updateManyMock).toHaveBeenCalledWith({
-      data: { whatsappApiTokenEncrypted: null },
+      data: {
+        whatsappApiTokenEncrypted: null,
+        whatsappApiTokenWrittenAt: null,
+      },
       where: expect.objectContaining({
         id: "default",
         whatsappApiTokenEncrypted: "enc:meta-token",
@@ -1351,7 +1427,7 @@ describe("fallback transitório, sunset e purge auditado", () => {
     const state = createStatefulPrisma(
       activeTransitionRow({
         whatsappLocalDeprecationStartedAt: new Date(
-          now.getTime() - 59 * DAY_MS
+          now.getTime() - 29 * DAY_MS
         ),
       })
     );
@@ -1386,5 +1462,111 @@ describe("fallback transitório, sunset e purge auditado", () => {
         type: "LOCAL_TOKEN_PURGED",
       }),
     ]);
+  });
+
+  it("timeout ambíguo da Cloud não usa fallback local nem duplica por retry direto", async () => {
+    const row = activeTransitionRow();
+    const state = createStatefulPrisma(row);
+    mocks.cloudFetch.mockRejectedValueOnce(
+      Object.assign(new Error("relay timeout"), { name: "AbortError" })
+    );
+
+    const result = await sendWhatsAppText(
+      state.prisma as never,
+      cloudChannel,
+      "912345678",
+      "A reparação está pronta",
+      "PT",
+      row
+    );
+
+    expect(result.success).toBe(false);
+    expect(mocks.sendWhatsApp).not.toHaveBeenCalled();
+    expect(state.getMigrationEvents()).toHaveLength(0);
+  });
+
+  it("purge retém token introduzido depois do prazo enquanto o upload Cloud está pendente", async () => {
+    const now = new Date("2026-04-01T12:00:00.000Z");
+    const startedAt = new Date(now.getTime() - 31 * DAY_MS);
+    const state = createStatefulPrisma(
+      activeTransitionRow({
+        whatsappApiTokenWrittenAt: new Date(
+          now.getTime() - 12 * 60 * 60 * 1000
+        ),
+        whatsappCredentialsAtCloud: false,
+        whatsappLocalDeprecationStartedAt: startedAt,
+      })
+    );
+
+    await expect(
+      purgeExpiredWhatsAppLocalToken(state.prisma as never, now)
+    ).resolves.toBe(false);
+
+    expect(state.getRow()?.whatsappApiTokenEncrypted).toBe("enc:meta-token");
+    expect(state.getMigrationEvents()).toHaveLength(0);
+  });
+
+  it("purge não retém um token pós-prazo sem consentimento Cloud para upload", async () => {
+    const now = new Date("2026-04-01T12:00:00.000Z");
+    const startedAt = new Date(now.getTime() - 31 * DAY_MS);
+    const state = createStatefulPrisma(
+      activeTransitionRow({
+        whatsappApiTokenWrittenAt: new Date(
+          now.getTime() - 12 * 60 * 60 * 1000
+        ),
+        whatsappCloudConsentAt: null,
+        whatsappCredentialsAtCloud: false,
+        whatsappLocalDeprecationStartedAt: startedAt,
+      })
+    );
+
+    await expect(
+      purgeExpiredWhatsAppLocalToken(state.prisma as never, now)
+    ).resolves.toBe(true);
+    expect(state.getRow()?.whatsappApiTokenEncrypted).toBeNull();
+  });
+
+  it("purge apaga token pós-prazo quando as credenciais já foram confirmadas na Cloud", async () => {
+    const now = new Date("2026-04-01T12:00:00.000Z");
+    const startedAt = new Date(now.getTime() - 31 * DAY_MS);
+    const state = createStatefulPrisma(
+      activeTransitionRow({
+        whatsappApiTokenWrittenAt: new Date(
+          now.getTime() - 12 * 60 * 60 * 1000
+        ),
+        whatsappCredentialsAtCloud: true,
+        whatsappLocalDeprecationStartedAt: startedAt,
+      })
+    );
+
+    await expect(
+      purgeExpiredWhatsAppLocalToken(state.prisma as never, now)
+    ).resolves.toBe(true);
+
+    expect(state.getRow()?.whatsappApiTokenEncrypted).toBeNull();
+    expect(state.getRow()?.whatsappApiTokenWrittenAt).toBeNull();
+  });
+
+  it("GET e PUT nunca expõem tokens nem blobs cifrados das settings WhatsApp", async () => {
+    const state = createStatefulPrisma(activeTransitionRow());
+    const app = buildApp(state.prisma);
+
+    for (const request of [
+      { method: "GET" as const, url: "/api/settings/whatsapp" },
+      {
+        method: "PUT" as const,
+        payload: { enabled: true },
+        url: "/api/settings/whatsapp",
+      },
+    ]) {
+      const res = await app.inject(request);
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as Record<string, unknown>;
+      for (const key of Object.keys(body)) {
+        expect(key).not.toMatch(ENCRYPTED_SETTINGS_KEY_RE);
+      }
+      expect(JSON.stringify(body)).not.toContain("enc:meta-token");
+      expect(body.hasApiToken).toBe(true);
+    }
   });
 });

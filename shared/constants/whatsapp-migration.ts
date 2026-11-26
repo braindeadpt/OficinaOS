@@ -1,7 +1,7 @@
 // Duração oficial da transição do envio Meta direto/local para o relay da
 // OficinaOS Cloud. Esta constante é a fonte única partilhada pelo servidor
 // (gates de envio e purge) e pela UI (contagem decrescente nas Definições).
-export const WHATSAPP_LOCAL_DEPRECATION_DAYS = 60;
+export const WHATSAPP_LOCAL_DEPRECATION_DAYS = 30;
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 export const WHATSAPP_LOCAL_DEPRECATION_MS =

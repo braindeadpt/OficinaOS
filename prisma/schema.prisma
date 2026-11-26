@@ -1234,6 +1234,10 @@ model ShopSettings {
   // Null = sem meta definida (não mostrar nada).
   monthlyRevenueGoal          Decimal?  @db.Decimal(10, 2)
   whatsappApiTokenEncrypted   String?
+  // Última gravação explícita do token Meta local. Tokens anteriores ao fim
+  // da transição são purgeados; tokens introduzidos depois do prazo ficam
+  // retidos apenas enquanto pendentes de upload para a Cloud (nunca enviam).
+  whatsappApiTokenWrittenAt   DateTime? @db.Timestamptz
   whatsappBusinessId          String?
   whatsappPhoneNumberId       String?
   whatsappEnabled             Boolean   @default(false)
@@ -1246,7 +1250,7 @@ model ShopSettings {
   // OficinaOS Cloud e enviar pelo relay. Instalações já migradas ficam
   // grandfathered durante a transição; uploads novos exigem este timestamp.
   whatsappCloudConsentAt      DateTime? @db.Timestamptz
-  // Início da transição de 60 dias do envio Meta direto/local — gravado
+  // Início da transição de 30 dias do envio Meta direto/local — gravado
   // uma vez, incondicionalmente, no primeiro arranque da versão nova.
   whatsappLocalDeprecationStartedAt DateTime? @db.Timestamptz
   // Aviso retrospetivo único às lojas migradas para a Cloud antes do

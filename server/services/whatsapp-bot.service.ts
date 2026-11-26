@@ -8,6 +8,7 @@ import {
   type InboundMessage,
   InboxPersistError,
   isStopText,
+  revokeConsentForPhone,
 } from "./bot-intents.js";
 import { cloudFetch } from "./cloud.service.js";
 import { recordInboundMessage } from "./inbox.service.js";
@@ -248,14 +249,16 @@ async function pollWhatsAppInboundCycle(
   const settings = await getOrCreateShopSettings(prisma);
   const channel = resolveWhatsAppChannel(settings);
   if (!channel) {
-    // ai-inbox sem "whatsapp-bot": a fila oficial continua a ser
-    // consumida — a caixa de entrada precisa de TODAS as mensagens e
-    // PARAR revoga o consentimento (legal). Respostas automáticas ficam
-    // suprimidas: o envio é todo Pro e o resolve devolveu null por isso.
-    if (!isModuleEnabled(settings, "ai-inbox")) {
-      return;
+    // Sem canal de resposta (ex.: sunset Meta sem consentimento Cloud) a
+    // revogação legal nunca pode ficar retida atrás do envio. Com ai-inbox
+    // mantemos o consumo record-only de toda a fila; sem inbox só os
+    // PARAR/STOP são confirmados — mensagens normais ficam na fila em vez de
+    // serem engolidas sem resposta nem registo.
+    if (isModuleEnabled(settings, "ai-inbox")) {
+      await drainInboxOnly(prisma, apiUrl, token, log, notifyCtx, settings);
+    } else {
+      await drainStopOnly(prisma, apiUrl, token, log);
     }
-    await drainInboxOnly(prisma, apiUrl, token, log, notifyCtx, settings);
     return;
   }
   // Transporte Evolution: a fila oficial só pode ser respondida com os
@@ -390,6 +393,53 @@ async function drainInboxOnly(
     processed.push(msg.id);
     if (await processInboxOnlyMessage(ctx, msg, log)) {
       ackIds.push(msg.id);
+    }
+  }
+  try {
+    if (ackIds.length) {
+      await cloudFetch(apiUrl, "/whatsapp/inbound/ack", {
+        body: { ids: ackIds },
+        method: "POST",
+        token,
+      });
+    }
+  } finally {
+    for (const id of processed) {
+      inFlightIds.delete(id);
+    }
+  }
+}
+
+/**
+ * Consumo legal-only quando já não existe canal WhatsApp de resposta nem
+ * ai-inbox: só PARAR/STOP são processados e confirmados. Mensagens normais
+ * ficam na fila — engoli-las sem inbox/resposta perdia comunicação do cliente.
+ */
+async function drainStopOnly(
+  prisma: PrismaClient,
+  apiUrl: string,
+  token: string,
+  log: FastifyBaseLogger
+): Promise<void> {
+  const res = await cloudFetch(apiUrl, "/whatsapp/inbound", { token });
+  if (!res.ok) {
+    return;
+  }
+  const messages = (res.body as { messages?: InboundMessage[] }).messages ?? [];
+  const ackIds: string[] = [];
+  const processed: string[] = [];
+  for (const msg of messages) {
+    if (!isStopText(msg.text ?? "") || inFlightIds.has(msg.id)) {
+      continue;
+    }
+    inFlightIds.add(msg.id);
+    processed.push(msg.id);
+    try {
+      await revokeConsentForPhone(prisma, msg.fromPhone);
+      ackIds.push(msg.id);
+    } catch (err) {
+      // Sem escrita local não há ack — a revogação legal é repetida no ciclo seguinte.
+      log.warn({ err, msgId: msg.id }, "whatsapp stop-only revocation failed");
     }
   }
   try {
