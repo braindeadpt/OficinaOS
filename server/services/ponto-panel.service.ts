@@ -747,7 +747,7 @@ function pushDayHours(
       hasCorrection: rawEntries.some(
         (e) => isSuperseded(e) || e.correctsId !== null
       ),
-      photoSentAts: dayUsable
+      photoSentAts: rawEntries
         .map((e) =>
           typeof (e.proofs as Record<string, unknown> | null)?.photoSentAt ===
           "string"

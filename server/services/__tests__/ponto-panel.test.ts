@@ -259,3 +259,90 @@ describe("emparelhamento sem overnight (decisão 2026-11-25)", () => {
     );
   });
 });
+
+describe("photoSentAts — prova fotográfica na exportação de horas", () => {
+  const TZ = "Europe/Lisbon";
+
+  function row(
+    id: string,
+    iso: string,
+    type: string,
+    decision: string | null,
+    photoSentAt?: string
+  ) {
+    return {
+      at: new Date(iso),
+      corrections: [],
+      corrects: null,
+      correctsId: null,
+      createdAt: new Date(iso),
+      id,
+      proofs: photoSentAt ? { photoSentAt } : {},
+      status: decision ? "POR_VALIDAR" : "APROVADO",
+      type,
+      userId: "u1",
+      validations: decision
+        ? [{ at: new Date(iso), decision, id: `v-${id}` }]
+        : [],
+    };
+  }
+
+  function prismaCom(rows: unknown[]) {
+    return {
+      timeEntry: {
+        findMany: vi.fn((args?: { distinct?: unknown }) =>
+          Promise.resolve(args?.distinct ? [{ userId: "u1" }] : rows)
+        ),
+      },
+      user: {
+        findMany: vi.fn(() =>
+          Promise.resolve([{ id: "u1", name: "Zé", username: "ze" }])
+        ),
+      },
+    } as unknown as DbClient;
+  }
+
+  const range = {
+    end: new Date("2026-01-06T00:00:00.000Z"),
+    fromDate: "2026-01-05",
+    start: new Date("2026-01-05T00:00:00.000Z"),
+    toDate: "2026-01-05",
+  };
+
+  it("inclui a hora da foto em picagens recusadas e substituídas, não só nas que contam horas", async () => {
+    // A prova continua a existir (e é legalmente relevante) mesmo quando a
+    // picagem é recusada ou substituída — a exportação tem de a mostrar.
+    const rows = [
+      row(
+        "e1",
+        "2026-01-05T09:00:00.000Z",
+        "ENTRADA",
+        null,
+        "2026-01-05T09:01:00.000Z"
+      ),
+      row(
+        "e2",
+        "2026-01-05T18:00:00.000Z",
+        "SAIDA",
+        "RECUSADO",
+        "2026-01-05T18:01:00.000Z"
+      ),
+    ];
+    const out = await getHours(prismaCom(rows), TZ, range, undefined);
+    const day = out.days.find((d) => d.date === "2026-01-05");
+    expect(day?.hours.photoSentAts).toEqual([
+      "2026-01-05T09:01:00.000Z",
+      "2026-01-05T18:01:00.000Z",
+    ]);
+  });
+
+  it("entries sem foto não produzem entradas vazias", async () => {
+    const rows = [
+      row("e1", "2026-01-05T09:00:00.000Z", "ENTRADA", null),
+      row("e2", "2026-01-05T18:00:00.000Z", "SAIDA", null),
+    ];
+    const out = await getHours(prismaCom(rows), TZ, range, undefined);
+    const day = out.days.find((d) => d.date === "2026-01-05");
+    expect(day?.hours.photoSentAts).toEqual([]);
+  });
+});

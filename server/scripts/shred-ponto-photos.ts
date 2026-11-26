@@ -4,6 +4,15 @@
  * `prisma migrate deploy` remover a tabela. Corre como parte de
  * `bun run db:migrate-deploy`; é idempotente e falha fechado — se a
  * eliminação falhar, a migração não avança.
+ *
+ * A limpeza cobre TODAS as cópias que o atualizador/instalador podem
+ * reter, porque a decisão do dono é "nada fica connosco":
+ * - a pasta ativa <app>/uploads/ponto-photos;
+ * - as instalações anteriores preservadas para rollback pelo
+ *   update-apply.ps1 — <root>/app.prev…/uploads/ponto-photos (portátil e
+ *   instalado usam o mesmo nome);
+ * - as cópias temporárias %TEMP%/oficinaos-keep-…/uploads/ponto-photos,
+ *   que sobrevivem se uma atualização for interrompida a meio.
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -34,17 +43,78 @@ async function countPhotoFiles(root: string): Promise<number> {
   return total;
 }
 
+async function isDir(root: string): Promise<boolean> {
+  const stat = await fs.lstat(root).catch(() => null);
+  return stat?.isDirectory() === true;
+}
+
+/**
+ * Todas as pastas de fotografias conhecidas: a ativa mais as cópias de
+ * backup criadas pelo atualizador/instalador. A derivação do layout
+ * portátil só acontece quando uploadDir é mesmo <root>/app/uploads —
+ * um UPLOAD_DIR personalizado noutro sítio não leva a varrer pastas
+ * alheias.
+ */
+export async function candidatePhotoDirs(uploadDir: string): Promise<{
+  active: string;
+  backups: string[];
+}> {
+  const active = path.resolve(uploadDir, PHOTO_SUBDIR);
+  const backups: string[] = [];
+  const resolvedUpload = path.resolve(uploadDir);
+  const appDir = path.dirname(resolvedUpload);
+  if (
+    path.basename(resolvedUpload) === "uploads" &&
+    path.basename(appDir) === "app"
+  ) {
+    const installRoot = path.dirname(appDir);
+    for (const entry of await fs
+      .readdir(installRoot, { withFileTypes: true })
+      .catch(() => [])) {
+      // O update-apply.ps1 usa exatamente "app.prev"; o prefixo cobre
+      // variantes futuras (app.prev.1, app.prev-old) sem tocar em pastas
+      // alheias como "app" ou "approvals".
+      if (!(entry.isDirectory() && entry.name.startsWith("app.prev"))) {
+        continue;
+      }
+      backups.push(path.join(installRoot, entry.name, "uploads", PHOTO_SUBDIR));
+    }
+  }
+  const temp = process.env.TEMP ?? process.env.TMP;
+  if (temp && (await isDir(temp))) {
+    for (const entry of await fs
+      .readdir(temp, { withFileTypes: true })
+      .catch(() => [])) {
+      if (!(entry.isDirectory() && entry.name.startsWith("oficinaos-keep-"))) {
+        continue;
+      }
+      backups.push(path.join(temp, entry.name, "uploads", PHOTO_SUBDIR));
+    }
+  }
+  return { active, backups };
+}
+
 export async function shredPontoPhotos(args: {
   databaseUrl: string;
   uploadDir: string;
 }): Promise<{
+  backupFilesDeleted: number;
   filesDeleted: number;
   rowsDeleted: number;
   tableExisted: boolean;
 }> {
-  const dir = path.resolve(args.uploadDir, PHOTO_SUBDIR);
-  const filesDeleted = await countPhotoFiles(dir);
-  await fs.rm(dir, { force: true, recursive: true });
+  const { active, backups } = await candidatePhotoDirs(args.uploadDir);
+  let filesDeleted = 0;
+  let backupFilesDeleted = 0;
+  for (const dir of [active, ...backups]) {
+    const count = await countPhotoFiles(dir);
+    await fs.rm(dir, { force: true, recursive: true });
+    if (dir === active) {
+      filesDeleted += count;
+    } else {
+      backupFilesDeleted += count;
+    }
+  }
 
   const client = new pg.Client({ connectionString: args.databaseUrl });
   let rowsDeleted = 0;
@@ -62,7 +132,7 @@ export async function shredPontoPhotos(args: {
   } finally {
     await client.end().catch(() => undefined);
   }
-  return { filesDeleted, rowsDeleted, tableExisted };
+  return { backupFilesDeleted, filesDeleted, rowsDeleted, tableExisted };
 }
 
 async function main(): Promise<void> {
@@ -77,7 +147,7 @@ async function main(): Promise<void> {
     uploadDir: process.env.UPLOAD_DIR ?? "./uploads",
   });
   console.log(
-    `[ponto-photo-migration] deleted ${result.rowsDeleted} PontoPhoto rows and ${result.filesDeleted} files under ${PHOTO_SUBDIR}/`
+    `[ponto-photo-migration] deleted ${result.rowsDeleted} PontoPhoto rows, ${result.filesDeleted} files under the active ${PHOTO_SUBDIR}/ and ${result.backupFilesDeleted} files in updater/installer backup copies (app.prev, oficinaos-keep-*)`
   );
 }
 
