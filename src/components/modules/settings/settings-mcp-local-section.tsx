@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Field } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import api, { getErrorMessage } from "@/lib/api";
@@ -173,32 +175,22 @@ export default function SettingsMcpLocalSection() {
       <div className="space-y-3">
         <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-48 flex-1">
-            <label
-              className="mb-1 block font-medium text-on-surface-variant text-xs"
-              htmlFor="mcp-token-name"
-            >
-              {t("mcp.name_label")}
-            </label>
-            <Input
-              id="mcp-token-name"
-              onChange={(e) => setName(e.target.value)}
-              placeholder={t("mcp.name_placeholder")}
-              value={name}
-            />
+            <Field id="mcp-token-name" label={t("mcp.name_label")}>
+              <Input
+                onChange={(e) => setName(e.target.value)}
+                placeholder={t("mcp.name_placeholder")}
+                value={name}
+              />
+            </Field>
           </div>
           <div>
-            <label
-              className="mb-1 block font-medium text-on-surface-variant text-xs"
-              htmlFor="mcp-token-expiry"
-            >
-              {t("mcp.expiry_label")}
-            </label>
-            <Input
-              id="mcp-token-expiry"
-              onChange={(e) => setExpiresAt(e.target.value)}
-              type="date"
-              value={expiresAt}
-            />
+            <Field id="mcp-token-expiry" label={t("mcp.expiry_label")}>
+              <Input
+                onChange={(e) => setExpiresAt(e.target.value)}
+                type="date"
+                value={expiresAt}
+              />
+            </Field>
           </div>
           <button
             className="flex min-h-10 items-center gap-2 rounded-xl bg-primary px-4 py-2 font-medium text-on-primary text-sm transition-opacity disabled:opacity-50"
@@ -211,30 +203,26 @@ export default function SettingsMcpLocalSection() {
           </button>
         </div>
 
-        <label className="flex items-start gap-2 text-on-surface-variant text-sm">
-          <input
+        <Field horizontal label={t("mcp.show_pii_label")}>
+          <Checkbox
             checked={showPii}
-            className="mt-1"
             onChange={(e) => setShowPii(e.target.checked)}
-            type="checkbox"
           />
-          <span>{t("mcp.show_pii_label")}</span>
-        </label>
+        </Field>
         {showPii && (
           <div className="rounded-xl border border-warning/40 bg-warning/10 p-3 text-on-surface text-sm">
             <p className="font-medium">{t("mcp.pii_warning_title")}</p>
             <p className="mt-1 text-on-surface-variant">
               {t("mcp.pii_warning_body")}
             </p>
-            <label className="mt-2 flex items-start gap-2">
-              <input
-                checked={piiAck}
-                className="mt-1"
-                onChange={(e) => setPiiAck(e.target.checked)}
-                type="checkbox"
-              />
-              <span className="font-medium">{t("mcp.pii_ack_label")}</span>
-            </label>
+            <div className="mt-2">
+              <Field horizontal label={t("mcp.pii_ack_label")}>
+                <Checkbox
+                  checked={piiAck}
+                  onChange={(e) => setPiiAck(e.target.checked)}
+                />
+              </Field>
+            </div>
           </div>
         )}
       </div>
