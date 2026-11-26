@@ -135,7 +135,17 @@ for key in POSTGRES_PASSWORD EVOLUTION_DB_PASSWORD BETTER_AUTH_SECRET COOKIE_SEC
   ensure_env_secret "$key" "$ENV_FILE"
 done
 if [ -n "$PONTO_EXISTING_AI_ENCRYPTION_KEY" ] && [ -z "$(env_value AI_ENCRYPTION_KEY "$ENV_FILE")" ]; then
-  sed -i "s|^AI_ENCRYPTION_KEY=.*|AI_ENCRYPTION_KEY=${PONTO_EXISTING_AI_ENCRYPTION_KEY}|" "$ENV_FILE.tmp"
+  # A chave nunca vai em argv (seria visível em ps/proc); é hex validada,
+  # por isso a substituição linha a linha em shell é suficiente.
+  : >"$ENV_FILE.tmp.key"
+  while IFS= read -r line; do
+    case "$line" in
+      AI_ENCRYPTION_KEY=*) printf 'AI_ENCRYPTION_KEY=%s\n' "$PONTO_EXISTING_AI_ENCRYPTION_KEY" ;;
+      *) printf '%s\n' "$line" ;;
+    esac
+  done <"$ENV_FILE.tmp" >"$ENV_FILE.tmp.key"
+  cat "$ENV_FILE.tmp.key" >"$ENV_FILE.tmp"
+  rm -f "$ENV_FILE.tmp.key"
 fi
 # Credenciais rclone exportadas no operador entram no .env gerado; o
 # db-backup só as usa quando BACKUP_REMOTE_ENABLED=true.
@@ -475,7 +485,13 @@ rm -f "$BOOTSTRAP_ENV"
 BOOTSTRAP_ENV=""
 
 backup_container="$(cd "$CLIENT_DIR" && docker compose ps -q db-backup 2>/dev/null || true)"
+# Não criar um dump extra quando já há um backup nas últimas 24h: reexecuções
+# idempotentes não mudaram dados e dumps extra competiam com a retenção diária.
+latest_backup=""
 if [ -n "$backup_container" ]; then
+  latest_backup="$(docker exec "$backup_container" sh -c "find /backups -maxdepth 1 -type f -name 'oficinaos-*.sql.gz' -mtime -1 -print -quit" 2>/dev/null || true)"
+fi
+if [ -n "$backup_container" ] && [ -z "$latest_backup" ]; then
   docker exec "$backup_container" bash /scripts/run-backup.sh >/dev/null 2>&1 ||
     echo "AVISO: o backup pós-bootstrap falhou; verificar db-backup." >&2
 fi

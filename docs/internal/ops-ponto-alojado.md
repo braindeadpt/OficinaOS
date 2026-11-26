@@ -110,6 +110,13 @@ são copiados para cada instância e ficam em:
 /opt/oficinaos-ponto/clientes/<slug>/scripts/
 ```
 
+Numa instância nova, a primeira execução do instalador termina primeiro o
+bootstrap — se ainda não houver dump restaurado, pode ser preciso um código de
+emparelhamento temporário. Só depois se restaura o dump e se começa a usar a
+instância; não fazer login nem marcações antes do restauro. Com o
+`AI_ENCRYPTION_KEY` original, o token Cloud restaurado volta a ser lido e uma
+nova execução do bootstrap passa a saltar o emparelhamento.
+
 Restauro manual, com a app parada:
 
 ```bash
