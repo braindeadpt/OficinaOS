@@ -1,0 +1,194 @@
+import type {
+  PontoInfoDeliveriesResponse,
+  PontoInfoDeliveryRowDTO,
+} from "@shared/types/ponto";
+import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router";
+import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import api from "@/lib/api";
+
+function todayYmd(): string {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
+}
+
+export default function TeamInfoSheets() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const [data, setData] = useState<PontoInfoDeliveriesResponse | null>(null);
+  const [editing, setEditing] = useState<PontoInfoDeliveryRowDTO | null>(null);
+  const [deliveredAt, setDeliveredAt] = useState(todayYmd());
+  const [signed, setSigned] = useState("no");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(false);
+
+  const load = useCallback(async () => {
+    const res = await api.get<PontoInfoDeliveriesResponse>(
+      "/ponto/info-deliveries"
+    );
+    setData(res.data);
+  }, []);
+
+  useEffect(() => {
+    load().catch(() => undefined);
+  }, [load]);
+
+  const open = (row: PontoInfoDeliveryRowDTO) => {
+    setEditing(row);
+    setDeliveredAt(row.delivery?.deliveredAt ?? todayYmd());
+    setSigned(row.delivery?.signed ? "yes" : "no");
+    setError(false);
+  };
+
+  const save = async () => {
+    if (!editing) {
+      return;
+    }
+    setBusy(true);
+    setError(false);
+    try {
+      await api.put(`/ponto/info-deliveries/${editing.userId}`, {
+        deliveredAt,
+        signed: signed === "yes",
+      });
+      setEditing(null);
+      await load();
+      window.dispatchEvent(new Event("ponto-info-deliveries-changed"));
+    } catch {
+      setError(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!data) {
+    return (
+      <div className="h-28 animate-pulse rounded-xl bg-surface-container-low" />
+    );
+  }
+
+  return (
+    <section className="rounded-2xl bg-surface-container-lowest p-5">
+      <div className="flex flex-wrap items-center gap-3">
+        <div>
+          <h2 className="font-bold text-on-surface text-sm">
+            {t("ponto.info_doc_title")}
+          </h2>
+          <p className="mt-1 text-on-surface-variant text-xs">
+            {t("ponto.sheet_missing_warning", {
+              count: data.missingActiveCount,
+            })}
+          </p>
+        </div>
+        <Button
+          className="ml-auto"
+          icon="print"
+          onClick={() => navigate("/ponto/info?all=1")}
+          size="sm"
+          type="button"
+          variant="secondary"
+        >
+          {t("ponto.sheet_print_all")}
+        </Button>
+      </div>
+      <div className="mt-4 divide-y divide-outline-variant">
+        {data.rows.map((row) => (
+          <div
+            className="flex flex-wrap items-center gap-3 py-3"
+            key={row.userId}
+          >
+            <div className="min-w-40">
+              <p className="font-medium text-sm">{row.name}</p>
+              <p className="text-on-surface-variant text-xs">@{row.username}</p>
+            </div>
+            <div className="text-sm">
+              {row.delivery ? (
+                <>
+                  {t("ponto.sheet_delivered_at")} {row.delivery.deliveredAt} ·{" "}
+                  {t("ponto.sheet_signed")}:{" "}
+                  {row.delivery.signed
+                    ? t("ponto.sheet_signed_yes")
+                    : t("ponto.sheet_signed_no")}
+                  <span className="block text-on-surface-variant text-xs">
+                    {t("ponto.sheet_registered_by", {
+                      name: row.delivery.registeredByName,
+                    })}
+                  </span>
+                </>
+              ) : (
+                <span className="text-error">
+                  {t("ponto.sheet_not_delivered")}
+                </span>
+              )}
+            </div>
+            <div className="ml-auto flex gap-2">
+              <Button
+                icon="print"
+                onClick={() => navigate(`/ponto/info?userId=${row.userId}`)}
+                size="sm"
+                type="button"
+                variant="secondary"
+              >
+                {t("ponto.sheet_print")}
+              </Button>
+              <Button onClick={() => open(row)} size="sm" type="button">
+                {t("ponto.sheet_register")}
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <Dialog
+        onClose={() => setEditing(null)}
+        open={editing !== null}
+        title={t("ponto.sheet_register")}
+      >
+        {editing && (
+          <div className="space-y-4">
+            <p className="font-medium text-sm">{editing.name}</p>
+            <Field label={t("ponto.sheet_delivered_at")}>
+              <Input
+                onChange={(e) => setDeliveredAt(e.target.value)}
+                type="date"
+                value={deliveredAt}
+              />
+            </Field>
+            <Field label={t("ponto.sheet_signed")}>
+              <Select
+                onChange={(e) => setSigned(e.target.value)}
+                value={signed}
+              >
+                <option value="yes">{t("ponto.sheet_signed_yes")}</option>
+                <option value="no">{t("ponto.sheet_signed_no")}</option>
+              </Select>
+            </Field>
+            {error && (
+              <p className="text-error text-sm">
+                {t("ponto.sheet_save_failed")}
+              </p>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button
+                onClick={() => setEditing(null)}
+                type="button"
+                variant="secondary"
+              >
+                {t("cancel")}
+              </Button>
+              <Button disabled={busy} onClick={save} type="button">
+                {t("ponto.sheet_save")}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Dialog>
+    </section>
+  );
+}

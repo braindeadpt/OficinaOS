@@ -8,6 +8,8 @@ import PontoInfoPage from "../info";
 
 const COMPANY_INTRO = /A empresa utiliza um sistema eletrónico/;
 const COMPANY_QR = /código QR afixado na empresa/;
+const COMPANY_NIF = /NIF: 501234567/;
+const COMPANY_ADDRESS = /Rua A, 1, Porto/;
 const REPAIR_WORDING = /\bloja\b|\boficina\b/i;
 
 function translate(key: string, options?: Record<string, unknown>): string {
@@ -40,9 +42,46 @@ vi.mock("@/lib/api", () => ({
       if (url === "/settings/shop") {
         return Promise.resolve({
           data: {
+            address: "Rua A, 1",
+            phone: "+351210000000",
             pontoInfoText: null,
+            shopLocality: "Porto",
             shopMode: "ponto_only",
             shopName: "",
+            shopTaxId: "501234567",
+          },
+        });
+      }
+      if (url === "/ponto/info-deliveries") {
+        return Promise.resolve({
+          data: {
+            missingActiveCount: 1,
+            rows: [
+              {
+                delivery: null,
+                isActive: true,
+                name: "Ana Silva",
+                pontoEnabled: true,
+                userId: "u1",
+                username: "ana",
+              },
+              {
+                delivery: null,
+                isActive: true,
+                name: "Bruno Costa",
+                pontoEnabled: true,
+                userId: "u2",
+                username: "bruno",
+              },
+              {
+                delivery: null,
+                isActive: false,
+                name: "Carla Inativa",
+                pontoEnabled: true,
+                userId: "u3",
+                username: "carla",
+              },
+            ],
           },
         });
       }
@@ -50,6 +89,8 @@ vi.mock("@/lib/api", () => ({
     }),
   },
 }));
+
+window.print = vi.fn();
 
 describe("PontoInfoPage em entrada direta", () => {
   it("usa a terminologia de empresa mesmo com a store de modo ainda vazia", async () => {
@@ -62,5 +103,35 @@ describe("PontoInfoPage em entrada direta", () => {
     expect(await screen.findByText(COMPANY_INTRO)).toBeInTheDocument();
     expect(screen.getByText(COMPANY_QR)).toBeInTheDocument();
     expect(container.textContent).not.toMatch(REPAIR_WORDING);
+  });
+
+  it("preenche automaticamente a empresa e o nome do trabalhador na folha individual", async () => {
+    render(
+      <MemoryRouter initialEntries={["/ponto/info?userId=u1"]}>
+        <PontoInfoPage />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText(COMPANY_NIF)).toBeInTheDocument();
+    expect(screen.getByText(COMPANY_ADDRESS)).toBeInTheDocument();
+    expect(screen.getByText("Ana Silva")).toBeInTheDocument();
+    expect(
+      screen.getByText("Modelo — em revisão jurídica.")
+    ).toBeInTheDocument();
+  });
+
+  it("imprime uma folha por trabalhador ativo do ponto em modo em lote", async () => {
+    render(
+      <MemoryRouter initialEntries={["/ponto/info?all=1"]}>
+        <PontoInfoPage />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText("Ana Silva")).toBeInTheDocument();
+    expect(screen.getByText("Bruno Costa")).toBeInTheDocument();
+    expect(screen.queryByText("Carla Inativa")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Modelo — em revisão jurídica.")).toHaveLength(
+      2
+    );
   });
 });

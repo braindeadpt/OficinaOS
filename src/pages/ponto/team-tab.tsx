@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import type { PontoUserPayload } from "@/stores/users";
 import { useUsersStore } from "@/stores/users";
+import TeamInfoSheets from "./team-info-sheets";
 
 interface EditState {
   externalWork: boolean;
@@ -273,6 +274,7 @@ export default function TeamTab() {
           </div>
         )}
       </Dialog>
+      <TeamInfoSheets />
     </div>
   );
 }
