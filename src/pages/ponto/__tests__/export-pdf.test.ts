@@ -19,7 +19,6 @@ vi.mock("jspdf", () => ({ default: pdfMocks.JsPdf }));
 vi.mock("jspdf-autotable", () => ({ default: pdfMocks.autoTable }));
 
 const { downloadPdf } = await import("../export-tab");
-const { formatClock, formatMinutes } = await import("../shared");
 
 const t = ((key: string) => key) as TFunction;
 
@@ -28,38 +27,53 @@ describe("downloadPdf do ponto", () => {
     const data: PontoHoursResponse = {
       days: [
         {
-          date: "2026-01-15",
+          date: "2026-06-15",
           hours: {
             earlyExitMinutes: 12,
-            firstEntradaAt: "2026-01-15T09:30:00.000Z",
+            firstEntradaAt: "2026-06-15T09:30:00.000Z",
             hasCorrection: true,
-            lastSaidaAt: "2026-01-15T17:00:00.000Z",
+            lastSaidaAt: "2026-06-15T17:00:00.000Z",
             lateMinutes: 30,
             missingExit: false,
-            recusadoCount: 1,
+            recusadoCount: 0,
             workedMinutes: 450,
           },
           userId: "u1",
           userName: "Ana",
         },
         {
-          date: "2026-01-16",
+          date: "2026-06-16",
           hours: {
             earlyExitMinutes: 0,
-            firstEntradaAt: "2026-01-16T09:00:00.000Z",
+            firstEntradaAt: "2026-06-16T09:00:00.000Z",
             hasCorrection: false,
-            lastSaidaAt: null,
+            lastSaidaAt: "2026-06-16T17:00:00.000Z",
             lateMinutes: 0,
-            missingExit: true,
-            recusadoCount: 0,
+            missingExit: false,
+            recusadoCount: 1,
             workedMinutes: 240,
           },
           userId: "u1",
           userName: "Ana",
         },
+        {
+          date: "2026-06-17",
+          hours: {
+            earlyExitMinutes: 0,
+            firstEntradaAt: "2026-06-17T09:00:00.000Z",
+            hasCorrection: false,
+            lastSaidaAt: null,
+            lateMinutes: 0,
+            missingExit: true,
+            recusadoCount: 0,
+            workedMinutes: 120,
+          },
+          userId: "u1",
+          userName: "Ana",
+        },
       ],
-      from: "2026-01-01",
-      to: "2026-01-31",
+      from: "2026-06-01",
+      to: "2026-06-30",
     };
 
     await downloadPdf(data, "Livro de ponto", "Europe/Lisbon", "pt", t);
@@ -82,31 +96,12 @@ describe("downloadPdf do ponto", () => {
       "ponto.pdf_col_corrected",
     ]);
     expect(options.body).toEqual([
-      [
-        "2026-01-15",
-        "Ana",
-        formatMinutes(450),
-        formatClock("2026-01-15T09:30:00.000Z", "pt", "Europe/Lisbon"),
-        formatClock("2026-01-15T17:00:00.000Z", "pt", "Europe/Lisbon"),
-        "",
-        "30m",
-        "12m",
-        "X",
-      ],
-      [
-        "2026-01-16",
-        "Ana",
-        formatMinutes(240),
-        formatClock("2026-01-16T09:00:00.000Z", "pt", "Europe/Lisbon"),
-        "—",
-        "!",
-        "",
-        "",
-        "",
-      ],
+      ["2026-06-15", "Ana", "7h30", "10:30", "18:00", "", "30m", "12m", "X"],
+      ["2026-06-16", "Ana", "4h00", "10:00", "18:00", "", "", "", "X"],
+      ["2026-06-17", "Ana", "2h00", "10:00", "—", "!", "", "", ""],
     ]);
     expect(pdfMocks.save).toHaveBeenCalledWith(
-      "ponto-2026-01-01_2026-01-31.pdf"
+      "ponto-2026-06-01_2026-06-30.pdf"
     );
   });
 });
