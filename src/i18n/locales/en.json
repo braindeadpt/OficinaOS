@@ -3161,9 +3161,14 @@
     "pii_badge": "personal data visible",
     "show_pii_label": "Show personal data (phone, email, tax ID) unmasked",
     "pii_warning_title": "GDPR warning — personal data leaves the shop",
-    "pii_warning_body": "With this option, customer names, phone numbers, emails and tax IDs are sent in full to the LLM provider you use (Anthropic, OpenAI, …). You remain responsible for this processing under the GDPR. Leave it off unless you really need it — masked data is enough for most questions.",
+    "pii_warning_body": "With this option, customer phone numbers, emails and tax IDs are sent in full to the provider of the LLM you use (Anthropic, OpenAI, …). You remain responsible for this processing under the GDPR. Keep it off unless strictly needed — masked data is enough for most questions.",
     "pii_ack_label": "I understand personal data will be sent to the LLM provider",
     "pii_ack_required": "Confirm the GDPR warning to create a token with personal data visible.",
-    "config_hint": "Replace <TOKEN> with the token you created. In Docker, use the docker compose exec command from docs/mcp.md. Restart the client after saving the configuration."
+    "config_hint": "Replace <TOKEN> with the token you created. In Docker, use the docker compose exec command from docs/mcp.md. Restart the client after saving the configuration.",
+    "rgpd_base_title": "GDPR notice",
+    "rgpd_base_body": "Anything the assistant queries (customer names, devices, repairs, amounts) is sent to the provider of the LLM you use. Phone, email and tax ID go masked. If you use a local model (e.g. LM Studio), the data never leaves this computer. You are responsible for this processing under the GDPR.",
+    "admin_title": "MCP tokens from all users",
+    "admin_subtitle": "Owner supervision: each user creates their tokens in their profile; here you see them all and can revoke them.",
+    "no_tokens": "No tokens created yet."
   }
 }

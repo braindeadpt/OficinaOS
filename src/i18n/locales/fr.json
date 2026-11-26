@@ -3161,9 +3161,14 @@
     "pii_badge": "données personnelles visibles",
     "show_pii_label": "Afficher les données personnelles (téléphone, email, NIF) sans masque",
     "pii_warning_title": "Avertissement RGPD — les données personnelles quittent le magasin",
-    "pii_warning_body": "Avec cette option, les noms, téléphones, emails et NIF des clients sont envoyés en clair au fournisseur du LLM que vous utilisez (Anthropic, OpenAI, …). Vous restez responsable de ce traitement au titre du RGPD. Laissez désactivé sauf si nécessaire — les données masquées suffisent pour la plupart des questions.",
+    "pii_warning_body": "Avec cette option, les téléphones, e-mails et NIF des clients sont envoyés en clair au fournisseur du LLM que vous utilisez (Anthropic, OpenAI, …). Vous restez responsable de ce traitement au titre du RGPD. Laissez désactivé sauf si vraiment nécessaire — les données masquées suffisent pour la plupart des questions.",
     "pii_ack_label": "Je comprends que les données personnelles seront envoyées au fournisseur du LLM",
     "pii_ack_required": "Confirmez l'avertissement RGPD pour créer un jeton avec données personnelles visibles.",
-    "config_hint": "Remplacez <TOKEN> par le jeton créé. Sous Docker, utilisez la commande docker compose exec de docs/mcp.md. Redémarrez le client après avoir enregistré la configuration."
+    "config_hint": "Remplacez <TOKEN> par le jeton créé. Sous Docker, utilisez la commande docker compose exec de docs/mcp.md. Redémarrez le client après avoir enregistré la configuration.",
+    "rgpd_base_title": "Avis RGPD",
+    "rgpd_base_body": "Tout ce que l'assistant consulte (noms des clients, appareils, réparations, montants) est envoyé au fournisseur du LLM que vous utilisez. Téléphone, e-mail et NIF sont masqués. Si vous utilisez un modèle local (ex. LM Studio), les données ne quittent pas cet ordinateur. Vous êtes responsable de ce traitement au titre du RGPD.",
+    "admin_title": "Jetons MCP de tous les utilisateurs",
+    "admin_subtitle": "Supervision du propriétaire : chaque utilisateur crée ses jetons dans son profil ; ici vous les voyez tous et pouvez les révoquer.",
+    "no_tokens": "Aucun jeton créé pour le moment."
   }
 }

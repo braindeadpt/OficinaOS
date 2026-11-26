@@ -26,6 +26,7 @@ function serialize(t: {
   lastUsedAt: Date | null;
   revokedAt: Date | null;
   createdAt: Date;
+  user?: { name: string; username: string | null } | null;
 }) {
   return {
     id: t.id,
@@ -36,6 +37,8 @@ function serialize(t: {
     lastUsedAt: t.lastUsedAt,
     revoked: t.revokedAt !== null,
     createdAt: t.createdAt,
+    userName: t.user?.name,
+    userUsername: t.user?.username,
   };
 }
 
@@ -52,6 +55,20 @@ export const mcpTokenRoutes: FastifyPluginAsync = async (app) => {
     const userId = requireUserId(req);
     const rows = await app.prisma.mcpToken.findMany({
       where: { userId },
+      orderBy: { createdAt: "desc" },
+    });
+    return rows.map(serialize);
+  });
+
+  // Vista de administração: o dono vê os tokens de TODOS os utilizadores
+  // (decisão do mentor — qualquer utilizador gere os seus; o dono supervisiona).
+  app.get("/all", async (req) => {
+    requireUserId(req);
+    if (req.user?.role !== "OWNER") {
+      throw new AppError("FORBIDDEN");
+    }
+    const rows = await app.prisma.mcpToken.findMany({
+      include: { user: { select: { name: true, username: true } } },
       orderBy: { createdAt: "desc" },
     });
     return rows.map(serialize);
@@ -85,9 +102,11 @@ export const mcpTokenRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete("/:id", async (req) => {
     const { id } = req.params as { id: string };
-    const row = await app.prisma.mcpToken.findFirst({
-      where: { id, userId: requireUserId(req) },
-    });
+    const userId = requireUserId(req);
+    // Um utilizador nunca revoga os tokens de outro — exceto o dono, que
+    // supervisiona todos (decisão do mentor).
+    const where = req.user?.role === "OWNER" ? { id } : { id, userId };
+    const row = await app.prisma.mcpToken.findFirst({ where });
     if (!row) {
       throw new AppError("NOT_FOUND");
     }

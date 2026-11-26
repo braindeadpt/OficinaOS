@@ -372,6 +372,8 @@ describe("route classification — every /api route is decided", () => {
     "GET /api/purchase-orders",
     "GET /api/loaners",
     "GET /api/mcp/tokens",
+    "GET /api/mcp/tokens/all",
+    "HEAD /api/mcp/tokens/all",
     "GET /api/mcp/tokens/",
     "HEAD /api/mcp/tokens",
     "HEAD /api/mcp/tokens/",

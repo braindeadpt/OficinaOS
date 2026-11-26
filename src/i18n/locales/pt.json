@@ -3161,9 +3161,14 @@
     "pii_badge": "dados pessoais visíveis",
     "show_pii_label": "Mostrar dados pessoais (telefone, email, NIF) sem máscara",
     "pii_warning_title": "Aviso RGPD — os dados pessoais saem da loja",
-    "pii_warning_body": "Com esta opção, nomes, telefones, emails e NIFs dos clientes são enviados por inteiro para o fornecedor do LLM que usar (Anthropic, OpenAI, …). Continua a ser responsável por este tratamento ao abrigo do RGPD. Deixe desligado salvo se for mesmo preciso — os dados mascarados chegam para a maioria das perguntas.",
+    "pii_warning_body": "Com esta opção, telefones, emails e NIFs dos clientes são enviados por inteiro para o fornecedor do LLM que usar (Anthropic, OpenAI, …). Continua a ser responsável por este tratamento ao abrigo do RGPD. Deixe desligado salvo se for mesmo preciso — os dados mascarados chegam para a maioria das perguntas.",
     "pii_ack_label": "Compreendo que os dados pessoais vão ser enviados para o fornecedor do LLM",
     "pii_ack_required": "Confirme o aviso RGPD para criar um token com dados pessoais visíveis.",
-    "config_hint": "Substitua <TOKEN> pelo token que criou. Em Docker, use o comando docker compose exec de docs/mcp.md. Reinicie o cliente depois de guardar a configuração."
+    "config_hint": "Substitua <TOKEN> pelo token que criou. Em Docker, use o comando docker compose exec de docs/mcp.md. Reinicie o cliente depois de guardar a configuração.",
+    "rgpd_base_title": "Aviso RGPD",
+    "rgpd_base_body": "O que o assistente consultar (nomes de clientes, equipamentos, reparações, valores) é enviado para o fornecedor do LLM que usar. Telefone, email e NIF vão mascarados. Se usar um modelo local (ex.: LM Studio), os dados não saem deste computador. É responsável por este tratamento ao abrigo do RGPD.",
+    "admin_title": "Tokens MCP de todos os utilizadores",
+    "admin_subtitle": "Supervisão do dono: cada utilizador cria os seus tokens no perfil; aqui vê todos e pode revogá-los.",
+    "no_tokens": "Ainda não há tokens criados."
   }
 }

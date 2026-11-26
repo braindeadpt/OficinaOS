@@ -3161,9 +3161,14 @@
     "pii_badge": "datos personales visibles",
     "show_pii_label": "Mostrar datos personales (teléfono, email, NIF) sin máscara",
     "pii_warning_title": "Aviso RGPD — los datos personales salen de la tienda",
-    "pii_warning_body": "Con esta opción, nombres, teléfonos, emails y NIF de los clientes se envían completos al proveedor del LLM que uses (Anthropic, OpenAI, …). Sigues siendo responsable de este tratamiento según el RGPD. Déjalo apagado salvo que sea necesario — los datos enmascarados bastan para la mayoría de las preguntas.",
+    "pii_warning_body": "Con esta opción, teléfonos, emails y NIF de los clientes se envían completos al proveedor del LLM que uses (Anthropic, OpenAI, …). Sigues siendo responsable de este tratamiento conforme al RGPD. Déjalo apagado salvo que sea imprescindible — los datos enmascarados bastan para la mayoría de las preguntas.",
     "pii_ack_label": "Entiendo que los datos personales se enviarán al proveedor del LLM",
     "pii_ack_required": "Confirma el aviso RGPD para crear un token con datos personales visibles.",
-    "config_hint": "Sustituye <TOKEN> por el token que creaste. En Docker, usa el comando docker compose exec de docs/mcp.md. Reinicia el cliente después de guardar la configuración."
+    "config_hint": "Sustituye <TOKEN> por el token que creaste. En Docker, usa el comando docker compose exec de docs/mcp.md. Reinicia el cliente después de guardar la configuración.",
+    "rgpd_base_title": "Aviso RGPD",
+    "rgpd_base_body": "Todo lo que el asistente consulte (nombres de clientes, equipos, reparaciones, importes) se envía al proveedor del LLM que uses. Teléfono, email y NIF van enmascarados. Si usas un modelo local (p. ej. LM Studio), los datos no salen de este ordenador. Eres responsable de este tratamiento conforme al RGPD.",
+    "admin_title": "Tokens MCP de todos los usuarios",
+    "admin_subtitle": "Supervisión del dueño: cada usuario crea sus tokens en su perfil; aquí los ves todos y puedes revocarlos.",
+    "no_tokens": "Todavía no hay tokens creados."
   }
 }

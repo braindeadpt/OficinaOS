@@ -11,7 +11,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import SettingsAiInboxSection from "@/components/modules/settings/settings-ai-inbox-section";
-import SettingsMcpLocalSection from "@/components/modules/settings/settings-mcp-local-section";
+import SettingsMcpAdminSection from "@/components/modules/settings/settings-mcp-local-section";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -923,7 +923,7 @@ export default function SettingsAiTab({
 
       {/* «Ligar o seu LLM» — MCP grátis SÓ DE LEITURA, local (#74):
           sempre visível, sem depender da Cloud. */}
-      <SettingsMcpLocalSection />
+      <SettingsMcpAdminSection />
 
       {deleteTarget && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-overlay">
