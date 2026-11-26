@@ -74,6 +74,21 @@ beforeEach(() => {
 });
 
 describe("createSignatureSession", () => {
+  it("stores the server-resolved terms provenance with the frozen session", async () => {
+    const prisma = mockPrisma();
+    const updatedAt = new Date("2026-11-20T10:00:00Z");
+    await createSignatureSession(prisma, DOC, { updatedAt, version: 7 });
+
+    expect(prisma.signatureSession.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          intakeTermsUpdatedAt: updatedAt,
+          intakeTermsVersion: 7,
+        }),
+      })
+    );
+  });
+
   it("creates a session with a 64-hex token and a future expiry", async () => {
     const prisma = mockPrisma();
     const result = await createSignatureSession(prisma, DOC);

@@ -57,7 +57,10 @@ describe("GET /settings/intake-terms", () => {
     const res = await app.inject({ url: "/api/settings/intake-terms" });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ intakeTerms: SHOP_ROW.intakeTerms });
+    expect(res.json()).toEqual({
+      intakeTerms: SHOP_ROW.intakeTerms,
+      intakeTermsVersion: 1,
+    });
     // Scoped to jobs:create — the full settings payload stays owner-only.
     expect(permissionChecks[0]?.body.permissions).toEqual({
       jobs: ["create"],
@@ -70,7 +73,10 @@ describe("GET /settings/intake-terms", () => {
     const res = await app.inject({ url: "/api/settings/intake-terms" });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ intakeTerms: SHOP_ROW.intakeTerms });
+    expect(res.json()).toEqual({
+      intakeTerms: SHOP_ROW.intakeTerms,
+      intakeTermsVersion: 1,
+    });
     await app.close();
   });
 
@@ -87,7 +93,7 @@ describe("GET /settings/intake-terms", () => {
     const res = await app.inject({ url: "/api/settings/intake-terms" });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ intakeTerms: null });
+    expect(res.json()).toEqual({ intakeTerms: null, intakeTermsVersion: 1 });
     await app.close();
   });
 });

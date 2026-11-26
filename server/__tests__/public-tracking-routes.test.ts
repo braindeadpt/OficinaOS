@@ -1,4 +1,5 @@
 import { isAppError } from "@shared/errors/app-error.js";
+import { buildIntakeDocument } from "@shared/intake-document.js";
 import Fastify from "fastify";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { intakeRequestsRoutes } from "../routes/intake-requests.js";
@@ -54,7 +55,9 @@ vi.mock("../services/signature-session.service.js", () => ({
   getSignatureSession: mocks.getSignatureSession,
 }));
 
-function buildApp() {
+function buildApp(
+  shopSettings: Record<string, unknown> = { shopMode: "repair_shop" }
+) {
   const app = Fastify();
 
   app.setErrorHandler((error, _request, reply) => {
@@ -72,7 +75,7 @@ function buildApp() {
 
   (app.decorate as (name: string, value: unknown) => void)("prisma", {
     shopSettings: {
-      findUnique: vi.fn().mockResolvedValue({ shopMode: "repair_shop" }),
+      findUnique: vi.fn().mockResolvedValue(shopSettings),
     },
     codeLockout: {
       findUnique: vi.fn().mockResolvedValue(null),
@@ -380,6 +383,50 @@ describe("public signature endpoints", () => {
       TOKEN,
       "data:image/png;base64,AAAA",
       expect.objectContaining({ ip: expect.any(String) })
+    );
+  });
+
+  it("POST /api/sign-sessions ignores forged terms and freezes the shop text", async () => {
+    const updatedAt = new Date("2026-11-20T10:00:00Z");
+    const app = buildApp({
+      intakeTerms: "Termos legais resolvidos no servidor",
+      intakeTermsUpdatedAt: updatedAt,
+      intakeTermsVersion: 8,
+      shopMode: "repair_shop",
+    });
+    app.addHook("preHandler", (req, _reply, done) => {
+      req.user = { id: "staff-1", role: "OWNER" } as never;
+      done();
+    });
+    mocks.createSignatureSession.mockResolvedValue({
+      expiresAt: new Date(),
+      token: TOKEN,
+    });
+    const forged = buildIntakeDocument(
+      {
+        customerName: "Maria Silva",
+        customerPhone: "912345678",
+        deviceBrand: "Apple",
+        deviceModel: "iPhone 14",
+        reportedProblem: "Ecrã partido",
+      },
+      "TERMOS FALSIFICADOS",
+      "pt"
+    );
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/sign-sessions",
+      payload: { document: forged },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mocks.createSignatureSession).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        termsText: "Termos legais resolvidos no servidor",
+      }),
+      { updatedAt, version: 8 }
     );
   });
 

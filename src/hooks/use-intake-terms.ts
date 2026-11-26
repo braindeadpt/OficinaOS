@@ -10,16 +10,22 @@ import api from "@/lib/api";
  * edited on another workstation at any time, so every intake opening
  * queries the server and the result is frozen only for that intake.
  */
-function loadIntakeTerms(): Promise<string | null> {
-  return api
-    .get("/settings/intake-terms")
-    .then((res) =>
-      typeof res.data?.intakeTerms === "string" ? res.data.intakeTerms : null
-    );
+function loadIntakeTerms(): Promise<{ terms: string | null; version: number }> {
+  return api.get("/settings/intake-terms").then((res) => ({
+    terms:
+      typeof res.data?.intakeTerms === "string" ? res.data.intakeTerms : null,
+    version:
+      typeof res.data?.intakeTermsVersion === "number"
+        ? res.data.intakeTermsVersion
+        : 1,
+  }));
 }
 
 /** Fresh terms for the next intake — always queries the server. */
-export function fetchIntakeTerms(): Promise<string | null> {
+export function fetchIntakeTerms(): Promise<{
+  terms: string | null;
+  version: number;
+}> {
   return loadIntakeTerms();
 }
 
@@ -36,6 +42,7 @@ export interface IntakeTermsSession {
    * default; a string is the shop's custom clauses.
    */
   terms: string | null | undefined;
+  version: number | undefined;
 }
 
 /**
@@ -48,7 +55,8 @@ export function useIntakeTermsSession(active: boolean): IntakeTermsSession {
   const [state, setState] = useState<{
     failed: boolean;
     terms: string | null | undefined;
-  }>({ failed: false, terms: undefined });
+    version: number | undefined;
+  }>({ failed: false, terms: undefined, version: undefined });
   // Monotonic request id — a stale response (closed intake, superseded retry)
   // must never overwrite newer state.
   const requestSeq = useRef(0);
@@ -58,12 +66,16 @@ export function useIntakeTermsSession(active: boolean): IntakeTermsSession {
     fetchIntakeTerms()
       .then((value) => {
         if (requestSeq.current === seq) {
-          setState({ failed: false, terms: value });
+          setState({
+            failed: false,
+            terms: value.terms,
+            version: value.version,
+          });
         }
       })
       .catch(() => {
         if (requestSeq.current === seq) {
-          setState({ failed: true, terms: undefined });
+          setState({ failed: true, terms: undefined, version: undefined });
         }
       });
   }, []);
@@ -71,16 +83,21 @@ export function useIntakeTermsSession(active: boolean): IntakeTermsSession {
   useEffect(() => {
     if (!active) {
       requestSeq.current += 1;
-      setState({ failed: false, terms: undefined });
+      setState({ failed: false, terms: undefined, version: undefined });
       return;
     }
     run();
   }, [active, run]);
 
   const retry = useCallback(() => {
-    setState({ failed: false, terms: undefined });
+    setState({ failed: false, terms: undefined, version: undefined });
     run();
   }, [run]);
 
-  return { failed: state.failed, retry, terms: state.terms };
+  return {
+    failed: state.failed,
+    retry,
+    terms: state.terms,
+    version: state.version,
+  };
 }
