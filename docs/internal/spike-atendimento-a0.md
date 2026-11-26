@@ -27,7 +27,7 @@ reais. Resultados:
 | 10 instâncias criadas (à espera de QR, com websocket ligado aos servidores WhatsApp) | 255 MB (+3 MB/instância) |
 | 50 instâncias | 286 MB (**+1,2 MB/instância** sobre o base) |
 | CPU com 50 instâncias em espera | ~2 % |
-| Restart do contentor | as 50 instâncias **sobrevivem** (persistidas em Postgres) e retomam a ligação sozinhas, sem novo QR — confirma o essencial para operação |
+| Restart do contentor | as 50 instâncias **sobrevivem** (persistidas em Postgres) e voltam ao estado de ligação sozinhas. ⚠️ Prova apenas a persistência do *registo* e a retoma de sessões **não emparelhadas** — se um número já ligado retoma as mensagens após restart sem novo QR **não foi testado** (exige número real) e é verificação obrigatória do piloto |
 | RSS após o restart (50 instâncias a religarem-se) | 326 MB — cresceu ~40 MB no churn, consistente com os relatos de leak (ver riscos) |
 
 **Leitura honesta:** o plano de gestão (criar, guardar, vigiar instâncias) é barato — cêntimos de
@@ -55,13 +55,18 @@ não podemos medir sem ligar um número real. Para esse custo usamos números pu
 
 Referências: CX22 2vCPU/4 GB €4,49; CX32 4vCPU/8 GB €8,49; CX43 8vCPU/16 GB €15,99
 ([cloudtally.eu, verificado 2026-11-10](https://cloudtally.eu/hetzner-cloud-prices), consultado 2026-11-26).
-Contas com 150 MB/sessão e ~50 % de margem para picos/leak — **só servidor, sem custo operacional**:
+Contas: consumo cru de 120 MB/sessão (meio do intervalo publicado em uso moderado) + 1 GB fixo,
+e dimensionamento com **~50 % de margem** para picos e leak — **só servidor, sem custo operacional**:
 
-| Clientes | RAM estimada | Servidor | Custo/mês | Por cliente/mês |
-|---|---|---|---|---|
-| 10 | 1 GB + 1,5 GB ≈ 2,5 GB | CX22 (4 GB) €4,49 | ~€4,50 | **~€0,45** |
-| 50 | 1 GB + 7,5 GB ≈ 8,5 GB | CX43 (16 GB) €15,99 | ~€16 | **~€0,32** |
-| 200 | 1 GB + 30 GB ≈ 31 GB | 2× CX43 + sharding | ~€32–40 | **~€0,16–0,20** |
+| Clientes | RAM crua | Com margem ×1,5 | Servidor | Custo/mês | Por cliente/mês |
+|---|---|---|---|---|---|
+| 10 | 1 + 1,2 ≈ 2,2 GB | 3,3 GB | CX22 (4 GB) €4,49 | ~€4,50 | **~€0,45** |
+| 50 | 1 + 6 ≈ 7 GB | 10,5 GB | CX43 (16 GB) €15,99 | ~€16 | **~€0,32** |
+| 200 | 1 + 24 ≈ 25 GB | 37,5 GB | 3× CX43 (48 GB) com sharding | ~€48 | **~€0,24** |
+
+Nota de honestidade nas contas: se as sessões em uso moderado ficarem no topo do intervalo
+publicado (200 MB em vez de 120 MB), o cenário de 200 clientes sobe para 4 hosts; a margem de
+50 % cobre o meio do intervalo, não o pior caso. É mais uma razão para medir RAM real no piloto.
 
 Aos preços comerciais do plano (dezenas de €/mês por cliente), o custo de infraestrutura WhatsApp é
 **irrelevante** — o custo real desta opção não é dinheiro, é risco (ver abaixo).
@@ -82,7 +87,8 @@ A parte mais importante do spike:
    `401` = sessão revogada (não religa — novo QR); `440` = dois processos com a mesma sessão;
    `515` = reset esperado após QR (religa só); `408` = timeout. A v2.3.7 tinha um bug de ~50 min
    `stream errored out` **corrigido na v2.3.8** — correr sempre a versão corrigida.
-3. **Persistência confirmada no nosso teste** (restart não perde sessões — desde que em Postgres).
+3. **Persistência de registo confirmada no nosso teste** (restart não perde instâncias — desde que
+   em Postgres); a retoma de sessões **emparelhadas** sem novo QR resta por provar no piloto.
 4. Sessões que caem para `connecting` sem emparelhar acumulam leak de memória (issue #2752) —
    operação tem de limpar/expirar sessões nunca emparelhadas.
 
@@ -148,7 +154,7 @@ resposta certa aparece no **top-3** (o que o assistente usaria).
 | **trigram na pergunta+resposta** | 29 | **38** | **95 %** |
 | trigram + fts híbrido | 32 | 36 | 90 % |
 | word_similarity (pg_trgm) q+a | 32 | 37 | 92 % |
-| trigram q+a com boost na pergunta | **35** | 36 | 90 % |
+| trigram q+a com boost na pergunta | **35** | 36 | 90 % |  ← melhor hit@1, pior top-3: o boost reordena mas expulsa candidatas certas do top-3
 
 ### Onde falha — e porquê
 
@@ -173,10 +179,12 @@ pgvector cobre** — embeddings capturam "cão ≈ animais", "sem marcar ≈ urg
 
 ### Recomendação (pergunta 2)
 
-**Chega sem pgvector para o MVP (A1–A3): trigram `pg_trgm` sobre pergunta+resposta, com boost na
-pergunta** (melhor hit@1: 87,5 %, top-3: 90–95 %). Custa zero de infraestrutura nova (já temos
-Postgres), indexa com `gin_trgm_ops`, e os erros residuais são semanticamente "impossíveis" para
-qualquer método lexical — não vale a pena afinar mais sem vetores.
+**Chega sem pgvector para o MVP (A1–A3): trigram `pg_trgm` simples sobre pergunta+resposta** —
+95 % de top-3 no benchmark. Como `procurar_faq` devolve 3 candidatas ao LLM, o que conta é o
+top-3, e aí a variante simples ganha à variante com boost na pergunta (38/40 contra 36/40; o boost
+melhora o hit@1 — 35/40 — mas o top-1 é irrelevante quando o LLM lê as três). Custa zero de
+infraestrutura nova (já temos Postgres), indexa com `gin_trgm_ops`, e os erros residuais são
+semanticamente "impossíveis" para qualquer método lexical — não vale a pena afinar mais sem vetores.
 
 **pgvector fica como upgrade decidido por dados:** se no piloto as falhas de FAQ forem visíveis
 (>5–10 % das conversas a cair em `pedir_humano` por falta de match), o custo de adicionar a extensão
@@ -240,7 +248,7 @@ fica fora do A4 exceto se o mentor decidir o contrário.
 | Pergunta | Recomendação | Confiança |
 |---|---|---|
 | 1. Evolution multi-sessão | **Avançar** para piloto; custo ~€0,16–0,45/cliente/mês; risco de banimento declarado no contrato; oficial Meta como upgrade no A5; medir RAM real de sessões emparelhadas no A3 | Média-alta (evidência própria + publicada) |
-| 2. procurar_faq | **Sem pgvector**: trigram sobre pergunta+resposta com boost na pergunta; pgvector como upgrade decidido por dados do piloto | Alta no mecanismo; média nos números (dataset sintético) |
+| 2. procurar_faq | **Sem pgvector**: trigram simples sobre pergunta+resposta (95 % top-3); pgvector como upgrade decidido por dados do piloto | Alta no mecanismo; média nos números (dataset sintético) |
 | 3. Google Places | **Proibido** pré-preencher a partir do perfil público. Fonte = site da empresa + perguntas; GBP API do próprio dono como caminho legal posterior | Alta (texto dos termos é explícito) |
 
 ### Estimativa de esforço do A1 (modelo de dados + BusinessProfile + consola com ficha editável à mão)
