@@ -50,6 +50,9 @@ describe("bootstrapPontoHosted", () => {
         if (url.endsWith("/api/auth/sign-in/email")) {
           return jsonResponse({ ok: true }, 200, ["session=xyz; Path=/"]);
         }
+        if (url.endsWith("/api/settings/shop")) {
+          return jsonResponse({ shopMode: "ponto_only" });
+        }
         if (url.endsWith("/api/settings/cloud/pair")) {
           cloudPaired = true;
           return jsonResponse({ paired: true });
@@ -101,6 +104,9 @@ describe("bootstrapPontoHosted", () => {
         }
         if (url.endsWith("/api/auth/sign-in/email")) {
           return jsonResponse({ ok: true }, 200, ["session=xyz; Path=/"]);
+        }
+        if (url.endsWith("/api/settings/shop")) {
+          return jsonResponse({ shopMode: "ponto_only" });
         }
         if (url.endsWith("/api/settings/cloud")) {
           return jsonResponse({ paired: true });

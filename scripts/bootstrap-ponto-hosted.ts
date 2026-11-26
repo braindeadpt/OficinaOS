@@ -185,6 +185,15 @@ export async function bootstrapPontoHosted(
     );
   }
 
+  const shopSettings = await api("/api/settings/shop");
+  const actualMode = (shopSettings.body as { shopMode?: unknown } | null)
+    ?.shopMode;
+  if (shopSettings.ok && actualMode !== options.shopMode) {
+    throw new Error(
+      `a imagem instalada não aplicou shopMode=${options.shopMode} (atual: ${String(actualMode)}) — atualize PONTO_IMAGE antes de emparelhar`
+    );
+  }
+
   const cloudBefore = await api("/api/settings/cloud");
   if (!cloudBefore.ok) {
     throw new Error(
