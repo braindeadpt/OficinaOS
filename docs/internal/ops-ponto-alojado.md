@@ -220,7 +220,8 @@ BACKUP_S3_ACCESS_KEY_ID=<access-key>
 BACKUP_S3_SECRET_ACCESS_KEY=<secret-key>
 # Estas credenciais precisam de leitura e também de escrita só para publicar
 # restore-check-status/last-restore-check.txt e a respetiva assinatura .minisig
-# (se limitares por prefixo, usa restore-check-status/last-restore-check.txt*).
+# (se limitares por prefixo no bucket inteiro, inclui o prefixo do cliente:
+# clientes/<slug>/restore-check-status/last-restore-check.txt*).
 PGHOST=<postgres-temporario>
 PGPORT=5432
 PGUSER=<utilizador>

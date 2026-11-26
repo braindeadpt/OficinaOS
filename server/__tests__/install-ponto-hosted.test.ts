@@ -174,17 +174,20 @@ describe("install-ponto-hosted.sh", () => {
       mkdirSync(binDir);
       writeFakeDocker(binDir);
 
+      const clientDir = join(root, "clientes", "empresa-teste");
+      mkdirSync(clientDir, { recursive: true });
+      const envPath = join(clientDir, ".env");
+      const existingEnv =
+        "POSTGRES_PASSWORD=existente\nBACKUP_RCLONE_REMOTE=legado:\n";
+      writeFileSync(envPath, existingEnv);
+
       const result = runInstaller(root, binDir, {
         BACKUP_S3_SECRET_ACCESS_KEY: "",
       });
 
       expect(result.status).not.toBe(0);
       expect(result.stderr).toContain("configuração S3 parcial");
-      const envText = readFileSync(
-        join(root, "clientes", "empresa-teste", ".env"),
-        "utf8"
-      );
-      expect(envText).not.toContain("BACKUP_S3_BUCKET=backups-teste");
+      expect(readFileSync(envPath, "utf8")).toBe(existingEnv);
     }
   );
 });
