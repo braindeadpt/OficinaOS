@@ -53,7 +53,7 @@ function fakePrisma(overrides: Partial<SettingsRow> = {}) {
     },
     timeEntry: {
       create: vi.fn(async () => ({})),
-      findFirst: vi.fn(async () => null),
+      findFirst: vi.fn(async () => null as { id: string } | null),
       findMany: vi.fn(async () => []),
       findUnique: vi.fn(async () => null),
     },
