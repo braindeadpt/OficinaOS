@@ -258,7 +258,7 @@ fica fora do A4 exceto se o mentor decidir o contrário.
 
 | Pergunta | Recomendação | Confiança |
 |---|---|---|
-| 1. Evolution multi-sessão | **Avançar** para piloto; custo ~€0,24–0,32/cliente/mês a escala; nos primeiros 10 clientes ~€0,45 (host mínimo, sem folga) ou ~€0,85 (host com folga — recomendado); risco de banimento declarado no contrato; oficial Meta como upgrade no A5; medir RAM real de sessões emparelhadas no A3 | Média-alta (evidência própria + publicada) |
+| 1. Evolution multi-sessão | **Avançar** para piloto; custo ~€0,24–0,40/cliente/mês a escala (intervalo do consumo real de RAM); nos primeiros 10 clientes ~€0,45 (host mínimo, sem folga) ou ~€0,85 (host com folga — recomendado); risco de banimento declarado no contrato; oficial Meta como upgrade no A5; medir RAM real de sessões emparelhadas no A3 | Média-alta (evidência própria + publicada) |
 | 2. procurar_faq | **Sem pgvector**: trigram simples sobre pergunta+resposta (95 % top-3); pgvector como upgrade decidido por dados do piloto | Alta no mecanismo; média nos números (dataset sintético) |
 | 3. Google Places | **Proibido** pré-preencher a partir do perfil público. Fonte = site da empresa + perguntas; GBP API do próprio dono como caminho legal posterior | Alta (texto dos termos é explícito) |
 
