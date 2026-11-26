@@ -36,7 +36,7 @@ activities (Art. 30):
 |---|---|---|---|
 | Remote access (Cloudflare Tunnel) | Cloudflare, Inc. (US, with EU clauses) | The traffic passing through the tunnel: pages and data consulted by whoever uses remote access or the public links | Don't enable the `tunnel` profile |
 | Public customer links (tracking, quotes, receipts, pre-check) | Cloudflare, Inc. | The data shown on those public pages | Without a tunnel, the links only work inside the shop |
-| WhatsApp notifications and bot | OficinaOS Cloud (relay) → Meta (WhatsApp Business) | The customer's phone number and the message text transit through our Cloud to reach Meta — **the Cloud neither stores nor logs the content** (logs carry only id, state and masked phone). We store your Meta token encrypted so we can send on your behalf | Settings → WhatsApp → disable; unpairing the Cloud deletes the stored token |
+| WhatsApp notifications and bot | OficinaOS Cloud (relay) → Meta (WhatsApp Business) | The customer's phone number and the message text transit through our Cloud to reach Meta — **the Cloud neither stores nor logs the content** (logs carry only id, state and masked phone). With your explicit authorization, the Cloud stores your Meta token encrypted so it can send on your behalf; see the credential lifecycle below | Settings → WhatsApp → disable; **Revoke cloud credentials** deletes the Cloud and local copies and withdraws that authorization; unpairing the Cloud also deletes the stored token |
 | Customer bot (rules + AI, SMS/WhatsApp) | OficinaOS Cloud → configured LLM provider | See the exact list in ["Customer bot (`/ai/bot-reply`)"](#customer-bot-aibot-reply) below. In short: the necessary message/conversation, the shop card and the `vistaCliente` projection of the number's active repairs — no internal customer/repair ids, no raw states, no IMEI, `holdReason`, suppliers or all names matched to the number. The Cloud **does not log content** — only usage counters (`AiBotUsage`) and the temporary queues with current retention. The Cloud never reads the shop's database | Disable the channel module or unpair the Cloud |
 | Inbox + staff AI (`ai-inbox`) | OficinaOS Cloud → LLM provider the shop chooses | When a staff member uses the AI or an MCP client: the inbox tool results (`staffInboxTools` – conversations, customer summaries, drafts) pass through the Cloud **in transit** on the app→Cloud connection and are never stored or logged. Each user's **personal MCP token** is stored on the Cloud only as a **hash**; the shop's **AI key** is encrypted (AES-256-GCM) and never returned to the app. With a local model via MCP (LM Studio/Open WebUI), the model is local but the data still passes through the Cloud in transit. The Cloud never reads the shop's database | Settings → AI: disable or revoke each user's MCP token |
 | SMS via Cloud (Pro) | OficinaOS Cloud → SMS Gateway (Android device) | Phone and text transit through the Cloud to the sending device; `SmsRoute` stores only the phone→shop mapping to route replies | Settings → SMS → the LAN fallback keeps working |
@@ -44,6 +44,34 @@ activities (Art. 30):
 | AI analyst | The provider you configure (e.g. OpenAI) | The content of the questions you ask the AI | Settings → AI → disable (off by default) |
 | Google reviews | Google | Only the review link — no customer data leaves, the customer opens their own page | Settings → Reviews → disable |
 | Time tracking (`ponto`, Pro) | OficinaOS Cloud → Pro channels (WhatsApp/SMS) | The commands and the **location only at clock-in time** (never tracking) transit through the channels to the app; proof photos travel as the channel's own media. The evaluation request to the Cloud (`POST /ponto/evaluate`) carries the phone, the location and a photo-exists flag — **never the image**. The Cloud **stores no** records — only `PontoToken` 24 h for auditing | Don't activate the `ponto` module; without it nothing is collected |
+
+## WhatsApp Meta credentials — lifecycle
+
+- You can save the Meta token in the app without sending it anywhere: it is
+  encrypted locally and the settings API never returns its value — the token
+  itself is represented only by a presence flag, while non-secret IDs and
+  migration state may still be shown.
+- The token leaves the shop only after someone with settings permission ticks
+  the explicit consent for encrypted storage in OficinaOS Cloud and sending
+  through the Cloud relay. The app records that consent once; the Cloud
+  validates the token + phone number ID against Meta before replacing the
+  stored credential.
+- On the Cloud the token is stored with AES-256-GCM. The key material comes
+  from the server `SECRETS_KEY` environment variable — it is not stored in the
+  database — and no endpoint returns the token to the app.
+- Sending then goes through the Cloud relay. The shared 30-day migration
+  window starts on the first boot of the app version that introduces the
+  migration, even before WhatsApp setup is opened. During that window a shop
+  whose upload is not yet confirmed can still send directly with its encrypted
+  local token; once the Cloud has the current credentials, direct app→Meta is
+  only an audited fallback when the relay returns a temporary server error or
+  clearly cannot be reached. After the deadline, direct app→Meta sending ends.
+- **Revoke cloud credentials** asks the Cloud to delete its copy first. When
+  deletion is confirmed (or the copy is already gone), the app deletes the
+  local encrypted copy and clears the consent. Using official WhatsApp again
+  requires re-entering a token and explicitly accepting the relay again.
+  Shops migrated before this consent step existed must make that choice when
+  the transition ends.
 
 ## Customer bot (`/ai/bot-reply`)
 
