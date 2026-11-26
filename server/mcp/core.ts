@@ -99,8 +99,21 @@ function dayBoundsInTz(
   let y: number;
   let m: number;
   let d: number;
-  if (dateStr && ISO_DATE_RE.test(dateStr)) {
+  if (dateStr) {
+    if (!ISO_DATE_RE.test(dateStr)) {
+      throw new Error("invalid_date");
+    }
     [y, m, d] = dateStr.split("-").map(Number) as [number, number, number];
+    const probe = new Date(Date.UTC(y, m - 1, d));
+    // Datas impossíveis (ex.: 2026-02-30) rolam para o mês seguinte no JS —
+    // rejeitar em vez de devolver totais de outro dia.
+    if (
+      probe.getUTCFullYear() !== y ||
+      probe.getUTCMonth() !== m - 1 ||
+      probe.getUTCDate() !== d
+    ) {
+      throw new Error("invalid_date");
+    }
   } else {
     const now = new Date();
     const local = new Date(now.getTime() + tzOffsetMs(now, tz));
@@ -710,10 +723,19 @@ async function cashSummary(
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const tz = await shopTz(ctx.prisma);
-  const { start, end } = dayBoundsInTz(
-    typeof args.date === "string" ? args.date : undefined,
-    tz
-  );
+  let start: Date;
+  let end: Date;
+  try {
+    ({ start, end } = dayBoundsInTz(
+      typeof args.date === "string" ? args.date : undefined,
+      tz
+    ));
+  } catch {
+    return {
+      error: "Data inválida — usa AAAA-MM-DD com um dia real.",
+      records: 0,
+    };
+  }
   const [sales, salePayments, repairPayments] = await Promise.all([
     ctx.prisma.sale.aggregate({
       where: { createdAt: { gte: start, lte: end } },
@@ -956,8 +978,10 @@ export const TOOLS: Record<string, ToolDef> = {
   ),
   cash_summary: def(
     "Resumo de caixa de um dia (vendas e pagamentos por método).",
-    "payments",
-    "view",
+    // O relatório de caixa da app exige reports:viewShop — totais de caixa de
+    // toda a equipa não podem chegar a quem só vê os próprios pagamentos.
+    "reports",
+    "viewShop",
     cashSummary,
     {
       type: "object",

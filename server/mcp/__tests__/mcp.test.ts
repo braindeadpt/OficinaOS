@@ -380,12 +380,37 @@ describe("contas desativadas", () => {
 describe("stripSecrets preserva dados reais", () => {
   it("datas e decimais não são destruídos", () => {
     const date = new Date("2026-01-15T10:00:00Z");
-    const out = stripSecrets({ createdAt: date, total: 25.5 }) as Record<
+    // Simula um Decimal do Prisma: objecto com protótipo próprio e toString.
+    class FakeDecimal {
+      private readonly v: string;
+      constructor(v: string) {
+        this.v = v;
+      }
+      toString() {
+        return this.v;
+      }
+    }
+    const decimal = new FakeDecimal("25.50");
+    const out = stripSecrets({ createdAt: date, total: decimal }) as Record<
       string,
       unknown
     >;
     expect(out.createdAt).toBe(date);
-    expect(out.total).toBe(25.5);
+    expect(out.total).toBe(decimal);
+    expect(String(out.total)).toBe("25.50");
+  });
+
+  it("data inválida na caixa devolve erro em vez de totais doutro dia", async () => {
+    const prisma = mockPrisma();
+    const bad = await executeTool(prisma, OWNER_AUTH, "cash_summary", {
+      date: "2026-02-30",
+    });
+    expect(bad.isError).toBe(true);
+    expect(bad.text).toContain("Data inválida");
+    const malformed = await executeTool(prisma, OWNER_AUTH, "cash_summary", {
+      date: "ontem",
+    });
+    expect(malformed.isError).toBe(true);
   });
 });
 

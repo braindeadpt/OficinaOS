@@ -30,13 +30,16 @@ const IP_RATE_LIMIT_PER_MINUTE = 60;
 
 function ipRateLimitOk(ip: string, now = Date.now()): boolean {
   const stamps = (ipWindows.get(ip) ?? []).filter((t) => now - t < 60_000);
-  if (stamps.length >= IP_RATE_LIMIT_PER_MINUTE) {
-    ipWindows.set(ip, stamps);
-    return false;
-  }
+  ipWindows.set(ip, stamps);
+  return stamps.length < IP_RATE_LIMIT_PER_MINUTE;
+}
+
+// Em loopback todos os clientes partilham o mesmo IP — a quota só é consumida
+// por falhanços de autenticação (força bruta), nunca por tráfego legítimo.
+function consumeIpAttempt(ip: string, now = Date.now()): void {
+  const stamps = (ipWindows.get(ip) ?? []).filter((t) => now - t < 60_000);
   stamps.push(now);
   ipWindows.set(ip, stamps);
-  return true;
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
@@ -75,6 +78,7 @@ export function createMcpHttpServer(prisma: PrismaClient): Server {
         ? await authenticateToken(prisma, plaintext)
         : null;
       if (!auth) {
+        consumeIpAttempt(ip);
         sendJson(res, 401, { error: "unauthorized" });
         return;
       }
@@ -124,7 +128,7 @@ export function startMcpHttpServer(
   }
   // Porta inválida ou ocupada nunca pode derrubar a app — o MCP é um extra.
   const validPort =
-    Number.isInteger(port) && port > 0 && port < 65_536
+    Number.isInteger(port) && port >= 0 && port < 65_536
       ? port
       : MCP_DEFAULT_PORT;
   const server = createMcpHttpServer(prisma);
