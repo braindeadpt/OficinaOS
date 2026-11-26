@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # OficinaOS database restore from a backup produced by run-backup.sh.
-# Usage (host):  docker compose exec -T db-backup /scripts/run-restore.sh <file.sql.gz>
+# Usage (host):  docker compose exec -T db-backup /scripts/run-restore.sh <file.dump|file.sql.gz>
 # Pauses 10 seconds before touching anything unless RESTORE_AUTO_CONFIRM=1
 # is set (used by the CI round-trip test).
 set -euo pipefail
@@ -14,7 +14,7 @@ export PGPASSWORD="${PGPASSWORD:-reparilo}"
 
 FILE="${1:-}"
 if [ -z "$FILE" ]; then
-  echo "usage: run-restore.sh <oficinaos-YYYYmmdd-HHMMSS.sql.gz>" >&2
+  echo "usage: run-restore.sh <oficinaos-YYYYmmdd-HHMMSS.(dump|sql.gz)>" >&2
   echo "       (relative paths resolve inside $BACKUP_DIR)" >&2
   exit 2
 fi
@@ -36,6 +36,13 @@ if [ "${RESTORE_AUTO_CONFIRM:-0}" != "1" ]; then
   sleep 10
 fi
 
+case "$SOURCE" in
+  *.age)
+    echo "ERROR: o backup está cifrado. Decifra-o primeiro numa máquina com a chave privada age." >&2
+    exit 2
+    ;;
+esac
+
 echo "[restore] dropping and recreating schema public"
 psql \
   --host="$PGHOST" --port="$PGPORT" --username="$PGUSER" \
@@ -51,11 +58,27 @@ DROP SCHEMA IF EXISTS analyst CASCADE;
 SQL
 
 echo "[restore] applying backup"
-# pg_dump >= 17 escreve `SET transaction_timeout = 0;` em todos os dumps —
-# o GUC nao existe em Postgres <= 16 e rebentava o restore (ON_ERROR_STOP).
-gunzip -c "$SOURCE" | sed '/^SET transaction_timeout\b/d' | psql \
-  --host="$PGHOST" --port="$PGPORT" --username="$PGUSER" \
-  --dbname="$PGDATABASE" --set=ON_ERROR_STOP=1 --quiet
+case "$SOURCE" in
+  *.dump)
+    # Ver nota em db-restore-check.sh: pg_restore 18+ emite um GUC que
+    # Postgres <= 16 não conhece; gerar SQL e filtrar evita a incompatibilidade.
+    pg_restore --no-owner --no-privileges -f - "$SOURCE" \
+      | sed '/^SET transaction_timeout\b/d' \
+      | psql --host="$PGHOST" --port="$PGPORT" --username="$PGUSER" \
+        --dbname="$PGDATABASE" --set=ON_ERROR_STOP=1 --quiet
+    ;;
+  *.sql.gz)
+    # pg_dump >= 17 escreve `SET transaction_timeout = 0;` em todos os dumps —
+    # o GUC nao existe em Postgres <= 16 e rebentava o restore (ON_ERROR_STOP).
+    gunzip -c "$SOURCE" | sed '/^SET transaction_timeout\b/d' | psql \
+      --host="$PGHOST" --port="$PGPORT" --username="$PGUSER" \
+      --dbname="$PGDATABASE" --set=ON_ERROR_STOP=1 --quiet
+    ;;
+  *)
+    echo "ERROR: formato não suportado; usa .dump decifrado ou .sql.gz legado" >&2
+    exit 2
+    ;;
+esac
 
 TABLES="$(psql --host="$PGHOST" --port="$PGPORT" --username="$PGUSER" \
   --dbname="$PGDATABASE" --tuples-only --no-align \

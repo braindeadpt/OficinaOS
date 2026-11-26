@@ -46,6 +46,7 @@ services:
   db-backup:
     image: postgres:16-alpine
     restart: unless-stopped
+    env_file: .env
     depends_on:
       db:
         condition: service_healthy
@@ -67,7 +68,9 @@ services:
     volumes:
       - backups:/backups
       - backups-heartbeat:/backups-status
+      - backup-keys:/backup-keys
       - ./scripts/db-backup.sh:/scripts/run-backup.sh:ro
+      - ./scripts/db-backup-remote.sh:/scripts/db-backup-remote.sh:ro
       - ./scripts/db-restore.sh:/scripts/run-restore.sh:ro
       - ./scripts/db-restore-check.sh:/scripts/run-restore-check.sh:ro
     # Daily backup loop: one dump right after start, then every 24h.
@@ -76,7 +79,7 @@ services:
       - sh
       - -c
       - |
-        for i in 1 2 3 4 5; do apk add --no-cache bash >/dev/null 2>&1 && break; sleep 5; done
+        for i in 1 2 3 4 5; do apk add --no-cache bash age curl minisign >/dev/null 2>&1 && break; sleep 5; done
         if [ "${BACKUP_REMOTE_ENABLED:-false}" = "true" ]; then
           apk add --no-cache rclone >/dev/null 2>&1 || echo '[db-backup] WARN: rclone install failed'
         fi
@@ -158,4 +161,5 @@ volumes:
   uploads:
   backups:
   backups-heartbeat:
+  backup-keys:
   evolution-data:

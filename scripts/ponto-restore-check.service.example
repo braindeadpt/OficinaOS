@@ -1,0 +1,8 @@
+[Unit]
+Description=Teste mensal de restauro dos backups cifrados do ponto
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/oficinaos/ponto-restore-check.env
+WorkingDirectory=/opt/oficinaos/OficinaOS
+ExecStart=/opt/oficinaos/OficinaOS/scripts/db-restore-check.sh
