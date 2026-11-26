@@ -35,8 +35,10 @@ opencode.json
 src/CLAUDE.md
 
 # Agent-generated planning artifacts and Spec Kit output
+# NOTA: docs/internal/ NÃO é ignorado — tem documentação interna versionada
+# (design, auditorias, spikes); ignorá-lo quebrava o pre-commit hook ao
+# adicionar novos documentos internos.
 docs/superpowers/
-docs/internal/
 specs/
 # local backup dumps (sidecar writes to a volume; this guards dev runs)
 backups/
