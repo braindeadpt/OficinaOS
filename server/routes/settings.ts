@@ -1,4 +1,4 @@
-import { AppError } from "@shared/errors/app-error.js";
+import { AppError, isAppError } from "@shared/errors/app-error.js";
 import {
   pairCloudSchema,
   updateAiSettingsSchema,
@@ -26,6 +26,7 @@ import {
   findShopSettingsUnique,
   getOrCreateShopSettings,
 } from "../repositories/settings.repository.js";
+import type { DbClient } from "../repositories/types.js";
 import { getBackupStatus } from "../services/backup-status.service.js";
 import {
   generateDiagPairingCode,
@@ -136,6 +137,67 @@ function assertEvolutionGates(
     throw new AppError("VALIDATION_ERROR", {
       errors: { remarketingEnabled: ["validations.invalid_option"] },
     });
+  }
+}
+
+interface WhatsAppCredentialSnapshot {
+  whatsappApiTokenEncrypted: string | null;
+  whatsappCredentialsAtCloud: boolean;
+  whatsappPhoneNumberId: string | null;
+}
+
+/**
+ * Rotação segura: a Cloud valida o par novo antes de substituir o antigo.
+ * Se rejeitar, o save já tinha gravado o candidato localmente; esta escrita
+ * condicionada repõe apenas o snapshot anterior de credenciais para a loja
+ * continuar a usar o que estava a funcionar. count=0 significa que outro
+ * save entretanto substituiu esse candidato — nesse caso não se pisa nada.
+ */
+async function restoreWorkingWhatsAppCredentials(
+  prisma: DbClient,
+  before: WhatsAppCredentialSnapshot,
+  rejected: WhatsAppCredentialSnapshot,
+  input: { apiToken?: string; phoneNumberId?: string }
+): Promise<void> {
+  const tokenTouched = input.apiToken !== undefined && input.apiToken !== "";
+  const phoneTouched =
+    input.phoneNumberId !== undefined &&
+    input.phoneNumberId !== before.whatsappPhoneNumberId;
+  const hadWorkingCredentials = Boolean(
+    before.whatsappCredentialsAtCloud || before.whatsappApiTokenEncrypted
+  );
+  if (!((tokenTouched || phoneTouched) && hadWorkingCredentials)) {
+    return;
+  }
+  await prisma.shopSettings.updateMany({
+    data: {
+      whatsappApiTokenEncrypted: before.whatsappApiTokenEncrypted,
+      whatsappCredentialsAtCloud: before.whatsappCredentialsAtCloud,
+      whatsappPhoneNumberId: before.whatsappPhoneNumberId,
+    },
+    where: {
+      id: "default",
+      whatsappApiTokenEncrypted: rejected.whatsappApiTokenEncrypted,
+      whatsappPhoneNumberId: rejected.whatsappPhoneNumberId,
+    },
+  });
+}
+
+async function pushWhatsAppCredentialsAfterSave(
+  prisma: DbClient,
+  before: WhatsAppCredentialSnapshot,
+  updated: WhatsAppCredentialSnapshot,
+  input: { apiToken?: string; phoneNumberId?: string }
+): Promise<boolean> {
+  try {
+    return await pushCredentialsToCloud(prisma, {
+      surfaceInvalidCredentials: true,
+    });
+  } catch (err) {
+    if (isAppError(err) && err.code === "CLOUD_INVALID_CREDENTIALS") {
+      await restoreWorkingWhatsAppCredentials(prisma, before, updated, input);
+    }
+    throw err;
   }
 }
 
@@ -565,9 +627,15 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       }
       // Migração consentida: envia as credenciais Meta para o relay da
       // cloud apenas quando whatsappCloudConsentAt existe (gate central no
-      // push). Se falhar fica para a próxima gravação/ciclo — o envio local
-      // continua durante a transição.
-      const credentialsAtCloud = await pushCredentialsToCloud(app.prisma);
+      // push). Falhas transitórias ficam para a próxima gravação/ciclo; uma
+      // rejeição de validação da Meta sobe para a UI e repõe o snapshot de
+      // credenciais que estava a funcionar.
+      const credentialsAtCloud = await pushWhatsAppCredentialsAfterSave(
+        app.prisma,
+        s,
+        updated,
+        parsed.data
+      );
       // §5.6 C.2 — ao ligar/configurar o WhatsApp, corre o sync de
       // templates Meta em background (GET primeiro, cria o que falta).
       // trackingBaseUrl controla um bloco {{if}} do corpo aprovado —

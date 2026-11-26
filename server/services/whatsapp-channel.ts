@@ -290,7 +290,26 @@ export function maskPhone(to: string): string {
  * notice. Returns true when the cloud has the current credentials — on
  * false the legacy local send path keeps working during the transition.
  */
-async function pushCredentialsToCloudOnce(prisma: DbClient): Promise<boolean> {
+interface PushCredentialsOptions {
+  surfaceInvalidCredentials?: boolean;
+}
+
+function cloudErrorCode(body: unknown): string | null {
+  if (!(body && typeof body === "object" && "error" in body)) {
+    return null;
+  }
+  const error = (body as { error?: unknown }).error;
+  if (!(error && typeof error === "object" && "code" in error)) {
+    return null;
+  }
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" ? code : null;
+}
+
+async function pushCredentialsToCloudOnce(
+  prisma: DbClient,
+  options: PushCredentialsOptions = {}
+): Promise<boolean> {
   const settings = await getOrCreateShopSettings(prisma);
   // §5.6 — só lojas Pro migram para o relay cloud: sem o módulo
   // "whatsapp-bot" fresco a loja nunca envia credenciais.
@@ -358,6 +377,17 @@ async function pushCredentialsToCloudOnce(prisma: DbClient): Promise<boolean> {
     //   libertado lá; corrigir o ID localmente também rota as credenciais.
     //   Nunca marcamos o upload como atual — a flag já está false neste ramo,
     //   por isso o envio legado continua disponível durante a transição.
+    // No save explícito o 400 de validação da Meta sobe para a UI; no poller
+    // continua silencioso porque o aviso persistente das definições é o local
+    // certo para o mostrar sem interromper ciclos em background.
+    const code = cloudErrorCode(res?.body);
+    if (
+      options.surfaceInvalidCredentials &&
+      res?.status === 400 &&
+      (code === "INVALID_CREDENTIALS" || code === "INVALID_BODY")
+    ) {
+      throw new AppError("CLOUD_INVALID_CREDENTIALS");
+    }
     return false;
   }
   // O upload demora e a loja pode gravar um token/phone_number_id de
@@ -393,8 +423,13 @@ function enqueueCredentialsMutation<T>(
   return run;
 }
 
-export function pushCredentialsToCloud(prisma: DbClient): Promise<boolean> {
-  return enqueueCredentialsMutation(() => pushCredentialsToCloudOnce(prisma));
+export function pushCredentialsToCloud(
+  prisma: DbClient,
+  options: PushCredentialsOptions = {}
+): Promise<boolean> {
+  return enqueueCredentialsMutation(() =>
+    pushCredentialsToCloudOnce(prisma, options)
+  );
 }
 
 /**

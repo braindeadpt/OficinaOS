@@ -1164,6 +1164,22 @@ export default function ChannelSettings({
           </div>
         )}
 
+        {whatsAppSettings?.phoneNumberId &&
+          !whatsAppSettings.credentialsAtCloud &&
+          !whatsAppSettings.hasApiToken && (
+            <div
+              className="mt-4 flex items-start gap-3 rounded-xl border border-warning/40 bg-warning/5 p-4"
+              role="status"
+            >
+              <span className="material-symbols-outlined text-warning text-xl">
+                warning
+              </span>
+              <p className="text-on-surface text-sm leading-relaxed">
+                {t("whatsapp_official_disconnected")}
+              </p>
+            </div>
+          )}
+
         {whatsAppForm.enabled && (
           <div className="mt-5 space-y-4">
             <Field label={t("whatsapp_transport")}>

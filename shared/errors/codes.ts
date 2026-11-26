@@ -221,6 +221,10 @@ export const ERRORS = {
   CLOUD_UNREACHABLE: { status: 502, message: "errors.cloud_unreachable" },
   CLOUD_NOT_PAIRED: { status: 400, message: "errors.cloud_not_paired" },
   CLOUD_INVALID_CODE: { status: 400, message: "errors.cloud_invalid_code" },
+  CLOUD_INVALID_CREDENTIALS: {
+    status: 400,
+    message: "errors.cloud_invalid_credentials",
+  },
   CLOUD_PAIRING_FAILED: {
     status: 502,
     message: "errors.cloud_pairing_failed",

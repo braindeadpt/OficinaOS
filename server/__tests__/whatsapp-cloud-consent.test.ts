@@ -174,6 +174,24 @@ function credentialsUploadCalls() {
   );
 }
 
+function mockCloudInvalidCredentials() {
+  mocks.cloudFetch.mockImplementation((_apiUrl: string, path: string) => {
+    if (path === "/shops/whatsapp-credentials") {
+      return Promise.resolve({
+        body: {
+          error: {
+            code: "INVALID_CREDENTIALS",
+            message: "Meta rejected",
+          },
+        },
+        ok: false,
+        status: 400,
+      });
+    }
+    return Promise.resolve({ body: {}, ok: true, status: 200 });
+  });
+}
+
 beforeEach(() => {
   mocks.cloudFetch.mockReset();
   mocks.cloudFetch.mockImplementation(
@@ -486,6 +504,65 @@ describe("WP0.6 PR B — rotação, revogação e aviso grandfathered", () => {
     expect(state.getRow()?.whatsappCredentialsAtCloud).toBe(true);
   });
 
+  it("rotação com token inválido mostra erro e mantém a configuração Cloud que estava a funcionar", async () => {
+    const state = createStatefulPrisma(
+      migratedRowWith({ whatsappApiTokenEncrypted: null })
+    );
+    const app = buildApp(state.prisma);
+    mockCloudInvalidCredentials();
+
+    const res = await app.inject({
+      method: "PUT",
+      payload: { apiToken: "meta-token-invalido" },
+      url: "/api/settings/whatsapp",
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({
+      code: "CLOUD_INVALID_CREDENTIALS",
+      message: "errors.cloud_invalid_credentials",
+    });
+    expect(state.getRow()).toMatchObject({
+      whatsappApiTokenEncrypted: null,
+      whatsappCredentialsAtCloud: true,
+      whatsappPhoneNumberId: "1234",
+    });
+    expect(
+      credentialsUploadCalls().filter(
+        (call) => (call[2] as { method?: string }).method === "POST"
+      )
+    ).toHaveLength(1);
+  });
+
+  it("rotação inválida antes do primeiro upload mantém o token local e não marca a flag Cloud", async () => {
+    const state = createStatefulPrisma(
+      baseRow({
+        whatsappApiTokenEncrypted: "enc:meta-token-antigo",
+        whatsappCloudConsentAt: new Date("2026-01-03T10:00:00.000Z"),
+        whatsappCredentialsAtCloud: false,
+        whatsappPhoneNumberId: "1234",
+      })
+    );
+    const app = buildApp(state.prisma);
+    mockCloudInvalidCredentials();
+
+    const res = await app.inject({
+      method: "PUT",
+      payload: { apiToken: "meta-token-invalido" },
+      url: "/api/settings/whatsapp",
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({
+      code: "CLOUD_INVALID_CREDENTIALS",
+    });
+    expect(state.getRow()).toMatchObject({
+      whatsappApiTokenEncrypted: "enc:meta-token-antigo",
+      whatsappCredentialsAtCloud: false,
+      whatsappPhoneNumberId: "1234",
+    });
+  });
+
   it("revogação chama DELETE na Cloud, apaga o token local e limpa o consentimento", async () => {
     const state = createStatefulPrisma(migratedRow());
     const app = buildApp(state.prisma);
@@ -526,6 +603,38 @@ describe("WP0.6 PR B — rotação, revogação e aviso grandfathered", () => {
     expect(res.statusCode).toBe(200);
     expect(state.getRow()?.whatsappApiTokenEncrypted).toBeNull();
     expect(state.getRow()?.whatsappCloudConsentAt).toBeNull();
+  });
+
+  it("revogar duas vezes é idempotente: o segundo 404 mantém o mesmo estado final", async () => {
+    const state = createStatefulPrisma(migratedRow());
+    const app = buildApp(state.prisma);
+
+    const first = await app.inject({
+      method: "POST",
+      url: "/api/settings/whatsapp/cloud/revoke",
+    });
+    expect(first.statusCode).toBe(200);
+    const afterFirst = state.getRow();
+
+    mocks.cloudFetch.mockImplementation(async () => ({
+      body: null,
+      ok: false,
+      status: 404,
+    }));
+    const second = await app.inject({
+      method: "POST",
+      url: "/api/settings/whatsapp/cloud/revoke",
+    });
+
+    expect(second.statusCode).toBe(200);
+    expect(state.getRow()).toEqual(afterFirst);
+    expect(
+      mocks.cloudFetch.mock.calls.filter(
+        (call) =>
+          call[1] === "/shops/whatsapp-credentials" &&
+          (call[2] as { method?: string }).method === "DELETE"
+      )
+    ).toHaveLength(2);
   });
 
   it("5xx na Cloud não apaga nada localmente e uma nova tentativa consegue concluir", async () => {
