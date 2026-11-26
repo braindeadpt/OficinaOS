@@ -37,6 +37,7 @@ interface FakePrismaOpts {
   missingExitRows?: unknown[];
   pendingEntryId?: string;
   photoPath?: string | null;
+  shopMode?: string;
   users?: unknown[];
   validations?: unknown[];
 }
@@ -56,7 +57,10 @@ function fakePrisma(opts: FakePrismaOpts = {}) {
     },
     shopSettings: {
       findFirst: vi.fn(async () => ({ timezone: settings.timezone })),
-      findUnique: vi.fn(async () => ({ ...settings })),
+      findUnique: vi.fn(async () => ({
+        ...settings,
+        shopMode: opts.shopMode ?? "repair_shop",
+      })),
     },
     timeEntry: {
       create: vi.fn(async (args: { data: Record<string, unknown> }) => ({
@@ -447,6 +451,44 @@ describe("ponto panel — GET /hours + /missing-exits", () => {
     // 9→12 (180) + 13→17 (240) = 420 min
     expect(day.hours.workedMinutes).toBe(420);
     expect(day.hours.missingExit).toBe(false);
+  });
+
+  it("um mês com correções produz as mesmas horas em oficina e só-ponto", async () => {
+    const original = entryRow({
+      at: new Date("2026-01-15T09:00:00Z"),
+      corrections: [
+        {
+          at: new Date("2026-01-15T09:30:00Z"),
+          id: "e-correction",
+          type: "ENTRADA",
+        },
+      ],
+      id: "e-original",
+      type: "ENTRADA",
+    });
+    const correction = entryRow({
+      at: new Date("2026-01-15T09:30:00Z"),
+      corrects: { at: original.at, id: "e-original", type: "ENTRADA" },
+      correctsId: "e-original",
+      id: "e-correction",
+      type: "ENTRADA",
+    });
+    const bodies: unknown[] = [];
+    for (const shopMode of ["repair_shop", "ponto_only"]) {
+      const prisma = fakePrisma({
+        entries: [original, correction, saida],
+        shopMode,
+      });
+      const res = await buildApp(prisma).inject({
+        method: "GET",
+        url: "/api/ponto/hours?from=2026-01-15&to=2026-01-15",
+      });
+      expect(res.statusCode).toBe(200);
+      bodies.push(res.json());
+      expect(res.json().days[0].hours.workedMinutes).toBe(450);
+      expect(res.json().days[0].hours.hasCorrection).toBe(true);
+    }
+    expect(bodies[1]).toEqual(bodies[0]);
   });
 
   it("flags a day whose last event is not SAIDA", async () => {
