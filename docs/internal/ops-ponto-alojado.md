@@ -120,7 +120,11 @@ sudo docker compose exec -T db-backup \
 sudo docker compose up -d
 ```
 
-Antes de trocar de VPS ou reconstruir uma instância, testar o restauro numa
+Antes de trocar de VPS ou reconstruir uma instância, guardar também o
+`AI_ENCRYPTION_KEY` antigo: o token Cloud guardado na base está cifrado com essa
+chave. Na instalação de destino exportar `PONTO_EXISTING_AI_ENCRYPTION_KEY`
+(hex de 64 caracteres) antes da primeira execução do instalador; sem ela o
+restauro abre, mas a ligação Cloud tem de ser refeita com código novo. Testar o restauro numa
 instância nova. O teste obrigatório é: instalar cliente temporário, restaurar o
 dump, confirmar login/configuração e exportar um mês PDF.
 
@@ -172,6 +176,8 @@ sudo docker compose -p oficinaos-ponto-proxy \
   de máquina virtual.
 - O backup off-server continua a exigir configuração `BACKUP_REMOTE_ENABLED` /
   `BACKUP_RCLONE_REMOTE` ou o trabalho futuro de backup gerido pela plataforma.
+  As variáveis `RCLONE_CONFIG_*` exportadas antes do instalador são copiadas
+  para o `.env` da instância e passadas ao contentor `db-backup`.
 - O Caddy fica acessível nas portas públicas 80/443; restrições adicionais por
   IP devem ser feitas na firewall do VPS ou na Cloudflare, conforme a política
   comercial decidida.

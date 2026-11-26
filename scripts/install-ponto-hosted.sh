@@ -47,6 +47,7 @@ b64() {
 need_cmd docker
 need_cmd od
 need_cmd base64
+need_cmd flock
 
 BOOTSTRAP_ENV=""
 cleanup_bootstrap_env() {
@@ -73,6 +74,7 @@ PONTO_TZ="${PONTO_TZ:-Europe/Lisbon}"
 PONTO_ENABLE_EVOLUTION="${PONTO_ENABLE_EVOLUTION:-true}"
 PONTO_ACME_EMAIL="${PONTO_ACME_EMAIL:-admin@oficinaos.app}"
 PONTO_NETWORK="${PONTO_NETWORK:-oficinaos-ponto-proxy}"
+PONTO_EXISTING_AI_ENCRYPTION_KEY="${PONTO_EXISTING_AI_ENCRYPTION_KEY:-}"
 
 case "$PONTO_CLIENT_SLUG" in
   *[!a-z0-9-]*|"") die "PONTO_CLIENT_SLUG só pode ter minúsculas, dígitos e hífenes" ;;
@@ -90,6 +92,9 @@ for var in PONTO_CLIENT_NAME PONTO_OWNER_NAME PONTO_OWNER_LOGIN PONTO_OWNER_PASS
 done
 if [ "${#PONTO_OWNER_PASSWORD}" -lt 10 ]; then
   die "PONTO_OWNER_PASSWORD tem de ter pelo menos 10 caracteres"
+fi
+if [ -n "$PONTO_EXISTING_AI_ENCRYPTION_KEY" ] && ! printf '%s' "$PONTO_EXISTING_AI_ENCRYPTION_KEY" | grep -qE '^[0-9a-f]{64}$'; then
+  die "PONTO_EXISTING_AI_ENCRYPTION_KEY tem de ser hex de 64 caracteres"
 fi
 case "$PONTO_CLOUD_API_URL" in
   https://*|http://localhost*|http://127.0.0.1*) ;;
@@ -129,6 +134,12 @@ chmod 600 "$ENV_FILE"
 for key in POSTGRES_PASSWORD EVOLUTION_DB_PASSWORD BETTER_AUTH_SECRET COOKIE_SECRET AI_ENCRYPTION_KEY SETUP_TOKEN EVOLUTION_API_KEY; do
   ensure_env_secret "$key" "$ENV_FILE"
 done
+if [ -n "$PONTO_EXISTING_AI_ENCRYPTION_KEY" ] && [ -z "$(env_value AI_ENCRYPTION_KEY "$ENV_FILE")" ]; then
+  sed -i "s|^AI_ENCRYPTION_KEY=.*|AI_ENCRYPTION_KEY=${PONTO_EXISTING_AI_ENCRYPTION_KEY}|" "$ENV_FILE.tmp"
+fi
+# Credenciais rclone exportadas no operador entram no .env gerado; o
+# db-backup só as usa quando BACKUP_REMOTE_ENABLED=true.
+{ env | grep '^RCLONE_CONFIG_' || true; grep '^RCLONE_CONFIG_' "$ENV_FILE" 2>/dev/null || true; } | awk -F= '!seen[$1]++' >>"$ENV_FILE.tmp"
 cat >>"$ENV_FILE.tmp" <<EOF
 COMPOSE_PROJECT_NAME=ponto-${PONTO_CLIENT_SLUG}
 COMPOSE_PROFILES=wa-local
@@ -203,6 +214,7 @@ services:
   db-backup:
     image: postgres:16-alpine
     restart: unless-stopped
+    env_file: .env
     depends_on:
       db:
         condition: service_healthy
@@ -299,6 +311,10 @@ EOF
 
 if [ "$PONTO_ENABLE_EVOLUTION" != "true" ]; then
   sed -i 's/^COMPOSE_PROFILES=wa-local$/COMPOSE_PROFILES=/' "$ENV_FILE"
+  (
+    cd "$CLIENT_DIR"
+    docker compose --profile wa-local stop evolution evolution-db >/dev/null 2>&1 || true
+  )
 fi
 
 cat >"$PROXY_DIR/docker-compose.yml" <<'EOF'
@@ -396,18 +412,22 @@ ${HOSTNAME_CLIENTE} {
 }
 ${python_marker_end}"
 
-if grep -qF "$python_marker_start" "$PROXY_DIR/Caddyfile"; then
+CADDY_TMP="$(mktemp "$PROXY_DIR/.Caddyfile.XXXXXX")"
+exec 8>"$PROXY_DIR/Caddyfile.lock"
+flock 8
+if grep -qFx "$python_marker_start" "$PROXY_DIR/Caddyfile"; then
   awk -v start="$python_marker_start" -v end="$python_marker_end" -v block="$block" '
     $0 == start { print block; skip=1; next }
     $0 == end { skip=0; next }
     skip != 1 { print }
-  ' "$PROXY_DIR/Caddyfile" >"$PROXY_DIR/Caddyfile.tmp"
+  ' "$PROXY_DIR/Caddyfile" >"$CADDY_TMP"
 else
-  cp "$PROXY_DIR/Caddyfile" "$PROXY_DIR/Caddyfile.tmp"
-  printf '\n%s\n' "$block" >>"$PROXY_DIR/Caddyfile.tmp"
+  cp "$PROXY_DIR/Caddyfile" "$CADDY_TMP"
+  printf '\n%s\n' "$block" >>"$CADDY_TMP"
 fi
-cat "$PROXY_DIR/Caddyfile.tmp" >"$PROXY_DIR/Caddyfile"
-rm -f "$PROXY_DIR/Caddyfile.tmp"
+mv "$CADDY_TMP" "$PROXY_DIR/Caddyfile"
+flock -u 8
+exec 8>&-
 
 # Sobe primeiro o proxy e depois a empresa. Se já existirem, `up -d` é
 # idempotente e só recria contentores cuja configuração mudou.
@@ -453,6 +473,12 @@ if ! docker exec --env-file "$BOOTSTRAP_ENV" "$app_container" bun /tmp/ponto-boo
 fi
 rm -f "$BOOTSTRAP_ENV"
 BOOTSTRAP_ENV=""
+
+backup_container="$(cd "$CLIENT_DIR" && docker compose ps -q db-backup 2>/dev/null || true)"
+if [ -n "$backup_container" ]; then
+  docker exec "$backup_container" bash /scripts/run-backup.sh >/dev/null 2>&1 ||
+    echo "AVISO: o backup pós-bootstrap falhou; verificar db-backup." >&2
+fi
 
 printf '\nInstância pronta: https://%s\n' "$HOSTNAME_CLIENTE"
 printf 'Diretório: %s\n' "$CLIENT_DIR"
