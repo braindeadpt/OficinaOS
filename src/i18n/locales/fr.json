@@ -618,6 +618,7 @@
     "cloud_pairing_failed": "Le serveur cloud a rejeté la demande de couplage.",
     "cloud_token_rejected": "Le cloud a rejeté ce jeton de boutique. Effectuez à nouveau l'appairage.",
     "cloud_request_failed": "La requête cloud a échoué. Réessayez.",
+    "whatsapp_mutation_timeout": "La modification de WhatsApp a pris trop de temps. Le serveur peut encore la terminer ; vérifiez l'état actuel avant de réessayer.",
     "cloud_station_not_found": "Station introuvable sur cette boutique.",
     "cloud_ai_failed": "Impossible de générer le rapport IA. Réessayez plus tard.",
     "cloud_module_required": "Cette fonctionnalité nécessite un module Pro sur votre compte OficinaOS Cloud.",

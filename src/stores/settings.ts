@@ -5,8 +5,13 @@ import type {
 } from "@shared/types";
 import { create } from "zustand";
 import i18n from "@/i18n";
-import api, { getErrorMessage } from "@/lib/api";
+import api, { getErrorMessage, isRequestTimeout } from "@/lib/api";
 import { useShopModeStore } from "@/stores/shop-mode";
+
+// Uma gravação WhatsApp pode esperar por outra na fila do servidor e cada
+// validação externa (Cloud/Meta ou webhook Evolution) tem o seu próprio
+// timeout de 10s. 15s chegava para uma operação, mas não para a segunda.
+const WHATSAPP_MUTATION_TIMEOUT_MS = 60_000;
 
 interface OutboxLog {
   channel: string;
@@ -474,10 +479,14 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   saveWhatsAppSettings: async (data) => {
     set({ error: null });
     try {
-      await api.put("/settings/whatsapp", data);
+      await api.put("/settings/whatsapp", data, {
+        timeout: WHATSAPP_MUTATION_TIMEOUT_MS,
+      });
       await useSettingsStore.getState().fetchWhatsAppSettings();
     } catch (err: unknown) {
-      const message = getErrorMessage(err, i18n.t("errors.save_shop_settings"));
+      const message = isRequestTimeout(err)
+        ? i18n.t("errors.whatsapp_mutation_timeout")
+        : getErrorMessage(err, i18n.t("errors.save_shop_settings"));
       set({ error: message });
       throw new Error(message);
     }
@@ -486,13 +495,14 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   revokeWhatsAppCloudCredentials: async () => {
     set({ error: null });
     try {
-      await api.post("/settings/whatsapp/cloud/revoke");
+      await api.post("/settings/whatsapp/cloud/revoke", undefined, {
+        timeout: WHATSAPP_MUTATION_TIMEOUT_MS,
+      });
       await useSettingsStore.getState().fetchWhatsAppSettings();
     } catch (err: unknown) {
-      const message = getErrorMessage(
-        err,
-        i18n.t("whatsapp_cloud_action_failed")
-      );
+      const message = isRequestTimeout(err)
+        ? i18n.t("errors.whatsapp_mutation_timeout")
+        : getErrorMessage(err, i18n.t("whatsapp_cloud_action_failed"));
       set({ error: message });
       throw new Error(message);
     }

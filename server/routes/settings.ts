@@ -186,19 +186,21 @@ async function restoreWorkingWhatsAppCredentials(
   });
 }
 
-let whatsAppSettingsSaveQueue: Promise<unknown> = Promise.resolve();
+let whatsAppSettingsMutationQueue: Promise<unknown> = Promise.resolve();
 
 /**
  * Saves de WhatsApp são raros, mas a validação externa é demorada. Serializar
  * a leitura do snapshot + escrita do candidato + validação/rollback evita que
  * um segundo save leia um candidato ainda por validar como se fosse a
- * configuração anteriormente válida.
+ * configuração anteriormente válida. A revogação entra na mesma fila: uma
+ * gravação já aceite termina antes do DELETE e nunca pode regravar o token
+ * depois de a loja o ter retirado.
  */
-function enqueueWhatsAppSettingsSave<T>(
+function enqueueWhatsAppSettingsMutation<T>(
   operation: () => Promise<T>
 ): Promise<T> {
-  const run = whatsAppSettingsSaveQueue.then(operation, operation);
-  whatsAppSettingsSaveQueue = run.catch(() => undefined);
+  const run = whatsAppSettingsMutationQueue.then(operation, operation);
+  whatsAppSettingsMutationQueue = run.catch(() => undefined);
   return run;
 }
 
@@ -606,8 +608,8 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
           ),
         });
       }
-      const { credentialsAtCloud, updated } = await enqueueWhatsAppSettingsSave(
-        async () => {
+      const { credentialsAtCloud, updated } =
+        await enqueueWhatsAppSettingsMutation(async () => {
           // Toda a mensagem WhatsApp é Pro (decisão 2026-11-23): ativar o
           // transporte — Meta local, Evolution ou relay cloud — e aceitar o
           // termo do bot exigem o módulo "whatsapp-bot" fresco.
@@ -659,8 +661,7 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
               parsed.data
             );
           return { credentialsAtCloud: pushedCredentialsAtCloud, updated };
-        }
-      );
+        });
       // §5.6 C.2 — ao ligar/configurar o WhatsApp, corre o sync de
       // templates Meta em background (GET primeiro, cria o que falta).
       // trackingBaseUrl controla um bloco {{if}} do corpo aprovado —
@@ -693,7 +694,9 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
     },
     async (_req, reply) => {
       assertNotDemoMode();
-      await revokeWhatsAppCloudCredentials(app.prisma);
+      await enqueueWhatsAppSettingsMutation(() =>
+        revokeWhatsAppCloudCredentials(app.prisma)
+      );
       return reply.send({ ok: true });
     }
   );

@@ -618,6 +618,7 @@
     "cloud_pairing_failed": "El servidor de la nube rechazó la solicitud de emparejamiento.",
     "cloud_token_rejected": "La nube rechazó este token de tienda. Empareje de nuevo.",
     "cloud_request_failed": "La solicitud de la nube falló. Inténtelo de nuevo.",
+    "whatsapp_mutation_timeout": "El cambio de WhatsApp tardó demasiado. El servidor aún puede terminarlo; compruebe el estado actual antes de intentarlo de nuevo.",
     "cloud_station_not_found": "Estación no encontrada en esta tienda.",
     "cloud_ai_failed": "No se pudo generar el informe de IA. Inténtalo más tarde.",
     "cloud_module_required": "Esta función requiere un módulo Pro en su cuenta de OficinaOS Cloud.",

@@ -1,9 +1,12 @@
 import { isAppError } from "@shared/errors/app-error.js";
+import { updateWhatsAppSettingsSchema } from "@shared/schemas/settings.schema";
 import Fastify from "fastify";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  assertNotDemoMode: vi.fn(),
   cloudFetch: vi.fn(),
+  setEvolutionWebhook: vi.fn(),
   syncWhatsAppTemplates: vi.fn(),
 }));
 
@@ -27,6 +30,23 @@ vi.mock("../services/cloud.service.js", () => ({
   syncCloudEntitlements: vi.fn(async () => []),
   unpairCloud: vi.fn(async () => ({})),
 }));
+
+vi.mock("../lib/demo.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/demo.js")>();
+  return {
+    ...actual,
+    assertNotDemoMode: mocks.assertNotDemoMode,
+  };
+});
+
+vi.mock("../services/evolution.service.js", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../services/evolution.service.js")>();
+  return {
+    ...actual,
+    setEvolutionWebhook: mocks.setEvolutionWebhook,
+  };
+});
 
 vi.mock("../services/whatsapp-templates.service.js", () => ({
   approvedTemplateBodyOf: vi.fn(() => null),
@@ -174,6 +194,18 @@ function credentialsUploadCalls() {
   );
 }
 
+async function waitForCondition(
+  condition: () => boolean,
+  description: string
+): Promise<void> {
+  for (let i = 0; i < 200 && !condition(); i++) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  if (!condition()) {
+    throw new Error(`Timed out waiting for ${description}`);
+  }
+}
+
 function mockCloudInvalidCredentials() {
   mocks.cloudFetch.mockImplementation((_apiUrl: string, path: string) => {
     if (path === "/shops/whatsapp-credentials") {
@@ -193,6 +225,7 @@ function mockCloudInvalidCredentials() {
 }
 
 beforeEach(() => {
+  mocks.assertNotDemoMode.mockReset();
   mocks.cloudFetch.mockReset();
   mocks.cloudFetch.mockImplementation(
     async (_apiUrl: string, path: string) => ({
@@ -201,6 +234,8 @@ beforeEach(() => {
       status: 200,
     })
   );
+  mocks.setEvolutionWebhook.mockReset();
+  mocks.setEvolutionWebhook.mockResolvedValue({ success: true });
   mocks.syncWhatsAppTemplates.mockReset();
   mocks.syncWhatsAppTemplates.mockResolvedValue({});
 });
@@ -529,42 +564,139 @@ describe("WP0.6 PR B — rotação, revogação e aviso grandfathered", () => {
       }
       return Promise.resolve({ body: {}, ok: true, status: 200 });
     });
-    const waitForUploads = async (count: number) => {
-      for (let i = 0; i < 50 && rejectUploads.length < count; i++) {
-        await new Promise((resolve) => setTimeout(resolve, 1));
-      }
-      expect(rejectUploads).toHaveLength(count);
-    };
+    const parseSpy = vi.spyOn(updateWhatsAppSettingsSchema, "safeParse");
 
-    const first = app.inject({
-      method: "PUT",
-      payload: { apiToken: "meta-token-invalido-a" },
-      url: "/api/settings/whatsapp",
-    });
-    await waitForUploads(1);
-    const second = app.inject({
-      method: "PUT",
-      payload: { apiToken: "meta-token-invalido-b" },
-      url: "/api/settings/whatsapp",
-    });
-    await new Promise((resolve) => setTimeout(resolve, 5));
-    // O segundo save espera pela validação/rollback do primeiro em vez de
-    // ler o candidato A como se fosse a configuração válida anterior.
-    expect(rejectUploads).toHaveLength(1);
+    try {
+      const first = app.inject({
+        method: "PUT",
+        payload: { apiToken: "meta-token-invalido-a" },
+        url: "/api/settings/whatsapp",
+      });
+      await waitForCondition(
+        () => rejectUploads.length === 1,
+        "o primeiro upload ficar pendente"
+      );
+      const second = app.inject({
+        method: "PUT",
+        payload: { apiToken: "meta-token-invalido-b" },
+        url: "/api/settings/whatsapp",
+      });
+      // safeParse é a primeira operação do handler; como não há await entre
+      // ela e a entrada na fila, este sinal garante que o segundo PUT já está
+      // retido antes de libertarmos a validação do primeiro.
+      await waitForCondition(
+        () => parseSpy.mock.calls.length === 2,
+        "o segundo PUT entrar no handler"
+      );
+      expect(rejectUploads).toHaveLength(1);
 
-    rejectUploads[0]?.();
-    const firstRes = await first;
-    expect(firstRes.statusCode).toBe(400);
-    await waitForUploads(2);
-    rejectUploads[1]?.();
-    const secondRes = await second;
+      rejectUploads[0]?.();
+      const firstRes = await first;
+      expect(firstRes.statusCode).toBe(400);
+      await waitForCondition(
+        () => rejectUploads.length === 2,
+        "o segundo upload ficar pendente"
+      );
+      rejectUploads[1]?.();
+      const secondRes = await second;
 
-    expect(secondRes.statusCode).toBe(400);
-    expect(state.getRow()).toMatchObject({
-      whatsappApiTokenEncrypted: null,
-      whatsappCredentialsAtCloud: true,
-      whatsappPhoneNumberId: "1234",
+      expect(secondRes.statusCode).toBe(400);
+      expect(state.getRow()).toMatchObject({
+        whatsappApiTokenEncrypted: null,
+        whatsappCredentialsAtCloud: true,
+        whatsappPhoneNumberId: "1234",
+      });
+    } finally {
+      parseSpy.mockRestore();
+    }
+  });
+
+  it("revogação espera por gravações em fila e nenhuma rotação pendente repõe o token depois dela", async () => {
+    const state = createStatefulPrisma(migratedRow());
+    const app = buildApp(state.prisma);
+    const parseSpy = vi.spyOn(updateWhatsAppSettingsSchema, "safeParse");
+    let releaseWebhook!: () => void;
+    const webhookGate = new Promise<void>((resolve) => {
+      releaseWebhook = resolve;
     });
+    mocks.setEvolutionWebhook.mockImplementation(async () => {
+      await webhookGate;
+      return { success: true };
+    });
+
+    try {
+      const evolutionSave = app.inject({
+        headers: { host: "192.168.1.50:4000" },
+        method: "PUT",
+        payload: {
+          botDisclaimerAccepted: true,
+          disclaimerAccepted: true,
+          enabled: true,
+          evolutionApiKey: "evo-key",
+          evolutionInstance: "oficinaos",
+          evolutionUrl: "http://evolution.local:8080",
+          transport: "evolution",
+        },
+        url: "/api/settings/whatsapp",
+      });
+      await waitForCondition(
+        () => mocks.setEvolutionWebhook.mock.calls.length === 1,
+        "a gravação Evolution ficar retida no webhook"
+      );
+
+      const rotation = app.inject({
+        method: "PUT",
+        payload: { apiToken: "meta-token-novo", transport: "meta" },
+        url: "/api/settings/whatsapp",
+      });
+      await waitForCondition(
+        () => parseSpy.mock.calls.length === 2,
+        "a rotação entrar no handler e ficar na fila"
+      );
+
+      const handlerEntriesBeforeRevoke =
+        mocks.assertNotDemoMode.mock.calls.length;
+      const revoke = app.inject({
+        method: "POST",
+        url: "/api/settings/whatsapp/cloud/revoke",
+      });
+      await waitForCondition(
+        () =>
+          mocks.assertNotDemoMode.mock.calls.length ===
+          handlerEntriesBeforeRevoke + 1,
+        "a revogação entrar no handler e ficar na fila"
+      );
+      // Antes de libertar o webhook nenhuma operação de credenciais pode
+      // passar à frente da gravação que já ocupava a fila.
+      expect(credentialsUploadCalls()).toHaveLength(0);
+
+      releaseWebhook();
+      const [evolutionRes, rotationRes, revokeRes] = await Promise.all([
+        evolutionSave,
+        rotation,
+        revoke,
+      ]);
+
+      expect(evolutionRes.statusCode).toBe(200);
+      expect(rotationRes.statusCode).toBe(200);
+      expect(revokeRes.statusCode).toBe(200);
+      expect(
+        credentialsUploadCalls().map(
+          (call) => (call[2] as { method?: string }).method
+        )
+      ).toEqual(["POST", "DELETE"]);
+      expect(credentialsUploadCalls()[0]?.[2]).toMatchObject({
+        body: { accessToken: "meta-token-novo", phoneNumberId: "1234" },
+      });
+      expect(state.getRow()).toMatchObject({
+        whatsappApiTokenEncrypted: null,
+        whatsappCloudConsentAt: null,
+        whatsappCredentialsAtCloud: false,
+      });
+    } finally {
+      releaseWebhook();
+      parseSpy.mockRestore();
+    }
   });
 
   it("rotação com token inválido mostra erro e mantém a configuração Cloud que estava a funcionar", async () => {
