@@ -387,6 +387,9 @@ async function inPersonSignatureData(
   // intakeTermsText do payload é deliberadamente ignorado: o texto legal
   // vem das definições da loja no servidor, na língua pedida para a ficha.
   const terms = await resolveIntakeTerms(prisma, input.intakeLocale);
+  if (input.intakeTermsVersion !== terms.version) {
+    throw new AppError("SIGNATURE_STALE");
+  }
   const document = buildIntakeDocument(input, terms.text, terms.locale);
   return {
     intakeSignatureDataUrl: input.intakeSignatureDataUrl,

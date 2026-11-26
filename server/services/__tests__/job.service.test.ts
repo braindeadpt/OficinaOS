@@ -1359,6 +1359,7 @@ describe("create", () => {
         intakeLocale: "pt",
         intakeSignatureDataUrl: signature,
         intakeTermsText: "TERMOS FALSIFICADOS PELO CLIENTE",
+        intakeTermsVersion: 5,
         reportedProblem: "Ecrã partido",
       },
       "user-1",

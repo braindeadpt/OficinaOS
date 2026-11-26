@@ -8,6 +8,7 @@ import {
   phone4Of,
   type ReceiptStrings,
   receiptStrings,
+  receiptTermsText,
   type renderReceiptHtml,
   type renderSaleReceiptHtml,
   toNum,
@@ -208,9 +209,24 @@ function jobCostsSection(
   }
 }
 
-function signatureSection(t: Ticket, job: JobReceiptData, s: ReceiptStrings) {
+function signatureSection(
+  t: Ticket,
+  job: JobReceiptData,
+  s: ReceiptStrings,
+  shopTerms: string | null | undefined
+) {
   t.sep();
-  t.wrap(s.termsSigned);
+  const hasSignature = Boolean(
+    job.intakeSignatureDataUrl?.startsWith("data:image/")
+  );
+  t.wrap(
+    receiptTermsText(
+      job.intakeTermsSnapshot,
+      shopTerms,
+      s.termsSigned,
+      hasSignature
+    )
+  );
   t.text("\n");
   t.center(s.signatureLabel);
   t.text("______________________________\n");
@@ -273,7 +289,7 @@ export function buildJobReceiptEscPos(
     );
   }
   if (prefs.showSignature) {
-    signatureSection(t, job, s);
+    signatureSection(t, job, s, settings?.intakeTerms);
   }
   const url = trackingUrl(
     job.jobCode,

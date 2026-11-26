@@ -45,7 +45,7 @@ function esc(s: string): string {
 // that signature would claim they were agreed, so fall back to the fixed
 // declaration. Unsigned jobs have no signature to misattribute; current shop
 // clauses are informational there.
-function receiptTermsText(
+export function receiptTermsText(
   snapshot: unknown,
   shopTerms: string | null | undefined,
   fallback: string,

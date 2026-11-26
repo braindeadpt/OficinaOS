@@ -43,6 +43,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     failed: intakeTermsFailed,
     retry: retryIntakeTerms,
     terms: intakeTerms,
+    version: intakeTermsVersion,
   } = useIntakeTermsSession(intakeModalOpen);
   const { pathname } = useLocation();
   const { t, i18n } = useTranslation();
@@ -74,6 +75,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         const job = await createJob({
           ...buildJobPayload(data),
           intakeLocale: i18n.language,
+          intakeTermsVersion,
         });
         toast.success(t("jobs_created_success", { id: job.jobCode || job.id }));
         await markRequestConverted(job.id);
@@ -109,6 +111,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       fetchMetrics,
       showPrintPreview,
       markRequestConverted,
+      intakeTermsVersion,
       t,
       i18n.language,
     ]

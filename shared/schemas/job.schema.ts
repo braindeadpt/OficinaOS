@@ -73,6 +73,7 @@ export const createJobSchema = z.object({
   // it and resolves the legal text from shop settings before signing.
   intakeTermsText: z.string().max(4000).optional(),
   intakeLocale: z.string().max(10).optional(),
+  intakeTermsVersion: z.number().int().min(1).optional(),
   // Optional — many shops only price a repair after diagnosis. Omitted/null
   // means "por orçamentar" (not yet quoted).
   estimatedCost: z

@@ -74,6 +74,7 @@ interface JobsState {
     intakeSignatureDataUrl?: string;
     signatureSessionToken?: string;
     intakeLocale?: string;
+    intakeTermsVersion?: number;
     estimatedCost?: number;
     estimatedDate?: string;
     depositAmount?: number;

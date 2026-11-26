@@ -13,8 +13,3 @@ ALTER TABLE "signature_sessions"
   ADD COLUMN IF NOT EXISTS "intakeTermsVersion" INTEGER,
   ADD COLUMN IF NOT EXISTS "intakeTermsUpdatedAt" TIMESTAMPTZ;
 
-UPDATE "shop_settings"
-SET "intakeTermsUpdatedAt" = "updatedAt"
-WHERE "intakeTerms" IS NOT NULL
-  AND btrim("intakeTerms") <> ''
-  AND "intakeTermsUpdatedAt" IS NULL;
