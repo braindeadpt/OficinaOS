@@ -282,6 +282,7 @@ jobs:
           object="$(rclone lsf pontobackup:oficinaos-backups --include 'oficinaos-*.dump.age' | sort | tail -1)"
           test -n "$object"
           echo "remote object: $object"
+          echo "REMOTE_BACKUP_OBJECT=$object" >> "$GITHUB_ENV"
           rclone copyto "pontobackup:oficinaos-backups/$object" /tmp/remote-backup.dump.age
           magic="$(head -c 21 /tmp/remote-backup.dump.age)"
           echo "remote magic: $magic"
@@ -309,7 +310,8 @@ jobs:
       - name: Restore from the encrypted off-site copy and verify
         run: |
           mkdir -p /tmp/offsite
-          object="$(rclone lsf pontobackup:oficinaos-backups --include 'oficinaos-*.dump.age' | sort | tail -1)"
+          object="$REMOTE_BACKUP_OBJECT"
+          test -n "$object"
           rclone copyto "pontobackup:oficinaos-backups/$object" /tmp/offsite/backup.dump.age
           age -d -i /tmp/ponto-backup-age-key.txt -o /tmp/offsite/backup.dump /tmp/offsite/backup.dump.age
           chmod 600 /tmp/offsite/backup.dump
