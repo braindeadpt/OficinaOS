@@ -24,7 +24,7 @@ export interface PontoProofs {
   lng?: number | null;
   manual?: boolean;
   onShopWifi?: boolean;
-  photoId?: string;
+  photoSentAt?: string;
   [key: string]: unknown;
 }
 
@@ -68,9 +68,7 @@ export interface PontoEntryDTO {
   }[];
 }
 
-export interface PontoPendingEntryDTO extends PontoEntryDTO {
-  photos: { id: string; url: string }[];
-}
+export type PontoPendingEntryDTO = PontoEntryDTO;
 
 export interface PontoNowUserDTO {
   lastAt: string | null;
@@ -100,6 +98,8 @@ export interface PontoDayHoursDTO {
   lateMinutes: number;
   /** O último evento efetivo do dia não é SAIDA. */
   missingExit: boolean;
+  /** Instantes em que uma foto de prova foi enviada nesse dia (nunca a imagem). */
+  photoSentAts?: string[];
   /** Registos efetivamente RECUSADOS nesse dia. */
   recusadoCount: number;
   /** Minutos efetivamente trabalhados (entradas→pausa/saída, volteis→pausa/saída). */

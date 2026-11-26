@@ -41,7 +41,6 @@ function fakePrisma(overrides: Partial<SettingsRow> = {}) {
     ...overrides,
   };
   return {
-    pontoPhoto: { findMany: vi.fn(async () => []) },
     shopSettings: {
       // dashboardScope lê o fuso da loja via findFirst (cache 60s).
       findFirst: vi.fn(async () => ({ timezone: "Europe/Lisbon" })),

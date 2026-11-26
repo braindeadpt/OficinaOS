@@ -35,6 +35,7 @@ describe("downloadPdf do ponto", () => {
             lastSaidaAt: "2026-06-15T17:00:00.000Z",
             lateMinutes: 30,
             missingExit: false,
+            photoSentAts: ["2026-06-15T09:29:00.000Z"],
             recusadoCount: 0,
             workedMinutes: 450,
           },
@@ -94,11 +95,23 @@ describe("downloadPdf do ponto", () => {
       "ponto.pdf_col_late",
       "ponto.pdf_col_early",
       "ponto.pdf_col_corrected",
+      "ponto.pdf_col_photos",
     ]);
     expect(options.body).toEqual([
-      ["2026-06-15", "Ana", "7h30", "10:30", "18:00", "", "30m", "12m", "X"],
-      ["2026-06-16", "Ana", "4h00", "10:00", "18:00", "", "", "", "X"],
-      ["2026-06-17", "Ana", "2h00", "10:00", "—", "!", "", "", ""],
+      [
+        "2026-06-15",
+        "Ana",
+        "7h30",
+        "10:30",
+        "18:00",
+        "",
+        "30m",
+        "12m",
+        "X",
+        "ponto.photo_sent_short",
+      ],
+      ["2026-06-16", "Ana", "4h00", "10:00", "18:00", "", "", "", "X", ""],
+      ["2026-06-17", "Ana", "2h00", "10:00", "—", "!", "", "", "", ""],
     ]);
     expect(pdfMocks.save).toHaveBeenCalledWith(
       "ponto-2026-06-01_2026-06-30.pdf"

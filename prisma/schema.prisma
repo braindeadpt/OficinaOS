@@ -254,7 +254,6 @@ model User {
   timeEntries           TimeEntry[]
   timeEntriesCreated    TimeEntry[]         @relation("TimeEntryCreatedBy")
   timeEntryValidations  TimeEntryValidation[]
-  pontoPhotos           PontoPhoto[]
 
   @@map("users")
 }
@@ -2069,7 +2068,7 @@ model TimeEntry {
   transport TimeEntryTransport
   status    TimeEntryStatus
   // Provas da avaliação da Cloud: codeValid, onShopWifi, lat, lng,
-  // accuracy, distanceM, insideRadius, photoId?, hasPhoto.
+  // accuracy, distanceM, insideRadius, hasPhoto/photoSentAt.
   proofs    Json
   reason    String?
   // Uma correção é uma linha nova que aponta para a original.
@@ -2108,22 +2107,4 @@ model TimeEntryValidation {
   @@index([entryId])
   @@index([byUserId])
   @@map("time_entry_validations")
-}
-
-// Foto de prova do registo (externos, ou quando a loja a exige). Guardada
-// localmente como JobPhoto e apagada automaticamente aos 90 dias — o
-// registo fica com "foto expirada". entryId é texto simples, sem FK: a
-// foto chega antes do TimeEntry (o registo só existe depois da avaliação
-// na Cloud) e as fotos expiram muito antes dos registos (5 anos).
-model PontoPhoto {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  entryId   String?
-  path      String
-  createdAt DateTime @default(now()) @db.Timestamptz
-
-  @@index([userId])
-  @@index([entryId])
-  @@map("ponto_photos")
 }

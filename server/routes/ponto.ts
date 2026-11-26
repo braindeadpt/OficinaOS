@@ -1,5 +1,3 @@
-import fs from "node:fs";
-import path from "node:path";
 import type { PrismaClient } from "@generated/client";
 import { AppError } from "@shared/errors/app-error.js";
 import {
@@ -11,7 +9,6 @@ import {
   pontoValidateSchema,
 } from "@shared/schemas/ponto.schema.js";
 import type { FastifyPluginCallback, FastifyRequest } from "fastify";
-import { loadEnv } from "../config/env.js";
 import { decryptSecret } from "../lib/crypto.js";
 import { dashboardScope } from "../middlewares/dashboard-scope.js";
 import { requirePermission } from "../middlewares/rbac.js";
@@ -27,7 +24,6 @@ import {
   listNow,
   listPending,
   listRecentDecisions,
-  resolvePontoPhotoPath,
   resolvePontoRange,
 } from "../services/ponto-panel.service.js";
 import { isModuleEnabled } from "../utils/modules.js";
@@ -486,50 +482,6 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
         lng: settings.pontoGeoLng,
         radiusM: settings.pontoRadiusM,
       });
-    }
-  );
-
-  // Fotos de prova: acesso por id (não por path) — a URL nunca expõe a
-  // estrutura de diretórios e o guard de traversal impede escapes de
-  // UPLOAD_DIR mesmo que um path gravado seja adulterado.
-  const PHOTO_MIME: Record<string, string> = {
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".png": "image/png",
-    ".webp": "image/webp",
-  };
-
-  app.get(
-    "/photos/:photoId",
-    {
-      preHandler: [requirePermission({ reports: ["viewShop"] })],
-      schema: {
-        params: { type: "object", additionalProperties: true },
-        summary: "Serve a ponto proof photo by id",
-        tags: ["ponto"],
-      },
-    },
-    async (req, reply) => {
-      const { photoId } = req.params as { photoId: string };
-      const photo = await app.prisma.pontoPhoto.findUnique({
-        select: { path: true },
-        where: { id: photoId },
-      });
-      if (!photo) {
-        throw new AppError("NOT_FOUND");
-      }
-      const full = resolvePontoPhotoPath(loadEnv().UPLOAD_DIR, photo.path);
-      if (!full) {
-        throw new AppError("NOT_FOUND");
-      }
-      const stat = await fs.promises.stat(full).catch(() => null);
-      if (!stat?.isFile()) {
-        throw new AppError("NOT_FOUND");
-      }
-      const type =
-        PHOTO_MIME[path.extname(full).toLowerCase()] ??
-        "application/octet-stream";
-      return reply.type(type).send(fs.createReadStream(full));
     }
   );
 

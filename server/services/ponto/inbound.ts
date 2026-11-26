@@ -58,8 +58,8 @@ function quotedFields(
 function imageFields(
   payload: Record<string, unknown> | null
 ): Pick<InboundMessage, "imageRef"> {
-  // Imagem oficial: a Meta não retransmite a média na fila — se um dia
-  // o payload a trouxer, a app já sabe o que fazer com ela.
+  // Imagem oficial: interessa só o facto de ter sido enviada. Mesmo que
+  // o payload traga URL/mediaId, a app nunca descarrega nem guarda essa referência.
   if (!payload) {
     return {};
   }
@@ -67,7 +67,6 @@ function imageFields(
     imageRef: {
       mimetype:
         typeof payload.mime_type === "string" ? payload.mime_type : null,
-      url: typeof payload.url === "string" ? payload.url : null,
     },
   };
 }

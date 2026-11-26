@@ -11,17 +11,12 @@
 import type { TimeEntryTransport, TimeEntryType } from "@generated/client";
 import { getOrCreateShopSettings } from "../../repositories/settings.repository.js";
 import { isModuleEnabled } from "../../utils/modules.js";
-import { fetchPublicMedia } from "../../utils/safe-url.js";
 import { dayRange, zonedDateTimeToUtc } from "../../utils/time-range.js";
 import type {
   BotReplyCtx,
   InboundMessage,
   InboundTransport,
 } from "../bot-intents.js";
-import {
-  downloadEvolutionMedia,
-  type EvolutionConfig,
-} from "../evolution.service.js";
 import { rateOk } from "../rate-limit.js";
 import {
   normalizePontoText,
@@ -29,12 +24,9 @@ import {
   parsePontoCommand,
 } from "./commands.js";
 import {
-  deletePontoPhoto,
   findOpenPresumedExit,
-  linkPontoPhoto,
   pontoEntriesSince,
   recordPontoEntry,
-  savePontoPhotoFile,
   todayPontoEntries,
 } from "./entries.js";
 import { evaluatePontoMark } from "./evaluate.js";
@@ -109,20 +101,8 @@ const TRANSPORT_ENUM: Record<
 };
 
 export interface PontoHandlerOpts {
-  /** Config Evolution para download de foto (só canal evolution). */
-  evolution?: EvolutionConfig;
-  /** Download da foto — por omissão: getBase64FromMediaMessage na
-   *  Evolution (raw) ou GET direto no url. Injetável em testes. */
-  fetchPhoto?: (
-    ref: NonNullable<InboundMessage["imageRef"]>
-  ) => Promise<{ buffer: Buffer; mimetype?: string | null } | null>;
   /** Settings já carregadas pelo caller (o caminho Evolution já as tem). */
   shopSettings?: Settings;
-}
-
-interface PhotoData {
-  buffer: Buffer;
-  mimetype?: string | null;
 }
 
 function firstNameOf(user: PontoStaffMatch["user"]): string {
@@ -290,48 +270,9 @@ function recusadoText(reason?: string): string {
     : "Não consegui registar o ponto — tente outra vez ou leia o QR.";
 }
 
-async function defaultFetchPhoto(
-  ref: NonNullable<InboundMessage["imageRef"]>,
-  opts?: PontoHandlerOpts
-): Promise<PhotoData | null> {
-  if (opts?.evolution && ref.raw) {
-    const media = await downloadEvolutionMedia(opts.evolution, ref.raw).catch(
-      () => null
-    );
-    if (media) {
-      return {
-        buffer: Buffer.from(media.base64, "base64"),
-        mimetype: media.mimetype ?? ref.mimetype ?? null,
-      };
-    }
-  }
-  if (ref.url) {
-    // A URL vem do payload do webhook — controlada por quem o enviou.
-    // Sem a guarda SSRF um webhook forjado faria a app pedir serviços
-    // internos (metadata, router, loopback). Só https público, ou a
-    // origem da instância Evolution configurada.
-    const media = await fetchPublicMedia(ref.url, {
-      trustedOrigin: opts?.evolution?.baseUrl ?? null,
-    });
-    if (media) {
-      return {
-        buffer: media.buffer,
-        mimetype: media.contentType ?? ref.mimetype ?? null,
-      };
-    }
-  }
-  return null;
-}
-
-function fetchPhotoForEntry(
-  ref: NonNullable<InboundMessage["imageRef"]>,
-  opts?: PontoHandlerOpts
-): Promise<PhotoData | null> {
-  if (opts?.fetchPhoto) {
-    return opts.fetchPhoto(ref).catch(() => null);
-  }
-  return defaultFetchPhoto(ref, opts);
-}
+// Fotografias: a app trata imageRef apenas como FACTO (chegou uma imagem
+// àquele instante). Nunca descarrega bytes — nem pela Evolution, nem por URL —
+// porque a prova visual fica só no telemóvel da empresa.
 
 type PontoChannel = NonNullable<InboundTransport["ponto"]>;
 type PontoTransportKind = PontoChannel["transport"];
@@ -1102,7 +1043,7 @@ interface FinalizeArgs {
   messageAt: string;
   pauseMinutes?: number | null;
   phoneDigits: string;
-  photoId?: string | null;
+  photoSentAt?: string;
   todayHasEntry: boolean;
 }
 
@@ -1195,26 +1136,15 @@ async function onPhoto(env: FlowEnv, pending: PendingPonto): Promise<void> {
     transport,
   } = env;
   clearPendingPonto(key);
-  const ref = msg.imageRef;
-  const photo = ref ? await fetchPhotoForEntry(ref, env.opts) : null;
-  let photoId: string | null = null;
-  if (photo) {
-    const saved = await savePontoPhotoFile(
-      ctx.prisma,
-      pending.userId,
-      photo.buffer,
-      photo.mimetype
-    ).catch(() => null);
-    photoId = saved?.id ?? null;
-  }
-  // hasPhoto = a foto foi validada e gravada — sem ficheiro não há
-  // prova (a Cloud avalia com hasPhoto=false → POR_VALIDAR quando a
-  // foto é obrigatória, nunca APROVADO com prova fantasma).
+  // A foto nunca é descarregada: chegar como imageRef nesta etapa é a
+  // prova. Guardamos apenas o instante de envio — a imagem fica no
+  // WhatsApp/SMS do telemóvel da empresa.
+  const photoSentAt = msg.sentAt ?? msg.createdAt;
   await finalizePonto(ctx, say, sayInteractive, settings, staff, transport, {
     at: new Date(pending.locationAt ?? pending.commandAt),
     code: pending.command === "ENTRADA" ? pending.code : undefined,
     command: pending.command,
-    hasPhoto: photoId !== null,
+    hasPhoto: true,
     location: pending.location,
     // A frescura mede-se sobre a ÚLTIMA interação do fluxo, não sobre o
     // comando: comando+localização+foto são janelas da app (3+5 min) e
@@ -1232,7 +1162,7 @@ async function onPhoto(env: FlowEnv, pending: PendingPonto): Promise<void> {
       new Date(pending.locationAt ?? pending.commandAt)
     ),
     phoneDigits,
-    photoId,
+    photoSentAt,
     todayHasEntry: pending.todayHasEntry,
   });
 }
@@ -1342,9 +1272,6 @@ async function finalizePonto(
     return;
   }
   if (result.status === "RECUSADO") {
-    if (args.photoId) {
-      await deletePontoPhoto(ctx.prisma, args.photoId).catch(() => undefined);
-    }
     await say(recusadoText(result.reason));
     return;
   }
@@ -1371,9 +1298,9 @@ async function finalizePonto(
           lng: args.location.lng,
         }
       : {}),
-    ...(args.photoId ? { photoId: args.photoId } : {}),
+    ...(args.photoSentAt ? { photoSentAt: args.photoSentAt } : {}),
   };
-  const entry = await recordPontoEntry(ctx.prisma, {
+  await recordPontoEntry(ctx.prisma, {
     at: args.at,
     correctsId,
     proofs,
@@ -1383,12 +1310,6 @@ async function finalizePonto(
     type: args.command as TimeEntryType,
     userId: staff.user.id,
   });
-  if (args.photoId && entry?.id) {
-    await linkPontoPhoto(ctx.prisma, args.photoId, entry.id).catch(
-      () => undefined
-    );
-  }
-
   const firstName = firstNameOf(staff.user);
   const text = confirmationText(
     args.command,

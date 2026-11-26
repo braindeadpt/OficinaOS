@@ -37,7 +37,6 @@ describe("listRecentDecisions", () => {
   it("traz decisões dos últimos 7 dias sem substituídas — a reversão precisa da lista", async () => {
     const findMany = vi.fn(() => Promise.resolve([]));
     const prisma = {
-      pontoPhoto: { findMany: vi.fn(() => Promise.resolve([])) },
       timeEntry: { findMany },
     } as unknown as DbClient;
 
@@ -101,7 +100,6 @@ describe("listRecentDecisions", () => {
     ];
     const findMany = vi.fn(() => Promise.resolve(rows));
     const prisma = {
-      pontoPhoto: { findMany: vi.fn(() => Promise.resolve([])) },
       timeEntry: { findMany },
     } as unknown as DbClient;
 
@@ -157,7 +155,6 @@ describe("listRecentDecisions", () => {
     }
     const findMany = vi.fn(() => Promise.resolve(rows));
     const prisma = {
-      pontoPhoto: { findMany: vi.fn(() => Promise.resolve([])) },
       timeEntry: { findMany },
     } as unknown as DbClient;
 

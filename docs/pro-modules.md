@@ -223,8 +223,10 @@ always the server's, never the phone's.
   location, photos or records: only single-use `PontoToken`s for ~24 h
   for auditing.
 - **In the shop:** `TimeEntry` is append-only (corrections are new rows),
-  5-year retention (Labour Code, art. 202); proof photos deleted at 90
-  days. The panel (now, validate, hours, missed clock-outs, export PDF)
+  5-year retention (Labour Code, art. 202). Proof photos are never
+  downloaded or stored — only `photoSentAt` is kept; the image stays in
+  the company phone. The panel (now, validate, hours, missed clock-outs,
+  export PDF/Excel)
   is in Ponto in the menu; manager decisions are reversible — the most
   recent validation is the effective one — and reading and export stay
   available even without the module active.
