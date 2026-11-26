@@ -25,29 +25,42 @@ export const MCP_DEFAULT_PORT = 4100;
 
 // Rate limit PRÉ-autenticação por IP (janela deslizante em memória) — mesmo
 // em loopback, um processo local não pode forçar tokens ilimitadamente.
-const ipWindows = new Map<string, number[]>();
+const ipWindows = new Map<string, Attempt[]>();
 const IP_RATE_LIMIT_PER_MINUTE = 60;
 
+interface Attempt {
+  id: symbol;
+  t: number;
+}
+
+function liveAttempts(ip: string, now: number): Attempt[] {
+  const live = (ipWindows.get(ip) ?? []).filter((a) => now - a.t < 60_000);
+  ipWindows.set(ip, live);
+  return live;
+}
+
 function ipRateLimitOk(ip: string, now = Date.now()): boolean {
-  const stamps = (ipWindows.get(ip) ?? []).filter((t) => now - t < 60_000);
-  ipWindows.set(ip, stamps);
-  return stamps.length < IP_RATE_LIMIT_PER_MINUTE;
+  return liveAttempts(ip, now).length < IP_RATE_LIMIT_PER_MINUTE;
 }
 
 // Em loopback todos os clientes partilham o mesmo IP — a quota só é consumida
 // por falhanços de autenticação (força bruta), nunca por tráfego legítimo.
-// O consumo é síncrono ANTES da consulta à BD (reembolsado no sucesso), para
-// que tentativas sobrepostas não passem todas antes da primeira falha contar.
-function consumeIpAttempt(ip: string, now = Date.now()): void {
-  const stamps = (ipWindows.get(ip) ?? []).filter((t) => now - t < 60_000);
-  stamps.push(now);
-  ipWindows.set(ip, stamps);
+// O consumo é síncrono ANTES da consulta à BD e o reembolso remove a marca
+// exata desta tentativa (não a mais recente) — tentativas sobrepostas não
+// podem apagar as marcas umas das outras.
+function consumeIpAttempt(ip: string, now = Date.now()): symbol {
+  const live = liveAttempts(ip, now);
+  const id = Symbol("attempt");
+  live.push({ id, t: now });
+  ipWindows.set(ip, live);
+  return id;
 }
 
-function refundIpAttempt(ip: string, now = Date.now()): void {
-  const stamps = (ipWindows.get(ip) ?? []).filter((t) => now - t < 60_000);
-  stamps.pop();
-  ipWindows.set(ip, stamps);
+function refundIpAttempt(ip: string, id: symbol, now = Date.now()): void {
+  ipWindows.set(
+    ip,
+    liveAttempts(ip, now).filter((a) => a.id !== id)
+  );
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
@@ -61,6 +74,33 @@ function bearerToken(req: IncomingMessage): string | null {
     return null;
   }
   return header.slice("Bearer ".length).trim();
+}
+
+type McpAuthResult = Awaited<ReturnType<typeof authenticateToken>>;
+
+/** Autentica o pedido e gere a quota de força bruta. Devolve null (e responde) em falha. */
+async function authenticateMcpRequest(
+  prisma: PrismaClient,
+  plaintext: string | null,
+  ip: string,
+  res: ServerResponse
+): Promise<McpAuthResult> {
+  const attemptId = consumeIpAttempt(ip);
+  let auth: McpAuthResult = null;
+  try {
+    auth = plaintext ? await authenticateToken(prisma, plaintext) : null;
+  } catch {
+    // Erro de BD não é força bruta — não fica na quota.
+    refundIpAttempt(ip, attemptId);
+    sendJson(res, 500, { error: "internal" });
+    return null;
+  }
+  if (!auth) {
+    sendJson(res, 401, { error: "unauthorized" });
+    return null;
+  }
+  refundIpAttempt(ip, attemptId);
+  return auth;
 }
 
 export function createMcpHttpServer(prisma: PrismaClient): Server {
@@ -82,15 +122,10 @@ export function createMcpHttpServer(prisma: PrismaClient): Server {
       }
 
       const plaintext = bearerToken(req);
-      consumeIpAttempt(ip);
-      const auth = plaintext
-        ? await authenticateToken(prisma, plaintext)
-        : null;
+      const auth = await authenticateMcpRequest(prisma, plaintext, ip, res);
       if (!auth) {
-        sendJson(res, 401, { error: "unauthorized" });
         return;
       }
-      refundIpAttempt(ip);
       if (!rateLimitOk(auth.tokenId)) {
         sendJson(res, 429, { error: "rate_limited", limit: "60/min" });
         return;
