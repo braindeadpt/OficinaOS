@@ -147,6 +147,44 @@ describe("buildJobReceiptEscPos", () => {
   });
 });
 
+describe("buildJobReceiptEscPos signature seal", () => {
+  it("prints the terms provenance on the seal for signed custom terms", async () => {
+    const signed = {
+      ...JOB,
+      intakeDocumentHash: "abcdef1234567890",
+      intakeSignatureDataUrl: "data:image/png;base64,AAAA",
+      intakeTermsSnapshot: { locale: "pt", termsText: "Termos custom da loja" },
+      intakeTermsUpdatedAt: new Date("2026-11-20T10:00:00Z"),
+      intakeTermsVersion: 3,
+      signedAt: new Date("2026-11-21T15:00:00Z"),
+    };
+    const buf = await buildJobReceiptEscPos(SETTINGS, signed, "https://app.test");
+    const text = decode(buf);
+    expect(text).toContain("#abcdef123456");
+    expect(text).toContain("termos v3");
+    expect(text).toContain("20/11/2026");
+  });
+
+  it("omits the version for the bundled default terms even with a version date", async () => {
+    const pt = await import("../../../src/i18n/locales/pt.json");
+    const defaultText = (pt.default as { intake?: { terms_text?: string } })
+      .intake?.terms_text;
+    const signed = {
+      ...JOB,
+      intakeDocumentHash: "abcdef1234567890",
+      intakeSignatureDataUrl: "data:image/png;base64,AAAA",
+      intakeTermsSnapshot: { locale: "pt", termsText: defaultText },
+      intakeTermsUpdatedAt: new Date("2026-11-20T10:00:00Z"),
+      intakeTermsVersion: 3,
+      signedAt: new Date("2026-11-21T15:00:00Z"),
+    };
+    const buf = await buildJobReceiptEscPos(SETTINGS, signed, "https://app.test");
+    const text = decode(buf);
+    expect(text).toContain("#abcdef123456");
+    expect(text).not.toContain("termos v3");
+  });
+});
+
 describe("buildSaleReceiptEscPos", () => {
   it("contains sale code, items and total", () => {
     const buf = buildSaleReceiptEscPos(SETTINGS, SALE);

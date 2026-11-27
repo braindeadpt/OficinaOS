@@ -390,6 +390,28 @@ describe("renderLabelHtml identification", () => {
   });
 });
 
+describe("renderReceiptHtml signature seal provenance", () => {
+  const A4 = { ...FULL_SETTINGS, receiptPaper: "a4" };
+
+  it("prints the terms version and date on the seal of the final receipt", async () => {
+    const prisma = mockPrisma({ ...A4, intakeTerms: "Termos custom da loja" });
+    const job = {
+      ...BASE_JOB,
+      intakeDocumentHash: "abcdef1234567890",
+      intakeTermsSnapshot: {
+        locale: "pt",
+        termsText: "Termos custom da loja",
+      },
+      intakeTermsUpdatedAt: new Date("2026-11-20T10:00:00Z"),
+      intakeTermsVersion: 3,
+      signedAt: new Date("2026-11-21T15:00:00Z"),
+    };
+    const html = await renderReceiptHtml(prisma, job, "", {});
+    expect(html).toContain("termos v3");
+    expect(html).toContain("20/11/2026");
+  });
+});
+
 describe("termsProvenanceLine", () => {
   const s = receiptStrings("pt");
 
@@ -436,6 +458,22 @@ describe("termsProvenanceLine", () => {
 
   it("omits provenance for jobs signed before versioning existed", async () => {
     const line = await termsProvenanceLine({}, s);
+    expect(line).toBe("");
+  });
+
+  it("omits the shop version for bundled default terms even when reverting stamped a date", async () => {
+    const pt = await import("../../../src/i18n/locales/pt.json");
+    const defaultText = (
+      pt.default as { intake?: { terms_text?: string } }
+    ).intake?.terms_text;
+    const line = await termsProvenanceLine(
+      {
+        intakeTermsSnapshot: { locale: "pt", termsText: defaultText },
+        intakeTermsUpdatedAt: new Date("2026-11-20T10:00:00Z"),
+        intakeTermsVersion: 3,
+      },
+      s
+    );
     expect(line).toBe("");
   });
 });
