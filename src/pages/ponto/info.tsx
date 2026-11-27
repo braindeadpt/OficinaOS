@@ -80,6 +80,7 @@ const DEFAULT_INFO_MODEL: InfoBlock[] = [
       "ponto.info_doc_rights_2",
       "ponto.info_doc_rights_3",
       "ponto.info_doc_rights_4",
+      "ponto.info_doc_rights_5",
     ],
     heading: "ponto.info_doc_rights",
   },

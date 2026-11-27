@@ -26,7 +26,7 @@ export interface PontoPendingLocation {
 export interface PendingPonto {
   /** Código de 4 dígitos do QR — só ENTRADA o usa. */
   code?: string;
-  command: Exclude<PontoCommand, "ESTADO">;
+  command: Exclude<PontoCommand, "ESTADO" | "REGISTOS">;
   /** ISO do instante de envio da mensagem de COMANDO — sentAt da Meta
    *  quando a fila oficial o traz, senão msg.createdAt (na Evolution o
    *  createdAt já é o timestamp da mensagem). A Cloud valida o código

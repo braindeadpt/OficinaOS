@@ -3253,5 +3253,6 @@
   "ponto.act_proof_screen_wifi": "Screen QR on the shop network",
   "ponto.act_proof_location": "Location at the time",
   "ponto.act_proof_external_photo": "External: location + photo (not stored)",
-  "ponto.act_proof_manual": "Manually validated by {{name}}"
+  "ponto.act_proof_manual": "Manually validated by {{name}}",
+  "ponto.info_doc_rights_5": "You can ask for your own records at any time by messaging REGISTOS (or REGISTOS MM/YYYY for an earlier month) on the same channel you use to clock in: you receive a summary of the month and a single-use link, valid for 24 hours, to the PDF."
 }

@@ -28,7 +28,7 @@ export const PONTO_EXIT_DATE_TERMS = {
 
 export const PONTO_TEXT = {
   commands:
-    "Comandos do livro de ponto: ENTRADA (leia o QR), PAUSA, VOLTEI, SAIDA, ESTADO.",
+    "Comandos do livro de ponto: ENTRADA (leia o QR), PAUSA, VOLTEI, SAIDA, ESTADO, REGISTOS (os seus registos do mês).",
   configMissing: ptMessages["ponto.config_missing"],
   configMissingCompany: ptMessages["ponto.config_missing_company"],
   entradaNeedsCode:

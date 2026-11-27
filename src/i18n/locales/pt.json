@@ -3253,5 +3253,6 @@
   "ponto.act_proof_screen_wifi": "QR do ecrã na rede da loja",
   "ponto.act_proof_location": "Localização no momento",
   "ponto.act_proof_external_photo": "Externo: localização + foto (não guardada)",
-  "ponto.act_proof_manual": "Validado manualmente por {{name}}"
+  "ponto.act_proof_manual": "Validado manualmente por {{name}}",
+  "ponto.info_doc_rights_5": "Pode pedir os seus registos a qualquer momento enviando REGISTOS (ou REGISTOS MM/AAAA para um mês anterior) pelo mesmo canal que usa para picar o ponto: recebe um resumo do mês e um link de uso único, válido por 24 horas, para o PDF."
 }

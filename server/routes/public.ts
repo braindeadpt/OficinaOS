@@ -12,6 +12,12 @@ import { handleEvolutionInbound } from "../services/evolution-bot.service.js";
 import { submitPreCheckRequest } from "../services/intake-request.service.js";
 import { respondToQuote } from "../services/job-quote.service.js";
 import {
+  consumeRegistosToken,
+  registosMonthEntries,
+  summarizeMonth,
+} from "../services/ponto/registos.js";
+import { buildRegistosPdf } from "../services/ponto/registos-pdf.js";
+import {
   getPublicSignatureSession,
   submitSignatureSession,
 } from "../services/signature-session.service.js";
@@ -232,6 +238,78 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
    * only secret; expired and unknown tokens return the same 410 so probing
    * reveals nothing about which sessions exist.
    */
+  /**
+   * PDF mensal do livro de ponto do próprio trabalhador (art. 15.º RGPD).
+   * Token de uso único válido 24 h — consumir marca o uso de forma atómica
+   * antes de gerar o PDF, por isso um segundo acesso (mesmo em corridas)
+   * recebe 410. Nada passa pela Cloud: a rota é servida pela app da loja.
+   */
+  app.get("/ponto-registos/:token", {
+    handler: async (req, reply) => {
+      const { token } = req.params as { token: string };
+      const consumed = await consumeRegistosToken(app.prisma, token);
+      if (!consumed) {
+        return reply.status(410).send({ error: "link expirado ou já usado" });
+      }
+      const user = await app.prisma.user.findUnique({
+        select: { name: true },
+        where: { id: consumed.userId },
+      });
+      if (!user) {
+        return reply.status(410).send({ error: "link expirado ou já usado" });
+      }
+      const settings = await getOrCreateShopSettings(app.prisma);
+      const tz = settings.timezone ?? process.env.TZ ?? "UTC";
+      const [year, month] = consumed.month.split("-").map(Number);
+      const spec = { month, year };
+      const { correctionsCount, entries } = await registosMonthEntries(
+        app.prisma,
+        consumed.userId,
+        tz,
+        spec
+      );
+      const summary = summarizeMonth(entries, correctionsCount, tz);
+      const monthNames = [
+        "janeiro",
+        "fevereiro",
+        "março",
+        "abril",
+        "maio",
+        "junho",
+        "julho",
+        "agosto",
+        "setembro",
+        "outubro",
+        "novembro",
+        "dezembro",
+      ];
+      const pdf = buildRegistosPdf({
+        entries,
+        monthLabel: `${monthNames[spec.month - 1]} de ${spec.year}`,
+        shopName: settings.shopName ?? "OficinaOS",
+        summary,
+        tz,
+        workerName: user.name,
+      });
+      return reply
+        .header(
+          "content-disposition",
+          `inline; filename="ponto-${consumed.month}.pdf"`
+        )
+        .type("application/pdf")
+        .send(pdf);
+    },
+    schema: {
+      params: {
+        properties: { token: { type: "string" } },
+        required: ["token"],
+        type: "object",
+      },
+      summary: "Monthly ponto PDF for the worker (single-use token, 24 h)",
+      tags: ["public"],
+    },
+  });
+
   app.get("/sign/:token", {
     handler: (req) => {
       const { token } = req.params as { token: string };

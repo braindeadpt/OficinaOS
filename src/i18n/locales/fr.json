@@ -3253,5 +3253,6 @@
   "ponto.act_proof_screen_wifi": "QR de l'écran sur le réseau de la boutique",
   "ponto.act_proof_location": "Localisation au moment de la pointeuse",
   "ponto.act_proof_external_photo": "Externe : localisation + photo (non conservée)",
-  "ponto.act_proof_manual": "Validé manuellement par {{name}}"
+  "ponto.act_proof_manual": "Validé manuellement par {{name}}",
+  "ponto.info_doc_rights_5": "Vous pouvez demander vos propres enregistrements à tout moment en envoyant REGISTOS (ou REGISTOS MM/AAAA pour un mois antérieur) par le même canal que vous utilisez pour pointer : vous recevez un résumé du mois et un lien à usage unique, valable 24 heures, vers le PDF."
 }

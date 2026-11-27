@@ -3253,5 +3253,6 @@
   "ponto.act_proof_screen_wifi": "QR de la pantalla en la red de la tienda",
   "ponto.act_proof_location": "Ubicación en el momento",
   "ponto.act_proof_external_photo": "Externo: ubicación + foto (no guardada)",
-  "ponto.act_proof_manual": "Validado manualmente por {{name}}"
+  "ponto.act_proof_manual": "Validado manualmente por {{name}}",
+  "ponto.info_doc_rights_5": "Puede pedir sus propios registros en cualquier momento enviando REGISTOS (o REGISTOS MM/AAAA para un mes anterior) por el mismo canal que usa para fichar: recibe un resumen del mes y un enlace de un solo uso, válido durante 24 horas, para el PDF."
 }

@@ -9,7 +9,12 @@
 // funcionário nunca "cai" no pipeline de clientes.
 
 import type { TimeEntryTransport, TimeEntryType } from "@generated/client";
-import { getOrCreateShopSettings } from "../../repositories/settings.repository.js";
+import { loadEnv } from "../../config/env.js";
+import { accessUrls } from "../../lib/mdns.js";
+import {
+  findShopSettingsUnique,
+  getOrCreateShopSettings,
+} from "../../repositories/settings.repository.js";
 import { isModuleEnabled } from "../../utils/modules.js";
 import { dayRange, zonedDateTimeToUtc } from "../../utils/time-range.js";
 import type {
@@ -32,6 +37,16 @@ import {
 } from "./entries.js";
 import { evaluatePontoMark } from "./evaluate.js";
 import { parsePontoExitAnswer } from "./exit-answer.js";
+import {
+  createRegistosToken,
+  currentMonthSpec,
+  fmtHoursMs,
+  monthKey,
+  parseMonthArg,
+  registosMonthEntries,
+  registosRateOk,
+  summarizeMonth,
+} from "./registos.js";
 import { findPontoStaff, type PontoStaffMatch } from "./staff.js";
 import {
   clearPendingPonto,
@@ -59,7 +74,7 @@ import {
   pontoReplyButtonsInteractive,
 } from "./transport.js";
 
-type PontoMarkCommand = Exclude<PontoCommand, "ESTADO">;
+type PontoMarkCommand = Exclude<PontoCommand, "ESTADO" | "REGISTOS">;
 type Settings = Awaited<ReturnType<typeof getOrCreateShopSettings>>;
 type Say = (text: string) => Promise<boolean>;
 /** Como Say mas devolve o id da mensagem quando o canal o expõe — as
@@ -956,6 +971,11 @@ async function dispatchCommand(a: DispatchArgs): Promise<void> {
   } = a;
   let command = parsed.command;
 
+  if (command === "REGISTOS") {
+    await replyRegistos(ctx, say, staff.user.id, tz, msg.text ?? "");
+    return;
+  }
+
   if (command === "ESTADO") {
     await replyEstado(ctx, say, staff.user.id, tz);
     return;
@@ -1436,6 +1456,105 @@ async function recordPontoResult(
 
 function tzOf(settings: Settings): string {
   return settings.timezone ?? process.env.TZ ?? "UTC";
+}
+
+const TRAILING_SLASH_RE = /\/+$/;
+
+/**
+ * Base para o link do PDF: o endereço público da loja quando existe
+ * (trackingBaseUrl ou APP_URL), senão o endereço de rede local — chega
+ * para quem está no Wi-Fi da loja. Nunca a Cloud: o PDF é servido pela
+ * app, como manda a minimização de dados.
+ */
+async function resolveRegistosBaseUrl(
+  prisma: BotReplyCtx["prisma"]
+): Promise<string | null> {
+  const settings = await findShopSettingsUnique(prisma);
+  if (settings?.trackingBaseUrl) {
+    return settings.trackingBaseUrl.replace(TRAILING_SLASH_RE, "");
+  }
+  const env = loadEnv();
+  const first = accessUrls({
+    appUrl: env.APP_URL,
+    mdnsHostname: env.MDNS_HOSTNAME,
+    port: env.PORT,
+  }).urls[0];
+  return first ? first.replace(TRAILING_SLASH_RE, "") : null;
+}
+
+/**
+ * REGISTOS — direito de acesso (art. 15.º RGPD). Resumo do mês por
+ * mensagem + link de uso único (24 h) para o PDF servido pela app. O PDF
+ * não passa pela Cloud: a mensagem leva só o endereço. Rate limit de 5
+ * pedidos por dia, contado nos tokens emitidos.
+ */
+async function replyRegistos(
+  ctx: BotReplyCtx,
+  say: Say,
+  userId: string,
+  tz: string,
+  rawText: string
+): Promise<void> {
+  const { normalizePontoText } = await import("./commands.js");
+  const parsed = parseMonthArg(normalizePontoText(rawText), tz);
+  if (parsed === undefined) {
+    await say(
+      "Mês inválido — escreva REGISTOS ou REGISTOS MM/AAAA (ex.: REGISTOS 10/2026), sem meses futuros."
+    );
+    return;
+  }
+  if (!(await registosRateOk(ctx.prisma, userId))) {
+    await say(
+      "Atingiu o limite de 5 pedidos de registos por dia — tente novamente amanhã."
+    );
+    return;
+  }
+  const spec = parsed ?? currentMonthSpec(tz);
+  const { correctionsCount, entries } = await registosMonthEntries(
+    ctx.prisma,
+    userId,
+    tz,
+    spec
+  );
+  const summary = summarizeMonth(entries, correctionsCount, tz);
+  const monthNames = [
+    "janeiro",
+    "fevereiro",
+    "março",
+    "abril",
+    "maio",
+    "junho",
+    "julho",
+    "agosto",
+    "setembro",
+    "outubro",
+    "novembro",
+    "dezembro",
+  ];
+  const monthLabel = `${monthNames[spec.month - 1]} de ${spec.year}`;
+
+  if (entries.length === 0) {
+    await say(`Sem registos em ${monthLabel}.`);
+    return;
+  }
+
+  const token = await createRegistosToken(ctx.prisma, userId, monthKey(spec));
+  const base = await resolveRegistosBaseUrl(ctx.prisma);
+  const lines = [
+    `Os seus registos de ${monthLabel}:`,
+    `${summary.days} dia(s) · ${fmtHoursMs(summary.workedMs)} trabalhadas · pausas ${fmtHoursMs(summary.pauseMs)}`,
+    `${summary.correctionsCount} correção(ões) · ${summary.pendingCount} por validar`,
+  ];
+  if (base) {
+    lines.push(
+      `PDF do mês (link de uso único, válido 24 h): ${base}/ponto-registos/${token}`
+    );
+  } else {
+    lines.push(
+      "Não consigo gerar o link do PDF porque a loja não tem endereço configurado — peça o relatório ao responsável."
+    );
+  }
+  await say(lines.join("\n"));
 }
 
 /** ESTADO (§2.5): horas de hoje e da semana + registos por validar. */
