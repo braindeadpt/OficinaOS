@@ -158,7 +158,11 @@ describe("buildJobReceiptEscPos signature seal", () => {
       intakeTermsVersion: 3,
       signedAt: new Date("2026-11-21T15:00:00Z"),
     };
-    const buf = await buildJobReceiptEscPos(SETTINGS, signed, "https://app.test");
+    const buf = await buildJobReceiptEscPos(
+      SETTINGS,
+      signed,
+      "https://app.test"
+    );
     const text = decode(buf);
     expect(text).toContain("#abcdef123456");
     expect(text).toContain("termos v3");
@@ -178,7 +182,11 @@ describe("buildJobReceiptEscPos signature seal", () => {
       intakeTermsVersion: 3,
       signedAt: new Date("2026-11-21T15:00:00Z"),
     };
-    const buf = await buildJobReceiptEscPos(SETTINGS, signed, "https://app.test");
+    const buf = await buildJobReceiptEscPos(
+      SETTINGS,
+      signed,
+      "https://app.test"
+    );
     const text = decode(buf);
     expect(text).toContain("#abcdef123456");
     expect(text).not.toContain("termos v3");

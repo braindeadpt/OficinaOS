@@ -463,9 +463,8 @@ describe("termsProvenanceLine", () => {
 
   it("omits the shop version for bundled default terms even when reverting stamped a date", async () => {
     const pt = await import("../../../src/i18n/locales/pt.json");
-    const defaultText = (
-      pt.default as { intake?: { terms_text?: string } }
-    ).intake?.terms_text;
+    const defaultText = (pt.default as { intake?: { terms_text?: string } })
+      .intake?.terms_text;
     const line = await termsProvenanceLine(
       {
         intakeTermsSnapshot: { locale: "pt", termsText: defaultText },
