@@ -344,6 +344,17 @@ export async function shredPontoPhotos(args: {
         }
       }
     }
+    // A migração corre uma vez; se a tabela ficar vazia num arranque
+    // posterior, é aqui que é removida — senão ficava para sempre como
+    // divergência de esquema (vazia mas presente).
+    if (tableExisted) {
+      const remaining = await client.query<{ n: number }>(
+        'SELECT count(*)::int AS n FROM "ponto_photos"'
+      );
+      if (remaining.rows[0]?.n === 0) {
+        await client.query('DROP TABLE "ponto_photos"');
+      }
+    }
   } finally {
     await client.end().catch(() => undefined);
   }

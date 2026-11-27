@@ -30,6 +30,13 @@ vi.mock("pg", () => ({
         if (sql.includes('SELECT id, path FROM "ponto_photos"')) {
           return { rows: [...dbState.rows] };
         }
+        if (sql.includes("count(*)")) {
+          return { rows: [{ n: dbState.rows.length }] };
+        }
+        if (sql.includes("DROP TABLE")) {
+          dbState.tableExists = false;
+          return { rows: [], rowCount: 0 };
+        }
         if (sql.includes("DELETE FROM")) {
           const id = params?.[0] as string;
           dbState.deletedIds.push(id);
@@ -57,7 +64,9 @@ describe("shred-ponto-photos — limpeza por fotografia", () => {
 
   afterEach(async () => {
     if (originalTemp === undefined) {
-      process.env.TEMP = undefined;
+      // Atribuir undefined virava a string "undefined" e envenenava o
+      // os.tmpdir() no Linux — apaga-se mesmo a variável.
+      delete process.env.TEMP;
     } else {
       process.env.TEMP = originalTemp;
     }
@@ -130,45 +139,41 @@ describe("shred-ponto-photos — limpeza por fotografia", () => {
   it("mistura de sucessos e falhas: a linha só cai na foto totalmente apagada", async () => {
     const { root, uploadDir } = await makeLayout();
     const relOk = "ponto-photos/u1/ok.jpg";
-    const relLocked = "ponto-photos/u1/trancada.jpg";
+    const relLocked = "ponto-photos/u2/trancada.jpg";
     dbState.rows = [
       { id: "ok", path: relOk },
       { id: "locked", path: relLocked },
     ];
     await makeFile(path.join(root, "app", "uploads"), relOk);
-    await makeFile(path.join(root, "app", "uploads"), relLocked);
 
-    // Windows: um ficheiro aberto não pode ser apagado — simula a falha
-    // sem depender de permissões.
-    const handle = await fs.open(
-      path.join(root, "app", "uploads", relLocked),
-      "r+"
+    // Falha determinista e multi-plataforma, sem permissões nem handles
+    // (a libuv abre ficheiros com FILE_SHARE_DELETE e o chmod só mexe no
+    // atributo read-only — nenhum bloqueia a remoção de forma fiável):
+    // ponto-photos/u2 é uma junction a apontar para FORA da base, pelo
+    // que a proteção de caminhos recusa apagar a cópia — a fotografia
+    // fica em disco e a linha na BD. Junctions não exigem privilégio no
+    // Windows; no Linux o tipo é ignorado e é um symlink normal.
+    const outsideDir = path.join(root, "fora-u2");
+    await fs.mkdir(outsideDir, { recursive: true });
+    await fs.writeFile(path.join(outsideDir, "trancada.jpg"), "foto");
+    const junctionDir = path.dirname(
+      path.join(root, "app", "uploads", relLocked)
     );
-    try {
-      const result = await shredPontoPhotos({
-        databaseUrl: "postgresql://unused",
-        uploadDir,
-      });
-      expect(dbState.deletedIds).toContain("ok");
-      if (result.rowsPending === 0) {
-        // Linux: apagar ficheiros abertos é permitido — o teste não
-        // força a falha, mas o contrato por-foto mantém-se verificado
-        // pela metade que teve sucesso.
-        expect(dbState.deletedIds).toEqual(["ok", "locked"]);
-      } else {
-        expect(result.rowsPending).toBe(1);
-        expect(dbState.deletedIds).not.toContain("locked");
-        // a foto falhada continua em disco e na BD para a próxima corrida
-        await expect(
-          fs.lstat(path.join(root, "app", "uploads", relLocked))
-        ).resolves.toBeTruthy();
-        expect(result.failures.some((f) => f.includes("trancada.jpg"))).toBe(
-          true
-        );
-      }
-    } finally {
-      await handle.close();
-    }
+    await fs.mkdir(path.dirname(junctionDir), { recursive: true });
+    await fs.symlink(outsideDir, junctionDir, "junction");
+
+    const result = await shredPontoPhotos({
+      databaseUrl: "postgresql://unused",
+      uploadDir,
+    });
+    expect(dbState.deletedIds).toContain("ok");
+    expect(result.rowsPending).toBe(1);
+    expect(dbState.deletedIds).not.toContain("locked");
+    // a foto falhada continua em disco e na BD para a próxima corrida
+    await expect(
+      fs.lstat(path.join(outsideDir, "trancada.jpg"))
+    ).resolves.toBeTruthy();
+    expect(result.failures.some((f) => f.includes("trancada.jpg"))).toBe(true);
   });
 
   it("um UPLOAD_DIR personalizado fora do layout portátil não varre pastas alheias", async () => {
