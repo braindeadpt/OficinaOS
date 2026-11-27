@@ -87,11 +87,28 @@ describe("buildCommands", () => {
     );
   });
 
-  it("hides /ponto when the module entitlement is off", () => {
+  it("hides /ponto when the module entitlement is off and there are no records", () => {
     const on = buildCommands(deps());
     expect(on.some((c) => c.to === "/ponto")).toBe(true);
     const off = buildCommands({ ...deps(), pontoEnabled: false });
     expect(off.some((c) => c.to === "/ponto")).toBe(false);
+  });
+
+  it("keeps the ACT export reachable when the entitlement expired but records exist", () => {
+    // Retenção legal de 5 anos: com o plano terminado, os registos de ponto
+    // continuam acessíveis pela paleta com o rótulo "Registos de ponto (ACT)".
+    const expired = buildCommands({
+      ...deps(),
+      pontoEnabled: false,
+      pontoHasRecords: true,
+    });
+    const entry = expired.find((c) => c.to === "/ponto");
+    expect(entry).toBeDefined();
+    expect(entry?.labelKey).toBe("ponto.act_nav_label");
+    const normal = buildCommands({ ...deps(), pontoHasRecords: true });
+    expect(normal.find((c) => c.to === "/ponto")?.labelKey).toBe(
+      "ponto.nav_label"
+    );
   });
 
   it("runs the injected callbacks rather than importing them", () => {

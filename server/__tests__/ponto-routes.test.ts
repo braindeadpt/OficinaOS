@@ -6,6 +6,7 @@ import { __resetTzCache } from "../middlewares/dashboard-scope.js";
 import { pontoRoutes } from "../routes/ponto.js";
 
 const CLOUD_URL = "https://cloud.test";
+const SHA256_HEX = /^[0-9a-f]{64}$/;
 
 interface SettingsRow {
   cloudApiUrl: string | null;
@@ -40,7 +41,8 @@ function fakePrisma(overrides: Partial<SettingsRow> = {}) {
     timezone: "Europe/Lisbon",
     ...overrides,
   };
-  return {
+  const client = {
+    pontoPhoto: { findMany: vi.fn(async () => []) },
     // /ponto/status lê as linhas legadas de ponto_photos por SQL cru —
     // sem tabela (ou sem mock) o aviso fica vazio.
     $queryRaw: vi.fn(async () => [{ reg: null }]),
@@ -51,15 +53,23 @@ function fakePrisma(overrides: Partial<SettingsRow> = {}) {
     },
     timeEntry: {
       create: vi.fn(async () => ({})),
+      findFirst: vi.fn(async () => null as { id: string } | null),
       findMany: vi.fn(async () => []),
       findUnique: vi.fn(async () => null),
     },
     timeEntryValidation: { create: vi.fn(async () => ({})) },
     user: {
       findMany: vi.fn(async () => []),
-      findUnique: vi.fn(async () => null),
+      findUnique: vi.fn(async (): Promise<unknown> => null),
     },
+    // A exportação ACT lê tudo dentro de uma transação REPEATABLE READ —
+    // o mock corre o callback com o próprio cliente.
+    $transaction: vi.fn(
+      async (callback: (tx: unknown) => Promise<unknown>, _options?: unknown) =>
+        callback(client)
+    ),
   };
+  return client;
 }
 
 const fetchMock = vi.fn();
@@ -142,6 +152,7 @@ describe("ponto — GET /status", () => {
     expect(res.json()).toEqual({
       enabled: true,
       photoCleanupWarnings: [],
+      hasRecords: false,
       tz: "Europe/Lisbon",
     });
     expect(fetchMock).not.toHaveBeenCalled();
@@ -153,6 +164,23 @@ describe("ponto — GET /status", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       enabled: false,
+      photoCleanupWarnings: [],
+      hasRecords: false,
+      tz: "Europe/Lisbon",
+    });
+  });
+
+  it("hasRecords true com entitlement expirado mas registos guardados", async () => {
+    // Acesso legal de 5 anos: é este sinal que mantém a exportação ACT
+    // visível nos menus mesmo depois de o plano terminar.
+    const prisma = fakePrisma({ cloudEntitlements: [] });
+    prisma.timeEntry.findFirst.mockResolvedValue({ id: "entry-1" });
+    const app = buildApp(prisma);
+    const res = await app.inject({ method: "GET", url: "/api/ponto/status" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      enabled: false,
+      hasRecords: true,
       photoCleanupWarnings: [],
       tz: "Europe/Lisbon",
     });
@@ -593,5 +621,37 @@ describe("ponto — gate de escrita sem módulo (WP0.5)", () => {
       const res = await app.inject({ method: "GET", url });
       expect(res.statusCode).toBe(200);
     }
+  });
+});
+
+describe("ponto — GET /act-export", () => {
+  it.each([
+    [
+      "sem emparelhamento Cloud",
+      { cloudApiUrl: null, cloudShopTokenEncrypted: null },
+    ],
+    ["com entitlement expirado", { cloudEntitlements: [] }],
+  ])("funciona %s, sem chamar a Cloud", async (_label, overrides) => {
+    const prisma = fakePrisma(overrides);
+    prisma.user.findUnique.mockResolvedValue({
+      id: "u1",
+      name: "Dono",
+      username: "dono",
+    });
+    const app = buildApp(prisma);
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/ponto/act-export?from=2026-01-01&to=2026-01-31",
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.contentHash).toMatch(SHA256_HEX);
+    expect(body.period).toEqual({
+      from: "2026-01-01",
+      timeZone: "Europe/Lisbon",
+      to: "2026-01-31",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

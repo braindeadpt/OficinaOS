@@ -135,6 +135,7 @@ export interface PontoUserFields {
   phoneE164?: string | null;
   pontoEnabled?: boolean;
   pontoScheduleEnd?: string | null;
+  pontoScheduleExempt?: boolean;
   pontoScheduleStart?: string | null;
   pontoSmsAllowed?: boolean;
 }
@@ -158,6 +159,9 @@ function pontoUpdateData(fields: PontoUserFields): Record<string, unknown> {
   }
   if (fields.pontoSmsAllowed !== undefined) {
     out.pontoSmsAllowed = fields.pontoSmsAllowed;
+  }
+  if (fields.pontoScheduleExempt !== undefined) {
+    out.pontoScheduleExempt = fields.pontoScheduleExempt;
   }
   if (fields.pontoScheduleStart !== undefined) {
     out.pontoScheduleStart = nullable(fields.pontoScheduleStart);

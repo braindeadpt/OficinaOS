@@ -14,6 +14,7 @@ interface EditState {
   phoneE164: string;
   pontoEnabled: boolean;
   pontoScheduleEnd: string;
+  pontoScheduleExempt: boolean;
   pontoScheduleStart: string;
   pontoSmsAllowed: boolean;
   userId: string;
@@ -65,6 +66,7 @@ export default function TeamTab() {
       phoneE164: u.phoneE164 ?? "",
       pontoEnabled: u.pontoEnabled,
       pontoScheduleEnd: u.pontoScheduleEnd ?? "",
+      pontoScheduleExempt: u.pontoScheduleExempt,
       pontoScheduleStart: u.pontoScheduleStart ?? "",
       pontoSmsAllowed: u.pontoSmsAllowed,
       userId: u.id,
@@ -94,6 +96,7 @@ export default function TeamTab() {
         phoneE164: phone || null,
         pontoEnabled: editing.pontoEnabled,
         pontoScheduleEnd: end || null,
+        pontoScheduleExempt: editing.pontoScheduleExempt,
         pontoScheduleStart: start || null,
         pontoSmsAllowed: editing.pontoSmsAllowed,
       };
@@ -166,6 +169,11 @@ export default function TeamTab() {
                       {u.externalWork && (
                         <Badge variant="tertiary">
                           {t("ponto.flag_external")}
+                        </Badge>
+                      )}
+                      {u.pontoScheduleExempt && (
+                        <Badge variant="tertiary">
+                          {t("ponto.flag_schedule_exempt")}
                         </Badge>
                       )}
                       {u.pontoSmsAllowed && (
@@ -244,6 +252,13 @@ export default function TeamTab() {
                 checked={editing.pontoSmsAllowed}
                 label={t("ponto.sw_sms")}
                 onChange={(v) => setEditing({ ...editing, pontoSmsAllowed: v })}
+              />
+              <SwitchRow
+                checked={editing.pontoScheduleExempt}
+                label={t("ponto.sw_schedule_exempt")}
+                onChange={(v) =>
+                  setEditing({ ...editing, pontoScheduleExempt: v })
+                }
               />
             </div>
             {formError && <p className="text-error text-sm">{formError}</p>}

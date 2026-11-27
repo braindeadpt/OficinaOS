@@ -4,7 +4,11 @@ import { useTranslation } from "react-i18next";
 import { NavLink, useLocation } from "react-router";
 import { Icon } from "@/components/ui/icon";
 import { can, useCan } from "@/hooks/use-can";
-import { BOTTOM_NAV_PRIMARY, NAV_ITEMS } from "@/lib/navigation";
+import {
+  BOTTOM_NAV_PRIMARY,
+  NAV_ITEMS,
+  resolvePontoNavItems,
+} from "@/lib/navigation";
 import { navItemVisibleInPontoOnly } from "@/lib/ponto-only";
 import { getInitials } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth";
@@ -191,6 +195,7 @@ export default function BottomNav() {
   const canCreateJob = useCan({ jobs: ["create"] });
   const pontoEnabled = usePontoStore((s) => s.enabled);
   const pontoCleanup = usePontoStore((s) => s.photoCleanupWarnings);
+  const pontoHasRecords = usePontoStore((s) => s.hasRecords);
   const fetchPonto = usePontoStore((s) => s.fetchStatus);
   useEffect(() => {
     if (pontoEnabled === null) {
@@ -204,16 +209,21 @@ export default function BottomNav() {
   const location = useLocation();
 
   const isPontoOnly = useShopModeStore((s) => s.shopMode === "ponto_only");
-  const visibleItems = NAV_ITEMS.filter(
-    (item) =>
-      item.perm &&
-      can(role, item.perm) &&
-      (item.to !== "/ponto" || pontoEnabled || pontoCleanup.length > 0) &&
-      navItemVisibleInPontoOnly(
-        item,
-        isPontoOnly,
-        can(role, { reports: ["viewShop"] })
-      )
+  const visibleItems = resolvePontoNavItems(
+    NAV_ITEMS.filter(
+      (item) =>
+        item.perm &&
+        can(role, item.perm) &&
+        navItemVisibleInPontoOnly(
+          item,
+          isPontoOnly,
+          can(role, { reports: ["viewShop"] })
+        )
+    ),
+    // O aviso de limpeza de fotografias vive nas Definições do ponto —
+    // com limpeza pendente o menu completo tem de continuar visível.
+    pontoEnabled || pontoCleanup.length > 0,
+    pontoHasRecords
   );
   const primaryPaths = isPontoOnly
     ? ["/ponto", "/settings"]

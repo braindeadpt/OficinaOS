@@ -26,16 +26,10 @@ const TABS: { icon: string; key: TabKey }[] = [
   { icon: "group", key: "equipa" },
 ];
 
-// Sem o módulo ativo o painel passa a leitura: consulta e exportação
-// continuam sempre possíveis (retenção legal de 5 anos), mas validar,
-// registar esquecimentos e gerir a equipa são escritas que exigem ponto.
-const READONLY_KEYS = new Set<TabKey>([
-  "agora",
-  "validar",
-  "horas",
-  "esquecimentos",
-  "exportar",
-]);
+// Sem o módulo ativo resta apenas a exportação ACT, em só leitura: é ela
+// que garante o acesso legal de 5 anos ao registo depois de o plano
+// terminar (a exportação traz picagens, correções, totais e horas).
+const ACT_ONLY_KEYS = new Set<TabKey>(["exportar"]);
 
 export default function PontoPage() {
   const { t } = useTranslation();
@@ -43,6 +37,7 @@ export default function PontoPage() {
   const photoCleanupWarnings = usePontoStore((s) => s.photoCleanupWarnings);
   const fetchStatus = usePontoStore((s) => s.fetchStatus);
   const [tab, setTab] = useState<TabKey>("agora");
+  const activeTab: TabKey = enabled === false ? "exportar" : tab;
 
   useEffect(() => {
     if (enabled === null) {
@@ -100,11 +95,11 @@ export default function PontoPage() {
 
       <div className="oos-scrollbar -mx-1 flex gap-1 overflow-x-auto rounded-xl bg-surface-container-low p-1">
         {TABS.filter(
-          ({ key }) => enabled !== false || READONLY_KEYS.has(key)
+          ({ key }) => enabled !== false || ACT_ONLY_KEYS.has(key)
         ).map(({ icon, key }) => (
           <button
             className={`flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg px-4 font-medium text-sm transition-colors ${
-              tab === key
+              activeTab === key
                 ? "bg-surface-container-lowest text-primary shadow-sm"
                 : "text-on-surface-variant hover:text-primary"
             }`}
@@ -120,12 +115,12 @@ export default function PontoPage() {
         ))}
       </div>
 
-      {tab === "agora" && <NowTab />}
-      {tab === "validar" && <PendingTab />}
-      {tab === "horas" && <HoursTab />}
-      {tab === "esquecimentos" && <MissingTab />}
-      {tab === "exportar" && <ExportTab />}
-      {tab === "equipa" && <TeamTab />}
+      {activeTab === "agora" && <NowTab />}
+      {activeTab === "validar" && <PendingTab />}
+      {activeTab === "horas" && <HoursTab />}
+      {activeTab === "esquecimentos" && <MissingTab />}
+      {activeTab === "exportar" && <ExportTab />}
+      {activeTab === "equipa" && <TeamTab />}
     </div>
   );
 }

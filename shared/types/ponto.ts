@@ -126,3 +126,100 @@ export interface PontoMissingExitDTO {
   userId: string;
   userName: string;
 }
+
+// ── Exportação ACT (art. 202.º CT) ─────────────────────────────────────
+// Dataset canónico gerado 100% no servidor local. O hash SHA-256 é
+// calculado sobre este JSON canónico (chaves ordenadas, UTF-8), antes de
+// qualquer formatação PDF/Excel ou tradução de etiquetas.
+
+export interface PontoActCompanyDTO {
+  address: string | null;
+  locality: string | null;
+  name: string;
+  phone: string | null;
+  taxId: string | null;
+}
+
+export interface PontoActActorDTO {
+  id: string;
+  name: string;
+  username: string;
+}
+
+export interface PontoActValidationDTO {
+  at: string;
+  byUserName: string | null;
+  decision: PontoDecision;
+  note: string | null;
+}
+
+/** Vista mínima de uma entry ligada por correção (original ou correção). */
+export interface PontoActLinkedEntryDTO {
+  at: string;
+  createdAt: string;
+  createdByName: string | null;
+  effectiveStatus: PontoEffectiveStatus;
+  id: string;
+  reason: string | null;
+  status: PontoEntryStatus;
+  transport: PontoTransport;
+  type: PontoEntryType;
+  /**
+   * Validações desta linha, da mais recente para a mais antiga — uma
+   * correção ligada pode ser o único registo visível de uma picagem fora
+   * do período, por isso o estado/autor da decisão viajam sempre junto.
+   */
+  validations: PontoActValidationDTO[];
+}
+
+export interface PontoActEntryDTO extends PontoActLinkedEntryDTO {
+  /** Correções desta linha, mesmo quando a correção cai fora do período. */
+  corrections: PontoActLinkedEntryDTO[];
+  /** Original corrigido por esta linha, mesmo quando cai fora do período. */
+  corrects: PontoActLinkedEntryDTO | null;
+  correctsId: string | null;
+  superseded: boolean;
+  validations: PontoActValidationDTO[];
+}
+
+export interface PontoActDayDTO {
+  date: string;
+  entries: PontoActEntryDTO[];
+  pauseMinutes: number;
+  weekStart: string;
+  workedMinutes: number;
+}
+
+export interface PontoActWeekDTO {
+  end: string;
+  start: string;
+  workedMinutes: number;
+}
+
+export interface PontoActWorkerDTO {
+  days: PontoActDayDTO[];
+  externalWork: boolean;
+  name: string;
+  scheduleEnd: string | null;
+  scheduleExempt: boolean;
+  scheduleStart: string | null;
+  totalMinutes: number;
+  userId: string;
+  username: string;
+  weeks: PontoActWeekDTO[];
+}
+
+export interface PontoActExportResponse {
+  company: PontoActCompanyDTO;
+  contentHash: string;
+  exportedAt: string;
+  exportedBy: PontoActActorDTO;
+  hashAlgorithm: "SHA-256";
+  hashInput: "canonical-json-v1";
+  period: {
+    from: string;
+    timeZone: string;
+    to: string;
+  };
+  workers: PontoActWorkerDTO[];
+}
