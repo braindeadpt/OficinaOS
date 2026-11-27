@@ -18,8 +18,8 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useCan } from "@/hooks/use-can";
-import { useFormatCurrency } from "@/hooks/use-format-currency";
 import api from "@/lib/api";
+import { formatCurrency } from "@/lib/format";
 import { BusinessHistory } from "./history";
 import { MessageLinks } from "./message-links";
 
@@ -116,7 +116,9 @@ function serializeField(field: FormField, raw: string): unknown {
   return raw;
 }
 export default function BusinessPage({ module }: { module: Module }) {
-  const fmt = useFormatCurrency();
+  // Encomendas e acordos são denominados em EUR por contrato do módulo
+  // (docs/business-support.md) — a moeda da loja não se aplica aqui.
+  const fmt = (v: number) => formatCurrency(v, "EUR");
   const { t } = useTranslation();
   const [params] = useSearchParams();
   const recordId = params.get("recordId") || undefined;

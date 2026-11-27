@@ -41,6 +41,7 @@ interface PublicShop {
 /** Redacted view of the frozen document — what the customer is signing. */
 interface PublicDocument {
   accessories: string[];
+  currency: string | null;
   customerName: string;
   deposit: number | null;
   device: string;
@@ -55,6 +56,17 @@ interface PublicDocument {
   problem: string;
   termsText: string;
   urgent: boolean;
+}
+
+/** Moeda a apresentar: a congelada no documento vence (é a que o cliente
+ *  viu ao assinar); a da loja ao vivo é só fallback para sessões antigas. */
+function signMoney(
+  value: number,
+  documentCurrency: string | null,
+  shopCurrency: string,
+  locale: string
+): string {
+  return formatCurrency(value, documentCurrency ?? shopCurrency, locale);
 }
 
 type PageState = "loading" | "ready" | "signed" | "done" | "expired";
@@ -255,8 +267,9 @@ export default function SignPage() {
                           {t("sign_doc_estimate")}
                         </dt>
                         <dd className="font-medium text-on-surface">
-                          {formatCurrency(
+                          {signMoney(
                             document.estimatedCost,
+                            document.currency,
                             shopCurrency,
                             i18n.language
                           )}

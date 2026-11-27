@@ -10,6 +10,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { fetchLoanerDevices, type LoanerDevice } from "@/lib/api-loaners";
 import { buildJobPayload } from "@/lib/build-job-payload";
+import { useSettingsStore } from "@/stores/settings";
 import FunctionalChecklist from "./functional-checklist";
 import RemoteSignatureDialog from "./remote-signature-dialog";
 import {
@@ -84,10 +85,13 @@ export default function Step2Content({
   const termsText = customTerms?.trim() || t("intake.terms_text");
   // The frozen intake document a remote signature session signs over — same
   // builder the server uses to verify the ficha didn't drift before submit.
+  const shopCurrency = useSettingsStore((s) => s.shopSettings?.currency);
   const intakeDocument = buildIntakeDocument(
     buildJobPayload(form),
     termsText,
-    i18n.language
+    i18n.language,
+    // Congelada no documento — o selo prova a moeda que o cliente viu.
+    shopCurrency ?? undefined
   );
   // Shown once the field was touched or the server flagged it on submit.
   const fieldError = (key: keyof IntakeFormData) =>

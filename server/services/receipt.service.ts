@@ -1815,6 +1815,7 @@ export async function renderOrdersReportHtml(
   }
 ): Promise<string> {
   const settings = await findShopSettingsUnique(prisma);
+  const reportCurrency = settings?.currency ?? "EUR";
   const s = ordersReportLabels(opts.locale);
   const shopName = esc(settings?.shopName || "OficinaOS");
   const statusLabel = opts.status
@@ -1834,7 +1835,7 @@ export async function renderOrdersReportHtml(
       <td>${esc(r.customerName)}</td>
       <td>${esc(r.deviceName)}</td>
       <td>${esc(s.statusLabels[r.status] ?? r.status)}</td>
-      <td class="num">${fmtMoney(r.totalValue, "EUR", dateLocale)}</td>
+      <td class="num">${fmtMoney(r.totalValue, reportCurrency, dateLocale)}</td>
       ${opts.includeMargin ? `<td class="num">${r.margin === undefined ? "—" : `${r.margin}%`}</td>` : ""}
       <td>${fmtDate(r.createdAt)}</td>
       <td>${fmtDate(r.completedAt)}</td>
@@ -1867,8 +1868,8 @@ export async function renderOrdersReportHtml(
   <p class="meta">${esc(s.period)}: ${esc(opts.from)} → ${esc(opts.to)} &nbsp;·&nbsp; ${esc(s.status)}: ${esc(statusLabel)} &nbsp;·&nbsp; ${new Date().toLocaleString(dateLocale)}</p>
   <div class="totals">
     <div class="t"><b>${report.summary.totalOrders}</b><span>${esc(s.totalOrders)}</span></div>
-    <div class="t"><b>${fmtMoney(report.summary.totalValue, "EUR", dateLocale)}</b><span>${esc(s.totalValue)}</span></div>
-    <div class="t"><b>${fmtMoney(report.summary.avgOrderValue, "EUR", dateLocale)}</b><span>${esc(s.avgOrder)}</span></div>
+    <div class="t"><b>${fmtMoney(report.summary.totalValue, reportCurrency, dateLocale)}</b><span>${esc(s.totalValue)}</span></div>
+    <div class="t"><b>${fmtMoney(report.summary.avgOrderValue, reportCurrency, dateLocale)}</b><span>${esc(s.avgOrder)}</span></div>
     ${opts.includeMargin && report.summary.avgMargin !== undefined ? `<div class="t"><b>${report.summary.avgMargin}%</b><span>${esc(s.margin)}</span></div>` : ""}
   </div>
   <table>

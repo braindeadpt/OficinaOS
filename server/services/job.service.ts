@@ -390,7 +390,13 @@ async function inPersonSignatureData(
   if (input.intakeTermsVersion !== terms.version) {
     throw new AppError("SIGNATURE_STALE");
   }
-  const document = buildIntakeDocument(input, terms.text, terms.locale);
+  const shopSettings = await findShopSettingsUnique(prisma);
+  const document = buildIntakeDocument(
+    input,
+    terms.text,
+    terms.locale,
+    shopSettings?.currency ?? undefined
+  );
   return {
     intakeSignatureDataUrl: input.intakeSignatureDataUrl,
     intakeTermsSnapshot: document as unknown as Prisma.InputJsonValue,

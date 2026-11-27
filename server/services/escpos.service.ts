@@ -207,7 +207,11 @@ function jobCostsSection(
     t.segments.push(BOLD_ON);
     t.row(
       s.balanceDue,
-      fmtMoneyPlain(Math.max(0, displayCost - paidTotal), currency)
+      fmtMoneyPlain(
+        Math.max(0, displayCost - paidTotal),
+        currency,
+        s.dateLocale
+      )
     );
     t.segments.push(BOLD_OFF);
   }

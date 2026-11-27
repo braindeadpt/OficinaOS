@@ -184,8 +184,9 @@ export interface CustomerJobView {
 export interface CustomerViewCtx {
   currency: string;
   /** Língua documental da projeção (pt/en/es/fr) — derivada do país da loja
-   *  nos canais sem browser (WhatsApp/SMS/email) ou do Accept-Language no
-   *  tracking. Omissa = pt, o comportamento de sempre para lojas em PT. */
+   *  nos canais sem browser (WhatsApp/SMS/bot). O tracking público não lê
+   *  desta projeção: o portal publica um instantâneo locale-neutro que a
+   *  Cloud traduz no lado dela. Omissa = pt, o comportamento de sempre. */
   locale?: string;
   /** Cloud API base used to build the public portal link (null → no link). */
   portalApiUrl: string | null;
