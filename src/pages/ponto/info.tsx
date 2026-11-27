@@ -1,7 +1,8 @@
 import type { ShopSettings } from "@shared/types";
-import { useEffect, useState } from "react";
+import type { PontoInfoDeliveryRowDTO } from "@shared/types/ponto";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { Button } from "@/components/ui/button";
 import { usePontoT } from "@/hooks/use-ponto-t";
 import api from "@/lib/api";
@@ -11,7 +12,16 @@ interface PontoStatus {
   enabled: boolean;
 }
 
-type PontoShop = Pick<ShopSettings, "pontoInfoText" | "shopMode" | "shopName">;
+type PontoShop = Pick<
+  ShopSettings,
+  | "address"
+  | "phone"
+  | "pontoInfoText"
+  | "shopLocality"
+  | "shopMode"
+  | "shopName"
+  | "shopTaxId"
+>;
 
 type PontoInfoState =
   | { kind: "loading" }
@@ -19,11 +29,10 @@ type PontoInfoState =
   | {
       kind: "ready";
       infoText: string | null;
+      shop: PontoShop;
       shopMode: ShopMode;
-      shopName: string;
+      workers: PontoInfoDeliveryRowDTO[];
     };
-
-const SIGNATURE_ROWS = 4;
 
 interface InfoBlock {
   bullets?: string[];
@@ -35,16 +44,17 @@ interface InfoBlock {
 // Só a estrutura vive aqui: os textos estão no catálogo i18n
 // (ponto.info_doc_*) e são sempre renderizados em PT-PT — ver docT no
 // componente. O {{controller}} do primeiro parágrafo é interpolado com o
-// nome do responsável.
+// nome do responsável. O texto base está marcado como modelo em revisão
+// jurídica.
 const DEFAULT_INFO_MODEL: InfoBlock[] = [
-  {
-    paragraphs: ["ponto.info_doc_intro"],
-  },
+  { paragraphs: ["ponto.info_doc_template_notice", "ponto.info_doc_intro"] },
   {
     bullets: [
       "ponto.info_doc_what_1",
       "ponto.info_doc_what_2",
       "ponto.info_doc_what_3",
+      "ponto.info_doc_what_4",
+      "ponto.info_doc_what_5",
     ],
     heading: "ponto.info_doc_what",
   },
@@ -53,19 +63,24 @@ const DEFAULT_INFO_MODEL: InfoBlock[] = [
     heading: "ponto.info_doc_how",
   },
   {
+    bullets: ["ponto.info_doc_corrections_1", "ponto.info_doc_corrections_2"],
+    heading: "ponto.info_doc_corrections",
+  },
+  {
     bullets: ["ponto.info_doc_purpose_1", "ponto.info_doc_purpose_2"],
     heading: "ponto.info_doc_purpose",
   },
   {
-    bullets: [
-      "ponto.info_doc_retention_1",
-      "ponto.info_doc_retention_2",
-      "ponto.info_doc_retention_3",
-    ],
+    bullets: ["ponto.info_doc_retention_1", "ponto.info_doc_retention_2"],
     heading: "ponto.info_doc_retention",
   },
   {
-    bullets: ["ponto.info_doc_rights_1", "ponto.info_doc_rights_2"],
+    bullets: [
+      "ponto.info_doc_rights_1",
+      "ponto.info_doc_rights_2",
+      "ponto.info_doc_rights_3",
+      "ponto.info_doc_rights_4",
+    ],
     heading: "ponto.info_doc_rights",
   },
 ];
@@ -78,38 +93,112 @@ async function loadPontoInfo(): Promise<PontoInfoState> {
   if (!statusRes.data.enabled) {
     return { kind: "unavailable" };
   }
+  let workers: PontoInfoDeliveryRowDTO[] = [];
+  try {
+    const res = await api.get<{ rows: PontoInfoDeliveryRowDTO[] }>(
+      "/ponto/info-deliveries"
+    );
+    workers = res.data.rows;
+  } catch {
+    workers = [];
+  }
   const shop = shopRes.data;
-  const custom = shop.pontoInfoText?.trim() ? shop.pontoInfoText : null;
   return {
-    infoText: custom,
+    infoText: shop.pontoInfoText?.trim() ? shop.pontoInfoText : null,
     kind: "ready",
+    shop,
     shopMode: shop.shopMode === "ponto_only" ? "ponto_only" : "repair_shop",
-    shopName: shop.shopName ?? "",
+    workers,
   };
 }
 
-function SignatureField({ label, tall }: { label: string; tall?: boolean }) {
+function SignatureField({
+  label,
+  tall,
+  value,
+}: {
+  label: string;
+  tall?: boolean;
+  value?: string;
+}) {
   return (
     <div className="flex flex-col gap-1.5">
       <span className="font-medium text-neutral-500 text-xs">{label}</span>
       <span
-        className={`border-neutral-400 border-b ${tall ? "h-12" : "h-7"}`}
-      />
+        className={`flex items-end border-neutral-400 border-b pb-1 font-medium text-sm ${tall ? "h-12" : "h-7"}`}
+      >
+        {value ?? ""}
+      </span>
     </div>
   );
 }
 
 function SignatureRow({
   labels,
+  workerName,
 }: {
   labels: { date: string; name: string; signature: string };
+  workerName?: string;
 }) {
   return (
     <div className="grid grid-cols-[1fr_1.6fr_0.5fr] items-end gap-x-5">
-      <SignatureField label={labels.name} />
+      <SignatureField label={labels.name} value={workerName} />
       <SignatureField label={labels.signature} tall />
       <SignatureField label={labels.date} />
     </div>
+  );
+}
+
+function InfoDocument({
+  children,
+  docT,
+  signatureLabels,
+  shop,
+  today,
+  workerName,
+}: {
+  children: React.ReactNode;
+  docT: (key: string) => string;
+  signatureLabels: { date: string; name: string; signature: string };
+  shop: PontoShop;
+  today: string;
+  workerName?: string;
+}) {
+  return (
+    <article className="flex flex-col gap-5 rounded-2xl bg-white p-8 text-neutral-900 print:rounded-none print:p-0">
+      <header className="flex flex-col gap-1" lang="pt-PT">
+        <h1 className="font-extrabold font-headline text-2xl">
+          {docT("ponto.info_doc_title")}
+        </h1>
+        {shop.shopName && (
+          <p className="font-semibold text-lg">{shop.shopName}</p>
+        )}
+        <p className="text-neutral-600 text-sm">
+          {shop.shopTaxId ? `${docT("shop_tax_id")}: ${shop.shopTaxId} · ` : ""}
+          {shop.address ?? ""}
+          {shop.shopLocality ? `, ${shop.shopLocality}` : ""}
+          {shop.phone ? ` · ${shop.phone}` : ""}
+        </p>
+        <p className="text-neutral-500 text-sm">
+          {docT("ponto.info_doc_date")}: {today}
+        </p>
+      </header>
+      {children}
+      <section className="mt-4" lang="pt-PT">
+        <p className="mb-4 font-semibold text-neutral-800 text-sm">
+          {docT("ponto.info_doc_sig_heading")}
+        </p>
+        <div className="flex flex-col gap-6">
+          {workerName ? (
+            <SignatureRow labels={signatureLabels} workerName={workerName} />
+          ) : (
+            Array.from({ length: 4 }, (_, i) => (
+              <SignatureRow key={`sig-${String(i)}`} labels={signatureLabels} />
+            ))
+          )}
+        </div>
+      </section>
+    </article>
   );
 }
 
@@ -118,11 +207,15 @@ function SignatureRow({
  * (RGPD — informação escrita obrigatória). O corpo vem de
  * ShopSettings.pontoInfoText; se estiver vazio usa o modelo RGPD base
  * acima. Gate: módulo `ponto` ativo (/ponto/status) — sem ele a página
- * mostra o aviso de indisponível.
+ * mostra o aviso de indisponível. Sem query string mantém 4 linhas em
+ * branco; ?userId= imprime uma folha com o nome preenchido; ?all=1
+ * imprime uma folha por trabalhador ativo do ponto.
  */
 export default function PontoInfoPage() {
   const { t } = useTranslation();
+  const [params] = useSearchParams();
   const [state, setState] = useState<PontoInfoState>({ kind: "loading" });
+  const autoPrinted = useRef(false);
   const loadedShopMode = state.kind === "ready" ? state.shopMode : null;
   const pt = usePontoT(loadedShopMode);
 
@@ -144,16 +237,23 @@ export default function PontoInfoPage() {
     };
   }, []);
 
+  const wantsPrint = params.get("all") === "1" || params.get("userId") !== null;
+  useEffect(() => {
+    if (state.kind === "ready" && wantsPrint && !autoPrinted.current) {
+      autoPrinted.current = true;
+      window.print();
+    }
+  }, [state.kind, wantsPrint]);
+
   const today = new Date().toLocaleDateString("pt-PT", {
     day: "numeric",
     month: "long",
     year: "numeric",
   });
   let controller = pt("ponto.info_doc_controller", { lng: "pt" });
-  if (state.kind === "ready" && state.shopName) {
-    controller = `A ${state.shopName}`;
+  if (state.kind === "ready" && state.shop.shopName) {
+    controller = `A ${state.shop.shopName}`;
   }
-
   // Folha A4 «Informação aos trabalhadores» — o documento impresso é
   // sempre em PT-PT (público-alvo: trabalhadores da loja; os comandos do
   // ponto são eles próprios PT), independentemente do idioma da
@@ -165,6 +265,49 @@ export default function PontoInfoPage() {
     name: docT("ponto.info_doc_sig_name"),
     signature: docT("ponto.info_doc_sig_signature"),
   };
+
+  let selectedWorkers: PontoInfoDeliveryRowDTO[] = [];
+  if (state.kind === "ready" && params.get("all") === "1") {
+    selectedWorkers = state.workers.filter((w) => w.isActive && w.pontoEnabled);
+  } else if (state.kind === "ready") {
+    selectedWorkers = state.workers.filter(
+      (w) => w.userId === params.get("userId")
+    );
+  }
+  const sheets =
+    selectedWorkers.length > 0
+      ? selectedWorkers.map((w) => ({ key: w.userId, workerName: w.name }))
+      : [{ key: "blank", workerName: undefined }];
+
+  const body =
+    state.kind === "ready" &&
+    (state.infoText ? (
+      <div className="whitespace-pre-line text-sm leading-relaxed">
+        {state.infoText}
+      </div>
+    ) : (
+      <div className="flex flex-col gap-4 text-sm leading-relaxed" lang="pt-PT">
+        {DEFAULT_INFO_MODEL.map((block) => (
+          <section key={block.heading ?? "intro"}>
+            {block.heading && (
+              <h2 className="mb-1.5 font-bold">{docT(block.heading)}</h2>
+            )}
+            {block.paragraphs?.map((p) => (
+              <p className="mb-1.5" key={p}>
+                {docT(p)}
+              </p>
+            ))}
+            {block.bullets && (
+              <ul className="flex list-disc flex-col gap-1 pl-5">
+                {block.bullets.map((b) => (
+                  <li key={b}>{docT(b)}</li>
+                ))}
+              </ul>
+            )}
+          </section>
+        ))}
+      </div>
+    ));
 
   return (
     <div className="print-ponto-info mx-auto flex min-h-dvh w-full max-w-2xl flex-col gap-6 bg-surface p-6 print:max-w-none print:bg-white print:p-0">
@@ -183,7 +326,6 @@ export default function PontoInfoPage() {
       {state.kind === "loading" && (
         <div className="h-96 animate-pulse rounded-xl bg-surface-container-low" />
       )}
-
       {state.kind === "unavailable" && (
         <div className="rounded-2xl bg-surface-container-low p-6 text-center">
           <p className="font-semibold text-on-surface">
@@ -194,71 +336,25 @@ export default function PontoInfoPage() {
           </p>
         </div>
       )}
-
-      {state.kind === "ready" && (
-        <article className="flex flex-col gap-5 rounded-2xl bg-white p-8 text-neutral-900 print:rounded-none print:p-0">
-          {/* O documento é sempre PT-PT mesmo com a app noutro idioma —
-              os lang locais dizem ao leitor de ecrã a pronúncia certa.
-              O texto personalizado (state.infoText) fica sem lang: a
-              língua em que a loja o escreveu é desconhecida. */}
-          <header className="flex flex-col gap-1" lang="pt-PT">
-            <h1 className="font-extrabold font-headline text-2xl">
-              {docT("ponto.info_doc_title")}
-            </h1>
-            {state.shopName && (
-              <p className="font-semibold text-lg">{state.shopName}</p>
-            )}
-            <p className="text-neutral-500 text-sm">
-              {docT("ponto.info_doc_date")}: {today}
-            </p>
-          </header>
-
-          {state.infoText ? (
-            <div className="whitespace-pre-line text-sm leading-relaxed">
-              {state.infoText}
-            </div>
-          ) : (
-            <div
-              className="flex flex-col gap-4 text-sm leading-relaxed"
-              lang="pt-PT"
+      {state.kind === "ready" &&
+        sheets.map((sheet, index) => (
+          <div
+            key={sheet.key}
+            style={{
+              breakAfter: index < sheets.length - 1 ? "page" : undefined,
+            }}
+          >
+            <InfoDocument
+              docT={docT}
+              shop={state.shop}
+              signatureLabels={signatureLabels}
+              today={today}
+              workerName={sheet.workerName}
             >
-              {DEFAULT_INFO_MODEL.map((block) => (
-                <section key={block.heading ?? "intro"}>
-                  {block.heading && (
-                    <h2 className="mb-1.5 font-bold">{docT(block.heading)}</h2>
-                  )}
-                  {block.paragraphs?.map((p) => (
-                    <p className="mb-1.5" key={p}>
-                      {docT(p)}
-                    </p>
-                  ))}
-                  {block.bullets && (
-                    <ul className="flex list-disc flex-col gap-1 pl-5">
-                      {block.bullets.map((b) => (
-                        <li key={b}>{docT(b)}</li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-              ))}
-            </div>
-          )}
-
-          <section className="mt-4" lang="pt-PT">
-            <p className="mb-4 font-semibold text-neutral-800 text-sm">
-              {docT("ponto.info_doc_sig_heading")}
-            </p>
-            <div className="flex flex-col gap-6">
-              {Array.from({ length: SIGNATURE_ROWS }, (_, i) => (
-                <SignatureRow
-                  key={`sig-${String(i)}`}
-                  labels={signatureLabels}
-                />
-              ))}
-            </div>
-          </section>
-        </article>
-      )}
+              {body}
+            </InfoDocument>
+          </div>
+        ))}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
+import api from "@/lib/api";
 import { usePontoStore } from "@/stores/ponto";
 import ExportTab from "./export-tab";
 import HoursTab from "./hours-tab";
@@ -38,11 +39,32 @@ export default function PontoPage() {
   const fetchStatus = usePontoStore((s) => s.fetchStatus);
   const [tab, setTab] = useState<TabKey>("agora");
   const activeTab: TabKey = enabled === false ? "exportar" : tab;
+  const [missingSheets, setMissingSheets] = useState(0);
 
   useEffect(() => {
     if (enabled === null) {
       fetchStatus().catch(() => undefined);
     }
+    let cancelled = false;
+    const loadMissingSheets = () => {
+      api
+        .get<{ missingActiveCount: number }>("/ponto/info-deliveries")
+        .then((res) => {
+          if (!cancelled) {
+            setMissingSheets(res.data.missingActiveCount);
+          }
+        })
+        .catch(() => undefined);
+    };
+    loadMissingSheets();
+    window.addEventListener("ponto-info-deliveries-changed", loadMissingSheets);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(
+        "ponto-info-deliveries-changed",
+        loadMissingSheets
+      );
+    };
   }, [enabled, fetchStatus]);
 
   if (enabled === null) {
@@ -90,6 +112,24 @@ export default function PontoPage() {
           >
             {t("ponto.go_settings")}
           </Link>
+        </div>
+      )}
+
+      {enabled !== false && missingSheets > 0 && (
+        <div className="flex items-center gap-3 rounded-2xl border border-outline-variant bg-surface-container-low px-4 py-3">
+          <span className="material-symbols-outlined text-on-surface-variant">
+            description
+          </span>
+          <p className="text-on-surface-variant text-sm">
+            {t("ponto.sheet_missing_warning", { count: missingSheets })}
+          </p>
+          <button
+            className="ml-auto shrink-0 font-bold text-primary text-sm"
+            onClick={() => setTab("equipa")}
+            type="button"
+          >
+            {t("ponto.tab_equipa")}
+          </button>
         </div>
       )}
 

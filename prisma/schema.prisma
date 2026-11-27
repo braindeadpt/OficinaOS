@@ -257,6 +257,7 @@ model User {
   inboxDraftsCreated    InboxDraft[]        @relation("InboxDraftCreator")
   inboxDraftsApproved   InboxDraft[]        @relation("InboxDraftApprover")
   timeEntries           TimeEntry[]
+  pontoInfoDelivery     PontoInfoDelivery?
   timeEntriesCreated    TimeEntry[]         @relation("TimeEntryCreatedBy")
   timeEntryValidations  TimeEntryValidation[]
 
@@ -2122,6 +2123,23 @@ enum TimeEntryStatus {
 enum TimeEntryDecision {
   APROVADO
   RECUSADO
+}
+
+// Registo de entrega da folha de informação RGPD do livro de ponto.
+// Um registo atual por trabalhador; registeredBy* é snapshot propositado
+// para o nome não desaparecer se a conta do gestor for removida.
+model PontoInfoDelivery {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveredAt      DateTime @db.Date
+  signed           Boolean
+  registeredById   String
+  registeredByName String
+  createdAt        DateTime @default(now()) @db.Timestamptz
+  updatedAt        DateTime @updatedAt @db.Timestamptz
+
+  @@map("ponto_info_deliveries")
 }
 
 model TimeEntry {

@@ -7,6 +7,7 @@ import {
   pontoEntriesQuerySchema,
   pontoEntryIdParamSchema,
   pontoHoursQuerySchema,
+  pontoInfoDeliveryUpsertSchema,
   pontoManualEntrySchema,
   pontoMissingExitsQuerySchema,
   pontoValidateSchema,
@@ -19,6 +20,10 @@ import { getOrCreateShopSettings } from "../repositories/settings.repository.js"
 import { cloudFetch } from "../services/cloud.service.js";
 import { pushPontoCloudConfig } from "../services/ponto/config-sync.js";
 import { getPontoActExport } from "../services/ponto-act-export.service.js";
+import {
+  listPontoInfoDeliveries,
+  upsertPontoInfoDelivery,
+} from "../services/ponto-info.service.js";
 import {
   createManualEntry,
   createValidation,
@@ -544,6 +549,54 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
           range,
           tz,
           userId: parsed.data.userId,
+        })
+      );
+    }
+  );
+
+  app.get(
+    "/info-deliveries",
+    {
+      preHandler: [
+        requirePermission({ reports: ["viewShop"] }),
+        dashboardScope,
+      ],
+      schema: {
+        summary: "Delivery status of the worker RGPD information sheet",
+        tags: ["ponto"],
+      },
+    },
+    async (_req, reply) => reply.send(await listPontoInfoDeliveries(app.prisma))
+  );
+
+  app.put(
+    "/info-deliveries/:userId",
+    {
+      preHandler: [requirePermission({ user: ["update"] }), dashboardScope],
+      schema: {
+        summary: "Register delivery/signature of the worker information sheet",
+        tags: ["ponto"],
+      },
+    },
+    async (req, reply) => {
+      const parsed = pontoInfoDeliveryUpsertSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new AppError("VALIDATION_ERROR", {
+          errors: resolveZodErrors(
+            parsed.error.flatten().fieldErrors,
+            req.locale
+          ),
+        });
+      }
+      const { userId } = req.params as { userId: string };
+      await requirePontoModule(app.prisma);
+      return reply.send(
+        await upsertPontoInfoDelivery(app.prisma, {
+          actorId: getUserId(req),
+          deliveredAt: parsed.data.deliveredAt,
+          signed: parsed.data.signed,
+          tz: shopTz(req),
+          userId,
         })
       );
     }

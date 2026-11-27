@@ -39,6 +39,11 @@ export const pontoMissingExitsQuerySchema = z.object({
   to: isoDate,
 });
 
+export const pontoInfoDeliveryUpsertSchema = z.object({
+  deliveredAt: isoDate,
+  signed: z.boolean(),
+});
+
 export const pontoValidateSchema = z.object({
   decision: z.enum(DECISIONS),
   note: z.string().trim().max(500).optional(),
@@ -68,6 +73,9 @@ export type PontoActExportQueryInput = z.infer<
 >;
 export type PontoMissingExitsQueryInput = z.infer<
   typeof pontoMissingExitsQuerySchema
+>;
+export type PontoInfoDeliveryUpsertInput = z.infer<
+  typeof pontoInfoDeliveryUpsertSchema
 >;
 export type PontoValidateInput = z.infer<typeof pontoValidateSchema>;
 export type PontoManualEntryInput = z.infer<typeof pontoManualEntrySchema>;
