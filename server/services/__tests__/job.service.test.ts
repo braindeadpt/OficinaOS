@@ -1317,8 +1317,6 @@ describe("create", () => {
     // A ficha é encontrada e a correção preparada, mas a rejeição da
     // assinatura (dentro da transação) tem de a impedir de chegar à BD —
     // em produção o rollback desfaz qualquer escrita da transação.
-    const signature =
-      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
     (
       prisma.shopSettings.findUnique as ReturnType<typeof vi.fn>
     ).mockResolvedValue({
