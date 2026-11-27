@@ -152,8 +152,14 @@ channel):**
   at home would reveal the worker's address. The record is `remote`
   («Telework — no proof of location» in the ACT export) and follows the
   validation rule the shop chooses: auto-approve or pending validation
-  (the default). Even a location request started on an on-site day
-  never sends coordinates if the answer lands on a telework day. ESTADO is a local records query and **makes no
+  (the default). This stripping applies to the **evaluation** the app
+  makes: even when a location request was started on an on-site day, the
+  coordinates are never sent to `POST /ponto/evaluate` nor stored in the
+  record if the answer lands on a telework day. The **reception** of the
+  reply is a separate, earlier step that follows the channel's own
+  rules: on the official WhatsApp relay the message (with the shared
+  location) transits the Cloud inbox queue like any other reply — it is
+  not retained as proof nor linked to the time record. ESTADO is a local records query and **makes no
   request to the Cloud** — but the **reply** (the records summary)
   leaves through the active channel and, if that channel is the
   WhatsApp Cloud relay or Cloud SMS, **transits through OficinaOS
