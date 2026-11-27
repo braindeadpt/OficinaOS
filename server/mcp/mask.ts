@@ -56,14 +56,26 @@ const E164_RE = /\+\d(?:[\s.-]?\d){7,14}\b/g;
 // A decisão data-vs-telefone não cabe no regex — ver isDateLike no callback:
 // «2026-11-27 9:30» e «912 345 678 9:30» são ambos 9 dígitos seguidos de
 // hora, mas só o segundo é telefone (o primeiro tem forma de data).
-const PT_PHONE_RE = /(?<![\d+])[239]\d(?:[\s.-]?\d){7}(?!\d)/g;
-// ISO (2026-11-27) ou PT (27-11-2026) no início do trecho — ninguém escreve
-// um telefone agrupado 4-2-2 ou 2-2-4 com hífenes alinhados a uma data.
+// O lookahead (?!\d{4}[\s.-]) barra à partida trechos com grupo inicial de
+// 4 dígitos + separador (datas ISO, códigos postais colados a números) —
+// nenhum telefone PT se escreve assim, e impedir o arranque no sítio errado
+// deixa o motor livre para apanhar o telefone que venha a seguir.
+const PT_PHONE_RE = /(?<![\d+])(?!\d{4}[\s.-])[239]\d(?:[\s.-]?\d){7}(?!\d)/g;
+// ISO (2026-11-27) ou PT (27-11-2026), com dia/mês de 1-2 algarismos, no
+// início do trecho. A validação de mês/dia é no callback — um telefone
+// agrupado por acaso em forma de data inválida (mês 45) não escapa.
 const DATE_LIKE_RE =
-  /^\d{4}[\s.-]\d{2}[\s.-]\d{2}|^\d{2}[\s.-]\d{2}[\s.-]\d{4}/;
+  /^(\d{4})[\s.-](\d{1,2})[\s.-](\d{1,2})(?!\d)|^(\d{1,2})[\s.-](\d{1,2})[\s.-](\d{4})(?!\d)/;
 
 function isDateLike(match: string): boolean {
-  return DATE_LIKE_RE.test(match);
+  const m = DATE_LIKE_RE.exec(match);
+  if (!m) {
+    return false;
+  }
+  // ISO: ano, mês, dia nos grupos 1-3; PT: dia, mês, ano nos grupos 4-6.
+  const month = Number(m[2] ?? m[5]);
+  const day = Number(m[3] ?? m[4]);
+  return month >= 1 && month <= 12 && day >= 1 && day <= 31;
 }
 const EMAIL_RE = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g;
 // NIF: 9 dígitos isolados que não foram já capturados como telefone

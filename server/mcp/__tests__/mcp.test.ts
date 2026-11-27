@@ -824,3 +824,30 @@ describe("F1 — telefone seguido de hora continua mascarado", () => {
     expect(redactFreeText("21 2345 678 fixo")).not.toContain("21 2345 678");
   });
 });
+
+describe("F1 — validação de datas e códigos postais", () => {
+  it("data sem zero inicial no mês/dia NÃO é mascarada", async () => {
+    const { redactFreeText } = await import("../mask.js");
+    expect(redactFreeText("entrega 27-1-2026 14:30")).toBe(
+      "entrega 27-1-2026 14:30"
+    );
+    expect(redactFreeText("entrega 2026-1-5 9:30")).toBe(
+      "entrega 2026-1-5 9:30"
+    );
+  });
+
+  it("data inválida (mês 45) não serve de escapatória", async () => {
+    const { redactFreeText } = await import("../mask.js");
+    // «2123-45-67» parece data mas o mês 45 não existe — não é data, mas o
+    // grupo inicial de 4 dígitos também não é telefone: fica intacto por
+    // não ser nenhum dos dois.
+    expect(redactFreeText("912 345 678 mesmo")).not.toContain("912 345 678");
+  });
+
+  it("código postal colado não impede mascarar o telefone a seguir", async () => {
+    const { redactFreeText } = await import("../mask.js");
+    const out = redactFreeText("cp 2450-123 tel 212 345 678");
+    expect(out).toContain("2450-123");
+    expect(out).not.toContain("212 345 678");
+  });
+});
