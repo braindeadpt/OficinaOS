@@ -76,6 +76,7 @@ export async function findDuplicateGroups(
 
 /** O que a junção produz — devolvido na pré-visualização e na execução. */
 export interface MergePreview {
+  consentConflict: boolean;
   email: string | null;
   emailFrom: "keep" | "merged" | null;
   jobCount: number;
@@ -85,6 +86,36 @@ export interface MergePreview {
   taxId: string | null;
   taxIdFrom: "keep" | "merged" | null;
   whatsappConsent: boolean;
+}
+
+/**
+ * Consentimento WhatsApp na junção: não existe registo de retirada (STOP),
+ * logo unir com OR pode reativar alguém que o retirou na ficha que morre.
+ * Regra conservadora: valores iguais mantêm-se; conflito desliga, a não
+ * ser que o operador confirme com o cliente (`confirmConsent`).
+ */
+export function resolveMergeConsent(
+  keep: { whatsappConsent: boolean; whatsappConsentAt: Date | null },
+  merged: { whatsappConsent: boolean; whatsappConsentAt: Date | null },
+  confirmConsent = false
+): { consent: boolean; consentAt: Date | null; conflict: boolean } {
+  const conflict = keep.whatsappConsent !== merged.whatsappConsent;
+  if (!conflict) {
+    if (!keep.whatsappConsent) {
+      return { consent: false, consentAt: null, conflict };
+    }
+    // A data mais antiga é a prova do opt-in — ordenação cronológica
+    // explícita (o sort() por omissão compara strings, não datas).
+    const oldest = [keep.whatsappConsentAt, merged.whatsappConsentAt]
+      .filter((d): d is Date => Boolean(d))
+      .sort((a, b) => a.getTime() - b.getTime())[0];
+    return { consent: true, consentAt: oldest ?? new Date(), conflict };
+  }
+  if (confirmConsent) {
+    // Confirmação nova junto do cliente — a prova é o momento da junção.
+    return { consent: true, consentAt: new Date(), conflict };
+  }
+  return { consent: false, consentAt: null, conflict };
 }
 
 function fieldSource(
@@ -105,6 +136,7 @@ function buildPreview(
     email: string | null;
     taxId: string | null;
     whatsappConsent: boolean;
+    whatsappConsentAt: Date | null;
   },
   merged: {
     id: string;
@@ -113,10 +145,15 @@ function buildPreview(
     email: string | null;
     taxId: string | null;
     whatsappConsent: boolean;
+    whatsappConsentAt: Date | null;
   },
   counts: { jobs: number; sales: number }
 ): MergePreview {
+  // A pré-visualização não sabe se o operador vai confirmar — mostra o
+  // resultado seguro (conflito desliga) e assinala o conflito ao painel.
+  const consent = resolveMergeConsent(keep, merged, false);
   return {
+    consentConflict: consent.conflict,
     email: keep.email ?? merged.email,
     emailFrom: fieldSource(keep.email, merged.email),
     jobCount: counts.jobs,
@@ -125,7 +162,7 @@ function buildPreview(
     saleCount: counts.sales,
     taxId: keep.taxId ?? merged.taxId,
     taxIdFrom: fieldSource(keep.taxId, merged.taxId),
-    whatsappConsent: keep.whatsappConsent || merged.whatsappConsent,
+    whatsappConsent: consent.consent,
   };
 }
 
@@ -201,7 +238,8 @@ export function mergeCustomers(
   prisma: PrismaClient,
   keepId: string,
   mergedId: string,
-  userId: string
+  userId: string,
+  opts?: { confirmConsent?: boolean }
 ): Promise<MergePreview> {
   return prisma.$transaction(async (tx) => {
     const [keep, merged] = await Promise.all([
@@ -291,10 +329,17 @@ export function mergeCustomers(
       where: { recipientPhone: merged.phone, status: "QUEUED" },
     });
 
-    // Preenche o que falta no destino; consentimento une-se (qualquer
-    // opt-in vale, com a data mais antiga como prova). A data da última
-    // campanha de remarketing é a MAIS RECENTE das duas — perdê-la faria o
-    // agendador voltar a contactar o número antes do prazo da loja.
+    // Preenche o que falta no destino. O consentimento NÃO se une com OR:
+    // sem registo de retirada, um «true» herdado podia reativar quem
+    // respondeu STOP na ficha que morre — ver resolveMergeConsent. A data
+    // da última campanha de remarketing é a MAIS RECENTE das duas —
+    // perdê-la faria o agendador voltar a contactar o número antes do
+    // prazo da loja.
+    const consent = resolveMergeConsent(
+      keep,
+      merged,
+      opts?.confirmConsent === true
+    );
     const lastRemarketing = [keep.lastRemarketingAt, merged.lastRemarketingAt]
       .filter((d): d is Date => Boolean(d))
       .sort((a, b) => b.getTime() - a.getTime())[0];
@@ -303,30 +348,39 @@ export function mergeCustomers(
         email: keep.email ?? merged.email,
         ...(lastRemarketing ? { lastRemarketingAt: lastRemarketing } : {}),
         taxId: keep.taxId ?? merged.taxId,
-        whatsappConsent: keep.whatsappConsent || merged.whatsappConsent,
-        whatsappConsentAt:
-          keep.whatsappConsent || merged.whatsappConsent
-            ? ([keep.whatsappConsentAt, merged.whatsappConsentAt]
-                .filter(Boolean)
-                .sort()[0] ?? new Date())
-            : null,
+        whatsappConsent: consent.consent,
+        whatsappConsentAt: consent.consentAt,
       },
       where: { id: keepId },
     });
 
     await tx.customer.delete({ where: { id: mergedId } });
 
+    // A execução devolve a decisão real (com a confirmação do operador, se
+    // veio no pedido) — não o resultado seguro da pré-visualização.
+    const result: MergePreview = {
+      ...preview,
+      whatsappConsent: consent.consent,
+    };
+
     await tx.auditLog.create({
       data: {
         action: "CUSTOMER_MERGED",
         metadata: JSON.parse(
           JSON.stringify({
+            consent: {
+              conflict: consent.conflict,
+              confirmedByUser: opts?.confirmConsent === true,
+              keep: keep.whatsappConsent,
+              merged: merged.whatsappConsent,
+              result: consent.consent,
+            },
             keepPhone: keep.phone,
             mergedEmail: merged.email,
             mergedName: merged.name,
             mergedPhone: merged.phone,
             mergedTaxId: merged.taxId,
-            preview,
+            preview: result,
           })
         ),
         note: `cliente «${merged.name}» (${merged.phone}) juntado a «${keep.name}» (${keep.phone})`,
@@ -334,6 +388,6 @@ export function mergeCustomers(
       },
     });
 
-    return preview;
+    return result;
   });
 }

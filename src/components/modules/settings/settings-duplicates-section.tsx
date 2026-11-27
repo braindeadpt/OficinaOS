@@ -22,6 +22,7 @@ interface DuplicateGroup {
 }
 
 interface MergePreview {
+  consentConflict: boolean;
   email: string | null;
   jobCount: number;
   saleCount: number;
@@ -44,6 +45,7 @@ export default function SettingsDuplicatesSection() {
     mergedId: string;
   } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirmConsent, setConfirmConsent] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -69,6 +71,9 @@ export default function SettingsDuplicatesSection() {
         keepId,
         mergedId,
       });
+      // O visto de confirmação de consentimento recomeça sempre desligado —
+      // é uma decisão consciente do operador, nunca um arrasto de estado.
+      setConfirmConsent(false);
       setPreview({ data: res.data, groupKey, keepId, mergedId });
     } catch (err) {
       toast.error(getErrorMessage(err, t("duplicates.error")));
@@ -84,11 +89,13 @@ export default function SettingsDuplicatesSection() {
     setBusy(true);
     try {
       await api.post("/customers/merge", {
+        confirmConsent,
         keepId: preview.keepId,
         mergedId: preview.mergedId,
       });
       toast.success(t("duplicates.merged"));
       setPreview(null);
+      setConfirmConsent(false);
       await refresh();
     } catch (err) {
       toast.error(getErrorMessage(err, t("duplicates.error")));
@@ -204,13 +211,28 @@ export default function SettingsDuplicatesSection() {
                         : t("duplicates.preview_consent_no")}
                     </li>
                   </ul>
+                  {preview.data.consentConflict ? (
+                    <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 p-2 text-on-surface text-xs">
+                      <input
+                        checked={confirmConsent}
+                        className="mt-0.5"
+                        disabled={busy}
+                        onChange={(e) => setConfirmConsent(e.target.checked)}
+                        type="checkbox"
+                      />
+                      <span>{t("duplicates.consent_conflict_warning")}</span>
+                    </label>
+                  ) : null}
                   <div className="mt-2 flex gap-2">
                     <Button disabled={busy} onClick={confirmMerge} size="sm">
                       {t("duplicates.confirm_merge")}
                     </Button>
                     <Button
                       disabled={busy}
-                      onClick={() => setPreview(null)}
+                      onClick={() => {
+                        setPreview(null);
+                        setConfirmConsent(false);
+                      }}
                       size="sm"
                       variant="secondary"
                     >

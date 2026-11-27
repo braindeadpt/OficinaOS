@@ -79,7 +79,11 @@ export const customersRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (req, reply) => {
-      const body = req.body as { keepId?: string; mergedId?: string };
+      const body = req.body as {
+        confirmConsent?: boolean;
+        keepId?: string;
+        mergedId?: string;
+      };
       if (!(body.keepId && body.mergedId)) {
         throw new AppError("VALIDATION_ERROR", {
           message: "keepId e mergedId são obrigatórios",
@@ -92,7 +96,8 @@ export const customersRoutes: FastifyPluginAsync = async (app) => {
         app.prisma,
         body.keepId,
         body.mergedId,
-        req.user.id
+        req.user.id,
+        { confirmConsent: body.confirmConsent === true }
       );
       return reply.send(result);
     }

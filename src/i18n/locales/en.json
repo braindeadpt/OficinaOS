@@ -3273,6 +3273,7 @@
   "duplicates.preview_taxid": "Tax ID: {{value}}",
   "duplicates.preview_consent_yes": "WhatsApp consent: yes",
   "duplicates.preview_consent_no": "WhatsApp consent: no",
+  "duplicates.consent_conflict_warning": "The records have different choices about WhatsApp messages — consent stays off. Tick only if you confirmed with the customer.",
   "duplicates.confirm_merge": "Merge now",
   "duplicates.merged": "Customers merged. The removal is recorded in the audit log.",
   "duplicates.error": "Could not complete the operation",

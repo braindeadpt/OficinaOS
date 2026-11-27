@@ -113,7 +113,12 @@ describe("mergeCustomers", () => {
 
   it("reatribui o histórico, preenche campos vazios, apaga e audita", async () => {
     const { prisma, tx } = txMock();
-    const preview = await mergeCustomers(prisma, "keep", "gone", "user-1");
+    // O fixture tem conflito de consentimento (keep=false, merged=true) —
+    // sem confirmConsent o resultado seria false; aqui confirma-se para o
+    // teste se concentrar na reatribuição e nos campos vazios.
+    const preview = await mergeCustomers(prisma, "keep", "gone", "user-1", {
+      confirmConsent: true,
+    });
 
     expect(tx.job.updateMany).toHaveBeenCalledWith({
       data: { customerId: "keep" },
@@ -194,6 +199,208 @@ describe("mergeCustomers", () => {
     expect(tx.notificationOutbox.updateMany).toHaveBeenCalledWith({
       data: { recipientPhone: "+351912345678" },
       where: { recipientPhone: "912345678", status: "QUEUED" },
+    });
+  });
+
+  describe("consentimento WhatsApp na junção", () => {
+    function consentPair(
+      tx: ReturnType<typeof txMock>["tx"],
+      keepConsent: { consent: boolean; at: Date | null },
+      mergedConsent: { consent: boolean; at: Date | null }
+    ) {
+      tx.customer.findUnique = vi.fn(({ where }: { where: { id: string } }) =>
+        Promise.resolve(
+          where.id === "keep"
+            ? customerRow({
+                id: "keep",
+                phone: "+351912345678",
+                whatsappConsent: keepConsent.consent,
+                whatsappConsentAt: keepConsent.at,
+              })
+            : customerRow({
+                id: "gone",
+                phone: "912345678",
+                whatsappConsent: mergedConsent.consent,
+                whatsappConsentAt: mergedConsent.at,
+              })
+        )
+      );
+    }
+
+    function updateData(tx: ReturnType<typeof txMock>["tx"]) {
+      return (
+        tx.customer.update.mock.calls[0][0] as { data: Record<string, unknown> }
+      ).data;
+    }
+
+    function auditConsent(tx: ReturnType<typeof txMock>["tx"]) {
+      return (
+        tx.auditLog.create.mock.calls[0][0] as {
+          data: {
+            metadata: {
+              consent: {
+                conflict: boolean;
+                confirmedByUser: boolean;
+                keep: boolean;
+                merged: boolean;
+                result: boolean;
+              };
+            };
+          };
+        }
+      ).data.metadata.consent;
+    }
+
+    it("true + false sem confirmação → false, sem data, com os dois valores na auditoria", async () => {
+      const { prisma, tx } = txMock();
+      consentPair(
+        tx,
+        { consent: true, at: new Date("2025-01-01T00:00:00Z") },
+        { consent: false, at: null }
+      );
+      const result = await mergeCustomers(prisma, "keep", "gone", "user-1");
+
+      expect(updateData(tx).whatsappConsent).toBe(false);
+      expect(updateData(tx).whatsappConsentAt).toBeNull();
+      expect(result.whatsappConsent).toBe(false);
+      expect(result.consentConflict).toBe(true);
+      // A auditoria regista os dois valores originais e a decisão
+      expect(auditConsent(tx)).toEqual({
+        conflict: true,
+        confirmedByUser: false,
+        keep: true,
+        merged: false,
+        result: false,
+      });
+    });
+
+    it("true + false com confirmConsent → true, com whatsappConsentAt = agora", async () => {
+      const { prisma, tx } = txMock();
+      consentPair(
+        tx,
+        { consent: true, at: new Date("2025-01-01T00:00:00Z") },
+        { consent: false, at: null }
+      );
+      const before = Date.now();
+      const result = await mergeCustomers(prisma, "keep", "gone", "user-1", {
+        confirmConsent: true,
+      });
+
+      expect(updateData(tx).whatsappConsent).toBe(true);
+      const consentAt = updateData(tx).whatsappConsentAt as Date;
+      expect(consentAt.getTime()).toBeGreaterThanOrEqual(before);
+      expect(consentAt.getTime()).toBeLessThanOrEqual(Date.now());
+      expect(result.whatsappConsent).toBe(true);
+      expect(auditConsent(tx)).toEqual({
+        conflict: true,
+        confirmedByUser: true,
+        keep: true,
+        merged: false,
+        result: true,
+      });
+    });
+
+    it("true + true → true, com a data mais antiga como prova", async () => {
+      const { prisma, tx } = txMock();
+      const oldest = new Date("2024-03-10T00:00:00Z");
+      const newest = new Date("2025-11-20T00:00:00Z");
+      consentPair(
+        tx,
+        { consent: true, at: newest },
+        { consent: true, at: oldest }
+      );
+      await mergeCustomers(prisma, "keep", "gone", "user-1");
+
+      expect(updateData(tx).whatsappConsent).toBe(true);
+      expect(updateData(tx).whatsappConsentAt).toEqual(oldest);
+      expect(auditConsent(tx)).toEqual({
+        conflict: false,
+        confirmedByUser: false,
+        keep: true,
+        merged: true,
+        result: true,
+      });
+    });
+
+    it("false + false → false, sem conflito nem data", async () => {
+      const { prisma, tx } = txMock();
+      consentPair(
+        tx,
+        { consent: false, at: null },
+        { consent: false, at: null }
+      );
+      await mergeCustomers(prisma, "keep", "gone", "user-1");
+
+      expect(updateData(tx).whatsappConsent).toBe(false);
+      expect(updateData(tx).whatsappConsentAt).toBeNull();
+      expect(auditConsent(tx).conflict).toBe(false);
+    });
+
+    it("pré-visualização assinala o conflito e mostra o resultado seguro", async () => {
+      const { previewMerge } = await import("../customer-duplicates.service");
+      const prisma = {
+        customer: {
+          findUnique: vi.fn(({ where }: { where: { id: string } }) =>
+            Promise.resolve(
+              where.id === "keep"
+                ? customerRow({
+                    _count: { jobs: 1, sales: 0 },
+                    id: "keep",
+                    phone: "+351912345678",
+                    whatsappConsent: true,
+                    whatsappConsentAt: new Date("2025-01-01T00:00:00Z"),
+                  })
+                : customerRow({
+                    _count: { jobs: 0, sales: 2 },
+                    id: "gone",
+                    phone: "912345678",
+                    whatsappConsent: false,
+                    whatsappConsentAt: null,
+                  })
+            )
+          ),
+        },
+        shopSettings: {
+          findUnique: vi.fn().mockResolvedValue({ countryCode: "PT" }),
+        },
+      } as unknown as PrismaClient;
+
+      const preview = await previewMerge(prisma, "keep", "gone");
+      expect(preview.consentConflict).toBe(true);
+      // Resultado seguro: sem confirmação do operador, o consentimento fica desligado
+      expect(preview.whatsappConsent).toBe(false);
+    });
+
+    it("pré-visualização sem conflito mantém o valor comum", async () => {
+      const { previewMerge } = await import("../customer-duplicates.service");
+      const prisma = {
+        customer: {
+          findUnique: vi.fn(({ where }: { where: { id: string } }) =>
+            Promise.resolve(
+              where.id === "keep"
+                ? customerRow({
+                    _count: { jobs: 0, sales: 0 },
+                    id: "keep",
+                    phone: "+351912345678",
+                    whatsappConsent: true,
+                  })
+                : customerRow({
+                    _count: { jobs: 0, sales: 0 },
+                    id: "gone",
+                    phone: "912345678",
+                    whatsappConsent: true,
+                  })
+            )
+          ),
+        },
+        shopSettings: {
+          findUnique: vi.fn().mockResolvedValue({ countryCode: "PT" }),
+        },
+      } as unknown as PrismaClient;
+
+      const preview = await previewMerge(prisma, "keep", "gone");
+      expect(preview.consentConflict).toBe(false);
+      expect(preview.whatsappConsent).toBe(true);
     });
   });
 

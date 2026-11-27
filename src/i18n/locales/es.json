@@ -3273,6 +3273,7 @@
   "duplicates.preview_taxid": "NIF: {{value}}",
   "duplicates.preview_consent_yes": "Consentimiento WhatsApp: sí",
   "duplicates.preview_consent_no": "Consentimiento WhatsApp: no",
+  "duplicates.consent_conflict_warning": "Las fichas tienen elecciones diferentes sobre los mensajes de WhatsApp — el consentimiento queda desactivado. Márquelo solo si lo confirmó con el cliente.",
   "duplicates.confirm_merge": "Fusionar ahora",
   "duplicates.merged": "Clientes fusionados. La fusión quedó registrada en la auditoría.",
   "duplicates.error": "No se pudo completar la operación",
