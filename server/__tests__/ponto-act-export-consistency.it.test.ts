@@ -222,12 +222,14 @@ describe.skipIf(!serverReachable)(
         const ids = day?.entries.map((e) => e.id) ?? [];
         const includesLate = ids.includes("late-in");
 
-        // A invariante: visibilidade total ou ausência total — nunca metade.
-        // Se o par tardio entrou no snapshot, as horas sobem para 9 h
-        // (540 min); se não entrou, ficam nas 8 h do par base.
-        expect(ids.includes("late-out")).toBe(includesLate);
-        expect(day?.workedMinutes).toBe(includesLate ? 540 : 480);
-        expect(w?.totalMinutes).toBe(includesLate ? 540 : 480);
+        // RepeatableRead fixa o snapshot na primeira leitura da transação —
+        // anterior à escrita concorrente — por isso o par tardio NUNCA pode
+        // aparecer. Aceitar a presença dele equivaleria ao comportamento de
+        // ReadCommitted e o teste deixaria de distinguir os dois níveis.
+        expect(includesLate).toBe(false);
+        expect(ids.includes("late-out")).toBe(false);
+        expect(day?.workedMinutes).toBe(480);
+        expect(w?.totalMinutes).toBe(480);
       } finally {
         await writer.end().catch(() => undefined);
       }
