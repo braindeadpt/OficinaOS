@@ -80,6 +80,7 @@ describe("mergeCustomers", () => {
       whatsappConsentAt: new Date("2025-01-01T00:00:00Z"),
     });
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       auditLog: { create: vi.fn().mockResolvedValue({}) },
       businessMessage: { updateMany: vi.fn().mockResolvedValue({}) },
       commercialAgreement: { updateMany: vi.fn().mockResolvedValue({}) },

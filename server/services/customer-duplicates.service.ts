@@ -242,6 +242,15 @@ export function mergeCustomers(
   opts?: { confirmConsent?: boolean }
 ): Promise<MergePreview> {
   return prisma.$transaction(async (tx) => {
+    // Lock das duas fichas antes de ler: sem ele, outro operador podia
+    // registar (ou retirar) o consentimento entre a leitura e a gravação
+    // da junção, e o update final apagava essa decisão mais recente.
+    // Ordem por id para não haver deadlock entre duas junções em sentidos
+    // opostos.
+    const lockOrder = [keepId, mergedId].sort();
+    for (const lockId of lockOrder) {
+      await tx.$queryRaw`SELECT "id" FROM "customers" WHERE "id" = ${lockId} FOR UPDATE`;
+    }
     const [keep, merged] = await Promise.all([
       tx.customer.findUnique({
         include: CUSTOMER_INCLUDE_COUNTS,
