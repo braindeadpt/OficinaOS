@@ -1418,6 +1418,7 @@ describe("create", () => {
     expect(prisma.job.create).not.toHaveBeenCalled();
     expect(prisma.customer.upsert).not.toHaveBeenCalled();
     expect(prisma.device.upsert).not.toHaveBeenCalled();
+    expect(prisma.brand.create).not.toHaveBeenCalled();
   });
 
   it("returns error when customerId is invalid", async () => {
