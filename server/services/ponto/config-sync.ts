@@ -278,8 +278,10 @@ async function pushPontoCloudConfigNow(
   }).catch(() => null);
   if (!res) {
     log.warn("ponto config sync: cloud unreachable");
+    lastConfigPushFailed = true;
     return null;
   }
+  lastConfigPushFailed = !res.ok;
   if (!res.ok) {
     log.warn({ status: res.status }, "ponto config sync: cloud recusou");
   }
@@ -296,7 +298,17 @@ async function pushPontoCloudConfigNow(
 // app segue o fluxo clássico e pede sempre a localização primeiro.
 let cloudEvaluateProbeSupported = false;
 
+// true quando a última tentativa de enviar a config falhou (rede ou
+// recusa) — o poller periódico usa-o para voltar a tentar, senão a
+// sonda ficava desligada até ao próximo arranque/sync manual.
+let lastConfigPushFailed = false;
+
 /** A Cloud desta instalação já suporta probe/needLocation no evaluate? */
 export function cloudSupportsEvaluateProbe(): boolean {
   return cloudEvaluateProbeSupported;
+}
+
+/** A última tentativa de PUT da config falhou e deve ser repetida? */
+export function pontoConfigPushFailed(): boolean {
+  return lastConfigPushFailed;
 }

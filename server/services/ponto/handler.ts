@@ -1257,7 +1257,20 @@ async function tryProbeFinalize(
   pauseSinceAt: string | undefined,
   hasEntrada: boolean
 ): Promise<boolean> {
-  if (staff.user.externalWork || !code || !cloudSupportsEvaluateProbe()) {
+  // Mesmo gate da avaliação clássica: sem geo da loja configurada o módulo
+  // não está operacional e a sonda não pode concluir nada — cai no fluxo
+  // clássico, que informa o utilizador da configuração em falta.
+  const geoMissing =
+    settings.pontoGeoLat === null ||
+    settings.pontoGeoLat === undefined ||
+    settings.pontoGeoLng === null ||
+    settings.pontoGeoLng === undefined;
+  if (
+    staff.user.externalWork ||
+    !code ||
+    geoMissing ||
+    !cloudSupportsEvaluateProbe()
+  ) {
     return false;
   }
   const probeResult = await evaluatePontoMark(ctx.prisma, ctx.log, {

@@ -1,7 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { AppError } from "../../shared/errors/app-error.js";
 import { syncCloudEntitlements } from "../services/cloud.service.js";
-import { pushPontoCloudConfig } from "../services/ponto/config-sync.js";
+import {
+  pontoConfigPushFailed,
+  pushPontoCloudConfig,
+} from "../services/ponto/config-sync.js";
 import { purgeExpiredWhatsAppLocalToken } from "../services/whatsapp-local-sunset.service.js";
 import { isModuleEnabled } from "../utils/modules.js";
 
@@ -41,7 +44,14 @@ export function startCloudPoller(app: FastifyInstance): () => void {
       // arranque já passou: este é o momento em que recuperamos o sync sem
       // voltar a transmitir staff a cada tick — só na transição para um
       // entitlement fresco de ponto.
-      if (!hadFreshPonto && status.modules.includes("ponto")) {
+      const pontoFresh = status.modules.includes("ponto");
+      // Além da transição para entitlement fresco, repetir o push quando a
+      // última tentativa falhou — sem isto, uma falha de rede no arranque
+      // deixava a sonda desligada até ao arranque seguinte.
+      if (
+        (!hadFreshPonto && pontoFresh) ||
+        (pontoFresh && pontoConfigPushFailed())
+      ) {
         pushPontoCloudConfig(app.prisma, app.log).catch((err) =>
           app.log.warn({ err }, "ponto config sync após refresh cloud falhou")
         );

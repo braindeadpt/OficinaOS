@@ -193,6 +193,7 @@ const botUpdate = (input: UpdateShopSettingsInput) => ({
 // opções de externos/lembretes. Tal como botCreate/botUpdate, mantido
 // fora do shopCreate/shopUpdate para não disparar a complexidade.
 const pontoCreate = (input: UpdateShopSettingsInput) => ({
+  pontoAlwaysAskLocation: input.pontoAlwaysAskLocation ?? false,
   pontoGeoLat: input.pontoGeoLat ?? null,
   pontoGeoLng: input.pontoGeoLng ?? null,
   pontoRadiusM: input.pontoRadiusM ?? 100,
@@ -206,6 +207,7 @@ const pontoCreate = (input: UpdateShopSettingsInput) => ({
 });
 
 const pontoUpdate = (input: UpdateShopSettingsInput) => ({
+  pontoAlwaysAskLocation: input.pontoAlwaysAskLocation,
   pontoGeoLat: input.pontoGeoLat,
   pontoGeoLng: input.pontoGeoLng,
   pontoRadiusM: input.pontoRadiusM,

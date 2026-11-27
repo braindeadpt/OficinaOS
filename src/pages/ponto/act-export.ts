@@ -68,7 +68,10 @@ function statusLabel(entry: PontoActEntryDTO, t: TFunction): string {
 /** Classificação única da prova de presença (decisões da Fase 2).
  *  Registos antigos sem kind → «—» no exportador, sem preenchimento
  *  retroativo. */
-function proofLabel(entry: PontoActEntryDTO, t: TFunction): string | null {
+function proofLabel(
+  entry: PontoActLinkedEntryDTO,
+  t: TFunction
+): string | null {
   if (entry.proofKind === "screen_wifi") {
     return t("ponto.act_proof_screen_wifi");
   }
@@ -106,7 +109,7 @@ function linkedLine(args: {
     e.createdAt,
     args.locale,
     args.timeZone
-  )}${reason}`;
+  )}${reason} · ${args.t("ponto.act_proof")}: ${proofLabel(e, args.t) ?? "—"}`;
 }
 
 function pushValidationLines(
