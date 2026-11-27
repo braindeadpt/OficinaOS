@@ -1,8 +1,9 @@
 // PDF mensal do próprio trabalhador (art. 15.º RGPD) — gerado na app,
-// servido por link de uso único. jsPDF corre em Node sem dependências de
-// browser para texto simples.
+// servido por link de uso único. PDF escrito à mão: o documento é texto
+// simples com Helvetica base-14 (WinAnsi cobre os acentos pt-PT) e um
+// gerador mínimo evita arrastar jspdf+canvg+html2canvas para o bundle
+// portable do servidor (o probe do CI despoja deps de frontend).
 
-import { jsPDF } from "jspdf";
 import {
   fmtHoursMs,
   type MonthSummary,
@@ -22,7 +23,7 @@ const STATUS_PT: Record<string, string> = {
   RECUSADO: "Recusado",
 };
 
-function hhmmss(at: Date, tz: string): string {
+function hhmm(at: Date, tz: string): string {
   return new Intl.DateTimeFormat("pt-PT", {
     hour: "2-digit",
     minute: "2-digit",
@@ -39,6 +40,118 @@ function dayLabel(at: Date, tz: string): string {
   }).format(at);
 }
 
+/** WinAnsi: latin-1 cobre pt-PT; o resto vira «?». Escape dos parênteses. */
+function pdfText(s: string): string {
+  return s
+    .replace(/[\\()]/g, (c) => `\\${c}`)
+    .split("")
+    .map((c) => (c.charCodeAt(0) > 255 ? "?" : c))
+    .join("");
+}
+
+interface PdfPage {
+  lines: { size: number; text: string; x: number; y: number }[];
+}
+
+function buildPages(input: {
+  entries: RegistosEntry[];
+  monthLabel: string;
+  shopName: string;
+  summary: MonthSummary;
+  tz: string;
+  workerName: string;
+}): PdfPage[] {
+  const { entries, monthLabel, shopName, summary, tz, workerName } = input;
+  const pages: PdfPage[] = [];
+  let page: PdfPage = { lines: [] };
+  let y = 800;
+  const push = (text: string, x: number, size: number, dy: number) => {
+    if (y < 60) {
+      pages.push(page);
+      page = { lines: [] };
+      y = 800;
+    }
+    page.lines.push({ size, text, x, y });
+    y -= dy;
+  };
+
+  push("Registo de ponto — os meus registos", 170, 15, 20);
+  push(`${shopName} — ${workerName} — ${monthLabel}`, 130, 11, 24);
+  push(
+    `Dias com registos: ${summary.days}   Horas trabalhadas: ${fmtHoursMs(summary.workedMs)}   Pausas: ${fmtHoursMs(summary.pauseMs)}`,
+    50,
+    10,
+    16
+  );
+  push(
+    `Correções: ${summary.correctionsCount}   Por validar: ${summary.pendingCount}`,
+    50,
+    10,
+    18
+  );
+  push(
+    "Documento pedido pelo próprio trabalhador (art. 15.º RGPD). Gerado automaticamente pela aplicação da loja.",
+    50,
+    8,
+    24
+  );
+
+  let lastDay = "";
+  for (const e of entries) {
+    const day = dayLabel(e.at, tz);
+    const showDay = day === lastDay ? "" : day;
+    lastDay = day;
+    const line = `${showDay.padEnd(14)}  ${(ENTRY_TYPE_PT[e.type] ?? e.type).padEnd(10)} ${hhmm(e.at, tz)}  ${STATUS_PT[e.status] ?? e.status}`;
+    push(line, 50, 10, 14);
+  }
+  if (entries.length === 0) {
+    push("Sem registos neste mês.", 50, 10, 14);
+  }
+  pages.push(page);
+  return pages;
+}
+
+/** Serializa páginas como PDF 1.4 com xref correto. */
+function serializePdf(pages: PdfPage[]): Buffer {
+  const objects: string[] = [];
+  // 1: catálogo, 2: pages, 3: fonte; depois 2 objetos por página.
+  const pageCount = pages.length;
+  const kids = pages.map((_, i) => `${4 + i * 2} 0 R`).join(" ");
+  objects[0] = "<< /Type /Catalog /Pages 2 0 R >>";
+  objects[1] = `<< /Type /Pages /Kids [${kids}] /Count ${pageCount} >>`;
+  objects[2] =
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>";
+  pages.forEach((p, i) => {
+    const pageObj = 4 + i * 2;
+    const contentObj = pageObj + 1;
+    objects[pageObj - 1] =
+      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] " +
+      `/Resources << /Font << /F1 3 0 R >> >> /Contents ${contentObj} 0 R >>`;
+    let stream = "BT\n";
+    for (const line of p.lines) {
+      stream += `/F1 ${line.size} Tf 1 0 0 1 ${line.x} ${line.y} Tm (${pdfText(line.text)}) Tj\n`;
+    }
+    stream += "ET";
+    objects[contentObj - 1] =
+      `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`;
+  });
+
+  let out = "%PDF-1.4\n";
+  const offsets: number[] = [];
+  objects.forEach((body, i) => {
+    offsets.push(out.length);
+    out += `${i + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xrefStart = out.length;
+  out += `xref\n0 ${objects.length + 1}\n`;
+  out += "0000000000 65535 f \n";
+  for (const off of offsets) {
+    out += `${String(off).padStart(10, "0")} 00000 n \n`;
+  }
+  out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+  return Buffer.from(out, "latin1");
+}
+
 export function buildRegistosPdf(input: {
   entries: RegistosEntry[];
   monthLabel: string;
@@ -47,61 +160,5 @@ export function buildRegistosPdf(input: {
   tz: string;
   workerName: string;
 }): Buffer {
-  const { entries, monthLabel, shopName, summary, tz, workerName } = input;
-  const doc = new jsPDF({ unit: "mm" });
-  const pageWidth = doc.internal.pageSize.getWidth();
-  let y = 18;
-
-  doc.setFontSize(15);
-  doc.text("Registo de ponto — os meus registos", pageWidth / 2, y, {
-    align: "center",
-  });
-  y += 8;
-  doc.setFontSize(11);
-  doc.text(`${shopName} — ${workerName} — ${monthLabel}`, pageWidth / 2, y, {
-    align: "center",
-  });
-  y += 10;
-
-  doc.setFontSize(10);
-  doc.text(
-    `Dias com registos: ${summary.days}   Horas trabalhadas: ${fmtHoursMs(summary.workedMs)}   Pausas: ${fmtHoursMs(summary.pauseMs)}`,
-    14,
-    y
-  );
-  y += 6;
-  doc.text(
-    `Correções: ${summary.correctionsCount}   Por validar: ${summary.pendingCount}`,
-    14,
-    y
-  );
-  y += 8;
-  doc.setFontSize(9);
-  doc.text(
-    "Documento pedido pelo próprio trabalhador (art. 15.º RGPD). Gerado automaticamente pela aplicação da loja.",
-    14,
-    y
-  );
-  y += 9;
-
-  doc.setFontSize(10);
-  let lastDay = "";
-  for (const e of entries) {
-    if (y > 275) {
-      doc.addPage();
-      y = 18;
-    }
-    const day = dayLabel(e.at, tz);
-    const showDay = day === lastDay ? "" : day;
-    lastDay = day;
-    const line = `${showDay.padEnd(12)}  ${(ENTRY_TYPE_PT[e.type] ?? e.type).padEnd(10)} ${hhmmss(e.at, tz)}  ${STATUS_PT[e.status] ?? e.status}`;
-    doc.text(line, 14, y);
-    y += 5.6;
-  }
-
-  if (entries.length === 0) {
-    doc.text("Sem registos neste mês.", 14, y);
-  }
-
-  return Buffer.from(doc.output("arraybuffer"));
+  return serializePdf(buildPages(input));
 }
