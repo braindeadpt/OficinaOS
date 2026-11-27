@@ -181,6 +181,7 @@ describe("ponto — GET /status", () => {
     expect(res.json()).toEqual({
       enabled: false,
       hasRecords: true,
+      photoCleanupWarnings: [],
       tz: "Europe/Lisbon",
     });
   });

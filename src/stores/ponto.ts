@@ -14,8 +14,8 @@ import api from "@/lib/api";
 interface PontoState {
   enabled: boolean | null;
   fetchStatus: () => Promise<void>;
-  photoCleanupWarnings: string[];
   hasRecords: boolean | null;
+  photoCleanupWarnings: string[];
   tz: string | null;
 }
 
