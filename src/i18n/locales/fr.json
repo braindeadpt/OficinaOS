@@ -3243,5 +3243,8 @@
   "ponto.sheet_save_failed": "Impossible d'enregistrer la livraison de la feuille",
   "ponto.sheet_signed": "Signé",
   "ponto.sheet_signed_no": "Non",
-  "ponto.sheet_signed_yes": "Oui"
+  "ponto.sheet_signed_yes": "Oui",
+  "ponto": {
+    "act_registered_by": "Enregistré par"
+  }
 }

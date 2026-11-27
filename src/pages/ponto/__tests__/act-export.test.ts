@@ -364,9 +364,9 @@ describe("correções à exportação ACT (revisão #208)", () => {
     );
     const details = rows.map((row) => row[5] ?? "").join("\n");
     // a decisão da correção é atribuída à correção…
-    expect(details).toContain("ponto.act_validation_of_correction: RECUSADO");
+    expect(details).toContain("ponto.act_validation_of_correction: ponto.act_status_recusado");
     // …e a decisão do original ao original — nunca misturadas
-    expect(details).toContain("ponto.act_validation_of_original: APROVADO");
+    expect(details).toContain("ponto.act_validation_of_original: ponto.act_status_aprovado");
   });
 
   it("referência à picagem ligada usa a data do momento da picagem no fuso da loja", () => {

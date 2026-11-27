@@ -3243,5 +3243,8 @@
   "ponto.sheet_save_failed": "Could not save the sheet delivery",
   "ponto.sheet_signed": "Signed",
   "ponto.sheet_signed_no": "no",
-  "ponto.sheet_signed_yes": "yes"
+  "ponto.sheet_signed_yes": "yes",
+  "ponto": {
+    "act_registered_by": "Registered by"
+  }
 }

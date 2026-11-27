@@ -3243,5 +3243,8 @@
   "ponto.sheet_save_failed": "No se pudo guardar la entrega de la hoja.",
   "ponto.sheet_signed": "Firmado",
   "ponto.sheet_signed_no": "No",
-  "ponto.sheet_signed_yes": "Sí"
+  "ponto.sheet_signed_yes": "Sí",
+  "ponto": {
+    "act_registered_by": "Registrado por"
+  }
 }
