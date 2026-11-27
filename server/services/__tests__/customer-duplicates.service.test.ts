@@ -89,12 +89,20 @@ describe("mergeCustomers", () => {
         delete: vi.fn().mockResolvedValue({}),
         findMany: vi.fn().mockResolvedValue([
           {
+            email: keep.email,
             id: "keep",
+            lastRemarketingAt: null,
+            phone: keep.phone,
+            taxId: keep.taxId,
             whatsappConsent: keep.whatsappConsent,
             whatsappConsentAt: keep.whatsappConsentAt ?? null,
           },
           {
+            email: merged.email,
             id: "gone",
+            lastRemarketingAt: null,
+            phone: merged.phone,
+            taxId: merged.taxId,
             whatsappConsent: merged.whatsappConsent,
             whatsappConsentAt: merged.whatsappConsentAt ?? null,
           },
@@ -205,6 +213,28 @@ describe("mergeCustomers", () => {
             })
       )
     );
+    // A decisão final usa a releitura sob lock — o mock tem de devolver
+    // as mesmas datas no findMany.
+    tx.customer.findMany = vi.fn().mockResolvedValue([
+      {
+        email: null,
+        id: "keep",
+        lastRemarketingAt: older,
+        phone: "+351912345678",
+        taxId: null,
+        whatsappConsent: false,
+        whatsappConsentAt: null,
+      },
+      {
+        email: null,
+        id: "gone",
+        lastRemarketingAt: newer,
+        phone: "912345678",
+        taxId: null,
+        whatsappConsent: false,
+        whatsappConsentAt: null,
+      },
+    ]);
     await mergeCustomers(prisma, "keep", "gone", "user-1");
     const updateArgs = tx.customer.update.mock.calls[0][0] as {
       data: Record<string, unknown>;
@@ -243,12 +273,20 @@ describe("mergeCustomers", () => {
       // mock tem de devolver os mesmos valores que o findUnique inicial.
       tx.customer.findMany = vi.fn().mockResolvedValue([
         {
+          email: null,
           id: "keep",
+          lastRemarketingAt: null,
+          phone: "+351912345678",
+          taxId: null,
           whatsappConsent: keepConsent.consent,
           whatsappConsentAt: keepConsent.at,
         },
         {
+          email: null,
           id: "gone",
+          lastRemarketingAt: null,
+          phone: "912345678",
+          taxId: null,
           whatsappConsent: mergedConsent.consent,
           whatsappConsentAt: mergedConsent.at,
         },
@@ -362,6 +400,80 @@ describe("mergeCustomers", () => {
       expect(updateData(tx).whatsappConsent).toBe(false);
       expect(updateData(tx).whatsappConsentAt).toBeNull();
       expect(auditConsent(tx).conflict).toBe(false);
+    });
+
+    it("retirada de consentimento a meio da junção é respeitada na releitura sob lock", async () => {
+      const { prisma, tx } = txMock();
+      // Leitura inicial: ambos com consentimento. Até ao lock, o cliente
+      // retira o consentimento na ficha que morre (PARAR por SMS) — a
+      // decisão tem de usar o valor fresco, não o inicial.
+      consentPair(
+        tx,
+        { consent: true, at: new Date("2025-01-01T00:00:00Z") },
+        { consent: true, at: new Date("2025-02-01T00:00:00Z") }
+      );
+      tx.customer.findMany = vi.fn().mockResolvedValue([
+        {
+          email: null,
+          id: "keep",
+          lastRemarketingAt: null,
+          phone: "+351912345678",
+          taxId: null,
+          whatsappConsent: true,
+          whatsappConsentAt: new Date("2025-01-01T00:00:00Z"),
+        },
+        {
+          email: null,
+          id: "gone",
+          lastRemarketingAt: null,
+          phone: "912345678",
+          taxId: null,
+          whatsappConsent: false,
+          whatsappConsentAt: null,
+        },
+      ]);
+      await mergeCustomers(prisma, "keep", "gone", "user-1");
+
+      // true + false sem confirmação → conflito, consentimento desligado.
+      expect(updateData(tx).whatsappConsent).toBe(false);
+      expect(updateData(tx).whatsappConsentAt).toBeNull();
+      expect(auditConsent(tx).conflict).toBe(true);
+      expect(auditConsent(tx).merged).toBe(false);
+    });
+
+    it("correção do telefone a meio da junção aborta antes de apagar", async () => {
+      const { prisma, tx } = txMock();
+      consentPair(
+        tx,
+        { consent: false, at: null },
+        { consent: false, at: null }
+      );
+      // Alguém corrige o telefone da ficha que morre antes do lock — o
+      // par deixa de ser duplicado e a junção não pode continuar.
+      tx.customer.findMany = vi.fn().mockResolvedValue([
+        {
+          email: null,
+          id: "keep",
+          lastRemarketingAt: null,
+          phone: "+351912345678",
+          taxId: null,
+          whatsappConsent: false,
+          whatsappConsentAt: null,
+        },
+        {
+          email: null,
+          id: "gone",
+          lastRemarketingAt: null,
+          phone: "913999888",
+          taxId: null,
+          whatsappConsent: false,
+          whatsappConsentAt: null,
+        },
+      ]);
+      await expect(
+        mergeCustomers(prisma, "keep", "gone", "user-1")
+      ).rejects.toThrow();
+      expect(tx.customer.delete).not.toHaveBeenCalled();
     });
 
     it("pré-visualização assinala o conflito e mostra o resultado seguro", async () => {

@@ -242,6 +242,15 @@ export function mergeCustomers(
   opts?: { confirmConsent?: boolean }
 ): Promise<MergePreview> {
   return prisma.$transaction(async (tx) => {
+    // Duas junções do mesmo par em sentidos opostos serializam aqui. O
+    // lock é por par ordenado — não toca em locks de linhas, por isso não
+    // interfere na ordem com a caixa de entrada. Sem ele, os KEY SHARE
+    // das reatribuições (a FK passa a apontar para a ficha de destino)
+    // cruzavam-se com os FOR UPDATE em sentidos opostos e podiam gerar
+    // deadlock mesmo com a ordenação por id. O segundo pedido espera e
+    // falha com NOT_FOUND — a ficha de origem já não existe.
+    const pairKey = [keepId, mergedId].sort().join("|");
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${pairKey}, 0))`;
     const [keep, merged] = await Promise.all([
       tx.customer.findUnique({
         include: CUSTOMER_INCLUDE_COUNTS,
@@ -274,60 +283,72 @@ export function mergeCustomers(
     // Reatribuir todo o histórico. O Supplier é 1:1 — só migra se o
     // destino ainda não for fornecedor; caso contrário fica órfão por
     // SetNull ao apagar, o que é preferível a perder a ficha de fornecedor.
-    const relink = [
-      tx.job.updateMany({
-        data: { customerId: keepId },
-        where: { customerId: mergedId },
-      }),
-      tx.sale.updateMany({
-        data: { customerId: keepId },
-        where: { customerId: mergedId },
-      }),
-      tx.tradeIn.updateMany({
-        data: { customerId: keepId },
-        where: { customerId: mergedId },
-      }),
-      tx.purchaseOrder.updateMany({
-        data: { customerId: keepId },
-        where: { customerId: mergedId },
-      }),
-      tx.supportTicket.updateMany({
-        data: { customerId: keepId },
-        where: { customerId: mergedId },
-      }),
-      tx.businessMessage.updateMany({
-        data: { customerId: keepId },
-        where: { customerId: mergedId },
-      }),
-      tx.inboxConversation.updateMany({
-        data: { customerId: keepId },
-        where: { customerId: mergedId },
-      }),
-      tx.commercialAgreement.updateMany({
-        data: { customerId: keepId },
-        where: { customerId: mergedId },
-      }),
-    ];
-    const keepSupplier = await tx.supplier.findUnique({
-      where: { customerId: keepId },
-    });
-    if (!keepSupplier) {
-      relink.push(
-        tx.supplier.updateMany({
+    // Corre DUAS vezes: aqui, antes do lock das fichas, para apanhar o
+    // grosso das linhas na ordem de locks coerente com a caixa de entrada
+    // (reatribuições primeiro, ficha no fim); e outra vez depois do lock,
+    // para apanhar linhas criadas entretanto na ficha que morre — um
+    // pedido de suporte aberto a meio da junção ficava órfão pelo
+    // SetNull ao apagar, em vez de passar para a ficha mantida. Depois do
+    // lock FOR UPDATE nenhuma linha nova consegue referenciar a ficha (a
+    // verificação da FK bloqueia até ao fim da transação), por isso a
+    // segunda passagem fecha a janela.
+    const relinkHistory = async () => {
+      const relink = [
+        tx.job.updateMany({
           data: { customerId: keepId },
           where: { customerId: mergedId },
-        })
-      );
-    }
-    await Promise.all(relink);
+        }),
+        tx.sale.updateMany({
+          data: { customerId: keepId },
+          where: { customerId: mergedId },
+        }),
+        tx.tradeIn.updateMany({
+          data: { customerId: keepId },
+          where: { customerId: mergedId },
+        }),
+        tx.purchaseOrder.updateMany({
+          data: { customerId: keepId },
+          where: { customerId: mergedId },
+        }),
+        tx.supportTicket.updateMany({
+          data: { customerId: keepId },
+          where: { customerId: mergedId },
+        }),
+        tx.businessMessage.updateMany({
+          data: { customerId: keepId },
+          where: { customerId: mergedId },
+        }),
+        tx.inboxConversation.updateMany({
+          data: { customerId: keepId },
+          where: { customerId: mergedId },
+        }),
+        tx.commercialAgreement.updateMany({
+          data: { customerId: keepId },
+          where: { customerId: mergedId },
+        }),
+      ];
+      const keepSupplier = await tx.supplier.findUnique({
+        where: { customerId: keepId },
+      });
+      if (!keepSupplier) {
+        relink.push(
+          tx.supplier.updateMany({
+            data: { customerId: keepId },
+            where: { customerId: mergedId },
+          })
+        );
+      }
+      await Promise.all(relink);
 
-    // Mensagens ainda na fila com o telefone literal do juntado passam a
-    // apontar para o número mantido — caso contrário a verificação de
-    // consentimento na próxima tentativa não encontrava a ficha.
-    await tx.notificationOutbox.updateMany({
-      data: { recipientPhone: keep.phone },
-      where: { recipientPhone: merged.phone, status: "QUEUED" },
-    });
+      // Mensagens ainda na fila com o telefone literal do juntado passam a
+      // apontar para o número mantido — caso contrário a verificação de
+      // consentimento na próxima tentativa não encontrava a ficha.
+      await tx.notificationOutbox.updateMany({
+        data: { recipientPhone: keep.phone },
+        where: { recipientPhone: merged.phone, status: "QUEUED" },
+      });
+    };
+    await relinkHistory();
 
     // Preenche o que falta no destino. O consentimento NÃO se une com OR:
     // sem registo de retirada, um «true» herdado podia reativar quem
@@ -347,9 +368,16 @@ export function mergeCustomers(
     for (const lockId of lockOrder) {
       await tx.$queryRaw`SELECT "id" FROM "customers" WHERE "id" = ${lockId} FOR UPDATE`;
     }
+    // Segunda passagem da reatribuição, já sob lock — apanha o que foi
+    // criado para a ficha que morre durante a primeira.
+    await relinkHistory();
     const freshRows = await tx.customer.findMany({
       select: {
+        email: true,
         id: true,
+        lastRemarketingAt: true,
+        phone: true,
+        taxId: true,
         whatsappConsent: true,
         whatsappConsentAt: true,
       },
@@ -360,19 +388,29 @@ export function mergeCustomers(
     if (!(freshKeep && freshMerged)) {
       throw new AppError("NOT_FOUND", { resource: "customer" });
     }
+    // Os telefones verificam-se outra vez com os valores sob lock: uma
+    // correção gravada a meio da junção invalida o par, e continuar
+    // apagava a ficha recém-corrigida.
+    await assertPhonesStillMatch(tx, freshKeep.phone, freshMerged.phone);
     const consent = resolveMergeConsent(
       freshKeep,
       freshMerged,
       opts?.confirmConsent === true
     );
-    const lastRemarketing = [keep.lastRemarketingAt, merged.lastRemarketingAt]
+    // Email, NIF e remarketing calculam-se dos valores sob lock — uma
+    // edição gravada entretanto na ficha mantida nunca é sobrescrita
+    // pelos valores lidos no início.
+    const lastRemarketing = [
+      freshKeep.lastRemarketingAt,
+      freshMerged.lastRemarketingAt,
+    ]
       .filter((d): d is Date => Boolean(d))
       .sort((a, b) => b.getTime() - a.getTime())[0];
     await tx.customer.update({
       data: {
-        email: keep.email ?? merged.email,
+        email: freshKeep.email ?? freshMerged.email,
         ...(lastRemarketing ? { lastRemarketingAt: lastRemarketing } : {}),
-        taxId: keep.taxId ?? merged.taxId,
+        taxId: freshKeep.taxId ?? freshMerged.taxId,
         whatsappConsent: consent.consent,
         whatsappConsentAt: consent.consentAt,
       },
@@ -400,11 +438,11 @@ export function mergeCustomers(
               merged: freshMerged.whatsappConsent,
               result: consent.consent,
             },
-            keepPhone: keep.phone,
-            mergedEmail: merged.email,
+            keepPhone: freshKeep.phone,
+            mergedEmail: freshMerged.email,
             mergedName: merged.name,
-            mergedPhone: merged.phone,
-            mergedTaxId: merged.taxId,
+            mergedPhone: freshMerged.phone,
+            mergedTaxId: freshMerged.taxId,
             preview: result,
           })
         ),
