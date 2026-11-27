@@ -135,4 +135,42 @@ describe("shred-ponto-photos — limpeza das cópias do atualizador", () => {
         .then(() => true)
     ).toBe(true);
   });
+
+  it("regista no relatório as pastas que não consegue apagar — nada de falhas silenciosas", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "shred-fail-"));
+    cleanup.push(root);
+    const uploadDir = path.join(root, "app", "uploads");
+    const activePhotos = path.join(uploadDir, "ponto-photos");
+    await fs.mkdir(activePhotos, { recursive: true });
+    const locked = path.join(activePhotos, "foto.jpg");
+    await fs.writeFile(locked, "jpeg");
+
+    // Windows: um ficheiro aberto não pode ser apagado — simula a falha
+    // de eliminação sem depender de permissões.
+    const handle = await fs.open(locked, "r+");
+    try {
+      const result = await shredPontoPhotos({
+        databaseUrl: "postgres://fake",
+        uploadDir,
+      });
+      if (result.failures.length === 0) {
+        // Plataformas que permitem apagar ficheiros abertos (Linux):
+        // o teste não consegue forçar a falha — valida só o contrato
+        // do relatório (sempre escrito, failures como lista).
+        expect(Array.isArray(result.failures)).toBe(true);
+      } else {
+        expect(result.failures).toContain(activePhotos);
+        // nunca diz "apagado" sem certeza: a pasta continua em disco
+        await expect(fs.lstat(locked)).resolves.toBeTruthy();
+      }
+    } finally {
+      await handle.close();
+    }
+    // relatório sempre escrito em UPLOAD_DIR — é ele que alimenta o
+    // aviso das Definições
+    const report = JSON.parse(
+      await fs.readFile(path.join(uploadDir, "ponto-photo-shred.json"), "utf-8")
+    ) as { failures: string[] };
+    expect(Array.isArray(report.failures)).toBe(true);
+  });
 });

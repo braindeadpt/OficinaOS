@@ -336,6 +336,48 @@ describe("photoSentAts — prova fotográfica na exportação de horas", () => {
     ]);
   });
 
+  it("mantém a hora da foto de uma picagem substituída sem a contar nas horas", async () => {
+    // A original é substituída por uma correção: sai dos cálculos de
+    // horas, mas a prova fotográfica continua na exportação.
+    const superseded = row(
+      "e2",
+      "2026-01-05T18:00:00.000Z",
+      "SAIDA",
+      null,
+      "2026-01-05T18:01:00.000Z"
+    );
+    (superseded as { corrections: unknown[] }).corrections = [
+      {
+        at: new Date("2026-01-05T18:30:00.000Z"),
+        correctsId: "e2",
+        id: "c1",
+        proofs: {},
+        status: "APROVADO",
+        type: "SAIDA",
+        userId: "u1",
+        validations: [],
+      },
+    ];
+    const rows = [
+      row(
+        "e1",
+        "2026-01-05T09:00:00.000Z",
+        "ENTRADA",
+        null,
+        "2026-01-05T09:01:00.000Z"
+      ),
+      row("e3", "2026-01-05T12:00:00.000Z", "SAIDA", null),
+      superseded,
+    ];
+    const out = await getHours(prismaCom(rows), TZ, range, undefined);
+    const day = out.days.find((d) => d.date === "2026-01-05");
+    // a foto da substituída continua visível…
+    expect(day?.hours.photoSentAts).toContain("2026-01-05T18:01:00.000Z");
+    // …mas não volta a contar nas horas: só conta o par eficaz
+    // 09:00–12:00, sem o tramo até às 18:00 da substituída.
+    expect(day?.hours.workedMinutes).toBe(180);
+  });
+
   it("entries sem foto não produzem entradas vazias", async () => {
     const rows = [
       row("e1", "2026-01-05T09:00:00.000Z", "ENTRADA", null),

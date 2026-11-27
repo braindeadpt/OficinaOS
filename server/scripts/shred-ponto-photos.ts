@@ -58,9 +58,11 @@ async function isDir(root: string): Promise<boolean> {
 export async function candidatePhotoDirs(uploadDir: string): Promise<{
   active: string;
   backups: string[];
+  listFailures: string[];
 }> {
   const active = path.resolve(uploadDir, PHOTO_SUBDIR);
   const backups: string[] = [];
+  const listFailures: string[] = [];
   const resolvedUpload = path.resolve(uploadDir);
   const appDir = path.dirname(resolvedUpload);
   if (
@@ -68,9 +70,19 @@ export async function candidatePhotoDirs(uploadDir: string): Promise<{
     path.basename(appDir) === "app"
   ) {
     const installRoot = path.dirname(appDir);
-    for (const entry of await fs
+    const entries = await fs
       .readdir(installRoot, { withFileTypes: true })
-      .catch(() => [])) {
+      .catch((err: NodeJS.ErrnoException) => {
+        if (err.code !== "ENOENT") {
+          // Falhar a listagem NÃO pode ser silencioso: pode haver cópias
+          // app.prev por encontrar — o dono tem de as apagar à mão.
+          listFailures.push(
+            path.join(installRoot, "app.prev*", "uploads", PHOTO_SUBDIR)
+          );
+        }
+        return [];
+      });
+    for (const entry of entries) {
       // O update-apply.ps1 usa exatamente "app.prev"; o prefixo cobre
       // variantes futuras (app.prev.1, app.prev-old) sem tocar em pastas
       // alheias como "app" ou "approvals".
@@ -82,39 +94,67 @@ export async function candidatePhotoDirs(uploadDir: string): Promise<{
   }
   const temp = process.env.TEMP ?? process.env.TMP;
   if (temp && (await isDir(temp))) {
-    for (const entry of await fs
+    const entries = await fs
       .readdir(temp, { withFileTypes: true })
-      .catch(() => [])) {
+      .catch((err: NodeJS.ErrnoException) => {
+        if (err.code !== "ENOENT") {
+          listFailures.push(
+            path.join(temp, "oficinaos-keep-*", "uploads", PHOTO_SUBDIR)
+          );
+        }
+        return [];
+      });
+    for (const entry of entries) {
       if (!(entry.isDirectory() && entry.name.startsWith("oficinaos-keep-"))) {
         continue;
       }
       backups.push(path.join(temp, entry.name, "uploads", PHOTO_SUBDIR));
     }
   }
-  return { active, backups };
+  return { active, backups, listFailures };
 }
+
+export const SHRED_REPORT_NAME = "ponto-photo-shred.json";
 
 export async function shredPontoPhotos(args: {
   databaseUrl: string;
   uploadDir: string;
 }): Promise<{
   backupFilesDeleted: number;
+  failures: string[];
   filesDeleted: number;
   rowsDeleted: number;
   tableExisted: boolean;
 }> {
-  const { active, backups } = await candidatePhotoDirs(args.uploadDir);
+  const { active, backups, listFailures } = await candidatePhotoDirs(
+    args.uploadDir
+  );
+  const failures: string[] = [...listFailures];
   let filesDeleted = 0;
   let backupFilesDeleted = 0;
   for (const dir of [active, ...backups]) {
-    const count = await countPhotoFiles(dir);
-    await fs.rm(dir, { force: true, recursive: true });
-    if (dir === active) {
-      filesDeleted += count;
-    } else {
-      backupFilesDeleted += count;
+    // Nada de falhas silenciosas: a limpeza nunca diz "apagado" sem
+    // certeza. O que falhar fica registado no relatório e aparece nas
+    // Definições do ponto para o dono apagar à mão.
+    try {
+      const count = await countPhotoFiles(dir);
+      await fs.rm(dir, { recursive: true });
+      if (dir === active) {
+        filesDeleted += count;
+      } else {
+        backupFilesDeleted += count;
+      }
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+        failures.push(dir);
+      }
     }
   }
+  const reportPath = path.resolve(args.uploadDir, SHRED_REPORT_NAME);
+  await fs.writeFile(
+    reportPath,
+    JSON.stringify({ at: new Date().toISOString(), failures }, null, 2)
+  );
 
   const client = new pg.Client({ connectionString: args.databaseUrl });
   let rowsDeleted = 0;
@@ -132,7 +172,13 @@ export async function shredPontoPhotos(args: {
   } finally {
     await client.end().catch(() => undefined);
   }
-  return { backupFilesDeleted, filesDeleted, rowsDeleted, tableExisted };
+  return {
+    backupFilesDeleted,
+    failures,
+    filesDeleted,
+    rowsDeleted,
+    tableExisted,
+  };
 }
 
 async function main(): Promise<void> {
@@ -149,6 +195,11 @@ async function main(): Promise<void> {
   console.log(
     `[ponto-photo-migration] deleted ${result.rowsDeleted} PontoPhoto rows, ${result.filesDeleted} files under the active ${PHOTO_SUBDIR}/ and ${result.backupFilesDeleted} files in updater/installer backup copies (app.prev, oficinaos-keep-*)`
   );
+  if (result.failures.length > 0) {
+    console.warn(
+      `[ponto-photo-migration] WARNING: could not fully remove photos in: ${result.failures.join(", ")} — delete them manually (also shown in the ponto settings)`
+    );
+  }
 }
 
 const invokedAsMain =

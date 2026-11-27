@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import type { PrismaClient } from "@generated/client";
 import { AppError } from "@shared/errors/app-error.js";
 import {
@@ -124,8 +126,29 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
     },
     async (req, reply) => {
       const settings = await getOrCreateShopSettings(app.prisma);
+      // Falhas da limpeza das fotografias antigas: a migração regista-as
+      // em UPLOAD_DIR/ponto-photo-shred.json e este aviso mostra-as nas
+      // Definições do ponto até o dono apagar as pastas à mão. Nada de
+      // falhas silenciosas — "apagado" só quando há certeza.
+      let photoCleanupWarnings: string[] = [];
+      try {
+        const reportPath = path.resolve(
+          process.env.UPLOAD_DIR ?? "./uploads",
+          "ponto-photo-shred.json"
+        );
+        const raw = await fs.readFile(reportPath, "utf-8");
+        const parsed = JSON.parse(raw) as { failures?: unknown };
+        if (Array.isArray(parsed.failures)) {
+          photoCleanupWarnings = parsed.failures.filter(
+            (f): f is string => typeof f === "string"
+          );
+        }
+      } catch {
+        photoCleanupWarnings = [];
+      }
       return reply.send({
         enabled: isModuleEnabled(settings, MODULE),
+        photoCleanupWarnings,
         tz: shopTz(req),
       });
     }
