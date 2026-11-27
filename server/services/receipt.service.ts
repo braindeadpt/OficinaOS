@@ -11,6 +11,7 @@ import type { OrdersReportDTO } from "@shared/types/reports";
 import QRCode from "qrcode";
 import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
+import { bundledIntakeTermsText } from "./intake-terms.service.js";
 
 export async function generateTrackingQr(
   jobCode: string,
@@ -516,15 +517,51 @@ function loanerDivHtml(job: LoanerJob, s: ReceiptStrings): string {
 }
 
 /** "Signed document a1b2c3d4e5f6 · 03/11/2026 14:22" — the integrity seal. */
+
+/**
+ * Provenance suffix for the signature seal: the terms version and its date.
+ * NULL updatedAt means either pre-migration custom text (unknown date —
+ * disclosed as such) or the bundled default clauses, where a shop version is
+ * meaningless and the "unknown date" claim would be false — so nothing shows.
+ */
+export async function termsProvenanceLine(
+  job: {
+    intakeTermsSnapshot?: unknown;
+    intakeTermsUpdatedAt?: Date | null;
+    intakeTermsVersion?: number | null;
+  },
+  s: ReceiptStrings
+): Promise<string> {
+  if (typeof job.intakeTermsVersion !== "number") {
+    return "";
+  }
+  let versionDate: string;
+  if (job.intakeTermsUpdatedAt) {
+    versionDate = new Date(job.intakeTermsUpdatedAt).toLocaleDateString(
+      s.dateLocale
+    );
+  } else {
+    const snapshot = job.intakeTermsSnapshot as {
+      locale?: string;
+      termsText?: string;
+    } | null;
+    const bundled = await bundledIntakeTermsText(snapshot?.locale);
+    if (snapshot?.termsText && snapshot.termsText === bundled) {
+      return "";
+    }
+    versionDate = s.termsVersionUnknownDate;
+  }
+  return ` · ${s.termsVersion.replace("{version}", String(job.intakeTermsVersion)).replace("{date}", versionDate)}`;
+}
+
 function signatureSealHtml(
   job: {
     intakeDocumentHash?: string | null;
-    intakeTermsUpdatedAt?: Date | null;
-    intakeTermsVersion?: number | null;
     signedAt?: Date | null;
   },
   s: ReceiptStrings,
-  hasSignature: boolean
+  hasSignature: boolean,
+  provenance = ""
 ): string {
   if (!job.intakeDocumentHash) {
     if (!(hasSignature && job.signedAt)) {
@@ -539,15 +576,6 @@ function signatureSealHtml(
   const when = job.signedAt
     ? ` · ${new Date(job.signedAt).toLocaleString(s.dateLocale)}`
     : "";
-  // Terms provenance: text frozen before the migration has no edit date —
-  // say so honestly instead of dropping the date or inventing one.
-  let provenance = "";
-  if (typeof job.intakeTermsVersion === "number") {
-    const versionDate = job.intakeTermsUpdatedAt
-      ? new Date(job.intakeTermsUpdatedAt).toLocaleDateString(s.dateLocale)
-      : s.termsVersionUnknownDate;
-    provenance = ` · ${s.termsVersion.replace("{version}", String(job.intakeTermsVersion)).replace("{date}", versionDate)}`;
-  }
   const seal = `${s.signedDoc} #${job.intakeDocumentHash.slice(0, 12)}${when}${provenance}`;
   return `<p style="text-align:left;font-size:9px;color:#777">${esc(seal)}</p>`;
 }
@@ -579,6 +607,8 @@ export async function renderReceiptHtml(
     intakeSignatureDataUrl?: string | null;
     intakeTermsSnapshot?: unknown;
     intakeDocumentHash?: string | null;
+    intakeTermsUpdatedAt?: Date | null;
+    intakeTermsVersion?: number | null;
     signedAt?: Date | null;
     createdAt: Date;
     payments?: Array<{
@@ -657,6 +687,7 @@ export async function renderReceiptHtml(
     repairs,
     s,
     settings,
+    termsProvenance: await termsProvenanceLine(job, s),
   };
   return prefs.paper === "a4"
     ? renderA4ReceiptDocument(ctx)
@@ -714,6 +745,7 @@ interface ReceiptRenderContext {
   repairs: Parameters<typeof renderReceiptHtml>[1]["repairs"];
   s: ReceiptStrings;
   settings: Awaited<ReturnType<typeof findShopSettingsUnique>>;
+  termsProvenance: string;
 }
 
 /**
@@ -744,7 +776,7 @@ function renderThermalReceiptDocument(ctx: ReceiptRenderContext): string {
     ? signatureSectionHtml(
         job.intakeSignatureDataUrl,
         termsText,
-        signatureSealHtml(job, s, hasSignature)
+        signatureSealHtml(job, s, hasSignature, ctx.termsProvenance)
       )
     : "";
   const qrImg = ctx.qrBuf
@@ -870,7 +902,8 @@ ${
     ? `<div class="sign"><p class="terms">${escMultiline(termsText)}</p><div class="box">${signatureBox}</div>${signatureSealHtml(
         job,
         s,
-        hasSignature
+        hasSignature,
+        ctx.termsProvenance
       )}</div>`
     : "";
 

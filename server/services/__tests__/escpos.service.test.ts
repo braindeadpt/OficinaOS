@@ -59,28 +59,28 @@ const decode = (buf: Buffer) => iconv.decode(buf, "cp850");
 const DASHES_RE = /^-+$/;
 
 describe("buildJobReceiptEscPos", () => {
-  it("starts with init+codepage and ends with feed+cut", () => {
-    const buf = buildJobReceiptEscPos(SETTINGS, JOB, "https://app.test");
+  it("starts with init+codepage and ends with feed+cut", async () => {
+    const buf = await buildJobReceiptEscPos(SETTINGS, JOB, "https://app.test");
     expect(buf[0]).toBe(ESC);
     expect(buf[1]).toBe(0x40);
     expect(buf.subarray(-4)).toEqual(Buffer.from([GS, 0x56, 0x41, 0x03]));
   });
 
-  it("contains job data and respects section toggles", () => {
-    const buf = buildJobReceiptEscPos(SETTINGS, JOB, "https://app.test");
+  it("contains job data and respects section toggles", async () => {
+    const buf = await buildJobReceiptEscPos(SETTINGS, JOB, "https://app.test");
     const text = decode(buf);
     expect(text).toContain("O-2026-001");
     expect(text).toContain("123456789012345");
     expect(text).toContain("80,00 EUR");
 
-    const noImei = buildJobReceiptEscPos(
+    const noImei = await buildJobReceiptEscPos(
       { ...SETTINGS, receiptShowImei: false },
       JOB,
       "https://app.test"
     );
     expect(decode(noImei)).not.toContain("123456789012345");
 
-    const noProblem = buildJobReceiptEscPos(
+    const noProblem = await buildJobReceiptEscPos(
       { ...SETTINGS, receiptShowProblem: false },
       JOB,
       "https://app.test"
@@ -88,19 +88,19 @@ describe("buildJobReceiptEscPos", () => {
     expect(decode(noProblem)).not.toContain("Ecrã partido");
   });
 
-  it("hides cost lines when hideCosts is set", () => {
-    const buf = buildJobReceiptEscPos(SETTINGS, JOB, "https://app.test", {
+  it("hides cost lines when hideCosts is set", async () => {
+    const buf = await buildJobReceiptEscPos(SETTINGS, JOB, "https://app.test", {
       hideCosts: true,
     });
     expect(decode(buf)).not.toContain("80,00 EUR");
   });
 
-  it("emits the native QR command when tracking URL exists", () => {
-    const buf = buildJobReceiptEscPos(SETTINGS, JOB, "https://app.test");
+  it("emits the native QR command when tracking URL exists", async () => {
+    const buf = await buildJobReceiptEscPos(SETTINGS, JOB, "https://app.test");
     const qrCmd = Buffer.from([GS, 0x28, 0x6b]);
     expect(buf.includes(qrCmd)).toBe(true);
 
-    const noQr = buildJobReceiptEscPos(
+    const noQr = await buildJobReceiptEscPos(
       { ...SETTINGS, receiptShowQr: false },
       JOB,
       "https://app.test"
@@ -108,8 +108,8 @@ describe("buildJobReceiptEscPos", () => {
     expect(noQr.includes(qrCmd)).toBe(false);
   });
 
-  it("uses 32-col width for 58mm paper", () => {
-    const buf = buildJobReceiptEscPos(
+  it("uses 32-col width for 58mm paper", async () => {
+    const buf = await buildJobReceiptEscPos(
       { ...SETTINGS, receiptPaper: "58mm" },
       JOB,
       "https://app.test"
@@ -123,13 +123,13 @@ describe("buildJobReceiptEscPos", () => {
 
   // Guedes e Pinto (#106): body text printed faint while bold headers were
   // readable — the printer's only contrast lever is ESC E (emphasized).
-  it("wraps every text line in bold when printerHighContrast is set", () => {
+  it("wraps every text line in bold when printerHighContrast is set", async () => {
     const boldOn = Buffer.from([ESC, 0x45, 0x01]);
     const boldOff = Buffer.from([ESC, 0x45, 0x00]);
     const sepLine = iconv.encode(`${"-".repeat(42)}\n`, "cp850");
     const wrappedSep = Buffer.concat([boldOn, sepLine, boldOff]);
 
-    const buf = buildJobReceiptEscPos(
+    const buf = await buildJobReceiptEscPos(
       { ...SETTINGS, printerHighContrast: true },
       JOB,
       "https://app.test"
@@ -137,7 +137,11 @@ describe("buildJobReceiptEscPos", () => {
     expect(buf.includes(wrappedSep)).toBe(true);
 
     // Off by default: the same body line ships without the bold wrapper.
-    const plain = buildJobReceiptEscPos(SETTINGS, JOB, "https://app.test");
+    const plain = await buildJobReceiptEscPos(
+      SETTINGS,
+      JOB,
+      "https://app.test"
+    );
     expect(plain.includes(wrappedSep)).toBe(false);
     expect(plain.includes(sepLine)).toBe(true);
   });

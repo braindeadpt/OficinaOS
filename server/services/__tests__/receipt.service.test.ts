@@ -2,9 +2,11 @@ import type { PrismaClient } from "@generated/client";
 import { buildLoanerAgreementDocument } from "@shared/loaner-agreement-document.js";
 import { describe, expect, it, vi } from "vitest";
 import {
+  receiptStrings,
   renderLabelHtml,
   renderLoanerAgreementHtml,
   renderReceiptHtml,
+  termsProvenanceLine,
 } from "../receipt.service";
 
 function mockPrisma(settings: Record<string, unknown> | null) {
@@ -385,5 +387,55 @@ describe("renderLabelHtml identification", () => {
       noAutoPrint: true,
     });
     expect(html).not.toContain("label-print.js");
+  });
+});
+
+describe("termsProvenanceLine", () => {
+  const s = receiptStrings("pt");
+
+  it("shows the version date when the edit date exists", async () => {
+    const line = await termsProvenanceLine(
+      {
+        intakeTermsVersion: 3,
+        intakeTermsUpdatedAt: new Date("2026-11-20T10:00:00Z"),
+      },
+      s
+    );
+    expect(line).toContain("termos v3");
+    expect(line).toContain("20/11/2026");
+    expect(line).not.toContain("desconhecida");
+  });
+
+  it("discloses the unknown date for pre-migration custom terms", async () => {
+    const line = await termsProvenanceLine(
+      {
+        intakeTermsSnapshot: { locale: "pt", termsText: "Texto custom antigo" },
+        intakeTermsUpdatedAt: null,
+        intakeTermsVersion: 1,
+      },
+      s
+    );
+    expect(line).toContain("data da versão desconhecida");
+    expect(line).toContain("2026-11-26");
+  });
+
+  it("omits provenance for the bundled default clauses — no false antiquity claim", async () => {
+    const pt = await import("../../../src/i18n/locales/pt.json");
+    const defaultText = (pt.default as { intake?: { terms_text?: string } })
+      .intake?.terms_text;
+    const line = await termsProvenanceLine(
+      {
+        intakeTermsSnapshot: { locale: "pt", termsText: defaultText },
+        intakeTermsUpdatedAt: null,
+        intakeTermsVersion: 1,
+      },
+      s
+    );
+    expect(line).toBe("");
+  });
+
+  it("omits provenance for jobs signed before versioning existed", async () => {
+    const line = await termsProvenanceLine({}, s);
+    expect(line).toBe("");
   });
 });

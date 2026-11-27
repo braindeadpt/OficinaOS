@@ -64,3 +64,11 @@ export async function resolveIntakeTerms(
     version: settings?.intakeTermsVersion ?? 1,
   };
 }
+
+/** The bundled default clause for a locale — without the shop override. */
+export async function bundledIntakeTermsText(
+  locale: string | null | undefined
+): Promise<string | undefined> {
+  return (await localeBundles())[normalizeIntakeLocale(locale)]?.intake
+    ?.terms_text;
+}

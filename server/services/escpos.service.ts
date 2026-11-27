@@ -11,6 +11,7 @@ import {
   receiptTermsText,
   type renderReceiptHtml,
   type renderSaleReceiptHtml,
+  termsProvenanceLine,
   toNum,
 } from "./receipt.service.js";
 
@@ -213,7 +214,8 @@ function signatureSection(
   t: Ticket,
   job: JobReceiptData,
   s: ReceiptStrings,
-  shopTerms: string | null | undefined
+  shopTerms: string | null | undefined,
+  termsProvenance = ""
 ) {
   t.sep();
   const hasSignature = Boolean(
@@ -237,16 +239,18 @@ function signatureSection(
   const when = job.signedAt
     ? ` ${new Date(job.signedAt).toLocaleString(s.dateLocale)}`
     : "";
-  t.wrap(`${s.signedDoc} #${job.intakeDocumentHash.slice(0, 12)}${when}`);
+  t.wrap(
+    `${s.signedDoc} #${job.intakeDocumentHash.slice(0, 12)}${when}${termsProvenance}`
+  );
   t.text("\n");
 }
 
-export function buildJobReceiptEscPos(
+export async function buildJobReceiptEscPos(
   settings: ShopSettings | null,
   job: JobReceiptData,
   baseUrl: string,
   options?: { deliveredAt?: Date | null; hideCosts?: boolean; locale?: string }
-): Buffer {
+): Promise<Buffer> {
   const s = receiptStrings(options?.locale);
   const currency = settings?.currency ?? "EUR";
   const prefs = {
@@ -289,7 +293,13 @@ export function buildJobReceiptEscPos(
     );
   }
   if (prefs.showSignature) {
-    signatureSection(t, job, s, settings?.intakeTerms);
+    signatureSection(
+      t,
+      job,
+      s,
+      settings?.intakeTerms,
+      await termsProvenanceLine(job, s)
+    );
   }
   const url = trackingUrl(
     job.jobCode,
