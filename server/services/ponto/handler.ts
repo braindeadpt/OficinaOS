@@ -1366,13 +1366,24 @@ async function finalizePonto(
   transport: NonNullable<InboundTransport["ponto"]>["transport"],
   args: FinalizeArgs
 ): Promise<void> {
+  // Teletrabalho (R3) calculado ao momento da marcação: em dia de
+  // teletrabalho as coordenadas NUNCA seguem — mesmo que o pedido de
+  // localização tenha começado num dia presencial e a resposta chegue
+  // depois da meia-noite. E a geo da loja é irrelevante quando não há
+  // localização em jogo: sem ela o teletrabalho avalia na mesma.
+  const telework = isTeleworkDay(
+    staff.user.pontoTeleworkDays,
+    tzOf(settings),
+    args.at
+  );
   const geoLat = settings.pontoGeoLat;
   const geoLng = settings.pontoGeoLng;
   if (
-    geoLat === null ||
-    geoLat === undefined ||
-    geoLng === null ||
-    geoLng === undefined
+    !telework &&
+    (geoLat === null ||
+      geoLat === undefined ||
+      geoLng === null ||
+      geoLng === undefined)
   ) {
     ctx.log.warn("ponto: shopGeo por configurar — registo ignorado");
     await say(pontoConfigMissingText(settings.shopMode));
@@ -1384,20 +1395,13 @@ async function finalizePonto(
   // esses campos deixaram de seguir no corpo do evaluate. O gate de geo
   // acima mantém-se lógica local: sem geo configurada a marcação nem
   // chega a ser avaliada.
-  // Teletrabalho (R3 da AIPD): a Cloud precisa de o saber mesmo quando o
-  // pedido vem do fluxo clássico — nunca pede localização nesse caso.
-  const telework = isTeleworkDay(
-    staff.user.pontoTeleworkDays,
-    tzOf(settings),
-    args.at
-  );
   const result = await evaluatePontoMark(ctx.prisma, ctx.log, {
     type: args.command,
     transport,
     ...(args.code ? { code: args.code } : {}),
     phone: args.phoneDigits,
     messageAt: args.messageAt,
-    ...(args.location ? { location: args.location } : {}),
+    ...(args.location && !telework ? { location: args.location } : {}),
     hasPhoto: args.hasPhoto,
     // Teletrabalho é estado por dia que a Cloud não conhece da config —
     // segue só quando presente, como o resto do contrato WP0.1.

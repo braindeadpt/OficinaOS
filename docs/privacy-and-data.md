@@ -146,7 +146,14 @@ channel):**
   languages; older records without `kind` show «—». The
   `pontoAlwaysAskLocation` setting — off by default — forces the
   location request even with a valid scan and **requires justification
-  in the impact assessment (DPIA)**. ESTADO is a local records query and **makes no
+  in the impact assessment (DPIA)**. **Telework** (DPIA risk R3):
+  workers can have telework days of the week set in their team record;
+  on those days the clock-in **never asks for location** — asking for it
+  at home would reveal the worker's address. The record is `remote`
+  («Telework — no proof of location» in the ACT export) and follows the
+  validation rule the shop chooses: auto-approve or pending validation
+  (the default). Even a location request started on an on-site day
+  never sends coordinates if the answer lands on a telework day. ESTADO is a local records query and **makes no
   request to the Cloud** — but the **reply** (the records summary)
   leaves through the active channel and, if that channel is the
   WhatsApp Cloud relay or Cloud SMS, **transits through OficinaOS

@@ -43,7 +43,7 @@ function SwitchRow({
 }
 
 export default function TeamTab() {
-  const { t } = useTranslation();
+  const { i18n, t } = useTranslation();
   const users = useUsersStore((s) => s.users);
   const isLoading = useUsersStore((s) => s.isLoading);
   const allUsersLoaded = useUsersStore((s) => s.allUsersLoaded);
@@ -274,7 +274,7 @@ export default function TeamTab() {
                     const active = editing.pontoTeleworkDays.includes(day);
                     // Nome do dia pela língua da UI — sem chaves novas:
                     // 2024-01-01 é uma segunda-feira (ISO 1).
-                    const label = new Intl.DateTimeFormat(undefined, {
+                    const label = new Intl.DateTimeFormat(i18n.language, {
                       weekday: "short",
                     }).format(new Date(2024, 0, day));
                     return (

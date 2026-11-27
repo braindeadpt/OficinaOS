@@ -25,6 +25,7 @@ export const USER_SELECT: UserSelect = {
   pontoScheduleExempt: true,
   pontoScheduleStart: true,
   pontoScheduleEnd: true,
+  pontoTeleworkDays: true,
   createdAt: true,
 };
 
@@ -53,6 +54,7 @@ export const USER_SELECT_NO_IMAGE: UserSelect = {
   pontoScheduleExempt: true,
   pontoScheduleStart: true,
   pontoScheduleEnd: true,
+  pontoTeleworkDays: true,
   createdAt: true,
 };
 
