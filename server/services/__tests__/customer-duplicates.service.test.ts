@@ -15,6 +15,7 @@ function customerRow(over: Record<string, unknown>) {
     phone: "912345678",
     taxId: null,
     whatsappConsent: false,
+    whatsappConsentAt: null,
     ...over,
   };
 }
@@ -86,6 +87,18 @@ describe("mergeCustomers", () => {
       commercialAgreement: { updateMany: vi.fn().mockResolvedValue({}) },
       customer: {
         delete: vi.fn().mockResolvedValue({}),
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: "keep",
+            whatsappConsent: keep.whatsappConsent,
+            whatsappConsentAt: keep.whatsappConsentAt ?? null,
+          },
+          {
+            id: "gone",
+            whatsappConsent: merged.whatsappConsent,
+            whatsappConsentAt: merged.whatsappConsentAt ?? null,
+          },
+        ]),
         findUnique: vi.fn(({ where }: { where: { id: string } }) =>
           Promise.resolve(where.id === "keep" ? keep : merged)
         ),
@@ -226,6 +239,20 @@ describe("mergeCustomers", () => {
               })
         )
       );
+      // A decisão de consentimento relê-se com o lock, via findMany — o
+      // mock tem de devolver os mesmos valores que o findUnique inicial.
+      tx.customer.findMany = vi.fn().mockResolvedValue([
+        {
+          id: "keep",
+          whatsappConsent: keepConsent.consent,
+          whatsappConsentAt: keepConsent.at,
+        },
+        {
+          id: "gone",
+          whatsappConsent: mergedConsent.consent,
+          whatsappConsentAt: mergedConsent.at,
+        },
+      ]);
     }
 
     function updateData(tx: ReturnType<typeof txMock>["tx"]) {

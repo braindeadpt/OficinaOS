@@ -242,15 +242,6 @@ export function mergeCustomers(
   opts?: { confirmConsent?: boolean }
 ): Promise<MergePreview> {
   return prisma.$transaction(async (tx) => {
-    // Lock das duas fichas antes de ler: sem ele, outro operador podia
-    // registar (ou retirar) o consentimento entre a leitura e a gravação
-    // da junção, e o update final apagava essa decisão mais recente.
-    // Ordem por id para não haver deadlock entre duas junções em sentidos
-    // opostos.
-    const lockOrder = [keepId, mergedId].sort();
-    for (const lockId of lockOrder) {
-      await tx.$queryRaw`SELECT "id" FROM "customers" WHERE "id" = ${lockId} FOR UPDATE`;
-    }
     const [keep, merged] = await Promise.all([
       tx.customer.findUnique({
         include: CUSTOMER_INCLUDE_COUNTS,
@@ -344,9 +335,34 @@ export function mergeCustomers(
     // da última campanha de remarketing é a MAIS RECENTE das duas —
     // perdê-la faria o agendador voltar a contactar o número antes do
     // prazo da loja.
+    // Lock tardio das duas fichas, só antes de escrever: cedo demais
+    // invertia a ordem de locks com a caixa de entrada (que tranca a
+    // conversa e depois referencia a ficha) e arriscava deadlock. Assim
+    // a ordem fica coerente com o resto da app — reatribuições primeiro,
+    // ficha no fim. O consentimento relê-se já com o lock, porque outro
+    // operador pode ter registado/retirado opt-in desde a leitura inicial
+    // (um PARAR por SMS, por exemplo) e a decisão tem de respeitar o valor
+    // mais recente. Ordem por id contra deadlocks entre duas junções.
+    const lockOrder = [keepId, mergedId].sort();
+    for (const lockId of lockOrder) {
+      await tx.$queryRaw`SELECT "id" FROM "customers" WHERE "id" = ${lockId} FOR UPDATE`;
+    }
+    const freshRows = await tx.customer.findMany({
+      select: {
+        id: true,
+        whatsappConsent: true,
+        whatsappConsentAt: true,
+      },
+      where: { id: { in: [keepId, mergedId] } },
+    });
+    const freshKeep = freshRows.find((r) => r.id === keepId);
+    const freshMerged = freshRows.find((r) => r.id === mergedId);
+    if (!(freshKeep && freshMerged)) {
+      throw new AppError("NOT_FOUND", { resource: "customer" });
+    }
     const consent = resolveMergeConsent(
-      keep,
-      merged,
+      freshKeep,
+      freshMerged,
       opts?.confirmConsent === true
     );
     const lastRemarketing = [keep.lastRemarketingAt, merged.lastRemarketingAt]
@@ -380,8 +396,8 @@ export function mergeCustomers(
             consent: {
               conflict: consent.conflict,
               confirmedByUser: opts?.confirmConsent === true,
-              keep: keep.whatsappConsent,
-              merged: merged.whatsappConsent,
+              keep: freshKeep.whatsappConsent,
+              merged: freshMerged.whatsappConsent,
               result: consent.consent,
             },
             keepPhone: keep.phone,
