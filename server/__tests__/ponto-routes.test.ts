@@ -41,6 +41,9 @@ function fakePrisma(overrides: Partial<SettingsRow> = {}) {
     ...overrides,
   };
   return {
+    // /ponto/status lê as linhas legadas de ponto_photos por SQL cru —
+    // sem tabela (ou sem mock) o aviso fica vazio.
+    $queryRaw: vi.fn(async () => [{ reg: null }]),
     shopSettings: {
       // dashboardScope lê o fuso da loja via findFirst (cache 60s).
       findFirst: vi.fn(async () => ({ timezone: "Europe/Lisbon" })),

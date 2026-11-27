@@ -126,11 +126,28 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
     },
     async (req, reply) => {
       const settings = await getOrCreateShopSettings(app.prisma);
-      // Falhas da limpeza das fotografias antigas: a migração regista-as
-      // em UPLOAD_DIR/ponto-photo-shred.json e este aviso mostra-as nas
-      // Definições do ponto até o dono apagar as pastas à mão. Nada de
-      // falhas silenciosas — "apagado" só quando há certeza.
-      let photoCleanupWarnings: string[] = [];
+      // Falhas da limpeza das fotografias antigas. Fonte principal: as
+      // linhas que continuam em ponto_photos — a linha só é apagada
+      // quando TODAS as cópias do ficheiro desaparecem, por isso cada
+      // linha presente É uma fotografia por apagar. E sobrevive a
+      // reversões do atualizador, que não restaura a base de dados.
+      // O relatório em UPLOAD_DIR/ponto-photo-shred.json cobre órfãos
+      // e pastas que não se conseguiram listar.
+      const photoCleanupWarnings: string[] = [];
+      try {
+        const reg = await app.prisma.$queryRaw<{ reg: string | null }[]>`
+          SELECT to_regclass('public.ponto_photos')::text AS reg`;
+        if (reg[0]?.reg) {
+          const rows = await app.prisma.$queryRaw<{ path: string }[]>`
+            SELECT path FROM "ponto_photos"`;
+          for (const row of rows) {
+            photoCleanupWarnings.push(row.path);
+          }
+        }
+      } catch {
+        // Sem tabela (limpeza concluída) ou BD indisponível — o
+        // relatório ainda pode ter entradas.
+      }
       try {
         const reportPath = path.resolve(
           process.env.UPLOAD_DIR ?? "./uploads",
@@ -145,21 +162,32 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
           // Pastas já apagadas à mão saem do aviso — sem isto o relatório
           // era lido para sempre e o aviso nunca desaparecia. Entradas com
           // padrões (app.prev*) não são caminhos reais: ficam sempre.
+          // Caminhos UNC/rede são recusados ANTES de qualquer stat: o
+          // relatório pode ser alterado por utilizadores locais e um
+          // caminho \\host\partilha levaria o Windows a autenticação SMB
+          // num destino não autorizado.
           const stillThere = await Promise.all(
             listed.map(async (f) => {
               if (f.includes("*")) {
                 return f;
               }
+              if (
+                f.startsWith("\\\\") ||
+                f.startsWith("//") ||
+                !path.isAbsolute(f)
+              ) {
+                return null;
+              }
               const stat = await fs.stat(f).catch(() => null);
               return stat ? f : null;
             })
           );
-          photoCleanupWarnings = stillThere.filter(
-            (f): f is string => f !== null
+          photoCleanupWarnings.push(
+            ...stillThere.filter((f): f is string => f !== null)
           );
         }
       } catch {
-        photoCleanupWarnings = [];
+        // Sem relatório — as linhas da BD já estão no aviso.
       }
       return reply.send({
         enabled: isModuleEnabled(settings, MODULE),
