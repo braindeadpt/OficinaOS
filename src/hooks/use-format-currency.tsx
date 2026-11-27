@@ -1,5 +1,5 @@
 import { createContext, type ReactNode, use, useCallback } from "react";
-import { formatCurrency } from "@/lib/format";
+import { currencySymbol, formatCurrency } from "@/lib/format";
 
 /**
  * EUR until ShopSettingsProvider learns otherwise, so a component rendered
@@ -36,4 +36,14 @@ export function useFormatCurrency(): (value: number) => string {
     (value: number) => formatCurrency(value, currency),
     [currency]
   );
+}
+
+/**
+ * Símbolo da moeda da loja para etiquetas de campos monetários — o formulário
+ * de intake mostra o que o cliente vai assinar, e o selo regista essa mesma
+ * moeda; hardcoded «EUR» mentia em lojas noutra moeda.
+ */
+export function useCurrencySymbol(): string {
+  const currency = use(ShopCurrencyContext);
+  return currencySymbol(currency);
 }

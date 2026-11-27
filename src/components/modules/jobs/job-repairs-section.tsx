@@ -5,7 +5,10 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import RepairServicePicker from "@/components/modules/jobs/repair-service-picker";
 import { Icon } from "@/components/ui/icon";
-import { useFormatCurrency } from "@/hooks/use-format-currency";
+import {
+  useCurrencySymbol,
+  useFormatCurrency,
+} from "@/hooks/use-format-currency";
 import { useJobsStore } from "@/stores/jobs";
 
 interface JobRepairsSectionProps {
@@ -18,6 +21,7 @@ export default function JobRepairsSection({
   onChanged,
 }: JobRepairsSectionProps) {
   const { t } = useTranslation();
+  const currencyLabel = useCurrencySymbol();
   const fmt = useFormatCurrency();
   const addRepair = useJobsStore((s) => s.addRepair);
   const removeRepair = useJobsStore((s) => s.removeRepair);
@@ -151,7 +155,7 @@ export default function JobRepairsSection({
                   value={price}
                 />
                 <span className="font-label text-on-surface-variant text-xs">
-                  {t("currency_eur")}
+                  {currencyLabel}
                 </span>
               </div>
               <button

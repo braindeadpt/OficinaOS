@@ -8,6 +8,7 @@ import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useCurrencySymbol } from "@/hooks/use-format-currency";
 import { fetchLoanerDevices, type LoanerDevice } from "@/lib/api-loaners";
 import { buildJobPayload } from "@/lib/build-job-payload";
 import { useSettingsStore } from "@/stores/settings";
@@ -85,6 +86,7 @@ export default function Step2Content({
   const termsText = customTerms?.trim() || t("intake.terms_text");
   // The frozen intake document a remote signature session signs over — same
   // builder the server uses to verify the ficha didn't drift before submit.
+  const currencyLabel = useCurrencySymbol();
   const shopCurrency = useSettingsStore((s) => s.shopSettings?.currency);
   const intakeDocument = buildIntakeDocument(
     buildJobPayload(form),
@@ -187,7 +189,7 @@ export default function Step2Content({
                 value={form.estimatedCost}
               />
               <span className="font-label text-on-surface-variant text-sm">
-                {t("currency_eur")}
+                {currencyLabel}
               </span>
             </div>
             {fieldError("estimatedCost") && (
@@ -219,7 +221,7 @@ export default function Step2Content({
                 value={form.deposit}
               />
               <span className="font-label text-on-surface-variant text-sm">
-                {t("currency_eur")}
+                {currencyLabel}
               </span>
             </div>
             {fieldError("deposit") && (
