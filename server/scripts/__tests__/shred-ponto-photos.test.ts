@@ -169,11 +169,28 @@ describe("shred-ponto-photos — limpeza por fotografia", () => {
     expect(dbState.deletedIds).toContain("ok");
     expect(result.rowsPending).toBe(1);
     expect(dbState.deletedIds).not.toContain("locked");
+    expect(dbState.tableExists).toBe(true);
     // a foto falhada continua em disco e na BD para a próxima corrida
     await expect(
       fs.lstat(path.join(outsideDir, "trancada.jpg"))
     ).resolves.toBeTruthy();
     expect(result.failures.some((f) => f.includes("trancada.jpg"))).toBe(true);
+
+    // Simula a remoção/resolução do bloqueio da última fotografia: a corrida
+    // seguinte apaga a última linha e elimina a tabela ponto_photos.
+    await fs.rm(junctionDir, { force: true, recursive: true });
+    await makeFile(uploadDir, relLocked);
+    const second = await shredPontoPhotos({
+      databaseUrl: "postgresql://unused",
+      uploadDir,
+    });
+    expect(second.rowsDeleted).toBe(1);
+    expect(second.rowsPending).toBe(0);
+    expect(second.filesDeleted).toBe(1);
+    expect(second.failures).toEqual([]);
+    expect(dbState.deletedIds).toContain("locked");
+    expect(dbState.rows).toEqual([]);
+    expect(dbState.tableExists).toBe(false);
   });
 
   it("um UPLOAD_DIR personalizado fora do layout portátil não varre pastas alheias", async () => {
