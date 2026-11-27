@@ -17,6 +17,7 @@ import { zonedDateTimeToUtc } from "../../utils/time-range.js";
 const REGISTOS_DAILY_LIMIT = 5;
 const MONTH_NUM_RE = /^\d{1,2}$/;
 const YEAR_NUM_RE = /^\d{4}$/;
+const DIGITS_RE = /^\d+$/;
 const TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 
 export interface MonthSpec {
@@ -66,9 +67,18 @@ export function parseMonthArg(
     }
   }
   if (!(mm && yyyy)) {
-    // Há um ano de 4 dígitos sem par válido («REGISTOS abc 2026») — erro
-    // claro, nunca o mês errado em silêncio. Sem ano nenhum, mês corrente.
-    return tokens.some((t) => YEAR_NUM_RE.test(t)) ? undefined : null;
+    // Erro claro — nunca o mês errado em silêncio — quando há texto de
+    // data malformado: um ano de 4 dígitos sem mês válido («abc 2026»)
+    // ou dois números seguidos sem ano de 4 dígitos («10/26» vira «10 26»).
+    if (tokens.some((t) => YEAR_NUM_RE.test(t))) {
+      return;
+    }
+    for (let i = 0; i < tokens.length - 1; i++) {
+      if (DIGITS_RE.test(tokens[i]) && DIGITS_RE.test(tokens[i + 1])) {
+        return;
+      }
+    }
+    return null;
   }
   const month = Number(mm);
   const year = Number(yyyy);
@@ -114,7 +124,11 @@ export async function registosMonthEntries(
   userId: string,
   tz: string,
   spec: MonthSpec
-): Promise<{ correctionsCount: number; entries: RegistosEntry[] }> {
+): Promise<{
+  correctionsCount: number;
+  effectiveEntries: RegistosEntry[];
+  entries: RegistosEntry[];
+}> {
   const { end, start } = monthSpecRange(tz, spec);
   const rows = await prisma.timeEntry.findMany({
     orderBy: [{ at: "asc" }, { createdAt: "asc" }],
@@ -139,14 +153,19 @@ export async function registosMonthEntries(
     (r) =>
       r.corrections.length === 0 && r.validations[0]?.decision !== "RECUSADO"
   );
+  const map = (r: (typeof rows)[number]) => ({
+    at: r.at,
+    status: r.status,
+    type: r.type,
+    validations: r.validations,
+  });
+  // Direito de acesso: o PDF lista TODAS as marcações do próprio —
+  // recusadas e substituídas incluídas, são registos dele. Os totais do
+  // resumo é que usam só as efetivas (como o ESTADO).
   return {
     correctionsCount,
-    entries: effective.map((r) => ({
-      at: r.at,
-      status: r.status,
-      type: r.type,
-      validations: r.validations,
-    })),
+    effectiveEntries: effective.map(map),
+    entries: rows.map(map),
   };
 }
 
@@ -164,8 +183,10 @@ function dayKeyOf(at: Date, tz: string): string {
 }
 
 /** Tempo de trabalho: segmentos ENTRADA/VOLTEI → PAUSA/SAIDA. Um turno
- * ainda aberto conta até à hora do pedido, como no painel. */
-function workMsOfDay(list: RegistosEntry[], now: Date): number {
+ * ainda aberto conta até à hora do pedido — mas só se o turno for de
+ * hoje: estender um esquecimento antigo até agora somava noites e dias
+ * como tempo trabalhado. */
+function workMsOfDay(list: RegistosEntry[], now: Date, tz: string): number {
   let total = 0;
   let open: Date | null = null;
   for (const e of list) {
@@ -176,7 +197,7 @@ function workMsOfDay(list: RegistosEntry[], now: Date): number {
       open = null;
     }
   }
-  if (open) {
+  if (open && dayKeyOf(open, tz) === dayKeyOf(now, tz)) {
     total += now.getTime() - open.getTime();
   }
   return total;
@@ -199,7 +220,8 @@ function pauseMsOfDay(list: RegistosEntry[]): number {
 
 function sumDayEntries(
   list: RegistosEntry[],
-  now: Date
+  now: Date,
+  tz: string
 ): {
   pauseMs: number;
   pendingCount: number;
@@ -211,7 +233,7 @@ function sumDayEntries(
   return {
     pauseMs: pauseMsOfDay(list),
     pendingCount,
-    workedMs: workMsOfDay(list, now),
+    workedMs: workMsOfDay(list, now, tz),
   };
 }
 
@@ -233,7 +255,7 @@ export function summarizeMonth(
   let pauseMsTotal = 0;
   let pendingCount = 0;
   for (const list of byDay.values()) {
-    const day = sumDayEntries(list, now);
+    const day = sumDayEntries(list, now, tz);
     workedMsTotal += day.workedMs;
     pauseMsTotal += day.pauseMs;
     pendingCount += day.pendingCount;
@@ -286,6 +308,18 @@ export async function createRegistosToken(
     },
   });
   return plaintext;
+}
+
+/** Validez sem consumir — para o HEAD das pré-visualizações. */
+export async function peekRegistosToken(
+  prisma: DbClient,
+  plaintext: string
+): Promise<boolean> {
+  const tokenHash = createHash("sha256").update(plaintext).digest("hex");
+  const row = await prisma.pontoRegistosToken.findUnique({
+    where: { tokenHash },
+  });
+  return Boolean(row && !row.usedAt && row.expiresAt >= new Date());
 }
 
 /** Consome o token: uso único — a marcação é atómica (count 0 = já usado). */

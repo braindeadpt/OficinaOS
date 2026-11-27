@@ -40,12 +40,32 @@ function dayLabel(at: Date, tz: string): string {
   }).format(at);
 }
 
-/** WinAnsi: latin-1 cobre pt-PT; o resto vira «?». Escape dos parênteses. */
+/** CP1252/WinAnsi: latin-1 cobre pt-PT; a pontuação tipográfica vive no
+ *  intervalo 0x80-0x9F — mapeada aqui (’ “ ” – — • € ‹ ›). O resto vira «?». */
+const CP1252_HIGH: Record<string, string> = {
+  "\u2018": "\x91",
+  "\u2019": "\x92",
+  "\u201c": "\x93",
+  "\u201d": "\x94",
+  "\u2013": "\x96",
+  "\u2014": "\x97",
+  "\u2022": "\x95",
+  "\u20ac": "\x80",
+  "\u2039": "\x8b",
+  "\u203a": "\x9b",
+  "\u2026": "\x85",
+};
+
 function pdfText(s: string): string {
   return s
     .replace(/[\\()]/g, (c) => `\\${c}`)
     .split("")
-    .map((c) => (c.charCodeAt(0) > 255 ? "?" : c))
+    .map((c) => {
+      if (c.charCodeAt(0) <= 255) {
+        return c;
+      }
+      return CP1252_HIGH[c] ?? "?";
+    })
     .join("");
 }
 
@@ -76,7 +96,10 @@ function buildPages(input: {
   };
 
   push("Registo de ponto — os meus registos", 170, 15, 20);
-  push(`${shopName} — ${workerName} — ${monthLabel}`, 130, 11, 24);
+  // Mês em linha própria: com nomes compridos não há quebra de linha no
+  // PDF e o período desaparecia para fora da página.
+  push(`${shopName} — ${workerName}`, 130, 11, 15);
+  push(monthLabel, 130, 11, 24);
   push(
     `Dias com registos: ${summary.days}   Horas trabalhadas: ${fmtHoursMs(summary.workedMs)}   Pausas: ${fmtHoursMs(summary.pauseMs)}`,
     50,
@@ -136,7 +159,9 @@ function serializePdf(pages: PdfPage[]): Buffer {
       `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`;
   });
 
-  let out = "%PDF-1.4\n";
+  // Comentário binário (bytes > 127) após o cabeçalho — exigido pelo
+  // PDF 1.4 quando o ficheiro tem bytes não ASCII (o nosso acento latin-1).
+  let out = "%PDF-1.4\n%\xe2\xe3\xcf\xd3\n";
   const offsets: number[] = [];
   objects.forEach((body, i) => {
     offsets.push(out.length);

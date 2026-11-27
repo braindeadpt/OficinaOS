@@ -1546,13 +1546,9 @@ async function replyRegistos(
     return;
   }
   const spec = parsed ?? currentMonthSpec(tz);
-  const { correctionsCount, entries } = await registosMonthEntries(
-    ctx.prisma,
-    userId,
-    tz,
-    spec
-  );
-  const summary = summarizeMonth(entries, correctionsCount, tz);
+  const { correctionsCount, effectiveEntries, entries } =
+    await registosMonthEntries(ctx.prisma, userId, tz, spec);
+  const summary = summarizeMonth(effectiveEntries, correctionsCount, tz);
   const monthNames = [
     "janeiro",
     "fevereiro",

@@ -13,6 +13,7 @@ import { submitPreCheckRequest } from "../services/intake-request.service.js";
 import { respondToQuote } from "../services/job-quote.service.js";
 import {
   consumeRegistosToken,
+  peekRegistosToken,
   registosMonthEntries,
   summarizeMonth,
 } from "../services/ponto/registos.js";
@@ -250,7 +251,11 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
       // HEAD (prefetch de clientes de email/chat) nunca consome o token —
       // gastar o uso único sem entregar o PDF bloqueava o GET seguinte.
       if (req.method === "HEAD") {
-        return reply.status(200).send();
+        // Pré-visualizações (chat/email) fazem HEAD antes do GET: validade
+        // real sem consumir — um 200 num link morto prometia um PDF que o
+        // GET já não entregava.
+        const peeked = await peekRegistosToken(app.prisma, token);
+        return reply.status(peeked ? 200 : 410).send();
       }
       const consumed = await consumeRegistosToken(app.prisma, token);
       if (!consumed) {
@@ -267,13 +272,9 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
       const tz = settings.timezone ?? process.env.TZ ?? "UTC";
       const [year, month] = consumed.month.split("-").map(Number);
       const spec = { month, year };
-      const { correctionsCount, entries } = await registosMonthEntries(
-        app.prisma,
-        consumed.userId,
-        tz,
-        spec
-      );
-      const summary = summarizeMonth(entries, correctionsCount, tz);
+      const { correctionsCount, effectiveEntries, entries } =
+        await registosMonthEntries(app.prisma, consumed.userId, tz, spec);
+      const summary = summarizeMonth(effectiveEntries, correctionsCount, tz);
       const monthNames = [
         "janeiro",
         "fevereiro",
