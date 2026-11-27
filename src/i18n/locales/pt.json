@@ -3172,6 +3172,8 @@
   "ponto.act_corrected_by": "Corrigido por",
   "ponto.act_reason": "Motivo",
   "ponto.act_validation": "Validação",
+  "ponto.act_validation_of_correction": "Validação da correção",
+  "ponto.act_validation_of_original": "Validação da picagem original",
   "ponto.act_system_author": "sistema/bot",
   "ponto.act_day_total": "Total do dia",
   "ponto.act_week_total": "Total da semana",

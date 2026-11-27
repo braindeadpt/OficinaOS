@@ -76,13 +76,18 @@ function pushValidationLines(
   validations: PontoActLinkedEntryDTO["validations"],
   locale: string,
   timeZone: string | undefined,
-  t: TFunction
+  t: TFunction,
+  subjectKey?: string
 ): void {
   for (const validation of validations) {
     const author = validation.byUserName ?? t("ponto.act_system_author");
     const note = validation.note ? ` — ${validation.note}` : "";
+    // Numa linha com picagem ligada há DUAS picagens em jogo — cada
+    // validação tem de dizer a qual pertence, senão a aprovação do
+    // original parece pertencer à correção.
+    const label = subjectKey ? t(subjectKey) : t("ponto.act_validation");
     lines.push(
-      `${t("ponto.act_validation")}: ${validation.decision} · ${author} · ${formatDateTime(
+      `${label}: ${validation.decision} · ${author} · ${formatDateTime(
         validation.at,
         locale,
         timeZone
@@ -108,7 +113,14 @@ export function actEntryDetails(
         timeZone,
       })
     );
-    pushValidationLines(lines, entry.corrects.validations, locale, timeZone, t);
+    pushValidationLines(
+      lines,
+      entry.corrects.validations,
+      locale,
+      timeZone,
+      t,
+      "ponto.act_validation_of_original"
+    );
     const author = entry.createdByName ?? t("ponto.act_system_author");
     const reason = entry.reason ? ` — ${entry.reason}` : "";
     lines.push(
@@ -129,12 +141,35 @@ export function actEntryDetails(
         timeZone,
       })
     );
-    pushValidationLines(lines, correction.validations, locale, timeZone, t);
+    pushValidationLines(
+      lines,
+      correction.validations,
+      locale,
+      timeZone,
+      t,
+      "ponto.act_validation_of_correction"
+    );
   }
   if (entry.reason && !entry.corrects) {
     lines.push(`${t("ponto.act_reason")}: ${entry.reason}`);
   }
-  pushValidationLines(lines, entry.validations, locale, timeZone, t);
+  // Quando a linha traz uma picagem ligada, até as validações da própria
+  // linha precisam de rótulo: pertencem ao original (se há correções) ou
+  // à correção (se a linha corrige outra picagem).
+  let ownSubject: string | undefined;
+  if (entry.corrections.length) {
+    ownSubject = "ponto.act_validation_of_original";
+  } else if (entry.corrects) {
+    ownSubject = "ponto.act_validation_of_correction";
+  }
+  pushValidationLines(
+    lines,
+    entry.validations,
+    locale,
+    timeZone,
+    t,
+    ownSubject
+  );
   return lines.join("\n");
 }
 

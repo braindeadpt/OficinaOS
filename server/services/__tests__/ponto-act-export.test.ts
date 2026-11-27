@@ -74,51 +74,87 @@ function prismaWith(rows: unknown[], users: ReturnType<typeof user>[]) {
   // Linhas "vivas": escritas a meio da exportação entram aqui. A transação
   // emulada tira um snapshot no INÍCIO (semântica REPEATABLE READ) e todas
   // as leituras dentro dela veem o snapshot — nunca as escritas posteriores.
+  // O cliente da transação é um objeto DISTINTO do cliente principal: uma
+  // leitura feita pelo cliente errado durante a transação fica contada em
+  // __outerReadsDuringTx e o teste falha — antes disto ambos eram o mesmo
+  // objeto e o teste passava mesmo com leituras fora da transação.
   const liveRows = [...rows];
-  const client = {
-    __isolationLevel: undefined as unknown,
+  const state = {
+    inTransaction: false,
+    outerReadsDuringTx: 0,
+    snapshot: null as unknown[] | null,
+  };
+  const makeModels = (source: () => unknown[], countEscape: boolean) => ({
     shopSettings: {
-      findUnique: vi.fn(() => Promise.resolve(settings)),
+      findUnique: vi.fn(() => {
+        if (countEscape && state.inTransaction) {
+          state.outerReadsDuringTx += 1;
+        }
+        return Promise.resolve(settings);
+      }),
     },
     timeEntry: {
       findMany: vi.fn((args?: { distinct?: unknown }) => {
-        const source = client.__snapshot ?? liveRows;
+        if (countEscape && state.inTransaction) {
+          state.outerReadsDuringTx += 1;
+        }
+        const rows0 = source();
         if (args?.distinct) {
           return Promise.resolve(
             [
-              ...new Set(source.map((r) => (r as { userId: string }).userId)),
+              ...new Set(rows0.map((r) => (r as { userId: string }).userId)),
             ].map((userId) => ({ userId }))
           );
         }
-        return Promise.resolve(source);
+        return Promise.resolve(rows0);
       }),
     },
     user: {
-      findMany: vi.fn(() => Promise.resolve(users)),
-      findUnique: vi.fn(() =>
-        Promise.resolve({ id: "owner-1", name: "Dono", username: "dono" })
-      ),
+      findMany: vi.fn(() => {
+        if (countEscape && state.inTransaction) {
+          state.outerReadsDuringTx += 1;
+        }
+        return Promise.resolve(users);
+      }),
+      findUnique: vi.fn(() => {
+        if (countEscape && state.inTransaction) {
+          state.outerReadsDuringTx += 1;
+        }
+        return Promise.resolve({
+          id: "owner-1",
+          name: "Dono",
+          username: "dono",
+        });
+      }),
     },
-    __snapshot: null as unknown[] | null,
+  });
+  const client = {
+    __isolationLevel: undefined as unknown,
+    ...makeModels(() => liveRows, true),
     $transaction: vi.fn(
       async (
         callback: (tx: unknown) => Promise<unknown>,
         options?: { isolationLevel?: unknown }
       ) => {
         client.__isolationLevel = options?.isolationLevel;
-        client.__snapshot = [...liveRows];
+        state.snapshot = [...liveRows];
+        state.inTransaction = true;
+        const tx = makeModels(() => state.snapshot ?? [], false);
         try {
-          return await callback(client);
+          return await callback(tx);
         } finally {
-          client.__snapshot = null;
+          state.inTransaction = false;
+          state.snapshot = null;
         }
       }
     ),
     __liveRows: liveRows,
+    __state: state,
   };
   return client as unknown as DbClient & {
     __isolationLevel: unknown;
     __liveRows: unknown[];
+    __state: { outerReadsDuringTx: number };
   };
 }
 
@@ -276,29 +312,38 @@ describe("exportação ACT do livro de ponto", () => {
       }),
     ];
     const prisma = prismaWith(rows, [user("u1", "Ana")]);
-    // A "escrita concorrente" acontece na primeira leitura da exportação —
-    // depois de o snapshot estar tirado, a meio das consultas.
-    const insertMidExport = () => {
-      prisma.__liveRows.push(
-        entry({
-          at: "2026-01-05T18:00:00.000Z",
-          id: "late-in",
-          type: "ENTRADA",
-          userId: "u1",
-        }),
-        entry({
-          at: "2026-01-05T19:00:00.000Z",
-          id: "late-out",
-          type: "SAIDA",
-          userId: "u1",
-        })
-      );
-    };
-    const originalFindUnique = prisma.shopSettings.findUnique;
-    prisma.shopSettings.findUnique = vi.fn((...findArgs: unknown[]) => {
-      insertMidExport();
-      return (originalFindUnique as (...a: unknown[]) => unknown)(...findArgs);
-    }) as never;
+    // A "escrita concorrente" acontece dentro da transação, depois de o
+    // snapshot estar tirado e antes das leituras da exportação. Como o
+    // cliente da transação é distinto do cliente principal, qualquer
+    // leitura que fuja da transação vê as linhas tardias E incrementa o
+    // contador — as duas deteções falham o teste.
+    const originalTransaction = prisma.$transaction;
+    prisma.$transaction = vi.fn(
+      (
+        callback: (tx: unknown) => Promise<unknown>,
+        options?: { isolationLevel?: unknown }
+      ) =>
+        (originalTransaction as (cb: unknown, o: unknown) => unknown)(
+          (tx: unknown) => {
+            prisma.__liveRows.push(
+              entry({
+                at: "2026-01-05T18:00:00.000Z",
+                id: "late-in",
+                type: "ENTRADA",
+                userId: "u1",
+              }),
+              entry({
+                at: "2026-01-05T19:00:00.000Z",
+                id: "late-out",
+                type: "SAIDA",
+                userId: "u1",
+              })
+            );
+            return callback(tx);
+          },
+          options
+        )
+    ) as never;
 
     const out = await getPontoActExport(
       prisma,
@@ -307,6 +352,8 @@ describe("exportação ACT do livro de ponto", () => {
     );
 
     expect(prisma.__isolationLevel).toBe("RepeatableRead");
+    // Prova direta: nenhuma leitura da exportação fugiu da transação.
+    expect(prisma.__state.outerReadsDuringTx).toBe(0);
     const worker = out.workers[0];
     const day = worker?.days[0];
     // Nem as linhas nem os totais veem a picagem tardia: 2 eventos, 8 h.

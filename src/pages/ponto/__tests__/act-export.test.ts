@@ -311,6 +311,108 @@ describe("correções à exportação ACT (revisão #208)", () => {
     expect(workerRow?.[0]?.value).toBe("Ana (@ana)");
   });
 
+  it("cada validação aparece atribuída à picagem a que pertence", () => {
+    // Original aprovada + correção recusada: sem rótulos distintos, a
+    // aprovação do original parecia pertencer à correção.
+    const correction = {
+      at: "2026-07-02T09:00:00.000Z",
+      createdAt: "2026-07-02T08:30:00.000Z",
+      createdByName: "Gestora",
+      effectiveStatus: "RECUSADO" as const,
+      id: "corr",
+      reason: "esquecimento",
+      status: "POR_VALIDAR" as const,
+      transport: "MANUAL" as const,
+      type: "SAIDA" as const,
+      validations: [
+        {
+          at: "2026-07-03T10:00:00.000Z",
+          byUserName: "Dono",
+          decision: "RECUSADO" as const,
+          note: "hora errada",
+        },
+      ],
+    };
+    const original = entry("orig", "2026-07-01T17:00:00.000Z", {
+      corrections: [correction],
+      superseded: true,
+      validations: [
+        {
+          at: "2026-07-01T18:00:00.000Z",
+          byUserName: "Dono",
+          decision: "APROVADO" as const,
+          note: null,
+        },
+      ],
+    });
+    const rows = buildActPdfRows(
+      worker({
+        days: [
+          {
+            date: "2026-07-01",
+            entries: [original],
+            pauseMinutes: 0,
+            weekStart: "2026-06-29",
+            workedMinutes: 0,
+          },
+        ],
+      }),
+      "pt",
+      "Europe/Lisbon",
+      t,
+      period
+    );
+    const details = rows.map((row) => row[5] ?? "").join("\n");
+    // a decisão da correção é atribuída à correção…
+    expect(details).toContain("ponto.act_validation_of_correction: RECUSADO");
+    // …e a decisão do original ao original — nunca misturadas
+    expect(details).toContain("ponto.act_validation_of_original: APROVADO");
+  });
+
+  it("referência à picagem ligada usa a data do momento da picagem no fuso da loja", () => {
+    // A picagem ligada atravessa ela própria a meia-noite local: 23:50 UTC
+    // de 30 jun são 00:50 de 1 jul em Lisboa (verão). A criação foi dias
+    // depois — se a data viesse da criação, aparecia 03/07 em vez de 01/07.
+    const corrected = entry("corr", "2026-07-02T09:00:00.000Z", {
+      corrects: {
+        at: "2026-06-30T23:50:00.000Z",
+        createdAt: "2026-07-03T10:00:00.000Z",
+        createdByName: null,
+        effectiveStatus: "APROVADO",
+        id: "orig",
+        reason: null,
+        status: "APROVADO",
+        transport: "MANUAL",
+        type: "SAIDA",
+        validations: [],
+      },
+      correctsId: "orig",
+      reason: "esquecimento",
+    });
+    const rows = buildActPdfRows(
+      worker({
+        days: [
+          {
+            date: "2026-07-02",
+            entries: [corrected],
+            pauseMinutes: 0,
+            weekStart: "2026-06-29",
+            workedMinutes: 0,
+          },
+        ],
+      }),
+      "pt",
+      "Europe/Lisbon",
+      t,
+      period
+    );
+    const details = rows.map((row) => row[5] ?? "").join("\n");
+    // o momento da picagem ligada aparece no dia local certo…
+    expect(details).toContain("01/07/2026, 00:50");
+    // …e não no dia UTC nem confundido com a data de criação
+    expect(details).not.toContain("30/06/2026, 23:50");
+  });
+
   it("correções ligadas mostram estado, decisão, autor e data da validação", () => {
     const correction = {
       at: "2026-07-02T09:00:00.000Z",
