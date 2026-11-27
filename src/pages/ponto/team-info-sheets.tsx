@@ -89,7 +89,8 @@ export default function TeamInfoSheets() {
         signed: signed === "yes",
       });
       setEditing(null);
-      await load();
+      // Sem load() aqui: o próprio componente ouve o evento e refresca —
+      // carregar antes de emitir pedia a mesma lista duas vezes.
       window.dispatchEvent(new Event("ponto-info-deliveries-changed"));
     } catch {
       setError(true);
