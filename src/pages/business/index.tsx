@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useCan } from "@/hooks/use-can";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 import api from "@/lib/api";
 import { BusinessHistory } from "./history";
 import { MessageLinks } from "./message-links";
@@ -115,6 +116,7 @@ function serializeField(field: FormField, raw: string): unknown {
   return raw;
 }
 export default function BusinessPage({ module }: { module: Module }) {
+  const fmt = useFormatCurrency();
   const { t } = useTranslation();
   const [params] = useSearchParams();
   const recordId = params.get("recordId") || undefined;
@@ -256,7 +258,7 @@ export default function BusinessPage({ module }: { module: Module }) {
             ))}
             {commission && (
               <p>
-                {t("business.commission_total")}: {commission} €
+                {t("business.commission_total")}: {fmt(Number(commission))}
               </p>
             )}
             <div className="flex gap-2">
@@ -378,12 +380,12 @@ export default function BusinessPage({ module }: { module: Module }) {
                         </p>
                         <p>
                           {t("business.fields.amountGross")}:{" "}
-                          {String(entry.amountGross)} € ·{" "}
+                          {fmt(Number(entry.amountGross))} ·{" "}
                           {t(`business.values.${entry.interval}`)}
                         </p>
                         <p>
                           {t("business.fields.paidGross")}:{" "}
-                          {String(entry.paidGross)} €
+                          {fmt(Number(entry.paidGross))}
                         </p>
                         {Boolean(entry.renewsAt) && (
                           <p>

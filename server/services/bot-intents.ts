@@ -103,6 +103,9 @@ export interface BotReplyCtx {
    *  histórico da conversa persistida. Canal da conversa: whatsapp |
    *  evolution | sms. */
   inbox?: { channel: string; enabled: boolean };
+  /** Língua documental das respostas com dados da vistaCliente — derivada
+   *  do país da loja na construção do contexto; omissa = pt (lojas PT). */
+  locale?: string;
   log: FastifyBaseLogger;
   notifyCtx: NotifyContext | undefined;
   /** Modo só ponto: funcionários passam primeiro pelo handler do ponto;
@@ -277,6 +280,7 @@ function serializeJobs(
 ) {
   const viewCtx = {
     currency: ctx.currency,
+    locale: ctx.locale,
     portalApiUrl: ctx.portalApiUrl ?? null,
     portalEnabled: ctx.portalEnabled ?? false,
     timezone: ctx.timezone,
@@ -460,6 +464,7 @@ export async function composeReply(
   const toolCtx: BotToolCtx = {
     currency: ctx.currency,
     customerIds: customers.map((c) => c.id),
+    locale: ctx.locale,
     log: ctx.log,
     portalApiUrl: ctx.portalApiUrl ?? null,
     portalEnabled: ctx.portalEnabled ?? false,

@@ -39,6 +39,7 @@ describe("toPublicShop", () => {
   it("exposes only the customer-facing identity", () => {
     expect(toPublicShop(baseSettings)).toEqual({
       address: "Rua de Benfica 12, Lisboa",
+      currency: "EUR",
       logoUrl: null,
       name: "TecFix Benfica",
       phone: "+351 912 345 678",
