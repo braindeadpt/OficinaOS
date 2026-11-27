@@ -15,8 +15,10 @@ OficinaOS has a free, open-source core and an optional paid tier (**OficinaOS Pr
 
 - **The free app sends and receives no messages.** WhatsApp, SMS and the shared inbox are Pro features, enforced by the
   Cloud. Don't add messaging paths to the free app.
-- **Anything public on the internet lives in the Cloud**, not in the shop app (customer portal, online bookings,
-  storefront…). The shop app is designed to run on the shop's local network.
+- **New public features live in the Cloud**, not in the shop app (customer portal, online bookings, storefront…).
+  The shop app is designed to run on the shop's local network. This rule is about where features are *built* — the
+  customer links the free app already has (tracking, quotes, warranty) stay free and local, and exposing them
+  through a tunnel is a deployment choice, documented in [`docs/remote-access.md`](docs/remote-access.md).
 - **Reading is free, acting is Pro (AI/MCP):** connecting your own LLM to **read** the shop's data is free and runs
   locally; writing, sending and administration through an LLM go through the Pro Cloud.
 - **Don't store what you don't need.** No biometrics, no employee photos; data minimisation is a hard rule (GDPR).
@@ -32,7 +34,7 @@ OficinaOS has a free, open-source core and an optional paid tier (**OficinaOS Pr
 
 ## Prerequisites
 
-- [Bun](https://bun.sh) `1.3.13` (pinned in `package.json`)
+- [Bun](https://bun.sh) `1.4.4` (pinned in `.bun-version`, used by CI)
 - PostgreSQL (locally or via Docker)
 - Or, for the full deployment: Docker Desktop (`docker compose up -d`)
 - For Android work: Android Studio + JDK 17+
@@ -48,7 +50,7 @@ cp .env.example .env
 # Fill in DATABASE_URL, BETTER_AUTH_SECRET, AI_ENCRYPTION_KEY, and SEED_ADMIN_PASSWORD
 # (dev only — or leave it unset and create the owner on the /setup screen).
 # Generate secrets with:
-#   node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"
+#   bun -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"
 
 bun run db:migrate
 bun run db:seed
