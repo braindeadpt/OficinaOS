@@ -1191,7 +1191,7 @@
   "ponto.info_doc_purpose_2": "El tratamiento se apoya en la obligación legal de registro y en el interés legítimo de la tienda en disponer de registros fiables e imputables.",
   "ponto.info_doc_purpose_2_company": "El tratamiento se apoya en la obligación legal de registro y en el interés legítimo de la empresa en disponer de registros fiables e imputables.",
   "ponto.info_doc_retention": "Conservación de los datos",
-  "ponto.info_doc_retention_1": "Los registros de jornada se conservan durante 5 años, según la ley; cumplido ese plazo, se eliminan automática y permanentemente.",
+  "ponto.info_doc_retention_1": "Los registros de jornada se conservan durante 5 años, según la ley; cumplido ese plazo, se eliminan automática y permanentemente de la aplicación. Las copias de seguridad se conservan como máximo 30 días, por lo que cualquier rastro en ellas expira poco después.",
   "ponto.info_doc_retention_2": "La aplicación no guarda fotografías. La foto queda en el móvil de la empresa que recibe los mensajes; es la empresa quien decide cuánto tiempo conservarla.",
   "ponto.info_doc_retention_3": "No se recogen ni utilizan datos biométricos.",
   "ponto.info_doc_rights": "Sus derechos",

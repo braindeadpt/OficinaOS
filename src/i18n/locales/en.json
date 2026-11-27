@@ -1191,7 +1191,7 @@
   "ponto.info_doc_purpose_2": "The processing relies on the legal time-clock obligation and the shop's legitimate interest in reliable, attributable records.",
   "ponto.info_doc_purpose_2_company": "The processing relies on the legal time-clock obligation and the company's legitimate interest in reliable, attributable records.",
   "ponto.info_doc_retention": "Data retention",
-  "ponto.info_doc_retention_1": "Time-clock records are kept for 5 years, as required by law; after that period they are automatically and permanently deleted.",
+  "ponto.info_doc_retention_1": "Time-clock records are kept for 5 years, as required by law; after that period they are automatically and permanently deleted from the application. Backups are kept for at most 30 days, so any trace in them expires shortly after.",
   "ponto.info_doc_retention_2": "The app does not store photos. The photo stays on the company phone that receives the messages; it is the company that decides how long to keep it.",
   "ponto.info_doc_retention_3": "No biometric data is collected or used.",
   "ponto.info_doc_rights": "Your rights",

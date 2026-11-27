@@ -1191,7 +1191,7 @@
   "ponto.info_doc_purpose_2": "O tratamento apoia-se na obrigação legal de registo de ponto e no legítimo interesse da loja em dispor de registos fiáveis e imputáveis.",
   "ponto.info_doc_purpose_2_company": "O tratamento apoia-se na obrigação legal de registo de ponto e no legítimo interesse da empresa em dispor de registos fiáveis e imputáveis.",
   "ponto.info_doc_retention": "Conservação dos dados",
-  "ponto.info_doc_retention_1": "Os registos de ponto são conservados durante 5 anos, nos termos da lei; findo esse prazo, são eliminados automática e permanentemente.",
+  "ponto.info_doc_retention_1": "Os registos de ponto são conservados durante 5 anos, nos termos da lei; findo esse prazo, são eliminados automática e permanentemente da aplicação. As cópias de segurança conservam-se no máximo 30 dias, pelo que qualquer vestígio nelas expira pouco depois.",
   "ponto.info_doc_retention_2": "A app não guarda fotografias. A foto fica no telemóvel da empresa que recebe as mensagens; é a empresa que decide quanto tempo a guarda.",
   "ponto.info_doc_retention_3": "Não são recolhidos nem utilizados dados biométricos.",
   "ponto.info_doc_rights": "Os seus direitos",

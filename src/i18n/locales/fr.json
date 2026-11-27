@@ -1191,7 +1191,7 @@
   "ponto.info_doc_purpose_2": "Le traitement s'appuie sur l'obligation légale de pointage et sur l'intérêt légitime du magasin à disposer d'enregistrements fiables et imputables.",
   "ponto.info_doc_purpose_2_company": "Le traitement s'appuie sur l'obligation légale de pointage et sur l'intérêt légitime de l'entreprise à disposer d'enregistrements fiables et imputables.",
   "ponto.info_doc_retention": "Conservation des données",
-  "ponto.info_doc_retention_1": "Les enregistrements de pointage sont conservés pendant 5 ans, conformément à la loi ; passé ce délai, ils sont automatiquement et définitivement supprimés.",
+  "ponto.info_doc_retention_1": "Les enregistrements de pointage sont conservés pendant 5 ans, conformément à la loi ; passé ce délai, ils sont automatiquement et définitivement supprimés de l’application. Les sauvegardes sont conservées au maximum 30 jours, toute trace y expirant peu après.",
   "ponto.info_doc_retention_2": "L'application ne conserve pas les photos. La photo reste sur le téléphone de l'entreprise qui reçoit les messages ; c'est l'entreprise qui décide combien de temps la garder.",
   "ponto.info_doc_retention_3": "Aucune donnée biométrique n'est collectée ni utilisée.",
   "ponto.info_doc_rights": "Vos droits",
