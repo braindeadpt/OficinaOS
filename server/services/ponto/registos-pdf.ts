@@ -9,6 +9,7 @@ import {
   type MonthSummary,
   type RegistosEntry,
 } from "./registos.js";
+import { PONTO_TEXT } from "./transport.js";
 
 const ENTRY_TYPE_PT: Record<string, string> = {
   ENTRADA: "Entrada",
@@ -113,12 +114,7 @@ function buildPages(input: {
     18
   );
   if (summary.hasOpenShift) {
-    push(
-      "Inclui horas estimadas — há dias sem saída registada (contadas até agora no dia de hoje, até à meia-noite nos dias anteriores).",
-      50,
-      8,
-      14
-    );
+    push(PONTO_TEXT.registosEstimatedHours, 50, 8, 14);
   }
   push(
     "Documento pedido pelo próprio trabalhador (art. 15.º RGPD). Gerado automaticamente pela aplicação da loja.",

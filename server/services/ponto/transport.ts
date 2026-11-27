@@ -49,6 +49,8 @@ export const PONTO_TEXT = {
     "Não consigo gerar o link do PDF porque a loja não tem endereço configurado — peça o relatório ao responsável.",
   registosRateLimited:
     "Atingiu o limite de 5 pedidos de registos por dia — tente novamente amanhã.",
+  registosEstimatedHours:
+    "Inclui horas estimadas — há dias sem saída registada (contadas até agora no dia de hoje, até à meia-noite nos dias anteriores).",
   noPendingLocation:
     "Não tenho nenhum pedido de localização pendente — escreva ENTRADA, PAUSA, VOLTEI, SAIDA ou ESTADO.",
   noPendingPhoto:

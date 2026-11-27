@@ -1578,9 +1578,7 @@ async function replyRegistos(
     `${summary.correctionsCount} correção(ões) · ${summary.pendingCount} por validar`,
   ];
   if (summary.hasOpenShift) {
-    lines.push(
-      "Inclui horas estimadas — há dias sem saída registada (contadas até agora no dia de hoje, até à meia-noite nos dias anteriores)."
-    );
+    lines.push(PONTO_TEXT.registosEstimatedHours);
   }
   if (base) {
     lines.push(
