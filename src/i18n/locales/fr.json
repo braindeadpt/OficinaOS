@@ -356,7 +356,6 @@
   "creativity_slightly_precise": "Un peu précis",
   "creativity_very_precise": "Très précis",
   "currency": "Devise",
-  "currency_eur": "EUR",
   "customer": "Client",
   "customer_edit_cancel": "Annuler",
   "customer_edit_email": "E-mail",
@@ -3254,5 +3253,10 @@
   "ponto.act_proof_location": "Localisation au moment de la pointeuse",
   "ponto.act_proof_external_photo": "Externe : localisation + photo (non conservée)",
   "ponto.act_proof_manual": "Validé manuellement par {{name}}",
-  "ponto.info_doc_rights_5": "Vous pouvez demander vos propres enregistrements à tout moment en envoyant REGISTOS (ou REGISTOS MM/AAAA pour un mois antérieur) par le même canal que vous utilisez pour pointer : vous recevez un résumé du mois et un lien à usage unique, valable 24 heures, vers le PDF."
+  "ponto.info_doc_rights_5": "Vous pouvez demander vos propres enregistrements à tout moment en envoyant REGISTOS (ou REGISTOS MM/AAAA pour un mois antérieur) par le même canal que vous utilisez pour pointer : vous recevez un résumé du mois et un lien à usage unique, valable 24 heures, vers le PDF.",
+  "ponto.act_proof_remote": "Télétravail — sans preuve de lieu",
+  "ponto.team_telework_days": "Télétravail",
+  "ponto.team_telework_explain": "En télétravail nous ne demandons pas la localisation, pour ne pas révéler votre adresse.",
+  "ponto.settings_remote_autoapprove": "Approuver automatiquement les pointages en télétravail",
+  "ponto.settings_remote_autoapprove_hint": "Désactivé par défaut : les pointages en télétravail restent à valider. Ils ne demandent jamais la localisation du travailleur."
 }

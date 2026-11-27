@@ -356,7 +356,6 @@
   "creativity_slightly_precise": "Um pouco preciso",
   "creativity_very_precise": "Muito preciso",
   "currency": "Moeda",
-  "currency_eur": "EUR",
   "customer": "Cliente",
   "customer_edit_cancel": "Cancelar",
   "customer_edit_email": "Email",
@@ -3254,5 +3253,10 @@
   "ponto.act_proof_location": "Localização no momento",
   "ponto.act_proof_external_photo": "Externo: localização + foto (não guardada)",
   "ponto.act_proof_manual": "Validado manualmente por {{name}}",
-  "ponto.info_doc_rights_5": "Pode pedir os seus registos a qualquer momento enviando REGISTOS (ou REGISTOS MM/AAAA para um mês anterior) pelo mesmo canal que usa para picar o ponto: recebe um resumo do mês e um link de uso único, válido por 24 horas, para o PDF."
+  "ponto.info_doc_rights_5": "Pode pedir os seus registos a qualquer momento enviando REGISTOS (ou REGISTOS MM/AAAA para um mês anterior) pelo mesmo canal que usa para picar o ponto: recebe um resumo do mês e um link de uso único, válido por 24 horas, para o PDF.",
+  "ponto.act_proof_remote": "Teletrabalho — sem prova de local",
+  "ponto.team_telework_days": "Teletrabalho",
+  "ponto.team_telework_explain": "Em teletrabalho não pedimos a localização, para não revelar a sua morada.",
+  "ponto.settings_remote_autoapprove": "Aprovar automaticamente as picagens em teletrabalho",
+  "ponto.settings_remote_autoapprove_hint": "Desligado por omissão: os registos de teletrabalho ficam por validar. Nunca pedem a localização do trabalhador."
 }

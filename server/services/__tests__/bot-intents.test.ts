@@ -426,7 +426,11 @@ describe("composeReply — transporte WP0.4 (regras na Cloud)", () => {
     expect(j.id).toBeUndefined();
     expect(j.jobCode).toBeUndefined();
     expect(j.quotes).toBeUndefined();
-    expect(j.status).toBeUndefined();
+    // `status` (enum cru) atravessa deliberadamente: o `estado` vai
+    // traduzido na língua documental da loja e as regras da Cloud não
+    // podem depender de texto traduzido — não é dado pessoal extra.
+    expect(j.status).toBe("IN_REPAIR");
+    expect(j.orcamento.status).toBe("SENT");
     expect(input.context.messageType).toBe("text");
     // flag on + módulo ativo → aiEnabled true
     expect(input.context.aiEnabled).toBe(true);
@@ -454,6 +458,7 @@ describe("composeReply — transporte WP0.4 (regras na Cloud)", () => {
         "jobs[].orcamento.estado",
         "jobs[].orcamento.id",
         "jobs[].orcamento.nota",
+        "jobs[].orcamento.status",
         "jobs[].orcamento.validade",
         "jobs[].orcamento.valor",
         "jobs[].orcamento.versao",
@@ -462,6 +467,7 @@ describe("composeReply — transporte WP0.4 (regras na Cloud)", () => {
         "jobs[].pecasEmEspera[].nome",
         "jobs[].reparacaoExterna",
         "jobs[].reparacaoExterna.regressoPrevisto",
+        "jobs[].status",
         "jobs[].valores",
         "jobs[].valores.emFalta",
         "jobs[].valores.estimado",

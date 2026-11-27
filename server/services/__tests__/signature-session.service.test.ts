@@ -380,6 +380,30 @@ describe("document hashing", () => {
     expect(documentMatches(DOC, { ...SOURCE, isUrgent: true })).toBe(false);
     expect(documentMatches(null, SOURCE)).toBe(false);
   });
+  it("documentMatches tolerates the frozen currency — never false drift", () => {
+    const withCurrency = buildIntakeDocument(
+      SOURCE,
+      "Termos de entrada",
+      "pt",
+      "EUR"
+    );
+    expect(documentMatches(withCurrency, SOURCE)).toBe(true);
+    // Documentos antigos sem moeda continuam byte a byte iguais.
+    const without = buildIntakeDocument(SOURCE, "Termos de entrada", "pt");
+    expect(documentMatches(without, SOURCE)).toBe(true);
+  });
+
+  it("currency in the snapshot changes the canonical form — the seal covers it", () => {
+    const eur = buildIntakeDocument(SOURCE, "Termos de entrada", "pt", "EUR");
+    const gbp = buildIntakeDocument(SOURCE, "Termos de entrada", "pt", "GBP");
+    const none = buildIntakeDocument(SOURCE, "Termos de entrada", "pt");
+    expect(intakeDocumentHash(eur, VALID_PNG)).not.toBe(
+      intakeDocumentHash(gbp, VALID_PNG)
+    );
+    expect(intakeDocumentHash(eur, VALID_PNG)).not.toBe(
+      intakeDocumentHash(none, VALID_PNG)
+    );
+  });
 });
 
 describe("publicDocumentView", () => {

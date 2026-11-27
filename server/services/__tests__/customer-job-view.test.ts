@@ -146,3 +146,54 @@ describe("vistaCliente", () => {
     expect(noEnt.linkPortal).toBeNull();
   });
 });
+
+describe("vistaCliente — locale documental (#206)", () => {
+  it("omitting locale keeps the historical Portuguese output", () => {
+    const view = vistaCliente(makeJob() as never, ctx);
+    expect(view.estado).toBe("À espera de peças");
+    expect(view.orcamento?.estado).toBe("por responder");
+    // pt-PT: vírgula decimal, símbolo depois do valor.
+    expect(view.valores.estimado).toBe("200,00 €");
+  });
+
+  it("en renders labels and money in English format", () => {
+    const view = vistaCliente(makeJob() as never, { ...ctx, locale: "en" });
+    expect(view.estado).toBe("Waiting for parts");
+    expect(view.orcamento?.estado).toBe("pending response");
+    expect(view.valores.estimado).toBe("€200.00");
+  });
+
+  it("es renders labels and money in Spanish format", () => {
+    const view = vistaCliente(makeJob() as never, { ...ctx, locale: "es" });
+    expect(view.estado).toBe("Esperando piezas");
+    expect(view.orcamento?.estado).toBe("pendiente de respuesta");
+    expect(view.valores.estimado).toBe("200,00 €");
+  });
+
+  it("fr renders labels in French", () => {
+    const view = vistaCliente(makeJob() as never, { ...ctx, locale: "fr" });
+    expect(view.estado).toBe("En attente de pièces");
+    expect(view.orcamento?.estado).toBe("en attente de réponse");
+  });
+
+  it("unknown locales fall back to Portuguese, never crash", () => {
+    const view = vistaCliente(makeJob() as never, { ...ctx, locale: "de" });
+    expect(view.estado).toBe("À espera de peças");
+  });
+
+  it("snapshot: full projection in PT and EN", () => {
+    const job = makeJob() as never;
+    const pt = vistaCliente(job, ctx);
+    const en = vistaCliente(job, { ...ctx, locale: "en" });
+    // Datas dependentes do relógio não entram no snapshot estável.
+    const stable = (v: typeof pt) => ({
+      estado: v.estado,
+      orcamento: v.orcamento
+        ? { estado: v.orcamento.estado, valor: v.orcamento.valor }
+        : null,
+      valores: v.valores,
+    });
+    expect(stable(pt)).toMatchSnapshot();
+    expect(stable(en)).toMatchSnapshot();
+  });
+});

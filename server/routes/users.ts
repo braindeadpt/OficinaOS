@@ -39,6 +39,10 @@ const PONTO_CLOUD_USER_FIELDS = [
   "pontoSmsAllowed",
 ] as const;
 
+// Configuração de staff que um utilizador não pode mudar a si mesmo
+// (mesma lógica dos campos PONTO_CLOUD_USER_FIELDS, mas inclui campos
+// locais como os dias de teletrabalho).
+
 function touchesPontoCloudStaff(
   data: Partial<Record<(typeof PONTO_CLOUD_USER_FIELDS)[number], unknown>>
 ): boolean {
@@ -318,6 +322,7 @@ export const usersRoutes: FastifyPluginAsync = async (app) => {
             pontoScheduleStart: _p5,
             pontoScheduleEnd: _p6,
             pontoScheduleExempt: _p7,
+            pontoTeleworkDays: _p8,
             ...rest
           } = parsed.data;
           profileData = rest;

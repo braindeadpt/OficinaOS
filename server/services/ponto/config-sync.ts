@@ -38,6 +38,7 @@ export interface PontoCloudConfigPayload {
   externalAutoApprove: boolean;
   photoRequired: boolean;
   pinSyncVersion: 1;
+  remoteAutoApprove: boolean;
   shopGeo: { lat: number; lng: number; radiusM: number } | null;
   smsNumber: string | null;
   staff: PontoStaffConfigRow[];
@@ -52,6 +53,7 @@ interface PontoSettingsRow {
   pontoGeoLat: number | null;
   pontoGeoLng: number | null;
   pontoRadiusM: number;
+  pontoRemoteAutoApprove: boolean;
   pontoSmsNumber: string | null;
   pontoWaNumber: string | null;
   timezone: string | null;
@@ -72,6 +74,7 @@ export function buildPontoConfigPayload(
   const hasGeo = settings.pontoGeoLat !== null && settings.pontoGeoLng !== null;
   return {
     alwaysAskLocation: settings.pontoAlwaysAskLocation,
+    remoteAutoApprove: settings.pontoRemoteAutoApprove,
     externalAutoApprove: settings.pontoExternalAutoApprove,
     photoRequired: settings.pontoExternalPhotoRequired,
     pinSyncVersion: 1,

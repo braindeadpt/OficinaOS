@@ -23,6 +23,7 @@ export interface PontoStaffUser {
   name: string | null;
   phoneE164: string | null;
   pontoSmsAllowed: boolean;
+  pontoTeleworkDays: number[];
   username: string;
 }
 
@@ -59,6 +60,7 @@ export async function findPontoStaff(
       name: true,
       phoneE164: true,
       pontoSmsAllowed: true,
+      pontoTeleworkDays: true,
       username: true,
     },
     // isActive: uma conta desativada (ex-funcionário) não é staff do

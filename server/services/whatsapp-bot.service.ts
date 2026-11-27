@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@generated/client";
 import type { FastifyBaseLogger } from "fastify";
+import { documentLocaleForCountry } from "../lib/document-locale.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import { isModuleEnabled } from "../utils/modules.js";
 import {
@@ -294,6 +295,7 @@ async function pollWhatsAppInboundCycle(
     apiUrl,
     channel,
     currency: settings.currency ?? "EUR",
+    locale: documentLocaleForCountry(settings.countryCode),
     inbox: {
       channel: channel.mode === "evolution" ? "evolution" : "whatsapp",
       enabled: isModuleEnabled(settings, "ai-inbox"),
@@ -373,6 +375,7 @@ async function drainInboxOnly(
   }
   const ctx: BotReplyCtx = {
     currency: settings.currency ?? "EUR",
+    locale: documentLocaleForCountry(settings.countryCode),
     inbox: { channel: "whatsapp", enabled: true },
     log,
     notifyCtx,

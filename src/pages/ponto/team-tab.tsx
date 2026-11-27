@@ -18,6 +18,7 @@ interface EditState {
   pontoScheduleExempt: boolean;
   pontoScheduleStart: string;
   pontoSmsAllowed: boolean;
+  pontoTeleworkDays: number[];
   userId: string;
 }
 
@@ -42,7 +43,7 @@ function SwitchRow({
 }
 
 export default function TeamTab() {
-  const { t } = useTranslation();
+  const { i18n, t } = useTranslation();
   const users = useUsersStore((s) => s.users);
   const isLoading = useUsersStore((s) => s.isLoading);
   const allUsersLoaded = useUsersStore((s) => s.allUsersLoaded);
@@ -70,6 +71,7 @@ export default function TeamTab() {
       pontoScheduleExempt: u.pontoScheduleExempt,
       pontoScheduleStart: u.pontoScheduleStart ?? "",
       pontoSmsAllowed: u.pontoSmsAllowed,
+      pontoTeleworkDays: u.pontoTeleworkDays ?? [],
       userId: u.id,
     });
   };
@@ -100,6 +102,7 @@ export default function TeamTab() {
         pontoScheduleExempt: editing.pontoScheduleExempt,
         pontoScheduleStart: start || null,
         pontoSmsAllowed: editing.pontoSmsAllowed,
+        pontoTeleworkDays: editing.pontoTeleworkDays,
       };
       await updateUserProfile(editing.userId, payload);
       setEditing(null);
@@ -264,6 +267,46 @@ export default function TeamTab() {
                   setEditing({ ...editing, pontoScheduleExempt: v })
                 }
               />
+              <div>
+                <span className="text-sm">{t("ponto.team_telework_days")}</span>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {[1, 2, 3, 4, 5, 6, 7].map((day) => {
+                    const active = editing.pontoTeleworkDays.includes(day);
+                    // Nome do dia pela língua da UI — sem chaves novas:
+                    // 2024-01-01 é uma segunda-feira (ISO 1).
+                    const label = new Intl.DateTimeFormat(i18n.language, {
+                      weekday: "short",
+                    }).format(new Date(2024, 0, day));
+                    return (
+                      <button
+                        aria-pressed={active}
+                        className={`rounded-md border px-2 py-1 text-xs ${
+                          active
+                            ? "border-primary bg-primary text-on-primary"
+                            : "border-outline-variant text-on-surface-variant"
+                        }`}
+                        key={day}
+                        onClick={() =>
+                          setEditing({
+                            ...editing,
+                            pontoTeleworkDays: active
+                              ? editing.pontoTeleworkDays.filter(
+                                  (d) => d !== day
+                                )
+                              : [...editing.pontoTeleworkDays, day].sort(),
+                          })
+                        }
+                        type="button"
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-1 text-on-surface-variant text-xs">
+                  {t("ponto.team_telework_explain")}
+                </p>
+              </div>
             </div>
             {formError && <p className="text-error text-sm">{formError}</p>}
             <div className="flex justify-end gap-2">

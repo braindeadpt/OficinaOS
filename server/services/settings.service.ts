@@ -194,6 +194,7 @@ const botUpdate = (input: UpdateShopSettingsInput) => ({
 // fora do shopCreate/shopUpdate para não disparar a complexidade.
 const pontoCreate = (input: UpdateShopSettingsInput) => ({
   pontoAlwaysAskLocation: input.pontoAlwaysAskLocation ?? false,
+  pontoRemoteAutoApprove: input.pontoRemoteAutoApprove ?? false,
   pontoGeoLat: input.pontoGeoLat ?? null,
   pontoGeoLng: input.pontoGeoLng ?? null,
   pontoRadiusM: input.pontoRadiusM ?? 100,
@@ -208,6 +209,7 @@ const pontoCreate = (input: UpdateShopSettingsInput) => ({
 
 const pontoUpdate = (input: UpdateShopSettingsInput) => ({
   pontoAlwaysAskLocation: input.pontoAlwaysAskLocation,
+  pontoRemoteAutoApprove: input.pontoRemoteAutoApprove,
   pontoGeoLat: input.pontoGeoLat,
   pontoGeoLng: input.pontoGeoLng,
   pontoRadiusM: input.pontoRadiusM,

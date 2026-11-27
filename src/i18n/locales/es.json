@@ -356,7 +356,6 @@
   "creativity_slightly_precise": "Ligeramente preciso",
   "creativity_very_precise": "Con precisión",
   "currency": "Moneda",
-  "currency_eur": "euros",
   "customer": "Cliente",
   "customer_edit_cancel": "Cancelar",
   "customer_edit_email": "Correo Electrónico",
@@ -3254,5 +3253,10 @@
   "ponto.act_proof_location": "Ubicación en el momento",
   "ponto.act_proof_external_photo": "Externo: ubicación + foto (no guardada)",
   "ponto.act_proof_manual": "Validado manualmente por {{name}}",
-  "ponto.info_doc_rights_5": "Puede pedir sus propios registros en cualquier momento enviando REGISTOS (o REGISTOS MM/AAAA para un mes anterior) por el mismo canal que usa para fichar: recibe un resumen del mes y un enlace de un solo uso, válido durante 24 horas, para el PDF."
+  "ponto.info_doc_rights_5": "Puede pedir sus propios registros en cualquier momento enviando REGISTOS (o REGISTOS MM/AAAA para un mes anterior) por el mismo canal que usa para fichar: recibe un resumen del mes y un enlace de un solo uso, válido durante 24 horas, para el PDF.",
+  "ponto.act_proof_remote": "Teletrabajo — sin prueba de ubicación",
+  "ponto.team_telework_days": "Teletrabajo",
+  "ponto.team_telework_explain": "En teletrabajo no pedimos la ubicación, para no revelar su domicilio.",
+  "ponto.settings_remote_autoapprove": "Aprobar automáticamente los fichajes en teletrabajo",
+  "ponto.settings_remote_autoapprove_hint": "Desactivado por defecto: los registros de teletrabajo quedan pendientes de validación. Nunca piden la ubicación del trabajador."
 }

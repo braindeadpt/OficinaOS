@@ -1,0 +1,33 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`vistaCliente — locale documental (#206) > snapshot: full projection in PT and EN 1`] = `
+{
+  "estado": "À espera de peças",
+  "orcamento": {
+    "estado": "por responder",
+    "valor": "200,00 €",
+  },
+  "valores": {
+    "emFalta": "120,00 €",
+    "estimado": "200,00 €",
+    "pago": "30,00 €",
+    "sinal": "50,00 €",
+  },
+}
+`;
+
+exports[`vistaCliente — locale documental (#206) > snapshot: full projection in PT and EN 2`] = `
+{
+  "estado": "Waiting for parts",
+  "orcamento": {
+    "estado": "pending response",
+    "valor": "€200.00",
+  },
+  "valores": {
+    "emFalta": "€120.00",
+    "estimado": "€200.00",
+    "pago": "€30.00",
+    "sinal": "€50.00",
+  },
+}
+`;

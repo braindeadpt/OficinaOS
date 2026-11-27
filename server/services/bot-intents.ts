@@ -103,6 +103,9 @@ export interface BotReplyCtx {
    *  histórico da conversa persistida. Canal da conversa: whatsapp |
    *  evolution | sms. */
   inbox?: { channel: string; enabled: boolean };
+  /** Língua documental das respostas com dados da vistaCliente — derivada
+   *  do país da loja na construção do contexto; omissa = pt (lojas PT). */
+  locale?: string;
   log: FastifyBaseLogger;
   notifyCtx: NotifyContext | undefined;
   /** Modo só ponto: funcionários passam primeiro pelo handler do ponto;
@@ -277,6 +280,7 @@ function serializeJobs(
 ) {
   const viewCtx = {
     currency: ctx.currency,
+    locale: ctx.locale,
     portalApiUrl: ctx.portalApiUrl ?? null,
     portalEnabled: ctx.portalEnabled ?? false,
     timezone: ctx.timezone,
@@ -286,9 +290,16 @@ function serializeJobs(
     const quote = job.quotes[0];
     return {
       ...view,
+      // `estado` vai traduzido para a língua documental da loja (o LLM
+      // usa-o em respostas naturais), mas as regras determinísticas da
+      // Cloud não podem depender de texto traduzido — o enum cru vai
+      // sempre a par, como no formato legado. Clouds antigas ignoram-no
+      // (zod descarta chaves desconhecidas).
+      status: job.status,
       orcamento: view.orcamento
         ? {
             ...view.orcamento,
+            status: quote?.status ?? null,
             // O id interno só atravessa quando o orçamento está por
             // responder E esta interação pode decidi-lo (fora da
             // janela de decisão nunca seria usado) — é a referência
@@ -460,6 +471,7 @@ export async function composeReply(
   const toolCtx: BotToolCtx = {
     currency: ctx.currency,
     customerIds: customers.map((c) => c.id),
+    locale: ctx.locale,
     log: ctx.log,
     portalApiUrl: ctx.portalApiUrl ?? null,
     portalEnabled: ctx.portalEnabled ?? false,

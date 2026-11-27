@@ -4,6 +4,7 @@ import { toSmsText } from "@shared/utils/gsm7.js";
 import type { FastifyBaseLogger } from "fastify";
 import { decryptSecret, isEncrypted } from "../lib/crypto.js";
 import { assertNotDemoMode } from "../lib/demo.js";
+import { documentLocaleForCountry } from "../lib/document-locale.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import { isModuleEnabled } from "../utils/modules.js";
 import {
@@ -220,6 +221,7 @@ export async function handleInboundSms(
           }
         : undefined,
     currency: settings.currency ?? "EUR",
+    locale: documentLocaleForCountry(settings.countryCode),
     inbox: { channel: "sms", enabled: inboxEnabled },
     log,
     notifyCtx,

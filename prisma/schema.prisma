@@ -216,6 +216,7 @@ model User {
   pontoEnabled        Boolean           @default(false)
   externalWork        Boolean           @default(false)
   pontoSmsAllowed     Boolean           @default(false)
+  pontoTeleworkDays   Int[]               @default([])
   pontoScheduleStart  String?
   pontoScheduleEnd    String?
   // Isenção de horário de trabalho (art. 219.º CT): mesmo isento,
@@ -1436,6 +1437,7 @@ model ShopSettings {
   // justificação na avaliação de impacto (AIPD): a localização passa a
   // ser pedida mesmo quando o scan do ecrã na rede da loja prova presença.
   pontoAlwaysAskLocation     Boolean   @default(false)
+  pontoRemoteAutoApprove       Boolean   @default(false)
   pontoExitReminderTime      String?
   pontoPauseReminderMinutes  Int       @default(20)
   pontoInfoText              String?   @db.Text

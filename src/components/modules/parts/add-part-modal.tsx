@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { useCurrencySymbol } from "@/hooks/use-format-currency";
 import { useModalEffects } from "@/hooks/use-modal-effects";
 import api from "@/lib/api";
 
@@ -103,6 +104,7 @@ export default function AddPartModal({
   onClose,
   onSubmit,
 }: AddPartModalProps) {
+  const currencyLabel = useCurrencySymbol();
   const { t } = useTranslation();
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -320,7 +322,7 @@ export default function AddPartModal({
               </Label>
               <div className="relative">
                 <span className="absolute start-4 top-1/2 -translate-y-1/2 font-mono text-on-surface-variant text-sm">
-                  {t("currency_eur")}
+                  {currencyLabel}
                 </span>
                 <Input
                   aria-describedby={

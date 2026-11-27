@@ -3,6 +3,7 @@ import { ACTIVE_STATUSES } from "@shared/constants/job-statuses.js";
 import type { FastifyBaseLogger } from "fastify";
 import {
   type CustomerViewCtx,
+  JOB_STATUS_I18N,
   JOB_STATUS_PT,
   loadVistaCliente,
 } from "./customer-job-view.js";
@@ -196,7 +197,7 @@ export async function runBotTool(
           historico: jobs.map((j) => ({
             aparelho: `${j.device.brand.name} ${j.device.model}`,
             codigo: j.jobCode,
-            estado: vistaClienteStatusPt(j.status),
+            estado: vistaClienteStatus(j.status, ctx.locale),
             fechadoEm: (closedAt.get(j.id) ?? j.updatedAt)
               .toISOString()
               .slice(0, 10),
@@ -228,6 +229,7 @@ export async function runBotTool(
   }
 }
 
-function vistaClienteStatusPt(status: string): string {
-  return JOB_STATUS_PT[status] ?? status;
+function vistaClienteStatus(status: string, locale?: string): string {
+  const lang = (locale ?? "pt").split("-")[0];
+  return (JOB_STATUS_I18N[lang] ?? JOB_STATUS_PT)[status] ?? status;
 }

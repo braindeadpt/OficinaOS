@@ -16,6 +16,9 @@ export interface IntakeDocument {
   checklist: Record<string, "ok" | "fail" | null>;
   color: string | null;
   conditionNotes: string | null;
+  /** Moeda ISO congelada na criação — o selo prova a moeda que o cliente
+   *  viu; undefined em documentos anteriores a este campo. */
+  currency?: string;
   customerEmail: string | null;
   customerName: string;
   customerPhone: string;
@@ -82,12 +85,16 @@ const emptyToNull = (v: string | null | undefined) => {
 export function buildIntakeDocument(
   input: IntakeDocumentSource,
   termsText: string,
-  locale: string
+  locale: string,
+  currency?: string
 ): IntakeDocument {
   return {
     v: INTAKE_DOCUMENT_VERSION,
     termsText,
     locale,
+    // undefined é filtrado pelo canonicalize — documentos sem moeda (fluxos
+    // antigos) produzem exatamente os mesmos bytes de sempre.
+    currency: currency ?? undefined,
     customerName: input.customerName.trim(),
     customerPhone: input.customerPhone.trim(),
     customerEmail: emptyToNull(input.customerEmail),
@@ -143,6 +150,7 @@ export function publicDocumentView(doc: IntakeDocument) {
     device: [doc.deviceBrand, doc.deviceModel, doc.color]
       .filter(Boolean)
       .join(" "),
+    currency: doc.currency ?? null,
     estimatedCost: doc.estimatedCost,
     estimatedDelivery: doc.estimatedDelivery,
     problem: doc.problem,

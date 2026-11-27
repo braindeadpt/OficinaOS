@@ -12,6 +12,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useCan } from "@/hooks/use-can";
 import api from "@/lib/api";
+import { formatCurrency } from "@/lib/format";
 import { BusinessHistory } from "@/pages/business/history";
 
 const HTTP_URL = /^https?:/;
@@ -61,6 +62,9 @@ const EMPTY = {
   recoverInputVat: true,
 };
 export default function PurchaseOrdersPage() {
+  // Encomendas e acordos são denominados em EUR por contrato do módulo
+  // (docs/business-support.md) — a moeda da loja não se aplica aqui.
+  const fmt = (v: number) => formatCurrency(v, "EUR");
   const { t } = useTranslation();
   const [params] = useSearchParams();
   const recordId = params.get("recordId") || undefined;
@@ -291,7 +295,8 @@ export default function PurchaseOrdersPage() {
             form.saleVatRate,
           ].every((value) => MONEY_PATTERN.test(value)) && (
             <p>
-              {t("business.margin")}: {orderMargin(form).profitAfterVat} € ·{" "}
+              {t("business.margin")}:{" "}
+              {fmt(Number(orderMargin(form).profitAfterVat))} ·{" "}
               {orderMargin(form).marginPercent ?? "—"}%
             </p>
           )}
@@ -394,22 +399,22 @@ export default function PurchaseOrdersPage() {
             <dl className="my-3 grid gap-2 sm:grid-cols-2">
               <div>
                 <dt>{t("business.fields.costGross")}</dt>
-                <dd>{order.costGross} €</dd>
+                <dd>{fmt(Number(order.costGross))}</dd>
               </div>
               <div>
                 <dt>{t("business.fields.quoteGross")}</dt>
-                <dd>{order.quoteGross} €</dd>
+                <dd>{fmt(Number(order.quoteGross))}</dd>
               </div>
               <div>
                 <dt>{t("business.margin")}</dt>
                 <dd>
-                  {order.margin.profitAfterVat} € ·{" "}
+                  {fmt(Number(order.margin.profitAfterVat))} ·{" "}
                   {order.margin.marginPercent ?? "—"}%
                 </dd>
               </div>
               <div>
                 <dt>{t("business.vat_balance")}</dt>
-                <dd>{order.margin.vatBalance} €</dd>
+                <dd>{fmt(Number(order.margin.vatBalance))}</dd>
               </div>
             </dl>
           )}

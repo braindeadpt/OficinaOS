@@ -13,22 +13,91 @@ import { portalUrl } from "./portal.service.js";
  * lista de chaves — qualquer campo novo passa por revisão explícita.
  */
 
-export const JOB_STATUS_PT: Record<string, string> = {
-  INTAKE: "Recebido",
-  WAITING_FOR_PARTS: "À espera de peças",
-  IN_REPAIR: "Em reparação",
-  ON_HOLD: "Em pausa",
-  DONE: "Pronto para levantar",
-  DELIVERED: "Entregue",
-  RETURNED: "Devolvido",
-  CANCELLED: "Cancelado",
+export const JOB_STATUS_I18N: Record<string, Record<string, string>> = {
+  pt: {
+    INTAKE: "Recebido",
+    WAITING_FOR_PARTS: "À espera de peças",
+    IN_REPAIR: "Em reparação",
+    ON_HOLD: "Em pausa",
+    DONE: "Pronto para levantar",
+    DELIVERED: "Entregue",
+    RETURNED: "Devolvido",
+    CANCELLED: "Cancelado",
+  },
+  en: {
+    INTAKE: "Received",
+    WAITING_FOR_PARTS: "Waiting for parts",
+    IN_REPAIR: "In repair",
+    ON_HOLD: "On hold",
+    DONE: "Ready for pickup",
+    DELIVERED: "Delivered",
+    RETURNED: "Returned",
+    CANCELLED: "Cancelled",
+  },
+  es: {
+    INTAKE: "Recibido",
+    WAITING_FOR_PARTS: "Esperando piezas",
+    IN_REPAIR: "En reparación",
+    ON_HOLD: "En pausa",
+    DONE: "Listo para recoger",
+    DELIVERED: "Entregado",
+    RETURNED: "Devuelto",
+    CANCELLED: "Cancelado",
+  },
+  fr: {
+    INTAKE: "Reçu",
+    WAITING_FOR_PARTS: "En attente de pièces",
+    IN_REPAIR: "En réparation",
+    ON_HOLD: "En pause",
+    DONE: "Prêt à récupérer",
+    DELIVERED: "Livré",
+    RETURNED: "Retourné",
+    CANCELLED: "Annulé",
+  },
 };
 
-const QUOTE_STATUS_PT: Record<string, string> = {
-  SENT: "por responder",
-  APPROVED: "aceite",
-  REJECTED: "recusado",
-  SUPERSEDED: "substituído",
+// Alias de compatibilidade — consumidores antigos leem a tabela PT direta.
+export const JOB_STATUS_PT: Record<string, string> = JOB_STATUS_I18N.pt;
+
+const QUOTE_STATUS_I18N: Record<string, Record<string, string>> = {
+  pt: {
+    SENT: "por responder",
+    APPROVED: "aceite",
+    REJECTED: "recusado",
+    SUPERSEDED: "substituído",
+  },
+  en: {
+    SENT: "pending response",
+    APPROVED: "accepted",
+    REJECTED: "rejected",
+    SUPERSEDED: "superseded",
+  },
+  es: {
+    SENT: "pendiente de respuesta",
+    APPROVED: "aceptado",
+    REJECTED: "rechazado",
+    SUPERSEDED: "sustituido",
+  },
+  fr: {
+    SENT: "en attente de réponse",
+    APPROVED: "accepté",
+    REJECTED: "refusé",
+    SUPERSEDED: "remplacé",
+  },
+};
+
+/** Língua documental resolvida da vista — pt quando o chamador não diz. */
+function viewLocale(ctx: CustomerViewCtx): string {
+  const lang = (ctx.locale ?? "pt").split("-")[0].toLowerCase();
+  return JOB_STATUS_I18N[lang] ? lang : "pt";
+}
+
+/** Locale Intl completo para a língua documental (formatação de valores). */
+const INTL_LOCALE: Record<string, string> = {
+  pt: "pt-PT",
+  en: "en-GB",
+  es: "es-ES",
+  fr: "fr-FR",
 };
 
 const MS_PER_DAY = 86_400_000;
@@ -114,6 +183,11 @@ export interface CustomerJobView {
 
 export interface CustomerViewCtx {
   currency: string;
+  /** Língua documental da projeção (pt/en/es/fr) — derivada do país da loja
+   *  nos canais sem browser (WhatsApp/SMS/bot). O tracking público não lê
+   *  desta projeção: o portal publica um instantâneo locale-neutro que a
+   *  Cloud traduz no lado dela. Omissa = pt, o comportamento de sempre. */
+  locale?: string;
   /** Cloud API base used to build the public portal link (null → no link). */
   portalApiUrl: string | null;
   /** Active module ids — portal link only when "portal" is entitled. */
@@ -124,7 +198,7 @@ export interface CustomerViewCtx {
 }
 
 function eur(ctx: CustomerViewCtx, n: number): string {
-  return new Intl.NumberFormat("pt-PT", {
+  return new Intl.NumberFormat(INTL_LOCALE[viewLocale(ctx)] ?? "pt-PT", {
     currency: ctx.currency,
     style: "currency",
   }).format(n);
@@ -146,7 +220,8 @@ export function vistaCliente(
   const aparelho = `${job.device.brand.name} ${job.device.model}${
     job.color ? ` ${job.color}` : ""
   }`;
-  const estado = JOB_STATUS_PT[job.status] ?? job.status;
+  const lang = viewLocale(ctx);
+  const estado = JOB_STATUS_I18N[lang][job.status] ?? job.status;
   const emPausa = job.status === "ON_HOLD";
   const diasAtraso =
     job.estimatedDate &&
@@ -187,7 +262,7 @@ export function vistaCliente(
     orcamento: quote
       ? {
           enviadoEm: quote.sentAt?.toISOString() ?? null,
-          estado: QUOTE_STATUS_PT[quote.status] ?? quote.status,
+          estado: QUOTE_STATUS_I18N[lang][quote.status] ?? quote.status,
           nota: quote.note,
           validade: null,
           valor: eur(ctx, quote.amount.toNumber()),
