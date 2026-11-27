@@ -11,6 +11,7 @@ import type { OrdersReportDTO } from "@shared/types/reports";
 import QRCode from "qrcode";
 import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
+import { bundledIntakeTermsText } from "./intake-terms.service.js";
 
 export async function generateTrackingQr(
   jobCode: string,
@@ -139,6 +140,8 @@ export interface ReceiptStrings {
   signatureLabel: string;
   signedDoc: string;
   termsSigned: string;
+  termsVersion: string;
+  termsVersionUnknownDate: string;
   total: string;
   warranty: string;
   warrantyDays: string;
@@ -176,6 +179,9 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     servedBy: "Atendido por",
     signatureLabel: "Assinatura do cliente",
     legacySignedDoc: "Assinatura anterior a {date}",
+    termsVersion: "termos v{version} de {date}",
+    termsVersionUnknownDate:
+      "data da versão desconhecida (texto anterior a 2026-11-26)",
     signedDoc: "Documento assinado",
     termsSigned:
       "Declaro que o equipamento descrito é meu e aceito os termos de reparação da loja.",
@@ -214,6 +220,8 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     servedBy: "Served by",
     signatureLabel: "Customer signature",
     legacySignedDoc: "Signature predating {date}",
+    termsVersion: "terms v{version} dated {date}",
+    termsVersionUnknownDate: "version date unknown (text predating 2026-11-26)",
     signedDoc: "Signed document",
     termsSigned:
       "I declare the described device is mine and accept the shop's repair terms.",
@@ -252,6 +260,9 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     servedBy: "Servi par",
     signatureLabel: "Signature du client",
     legacySignedDoc: "Signature antérieure au {date}",
+    termsVersion: "conditions v{version} du {date}",
+    termsVersionUnknownDate:
+      "date de version inconnue (texte antérieur au 2026-11-26)",
     signedDoc: "Document signé",
     termsSigned:
       "Je déclare que l'appareil décrit m'appartient et j'accepte les conditions de réparation.",
@@ -290,6 +301,9 @@ const RECEIPT_STRINGS: Record<string, ReceiptStrings> = {
     servedBy: "Atendido por",
     signatureLabel: "Firma del cliente",
     legacySignedDoc: "Firma anterior al {date}",
+    termsVersion: "condiciones v{version} de {date}",
+    termsVersionUnknownDate:
+      "fecha de la versión desconocida (texto anterior al 2026-11-26)",
     signedDoc: "Documento firmado",
     termsSigned:
       "Declaro que el dispositivo descrito es mío y acepto las condiciones de reparación.",
@@ -503,10 +517,47 @@ function loanerDivHtml(job: LoanerJob, s: ReceiptStrings): string {
 }
 
 /** "Signed document a1b2c3d4e5f6 · 03/11/2026 14:22" — the integrity seal. */
+
+/**
+ * Provenance suffix for the signature seal: the terms version and its date.
+ * When the signed text is the bundled default clause the shop version is
+ * meaningless (the shop never wrote that text — even after clearing custom
+ * terms, which bumps the version), so nothing shows. Otherwise NULL updatedAt
+ * means pre-migration custom text, disclosed as an unknown date.
+ */
+export async function termsProvenanceLine(
+  job: {
+    intakeTermsSnapshot?: unknown;
+    intakeTermsUpdatedAt?: Date | null;
+    intakeTermsVersion?: number | null;
+  },
+  s: ReceiptStrings
+): Promise<string> {
+  if (typeof job.intakeTermsVersion !== "number") {
+    return "";
+  }
+  const snapshot = job.intakeTermsSnapshot as {
+    locale?: string;
+    termsText?: string;
+  } | null;
+  const bundled = await bundledIntakeTermsText(snapshot?.locale);
+  if (snapshot?.termsText && snapshot.termsText === bundled) {
+    return "";
+  }
+  const versionDate = job.intakeTermsUpdatedAt
+    ? new Date(job.intakeTermsUpdatedAt).toLocaleDateString(s.dateLocale)
+    : s.termsVersionUnknownDate;
+  return ` · ${s.termsVersion.replace("{version}", String(job.intakeTermsVersion)).replace("{date}", versionDate)}`;
+}
+
 function signatureSealHtml(
-  job: { intakeDocumentHash?: string | null; signedAt?: Date | null },
+  job: {
+    intakeDocumentHash?: string | null;
+    signedAt?: Date | null;
+  },
   s: ReceiptStrings,
-  hasSignature: boolean
+  hasSignature: boolean,
+  provenance = ""
 ): string {
   if (!job.intakeDocumentHash) {
     if (!(hasSignature && job.signedAt)) {
@@ -521,7 +572,7 @@ function signatureSealHtml(
   const when = job.signedAt
     ? ` · ${new Date(job.signedAt).toLocaleString(s.dateLocale)}`
     : "";
-  const seal = `${s.signedDoc} #${job.intakeDocumentHash.slice(0, 12)}${when}`;
+  const seal = `${s.signedDoc} #${job.intakeDocumentHash.slice(0, 12)}${when}${provenance}`;
   return `<p style="text-align:left;font-size:9px;color:#777">${esc(seal)}</p>`;
 }
 
@@ -552,6 +603,8 @@ export async function renderReceiptHtml(
     intakeSignatureDataUrl?: string | null;
     intakeTermsSnapshot?: unknown;
     intakeDocumentHash?: string | null;
+    intakeTermsUpdatedAt?: Date | null;
+    intakeTermsVersion?: number | null;
     signedAt?: Date | null;
     createdAt: Date;
     payments?: Array<{
@@ -630,6 +683,7 @@ export async function renderReceiptHtml(
     repairs,
     s,
     settings,
+    termsProvenance: await termsProvenanceLine(job, s),
   };
   return prefs.paper === "a4"
     ? renderA4ReceiptDocument(ctx)
@@ -687,6 +741,7 @@ interface ReceiptRenderContext {
   repairs: Parameters<typeof renderReceiptHtml>[1]["repairs"];
   s: ReceiptStrings;
   settings: Awaited<ReturnType<typeof findShopSettingsUnique>>;
+  termsProvenance: string;
 }
 
 /**
@@ -717,7 +772,7 @@ function renderThermalReceiptDocument(ctx: ReceiptRenderContext): string {
     ? signatureSectionHtml(
         job.intakeSignatureDataUrl,
         termsText,
-        signatureSealHtml(job, s, hasSignature)
+        signatureSealHtml(job, s, hasSignature, ctx.termsProvenance)
       )
     : "";
   const qrImg = ctx.qrBuf
@@ -843,7 +898,8 @@ ${
     ? `<div class="sign"><p class="terms">${escMultiline(termsText)}</p><div class="box">${signatureBox}</div>${signatureSealHtml(
         job,
         s,
-        hasSignature
+        hasSignature,
+        ctx.termsProvenance
       )}</div>`
     : "";
 

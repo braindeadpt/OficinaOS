@@ -1382,6 +1382,45 @@ describe("create", () => {
     expect(data.intakeDocumentHash).toBe(expectedHash);
   });
 
+  it("rejects an in-person signature over stale terms (SIGNATURE_STALE) and writes nothing", async () => {
+    const signature =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    (
+      prisma.shopSettings.findUnique as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      id: "default",
+      intakeTerms: "Termos legais da loja",
+      intakeTermsUpdatedAt: new Date("2026-11-20T10:00:00Z"),
+      intakeTermsVersion: 5,
+    });
+
+    await expect(
+      create(
+        prisma,
+        {
+          customerName: "Maria",
+          customerPhone: "912345678",
+          deviceBrand: "Apple",
+          deviceModel: "iPhone 14",
+          estimatedCost: 100,
+          intakeLocale: "pt",
+          intakeSignatureDataUrl: signature,
+          intakeTermsVersion: 4,
+          reportedProblem: "Ecrã partido",
+        },
+        "user-1",
+        mockNotifyCtx
+      )
+    ).rejects.toMatchObject({ code: "SIGNATURE_STALE" });
+
+    // A versão errada é rejeitada antes de qualquer escrita: sem job, sem
+    // cliente novo, sem marca/dispositivo criados pela ficha rejeitada.
+    expect(prisma.job.create).not.toHaveBeenCalled();
+    expect(prisma.customer.upsert).not.toHaveBeenCalled();
+    expect(prisma.device.upsert).not.toHaveBeenCalled();
+    expect(prisma.brand.create).not.toHaveBeenCalled();
+  });
+
   it("returns error when customerId is invalid", async () => {
     (prisma.customer.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(
       null

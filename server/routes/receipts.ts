@@ -117,7 +117,7 @@ export const receiptRoutes: FastifyPluginAsync = async (app) => {
         }),
       ]);
 
-      const data = buildJobReceiptEscPos(
+      const data = await buildJobReceiptEscPos(
         settings,
         job as unknown as Parameters<typeof buildJobReceiptEscPos>[1],
         baseUrl,
