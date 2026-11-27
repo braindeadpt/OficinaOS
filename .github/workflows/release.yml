@@ -104,7 +104,7 @@ jobs:
             '@capacitor', '@electric-sql', '@prisma/query-plan-executor',
             '@testing-library', '@types', '@babel', '@rolldown', '@vitest',
             '@vitejs', '@biomejs', '@fontsource-variable',
-            'typescript', 'jsdom', 'lucide-react', 'jspdf', 'jspdf-autotable',
+            'typescript', 'jsdom', 'lucide-react', 'jspdf-autotable',
             'html2canvas', 'react', 'react-dom', 'react-router', 'react-i18next',
             'react-markdown', 'remark-gfm', 'rehype-highlight', 'highlight.js',
             'zustand', 'sonner', 'chart.js', 'vitest', 'vite', 'tailwindcss',
