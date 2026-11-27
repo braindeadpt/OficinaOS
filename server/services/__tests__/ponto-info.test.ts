@@ -113,20 +113,37 @@ describe("registo de entrega da folha de informação do ponto", () => {
   });
 
   it("recusa data de entrega no futuro (dia da loja)", async () => {
-    const { prisma, upsert } = prismaFake();
-    const tomorrow = new Date(Date.now() + 86_400_000)
-      .toISOString()
-      .slice(0, 10);
+    // Relógio fixo: sem fake timers o "amanhã" calculado em UTC podia já
+    // ser hoje na loja perto da meia-noite e o teste falhava por acaso.
+    vi.useFakeTimers();
+    try {
+      // 23:30 UTC de 10 jan — em Lisboa (inverno, UTC+0) ainda é dia 10;
+      // amanhã é 11 em qualquer cenário.
+      vi.setSystemTime(new Date("2026-01-10T23:30:00.000Z"));
+      const { prisma, upsert } = prismaFake();
 
-    await expect(
-      upsertPontoInfoDelivery(prisma, {
+      await expect(
+        upsertPontoInfoDelivery(prisma, {
+          actorId: "owner",
+          deliveredAt: "2026-01-11",
+          signed: false,
+          tz: "Europe/Lisbon",
+          userId: "u1",
+        })
+      ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+      expect(upsert).not.toHaveBeenCalled();
+
+      // o próprio dia continua a ser aceite perto da meia-noite
+      await upsertPontoInfoDelivery(prisma, {
         actorId: "owner",
-        deliveredAt: tomorrow,
+        deliveredAt: "2026-01-10",
         signed: false,
         tz: "Europe/Lisbon",
         userId: "u1",
-      })
-    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
-    expect(upsert).not.toHaveBeenCalled();
+      });
+      expect(upsert).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

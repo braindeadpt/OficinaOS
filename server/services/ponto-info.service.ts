@@ -67,9 +67,15 @@ export async function upsertPontoInfoDelivery(
   // Uma entrega no futuro não pode contar como concluída — o trabalhador
   // desaparecia logo do aviso sem a folha lhe ter chegado. A comparação
   // faz-se no dia civil DA LOJA, não no do dispositivo.
-  const todayKey = new Intl.DateTimeFormat("en-CA", {
+  const parts = new Intl.DateTimeFormat("en", {
+    day: "2-digit",
+    month: "2-digit",
     timeZone: args.tz,
-  }).format(new Date());
+    year: "numeric",
+  }).formatToParts(new Date());
+  const part = (type: string) =>
+    parts.find((p) => p.type === type)?.value ?? "";
+  const todayKey = `${part("year")}-${part("month")}-${part("day")}`;
   if (args.deliveredAt > todayKey) {
     throw new AppError("VALIDATION_ERROR", {
       errors: { deliveredAt: ["validations.ponto_delivery_future"] },
