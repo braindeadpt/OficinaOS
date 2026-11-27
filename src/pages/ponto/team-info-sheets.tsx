@@ -17,25 +17,21 @@ import { usePontoStore } from "@/stores/ponto";
  *  amanhã (ou ainda ontem) e gravava a entrega na data errada. O formato
  *  é montado pelas partes: o en-CA nem sempre devolve AAAA-MM-DD em
  *  todos os navegadores e o campo de data ficava em branco. */
-function isoDayInTz(date: Date, tz: string): string {
-  const parts = new Intl.DateTimeFormat("en", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: tz,
-    year: "numeric",
-  }).formatToParts(date);
-  const part = (type: string) =>
-    parts.find((p) => p.type === type)?.value ?? "";
-  return `${part("year")}-${part("month")}-${part("day")}`;
-}
-
 function todayYmd(tz: string | null): string {
   if (!tz) {
     const now = new Date();
     const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
     return local.toISOString().slice(0, 10);
   }
-  return isoDayInTz(new Date(), tz);
+  const parts = new Intl.DateTimeFormat("en", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: tz,
+    year: "numeric",
+  }).formatToParts(new Date());
+  const part = (type: string) =>
+    parts.find((p) => p.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
 }
 
 export default function TeamInfoSheets() {

@@ -117,15 +117,17 @@ describe("registo de entrega da folha de informação do ponto", () => {
     // ser hoje na loja perto da meia-noite e o teste falhava por acaso.
     vi.useFakeTimers();
     try {
-      // 23:30 UTC de 10 jan — em Lisboa (inverno, UTC+0) ainda é dia 10;
-      // amanhã é 11 em qualquer cenário.
-      vi.setSystemTime(new Date("2026-01-10T23:30:00.000Z"));
+      // 23:30 UTC de 10 jul — em Lisboa (verão, UTC+1) já é 00:30 de
+      // 11 jul: o dia da loja NÃO é o dia UTC. Se a validação usasse
+      // UTC, o dia 11 seria recusado como futuro — este teste apanha-o.
+      vi.setSystemTime(new Date("2026-07-10T23:30:00.000Z"));
       const { prisma, upsert } = prismaFake();
 
+      // 12 jul: futuro na loja — recusado
       await expect(
         upsertPontoInfoDelivery(prisma, {
           actorId: "owner",
-          deliveredAt: "2026-01-11",
+          deliveredAt: "2026-07-12",
           signed: false,
           tz: "Europe/Lisbon",
           userId: "u1",
@@ -133,10 +135,10 @@ describe("registo de entrega da folha de informação do ponto", () => {
       ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
       expect(upsert).not.toHaveBeenCalled();
 
-      // o próprio dia continua a ser aceite perto da meia-noite
+      // 11 jul: o próprio dia NA LOJA — aceite mesmo sendo "amanhã" em UTC
       await upsertPontoInfoDelivery(prisma, {
         actorId: "owner",
-        deliveredAt: "2026-01-10",
+        deliveredAt: "2026-07-11",
         signed: false,
         tz: "Europe/Lisbon",
         userId: "u1",
