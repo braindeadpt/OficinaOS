@@ -52,11 +52,19 @@ export function maskTaxId(taxId: string | null | undefined): string | null {
 // E.164: "+" seguido de 8–15 dígitos (espaços/pontos/hífenes tolerados).
 const E164_RE = /\+\d(?:[\s.-]?\d){7,14}\b/g;
 // Telefone PT: 9 dígitos começados por 2/3/9, separadores opcionais entre
-// dígitos. As âncoras impedem cortar sequências maiores (IMEI, séries) e o
-// lookahead (?![\s.\-:]?\d) exclui datas ISO seguidas de hora — em
-// «2026-11-27 9:30» os 9 primeiros dígitos seriam um falso telefone, mas um
-// telefone real nunca é seguido de mais um dígito separado.
-const PT_PHONE_RE = /(?<![\d+])[239]\d(?:[\s.-]?\d){7}(?![\s.\-:]?\d)/g;
+// dígitos. As âncoras impedem cortar sequências maiores (IMEI, séries).
+// A decisão data-vs-telefone não cabe no regex — ver isDateLike no callback:
+// «2026-11-27 9:30» e «912 345 678 9:30» são ambos 9 dígitos seguidos de
+// hora, mas só o segundo é telefone (o primeiro tem forma de data).
+const PT_PHONE_RE = /(?<![\d+])[239]\d(?:[\s.-]?\d){7}(?!\d)/g;
+// ISO (2026-11-27) ou PT (27-11-2026) no início do trecho — ninguém escreve
+// um telefone agrupado 4-2-2 ou 2-2-4 com hífenes alinhados a uma data.
+const DATE_LIKE_RE =
+  /^\d{4}[\s.-]\d{2}[\s.-]\d{2}|^\d{2}[\s.-]\d{2}[\s.-]\d{4}/;
+
+function isDateLike(match: string): boolean {
+  return DATE_LIKE_RE.test(match);
+}
 const EMAIL_RE = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g;
 // NIF: 9 dígitos isolados que não foram já capturados como telefone
 // (começam por outro dígito ou ficaram de fora por contexto). O ponto final
@@ -75,7 +83,7 @@ export function redactFreeText(text: string): string {
   }
   let out = text;
   out = out.replace(E164_RE, (m) => maskPhoneText(m));
-  out = out.replace(PT_PHONE_RE, (m) => maskPhoneText(m));
+  out = out.replace(PT_PHONE_RE, (m) => (isDateLike(m) ? m : maskPhoneText(m)));
   out = out.replace(EMAIL_RE, (m) => {
     const masked = maskEmail(m);
     return masked ?? "***";

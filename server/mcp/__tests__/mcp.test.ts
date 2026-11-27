@@ -810,3 +810,17 @@ describe("F1 — regressões da revisão", () => {
     expect(out.note).not.toContain("123456789");
   });
 });
+
+describe("F1 — telefone seguido de hora continua mascarado", () => {
+  it("telefone em grupos seguido de hora É mascarado; data+hora não", async () => {
+    const { redactFreeText } = await import("../mask.js");
+    expect(redactFreeText("912 345 678 9:30 combinado")).not.toContain(
+      "912 345 678"
+    );
+    expect(redactFreeText("entrega 27-11-2026 9:30")).toBe(
+      "entrega 27-11-2026 9:30"
+    );
+    expect(redactFreeText("912345678")).not.toContain("912345678");
+    expect(redactFreeText("21 2345 678 fixo")).not.toContain("21 2345 678");
+  });
+});
