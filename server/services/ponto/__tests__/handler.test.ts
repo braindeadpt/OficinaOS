@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   cloudFetch: vi.fn(),
+  probeSupported: vi.fn((): boolean => false),
   findOpenPresumedExit: vi.fn(
     (): Promise<{ at: Date; id: string } | null> => Promise.resolve(null)
   ),
@@ -27,6 +28,13 @@ vi.mock("../../../repositories/settings.repository.js", () => ({
   getOrCreateShopSettings: mocks.getOrCreateShopSettings,
 }));
 vi.mock("../../cloud.service.js", () => ({ cloudFetch: mocks.cloudFetch }));
+vi.mock("../config-sync.js", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("../config-sync.js")>();
+  return {
+    ...orig,
+    cloudSupportsEvaluateProbe: () => mocks.probeSupported(),
+  };
+});
 vi.mock("../../../lib/crypto.js", async (importOriginal) => {
   const orig = await importOriginal<typeof import("../../../lib/crypto.js")>();
   return { ...orig, decryptSecret: () => "test-shop-token" };
@@ -214,6 +222,7 @@ beforeEach(() => {
   mocks.getOrCreateShopSettings.mockImplementation(() =>
     Promise.resolve(makeSettings())
   );
+  mocks.probeSupported.mockReturnValue(false);
   cloudOk();
 });
 
@@ -399,15 +408,21 @@ describe("comandos sem fluxo", () => {
 });
 
 describe("fluxo ENTRADA staff (QR + localização)", () => {
-  it("ENTRADA sem código → pede o QR, sem pendente", async () => {
-    const { ctx, phone, sent, t } = setup();
+  it("ENTRADA sem código → pede localização, sem bloquear", async () => {
+    // Fase 2: sem código já não é bloqueado — pede localização e a Cloud
+    // decide; fica sempre POR_VALIDAR (entrada sem código).
+    const { ctx, interactive, phone, sent, t } = setup();
     await tryHandlePontoStaff(
       ctx,
       msg({ fromPhone: phone, text: "ENTRADA" }),
       t
     );
-    expect(sent[0]).toContain("QR");
-    expect(mocks.cloudFetch).not.toHaveBeenCalled();
+    expect(interactive).toHaveLength(1);
+    expect(interactive[0]).toMatchObject({
+      action: { name: "send_location" },
+      type: "location_request_message",
+    });
+    expect(sent).toHaveLength(0);
   });
 
   it("ENTRADA com código → location_request interativo + pending", async () => {
@@ -607,7 +622,8 @@ describe("fluxo PAUSA/VOLTEI/SAIDA", () => {
       t
     );
     expect(evaluateBody()).toMatchObject({ type: "VOLTEI" });
-    expect(evaluateBody().code).toBeUndefined();
+    // Fase 2: o código é aceite e enviado em todos os comandos.
+    expect(evaluateBody().code).toBe("9999");
     const text = lastInteractiveText(interactive);
     expect(text).toContain("Regresso");
     expect(text).toContain("pausa de 11 min");
@@ -1204,5 +1220,159 @@ describe("canal Evolution", () => {
     );
     expect(evaluateBody().transport).toBe("whatsapp_evolution");
     expect(sent.join(" ")).toContain("Responda VOLTEI");
+  });
+});
+
+describe("sonda de scan (Cloud nova, Fase 2)", () => {
+  it("scan aprovado na sonda → grava sem pedir localização, com kind", async () => {
+    mocks.probeSupported.mockReturnValue(true);
+    const { ctx, interactive, phone, t } = setup();
+    cloudOk("APROVADO", {
+      entryRecordedAt: "2026-01-10T09:00:01.000Z",
+      proofs: { insideRadius: null, kind: "screen_wifi", onShopWifi: true },
+    });
+    await tryHandlePontoStaff(
+      ctx,
+      msg({ fromPhone: phone, text: "ENTRADA loja-x 4821" }),
+      t
+    );
+    // Nenhum pedido de localização — a sonda finalizou. A confirmação
+    // interativa (botões) é esperada; o que não pode existir é o
+    // location_request.
+    expect(
+      interactive.filter(
+        (i) => (i as { type?: string }).type === "location_request_message"
+      )
+    ).toHaveLength(0);
+    expect(mocks.recordPontoEntry).toHaveBeenCalledTimes(1);
+    const evaluateCalls = mocks.cloudFetch.mock.calls.filter(
+      (c) => c[1] === "/ponto/evaluate"
+    );
+    expect(evaluateCalls).toHaveLength(1);
+    expect(evaluateCalls[0][2].body).toMatchObject({
+      code: "4821",
+      probe: true,
+      type: "ENTRADA",
+    });
+    expect(evaluateCalls[0][2].body.location).toBeUndefined();
+    // proofs gravados trazem o kind da Cloud
+    const recordInput = mocks.recordPontoEntry.mock.calls[0][1];
+    expect(recordInput.proofs).toMatchObject({ kind: "screen_wifi" });
+  });
+
+  it("sonda needLocation → pede localização (scan fora do Wi-Fi)", async () => {
+    mocks.probeSupported.mockReturnValue(true);
+    const { ctx, interactive, phone, t } = setup();
+    mocks.cloudFetch
+      .mockResolvedValueOnce({
+        body: {
+          needLocation: true,
+          proofs: { onShopWifi: false },
+          status: "POR_VALIDAR",
+        },
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValue({
+        body: {
+          proofs: { insideRadius: true, kind: "location" },
+          status: "APROVADO",
+        },
+        ok: true,
+        status: 200,
+      });
+    await tryHandlePontoStaff(
+      ctx,
+      msg({ fromPhone: phone, text: "ENTRADA loja-x 4821" }),
+      t
+    );
+    // A sonda não finalizou — fluxo clássico: pedido de localização.
+    expect(interactive).toHaveLength(1);
+    expect(interactive[0]).toMatchObject({
+      action: { name: "send_location" },
+      type: "location_request_message",
+    });
+    await tryHandlePontoStaff(
+      ctx,
+      msg({
+        fromPhone: phone,
+        location: { lat: 38.72, lng: -9.14 },
+        messageType: "location",
+      }),
+      t
+    );
+    const evalCalls = mocks.cloudFetch.mock.calls
+      .filter((c) => c[1] === "/ponto/evaluate")
+      .map((c) => c[2].body as Record<string, unknown>);
+    expect(evalCalls).toHaveLength(2);
+    // A primeira é a sonda sem coordenadas; a segunda é a final, clássica.
+    expect(evalCalls[0].probe).toBe(true);
+    const finalBody = evalCalls[1];
+    expect(finalBody.probe).toBeUndefined();
+    expect(finalBody.code).toBe("4821");
+    expect(finalBody.location).toMatchObject({ lat: 38.72, lng: -9.14 });
+  });
+
+  it("código em SAIDA também passa pela sonda", async () => {
+    mocks.probeSupported.mockReturnValue(true);
+    const { ctx, phone, t } = setup();
+    mocks.todayPontoEntries.mockResolvedValue([
+      {
+        at: new Date(Date.now() - 4 * 3_600_000),
+        status: "APROVADO",
+        type: "ENTRADA",
+      },
+    ]);
+    cloudOk("APROVADO", {
+      entryRecordedAt: "2026-01-10T18:00:01.000Z",
+      proofs: { kind: "screen_wifi", onShopWifi: true },
+    });
+    await tryHandlePontoStaff(
+      ctx,
+      msg({ fromPhone: phone, text: "SAIDA loja-x 4821" }),
+      t
+    );
+    const evaluateCalls = mocks.cloudFetch.mock.calls.filter(
+      (c) => c[1] === "/ponto/evaluate"
+    );
+    expect(evaluateCalls).toHaveLength(1);
+    expect(evaluateCalls[0][2].body).toMatchObject({
+      code: "4821",
+      probe: true,
+      type: "SAIDA",
+    });
+    expect(mocks.recordPontoEntry).toHaveBeenCalledTimes(1);
+  });
+
+  it("Cloud antiga (sem capability) → fluxo clássico com localização", async () => {
+    const { ctx, interactive, phone, t } = setup();
+    // probeSupported fica false (default do beforeEach).
+    await tryHandlePontoStaff(
+      ctx,
+      msg({ fromPhone: phone, text: "ENTRADA loja-x 4821" }),
+      t
+    );
+    expect(interactive).toHaveLength(1);
+    expect(interactive[0]).toMatchObject({
+      action: { name: "send_location" },
+      type: "location_request_message",
+    });
+    expect(mocks.cloudFetch).not.toHaveBeenCalled();
+  });
+
+  it("sonda falha na rede → cai no fluxo clássico sem perder o comando", async () => {
+    mocks.probeSupported.mockReturnValue(true);
+    const { ctx, interactive, phone, t } = setup();
+    mocks.cloudFetch.mockRejectedValue(new Error("rede em baixo"));
+    await tryHandlePontoStaff(
+      ctx,
+      msg({ fromPhone: phone, text: "ENTRADA loja-x 4821" }),
+      t
+    );
+    expect(interactive).toHaveLength(1);
+    expect(interactive[0]).toMatchObject({
+      action: { name: "send_location" },
+      type: "location_request_message",
+    });
   });
 });

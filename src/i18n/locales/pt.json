@@ -3246,5 +3246,12 @@
   "ponto.sheet_signed_yes": "sim",
   "ponto": {
     "act_registered_by": "Registado por"
-  }
+  },
+  "ponto.always_ask_location": "Pedir sempre a localização",
+  "ponto.always_ask_location_hint": "Pedir sempre a localização exige justificação na avaliação de impacto (AIPD). Desligado por omissão: a localização só é pedida quando não há outra prova de presença.",
+  "ponto.act_proof": "Prova",
+  "ponto.act_proof_screen_wifi": "QR do ecrã na rede da loja",
+  "ponto.act_proof_location": "Localização no momento",
+  "ponto.act_proof_external_photo": "Externo: localização + foto (não guardada)",
+  "ponto.act_proof_manual": "Validado manualmente por {{name}}"
 }

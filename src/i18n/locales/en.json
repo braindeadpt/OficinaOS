@@ -3246,5 +3246,12 @@
   "ponto.sheet_signed_yes": "yes",
   "ponto": {
     "act_registered_by": "Registered by"
-  }
+  },
+  "ponto.always_ask_location": "Always ask for location",
+  "ponto.always_ask_location_hint": "Always requesting location requires justification in the impact assessment (AIPD). Off by default: location is only requested when there is no other proof of presence.",
+  "ponto.act_proof": "Proof",
+  "ponto.act_proof_screen_wifi": "Screen QR on the shop network",
+  "ponto.act_proof_location": "Location at the time",
+  "ponto.act_proof_external_photo": "External: location + photo (not stored)",
+  "ponto.act_proof_manual": "Manually validated by {{name}}"
 }

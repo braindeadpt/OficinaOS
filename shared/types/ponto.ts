@@ -160,6 +160,12 @@ export interface PontoActLinkedEntryDTO {
   createdByName: string | null;
   effectiveStatus: PontoEffectiveStatus;
   id: string;
+  /**
+   * Classificação única da prova gravada pela Cloud (`screen_wifi` |
+   * `location` | `external_photo`). Registos antigos ou decididos por
+   * pessoa não a têm — a exportação mostra «—» ou a validação manual.
+   */
+  proofKind?: string;
   reason: string | null;
   status: PontoEntryStatus;
   transport: PontoTransport;

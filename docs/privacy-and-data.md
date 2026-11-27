@@ -120,16 +120,33 @@ sends, in the **first round** of each message:
 **Leaves the shop (only with the module active and a Pro receiving
 channel):**
 
-- The worker's message — text and **location at clock-in time** —
-  reaches the app through the active channel: on the Evolution channel
-  the webhook delivers directly to the app, **without passing through
-  OficinaOS Cloud** (on the Cloud relay the message transits through it;
-  on official WhatsApp it arrives via Meta's webhook). The trip to the
-  Cloud is a separate step and only happens on clock events (ENTRADA,
-  PAUSA, VOLTEI, SAIDA): the app calls `POST /ponto/evaluate`, which
-  validates code, radius and precision — the request carries the phone
-  and a photo-exists flag, **never the image** (the photo travels as the
-  channel's own media). ESTADO is a local records query and **makes no
+- The worker's message — text and **location at clock-in time, only
+  when no other proof of presence exists** — reaches the app through the
+  active channel: on the Evolution channel the webhook delivers directly
+  to the app, **without passing through OficinaOS Cloud** (on the Cloud
+  relay the message transits through it; on official WhatsApp it arrives
+  via Meta's webhook). The trip to the Cloud is a separate step and only
+  happens on clock events (ENTRADA, PAUSA, VOLTEI, SAIDA): the app calls
+  `POST /ponto/evaluate`, which validates code, radius and precision —
+  the request carries the phone and a photo-exists flag, **never the
+  image** (the photo travels as the channel's own media). **Location is
+  minimised by design** (`proofs.kind`): when the command carries a code
+  the app first evaluates **without coordinates** (`probe`); a scan of
+  the rotating screen QR on the shop Wi-Fi proves presence and is
+  approved as `screen_wifi` — location is never asked. Location is only
+  requested when the Cloud answers `needLocation`: printed QR, a
+  handwritten code (no scan → no network proof), a scan off the shop
+  Wi-Fi, an expired code (then normal location rules apply — it can
+  approve inside the radius), or no code at all. An invalid or
+  already-used code also asks for location but the record always stays
+  POR_VALIDAR for a person to decide (`manual` proof). An approval on
+  current location inside the radius is `location`; external work with
+  location + photo (image never stored) is `external_photo`. The
+  classification appears in the ACT export (PDF/Excel) in all four
+  languages; older records without `kind` show «—». The
+  `pontoAlwaysAskLocation` setting — off by default — forces the
+  location request even with a valid scan and **requires justification
+  in the impact assessment (DPIA)**. ESTADO is a local records query and **makes no
   request to the Cloud** — but the **reply** (the records summary)
   leaves through the active channel and, if that channel is the
   WhatsApp Cloud relay or Cloud SMS, **transits through OficinaOS

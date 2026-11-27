@@ -3246,5 +3246,12 @@
   "ponto.sheet_signed_yes": "Oui",
   "ponto": {
     "act_registered_by": "Enregistré par"
-  }
+  },
+  "ponto.always_ask_location": "Demandez toujours l'emplacement",
+  "ponto.always_ask_location_hint": "La demande de localisation nécessite toujours une justification dans l’étude d’impact (AIPD). ",
+  "ponto.act_proof": "Preuve",
+  "ponto.act_proof_screen_wifi": "QR de l'écran sur le réseau de la boutique",
+  "ponto.act_proof_location": "Localisation au moment de la pointeuse",
+  "ponto.act_proof_external_photo": "Externe : localisation + photo (non conservée)",
+  "ponto.act_proof_manual": "Validé manuellement par {{name}}"
 }
