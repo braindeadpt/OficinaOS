@@ -1307,6 +1307,55 @@ describe("create", () => {
     });
   });
 
+  it("assinatura desatualizada com ficha existente não grava a correção", async () => {
+    // A ficha é encontrada e a correção preparada, mas a rejeição da
+    // assinatura (dentro da transação) tem de a impedir de chegar à BD —
+    // em produção o rollback desfaz qualquer escrita da transação.
+    const signature =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    (
+      prisma.shopSettings.findUnique as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      countryCode: "PT",
+      id: "default",
+      intakeTerms: "Termos legais da loja",
+      intakeTermsUpdatedAt: new Date("2026-11-20T10:00:00Z"),
+      intakeTermsVersion: 5,
+    });
+    (prisma.$queryRaw as ReturnType<typeof vi.fn>).mockImplementation(
+      (strings: TemplateStringsArray) => {
+        const sql = Array.isArray(strings)
+          ? strings.join(" ")
+          : String(strings);
+        return Promise.resolve(
+          sql.includes("customers")
+            ? [{ id: "cust-existing", name: "Maria", phone: "+351912345678" }]
+            : [{ lastSeq: 1 }]
+        );
+      }
+    );
+
+    await expect(
+      create(
+        prisma,
+        {
+          customerName: "Maria Silva",
+          customerPhone: "912345678",
+          deviceBrand: "Apple",
+          deviceModel: "iPhone 14",
+          estimatedCost: 100,
+          intakeLocale: "pt",
+          intakeSignatureDataUrl: signature,
+          intakeTermsVersion: 4,
+          reportedProblem: "Ecrã partido",
+        },
+        "user-1",
+        mockNotifyCtx
+      )
+    ).rejects.toMatchObject({ code: "SIGNATURE_STALE" });
+    expect(prisma.customer.update).not.toHaveBeenCalled();
+  });
+
   it("reutiliza a ficha encontrada pelo telefone e grava as correções", async () => {
     (
       prisma.shopSettings.findUnique as ReturnType<typeof vi.fn>
@@ -1506,6 +1555,7 @@ describe("create", () => {
     // cliente novo, sem marca/dispositivo criados pela ficha rejeitada.
     expect(prisma.job.create).not.toHaveBeenCalled();
     expect(prisma.customer.upsert).not.toHaveBeenCalled();
+    expect(prisma.customer.update).not.toHaveBeenCalled();
     expect(prisma.device.upsert).not.toHaveBeenCalled();
     expect(prisma.brand.create).not.toHaveBeenCalled();
   });
