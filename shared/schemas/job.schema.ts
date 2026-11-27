@@ -69,9 +69,14 @@ export const createJobSchema = z.object({
     .string()
     .regex(/^[a-f0-9]{64}$/)
     .optional(),
-  // Legacy clients may still send this field. The server deliberately ignores
-  // it and resolves the legal text from shop settings before signing.
-  intakeTermsText: z.string().max(4000).optional(),
+  // Obsoleto: mantido só para compatibilidade com clientes antigos e a app
+  // Android. O servidor ignora-o sempre — o texto legal é resolvido das
+  // definições da loja no servidor antes de assinar.
+  intakeTermsText: z
+    .string()
+    .max(4000)
+    .optional()
+    .describe("Obsoleto: ignorado pelo servidor"),
   intakeLocale: z.string().max(10).optional(),
   intakeTermsVersion: z.number().int().min(1).optional(),
   // Optional — many shops only price a repair after diagnosis. Omitted/null
