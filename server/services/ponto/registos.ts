@@ -47,6 +47,21 @@ export function currentMonthSpec(tz: string, now = new Date()): MonthSpec {
  * Devolve null quando não há mês no texto (usa-se o corrente) e undefined
  * quando o mês é inválido ou futuro — o handler responde com erro claro.
  */
+/** Há texto que parece uma data malformada? — ano de 4 dígitos sem mês
+ * válido («abc 2026»), dois números seguidos sem ano de 4 dígitos
+ * («10/26»), ou um mês sozinho sem ano («REGISTOS 10»). */
+function looksLikeMalformedDate(tokens: string[]): boolean {
+  if (tokens.some((t) => YEAR_NUM_RE.test(t))) {
+    return true;
+  }
+  for (let i = 0; i < tokens.length - 1; i++) {
+    if (DIGITS_RE.test(tokens[i]) && DIGITS_RE.test(tokens[i + 1])) {
+      return true;
+    }
+  }
+  return tokens.length === 2 && MONTH_NUM_RE.test(tokens[1]);
+}
+
 export function parseMonthArg(
   normalizedText: string,
   tz: string,
@@ -70,13 +85,8 @@ export function parseMonthArg(
     // Erro claro — nunca o mês errado em silêncio — quando há texto de
     // data malformado: um ano de 4 dígitos sem mês válido («abc 2026»)
     // ou dois números seguidos sem ano de 4 dígitos («10/26» vira «10 26»).
-    if (tokens.some((t) => YEAR_NUM_RE.test(t))) {
+    if (looksLikeMalformedDate(tokens)) {
       return;
-    }
-    for (let i = 0; i < tokens.length - 1; i++) {
-      if (DIGITS_RE.test(tokens[i]) && DIGITS_RE.test(tokens[i + 1])) {
-        return;
-      }
     }
     return null;
   }
@@ -114,6 +124,8 @@ export function monthSpecRange(
 export interface RegistosEntry {
   at: Date;
   status: string;
+  /** Linha substituída por uma correção — não conta para os totais. */
+  superseded: boolean;
   type: string;
   validations: { decision: string }[];
 }
@@ -156,6 +168,7 @@ export async function registosMonthEntries(
   const map = (r: (typeof rows)[number]) => ({
     at: r.at,
     status: r.status,
+    superseded: r.corrections.length > 0,
     type: r.type,
     validations: r.validations,
   });
@@ -197,8 +210,21 @@ function workMsOfDay(list: RegistosEntry[], now: Date, tz: string): number {
       open = null;
     }
   }
-  if (open && dayKeyOf(open, tz) === dayKeyOf(now, tz)) {
-    total += now.getTime() - open.getTime();
+  if (open) {
+    if (dayKeyOf(open, tz) === dayKeyOf(now, tz)) {
+      total += now.getTime() - open.getTime();
+    } else {
+      // Esquecimento de um dia passado: o painel conta até à meia-noite
+      // desse dia — o resumo mensal tem de bater certo com ele.
+      const [y, m, d] = dayKeyOf(open, tz).split("-").map(Number);
+      const nextYmd = new Date(Date.UTC(y, m - 1, d + 1))
+        .toISOString()
+        .slice(0, 10);
+      const midnight = zonedDateTimeToUtc(tz, nextYmd, "00:00");
+      if (midnight) {
+        total += midnight.getTime() - open.getTime();
+      }
+    }
   }
   return total;
 }

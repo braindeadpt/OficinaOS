@@ -124,7 +124,15 @@ function buildPages(input: {
     const day = dayLabel(e.at, tz);
     const showDay = day === lastDay ? "" : day;
     lastDay = day;
-    const line = `${showDay.padEnd(14)}  ${(ENTRY_TYPE_PT[e.type] ?? e.type).padEnd(10)} ${hhmm(e.at, tz)}  ${STATUS_PT[e.status] ?? e.status}`;
+    // Direito de acesso: recusadas e substituídas fazem parte dos
+    // registos do próprio — têm de se distinguir das que contam.
+    let note = "";
+    if (e.superseded) {
+      note = " (substituída por correção)";
+    } else if (e.validations[0]?.decision === "RECUSADO") {
+      note = " (recusada)";
+    }
+    const line = `${showDay.padEnd(14)}  ${(ENTRY_TYPE_PT[e.type] ?? e.type).padEnd(10)} ${hhmm(e.at, tz)}  ${STATUS_PT[e.status] ?? e.status}${note}`;
     push(line, 50, 10, 14);
   }
   if (entries.length === 0) {
