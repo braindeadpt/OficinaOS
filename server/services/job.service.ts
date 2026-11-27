@@ -519,25 +519,17 @@ export async function create(
   }
   const { device, identifier: deviceIdentifier } = resolved;
 
-  // Validações passadas — a criação vai mesmo acontecer, por isso as
-  // correções da admissão já podem chegar à ficha reutilizada.
-  if (customerCorrections) {
-    const corr = customerCorrections;
-    customer = await prisma.customer.update({
-      data: {
-        name: corr.name,
-        ...(corr.email ? { email: corr.email } : {}),
-      },
-      where: { id: corr.id },
-    });
-  }
-
   const { accessCode, jobCode } = await generateJobCode(prisma);
 
   const job = await prisma.$transaction(async (tx) => {
     // Throws SIGNATURE_STALE when the ficha drifted since the link was
     // created — the customer must sign a fresh document.
     const remoteData = await remoteSignatureData(tx, input);
+
+    // Só dentro da transação, depois de todas as validações (IMEI,
+    // assinatura e afins): se a criação falhar, o rollback desfaz também a
+    // correção — uma admissão rejeitada nunca altera a ficha.
+    customer = await applyIntakeCorrections(tx, customer, customerCorrections);
 
     // Fleet unit checkout — the row lock serializes simultaneous intakes so
     // the same unit can never be handed out twice at once.
@@ -621,6 +613,25 @@ export async function create(
  * without the normalized lookup a customer already registered with the
  * country code would get a second record.
  */
+type IntakeCorrections = { email?: string; id: string; name: string } | null;
+
+async function applyIntakeCorrections(
+  tx: Prisma.TransactionClient,
+  customer: { email: string | null; id: string; name: string; phone: string },
+  corrections: IntakeCorrections
+) {
+  if (!corrections) {
+    return customer;
+  }
+  return await tx.customer.update({
+    data: {
+      name: corrections.name,
+      ...(corrections.email ? { email: corrections.email } : {}),
+    },
+    where: { id: corrections.id },
+  });
+}
+
 async function resolveCustomerByPhone(
   prisma: PrismaClient,
   input: {
