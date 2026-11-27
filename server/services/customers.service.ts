@@ -74,7 +74,12 @@ export async function create(prisma: PrismaClient, input: CreateCustomerInput) {
   // code, and the dedupe lookup matches legacy rows written without it.
   const dial = await shopDialCode(prisma);
   const e164 = normalizePhoneE164(input.phone, dial);
-  const existing = await findByNormalizedPhone(prisma, e164, dial);
+  const existing = await findByNormalizedPhone(
+    prisma,
+    e164,
+    dial,
+    input.phone.replace(/\D/g, "")
+  );
   if (existing && !input.useExisting) {
     throw new AppError("DUPLICATE_CUSTOMER_PHONE", {
       existingCustomerId: existing.id,

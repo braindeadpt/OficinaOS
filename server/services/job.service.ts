@@ -483,6 +483,8 @@ export async function create(
     phone: string;
     email: string | null;
   };
+  let customerCorrections: { email?: string; id: string; name: string } | null =
+    null;
 
   if (input.customerId) {
     const found = await customerFindUnique(prisma, input.customerId);
@@ -491,7 +493,9 @@ export async function create(
     }
     customer = found;
   } else {
-    customer = await resolveCustomerByPhone(prisma, input);
+    const resolution = await resolveCustomerByPhone(prisma, input);
+    customer = resolution.customer;
+    customerCorrections = resolution.corrections;
   }
 
   let brandId = input.deviceBrandId;
@@ -514,6 +518,19 @@ export async function create(
     return resolved;
   }
   const { device, identifier: deviceIdentifier } = resolved;
+
+  // Validações passadas — a criação vai mesmo acontecer, por isso as
+  // correções da admissão já podem chegar à ficha reutilizada.
+  if (customerCorrections) {
+    const corr = customerCorrections;
+    customer = await prisma.customer.update({
+      data: {
+        name: corr.name,
+        ...(corr.email ? { email: corr.email } : {}),
+      },
+      where: { id: corr.id },
+    });
+  }
 
   const { accessCode, jobCode } = await generateJobCode(prisma);
 
@@ -618,32 +635,48 @@ async function resolveCustomerByPhone(
   });
   const dial = effectiveDialCode(settings?.countryCode);
   const phone = normalizePhoneE164(input.customerPhone, dial);
-  const existing = await findByNormalizedPhone(prisma, phone, dial);
+  const existing = await findByNormalizedPhone(
+    prisma,
+    phone,
+    dial,
+    input.customerPhone.replace(/\D/g, "")
+  );
   const email = input.customerEmail?.trim() || null;
   if (existing) {
-    // Paridade com o upsert anterior: a admissão também serve para corrigir
-    // a ficha — o nome é sempre o da admissão e o email só se for indicado.
-    return await prisma.customer.update({
-      data: {
+    // A correção não se grava aqui: a admissão ainda pode ser rejeitada
+    // (IMEI inválido e afins) e uma ficha alterada por uma reparação que
+    // não entrou é efeito lateral indevido. O chamador aplica-a depois das
+    // validações, já com a criação garantida.
+    return {
+      corrections: {
+        email: email ?? undefined,
+        id: existing.id,
+        name: input.customerName,
+      },
+      customer: {
+        email,
+        id: existing.id,
+        name: existing.name,
+        phone: existing.phone,
+      },
+    };
+  }
+  return {
+    corrections: null,
+    customer: await customerUpsert(
+      prisma,
+      { phone },
+      {
         name: input.customerName,
         ...(email ? { email } : {}),
       },
-      where: { id: existing.id },
-    });
-  }
-  return await customerUpsert(
-    prisma,
-    { phone },
-    {
-      name: input.customerName,
-      ...(email ? { email } : {}),
-    },
-    {
-      email,
-      name: input.customerName,
-      phone,
-    }
-  );
+      {
+        email,
+        name: input.customerName,
+        phone,
+      }
+    ),
+  };
 }
 
 const GENERIC_IMPORT_BRAND = "Outra";
@@ -689,7 +722,12 @@ export function createImportedJob(
     const importDial = effectiveDialCode(importSettings?.countryCode);
     const importPhone = normalizePhoneE164(input.customerPhone, importDial);
     const customer =
-      (await findByNormalizedPhone(tx, importPhone, importDial)) ??
+      (await findByNormalizedPhone(
+        tx,
+        importPhone,
+        importDial,
+        input.customerPhone.replace(/\D/g, "")
+      )) ??
       (await tx.customer.create({
         data: {
           name: input.customerName.trim(),

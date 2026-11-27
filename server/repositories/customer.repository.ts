@@ -32,7 +32,8 @@ export async function findCustomerByPhone(prisma: DbClient, phone: string) {
 export async function findByNormalizedPhone(
   prisma: DbClient,
   normalizedPhone: string,
-  dialCode = "351"
+  dialCode = "351",
+  rawDigits = ""
 ): Promise<{ id: string; name: string; phone: string } | null> {
   const rows = await prisma.$queryRaw<
     { id: string; name: string; phone: string }[]
@@ -48,14 +49,24 @@ export async function findByNormalizedPhone(
       CASE
         WHEN c.trimmed LIKE '+%' THEN '+' || c.digits
         WHEN c.digits LIKE '00%' THEN '+' || substr(c.digits, 3)
+        -- Indicativo escrito sem o "+" ("351912345678"): os dígitos já o
+        -- trazem, não se acrescenta outra vez — mesma regra do normalizePhoneE164.
+        WHEN c.digits LIKE ${dialCode} || '%'
+             AND length(regexp_replace(c.digits, '^0+', '')) - ${dialCode.length} >= 8
+          THEN '+' || regexp_replace(c.digits, '^0+', '')
         ELSE '+' || ${dialCode} || regexp_replace(c.digits, '^0+', '')
       END
     ) = ${normalizedPhone}
     -- Exact stored form first: in a duplicate pair ("+351912345678" vs
     -- legacy "912345678") an import that carries the international form
     -- belongs to the row already written that way, not to whichever id
-    -- sorts first.
-    ORDER BY CASE WHEN c.trimmed = ${normalizedPhone} THEN 0 ELSE 1 END, id
+    -- sorts first. O mesmo para os dígitos exatamente como foram escritos:
+    -- "912345678" pertence à ficha nacional, não à internacionalizada.
+    ORDER BY CASE
+      WHEN c.trimmed = ${normalizedPhone} THEN 0
+      WHEN c.digits = ${rawDigits} THEN 0
+      ELSE 1
+    END, id
     LIMIT 1
   `;
   return rows[0] ?? null;
