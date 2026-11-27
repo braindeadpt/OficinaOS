@@ -198,6 +198,13 @@ describe.skipIf(!serverReachable)(
       ) =>
         originalTransaction(
           (async (tx: unknown) => {
+            // Uma leitura dentro da transação ANTES da escrita concorrente:
+            // em RepeatableRead o snapshot é fixado na primeira leitura —
+            // o par tardio escrito depois disto é invisível para todas as
+            // leituras seguintes. Com ReadCommitted apareceria nas linhas
+            // da exportação e o teste falharia, ou seja, deixa de ser
+            // possível passar sem o isolamento exigido.
+            await (tx as PrismaClient).shopSettings.findFirst();
             await insertLate();
             return callback(tx);
           }) as never,
