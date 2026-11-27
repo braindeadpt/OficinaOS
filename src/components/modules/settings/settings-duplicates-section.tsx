@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Field } from "@/components/ui/field";
 import api, { getErrorMessage } from "@/lib/api";
 
 interface DuplicateCustomer {
@@ -206,22 +208,25 @@ export default function SettingsDuplicatesSection() {
                       })}
                     </li>
                     <li>
-                      {preview.data.whatsappConsent
+                      {preview.data.whatsappConsent ||
+                      (preview.data.consentConflict && confirmConsent)
                         ? t("duplicates.preview_consent_yes")
                         : t("duplicates.preview_consent_no")}
                     </li>
                   </ul>
                   {preview.data.consentConflict ? (
-                    <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 p-2 text-on-surface text-xs">
-                      <input
-                        checked={confirmConsent}
-                        className="mt-0.5"
-                        disabled={busy}
-                        onChange={(e) => setConfirmConsent(e.target.checked)}
-                        type="checkbox"
-                      />
-                      <span>{t("duplicates.consent_conflict_warning")}</span>
-                    </label>
+                    <div className="mt-2 rounded-lg border border-warning/40 bg-warning/5 p-2 text-xs">
+                      <Field
+                        horizontal
+                        label={t("duplicates.consent_conflict_warning")}
+                      >
+                        <Checkbox
+                          checked={confirmConsent}
+                          disabled={busy}
+                          onChange={(e) => setConfirmConsent(e.target.checked)}
+                        />
+                      </Field>
+                    </div>
                   ) : null}
                   <div className="mt-2 flex gap-2">
                     <Button disabled={busy} onClick={confirmMerge} size="sm">
