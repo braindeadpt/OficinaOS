@@ -18,6 +18,7 @@ export function parseImageDataUrl(
 
 export function toPublicShop(s: {
   address: string | null;
+  currency?: string | null;
   defaultWarrantyDays: number;
   logoPath: string | null;
   phone: string | null;
@@ -33,6 +34,9 @@ export function toPublicShop(s: {
   }
   return {
     address: s.address?.trim() || null,
+    // ISO 4217 — o cliente vê-a nos recibos e na ficha assinada, não é
+    // informação privada; sem ela a página /sign não sabe formatar valores.
+    currency: s.currency?.trim() || "EUR",
     logoUrl,
     name: s.shopName.trim() || null,
     phone: s.phone?.trim() || null,

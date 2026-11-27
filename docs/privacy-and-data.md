@@ -104,6 +104,10 @@ sends, in the **first round** of each message:
   `pago`, `emFalta`) and `orcamento` (`valor`, human-readable `estado`,
   `nota`, `enviadoEm`, `validade`, `versao` — plus the internal quote `id`
   when the quote is pending and the interaction can decide it).
+  Alongside the human-readable labels, the machine-readable status
+  codes (`status` of the repair and of the quote — enum values like
+  `IN_REPAIR` or `SENT`, never customer data) travel so the Cloud's
+  deterministic rules never depend on translated text.
 
 ## Time tracking (`ponto`) in detail
 

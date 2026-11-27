@@ -2,6 +2,7 @@ import { OutboxStatus, type PrismaClient } from "@generated/client";
 import { toSmsText } from "@shared/utils/gsm7.js";
 import type { FastifyBaseLogger } from "fastify";
 import { decryptSecret } from "../lib/crypto.js";
+import { documentLocaleForCountry } from "../lib/document-locale.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import { isModuleEnabled } from "../utils/modules.js";
@@ -163,6 +164,7 @@ async function syncSmsInboundCycle(
       token,
     },
     currency: settings.currency ?? "EUR",
+    locale: documentLocaleForCountry(settings.countryCode),
     inbox: { channel: "sms", enabled: isModuleEnabled(settings, "ai-inbox") },
     log,
     notifyCtx,

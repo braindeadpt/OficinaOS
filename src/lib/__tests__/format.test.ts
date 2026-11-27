@@ -38,4 +38,10 @@ describe("formatCurrency", () => {
     expect(formatCurrency(34.9, "EUR")).toBe(`34,90${NBSP}€`);
     expect(formatCurrency(120, "EUR")).toBe(`120,00${NBSP}€`);
   });
+
+  it("issue #76 acceptance: 774.6 EUR renders localized in pt/en/es", () => {
+    expect(formatCurrency(774.6, "EUR", "pt-PT")).toBe(`774,60${NBSP}€`);
+    expect(formatCurrency(774.6, "EUR", "en-GB")).toBe("€774.60");
+    expect(formatCurrency(774.6, "EUR", "es-ES")).toBe(`774,60${NBSP}€`);
+  });
 });

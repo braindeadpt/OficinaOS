@@ -709,17 +709,17 @@ function costsSectionHtml(args: {
   if (args.hasPayments) {
     const depositRow =
       deposit > 0
-        ? `<tr><td>${s.paidDeposit}</td><td style="text-align:right">${fmtMoney(deposit, currency)}</td></tr>`
+        ? `<tr><td>${s.paidDeposit}</td><td style="text-align:right">${fmtMoney(deposit, currency, s.dateLocale)}</td></tr>`
         : "";
     const rows = args.payments
       .map(
         (p) =>
-          `<tr><td>${s.paid} (${args.methodLabel(p.method)})</td><td style="text-align:right">${fmtMoney(p.amount, currency)}</td></tr>`
+          `<tr><td>${s.paid} (${args.methodLabel(p.method)})</td><td style="text-align:right">${fmtMoney(p.amount, currency, s.dateLocale)}</td></tr>`
       )
       .join("");
-    paymentsTable = `<table>${depositRow}${rows}<tr><td><strong>${s.balanceDue}</strong></td><td style="text-align:right"><strong>${fmtMoney(balanceDue, currency)}</strong></td></tr></table>`;
+    paymentsTable = `<table>${depositRow}${rows}<tr><td><strong>${s.balanceDue}</strong></td><td style="text-align:right"><strong>${fmtMoney(balanceDue, currency, s.dateLocale)}</strong></td></tr></table>`;
   }
-  return `<table><tr><td><strong>${s.total}</strong></td><td style="text-align:right">${fmtMoney(displayCost, currency)}</td></tr></table>${paymentsTable}<div class="sep"></div>`;
+  return `<table><tr><td><strong>${s.total}</strong></td><td style="text-align:right">${fmtMoney(displayCost, currency, s.dateLocale)}</td></tr></table>${paymentsTable}<div class="sep"></div>`;
 }
 
 interface ReceiptRenderContext {
@@ -831,13 +831,13 @@ function renderA4ReceiptDocument(ctx: ReceiptRenderContext): string {
 ${ctx.repairs
   .map(
     (r) =>
-      `<tr><td>${esc(r.repairName)}</td><td class="num">1</td><td class="num">${fmtMoney(r.price, ctx.currency)}</td></tr>`
+      `<tr><td>${esc(r.repairName)}</td><td class="num">1</td><td class="num">${fmtMoney(r.price, ctx.currency, s.dateLocale)}</td></tr>`
   )
   .join("")}
 ${ctx.partsUsed
   .map(
     (p) =>
-      `<tr><td>${esc(p.partName)}</td><td class="num">${p.quantity}</td><td class="num">${fmtMoney(p.totalCost, ctx.currency)}</td></tr>`
+      `<tr><td>${esc(p.partName)}</td><td class="num">${p.quantity}</td><td class="num">${fmtMoney(p.totalCost, ctx.currency, s.dateLocale)}</td></tr>`
   )
   .join("")}
 </tbody></table>`;
@@ -845,21 +845,21 @@ ${ctx.partsUsed
   const totalsRows = ctx.hideCosts
     ? ""
     : `<div class="totals"><table>
-<tr class="grand"><td>${s.total}</td><td class="num">${fmtMoney(ctx.displayCost, ctx.currency)}</td></tr>
+<tr class="grand"><td>${s.total}</td><td class="num">${fmtMoney(ctx.displayCost, ctx.currency, s.dateLocale)}</td></tr>
 ${
   ctx.hasPayments
     ? `${
         ctx.deposit > 0
-          ? `<tr><td>${s.paidDeposit}</td><td class="num">${fmtMoney(ctx.deposit, ctx.currency)}</td></tr>`
+          ? `<tr><td>${s.paidDeposit}</td><td class="num">${fmtMoney(ctx.deposit, ctx.currency, s.dateLocale)}</td></tr>`
           : ""
       }${ctx.payments
         .map(
           (p) =>
-            `<tr><td>${s.paid} (${ctx.methodLabel(p.method)})</td><td class="num">${fmtMoney(p.amount, ctx.currency)}</td></tr>`
+            `<tr><td>${s.paid} (${ctx.methodLabel(p.method)})</td><td class="num">${fmtMoney(p.amount, ctx.currency, s.dateLocale)}</td></tr>`
         )
         .join(
           ""
-        )}<tr class="due"><td>${s.balanceDue}</td><td class="num">${fmtMoney(ctx.balanceDue, ctx.currency)}</td></tr>`
+        )}<tr class="due"><td>${s.balanceDue}</td><td class="num">${fmtMoney(ctx.balanceDue, ctx.currency, s.dateLocale)}</td></tr>`
     : ""
 }
 </table></div>`;
@@ -1006,7 +1006,7 @@ const LOANER_AGREEMENT_STRINGS: Record<string, LoanerAgreementStrings> = {
     deviceInRepair: "Appareil en réparation",
     email: "E-mail",
     expectedReturn: "Retour prévu",
-    idDoc: "NIF",
+    idDoc: "Identifiant fiscal",
     jobRef: "Dossier",
     lentOn: "Date du prêt",
     loanedDevice: "Appareil prêté",
@@ -1265,13 +1265,13 @@ export async function renderSaleReceiptHtml(
     const itemRows = sale.items
       .map(
         (i) =>
-          `<tr><td>${esc(i.name)}</td><td class="num">${i.quantity}</td><td class="num">${fmtMoney(i.lineTotal, currency)}</td></tr>`
+          `<tr><td>${esc(i.name)}</td><td class="num">${i.quantity}</td><td class="num">${fmtMoney(i.lineTotal, currency, s.dateLocale)}</td></tr>`
       )
       .join("");
     const payRows = sale.payments
       .map(
         (p) =>
-          `<tr><td>${s.paid} (${esc(s.paymentMethods[p.method] ?? p.method)}${p.reference ? ` · ${esc(p.reference)}` : ""})</td><td class="num">${fmtMoney(p.amount, currency)}</td></tr>`
+          `<tr><td>${s.paid} (${esc(s.paymentMethods[p.method] ?? p.method)}${p.reference ? ` · ${esc(p.reference)}` : ""})</td><td class="num">${fmtMoney(p.amount, currency, s.dateLocale)}</td></tr>`
       )
       .join("");
     return `<!doctype html>
@@ -1300,7 +1300,7 @@ export async function renderSaleReceiptHtml(
 <thead><tr><th>${s.items}</th><th class="num">${s.qty}</th><th class="num">${s.total}</th></tr></thead>
 <tbody>${itemRows}</tbody></table>
 <div class="totals"><table>
-<tr class="grand"><td>${s.total}</td><td class="num">${fmtMoney(sale.total, currency)}</td></tr>
+<tr class="grand"><td>${s.total}</td><td class="num">${fmtMoney(sale.total, currency, s.dateLocale)}</td></tr>
 ${payRows}
 </table></div>
 ${settings?.receiptFooter ? `<div class="foot"><div class="txt"><p>${escMultiline(settings.receiptFooter)}</p></div></div>` : ""}
@@ -1312,13 +1312,13 @@ ${settings?.receiptFooter ? `<div class="foot"><div class="txt"><p>${escMultilin
   const rows = sale.items
     .map(
       (i) =>
-        `<tr><td>${esc(i.name)} ×${i.quantity}</td><td style="text-align:right">${fmtMoney(i.lineTotal, currency)}</td></tr>`
+        `<tr><td>${esc(i.name)} ×${i.quantity}</td><td style="text-align:right">${fmtMoney(i.lineTotal, currency, s.dateLocale)}</td></tr>`
     )
     .join("");
   const payRows = sale.payments
     .map(
       (p) =>
-        `<tr><td>${s.paid} (${esc(s.paymentMethods[p.method] ?? p.method)}${p.reference ? ` · ${esc(p.reference)}` : ""})</td><td style="text-align:right">${fmtMoney(p.amount, currency)}</td></tr>`
+        `<tr><td>${s.paid} (${esc(s.paymentMethods[p.method] ?? p.method)}${p.reference ? ` · ${esc(p.reference)}` : ""})</td><td style="text-align:right">${fmtMoney(p.amount, currency, s.dateLocale)}</td></tr>`
     )
     .join("");
 
@@ -1351,7 +1351,7 @@ ${sale.customer ? `<tr><td>${s.customer}</td><td style="text-align:right">${esc(
 <div class="sep"></div>
 <table>${rows}</table>
 <div class="sep"></div>
-<table><tr class="total"><td>${s.total}</td><td style="text-align:right">${fmtMoney(sale.total, currency)}</td></tr>${payRows}</table>
+<table><tr class="total"><td>${s.total}</td><td style="text-align:right">${fmtMoney(sale.total, currency, s.dateLocale)}</td></tr>${payRows}</table>
 ${footerHtml}
 </body></html>`;
 }
@@ -1523,7 +1523,7 @@ ${tradeIn.imei ? `<tr><td>IMEI</td><td style="text-align:right">${esc(tradeIn.im
 </table>
 <div class="sep"></div>
 <table>
-<tr class="total"><td>${s.purchasePrice}</td><td style="text-align:right">${fmtMoney(tradeIn.purchasePrice, currency)}</td></tr>
+<tr class="total"><td>${s.purchasePrice}</td><td style="text-align:right">${fmtMoney(tradeIn.purchasePrice, currency, s.dateLocale)}</td></tr>
 <tr><td>${s.paidWith}</td><td style="text-align:right">${esc(s.paymentMethods[tradeIn.paymentMethod] ?? tradeIn.paymentMethod)}</td></tr>
 </table>
 <div class="sep"></div>
@@ -1590,7 +1590,7 @@ export async function renderLabelHtml(
   );
   const finalCost = partsTotal + repairsTotal;
   const displayCost = finalCost > 0 ? finalCost : toNum(job.estimatedCost);
-  const price = hideCosts ? "" : fmtMoney(displayCost, currency);
+  const price = hideCosts ? "" : fmtMoney(displayCost, currency, s.dateLocale);
 
   return `<!doctype html>
 <html lang="${options?.locale ?? "pt"}">
@@ -1815,6 +1815,7 @@ export async function renderOrdersReportHtml(
   }
 ): Promise<string> {
   const settings = await findShopSettingsUnique(prisma);
+  const reportCurrency = settings?.currency ?? "EUR";
   const s = ordersReportLabels(opts.locale);
   const shopName = esc(settings?.shopName || "OficinaOS");
   const statusLabel = opts.status
@@ -1834,7 +1835,7 @@ export async function renderOrdersReportHtml(
       <td>${esc(r.customerName)}</td>
       <td>${esc(r.deviceName)}</td>
       <td>${esc(s.statusLabels[r.status] ?? r.status)}</td>
-      <td class="num">${fmtMoney(r.totalValue)}</td>
+      <td class="num">${fmtMoney(r.totalValue, reportCurrency, dateLocale)}</td>
       ${opts.includeMargin ? `<td class="num">${r.margin === undefined ? "—" : `${r.margin}%`}</td>` : ""}
       <td>${fmtDate(r.createdAt)}</td>
       <td>${fmtDate(r.completedAt)}</td>
@@ -1867,8 +1868,8 @@ export async function renderOrdersReportHtml(
   <p class="meta">${esc(s.period)}: ${esc(opts.from)} → ${esc(opts.to)} &nbsp;·&nbsp; ${esc(s.status)}: ${esc(statusLabel)} &nbsp;·&nbsp; ${new Date().toLocaleString(dateLocale)}</p>
   <div class="totals">
     <div class="t"><b>${report.summary.totalOrders}</b><span>${esc(s.totalOrders)}</span></div>
-    <div class="t"><b>${fmtMoney(report.summary.totalValue)}</b><span>${esc(s.totalValue)}</span></div>
-    <div class="t"><b>${fmtMoney(report.summary.avgOrderValue)}</b><span>${esc(s.avgOrder)}</span></div>
+    <div class="t"><b>${fmtMoney(report.summary.totalValue, reportCurrency, dateLocale)}</b><span>${esc(s.totalValue)}</span></div>
+    <div class="t"><b>${fmtMoney(report.summary.avgOrderValue, reportCurrency, dateLocale)}</b><span>${esc(s.avgOrder)}</span></div>
     ${opts.includeMargin && report.summary.avgMargin !== undefined ? `<div class="t"><b>${report.summary.avgMargin}%</b><span>${esc(s.margin)}</span></div>` : ""}
   </div>
   <table>

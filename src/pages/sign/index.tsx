@@ -5,6 +5,7 @@ import { useParams } from "react-router";
 import SignaturePad from "@/components/reports/signature-pad";
 import { Icon } from "@/components/ui/icon";
 import api, { type ApiError } from "@/lib/api";
+import { formatCurrency } from "@/lib/format";
 
 function LanguageSwitcher() {
   const { i18n, t } = useTranslation();
@@ -32,6 +33,7 @@ function LanguageSwitcher() {
 }
 
 interface PublicShop {
+  currency: string | null;
   logoUrl: string | null;
   name: string | null;
 }
@@ -39,6 +41,7 @@ interface PublicShop {
 /** Redacted view of the frozen document — what the customer is signing. */
 interface PublicDocument {
   accessories: string[];
+  currency: string | null;
   customerName: string;
   deposit: number | null;
   device: string;
@@ -55,12 +58,24 @@ interface PublicDocument {
   urgent: boolean;
 }
 
+/** Moeda a apresentar: a congelada no documento vence (é a que o cliente
+ *  viu ao assinar); a da loja ao vivo é só fallback para sessões antigas. */
+function signMoney(
+  value: number,
+  documentCurrency: string | null,
+  shopCurrency: string,
+  locale: string
+): string {
+  return formatCurrency(value, documentCurrency ?? shopCurrency, locale);
+}
+
 type PageState = "loading" | "ready" | "signed" | "done" | "expired";
 
 export default function SignPage() {
   const { t, i18n } = useTranslation();
   const { token } = useParams<{ token: string }>();
   const [state, setState] = useState<PageState>("loading");
+  const [shopCurrency, setShopCurrency] = useState<string>("EUR");
   const [shopName, setShopName] = useState<string | null>(null);
   const [shopLogoUrl, setShopLogoUrl] = useState<string | null>(null);
   const [logoFailed, setLogoFailed] = useState(false);
@@ -80,6 +95,7 @@ export default function SignPage() {
       }
       if (shopRes.status === "fulfilled") {
         const shop = shopRes.value.data as PublicShop;
+        setShopCurrency(shop.currency ?? "EUR");
         setShopName(shop.name ?? null);
         setShopLogoUrl(shop.logoUrl ?? null);
       }
@@ -251,7 +267,12 @@ export default function SignPage() {
                           {t("sign_doc_estimate")}
                         </dt>
                         <dd className="font-medium text-on-surface">
-                          {document.estimatedCost.toFixed(2)} €
+                          {signMoney(
+                            document.estimatedCost,
+                            document.currency,
+                            shopCurrency,
+                            i18n.language
+                          )}
                         </dd>
                       </div>
                     )}

@@ -191,20 +191,27 @@ function jobCostsSection(
 
   t.sep();
   t.segments.push(BOLD_ON);
-  t.row(s.total, fmtMoneyPlain(displayCost, currency));
+  t.row(s.total, fmtMoneyPlain(displayCost, currency, s.dateLocale));
   t.segments.push(BOLD_OFF);
   if (deposit > 0) {
-    t.row(s.paidDeposit, fmtMoneyPlain(deposit, currency));
+    t.row(s.paidDeposit, fmtMoneyPlain(deposit, currency, s.dateLocale));
   }
   for (const p of payments) {
     const method = s.paymentMethods[p.method] ?? p.method;
-    t.row(`${s.paid} (${method})`, fmtMoneyPlain(p.amount, currency));
+    t.row(
+      `${s.paid} (${method})`,
+      fmtMoneyPlain(p.amount, currency, s.dateLocale)
+    );
   }
   if (paidTotal > 0) {
     t.segments.push(BOLD_ON);
     t.row(
       s.balanceDue,
-      fmtMoneyPlain(Math.max(0, displayCost - paidTotal), currency)
+      fmtMoneyPlain(
+        Math.max(0, displayCost - paidTotal),
+        currency,
+        s.dateLocale
+      )
     );
     t.segments.push(BOLD_OFF);
   }
@@ -345,16 +352,19 @@ export function buildSaleReceiptEscPos(
   for (const item of sale.items) {
     const label =
       item.quantity > 1 ? `${item.name} x${item.quantity}` : item.name;
-    t.row(label, fmtMoneyPlain(item.lineTotal, currency));
+    t.row(label, fmtMoneyPlain(item.lineTotal, currency, s.dateLocale));
   }
   t.sep();
   t.segments.push(BOLD_ON);
-  t.row(s.total, fmtMoneyPlain(sale.total, currency));
+  t.row(s.total, fmtMoneyPlain(sale.total, currency, s.dateLocale));
   t.segments.push(BOLD_OFF);
   for (const p of sale.payments) {
     const method = s.paymentMethods[p.method] ?? p.method;
     const ref = p.reference ? ` · ${p.reference}` : "";
-    t.row(`${s.paid} (${method}${ref})`, fmtMoneyPlain(p.amount, currency));
+    t.row(
+      `${s.paid} (${method}${ref})`,
+      fmtMoneyPlain(p.amount, currency, s.dateLocale)
+    );
   }
   if (settings?.receiptFooter) {
     t.sep();

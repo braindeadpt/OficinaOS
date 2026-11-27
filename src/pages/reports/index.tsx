@@ -2,6 +2,7 @@ import type { TimeRangePreset } from "@shared/types/reports";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useCan } from "@/hooks/use-can";
+import { currencySymbol } from "@/lib/format";
 import { useReportsStore } from "@/stores/reports";
 import { useSettingsStore } from "@/stores/settings";
 import CashTab from "./cash-tab";
@@ -150,7 +151,7 @@ export default function ReportsPage() {
             {t("reports.title")}
           </h1>
           <p className="mt-1 text-on-surface-variant text-sm">
-            {currency} /{" "}
+            {currencySymbol(currency)} /{" "}
             {t(
               RANGE_OPTIONS.find((option) => option.key === range)?.label ??
                 "reports.30d"

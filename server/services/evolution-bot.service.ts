@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@generated/client";
 import type { FastifyBaseLogger } from "fastify";
 import { decryptSecret } from "../lib/crypto.js";
+import { documentLocaleForCountry } from "../lib/document-locale.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import { isModuleEnabled } from "../utils/modules.js";
 import {
@@ -386,6 +387,7 @@ function buildCtx(
       channel: INBOX_CHANNEL_EVOLUTION,
       enabled: isModuleEnabled(settings, "ai-inbox"),
     },
+    locale: documentLocaleForCountry(settings.countryCode),
     log,
     notifyCtx,
     portalApiUrl: settings.cloudApiUrl,
@@ -553,6 +555,7 @@ function tryPontoForEvolution(
       inbox: inboxEnabled
         ? { channel: INBOX_CHANNEL_EVOLUTION, enabled: true }
         : undefined,
+      locale: documentLocaleForCountry(settings.countryCode),
       log,
       notifyCtx: undefined,
       prisma,

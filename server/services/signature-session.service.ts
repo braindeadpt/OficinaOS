@@ -46,7 +46,14 @@ export function documentMatches(
   if (!frozen) {
     return false;
   }
-  const rebuilt = buildIntakeDocument(input, frozen.termsText, frozen.locale);
+  // A moeda não é input do utilizador — vem sempre do snapshot para o
+  // campo nunca causar falso drift; o selo cobre-a por estar no snapshot.
+  const rebuilt = buildIntakeDocument(
+    input,
+    frozen.termsText,
+    frozen.locale,
+    frozen.currency
+  );
   return canonicalize(rebuilt) === canonicalize(frozen);
 }
 
