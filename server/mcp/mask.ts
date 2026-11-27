@@ -52,13 +52,17 @@ export function maskTaxId(taxId: string | null | undefined): string | null {
 // E.164: "+" seguido de 8–15 dígitos (espaços/pontos/hífenes tolerados).
 const E164_RE = /\+\d(?:[\s.-]?\d){7,14}\b/g;
 // Telefone PT: 9 dígitos começados por 2/3/9, separadores opcionais entre
-// dígitos. As âncoras (?<![\d+]) e (?!\d) impedem cortar sequências maiores
-// (IMEI, nº de série longos) — dentro delas não há fronteira de palavra.
-const PT_PHONE_RE = /(?<![\d+])[239]\d(?:[\s.-]?\d){7}(?!\d)/g;
+// dígitos. As âncoras impedem cortar sequências maiores (IMEI, séries) e o
+// lookahead (?![\s.\-:]?\d) exclui datas ISO seguidas de hora — em
+// «2026-11-27 9:30» os 9 primeiros dígitos seriam um falso telefone, mas um
+// telefone real nunca é seguido de mais um dígito separado.
+const PT_PHONE_RE = /(?<![\d+])[239]\d(?:[\s.-]?\d){7}(?![\s.\-:]?\d)/g;
 const EMAIL_RE = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g;
 // NIF: 9 dígitos isolados que não foram já capturados como telefone
-// (começam por outro dígito ou ficaram de fora por contexto).
-const TAXID_RE = /(?<![\d+.])\d{9}(?![\d.])/g;
+// (começam por outro dígito ou ficaram de fora por contexto). O ponto final
+// de uma frase não impede a máscara — só um ponto seguido de dígitos
+// (decimal) é que afasta o número do padrão.
+const TAXID_RE = /(?<![\d+.])\d{9}(?!\d|\.\d)/g;
 
 function maskPhoneText(raw: string): string {
   const digits = raw.replace(/\D/g, "");
@@ -86,12 +90,32 @@ export function redactFreeText(text: string): string {
  * descrições e qualquer campo string futuro sem lista manual. Objectos com
  * protótipo próprio (Date, Decimal) passam intactos.
  */
-export function redactDeep(value: unknown): unknown {
+// Chaves que são identificadores estruturados, não texto livre — um número
+// de série ou referência de fornecedor com 9 dígitos é indistinguível de um
+// NIF em texto livre, mas num campo identificador a redação destruía dados
+// operacionais sem ganho RGPD (não são dados pessoais). A especificação
+// pede texto livre; identificadores ficam intactos.
+const IDENTIFIER_KEYS = new Set([
+  "id",
+  "jobCode",
+  "saleCode",
+  "quoteCode",
+  "serialNumber",
+  "reference",
+  "sku",
+  "barcode",
+  "imei",
+]);
+
+function redactEntry(key: string | null, value: unknown): unknown {
   if (typeof value === "string") {
+    if (key !== null && IDENTIFIER_KEYS.has(key)) {
+      return value;
+    }
     return redactFreeText(value);
   }
   if (Array.isArray(value)) {
-    return value.map(redactDeep);
+    return value.map((item) => redactEntry(null, item));
   }
   if (value !== null && typeof value === "object") {
     const proto = Object.getPrototypeOf(value);
@@ -99,12 +123,16 @@ export function redactDeep(value: unknown): unknown {
       return value;
     }
     const out: Record<string, unknown> = {};
-    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
-      out[key] = redactDeep(val);
+    for (const [k, val] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = redactEntry(k, val);
     }
     return out;
   }
   return value;
+}
+
+export function redactDeep(value: unknown): unknown {
+  return redactEntry(null, value);
 }
 
 /**

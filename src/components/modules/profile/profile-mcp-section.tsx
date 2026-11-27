@@ -103,6 +103,11 @@ export default function ProfileMcpSection() {
   const [tokens, setTokens] = useState<LocalMcpToken[]>([]);
   const [name, setName] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
+  // Validade máxima de 1 ano (o servidor impõe o mesmo limite — sem isto a
+  // pessoa só descobria o teto num erro genérico depois de submeter).
+  const maxExpiryDate = new Date(Date.now() + 365 * 24 * 3600 * 1000)
+    .toISOString()
+    .slice(0, 10);
   const [showPii, setShowPii] = useState(false);
   const [piiAck, setPiiAck] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -205,6 +210,7 @@ export default function ProfileMcpSection() {
             <div>
               <Field id="mcp-token-expiry" label={t("mcp.expiry_label")}>
                 <Input
+                  max={maxExpiryDate}
                   onChange={(e) => setExpiresAt(e.target.value)}
                   type="date"
                   value={expiresAt}

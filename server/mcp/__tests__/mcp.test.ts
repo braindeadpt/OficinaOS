@@ -770,3 +770,43 @@ describe("F6/F7 — validade e gate de vendas", () => {
     expect(call.select.sales).toBeDefined();
   });
 });
+
+describe("F1 — regressões da revisão", () => {
+  it("data ISO seguida de hora NÃO é mascarada", async () => {
+    const { redactFreeText } = await import("../mask.js");
+    expect(redactFreeText("entrega 2026-11-27 9:30 com o cliente")).toBe(
+      "entrega 2026-11-27 9:30 com o cliente"
+    );
+    expect(redactFreeText("entrega 2026-11-27 14:30")).toBe(
+      "entrega 2026-11-27 14:30"
+    );
+  });
+
+  it("NIF no fim de frase com ponto final É mascarado", async () => {
+    const { redactFreeText } = await import("../mask.js");
+    const out = redactFreeText("O nif é 123456789.");
+    expect(out).not.toContain("123456789");
+    expect(out).toContain("***789");
+    // decimal genuíno continua intacto
+    expect(redactFreeText("valor 123456789.5")).toBe("valor 123456789.5");
+  });
+
+  it("telefone continua mascarado quando seguido de pontuação ou texto", async () => {
+    const { redactFreeText } = await import("../mask.js");
+    expect(redactFreeText("ligar 912 345 678.")).not.toContain("912 345 678");
+    expect(redactFreeText("912 345 678, urgente")).not.toContain("912 345 678");
+  });
+
+  it("identificadores estruturados de 9 dígitos NÃO são truncados", async () => {
+    const { redactDeep } = await import("../mask.js");
+    const out = redactDeep({
+      serialNumber: "123456789",
+      reference: "123456789",
+      jobCode: "REP-1",
+      note: "nif 123456789",
+    }) as Record<string, string>;
+    expect(out.serialNumber).toBe("123456789");
+    expect(out.reference).toBe("123456789");
+    expect(out.note).not.toContain("123456789");
+  });
+});
