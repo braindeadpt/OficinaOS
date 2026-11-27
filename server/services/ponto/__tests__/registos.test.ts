@@ -92,6 +92,7 @@ describe("registosMonthEntries — isolamento por trabalhador", () => {
         at: new Date(),
         corrections: [],
         status: "APROVADO",
+        superseded: false,
         type: "ENTRADA",
         validations: [],
       },
@@ -99,6 +100,7 @@ describe("registosMonthEntries — isolamento por trabalhador", () => {
         at: new Date(),
         corrections: [{ id: "c1" }],
         status: "APROVADO",
+        superseded: false,
         type: "SAIDA",
         validations: [],
       },
@@ -122,10 +124,34 @@ describe("summarizeMonth", () => {
   it("dia completo: entrada→pausa→voltei→saída soma trabalho e pausa", () => {
     const d = (h: number, m = 0) => new Date(Date.UTC(2026, 10, 3, h, m)); // inverno: UTC == Lisboa
     const entries = [
-      { at: d(9), status: "APROVADO", type: "ENTRADA", validations: [] },
-      { at: d(13), status: "APROVADO", type: "PAUSA", validations: [] },
-      { at: d(14), status: "APROVADO", type: "VOLTEI", validations: [] },
-      { at: d(18), status: "POR_VALIDAR", type: "SAIDA", validations: [] },
+      {
+        at: d(9),
+        status: "APROVADO",
+        superseded: false,
+        type: "ENTRADA",
+        validations: [],
+      },
+      {
+        at: d(13),
+        status: "APROVADO",
+        superseded: false,
+        type: "PAUSA",
+        validations: [],
+      },
+      {
+        at: d(14),
+        status: "APROVADO",
+        superseded: false,
+        type: "VOLTEI",
+        validations: [],
+      },
+      {
+        at: d(18),
+        status: "POR_VALIDAR",
+        superseded: false,
+        type: "SAIDA",
+        validations: [],
+      },
     ];
     const s = summarizeMonth(entries, 0, TZ);
     expect(s.days).toBe(1);

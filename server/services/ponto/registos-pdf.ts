@@ -112,6 +112,14 @@ function buildPages(input: {
     10,
     18
   );
+  if (summary.hasOpenShift) {
+    push(
+      "Inclui horas estimadas — há dias sem saída registada (contadas até à meia-noite).",
+      50,
+      8,
+      14
+    );
+  }
   push(
     "Documento pedido pelo próprio trabalhador (art. 15.º RGPD). Gerado automaticamente pela aplicação da loja.",
     50,

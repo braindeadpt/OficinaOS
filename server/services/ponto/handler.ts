@@ -1577,6 +1577,11 @@ async function replyRegistos(
     `${summary.days} dia(s) · ${fmtHoursMs(summary.workedMs)} trabalhadas · pausas ${fmtHoursMs(summary.pauseMs)}`,
     `${summary.correctionsCount} correção(ões) · ${summary.pendingCount} por validar`,
   ];
+  if (summary.hasOpenShift) {
+    lines.push(
+      "Inclui horas estimadas — há dias sem saída registada (contadas até à meia-noite)."
+    );
+  }
   if (base) {
     lines.push(
       `PDF do mês (link de uso único, válido 24 h): ${base}/api/public/ponto-registos/${token}`

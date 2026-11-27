@@ -186,6 +186,9 @@ export interface MonthSummary {
   correctionsCount: number;
   days: number;
   entriesCount: number;
+  /** Há turnos sem saída — parte das horas é estimativa até à meia-noite
+   *  (ou até agora, hoje), como o painel assinala. */
+  hasOpenShift: boolean;
   pauseMs: number;
   pendingCount: number;
   workedMs: number;
@@ -199,7 +202,12 @@ function dayKeyOf(at: Date, tz: string): string {
  * ainda aberto conta até à hora do pedido — mas só se o turno for de
  * hoje: estender um esquecimento antigo até agora somava noites e dias
  * como tempo trabalhado. */
-function workMsOfDay(list: RegistosEntry[], now: Date, tz: string): number {
+function workMsOfDay(
+  list: RegistosEntry[],
+  now: Date,
+  tz: string,
+  openOut?: { open: boolean }
+): number {
   let total = 0;
   let open: Date | null = null;
   for (const e of list) {
@@ -211,6 +219,9 @@ function workMsOfDay(list: RegistosEntry[], now: Date, tz: string): number {
     }
   }
   if (open) {
+    if (openOut) {
+      openOut.open = true;
+    }
     if (dayKeyOf(open, tz) === dayKeyOf(now, tz)) {
       total += now.getTime() - open.getTime();
     } else {
@@ -249,6 +260,7 @@ function sumDayEntries(
   now: Date,
   tz: string
 ): {
+  openShift: boolean;
   pauseMs: number;
   pendingCount: number;
   workedMs: number;
@@ -256,10 +268,13 @@ function sumDayEntries(
   const pendingCount = list.filter(
     (e) => e.status === "POR_VALIDAR" && e.validations.length === 0
   ).length;
+  const openOut = { open: false };
+  const workedMs = workMsOfDay(list, now, tz, openOut);
   return {
+    openShift: openOut.open,
     pauseMs: pauseMsOfDay(list),
     pendingCount,
-    workedMs: workMsOfDay(list, now, tz),
+    workedMs,
   };
 }
 
@@ -278,11 +293,15 @@ export function summarizeMonth(
     byDay.set(key, list);
   }
   let workedMsTotal = 0;
+  let hasOpenShift = false;
   let pauseMsTotal = 0;
   let pendingCount = 0;
   for (const list of byDay.values()) {
     const day = sumDayEntries(list, now, tz);
     workedMsTotal += day.workedMs;
+    if (day.openShift) {
+      hasOpenShift = true;
+    }
     pauseMsTotal += day.pauseMs;
     pendingCount += day.pendingCount;
   }
@@ -290,6 +309,7 @@ export function summarizeMonth(
     correctionsCount,
     days: byDay.size,
     entriesCount: entries.length,
+    hasOpenShift,
     pauseMs: pauseMsTotal,
     pendingCount,
     workedMs: workedMsTotal,
