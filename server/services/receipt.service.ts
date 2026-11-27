@@ -520,9 +520,10 @@ function loanerDivHtml(job: LoanerJob, s: ReceiptStrings): string {
 
 /**
  * Provenance suffix for the signature seal: the terms version and its date.
- * NULL updatedAt means either pre-migration custom text (unknown date —
- * disclosed as such) or the bundled default clauses, where a shop version is
- * meaningless and the "unknown date" claim would be false — so nothing shows.
+ * When the signed text is the bundled default clause the shop version is
+ * meaningless (the shop never wrote that text — even after clearing custom
+ * terms, which bumps the version), so nothing shows. Otherwise NULL updatedAt
+ * means pre-migration custom text, disclosed as an unknown date.
  */
 export async function termsProvenanceLine(
   job: {
@@ -535,22 +536,17 @@ export async function termsProvenanceLine(
   if (typeof job.intakeTermsVersion !== "number") {
     return "";
   }
-  let versionDate: string;
-  if (job.intakeTermsUpdatedAt) {
-    versionDate = new Date(job.intakeTermsUpdatedAt).toLocaleDateString(
-      s.dateLocale
-    );
-  } else {
-    const snapshot = job.intakeTermsSnapshot as {
-      locale?: string;
-      termsText?: string;
-    } | null;
-    const bundled = await bundledIntakeTermsText(snapshot?.locale);
-    if (snapshot?.termsText && snapshot.termsText === bundled) {
-      return "";
-    }
-    versionDate = s.termsVersionUnknownDate;
+  const snapshot = job.intakeTermsSnapshot as {
+    locale?: string;
+    termsText?: string;
+  } | null;
+  const bundled = await bundledIntakeTermsText(snapshot?.locale);
+  if (snapshot?.termsText && snapshot.termsText === bundled) {
+    return "";
   }
+  const versionDate = job.intakeTermsUpdatedAt
+    ? new Date(job.intakeTermsUpdatedAt).toLocaleDateString(s.dateLocale)
+    : s.termsVersionUnknownDate;
   return ` · ${s.termsVersion.replace("{version}", String(job.intakeTermsVersion)).replace("{date}", versionDate)}`;
 }
 
