@@ -836,18 +836,27 @@ describe("F1 — validação de datas e códigos postais", () => {
     );
   });
 
-  it("data inválida (mês 45) não serve de escapatória", async () => {
+  it("validação de mês/dia distingue datas reais de pseudo-datas", async () => {
     const { redactFreeText } = await import("../mask.js");
-    // «2123-45-67» parece data mas o mês 45 não existe — não é data, mas o
-    // grupo inicial de 4 dígitos também não é telefone: fica intacto por
-    // não ser nenhum dos dois.
-    expect(redactFreeText("912 345 678 mesmo")).not.toContain("912 345 678");
+    // data real com mês/dia válidos — intacta
+    expect(redactFreeText("entrega 27-1-2026 14:30")).toBe(
+      "entrega 27-1-2026 14:30"
+    );
+    // um trecho em forma de data com mês 13 não é data — e o grupo inicial
+    // de 4 dígitos também não é telefone: não é mascarado como telefone,
+    // mas a razão é o lookahead, não a pseudo-data. O que interessa é que
+    // um telefone normal na mesma frase continua mascarado.
+    const out = redactFreeText("nota 2145-13-99 ligar 912 345 678");
+    expect(out).not.toContain("912 345 678");
+    expect(out).toContain("2145-13-99");
   });
 
-  it("código postal colado não impede mascarar o telefone a seguir", async () => {
+  it("código postal colado ao telefone mascara o telefone e não o postal", async () => {
     const { redactFreeText } = await import("../mask.js");
-    const out = redactFreeText("cp 2450-123 tel 212 345 678");
+    // sem palavras pelo meio — o pior caso: postal emendado no telefone
+    const out = redactFreeText("morada 2450-123 212 345 678 fim");
     expect(out).toContain("2450-123");
     expect(out).not.toContain("212 345 678");
+    expect(out).not.toContain("345");
   });
 });
