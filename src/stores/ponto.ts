@@ -12,17 +12,22 @@ import api from "@/lib/api";
 interface PontoState {
   enabled: boolean | null;
   fetchStatus: () => Promise<void>;
+  photoCleanupWarnings: string[];
   tz: string | null;
 }
 
 export const usePontoStore = create<PontoState>((set) => ({
   enabled: null,
+  photoCleanupWarnings: [],
   tz: null,
   fetchStatus: async () => {
     try {
       const res = await api.get("/ponto/status");
       set({
         enabled: res.data?.enabled === true,
+        photoCleanupWarnings: Array.isArray(res.data?.photoCleanupWarnings)
+          ? res.data.photoCleanupWarnings
+          : [],
         tz: typeof res.data?.tz === "string" ? res.data.tz : null,
       });
     } catch {

@@ -78,8 +78,7 @@ export default function Step2Content({
 }: Step2Props) {
   const { i18n } = useTranslation();
   // Shop-editable clauses win; empty setting falls back to the app default.
-  // The same resolved value feeds the display, the remote-sign document and
-  // the intakeTermsText sent on submit — what the customer reads signs.
+  // O servidor volta a resolver o mesmo texto antes de congelar/assinar.
   // undefined = still loading for THIS intake → signing stays disabled.
   const termsLoading = customTerms === undefined;
   const termsText = customTerms?.trim() || t("intake.terms_text");

@@ -56,13 +56,10 @@ export interface InboundMessage {
   createdAt: string;
   fromPhone: string;
   id: string;
-  /** Referência a imagem recebida — hoje só a Evolution expõe a mensagem
-   *  crua (download via getBase64FromMediaMessage); `raw` leva a message
-   *  completa para esse endpoint. */
+  /** Facto de ter chegado uma imagem — usado pelo livro de ponto só como
+   *  prova temporal. Nunca é descarregada nem persistida como ficheiro/URL. */
   imageRef?: {
     mimetype?: string | null;
-    raw?: unknown;
-    url?: string | null;
   };
   /** Id de botão interativo respondido (Meta button_reply/list_reply ou
    *  Evolution buttonsResponse/listResponse). */

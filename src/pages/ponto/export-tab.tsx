@@ -8,6 +8,61 @@ import { Input } from "@/components/ui/input";
 import api from "@/lib/api";
 import { formatClock, formatMinutes, useShopTz, ymdDaysAgo } from "./shared";
 
+function exportHeaders(t: TFunction): string[] {
+  return [
+    t("ponto.pdf_col_date"),
+    t("ponto.pdf_col_user"),
+    t("ponto.pdf_col_worked"),
+    t("ponto.pdf_col_first"),
+    t("ponto.pdf_col_last"),
+    t("ponto.pdf_col_missing_exit"),
+    t("ponto.pdf_col_late"),
+    t("ponto.pdf_col_early"),
+    t("ponto.pdf_col_corrected"),
+    t("ponto.pdf_col_photos"),
+  ];
+}
+
+function exportBody(
+  data: PontoHoursResponse,
+  timeZone: string | undefined,
+  locale: string,
+  t: TFunction
+): string[][] {
+  const time = (iso: string | null) =>
+    iso ? formatClock(iso, locale, timeZone) : "—";
+  const photos = (isos: string[] | undefined) =>
+    (isos ?? [])
+      .map((iso) =>
+        t("ponto.photo_sent_short", {
+          time: formatClock(iso, locale, timeZone),
+        })
+      )
+      .join("\n");
+
+  return data.days.map((d) => [
+    d.date,
+    d.userName,
+    formatMinutes(d.hours.workedMinutes),
+    time(d.hours.firstEntradaAt),
+    time(d.hours.lastSaidaAt),
+    d.hours.missingExit ? "!" : "",
+    d.hours.lateMinutes > 0 ? `${d.hours.lateMinutes}m` : "",
+    d.hours.earlyExitMinutes > 0 ? `${d.hours.earlyExitMinutes}m` : "",
+    d.hours.hasCorrection || d.hours.recusadoCount > 0 ? "X" : "",
+    photos(d.hours.photoSentAts),
+  ]);
+}
+
+function downloadBlob(name: string, blob: Blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export async function downloadPdf(
   data: PontoHoursResponse,
   title: string,
@@ -29,39 +84,28 @@ export async function downloadPdf(
     28
   );
 
-  const time = (iso: string | null) =>
-    iso ? formatClock(iso, locale, timeZone) : "—";
-
   autoTable(doc, {
-    body: data.days.map((d) => [
-      d.date,
-      d.userName,
-      formatMinutes(d.hours.workedMinutes),
-      time(d.hours.firstEntradaAt),
-      time(d.hours.lastSaidaAt),
-      d.hours.missingExit ? "!" : "",
-      d.hours.lateMinutes > 0 ? `${d.hours.lateMinutes}m` : "",
-      d.hours.earlyExitMinutes > 0 ? `${d.hours.earlyExitMinutes}m` : "",
-      d.hours.hasCorrection || d.hours.recusadoCount > 0 ? "X" : "",
-    ]),
-    head: [
-      [
-        t("ponto.pdf_col_date"),
-        t("ponto.pdf_col_user"),
-        t("ponto.pdf_col_worked"),
-        t("ponto.pdf_col_first"),
-        t("ponto.pdf_col_last"),
-        t("ponto.pdf_col_missing_exit"),
-        t("ponto.pdf_col_late"),
-        t("ponto.pdf_col_early"),
-        t("ponto.pdf_col_corrected"),
-      ],
-    ],
+    body: exportBody(data, timeZone, locale, t),
+    head: [exportHeaders(t)],
     startY: 33,
     styles: { fontSize: 8 },
   });
 
   doc.save(`ponto-${data.from}_${data.to}.pdf`);
+}
+
+export async function downloadXlsx(
+  data: PontoHoursResponse,
+  timeZone: string | undefined,
+  locale: string,
+  t: TFunction
+) {
+  const { default: writeXlsxFile } = await import("write-excel-file/browser");
+  const rows = [exportHeaders(t), ...exportBody(data, timeZone, locale, t)].map(
+    (row) => row.map((value) => ({ type: String, value }))
+  );
+  const blob = await writeXlsxFile(rows, { sheet: "ponto" }).toBlob();
+  downloadBlob(`ponto-${data.from}_${data.to}.xlsx`, blob);
 }
 
 export default function ExportTab() {
@@ -107,6 +151,18 @@ export default function ExportTab() {
     }
   };
 
+  const exportExcel = async () => {
+    if (!data) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await downloadXlsx(data, shopTz, i18n.language, t);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
@@ -133,6 +189,14 @@ export default function ExportTab() {
           onClick={exportPdf}
         >
           {t("ponto.export_pdf")}
+        </Button>
+        <Button
+          disabled={busy || !data || data.days.length === 0}
+          icon="download"
+          onClick={exportExcel}
+          variant="secondary"
+        >
+          {t("ponto.export_excel")}
         </Button>
       </div>
 

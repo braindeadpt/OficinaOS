@@ -40,6 +40,7 @@ const READONLY_KEYS = new Set<TabKey>([
 export default function PontoPage() {
   const { t } = useTranslation();
   const enabled = usePontoStore((s) => s.enabled);
+  const photoCleanupWarnings = usePontoStore((s) => s.photoCleanupWarnings);
   const fetchStatus = usePontoStore((s) => s.fetchStatus);
   const [tab, setTab] = useState<TabKey>("agora");
 
@@ -65,6 +66,20 @@ export default function PontoPage() {
           {t("ponto.panel_subtitle")}
         </p>
       </div>
+
+      {photoCleanupWarnings.length > 0 && (
+        <div
+          className="flex items-center gap-3 rounded-2xl border border-error bg-error-container/40 px-4 py-3"
+          role="alert"
+        >
+          <span className="material-symbols-outlined text-error">warning</span>
+          <div className="text-on-surface text-sm">
+            {photoCleanupWarnings.map((dir) => (
+              <p key={dir}>{t("ponto.photo_cleanup_warning", { dir })}</p>
+            ))}
+          </div>
+        </div>
+      )}
 
       {enabled === false && (
         <div className="flex items-center gap-3 rounded-2xl border border-outline-variant bg-surface-container-low px-4 py-3">

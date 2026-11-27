@@ -1,5 +1,7 @@
+import { createHash } from "node:crypto";
 import type { PrismaClient } from "@generated/client";
 import { Role } from "@shared/constants";
+import { canonicalize } from "@shared/intake-document.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   computeFinalCost,
@@ -16,6 +18,10 @@ import {
 // Mock audit service to avoid side effects
 vi.mock("../audit.service.js", () => ({
   createAuditLog: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("../notification-dispatch.js", () => ({
+  notify: vi.fn().mockResolvedValue(undefined),
 }));
 
 function mockPrisma(
@@ -1298,6 +1304,82 @@ describe("create", () => {
     expect(result).toEqual({
       error: "INVALID_WARRANTY_REFERENCE",
     });
+  });
+
+  it("ignores forged client terms and signs the server-resolved shop text", async () => {
+    const signature =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const termsUpdatedAt = new Date("2026-11-20T10:00:00Z");
+    (
+      prisma.shopSettings.findUnique as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      id: "default",
+      intakeTerms: "Termos legais da loja",
+      intakeTermsUpdatedAt: termsUpdatedAt,
+      intakeTermsVersion: 5,
+    });
+    (prisma.customer.upsert as ReturnType<typeof vi.fn>).mockResolvedValue({
+      email: null,
+      id: "customer-1",
+      name: "Maria",
+      phone: "912345678",
+    });
+    (prisma.brand.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "brand-1",
+    });
+    (prisma.device.upsert as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "device-1",
+    });
+    (prisma.$queryRaw as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { lastSeq: 1 },
+    ]);
+    (prisma.job.create as ReturnType<typeof vi.fn>).mockImplementation(
+      ({ data }) =>
+        Promise.resolve({
+          ...data,
+          id: "job-1",
+          partsUsed: [],
+          repairs: [],
+        })
+    );
+    (prisma.job.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "job-1",
+      partsUsed: [],
+      repairs: [],
+    });
+
+    await create(
+      prisma,
+      {
+        customerName: "Maria",
+        customerPhone: "912345678",
+        deviceBrand: "Apple",
+        deviceModel: "iPhone 14",
+        estimatedCost: 100,
+        intakeLocale: "pt",
+        intakeSignatureDataUrl: signature,
+        intakeTermsText: "TERMOS FALSIFICADOS PELO CLIENTE",
+        intakeTermsVersion: 5,
+        reportedProblem: "Ecrã partido",
+      },
+      "user-1",
+      mockNotifyCtx
+    );
+
+    const data = (prisma.job.create as ReturnType<typeof vi.fn>).mock
+      .calls[0][0].data;
+    expect(data.intakeTermsSnapshot.termsText).toBe("Termos legais da loja");
+    expect(JSON.stringify(data.intakeTermsSnapshot)).not.toContain(
+      "FALSIFICADOS"
+    );
+    expect(data.intakeTermsVersion).toBe(5);
+    expect(data.intakeTermsUpdatedAt).toBe(termsUpdatedAt);
+    const expectedHash = createHash("sha256")
+      .update(canonicalize(data.intakeTermsSnapshot))
+      .update("\n")
+      .update(signature)
+      .digest("hex");
+    expect(data.intakeDocumentHash).toBe(expectedHash);
   });
 
   it("returns error when customerId is invalid", async () => {

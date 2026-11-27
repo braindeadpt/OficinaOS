@@ -41,7 +41,9 @@ function fakePrisma(overrides: Partial<SettingsRow> = {}) {
     ...overrides,
   };
   return {
-    pontoPhoto: { findMany: vi.fn(async () => []) },
+    // /ponto/status lê as linhas legadas de ponto_photos por SQL cru —
+    // sem tabela (ou sem mock) o aviso fica vazio.
+    $queryRaw: vi.fn(async () => [{ reg: null }]),
     shopSettings: {
       // dashboardScope lê o fuso da loja via findFirst (cache 60s).
       findFirst: vi.fn(async () => ({ timezone: "Europe/Lisbon" })),
@@ -137,7 +139,11 @@ describe("ponto — GET /status", () => {
     const res = await app.inject({ method: "GET", url: "/api/ponto/status" });
     expect(res.statusCode).toBe(200);
     // tz é o fuso efetivo da loja — a UI formata as horas nele.
-    expect(res.json()).toEqual({ enabled: true, tz: "Europe/Lisbon" });
+    expect(res.json()).toEqual({
+      enabled: true,
+      photoCleanupWarnings: [],
+      tz: "Europe/Lisbon",
+    });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -145,7 +151,11 @@ describe("ponto — GET /status", () => {
     const app = buildApp(fakePrisma({ cloudEntitlements: ["portal"] }));
     const res = await app.inject({ method: "GET", url: "/api/ponto/status" });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ enabled: false, tz: "Europe/Lisbon" });
+    expect(res.json()).toEqual({
+      enabled: false,
+      photoCleanupWarnings: [],
+      tz: "Europe/Lisbon",
+    });
   });
 });
 

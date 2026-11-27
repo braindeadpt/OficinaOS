@@ -107,19 +107,29 @@ describe("renderReceiptHtml signed clauses", () => {
     expect(html).toContain("Termos atuais da loja");
   });
 
-  it("thermal keeps the short built-in declaration", async () => {
+  it("marks signed legacy jobs without a hash as anterior à data", async () => {
+    const prisma = mockPrisma({ ...A4, intakeTerms: "Termos atuais da loja" });
+    const job = {
+      ...BASE_JOB,
+      signedAt: new Date("2026-01-15T10:00:00Z"),
+    };
+    const html = await renderReceiptHtml(prisma, job, "", {});
+    expect(html).toContain("Assinatura anterior a 15/01/2026");
+    expect(html).not.toContain("Documento assinado #");
+  });
+
+  it("thermal also prints the clauses frozen in the signed snapshot", async () => {
+    const prisma = mockPrisma({
+      ...FULL_SETTINGS,
+      intakeTerms: "TERMOS ACTUAIS QUE NAO FORAM ASSINADOS",
+    });
     const job = {
       ...BASE_JOB,
       intakeTermsSnapshot: { termsText: "Cláusulas da loja" },
     };
-    const html = await renderReceiptHtml(
-      mockPrisma(FULL_SETTINGS),
-      job,
-      "",
-      {}
-    );
-    expect(html).not.toContain("Cláusulas da loja");
-    expect(html).toContain("aceito os termos de reparação");
+    const html = await renderReceiptHtml(prisma, job, "", {});
+    expect(html).toContain("Cláusulas da loja");
+    expect(html).not.toContain("TERMOS ACTUAIS");
   });
 });
 

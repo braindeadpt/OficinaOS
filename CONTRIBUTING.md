@@ -8,9 +8,33 @@ OficinaOS is a Portuguese-market fork of [Reparilo](https://github.com/cranknet/
 
 OficinaOS is intentionally a **single-tenant, single-location** repair-shop tool. Features that push it toward multi-tenant SaaS or generic ERP territory will likely be declined. The Portuguese (pt-PT) locale is a first-class citizen — user-facing changes must not degrade it.
 
+## Product boundaries (read before proposing a feature)
+
+OficinaOS has a free, open-source core and an optional paid tier (**OficinaOS Pro**) whose value lives in the
+**OficinaOS Cloud**. A few rules decide where a feature belongs — check them before you start, it saves everyone time:
+
+- **The free app sends and receives no messages.** WhatsApp, SMS and the shared inbox are Pro features, enforced by the
+  Cloud. Don't add messaging paths to the free app.
+- **New public features live in the Cloud**, not in the shop app (customer portal, online bookings, storefront…).
+  The shop app is designed to run on the shop's local network. This rule is about where features are *built* — the
+  customer links the free app already has (tracking, quotes, warranty) stay free and local, and exposing them
+  through a tunnel is a deployment choice, documented in [`docs/remote-access.md`](docs/remote-access.md).
+- **Reading is free, acting is Pro (AI/MCP):** connecting your own LLM to **read** the shop's data is free and runs
+  locally; writing, sending and administration through an LLM go through the Pro Cloud.
+- **Don't store what you don't need.** No biometrics, no employee photos; data minimisation is a hard rule (GDPR).
+- When in doubt, open an issue and ask — we'll tell you where the feature fits.
+
+## Stay on the current `main`
+
+- Branch from the **latest `main`** and rebase often. A large branch that drifts for weeks is very hard to merge.
+- Use **Bun** (pinned version below), not Node — the project, scripts and CI assume Bun.
+- **Split big work into small PRs**, one concern each (e.g. importer mapping UI, then importer undo). A 10 000-line PR
+  can't be reviewed safely, however good the code is.
+- New here? Look for issues labelled **`good first issue`**.
+
 ## Prerequisites
 
-- [Bun](https://bun.sh) `1.3.13` (pinned in `package.json`)
+- [Bun](https://bun.sh) `1.4.4` (pinned in `.bun-version`, used by CI)
 - PostgreSQL (locally or via Docker)
 - Or, for the full deployment: Docker Desktop (`docker compose up -d`)
 - For Android work: Android Studio + JDK 17+
@@ -26,7 +50,7 @@ cp .env.example .env
 # Fill in DATABASE_URL, BETTER_AUTH_SECRET, AI_ENCRYPTION_KEY, and SEED_ADMIN_PASSWORD
 # (dev only — or leave it unset and create the owner on the /setup screen).
 # Generate secrets with:
-#   node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"
+#   bun -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"
 
 bun run db:migrate
 bun run db:seed
@@ -100,7 +124,7 @@ Type prefixes we use: `feat`, `fix`, `docs`, `chore`, `test`, `refactor`, `perf`
 
 - One concern per PR. Smaller PRs get reviewed and merged faster.
 - Reference the issue it closes: `Closes #123`.
-- Include screenshots or short clips for any UI change. Test in all three locales (PT, EN, FR) if your change touches text or layout.
+- Include screenshots or short clips for any UI change. Test in all four locales (PT, EN, ES, FR) if your change touches text or layout.
 - For database changes, include the generated migration file and call out any data backfill needed.
 - Don't bump unrelated dependencies in the same PR.
 

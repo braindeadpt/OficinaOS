@@ -6,27 +6,22 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   cloudFetch: vi.fn(),
-  deletePontoPhoto: vi.fn(() => Promise.resolve(undefined)),
-  downloadEvolutionMedia: vi.fn(() => Promise.resolve(null)),
   findOpenPresumedExit: vi.fn(
     (): Promise<{ at: Date; id: string } | null> => Promise.resolve(null)
   ),
   getOrCreateShopSettings: vi.fn(),
-  linkPontoPhoto: vi.fn(() => Promise.resolve(undefined)),
   pontoEntriesSince: vi.fn(
     (): Promise<Record<string, unknown>[]> => Promise.resolve([])
   ),
   recordPontoEntry: vi.fn((_prisma: unknown, _input: Record<string, unknown>) =>
     Promise.resolve({ id: "entry-new" })
   ),
-  savePontoPhotoFile: vi.fn(() =>
-    Promise.resolve({ id: "photo-1", path: "ponto-photos/u1/p.jpg" })
+  timeEntryFindFirst: vi.fn(
+    (_args?: unknown): Promise<Record<string, unknown> | null> =>
+      Promise.resolve(null)
   ),
   timeEntryFindMany: vi.fn(
-    (_args?: unknown): Promise<unknown[]> => Promise.resolve([])
-  ),
-  timeEntryFindFirst: vi.fn(
-    (): Promise<{ id: string } | null> => Promise.resolve(null)
+    (_args?: unknown): Promise<Record<string, unknown>[]> => Promise.resolve([])
   ),
   todayPontoEntries: vi.fn(
     (): Promise<Record<string, unknown>[]> => Promise.resolve([])
@@ -41,16 +36,10 @@ vi.mock("../../../lib/crypto.js", async (importOriginal) => {
   const orig = await importOriginal<typeof import("../../../lib/crypto.js")>();
   return { ...orig, decryptSecret: () => "test-shop-token" };
 });
-vi.mock("../../evolution.service.js", () => ({
-  downloadEvolutionMedia: mocks.downloadEvolutionMedia,
-}));
 vi.mock("../entries.js", () => ({
-  deletePontoPhoto: mocks.deletePontoPhoto,
   findOpenPresumedExit: mocks.findOpenPresumedExit,
-  linkPontoPhoto: mocks.linkPontoPhoto,
   pontoEntriesSince: mocks.pontoEntriesSince,
   recordPontoEntry: mocks.recordPontoEntry,
-  savePontoPhotoFile: mocks.savePontoPhotoFile,
   todayPontoEntries: mocks.todayPontoEntries,
 }));
 vi.mock("../../bot-ai.js", () => ({ askBotAi: vi.fn() }));

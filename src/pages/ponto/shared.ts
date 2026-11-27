@@ -275,7 +275,7 @@ export function proofSummary(
   if (p.codeValid === false) {
     out.push(t("ponto.proof_code_invalid"));
   }
-  if (p.hasPhoto || p.photoId) {
+  if (p.hasPhoto && !p.photoSentAt) {
     out.push(t("ponto.proof_photo"));
   }
   if (p.manual) {

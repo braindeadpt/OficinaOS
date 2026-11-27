@@ -256,7 +256,6 @@ model User {
   timeEntries           TimeEntry[]
   timeEntriesCreated    TimeEntry[]         @relation("TimeEntryCreatedBy")
   timeEntryValidations  TimeEntryValidation[]
-  pontoPhotos           PontoPhoto[]
 
   @@map("users")
 }
@@ -504,6 +503,9 @@ model Job {
   // signed jobs keep the snapshot they were signed over.
   intakeTermsSnapshot    Json?
   intakeDocumentHash     String?
+  // Proveniência dos termos resolvidos no servidor no momento da assinatura.
+  intakeTermsVersion       Int?
+  intakeTermsUpdatedAt     DateTime? @db.Timestamptz
   signedAt               DateTime? @db.Timestamptz
   signedVia              String? // in_person | remote
   // Remote-signing provenance, captured when the signature is submitted.
@@ -1240,6 +1242,9 @@ model ShopSettings {
   // Custom clauses shown on the repair intake ficha and frozen into the
   // signed document. Null/empty = the app's built-in terms_text default.
   intakeTerms                 String?   @db.Text
+  // Versão/data da cláusula resolvida no servidor e congelada na assinatura.
+  intakeTermsVersion          Int       @default(1)
+  intakeTermsUpdatedAt        DateTime? @db.Timestamptz
   // Printing — presets applied by the server-rendered receipt/label HTML.
   // receiptPaper: "58mm" | "80mm" (thermal roll) | "a4" (full document).
   receiptPaper                String    @default("80mm")
@@ -1601,6 +1606,9 @@ model SignatureSession {
   // sha256(canonical(snapshot) + signature image) + provenance, set when the
   // signature lands — copied onto the job at intake.
   documentHash     String?
+  // Proveniência dos termos no momento em que a sessão foi congelada.
+  intakeTermsVersion Int?
+  intakeTermsUpdatedAt DateTime? @db.Timestamptz
   signedAt         DateTime? @db.Timestamptz
   signerIp         String?
   signerUserAgent  String?   @db.Text
@@ -2119,7 +2127,7 @@ model TimeEntry {
   transport TimeEntryTransport
   status    TimeEntryStatus
   // Provas da avaliação da Cloud: codeValid, onShopWifi, lat, lng,
-  // accuracy, distanceM, insideRadius, photoId?, hasPhoto.
+  // accuracy, distanceM, insideRadius, hasPhoto/photoSentAt.
   proofs    Json
   reason    String?
   // Uma correção é uma linha nova que aponta para a original.
@@ -2158,22 +2166,4 @@ model TimeEntryValidation {
   @@index([entryId])
   @@index([byUserId])
   @@map("time_entry_validations")
-}
-
-// Foto de prova do registo (externos, ou quando a loja a exige). Guardada
-// localmente como JobPhoto e apagada automaticamente aos 90 dias — o
-// registo fica com "foto expirada". entryId é texto simples, sem FK: a
-// foto chega antes do TimeEntry (o registo só existe depois da avaliação
-// na Cloud) e as fotos expiram muito antes dos registos (5 anos).
-model PontoPhoto {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  entryId   String?
-  path      String
-  createdAt DateTime @default(now()) @db.Timestamptz
-
-  @@index([userId])
-  @@index([entryId])
-  @@map("ponto_photos")
 }

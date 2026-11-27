@@ -48,3 +48,48 @@ describe("pontoFieldsFromCloudRow — quotedMessageId", () => {
     expect(out.quotedMessageId).toBeUndefined();
   });
 });
+
+describe("pontoFieldsFromCloudRow — imageRef (prova fotográfica)", () => {
+  // Formato real confirmado na Cloud (oficinaos-cloud whatsapp.ts): o
+  // webhook só constrói payload para location/interactive — uma imagem
+  // chega SEMPRE com payload null. A prova é o próprio messageType.
+  it("imagem SEM payload regista imageRef — é o formato real do relay", () => {
+    const out = pontoFieldsFromCloudRow({
+      messageType: "image",
+      payload: null,
+      text: null,
+    } as never);
+
+    expect(out.imageRef).toEqual({ mimetype: null });
+  });
+
+  it("imagem com payload vazio também regista imageRef", () => {
+    const out = pontoFieldsFromCloudRow({
+      messageType: "image",
+      payload: {},
+      text: null,
+    } as never);
+
+    expect(out.imageRef).toEqual({ mimetype: null });
+  });
+
+  it("messageType photo (variante) regista imageRef", () => {
+    const out = pontoFieldsFromCloudRow({
+      messageType: "photo",
+      payload: null,
+      text: null,
+    } as never);
+
+    expect(out.imageRef).toEqual({ mimetype: null });
+  });
+
+  it("texto não gera imageRef", () => {
+    const out = pontoFieldsFromCloudRow({
+      messageType: "text",
+      payload: null,
+      text: "ponto",
+    } as never);
+
+    expect(out.imageRef).toBeUndefined();
+  });
+});

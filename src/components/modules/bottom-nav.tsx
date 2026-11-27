@@ -190,6 +190,7 @@ export default function BottomNav() {
   const role = useAuthStore((s) => s.role);
   const canCreateJob = useCan({ jobs: ["create"] });
   const pontoEnabled = usePontoStore((s) => s.enabled);
+  const pontoCleanup = usePontoStore((s) => s.photoCleanupWarnings);
   const fetchPonto = usePontoStore((s) => s.fetchStatus);
   useEffect(() => {
     if (pontoEnabled === null) {
@@ -207,7 +208,7 @@ export default function BottomNav() {
     (item) =>
       item.perm &&
       can(role, item.perm) &&
-      (item.to !== "/ponto" || pontoEnabled) &&
+      (item.to !== "/ponto" || pontoEnabled || pontoCleanup.length > 0) &&
       navItemVisibleInPontoOnly(
         item,
         isPontoOnly,

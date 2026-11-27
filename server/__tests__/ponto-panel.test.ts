@@ -1,4 +1,3 @@
-import path from "node:path";
 import { isAppError } from "@shared/errors/app-error.js";
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -9,7 +8,6 @@ import {
   effectiveStatusOf,
   isSuperseded,
   localDateKey,
-  resolvePontoPhotoPath,
   resolvePontoRange,
   usableEntries,
 } from "../services/ponto-panel.service.js";
@@ -36,7 +34,6 @@ interface FakePrismaOpts {
   entries?: unknown[];
   missingExitRows?: unknown[];
   pendingEntryId?: string;
-  photoPath?: string | null;
   shopMode?: string;
   users?: unknown[];
   validations?: unknown[];
@@ -45,16 +42,6 @@ interface FakePrismaOpts {
 function fakePrisma(opts: FakePrismaOpts = {}) {
   const settings = baseSettings();
   return {
-    pontoPhoto: {
-      findMany: vi.fn(async () =>
-        opts.pendingEntryId ? [{ entryId: opts.pendingEntryId, id: "ph1" }] : []
-      ),
-      findUnique: vi.fn(async () =>
-        opts.photoPath === null
-          ? null
-          : { path: opts.photoPath ?? "ponto-photos/x.jpg" }
-      ),
-    },
     shopSettings: {
       findFirst: vi.fn(async () => ({ timezone: settings.timezone })),
       findUnique: vi.fn(async () => ({
@@ -226,21 +213,6 @@ describe("ponto-panel — ranges", () => {
   });
 });
 
-describe("ponto-panel — photo path guard", () => {
-  it("resolves paths inside UPLOAD_DIR", () => {
-    const base = path.resolve("/uploads");
-    expect(resolvePontoPhotoPath(base, "ponto-photos/a.jpg")).toBe(
-      path.join(base, "ponto-photos", "a.jpg")
-    );
-  });
-
-  it("rejects traversal and absolute escapes", () => {
-    expect(resolvePontoPhotoPath("/uploads", "../etc/passwd")).toBeNull();
-    expect(resolvePontoPhotoPath("/uploads", "/etc/passwd")).toBeNull();
-    expect(resolvePontoPhotoPath("/uploads", "..")).toBeNull();
-  });
-});
-
 // ── Rotas ───────────────────────────────────────────────────────────────
 
 describe("ponto panel — GET /now", () => {
@@ -307,12 +279,16 @@ describe("ponto panel — GET /now", () => {
 });
 
 describe("ponto panel — GET /pending + POST validate", () => {
-  it("lists pending entries with photo urls", async () => {
+  it("lists pending entries without photo urls — only the temporal proof", async () => {
     const prisma = fakePrisma({
       entries: [
         entryRow({
           id: "pend1",
-          proofs: { distanceM: 42, hasPhoto: true },
+          proofs: {
+            distanceM: 42,
+            hasPhoto: true,
+            photoSentAt: "2026-01-15T09:00:00.000Z",
+          },
           status: "POR_VALIDAR",
           validations: [],
         }),
@@ -325,9 +301,9 @@ describe("ponto panel — GET /pending + POST validate", () => {
     const body = res.json();
     expect(body).toHaveLength(1);
     expect(body[0].effectiveStatus).toBe("POR_VALIDAR");
-    expect(body[0].photos).toEqual([
-      { id: "ph1", url: "/api/ponto/photos/ph1" },
-    ]);
+    expect(body[0].proofs.photoSentAt).toBe("2026-01-15T09:00:00.000Z");
+    expect(body[0]).not.toHaveProperty("photos");
+    expect(body[0].proofs).not.toHaveProperty("photoId");
   });
 
   it("validate appends a decision and returns the effective status", async () => {
@@ -641,8 +617,8 @@ describe("ponto panel — GET /hours + /missing-exits", () => {
 });
 
 describe("ponto panel — GET /photos/:id", () => {
-  it("404 when the photo row does not exist", async () => {
-    const app = buildApp(fakePrisma({ photoPath: null }));
+  it("photo serving route no longer exists", async () => {
+    const app = buildApp(fakePrisma());
     const res = await app.inject({
       method: "GET",
       url: "/api/ponto/photos/nope",

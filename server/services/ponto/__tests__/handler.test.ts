@@ -2,33 +2,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Fluxos do livro de ponto com fakes: prisma (só user.findMany é real —
 // staff.ts), settings.repository, cloudFetch (evaluate), crypto e
-// entries.js (timeEntry/pontoPhoto). state.ts e rate-limit.ts correm a
+// entries.js (timeEntry). state.ts e rate-limit.ts correm a
 // valer — cada teste usa um telefone distinto para não esgotar o
 // balde horário de 30/h do scope "ponto".
 
 const mocks = vi.hoisted(() => ({
   cloudFetch: vi.fn(),
-  deletePontoPhoto: vi.fn(() => Promise.resolve(undefined)),
-  downloadEvolutionMedia: vi.fn(() => Promise.resolve(null)),
   findOpenPresumedExit: vi.fn(
     (): Promise<{ at: Date; id: string } | null> => Promise.resolve(null)
   ),
   getOrCreateShopSettings: vi.fn(),
-  linkPontoPhoto: vi.fn(() => Promise.resolve(undefined)),
   pontoEntriesSince: vi.fn(
     (): Promise<Record<string, unknown>[]> => Promise.resolve([])
   ),
   recordPontoEntry: vi.fn((_prisma: unknown, _input: Record<string, unknown>) =>
     Promise.resolve({ id: "entry-1" })
-  ),
-  savePontoPhotoFile: vi.fn(
-    (
-      _prisma: unknown,
-      _userId: string,
-      _buffer: Buffer,
-      _hintedMime?: string | null
-    ): Promise<{ id: string; path: string } | null> =>
-      Promise.resolve({ id: "photo-1", path: "ponto-photos/u1/p.jpg" })
   ),
   todayPontoEntries: vi.fn(
     (): Promise<Record<string, unknown>[]> => Promise.resolve([])
@@ -43,16 +31,10 @@ vi.mock("../../../lib/crypto.js", async (importOriginal) => {
   const orig = await importOriginal<typeof import("../../../lib/crypto.js")>();
   return { ...orig, decryptSecret: () => "test-shop-token" };
 });
-vi.mock("../../evolution.service.js", () => ({
-  downloadEvolutionMedia: mocks.downloadEvolutionMedia,
-}));
 vi.mock("../entries.js", () => ({
-  deletePontoPhoto: mocks.deletePontoPhoto,
   findOpenPresumedExit: mocks.findOpenPresumedExit,
-  linkPontoPhoto: mocks.linkPontoPhoto,
   pontoEntriesSince: mocks.pontoEntriesSince,
   recordPontoEntry: mocks.recordPontoEntry,
-  savePontoPhotoFile: mocks.savePontoPhotoFile,
   todayPontoEntries: mocks.todayPontoEntries,
 }));
 // Dependências do pipeline de clientes — o ponto tem de as evitar.
@@ -796,7 +778,7 @@ describe("SMS", () => {
 });
 
 describe("externos (externalWork)", () => {
-  it("ENTRADA sem código → localização → pedido de foto → foto → hasPhoto", async () => {
+  it("ENTRADA externa com foto → prova temporal, sem ficheiro nem photoId", async () => {
     const { ctx, phone, sent, t } = setup({
       staffOver: { externalWork: true },
     });
@@ -818,32 +800,35 @@ describe("externos (externalWork)", () => {
     expect(sent.at(-1)).toContain("foto");
     // Ainda não avaliou — espera a foto.
     expect(mocks.cloudFetch).not.toHaveBeenCalled();
-    const png = Buffer.from([
-      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4,
-    ]);
+    const photoAt = new Date().toISOString();
     await tryHandlePontoStaff(
       ctx,
       msg({
+        createdAt: photoAt,
         fromPhone: phone,
-        imageRef: { mimetype: "image/png", raw: { key: { id: "k" } } },
+        imageRef: { mimetype: "image/png" },
         messageType: "image",
       }),
-      t,
-      { fetchPhoto: async () => ({ buffer: png, mimetype: "image/png" }) }
+      t
     );
     expect(evaluateBody()).toMatchObject({ hasPhoto: true, type: "ENTRADA" });
-    expect(mocks.savePontoPhotoFile).toHaveBeenCalled();
-    expect(mocks.linkPontoPhoto).toHaveBeenCalledWith(
-      expect.anything(),
-      "photo-1",
-      "entry-1"
-    );
     expect(mocks.recordPontoEntry).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        proofs: expect.objectContaining({ hasPhoto: true, photoId: "photo-1" }),
+        proofs: expect.objectContaining({
+          hasPhoto: true,
+          photoSentAt: photoAt,
+        }),
       })
     );
+    const entryArg = mocks.recordPontoEntry.mock.calls.at(-1)?.[1] as
+      | { proofs: Record<string, unknown> }
+      | undefined;
+    // Critério de privacidade: não há ficheiro, URL nem identificador de
+    // fotografia para ligar ao registo — só o instante em que foi enviada.
+    expect(entryArg?.proofs).not.toHaveProperty("photoId");
+    expect(entryArg?.proofs).not.toHaveProperty("photoUrl");
+    expect(entryArg?.proofs).not.toHaveProperty("photoPath");
   });
 
   it("foto a tempo >5 min depois do comando → messageAt é o envio da foto, não o comando", async () => {
@@ -877,24 +862,26 @@ describe("externos (externalWork)", () => {
     // Foto chega 6 min depois do comando — dentro da janela da foto.
     vi.setSystemTime(new Date("2026-01-10T09:06:00Z"));
     const photoAt = new Date().toISOString();
-    const png = Buffer.from([
-      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4,
-    ]);
     await tryHandlePontoStaff(
       ctx,
       msg({
         createdAt: photoAt,
         fromPhone: phone,
-        imageRef: { mimetype: "image/png", raw: { key: { id: "k" } } },
+        imageRef: { mimetype: "image/png" },
         messageType: "image",
       }),
-      t,
-      { fetchPhoto: async () => ({ buffer: png, mimetype: "image/png" }) }
+      t
     );
     const body = evaluateBody();
     expect(body).toMatchObject({ hasPhoto: true, type: "ENTRADA" });
     // messageAt = envio da foto — fresco na janela de 5 min da Cloud.
     expect(body.messageAt).toBe(photoAt);
+    expect(mocks.recordPontoEntry).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        proofs: expect.objectContaining({ photoSentAt: photoAt }),
+      })
+    );
     expect(Date.now() - Date.parse(body.messageAt as string)).toBeLessThan(
       5 * 60 * 1000
     );
@@ -1058,7 +1045,7 @@ describe("externos (externalWork)", () => {
     expect(evaluateBody().messageAt).toBe("2026-01-10T09:05:00.000Z");
   });
 
-  it("foto que não grava (imagem inválida) → hasPhoto=false, sem photoId", async () => {
+  it("imageRef sem metadados de ficheiro → continua a contar como foto enviada", async () => {
     const { ctx, phone, t } = setup({
       staffOver: { externalWork: true },
     });
@@ -1077,68 +1064,25 @@ describe("externos (externalWork)", () => {
       }),
       t
     );
-    // A foto chega mas a gravação rejeita-a (magic bytes inválidos) —
-    // a marcação segue sem prova, nunca APROVADO com foto fantasma.
-    mocks.savePontoPhotoFile.mockResolvedValueOnce(null);
+    // Não há validação de magic bytes nem tentativa de download: a chegada
+    // da mensagem de imagem é, por si só, a prova pedida pelo dono.
+    const photoAt = new Date().toISOString();
     await tryHandlePontoStaff(
       ctx,
       msg({
+        createdAt: photoAt,
         fromPhone: phone,
-        imageRef: { mimetype: "image/png", raw: { key: { id: "k" } } },
+        imageRef: {},
         messageType: "image",
       }),
-      t,
-      {
-        fetchPhoto: async () => ({
-          buffer: Buffer.from("isto nao e uma imagem"),
-          mimetype: "image/png",
-        }),
-      }
+      t
     );
-    expect(evaluateBody()).toMatchObject({ hasPhoto: false });
+    expect(evaluateBody()).toMatchObject({ hasPhoto: true });
     const entryArg = mocks.recordPontoEntry.mock.calls.at(-1)?.[1] as
       | { proofs: Record<string, unknown> }
       | undefined;
-    expect(entryArg?.proofs.hasPhoto).toBe(false);
-    expect(entryArg?.proofs.photoId).toBeUndefined();
-    expect(mocks.linkPontoPhoto).not.toHaveBeenCalled();
-  });
-
-  it("URL de foto privada (SSRF) → descartada sem download, hasPhoto=false", async () => {
-    const { ctx, phone, t } = setup({
-      staffOver: { externalWork: true },
-    });
-    mocks.todayPontoEntries.mockResolvedValue([]);
-    await tryHandlePontoStaff(
-      ctx,
-      msg({ fromPhone: phone, text: "ENTRADA" }),
-      t
-    );
-    await tryHandlePontoStaff(
-      ctx,
-      msg({
-        fromPhone: phone,
-        location: { lat: 41.1, lng: -8.6 },
-        messageType: "location",
-      }),
-      t
-    );
-    // Sem opts.fetchPhoto → defaultFetchPhoto → a url do webhook passa
-    // pela guarda SSRF: IP privado/link-local nunca é contactado.
-    await tryHandlePontoStaff(
-      ctx,
-      msg({
-        fromPhone: phone,
-        imageRef: {
-          mimetype: "image/png",
-          url: "https://169.254.169.254/latest/meta-data",
-        },
-        messageType: "image",
-      }),
-      t
-    );
-    expect(evaluateBody()).toMatchObject({ hasPhoto: false });
-    expect(mocks.savePontoPhotoFile).not.toHaveBeenCalled();
+    expect(entryArg?.proofs.photoSentAt).toBe(photoAt);
+    expect(entryArg?.proofs).not.toHaveProperty("photoId");
   });
 });
 

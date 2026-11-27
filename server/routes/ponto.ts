@@ -1,4 +1,4 @@
-import fs from "node:fs";
+import fs from "node:fs/promises";
 import path from "node:path";
 import type { PrismaClient } from "@generated/client";
 import { AppError } from "@shared/errors/app-error.js";
@@ -11,7 +11,6 @@ import {
   pontoValidateSchema,
 } from "@shared/schemas/ponto.schema.js";
 import type { FastifyPluginCallback, FastifyRequest } from "fastify";
-import { loadEnv } from "../config/env.js";
 import { decryptSecret } from "../lib/crypto.js";
 import { dashboardScope } from "../middlewares/dashboard-scope.js";
 import { requirePermission } from "../middlewares/rbac.js";
@@ -27,7 +26,6 @@ import {
   listNow,
   listPending,
   listRecentDecisions,
-  resolvePontoPhotoPath,
   resolvePontoRange,
 } from "../services/ponto-panel.service.js";
 import { isModuleEnabled } from "../utils/modules.js";
@@ -128,8 +126,72 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
     },
     async (req, reply) => {
       const settings = await getOrCreateShopSettings(app.prisma);
+      // Falhas da limpeza das fotografias antigas. Fonte principal: as
+      // linhas que continuam em ponto_photos — a linha só é apagada
+      // quando TODAS as cópias do ficheiro desaparecem, por isso cada
+      // linha presente É uma fotografia por apagar. E sobrevive a
+      // reversões do atualizador, que não restaura a base de dados.
+      // O relatório em UPLOAD_DIR/ponto-photo-shred.json cobre órfãos
+      // e pastas que não se conseguiram listar.
+      const photoCleanupWarnings: string[] = [];
+      try {
+        const reg = await app.prisma.$queryRaw<{ reg: string | null }[]>`
+          SELECT to_regclass('public.ponto_photos')::text AS reg`;
+        if (reg[0]?.reg) {
+          const rows = await app.prisma.$queryRaw<{ path: string }[]>`
+            SELECT path FROM "ponto_photos"`;
+          for (const row of rows) {
+            photoCleanupWarnings.push(row.path);
+          }
+        }
+      } catch {
+        // Sem tabela (limpeza concluída) ou BD indisponível — o
+        // relatório ainda pode ter entradas.
+      }
+      try {
+        const reportPath = path.resolve(
+          process.env.UPLOAD_DIR ?? "./uploads",
+          "ponto-photo-shred.json"
+        );
+        const raw = await fs.readFile(reportPath, "utf-8");
+        const parsed = JSON.parse(raw) as { failures?: unknown };
+        if (Array.isArray(parsed.failures)) {
+          const listed = parsed.failures.filter(
+            (f): f is string => typeof f === "string"
+          );
+          // Pastas já apagadas à mão saem do aviso — sem isto o relatório
+          // era lido para sempre e o aviso nunca desaparecia. Entradas com
+          // padrões (app.prev*) não são caminhos reais: ficam sempre.
+          // Caminhos UNC/rede são recusados ANTES de qualquer stat: o
+          // relatório pode ser alterado por utilizadores locais e um
+          // caminho \\host\partilha levaria o Windows a autenticação SMB
+          // num destino não autorizado.
+          const stillThere = await Promise.all(
+            listed.map(async (f) => {
+              if (f.includes("*")) {
+                return f;
+              }
+              if (
+                f.startsWith("\\\\") ||
+                f.startsWith("//") ||
+                !path.isAbsolute(f)
+              ) {
+                return null;
+              }
+              const stat = await fs.stat(f).catch(() => null);
+              return stat ? f : null;
+            })
+          );
+          photoCleanupWarnings.push(
+            ...stillThere.filter((f): f is string => f !== null)
+          );
+        }
+      } catch {
+        // Sem relatório — as linhas da BD já estão no aviso.
+      }
       return reply.send({
         enabled: isModuleEnabled(settings, MODULE),
+        photoCleanupWarnings,
         tz: shopTz(req),
       });
     }
@@ -486,50 +548,6 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
         lng: settings.pontoGeoLng,
         radiusM: settings.pontoRadiusM,
       });
-    }
-  );
-
-  // Fotos de prova: acesso por id (não por path) — a URL nunca expõe a
-  // estrutura de diretórios e o guard de traversal impede escapes de
-  // UPLOAD_DIR mesmo que um path gravado seja adulterado.
-  const PHOTO_MIME: Record<string, string> = {
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".png": "image/png",
-    ".webp": "image/webp",
-  };
-
-  app.get(
-    "/photos/:photoId",
-    {
-      preHandler: [requirePermission({ reports: ["viewShop"] })],
-      schema: {
-        params: { type: "object", additionalProperties: true },
-        summary: "Serve a ponto proof photo by id",
-        tags: ["ponto"],
-      },
-    },
-    async (req, reply) => {
-      const { photoId } = req.params as { photoId: string };
-      const photo = await app.prisma.pontoPhoto.findUnique({
-        select: { path: true },
-        where: { id: photoId },
-      });
-      if (!photo) {
-        throw new AppError("NOT_FOUND");
-      }
-      const full = resolvePontoPhotoPath(loadEnv().UPLOAD_DIR, photo.path);
-      if (!full) {
-        throw new AppError("NOT_FOUND");
-      }
-      const stat = await fs.promises.stat(full).catch(() => null);
-      if (!stat?.isFile()) {
-        throw new AppError("NOT_FOUND");
-      }
-      const type =
-        PHOTO_MIME[path.extname(full).toLowerCase()] ??
-        "application/octet-stream";
-      return reply.type(type).send(fs.createReadStream(full));
     }
   );
 

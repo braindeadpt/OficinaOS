@@ -17,7 +17,10 @@ export const intakeTermsRoutes: FastifyPluginCallback = (app, _opts, done) => {
     { schema: { tags: ["settings"], summary: "Get intake terms" } },
     async (_req, reply) => {
       const settings = await getShopSettings(app.prisma);
-      return reply.send({ intakeTerms: settings?.intakeTerms ?? null });
+      return reply.send({
+        intakeTerms: settings?.intakeTerms ?? null,
+        intakeTermsVersion: settings?.intakeTermsVersion ?? 1,
+      });
     }
   );
 
