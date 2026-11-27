@@ -250,7 +250,9 @@ export function mergeCustomers(
     // deadlock mesmo com a ordenação por id. O segundo pedido espera e
     // falha com NOT_FOUND — a ficha de origem já não existe.
     const pairKey = [keepId, mergedId].sort().join("|");
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${pairKey}, 0))`;
+    // $executeRaw: pg_advisory_xact_lock devolve void, que o $queryRaw
+    // não consegue desserializar — abortava a transação inteira.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${pairKey}, 0))`;
     const [keep, merged] = await Promise.all([
       tx.customer.findUnique({
         include: CUSTOMER_INCLUDE_COUNTS,
@@ -421,8 +423,14 @@ export function mergeCustomers(
 
     // A execução devolve a decisão real (com a confirmação do operador, se
     // veio no pedido) — não o resultado seguro da pré-visualização.
+    // O resumo reflete o que foi gravado — os valores relidos sob lock,
+    // não os iniciais (uma edição a meio da junção não o desatualiza).
     const result: MergePreview = {
       ...preview,
+      email: freshKeep.email ?? freshMerged.email,
+      emailFrom: fieldSource(freshKeep.email, freshMerged.email),
+      taxId: freshKeep.taxId ?? freshMerged.taxId,
+      taxIdFrom: fieldSource(freshKeep.taxId, freshMerged.taxId),
       whatsappConsent: consent.consent,
     };
 
