@@ -57,6 +57,19 @@ export default function TeamInfoSheets() {
     load().catch(() => undefined);
   }, [load]);
 
+  // A Equipa emite este evento quando ativa/desativa o ponto de alguém —
+  // sem o refresco, a lista (e o botão de impressão em lote) ficava presa
+  // aos destinatários de quando o separador abriu.
+  useEffect(() => {
+    const refresh = () => {
+      setPrintAllEmpty(false);
+      load().catch(() => undefined);
+    };
+    window.addEventListener("ponto-info-deliveries-changed", refresh);
+    return () =>
+      window.removeEventListener("ponto-info-deliveries-changed", refresh);
+  }, [load]);
+
   const open = (row: PontoInfoDeliveryRowDTO) => {
     setEditing(row);
     setDeliveredAt(row.delivery?.deliveredAt ?? todayYmd(shopTz));
@@ -107,10 +120,21 @@ export default function TeamInfoSheets() {
         <Button
           className="ml-auto"
           icon="print"
-          onClick={() => {
-            // A impressão em lote só inclui ativos com ponto — contar os
-            // destinatários reais, não as linhas da tabela.
-            const printable = data.rows.filter(
+          onClick={async () => {
+            // A impressão em lote só inclui ativos com ponto. Consultar a
+            // lista fresca ao clicar: a ativação do ponto noutro separador
+            // pode ter mudado os destinatários desde o carregamento.
+            let rows = data.rows;
+            try {
+              const res = await api.get<PontoInfoDeliveriesResponse>(
+                "/ponto/info-deliveries"
+              );
+              setData(res.data);
+              rows = res.data.rows;
+            } catch {
+              // Sem rede decide-se com a lista em memória.
+            }
+            const printable = rows.filter(
               (r) => r.isActive && r.pontoEnabled
             ).length;
             if (printable === 0) {
