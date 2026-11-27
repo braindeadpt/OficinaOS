@@ -65,6 +65,32 @@ function statusLabel(entry: PontoActEntryDTO, t: TFunction): string {
   return entry.superseded ? `${base} (${t("ponto.act_superseded")})` : base;
 }
 
+/** Classificação única da prova de presença (decisões da Fase 2).
+ *  Registos antigos sem kind → «—» no exportador, sem preenchimento
+ *  retroativo. */
+function proofLabel(
+  entry: PontoActLinkedEntryDTO,
+  t: TFunction
+): string | null {
+  if (entry.proofKind === "screen_wifi") {
+    return t("ponto.act_proof_screen_wifi");
+  }
+  if (entry.proofKind === "location") {
+    return t("ponto.act_proof_location");
+  }
+  if (entry.proofKind === "external_photo") {
+    return t("ponto.act_proof_external_photo");
+  }
+  // Ficou por validar e uma pessoa decidiu: prova é a própria validação.
+  const latest = entry.validations[0];
+  if (latest?.decision === "APROVADO") {
+    return t("ponto.act_proof_manual", {
+      name: latest.byUserName ?? t("ponto.act_system_author"),
+    });
+  }
+  return null;
+}
+
 function linkedLine(args: {
   entry: PontoActLinkedEntryDTO;
   label: string;
@@ -83,7 +109,7 @@ function linkedLine(args: {
     e.createdAt,
     args.locale,
     args.timeZone
-  )}${reason}`;
+  )}${reason} · ${args.t("ponto.act_proof")}: ${proofLabel(e, args.t) ?? "—"}`;
 }
 
 function pushValidationLines(
@@ -181,6 +207,8 @@ export function actEntryDetails(
       )}`
     );
   }
+  const proof = proofLabel(entry, t);
+  lines.push(`${t("ponto.act_proof")}: ${proof ?? "—"}`);
   // Quando a linha traz uma picagem ligada, até as validações da própria
   // linha precisam de rótulo: pertencem ao original (se há correções) ou
   // à correção (se a linha corrige outra picagem).

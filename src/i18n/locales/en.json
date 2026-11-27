@@ -1208,7 +1208,7 @@
   "ponto.info_doc_what_1": "Clock-ins, break starts, break returns and clock-outs sent by WhatsApp or SMS, always with the server time at the moment each record is received.",
   "ponto.info_doc_what_2": "The first proof is the shop network: the system checks whether the record was made through the shop Wi-Fi/network.",
   "ponto.info_doc_what_2_company": "The first proof is the company network: the system checks whether the record was made through the company Wi-Fi/network.",
-  "ponto.info_doc_what_3": "For WhatsApp punches the current location is requested at the moment of the punch. SMS punches never ask for location or photos: the record is made immediately and stays 'pending review' until the manager decides (the code is only used for internal staff clock-ins). Location is never continuous and there is no tracking or surveillance.",
+  "ponto.info_doc_what_3": "For WhatsApp clock-ins, your location is only requested when there is no other proof of presence: scanning the rotating screen QR code on the shop network does not require it. A handwritten code, the printed QR, an expired code or no code at all do require it. SMS clock-ins never request location or a photo: the record stays 'pending validation' until the manager decides. The code can be used for every record (entry, pause, return and exit). Location is never continuous and there is no tracking or surveillance. If the shop has enabled systematic location requests, it is requested on every WhatsApp clock-in.",
   "ponto.info_open": "Print worker information",
   "ponto.info_print": "Print",
   "ponto.info_text": "Information text for workers (GDPR)",
@@ -3228,7 +3228,7 @@
   "ponto.info_doc_rights_3": "Corrections to time-clock records are not deleted: they are added next to the original record so the history remains auditable.",
   "ponto.info_doc_rights_4": "If you have questions about this processing, contact the controller identified above.",
   "ponto.info_doc_template_notice": "Template — under legal review.",
-  "ponto.info_doc_what_3_company": "For WhatsApp punches the current location is requested at the moment of the punch. SMS punches never ask for location or photos: the record is made immediately and stays 'pending review' until the manager decides (the code is only used for internal staff clock-ins). Location is never continuous and there is no tracking or surveillance.",
+  "ponto.info_doc_what_3_company": "For WhatsApp clock-ins, your location is only requested when there is no other proof of presence: scanning the rotating screen QR code on the company network does not require it. A handwritten code, the printed QR, an expired code or no code at all do require it. SMS clock-ins never request location or a photo: the record stays 'pending validation' until the manager decides. The code can be used for every record (entry, pause, return and exit). Location is never continuous and there is no tracking or surveillance. If the company has enabled systematic location requests, it is requested on every WhatsApp clock-in.",
   "ponto.info_doc_what_4": "Photos of external work remain only on the company mobile phone that receives WhatsApp/SMS. They are not stored by this application or by the service provider.",
   "ponto.info_doc_what_5": "No biometric data is collected or used.",
   "ponto.sheet_delivered_at": "Delivered on",
@@ -3246,5 +3246,12 @@
   "ponto.sheet_signed_yes": "yes",
   "ponto": {
     "act_registered_by": "Registered by"
-  }
+  },
+  "ponto.always_ask_location": "Always ask for location",
+  "ponto.always_ask_location_hint": "Always requesting location requires justification in the impact assessment (AIPD). Off by default: location is only requested when there is no other proof of presence.",
+  "ponto.act_proof": "Proof",
+  "ponto.act_proof_screen_wifi": "Screen QR on the shop network",
+  "ponto.act_proof_location": "Location at the time",
+  "ponto.act_proof_external_photo": "External: location + photo (not stored)",
+  "ponto.act_proof_manual": "Manually validated by {{name}}"
 }

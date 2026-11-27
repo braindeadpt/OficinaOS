@@ -34,6 +34,7 @@ export interface PontoStaffConfigRow {
 }
 
 export interface PontoCloudConfigPayload {
+  alwaysAskLocation: boolean;
   externalAutoApprove: boolean;
   photoRequired: boolean;
   pinSyncVersion: 1;
@@ -45,6 +46,7 @@ export interface PontoCloudConfigPayload {
 }
 
 interface PontoSettingsRow {
+  pontoAlwaysAskLocation: boolean;
   pontoExternalAutoApprove: boolean;
   pontoExternalPhotoRequired: boolean;
   pontoGeoLat: number | null;
@@ -69,6 +71,7 @@ export function buildPontoConfigPayload(
 ): PontoCloudConfigPayload {
   const hasGeo = settings.pontoGeoLat !== null && settings.pontoGeoLng !== null;
   return {
+    alwaysAskLocation: settings.pontoAlwaysAskLocation,
     externalAutoApprove: settings.pontoExternalAutoApprove,
     photoRequired: settings.pontoExternalPhotoRequired,
     pinSyncVersion: 1,
@@ -275,10 +278,37 @@ async function pushPontoCloudConfigNow(
   }).catch(() => null);
   if (!res) {
     log.warn("ponto config sync: cloud unreachable");
+    lastConfigPushFailed = true;
     return null;
   }
+  lastConfigPushFailed = !res.ok;
   if (!res.ok) {
     log.warn({ status: res.status }, "ponto config sync: cloud recusou");
   }
+  // Capacidade da Cloud: probe/needLocation + proofs.kind. Lê-se de cada
+  // resposta — Cloud antiga (sem o campo) ou falha de rede mantém o
+  // fluxo clássico de pedir sempre a localização.
+  const body = res.body as { evaluateProbe?: unknown } | null;
+  cloudEvaluateProbeSupported = res.ok && body?.evaluateProbe === true;
   return { body: res.body, ok: res.ok, status: res.status };
+}
+
+// Cache em memória da capacidade anunciada pela Cloud no último PUT de
+// config bem-sucedido. Conservador por omissão (false): sem certeza, a
+// app segue o fluxo clássico e pede sempre a localização primeiro.
+let cloudEvaluateProbeSupported = false;
+
+// true quando a última tentativa de enviar a config falhou (rede ou
+// recusa) — o poller periódico usa-o para voltar a tentar, senão a
+// sonda ficava desligada até ao próximo arranque/sync manual.
+let lastConfigPushFailed = false;
+
+/** A Cloud desta instalação já suporta probe/needLocation no evaluate? */
+export function cloudSupportsEvaluateProbe(): boolean {
+  return cloudEvaluateProbeSupported;
+}
+
+/** A última tentativa de PUT da config falhou e deve ser repetida? */
+export function pontoConfigPushFailed(): boolean {
+  return lastConfigPushFailed;
 }

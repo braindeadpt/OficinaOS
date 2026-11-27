@@ -24,6 +24,7 @@ interface PontoConfig {
 
 type PontoShop = Pick<
   ShopSettings,
+  | "pontoAlwaysAskLocation"
   | "pontoExitReminderTime"
   | "pontoExternalAutoApprove"
   | "pontoExternalPhotoRequired"
@@ -211,6 +212,7 @@ export default function SettingsPontoSection({
   const [radius, setRadius] = useState("100");
   const [autoApprove, setAutoApprove] = useState(true);
   const [photoRequired, setPhotoRequired] = useState(false);
+  const [alwaysAskLocation, setAlwaysAskLocation] = useState(false);
   const [exitTime, setExitTime] = useState("");
   const [pauseMinutes, setPauseMinutes] = useState("20");
   const [infoText, setInfoText] = useState("");
@@ -234,6 +236,7 @@ export default function SettingsPontoSection({
       setRadius(s.pontoRadiusM?.toString() ?? "100");
       setAutoApprove(s.pontoExternalAutoApprove ?? true);
       setPhotoRequired(s.pontoExternalPhotoRequired ?? false);
+      setAlwaysAskLocation(s.pontoAlwaysAskLocation ?? false);
       setExitTime(s.pontoExitReminderTime ?? "");
       setPauseMinutes(s.pontoPauseReminderMinutes?.toString() ?? "20");
       setInfoText(s.pontoInfoText ?? "");
@@ -282,6 +285,7 @@ export default function SettingsPontoSection({
       await api.put("/settings/shop", {
         pontoExitReminderTime: exitTime || null,
         pontoExternalAutoApprove: autoApprove,
+        pontoAlwaysAskLocation: alwaysAskLocation,
         pontoExternalPhotoRequired: photoRequired,
         pontoGeoLat: values.geoLat,
         pontoGeoLng: values.geoLng,
@@ -434,6 +438,27 @@ export default function SettingsPontoSection({
                 markDirty();
               }}
             />
+          </div>
+          <div>
+            <div className="flex items-center justify-between">
+              <p
+                className="font-medium text-on-surface text-sm"
+                id="ponto-always-ask-location-label"
+              >
+                {t("ponto.always_ask_location")}
+              </p>
+              <Switch
+                ariaLabelledBy="ponto-always-ask-location-label"
+                checked={alwaysAskLocation}
+                onChange={(checked) => {
+                  setAlwaysAskLocation(checked);
+                  markDirty();
+                }}
+              />
+            </div>
+            <p className="mt-1 text-on-surface-variant text-xs">
+              {t("ponto.always_ask_location_hint")}
+            </p>
           </div>
         </div>
       </div>

@@ -10,6 +10,7 @@ import {
 
 function settings(over: Record<string, unknown> = {}) {
   return {
+    pontoAlwaysAskLocation: false,
     pontoExternalAutoApprove: true,
     pontoExternalPhotoRequired: false,
     pontoGeoLat: 38.72,
@@ -26,6 +27,7 @@ describe("buildPontoConfigPayload", () => {
   it("monta geo/flags/timezone a partir das definições", () => {
     const payload = buildPontoConfigPayload(settings(), []);
     expect(payload).toEqual({
+      alwaysAskLocation: false,
       externalAutoApprove: true,
       photoRequired: false,
       pinSyncVersion: 1,
@@ -138,6 +140,7 @@ describe("pushPontoCloudConfig", () => {
           cloudEntitlements: ["ponto"],
           cloudShopTokenEncrypted: encryptSecret("shop-token"),
           cloudSyncedAt: new Date(),
+          pontoAlwaysAskLocation: false,
           pontoExternalAutoApprove: true,
           pontoExternalPhotoRequired: false,
           pontoGeoLat: 38.7,

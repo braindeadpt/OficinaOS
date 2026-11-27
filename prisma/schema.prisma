@@ -1416,6 +1416,10 @@ model ShopSettings {
   pontoRadiusM               Int       @default(100)
   pontoExternalAutoApprove   Boolean   @default(true)
   pontoExternalPhotoRequired Boolean   @default(false)
+  // «Pedir sempre a localização» — desligado por omissão. Ligado, exige
+  // justificação na avaliação de impacto (AIPD): a localização passa a
+  // ser pedida mesmo quando o scan do ecrã na rede da loja prova presença.
+  pontoAlwaysAskLocation     Boolean   @default(false)
   pontoExitReminderTime      String?
   pontoPauseReminderMinutes  Int       @default(20)
   pontoInfoText              String?   @db.Text

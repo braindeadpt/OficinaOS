@@ -34,6 +34,12 @@ export interface PontoEvaluateInput {
    *  createdAt) — ver state.ts commandAt. */
   messageAt?: string;
   phone: string;
+  /** Sonda (Cloud nova): a app ainda pode recolher localização. A Cloud
+   *  responde needLocation sem consumir o código nem gravar nada, ou
+   *  finaliza logo se a prova chegar sem coordenadas. Ignorado por
+   *  Clouds antigas — por isso só se envia quando a config anuncia a
+   *  capacidade (ver config-sync.ts). */
+  probe?: boolean;
   transport: PontoTransportKind;
   /** Comando original (ENTRADA pode ter sido convertido em VOLTEI por
    *  pausa — o `type` enviado é o efetivo). */
@@ -44,6 +50,9 @@ export interface PontoEvaluateResult {
   /** Instante da prova gravada pela Cloud — necessário para revogar uma
    *  ENTRADA que o dono recuse depois. Clouds sem o campo novo omitem-no. */
   entryRecordedAt?: string;
+  /** Resposta a uma sonda: falta prova — recolher localização e reenviar.
+   *  Nada foi consumido nem gravado. Clouds antigas nunca o enviam. */
+  needLocation?: boolean;
   proofs: Record<string, unknown>;
   reason?: string;
   status: PontoEvaluateStatus;
@@ -51,6 +60,7 @@ export interface PontoEvaluateResult {
 
 interface CloudEvaluateBody {
   entryRecordedAt?: unknown;
+  needLocation?: unknown;
   proofs?: unknown;
   reason?: unknown;
   status?: unknown;
@@ -107,6 +117,7 @@ export async function evaluatePontoMark(
       : undefined;
   return {
     ...(entryRecordedAt ? { entryRecordedAt } : {}),
+    ...(body?.needLocation === true ? { needLocation: true } : {}),
     proofs:
       body?.proofs && typeof body.proofs === "object"
         ? (body.proofs as Record<string, unknown>)

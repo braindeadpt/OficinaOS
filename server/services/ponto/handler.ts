@@ -23,6 +23,7 @@ import {
   type PontoCommand,
   parsePontoCommand,
 } from "./commands.js";
+import { cloudSupportsEvaluateProbe } from "./config-sync.js";
 import {
   findOpenPresumedExit,
   pontoEntriesSince,
@@ -371,7 +372,7 @@ async function finalizeExpiredPhoto(
     env.transport,
     {
       at,
-      code: expired.command === "ENTRADA" ? expired.code : undefined,
+      code: expired.code,
       command: expired.command,
       hasPhoto: false,
       location: expired.location,
@@ -989,10 +990,7 @@ async function dispatchCommand(a: DispatchArgs): Promise<void> {
   if (transport === "sms") {
     await finalizePonto(ctx, say, sayInteractive, settings, staff, transport, {
       at: new Date(msg.createdAt),
-      code:
-        effective === "ENTRADA" && !staff.user.externalWork
-          ? parsed.code
-          : undefined,
+      code: !staff.user.externalWork && parsed.code ? parsed.code : undefined,
       command: effective,
       hasPhoto: false,
       messageAt: msg.sentAt ?? msg.createdAt,
@@ -1003,10 +1001,22 @@ async function dispatchCommand(a: DispatchArgs): Promise<void> {
     return;
   }
 
-  // Staff de loja: ENTRADA exige o código do QR (o texto do wa.me traz
-  // "ENTRADA <slug> #<code>"). Externo entra sem código (§2.4).
-  if (!staff.user.externalWork && effective === "ENTRADA" && !parsed.code) {
-    await say(PONTO_TEXT.entradaNeedsCode);
+  if (
+    await tryProbeFinalize(
+      ctx,
+      say,
+      sayInteractive,
+      settings,
+      staff,
+      transport,
+      msg,
+      effective,
+      parsed.code,
+      phoneDigits,
+      pauseSinceAt,
+      hasEntrada
+    )
+  ) {
     return;
   }
 
@@ -1018,9 +1028,7 @@ async function dispatchCommand(a: DispatchArgs): Promise<void> {
     // messageTimestamp do payload) — a Cloud mede a validade do código
     // e a frescura do registo a partir daqui.
     commandAt: msg.sentAt ?? msg.createdAt,
-    ...(effective === "ENTRADA" && !staff.user.externalWork && parsed.code
-      ? { code: parsed.code }
-      : {}),
+    ...(!staff.user.externalWork && parsed.code ? { code: parsed.code } : {}),
     expiresAt: Date.now() + PONTO_LOCATION_TTL_MS,
     externalWork: staff.user.externalWork,
     pauseSinceAt,
@@ -1104,7 +1112,7 @@ async function onLocation(env: FlowEnv, pending: PendingPonto): Promise<void> {
   clearPendingPonto(key);
   await finalizePonto(ctx, say, sayInteractive, settings, staff, transport, {
     at: new Date(pending.locationAt),
-    code: pending.command === "ENTRADA" ? pending.code : undefined,
+    code: pending.code,
     command: pending.command,
     hasPhoto: false,
     location: pending.location,
@@ -1142,7 +1150,7 @@ async function onPhoto(env: FlowEnv, pending: PendingPonto): Promise<void> {
   const photoSentAt = msg.sentAt ?? msg.createdAt;
   await finalizePonto(ctx, say, sayInteractive, settings, staff, transport, {
     at: new Date(pending.locationAt ?? pending.commandAt),
-    code: pending.command === "ENTRADA" ? pending.code : undefined,
+    code: pending.code,
     command: pending.command,
     hasPhoto: true,
     location: pending.location,
@@ -1230,6 +1238,75 @@ function entryRecordedAtProof(entryRecordedAt: string | undefined) {
   return { entryRecordedAt };
 }
 
+/** Sonda (Cloud nova, Fase 2): com código, avaliar primeiro sem
+ *  coordenadas — o scan do ecrã rotativo dentro da rede da loja prova
+ *  presença e a localização nunca é pedida (privacidade: só se recolhe
+ *  quando não há outra prova). needLocation, Cloud antiga ou falha de
+ *  rede devolvem false e o chamador segue o fluxo clássico. */
+async function tryProbeFinalize(
+  ctx: BotReplyCtx,
+  say: Say,
+  sayInteractive: SayInteractive,
+  settings: Settings,
+  staff: PontoStaffMatch,
+  transport: NonNullable<InboundTransport["ponto"]>["transport"],
+  msg: InboundMessage,
+  effective: PontoMarkCommand,
+  code: string | undefined,
+  phoneDigits: string,
+  pauseSinceAt: string | undefined,
+  hasEntrada: boolean
+): Promise<boolean> {
+  // Mesmo gate da avaliação clássica: sem geo da loja configurada o módulo
+  // não está operacional e a sonda não pode concluir nada — cai no fluxo
+  // clássico, que informa o utilizador da configuração em falta.
+  const geoMissing =
+    settings.pontoGeoLat === null ||
+    settings.pontoGeoLat === undefined ||
+    settings.pontoGeoLng === null ||
+    settings.pontoGeoLng === undefined;
+  if (
+    staff.user.externalWork ||
+    !code ||
+    geoMissing ||
+    !cloudSupportsEvaluateProbe()
+  ) {
+    return false;
+  }
+  const probeResult = await evaluatePontoMark(ctx.prisma, ctx.log, {
+    type: effective,
+    transport,
+    code,
+    phone: phoneDigits,
+    messageAt: msg.sentAt ?? msg.createdAt,
+    hasPhoto: false,
+    probe: true,
+  });
+  if (!probeResult || probeResult.needLocation) {
+    return false;
+  }
+  await recordPontoResult(
+    ctx,
+    say,
+    sayInteractive,
+    settings,
+    staff,
+    transport,
+    {
+      at: new Date(msg.createdAt),
+      code,
+      command: effective,
+      hasPhoto: false,
+      messageAt: msg.sentAt ?? msg.createdAt,
+      pauseMinutes: pauseMinutesOf(pauseSinceAt, new Date(msg.createdAt)),
+      phoneDigits,
+      todayHasEntry: hasEntrada,
+    },
+    probeResult
+  );
+  return true;
+}
+
 async function finalizePonto(
   ctx: BotReplyCtx,
   say: Say,
@@ -1260,7 +1337,7 @@ async function finalizePonto(
   const result = await evaluatePontoMark(ctx.prisma, ctx.log, {
     type: args.command,
     transport,
-    ...(args.command === "ENTRADA" && args.code ? { code: args.code } : {}),
+    ...(args.code ? { code: args.code } : {}),
     phone: args.phoneDigits,
     messageAt: args.messageAt,
     ...(args.location ? { location: args.location } : {}),
@@ -1271,6 +1348,31 @@ async function finalizePonto(
     await say(PONTO_TEXT.evaluateFailed);
     return;
   }
+  await recordPontoResult(
+    ctx,
+    say,
+    sayInteractive,
+    settings,
+    staff,
+    transport,
+    args,
+    result
+  );
+}
+
+/** Gravação + confirmação de uma avaliação já feita — partilhada pelo
+ *  fluxo clássico (finalizePonto avalia primeiro) e pela sonda da Cloud
+ *  nova, que já traz o veredicto final quando dispensa a localização. */
+async function recordPontoResult(
+  ctx: BotReplyCtx,
+  say: Say,
+  sayInteractive: SayInteractive,
+  settings: Settings,
+  staff: PontoStaffMatch,
+  transport: NonNullable<InboundTransport["ponto"]>["transport"],
+  args: FinalizeArgs,
+  result: NonNullable<Awaited<ReturnType<typeof evaluatePontoMark>>>
+): Promise<void> {
   if (result.status === "RECUSADO") {
     await say(recusadoText(result.reason));
     return;

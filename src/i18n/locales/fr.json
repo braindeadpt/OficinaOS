@@ -1208,7 +1208,7 @@
   "ponto.info_doc_what_1": "Entrées, débuts de pause, retours de pause et sorties envoyés par WhatsApp ou SMS, toujours avec l'heure du serveur au moment où chaque enregistrement est reçu.",
   "ponto.info_doc_what_2": "La première preuve est le réseau du magasin : le système vérifie si l'enregistrement a été effectué via le réseau/Wi-Fi du magasin.",
   "ponto.info_doc_what_2_company": "La première preuve est le réseau de l'entreprise : le système vérifie si l'enregistrement a été effectué via le réseau/Wi-Fi de l'entreprise.",
-  "ponto.info_doc_what_3": "Pour les pointages par WhatsApp, la localisation actuelle est demandée au moment du pointage. Les pointages par SMS ne demandent ni localisation ni photo : l'enregistrement est fait immédiatement et reste « à valider » jusqu'à la décision du responsable (le code n'est utilisé que pour les entrées du personnel interne). La localisation n'est jamais continue et il n'y a ni suivi ni surveillance.",
+  "ponto.info_doc_what_3": "Pour les pointages WhatsApp, la localisation n'est demandée que lorsqu'il n'existe pas d'autre preuve de présence : la lecture du QR rotatif de l'écran sur le réseau de la boutique l'en dispense. La demandent le code écrit à la main, le QR imprimé, un code expiré ou l'absence de code. Pour les pointages SMS, ni localisation ni photo ne sont demandées : le pointage reste « à valider » jusqu'à la décision du responsable. Le code peut être utilisé pour tous les pointages (entrée, pause, retour et sortie). La localisation n'est jamais continue et il n'y a ni suivi ni surveillance. Si la boutique a activé la demande systématique de localisation, celle-ci est demandée à chaque pointage WhatsApp.",
   "ponto.info_open": "Imprimer les informations sur le travailleur",
   "ponto.info_print": "Imprimer",
   "ponto.info_text": "Texte d'information pour les travailleurs (RGPD)",
@@ -3228,7 +3228,7 @@
   "ponto.info_doc_rights_3": "Les corrections des enregistrements de pointage n'effacent pas l'original : elles sont ajoutées à côté de lui afin de conserver un historique vérifiable.",
   "ponto.info_doc_rights_4": "En cas de question sur ce traitement, contactez le responsable identifié ci-dessus.",
   "ponto.info_doc_template_notice": "Modèle — en cours de révision juridique.",
-  "ponto.info_doc_what_3_company": "Pour les pointages par WhatsApp, la localisation actuelle est demandée au moment du pointage. Les pointages par SMS ne demandent ni localisation ni photo : l'enregistrement est fait immédiatement et reste « à valider » jusqu'à la décision du responsable (le code n'est utilisé que pour les entrées du personnel interne). La localisation n'est jamais continue et il n'y a ni suivi ni surveillance.",
+  "ponto.info_doc_what_3_company": "Pour les pointages WhatsApp, la localisation n'est demandée que lorsqu'il n'existe pas d'autre preuve de présence : la lecture du QR rotatif de l'écran sur le réseau de l'entreprise l'en dispense. La demandent le code écrit à la main, le QR imprimé, un code expiré ou l'absence de code. Pour les pointages SMS, ni localisation ni photo ne sont demandées : le pointage reste « à valider » jusqu'à la décision du responsable. Le code peut être utilisé pour tous les pointages (entrée, pause, retour et sortie). La localisation n'est jamais continue et il n'y a ni suivi ni surveillance. Si l'entreprise a activé la demande systématique de localisation, celle-ci est demandée à chaque pointage WhatsApp.",
   "ponto.info_doc_what_4": "Les photos du travail externe restent uniquement sur le téléphone mobile de l'entreprise qui reçoit le WhatsApp/SMS. Elles ne sont pas conservées par cette application ni par le fournisseur du service.",
   "ponto.info_doc_what_5": "Aucune donnée biométrique n'est collectée ni utilisée.",
   "ponto.sheet_delivered_at": "Livré le",
@@ -3246,5 +3246,12 @@
   "ponto.sheet_signed_yes": "Oui",
   "ponto": {
     "act_registered_by": "Enregistré par"
-  }
+  },
+  "ponto.always_ask_location": "Demandez toujours l'emplacement",
+  "ponto.always_ask_location_hint": "La demande de localisation nécessite toujours une justification dans l’étude d’impact (AIPD). ",
+  "ponto.act_proof": "Preuve",
+  "ponto.act_proof_screen_wifi": "QR de l'écran sur le réseau de la boutique",
+  "ponto.act_proof_location": "Localisation au moment de la pointeuse",
+  "ponto.act_proof_external_photo": "Externe : localisation + photo (non conservée)",
+  "ponto.act_proof_manual": "Validé manuellement par {{name}}"
 }

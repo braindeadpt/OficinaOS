@@ -112,12 +112,14 @@ function validationsDTO(
 }
 
 function linkedDTO(entry: LinkedEntryRow): PontoActLinkedEntryDTO {
+  const kind = (entry.proofs as Record<string, unknown> | null)?.kind;
   return {
     at: entry.at.toISOString(),
     createdAt: entry.createdAt.toISOString(),
     createdByName: entry.createdBy ? displayName(entry.createdBy) : null,
     effectiveStatus: entry.validations[0]?.decision ?? entry.status,
     id: entry.id,
+    ...(typeof kind === "string" ? { proofKind: kind } : {}),
     reason: entry.reason,
     status: entry.status,
     transport: entry.transport,
