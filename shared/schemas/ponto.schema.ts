@@ -28,15 +28,25 @@ export const pontoHoursQuerySchema = z.object({
   userId: z.string().optional(),
 });
 
-export const pontoActExportQuerySchema = z.object({
-  from: isoDate,
-  to: isoDate,
-  userId: z.string().optional(),
-});
+export const pontoActExportQuerySchema = z
+  .object({
+    from: isoDate,
+    to: isoDate,
+    userId: z.string().optional(),
+  })
+  .refine((v) => v.from <= v.to, {
+    message: "ponto.dates_invalid",
+    path: ["to"],
+  });
 
 export const pontoMissingExitsQuerySchema = z.object({
   from: isoDate,
   to: isoDate,
+});
+
+export const pontoInfoDeliveryUpsertSchema = z.object({
+  deliveredAt: isoDate,
+  signed: z.boolean(),
 });
 
 export const pontoValidateSchema = z.object({
@@ -68,6 +78,9 @@ export type PontoActExportQueryInput = z.infer<
 >;
 export type PontoMissingExitsQueryInput = z.infer<
   typeof pontoMissingExitsQuerySchema
+>;
+export type PontoInfoDeliveryUpsertInput = z.infer<
+  typeof pontoInfoDeliveryUpsertSchema
 >;
 export type PontoValidateInput = z.infer<typeof pontoValidateSchema>;
 export type PontoManualEntryInput = z.infer<typeof pontoManualEntrySchema>;

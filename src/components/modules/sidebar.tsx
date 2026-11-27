@@ -96,6 +96,7 @@ export default function Sidebar() {
   // (acesso legal de 5 anos à exportação); ver resolvePontoNavItems.
   const pontoEnabled = usePontoStore((s) => s.enabled);
   const pontoHasRecords = usePontoStore((s) => s.hasRecords);
+  const pontoCleanup = usePontoStore((s) => s.photoCleanupWarnings);
   const fetchPonto = usePontoStore((s) => s.fetchStatus);
   useEffect(() => {
     if (pontoEnabled === null) {
@@ -117,9 +118,17 @@ export default function Sidebar() {
             )
         ),
         pontoEnabled,
-        pontoHasRecords
+        pontoHasRecords,
+        pontoCleanup.length > 0
       ),
-    [role, aiInboxEnabled, pontoEnabled, pontoHasRecords, isPontoOnly]
+    [
+      role,
+      aiInboxEnabled,
+      pontoEnabled,
+      pontoHasRecords,
+      pontoCleanup,
+      isPontoOnly,
+    ]
   );
   const navGroups = useMemo(() => {
     const groupedPaths = new Set(NAV_GROUPS.flatMap((group) => group.paths));

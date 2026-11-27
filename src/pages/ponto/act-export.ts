@@ -7,7 +7,22 @@ import type {
   PontoTransport,
 } from "@shared/types/ponto";
 import type { TFunction } from "i18next";
-import { formatClock, formatMinutes } from "./shared";
+import { formatMinutes } from "./shared";
+
+// O relógio da exportação ACT mostra os segundos: os totais são calculados
+// com eles e uma picagem às 09:00:59 não pode parecer às 09:00 em papel.
+function formatClockSeconds(
+  iso: string,
+  locale: string,
+  timeZone: string | undefined
+): string {
+  return new Date(iso).toLocaleTimeString(locale, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    ...(timeZone ? { timeZone } : {}),
+  });
+}
 
 function formatDateTime(
   iso: string,
@@ -87,7 +102,7 @@ function pushValidationLines(
     // original parece pertencer à correção.
     const label = subjectKey ? t(subjectKey) : t("ponto.act_validation");
     lines.push(
-      `${label}: ${validation.decision} · ${author} · ${formatDateTime(
+      `${label}: ${statusText(validation.decision, t)} · ${author} · ${formatDateTime(
         validation.at,
         locale,
         timeZone
@@ -153,6 +168,19 @@ export function actEntryDetails(
   if (entry.reason && !entry.corrects) {
     lines.push(`${t("ponto.act_reason")}: ${entry.reason}`);
   }
+  // Uma picagem manual que não corrige nenhuma outra não teria autoria
+  // visível em lado nenhum — e é precisamente nessas que a ACT quer saber
+  // quem a registou e quando.
+  if (entry.transport === "MANUAL" && !entry.corrects) {
+    const author = entry.createdByName ?? t("ponto.act_system_author");
+    lines.push(
+      `${t("ponto.act_registered_by")}: ${author} · ${formatDateTime(
+        entry.createdAt,
+        locale,
+        timeZone
+      )}`
+    );
+  }
   // Quando a linha traz uma picagem ligada, até as validações da própria
   // linha precisam de rótulo: pertencem ao original (se há correções) ou
   // à correção (se a linha corrige outra picagem).
@@ -204,15 +232,26 @@ function workerRows(
   const rows: string[][] = [];
   const prefix = includeWorker ? [`${worker.name} (@${worker.username})`] : [];
   if (worker.days.length === 0) {
-    rows.push([...prefix, "", "", "", "", "", t("ponto.act_no_records")]);
-    return rows;
+    const exemptNote = worker.scheduleExempt
+      ? ` — ${t("ponto.act_schedule_exempt")} (${t("ponto.act_regime_at_export")})`
+      : "";
+    rows.push([
+      ...prefix,
+      "",
+      "",
+      "",
+      "",
+      "",
+      `${t("ponto.act_no_records")}${exemptNote}`,
+    ]);
+    // A linha de total do trabalhador (com o regime) continua a sair.
   }
   for (const [dayIndex, day] of worker.days.entries()) {
     for (const entry of day.entries) {
       rows.push([
         ...prefix,
         day.date,
-        formatClock(entry.at, locale, timeZone),
+        formatClockSeconds(entry.at, locale, timeZone),
         typeLabel(entry.type, t),
         t(TRANSPORT_LABEL[entry.transport]),
         statusLabel(entry, t),

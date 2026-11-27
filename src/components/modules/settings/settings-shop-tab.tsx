@@ -300,16 +300,19 @@ export default function SettingsShopTab({
         printerHost: shopForm.printerHost.trim() || null,
         printerPort: Number(shopForm.printerPort) || 9100,
       };
-      // intakeTerms is omitted when untouched: another workstation may have
-      // saved newer clauses since this form loaded, and resending the stale
-      // copy would silently overwrite them. An intentional clear still sends
-      // "" — the server stores it as null.
-      if (shopForm.intakeTerms === shopFormInitial.intakeTerms) {
-        const { intakeTerms: _unchanged, ...rest } = payload;
-        await saveShopSettings(rest);
-      } else {
-        await saveShopSettings(payload);
-      }
+      // intakeTerms/shopTaxId/shopLocality are omitted when untouched:
+      // another workstation may have saved newer values since this form
+      // loaded, and resending the stale copy would silently overwrite them.
+      // An intentional clear still sends "" — the server stores it as null.
+      const unchangedKeys = (
+        ["intakeTerms", "shopTaxId", "shopLocality"] as const
+      ).filter((key) => shopForm[key] === shopFormInitial[key]);
+      const finalPayload = Object.fromEntries(
+        Object.entries(payload).filter(
+          ([key]) => !(unchangedKeys as readonly string[]).includes(key)
+        )
+      ) as Partial<typeof payload>;
+      await saveShopSettings(finalPayload);
       setShopFormInitial({ ...shopForm });
       onDirtyChange(false);
       onToast(t("shop_config_saved"), "success");

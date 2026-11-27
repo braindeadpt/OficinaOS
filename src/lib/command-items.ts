@@ -61,6 +61,8 @@ export function buildCommands(deps: {
   pontoEnabled: boolean;
   /** Há registos guardados: a exportação ACT continua acessível (5 anos). */
   pontoHasRecords?: boolean;
+  /** Limpeza de fotografias por concluir: a entrada fica visível (rótulo ACT). */
+  pontoCleanupPending?: boolean;
   /** Instância standalone de ponto: só as páginas permitidas e nada de intake. */
   pontoOnly?: boolean;
   role: string;
@@ -77,7 +79,8 @@ export function buildCommands(deps: {
       )
     ),
     deps.pontoEnabled,
-    deps.pontoHasRecords ?? false
+    deps.pontoHasRecords ?? false,
+    deps.pontoCleanupPending ?? false
   ).map((item) => ({
     keywords: PAGE_KEYWORDS[item.to] ?? [],
     kind: "page",

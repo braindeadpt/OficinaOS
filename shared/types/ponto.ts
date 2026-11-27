@@ -223,3 +223,25 @@ export interface PontoActExportResponse {
   };
   workers: PontoActWorkerDTO[];
 }
+
+export interface PontoInfoDeliveryDTO {
+  deliveredAt: string;
+  registeredById: string;
+  registeredByName: string;
+  signed: boolean;
+  updatedAt: string;
+}
+
+export interface PontoInfoDeliveryRowDTO {
+  delivery: PontoInfoDeliveryDTO | null;
+  isActive: boolean;
+  name: string;
+  pontoEnabled: boolean;
+  userId: string;
+  username: string;
+}
+
+export interface PontoInfoDeliveriesResponse {
+  missingActiveCount: number;
+  rows: PontoInfoDeliveryRowDTO[];
+}

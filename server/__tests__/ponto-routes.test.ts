@@ -51,6 +51,14 @@ function fakePrisma(overrides: Partial<SettingsRow> = {}) {
       findFirst: vi.fn(async () => ({ timezone: "Europe/Lisbon" })),
       findUnique: vi.fn(async () => ({ ...row })),
     },
+    pontoInfoDelivery: {
+      upsert: vi.fn((args: { create: object }) =>
+        Promise.resolve({
+          ...args.create,
+          updatedAt: new Date("2026-01-10T12:00:00.000Z"),
+        })
+      ),
+    },
     timeEntry: {
       create: vi.fn(async () => ({})),
       findFirst: vi.fn(async () => null as { id: string } | null),
@@ -59,8 +67,8 @@ function fakePrisma(overrides: Partial<SettingsRow> = {}) {
     },
     timeEntryValidation: { create: vi.fn(async () => ({})) },
     user: {
-      findMany: vi.fn(async () => []),
-      findUnique: vi.fn(async (): Promise<unknown> => null),
+      findMany: vi.fn(async (): Promise<unknown[]> => []),
+      findUnique: vi.fn(async (_args: unknown): Promise<unknown> => null),
     },
     // A exportação ACT lê tudo dentro de uma transação REPEATABLE READ —
     // o mock corre o callback com o próprio cliente.
@@ -652,6 +660,89 @@ describe("ponto — GET /act-export", () => {
       timeZone: "Europe/Lisbon",
       to: "2026-01-31",
     });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejeita datas invertidas com 400 e o erro associado à data final", async () => {
+    const prisma = fakePrisma();
+    const app = buildApp(prisma);
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/ponto/act-export?from=2026-01-31&to=2026-01-01",
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.stringify(res.json())).toContain("dates_invalid");
+  });
+});
+
+describe("ponto — folha de informação aos trabalhadores", () => {
+  it("GET /info-deliveries devolve a contagem usada no aviso do painel", async () => {
+    const prisma = fakePrisma();
+    prisma.user.findMany.mockResolvedValue([
+      {
+        id: "u1",
+        isActive: true,
+        name: "Ana",
+        pontoEnabled: true,
+        pontoInfoDelivery: null,
+        username: "ana",
+      },
+      {
+        id: "u2",
+        isActive: false,
+        name: "Bruno",
+        pontoEnabled: true,
+        pontoInfoDelivery: null,
+        username: "bruno",
+      },
+    ]);
+    const app = buildApp(prisma);
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/ponto/info-deliveries",
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().missingActiveCount).toBe(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("PUT /info-deliveries/:userId regista data, assinatura e autor", async () => {
+    const prisma = fakePrisma();
+    prisma.user.findUnique.mockImplementation((args: unknown) => {
+      const id = (args as { where: { id: string } }).where.id;
+      return Promise.resolve(
+        id === "u1"
+          ? { id: "u1", name: "Dono", username: "dono" }
+          : { id, pontoEnabled: true }
+      );
+    });
+    const app = buildApp(prisma, { id: "u1", role: "OWNER" });
+    const res = await app.inject({
+      method: "PUT",
+      payload: { deliveredAt: "2026-01-08", signed: true },
+      url: "/api/ponto/info-deliveries/worker-1",
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(prisma.pontoInfoDelivery.upsert).toHaveBeenCalledOnce();
+    const args = prisma.pontoInfoDelivery.upsert.mock.calls[0]?.[0] as {
+      create: {
+        deliveredAt: Date;
+        registeredById: string;
+        registeredByName: string;
+        signed: boolean;
+      };
+    };
+    expect(args.create).toMatchObject({
+      registeredById: "u1",
+      registeredByName: "Dono",
+      signed: true,
+    });
+    expect(args.create.deliveredAt.toISOString()).toBe(
+      "2026-01-08T00:00:00.000Z"
+    );
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

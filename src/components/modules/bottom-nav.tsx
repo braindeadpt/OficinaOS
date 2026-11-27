@@ -220,10 +220,12 @@ export default function BottomNav() {
           can(role, { reports: ["viewShop"] })
         )
     ),
-    // O aviso de limpeza de fotografias vive nas Definições do ponto —
-    // com limpeza pendente o menu completo tem de continuar visível.
-    pontoEnabled || pontoCleanup.length > 0,
-    pontoHasRecords
+    // O aviso de limpeza de fotografias vive na própria página do ponto:
+    // com limpeza pendente a entrada fica visível, mas o rótulo ACT é
+    // decidido pelo entitlement — ver resolvePontoNavItems.
+    pontoEnabled,
+    pontoHasRecords,
+    pontoCleanup.length > 0
   );
   const primaryPaths = isPontoOnly
     ? ["/ponto", "/settings"]
