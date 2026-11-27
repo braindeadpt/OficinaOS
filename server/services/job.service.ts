@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import type { Job, PrismaClient } from "@generated/client";
 import { AuditAction, Prisma, type RepairCategory } from "@generated/client";
+import { effectiveDialCode } from "@shared/constants/countries.js";
 import { isImeiCategory } from "@shared/constants/device-categories";
 import type { JobStatusType } from "@shared/constants/job-statuses";
 import {
@@ -23,7 +24,7 @@ import type {
   UpdateJobInput,
 } from "@shared/schemas/job.schema";
 import { isValidImei, normalizeImei } from "@shared/utils/imei";
-import { normalizePhone } from "@shared/utils/phone";
+import { normalizePhoneE164 } from "@shared/utils/phone";
 import {
   findMany as auditFindMany,
   findManyWithInclude as auditFindManyWithInclude,
@@ -644,12 +645,20 @@ export function createImportedJob(
   const deliveredAt = input.deliveredAt ? new Date(input.deliveredAt) : null;
 
   return prisma.$transaction(async (tx) => {
+    // E.164 com o indicativo da loja (issue #77) — o lookup deduz o mesmo
+    // indicativo nas linhas legadas escritas sem ele.
+    const importSettings = await tx.shopSettings.findUnique({
+      select: { countryCode: true },
+      where: { id: "default" },
+    });
+    const importDial = effectiveDialCode(importSettings?.countryCode);
+    const importPhone = normalizePhoneE164(input.customerPhone, importDial);
     const customer =
-      (await findByNormalizedPhone(tx, normalizePhone(input.customerPhone))) ??
+      (await findByNormalizedPhone(tx, importPhone, importDial)) ??
       (await tx.customer.create({
         data: {
           name: input.customerName.trim(),
-          phone: input.customerPhone.trim(),
+          phone: importPhone,
           email: input.customerEmail?.trim() || null,
         },
       }));

@@ -5,6 +5,9 @@ import { create, list, search, update } from "../customers.service";
 function mockPrisma() {
   return {
     $queryRaw: vi.fn().mockResolvedValue([]),
+    shopSettings: {
+      findUnique: vi.fn().mockResolvedValue({ countryCode: "PT" }),
+    },
     customer: {
       upsert: vi.fn(),
       findUnique: vi.fn(),
@@ -391,5 +394,68 @@ describe("search", () => {
     expect(findManyCall[0].where.OR[1]).toEqual({
       phone: { startsWith: "+123" },
     });
+  });
+});
+
+describe("E.164 (issue #77)", () => {
+  it("guarda números novos em E.164 com o indicativo da loja", async () => {
+    const prisma = mockPrisma();
+    (prisma.customer.upsert as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "cust-1",
+      name: "Rui",
+      phone: "+351912345678",
+    });
+
+    await create(prisma, { name: "Rui", phone: "912 345 678" });
+
+    const upsertCall = (prisma.customer.upsert as ReturnType<typeof vi.fn>).mock
+      .calls[0];
+    expect(upsertCall[0].create.phone).toBe("+351912345678");
+    // "+351 912 345 678" e "00351912345678" produzem o mesmo valor
+    expect(
+      (await import("@shared/utils/phone")).normalizePhoneE164(
+        "+351 912 345 678",
+        "351"
+      )
+    ).toBe("+351912345678");
+    expect(
+      (await import("@shared/utils/phone")).normalizePhoneE164(
+        "00351912345678",
+        "351"
+      )
+    ).toBe("+351912345678");
+  });
+
+  it("número estrangeiro fica intacto", async () => {
+    const prisma = mockPrisma();
+    (prisma.customer.upsert as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "cust-2",
+      name: "Jo",
+      phone: "+447700900123",
+    });
+
+    await create(prisma, { name: "Jo", phone: "+44 7700 900123" });
+
+    const upsertCall = (prisma.customer.upsert as ReturnType<typeof vi.fn>).mock
+      .calls[0];
+    expect(upsertCall[0].create.phone).toBe("+447700900123");
+  });
+
+  it("a deduplicação procura já com a forma E.164", async () => {
+    const prisma = mockPrisma();
+    (prisma.customer.upsert as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "cust-3",
+    });
+
+    await create(prisma, { name: "Rui", phone: "912345678" });
+
+    // O $queryRaw do findByNormalizedPhone recebe a forma E.164 e o
+    // indicativo da loja — as linhas legadas sem indicativo são
+    // normalizadas no SQL com o mesmo indicativo.
+    const rawCalls = (prisma.$queryRaw as ReturnType<typeof vi.fn>).mock.calls;
+    expect(rawCalls.length).toBeGreaterThan(0);
+    const values = rawCalls[0].slice(1);
+    expect(values).toContain("+351912345678");
+    expect(values).toContain("351");
   });
 });

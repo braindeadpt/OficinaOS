@@ -21,6 +21,7 @@ import {
   remapChunkErrors,
 } from "@/lib/import-table";
 import { useSettingsStore } from "@/stores/settings";
+import SettingsDuplicatesSection from "./settings-duplicates-section";
 
 type Entity = "parts" | "repairs" | "jobs";
 
@@ -439,6 +440,13 @@ export default function SettingsDataTab() {
           <Icon name="info" size="sm" />
           <span>{t("data_io.embed_note")}</span>
         </div>
+      </section>
+
+      <section>
+        <h2 className="mb-1 font-bold font-headline text-base text-on-surface">
+          {t("duplicates.section")}
+        </h2>
+        <SettingsDuplicatesSection />
       </section>
     </div>
   );

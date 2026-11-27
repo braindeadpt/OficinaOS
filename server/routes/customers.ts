@@ -9,6 +9,11 @@ import {
 import type { FastifyPluginAsync } from "fastify";
 import { requirePermission } from "../middlewares/rbac.js";
 import {
+  findDuplicateGroups,
+  mergeCustomers,
+  previewMerge,
+} from "../services/customer-duplicates.service.js";
+import {
   create as createCustomer,
   getById,
   list as listCustomers,
@@ -20,6 +25,76 @@ import { resolveZodErrors } from "../utils/resolve-validation-messages.js";
 // biome-ignore lint/suspicious/useAwait: FastifyPluginAsync requires async
 export const customersRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", requirePermission({ customers: ["view"] }));
+
+  // Possíveis duplicados por número normalizado E.164 (issue #77) —
+  // relatório informativo; a junção é manual, par a par, com auditoria.
+  app.get(
+    "/duplicates",
+    {
+      schema: {
+        tags: ["customers"],
+        summary: "List possible duplicate customers by normalized phone",
+      },
+    },
+    async (_req, reply) => {
+      const groups = await findDuplicateGroups(app.prisma);
+      return reply.send({ groups });
+    }
+  );
+
+  app.post(
+    "/merge/preview",
+    {
+      schema: {
+        tags: ["customers"],
+        summary: "Preview a pairwise customer merge",
+        body: { type: "object", additionalProperties: true },
+      },
+    },
+    async (req, reply) => {
+      const body = req.body as { keepId?: string; mergedId?: string };
+      if (!(body.keepId && body.mergedId)) {
+        throw new AppError("VALIDATION_ERROR", {
+          message: "keepId e mergedId são obrigatórios",
+        });
+      }
+      const preview = await previewMerge(
+        app.prisma,
+        body.keepId,
+        body.mergedId
+      );
+      return reply.send(preview);
+    }
+  );
+
+  app.post(
+    "/merge",
+    {
+      schema: {
+        tags: ["customers"],
+        summary: "Merge a duplicate customer pair, with audit",
+        body: { type: "object", additionalProperties: true },
+      },
+    },
+    async (req, reply) => {
+      const body = req.body as { keepId?: string; mergedId?: string };
+      if (!(body.keepId && body.mergedId)) {
+        throw new AppError("VALIDATION_ERROR", {
+          message: "keepId e mergedId são obrigatórios",
+        });
+      }
+      if (!req.user) {
+        throw new AppError("UNAUTHORIZED");
+      }
+      const result = await mergeCustomers(
+        app.prisma,
+        body.keepId,
+        body.mergedId,
+        req.user.id
+      );
+      return reply.send(result);
+    }
+  );
 
   app.post(
     "/",

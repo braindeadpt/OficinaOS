@@ -31,7 +31,8 @@ export async function findCustomerByPhone(prisma: DbClient, phone: string) {
  */
 export async function findByNormalizedPhone(
   prisma: DbClient,
-  normalizedPhone: string
+  normalizedPhone: string,
+  dialCode = "351"
 ): Promise<{ id: string; name: string; phone: string } | null> {
   const rows = await prisma.$queryRaw<
     { id: string; name: string; phone: string }[]
@@ -47,7 +48,7 @@ export async function findByNormalizedPhone(
       CASE
         WHEN c.trimmed LIKE '+%' THEN '+' || c.digits
         WHEN c.digits LIKE '00%' THEN '+' || substr(c.digits, 3)
-        ELSE c.digits
+        ELSE '+' || ${dialCode} || c.digits
       END
     ) = ${normalizedPhone}
     ORDER BY id
@@ -121,8 +122,14 @@ export async function update(
 export async function findIdsByPhoneDigits(
   prisma: DbClient,
   digits: string,
-  limit: number
+  limit: number,
+  dialCode = "351"
 ): Promise<string[]> {
+  // Nacional significativo: 9 dígitos em PT/FR, 10 em GB/US — o corte
+  // serve só para distinguir "351912345678" (com indicativo) de um
+  // número nacional longo; errar para cima não exclui resultados.
+  const intlLength = dialCode.length + 9;
+  const stripLen = dialCode.length + 1;
   const rows = await prisma.$queryRaw<{ id: string }[]>`
     SELECT id
     FROM (
@@ -138,8 +145,9 @@ export async function findIdsByPhoneDigits(
     ) p
     CROSS JOIN LATERAL (
       SELECT CASE
-               WHEN p.d LIKE '351%' AND (p.intl OR length(p.d) >= 12)
-                 THEN substr(p.d, 4)
+               WHEN p.d LIKE ${dialCode} || '%'
+                    AND (p.intl OR length(p.d) >= ${intlLength})
+                 THEN substr(p.d, ${stripLen})
                ELSE p.d
              END AS national
     ) n

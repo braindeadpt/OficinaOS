@@ -43,6 +43,23 @@ export function normalizePhone(raw: string): string {
   return digits;
 }
 
+/**
+ * Canonical E.164 form for storing NEW phone numbers: separators dropped,
+ * "00" becomes "+", and a number without any country indicator gets the
+ * shop's dial code prepended. "912 345 678", "+351 912 345 678" and
+ * "00351 912345678" all normalize to "+351912345678" for a Portuguese
+ * shop; a number already international ("+44…") stays untouched.
+ *
+ * Existing rows are never rewritten — this only applies at write time.
+ */
+export function normalizePhoneE164(raw: string, dialCode: string): string {
+  const canonical = normalizePhone(raw);
+  if (canonical.startsWith("+")) {
+    return canonical;
+  }
+  return `+${dialCode}${canonical}`;
+}
+
 /** Portugal's country code, the one a search ignores. */
 const PT_COUNTRY_CODE = "351";
 /** A Portuguese national number is nine digits. */
@@ -55,7 +72,10 @@ const PT_NATIONAL_LENGTH = 9;
  * search as "912345678". Other country codes are kept, since only +351 is
  * implied by a local number. Returns "" when there are no digits.
  */
-export function phoneSearchDigits(raw: string): string {
+export function phoneSearchDigits(
+  raw: string,
+  dialCode = PT_COUNTRY_CODE
+): string {
   const trimmed = raw.trim();
   let digits = trimmed.replace(/\D/g, "");
   const international = trimmed.startsWith("+") || digits.startsWith("00");
@@ -63,11 +83,10 @@ export function phoneSearchDigits(raw: string): string {
     digits = digits.slice(2);
   }
   if (
-    digits.startsWith(PT_COUNTRY_CODE) &&
-    (international ||
-      digits.length >= PT_COUNTRY_CODE.length + PT_NATIONAL_LENGTH)
+    digits.startsWith(dialCode) &&
+    (international || digits.length >= dialCode.length + PT_NATIONAL_LENGTH)
   ) {
-    digits = digits.slice(PT_COUNTRY_CODE.length);
+    digits = digits.slice(dialCode.length);
   }
   return digits;
 }
