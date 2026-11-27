@@ -1579,7 +1579,7 @@ async function replyRegistos(
   ];
   if (summary.hasOpenShift) {
     lines.push(
-      "Inclui horas estimadas — há dias sem saída registada (contadas até à meia-noite)."
+      "Inclui horas estimadas — há dias sem saída registada (contadas até agora no dia de hoje, até à meia-noite nos dias anteriores)."
     );
   }
   if (base) {

@@ -160,6 +160,70 @@ describe("summarizeMonth", () => {
     expect(s.pendingCount).toBe(1);
   });
 
+  it("hasOpenShift: dia fechado → falso; turno aberto hoje → verdadeiro", () => {
+    const d = (h: number, m = 0) => new Date(Date.UTC(2026, 10, 3, h, m));
+    const closed = summarizeMonth(
+      [
+        {
+          at: d(9),
+          status: "APROVADO",
+          superseded: false,
+          type: "ENTRADA",
+          validations: [],
+        },
+        {
+          at: d(18),
+          status: "APROVADO",
+          superseded: false,
+          type: "SAIDA",
+          validations: [],
+        },
+      ],
+      0,
+      TZ,
+      new Date(Date.UTC(2026, 10, 20, 12, 0))
+    );
+    expect(closed.hasOpenShift).toBe(false);
+    // turno de hoje ainda aberto: conta até agora e o indicador acende
+    const now = new Date(Date.UTC(2026, 10, 3, 12, 0));
+    const openToday = summarizeMonth(
+      [
+        {
+          at: d(9),
+          status: "APROVADO",
+          superseded: false,
+          type: "ENTRADA",
+          validations: [],
+        },
+      ],
+      0,
+      TZ,
+      now
+    );
+    expect(openToday.hasOpenShift).toBe(true);
+    expect(openToday.workedMs).toBe(3 * 3_600_000); // 9h → 12h (agora)
+  });
+
+  it("hasOpenShift: turno esquecido num dia passado conta até à meia-noite", () => {
+    const d = (h: number, m = 0) => new Date(Date.UTC(2026, 10, 3, h, m));
+    const s = summarizeMonth(
+      [
+        {
+          at: d(9),
+          status: "APROVADO",
+          superseded: false,
+          type: "ENTRADA",
+          validations: [],
+        },
+      ],
+      0,
+      TZ,
+      new Date(Date.UTC(2026, 10, 20, 12, 0)) // dias depois
+    );
+    expect(s.hasOpenShift).toBe(true);
+    expect(s.workedMs).toBe(15 * 3_600_000); // 9h → 24h como o painel
+  });
+
   it("mês sem registos → zero em tudo (resposta clara vem do handler)", () => {
     const s = summarizeMonth([], 0, TZ);
     expect(s.days).toBe(0);
