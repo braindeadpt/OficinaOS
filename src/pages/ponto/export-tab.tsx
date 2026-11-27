@@ -145,6 +145,7 @@ export default function ExportTab() {
   const [actBusy, setActBusy] = useState<"pdf" | "xlsx" | null>(null);
   const [actError, setActError] = useState(false);
   const [actUserId, setActUserId] = useState("");
+  const actDatesValid = from <= to;
   const storeUsers = useUsersStore((state) => state.users);
   const fetchAllUsers = useUsersStore((state) => state.fetchAllUsers);
   const allUsersLoaded = useUsersStore((state) => state.allUsersLoaded);
@@ -327,14 +328,14 @@ export default function ExportTab() {
             </Select>
           </Field>
           <Button
-            disabled={actBusy !== null}
+            disabled={actBusy !== null || !actDatesValid}
             icon="download"
             onClick={() => exportAct("pdf")}
           >
             {actBusy === "pdf" ? t("loading") : t("ponto.act_export_pdf")}
           </Button>
           <Button
-            disabled={actBusy !== null}
+            disabled={actBusy !== null || !actDatesValid}
             icon="download"
             onClick={() => exportAct("xlsx")}
             variant="secondary"
@@ -342,6 +343,11 @@ export default function ExportTab() {
             {actBusy === "xlsx" ? t("loading") : t("ponto.act_export_excel")}
           </Button>
         </div>
+        {!actDatesValid && (
+          <p className="mt-2 text-error text-xs" role="alert">
+            {t("ponto.dates_invalid")}
+          </p>
+        )}
         {actError && (
           <p className="mt-3 text-error text-sm">{t("ponto.act_failed")}</p>
         )}

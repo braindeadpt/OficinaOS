@@ -28,11 +28,13 @@ export const pontoHoursQuerySchema = z.object({
   userId: z.string().optional(),
 });
 
-export const pontoActExportQuerySchema = z.object({
-  from: isoDate,
-  to: isoDate,
-  userId: z.string().optional(),
-});
+export const pontoActExportQuerySchema = z
+  .object({
+    from: isoDate,
+    to: isoDate,
+    userId: z.string().optional(),
+  })
+  .refine((v) => v.from <= v.to, { message: "ponto.dates_invalid" });
 
 export const pontoMissingExitsQuerySchema = z.object({
   from: isoDate,
