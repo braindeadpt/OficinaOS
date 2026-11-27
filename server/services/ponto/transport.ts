@@ -42,6 +42,13 @@ export const PONTO_TEXT = {
   locationPromptText:
     "Para registar o ponto, partilhe a sua localização: toque em 📎 → Localização → localização atual.",
   noEntryToday: "Não tem entrada registada hoje — leia o QR para começar.",
+  registosInvalidMonth:
+    "Mês inválido — escreva REGISTOS ou REGISTOS MM/AAAA (ex.: REGISTOS 10/2026), sem meses futuros.",
+  registosNoEntries: "Sem registos em {{month}}.",
+  registosNoUrl:
+    "Não consigo gerar o link do PDF porque a loja não tem endereço configurado — peça o relatório ao responsável.",
+  registosRateLimited:
+    "Atingiu o limite de 5 pedidos de registos por dia — tente novamente amanhã.",
   noPendingLocation:
     "Não tenho nenhum pedido de localização pendente — escreva ENTRADA, PAUSA, VOLTEI, SAIDA ou ESTADO.",
   noPendingPhoto:

@@ -51,18 +51,24 @@ export function parseMonthArg(
   tz: string,
   now = new Date()
 ): MonthSpec | null | undefined {
+  // O par mês/ano procura-se em qualquer posição: o parser de comandos é
+  // tolerante a gralhas («REGSITOS»), e procurar só depois da palavra
+  // exata ignorava o mês nesses pedidos — o trabalhador recebia o mês
+  // errado sem aviso.
   const tokens = normalizedText.split(" ");
-  const i = tokens.findIndex((t) => t === "registos" || t === "acesso");
-  if (i < 0) {
-    return null;
+  let mm: string | undefined;
+  let yyyy: string | undefined;
+  for (let i = 0; i < tokens.length - 1; i++) {
+    if (MONTH_NUM_RE.test(tokens[i]) && YEAR_NUM_RE.test(tokens[i + 1])) {
+      mm = tokens[i];
+      yyyy = tokens[i + 1];
+      break;
+    }
   }
-  const mm = tokens[i + 1];
-  const yyyy = tokens[i + 2];
   if (!(mm && yyyy)) {
-    return null;
-  }
-  if (!(MONTH_NUM_RE.test(mm) && YEAR_NUM_RE.test(yyyy))) {
-    return;
+    // Há um ano de 4 dígitos sem par válido («REGISTOS abc 2026») — erro
+    // claro, nunca o mês errado em silêncio. Sem ano nenhum, mês corrente.
+    return tokens.some((t) => YEAR_NUM_RE.test(t)) ? undefined : null;
   }
   const month = Number(mm);
   const year = Number(yyyy);
@@ -113,7 +119,6 @@ export async function registosMonthEntries(
   const rows = await prisma.timeEntry.findMany({
     orderBy: [{ at: "asc" }, { createdAt: "asc" }],
     select: {
-      _count: { select: { corrections: true } },
       at: true,
       corrections: { select: { id: true }, take: 1 },
       status: true,
@@ -126,10 +131,17 @@ export async function registosMonthEntries(
     },
     where: { at: { gte: start, lt: end }, userId },
   });
+  // Correções contam-se pelas linhas substituídas (têm correção apontada).
   const correctionsCount = rows.filter((r) => r.corrections.length > 0).length;
+  // Horas e pendências só com marcações efetivas: nem substituídas pela
+  // correção nem recusadas pela validação mais recente — como o ESTADO.
+  const effective = rows.filter(
+    (r) =>
+      r.corrections.length === 0 && r.validations[0]?.decision !== "RECUSADO"
+  );
   return {
     correctionsCount,
-    entries: rows.map((r) => ({
+    entries: effective.map((r) => ({
       at: r.at,
       status: r.status,
       type: r.type,
@@ -151,8 +163,9 @@ function dayKeyOf(at: Date, tz: string): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(at);
 }
 
-/** Tempo de trabalho: segmentos ENTRADA/VOLTEI → PAUSA/SAIDA. */
-function workMsOfDay(list: RegistosEntry[]): number {
+/** Tempo de trabalho: segmentos ENTRADA/VOLTEI → PAUSA/SAIDA. Um turno
+ * ainda aberto conta até à hora do pedido, como no painel. */
+function workMsOfDay(list: RegistosEntry[], now: Date): number {
   let total = 0;
   let open: Date | null = null;
   for (const e of list) {
@@ -162,6 +175,9 @@ function workMsOfDay(list: RegistosEntry[]): number {
       total += e.at.getTime() - open.getTime();
       open = null;
     }
+  }
+  if (open) {
+    total += now.getTime() - open.getTime();
   }
   return total;
 }
@@ -181,7 +197,10 @@ function pauseMsOfDay(list: RegistosEntry[]): number {
   return total;
 }
 
-function sumDayEntries(list: RegistosEntry[]): {
+function sumDayEntries(
+  list: RegistosEntry[],
+  now: Date
+): {
   pauseMs: number;
   pendingCount: number;
   workedMs: number;
@@ -192,7 +211,7 @@ function sumDayEntries(list: RegistosEntry[]): {
   return {
     pauseMs: pauseMsOfDay(list),
     pendingCount,
-    workedMs: workMsOfDay(list),
+    workedMs: workMsOfDay(list, now),
   };
 }
 
@@ -200,7 +219,8 @@ function sumDayEntries(list: RegistosEntry[]): {
 export function summarizeMonth(
   entries: RegistosEntry[],
   correctionsCount: number,
-  tz: string
+  tz: string,
+  now: Date = new Date()
 ): MonthSummary {
   const byDay = new Map<string, RegistosEntry[]>();
   for (const e of entries) {
@@ -213,7 +233,7 @@ export function summarizeMonth(
   let pauseMsTotal = 0;
   let pendingCount = 0;
   for (const list of byDay.values()) {
-    const day = sumDayEntries(list);
+    const day = sumDayEntries(list, now);
     workedMsTotal += day.workedMs;
     pauseMsTotal += day.pauseMs;
     pendingCount += day.pendingCount;

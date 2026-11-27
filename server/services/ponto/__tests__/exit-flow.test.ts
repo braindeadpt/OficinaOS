@@ -1071,14 +1071,15 @@ describe("resposta ao lembrete de saída", () => {
     expect(getPendingPontoExit("user-1")).toBeNull();
   });
 
-  it("comando ponto normal mata o pending de saída", async () => {
+  it("consulta (ESTADO/REGISTOS) não mata o pending de saída; marcação mata", async () => {
     const { ctx, message, t } = setup();
     armPending();
 
-    // ESTADO é comando — não cria entry, mas deve limpar o pending.
+    // Consultar horas ou registos não é uma marcação — o trabalhador pode
+    // verificar o mês e ainda assim responder ao lembrete de saída.
     await tryHandlePontoStaff(ctx, message("ESTADO"), t);
 
-    expect(getPendingPontoExit("user-1")).toBeNull();
+    expect(getPendingPontoExit("user-1")).not.toBeNull();
     expect(mocks.recordPontoEntry).not.toHaveBeenCalled();
   });
 

@@ -496,10 +496,14 @@ async function routeText(env: FlowEnv): Promise<void> {
     await onExitReminderAnswer(env, exitPending);
     return;
   }
-  // Qualquer comando ponto normal mata o pending de saída — a SAIDA
-  // seguinte corrige a presumida automaticamente no finalizePonto.
-  clearPendingPontoExit(env.staff.user.id);
-  clearPendingPonto(env.key);
+  // Comandos de MARCAÇÃO matam o pending de saída — a SAIDA seguinte
+  // corrige a presumida automaticamente no finalizePonto. Consultas
+  // (ESTADO, REGISTOS) não interrompem nada: o trabalhador pode consultar
+  // o mês e ainda assim responder ao lembrete de saída depois.
+  if (parsed.command !== "ESTADO" && parsed.command !== "REGISTOS") {
+    clearPendingPontoExit(env.staff.user.id);
+    clearPendingPonto(env.key);
+  }
   await dispatchCommand({
     channel: env.channel,
     ctx: env.ctx,
@@ -1460,6 +1464,37 @@ function tzOf(settings: Settings): string {
 
 const TRAILING_SLASH_RE = /\/+$/;
 
+/** true se o URL é alcançável fora da rede da loja (host público). */
+function isDialablePublicUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    const host = u.hostname.toLowerCase();
+    if (
+      host === "localhost" ||
+      host.endsWith(".local") ||
+      host.endsWith(".localhost") ||
+      host === "0.0.0.0" ||
+      host === "::1"
+    ) {
+      return false;
+    }
+    const first = host.split(".")[0];
+    if (first === "10" || first === "192" || first === "127") {
+      return false;
+    }
+    // 172.16-31 — redes privadas
+    if (first === "172") {
+      const second = Number(host.split(".")[1]);
+      if (second >= 16 && second <= 31) {
+        return false;
+      }
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Base para o link do PDF: o endereço público da loja quando existe
  * (trackingBaseUrl ou APP_URL), senão o endereço de rede local — chega
@@ -1474,6 +1509,11 @@ async function resolveRegistosBaseUrl(
     return settings.trackingBaseUrl.replace(TRAILING_SLASH_RE, "");
   }
   const env = loadEnv();
+  // Um APP_URL público vale mais que o .local/mdns, que não abre fora da
+  // rede da loja — accessUrls devolve o .local em primeiro lugar.
+  if (env.APP_URL && isDialablePublicUrl(env.APP_URL)) {
+    return env.APP_URL.replace(TRAILING_SLASH_RE, "");
+  }
   const first = accessUrls({
     appUrl: env.APP_URL,
     mdnsHostname: env.MDNS_HOSTNAME,
@@ -1498,15 +1538,11 @@ async function replyRegistos(
   const { normalizePontoText } = await import("./commands.js");
   const parsed = parseMonthArg(normalizePontoText(rawText), tz);
   if (parsed === undefined) {
-    await say(
-      "Mês inválido — escreva REGISTOS ou REGISTOS MM/AAAA (ex.: REGISTOS 10/2026), sem meses futuros."
-    );
+    await say(PONTO_TEXT.registosInvalidMonth);
     return;
   }
   if (!(await registosRateOk(ctx.prisma, userId))) {
-    await say(
-      "Atingiu o limite de 5 pedidos de registos por dia — tente novamente amanhã."
-    );
+    await say(PONTO_TEXT.registosRateLimited);
     return;
   }
   const spec = parsed ?? currentMonthSpec(tz);
@@ -1534,7 +1570,7 @@ async function replyRegistos(
   const monthLabel = `${monthNames[spec.month - 1]} de ${spec.year}`;
 
   if (entries.length === 0) {
-    await say(`Sem registos em ${monthLabel}.`);
+    await say(PONTO_TEXT.registosNoEntries.replace("{{month}}", monthLabel));
     return;
   }
 
@@ -1547,12 +1583,10 @@ async function replyRegistos(
   ];
   if (base) {
     lines.push(
-      `PDF do mês (link de uso único, válido 24 h): ${base}/ponto-registos/${token}`
+      `PDF do mês (link de uso único, válido 24 h): ${base}/api/public/ponto-registos/${token}`
     );
   } else {
-    lines.push(
-      "Não consigo gerar o link do PDF porque a loja não tem endereço configurado — peça o relatório ao responsável."
-    );
+    lines.push(PONTO_TEXT.registosNoUrl);
   }
   await say(lines.join("\n"));
 }

@@ -111,7 +111,7 @@ describe("registosMonthEntries — isolamento por trabalhador", () => {
       year: 2026,
     });
     expect(out.correctionsCount).toBe(1);
-    expect(out.entries).toHaveLength(2);
+    expect(out.entries).toHaveLength(1); // a substituída fica fora das horas
   });
 });
 

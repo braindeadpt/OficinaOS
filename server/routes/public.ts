@@ -247,6 +247,11 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
   app.get("/ponto-registos/:token", {
     handler: async (req, reply) => {
       const { token } = req.params as { token: string };
+      // HEAD (prefetch de clientes de email/chat) nunca consome o token —
+      // gastar o uso único sem entregar o PDF bloqueava o GET seguinte.
+      if (req.method === "HEAD") {
+        return reply.status(200).send();
+      }
       const consumed = await consumeRegistosToken(app.prisma, token);
       if (!consumed) {
         return reply.status(410).send({ error: "link expirado ou já usado" });
@@ -299,6 +304,9 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
         .type("application/pdf")
         .send(pdf);
     },
+    // disableRequestLogging: o token de uso único vai no URL — um pedido
+    // registado antes do handler deixava um token ainda válido nos logs.
+    ...({ disableRequestLogging: true } as const),
     schema: {
       params: {
         properties: { token: { type: "string" } },
