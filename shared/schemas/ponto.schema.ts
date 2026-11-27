@@ -34,7 +34,10 @@ export const pontoActExportQuerySchema = z
     to: isoDate,
     userId: z.string().optional(),
   })
-  .refine((v) => v.from <= v.to, { message: "ponto.dates_invalid" });
+  .refine((v) => v.from <= v.to, {
+    message: "ponto.dates_invalid",
+    path: ["to"],
+  });
 
 export const pontoMissingExitsQuerySchema = z.object({
   from: isoDate,

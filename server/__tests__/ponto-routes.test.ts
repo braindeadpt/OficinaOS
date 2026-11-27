@@ -662,6 +662,18 @@ describe("ponto — GET /act-export", () => {
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it("rejeita datas invertidas com 400 e o erro associado à data final", async () => {
+    const prisma = fakePrisma();
+    const app = buildApp(prisma);
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/ponto/act-export?from=2026-01-31&to=2026-01-01",
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.stringify(res.json())).toContain("dates_invalid");
+  });
 });
 
 describe("ponto — folha de informação aos trabalhadores", () => {
