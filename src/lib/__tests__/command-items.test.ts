@@ -111,6 +111,34 @@ describe("buildCommands", () => {
     );
   });
 
+  it("keeps the ACT label when cleanup is pending on top of the expired entitlement", () => {
+    // Cenário da revisão: módulo inativo + registos + fotografias por limpar.
+    // A limpeza pendente garante visibilidade, mas nunca devolve o rótulo
+    // normal — a página está em modo só leitura e a sidebar mostra ACT.
+    const pending = buildCommands({
+      ...deps(),
+      pontoEnabled: false,
+      pontoHasRecords: true,
+      pontoCleanupPending: true,
+    });
+    expect(pending.find((c) => c.to === "/ponto")?.labelKey).toBe(
+      "ponto.act_nav_label"
+    );
+  });
+
+  it("keeps /ponto visible with the ACT label when only cleanup is pending", () => {
+    // Sem registos, a entrada só sobrevive pela limpeza de fotografias —
+    // e mesmo aí o modo é só leitura, logo o rótulo é o da ACT.
+    const cleanupOnly = buildCommands({
+      ...deps(),
+      pontoEnabled: false,
+      pontoCleanupPending: true,
+    });
+    expect(cleanupOnly.find((c) => c.to === "/ponto")?.labelKey).toBe(
+      "ponto.act_nav_label"
+    );
+  });
+
   it("runs the injected callbacks rather than importing them", () => {
     const d = deps();
     const commands = buildCommands(d);

@@ -183,20 +183,26 @@ export const BOTTOM_NAV_PRIMARY: string[] = ["/", "/jobs", "/settings"];
  * de ponto (ACT)" — a lei obriga a conservar e apresentar o registo
  * durante 5 anos, mesmo depois de o plano Pro terminar. A página abre
  * nesse caso só o separador de exportação (só leitura). Sem entitlement
- * nem registos, a entrada fica escondida como antes.
+ * nem registos, a entrada fica escondida como antes — exceto se houver
+ * limpeza de fotografias por concluir, porque o aviso vive na página.
+ *
+ * O rótulo ACT aplica-se a qualquer entrada visível com o módulo inativo:
+ * misturar a limpeza pendente no sinal de "ativo" voltava a mostrar o
+ * nome normal numa página que afinal está em modo só leitura.
  */
 export function resolvePontoNavItems<
   T extends { labelKey: string; to: string },
 >(
   items: T[],
   pontoEnabled: boolean | null,
-  pontoHasRecords: boolean | null
+  pontoHasRecords: boolean | null,
+  pontoCleanupPending = false
 ): T[] {
   return items.flatMap((item) => {
     if (item.to !== "/ponto" || pontoEnabled) {
       return [item];
     }
-    if (!pontoHasRecords) {
+    if (!(pontoHasRecords || pontoCleanupPending)) {
       return [];
     }
     return [{ ...item, labelKey: "ponto.act_nav_label" }];
