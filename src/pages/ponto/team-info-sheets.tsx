@@ -108,7 +108,12 @@ export default function TeamInfoSheets() {
           className="ml-auto"
           icon="print"
           onClick={() => {
-            if (data.rows.length === 0) {
+            // A impressão em lote só inclui ativos com ponto — contar os
+            // destinatários reais, não as linhas da tabela.
+            const printable = data.rows.filter(
+              (r) => r.isActive && r.pontoEnabled
+            ).length;
+            if (printable === 0) {
               setPrintAllEmpty(true);
               return;
             }
@@ -121,7 +126,7 @@ export default function TeamInfoSheets() {
           {t("ponto.sheet_print_all")}
         </Button>
       </div>
-      {printAllEmpty && data.rows.length === 0 && (
+      {printAllEmpty && (
         <p className="mt-2 text-error text-xs" role="alert">
           {t("ponto.sheet_print_all_empty")}
         </p>
