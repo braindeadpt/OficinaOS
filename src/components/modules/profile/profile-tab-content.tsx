@@ -3,6 +3,7 @@ import { ActivityItemRow } from "@/components/modules/profile/activity-timeline"
 import { PasswordForm } from "@/components/modules/profile/password-form";
 import { PersonalForm } from "@/components/modules/profile/personal-form";
 import { PersonalSpecSheet } from "@/components/modules/profile/personal-spec-sheet";
+import ProfileMcpSection from "@/components/modules/profile/profile-mcp-section";
 import { SessionButton } from "@/components/modules/profile/session-button";
 import type { ActivityItem } from "@/components/modules/profile/shared";
 import { TwoFactorCard } from "@/components/modules/profile/two-factor-card";
@@ -253,6 +254,8 @@ export function ProfileTabContent({
             sessionCount={sessions.length}
           />
         )}
+        <div className="h-2 rounded-full bg-surface-container-low" />
+        <ProfileMcpSection />
       </div>
     );
   }

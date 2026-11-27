@@ -19,6 +19,7 @@ import { startMdnsResponder } from "./lib/mdns.js";
 import { isFileRequestPath } from "./lib/spa-fallback.js";
 import { cacheControlFor } from "./lib/static-cache.js";
 import { registerUploadsStatic } from "./lib/uploads-static.js";
+import { startMcpHttpServer } from "./mcp/http.js";
 import authPlugin from "./plugins/auth.js";
 import demoPlugin from "./plugins/demo.js";
 import { localePlugin } from "./plugins/locale.js";
@@ -325,6 +326,21 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
 
 try {
   await app.listen({ port: env.PORT, host: env.HOST });
+  // Servidor MCP só de leitura — EXCLUSIVO loopback (127.0.0.1), nunca na
+  // LAN da loja. Quem liga o seu LLM na mesma máquina chega aqui; em Docker
+  // usa-se o stdio via `docker compose exec`.
+  const mcp = startMcpHttpServer(app.prisma);
+  if (mcp) {
+    mcp.server.on("listening", () => {
+      const bound = mcp.server.address();
+      const realPort =
+        bound && typeof bound === "object" ? bound.port : mcp.port;
+      app.log.info(`MCP (só leitura) a escutar em 127.0.0.1:${realPort}`);
+    });
+    mcp.server.on("error", (err) => {
+      app.log.warn({ err }, "MCP listener falhou — a app continua sem ele");
+    });
+  }
   app.log.info(
     { env: env.NODE_ENV, trustProxy: Boolean(env.TRUST_PROXY) },
     `OficinaOS server running on ${env.HOST}:${env.PORT}`

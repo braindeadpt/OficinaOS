@@ -11,6 +11,7 @@ import type { SettingsAiTabHandle } from "@/components/modules/settings/settings
 import SettingsAiTab from "@/components/modules/settings/settings-ai-tab";
 import SettingsCloudTab from "@/components/modules/settings/settings-cloud-tab";
 import SettingsDataTab from "@/components/modules/settings/settings-data-tab";
+import SettingsMcpAdminSection from "@/components/modules/settings/settings-mcp-local-section";
 import SettingsNotificationsTab from "@/components/modules/settings/settings-notifications-tab";
 import type { SettingsShopTabHandle } from "@/components/modules/settings/settings-shop-tab";
 import SettingsShopTab from "@/components/modules/settings/settings-shop-tab";
@@ -344,14 +345,23 @@ export default function SettingsPage() {
               />
             )}
             {activeTab === "users" && !isDemo && (
-              <SettingsUsersTab
-                onAddUser={() => setShowAddUserModal(true)}
-                onEditUser={(id) => navigate(`/profile/${id}`)}
-                onResetPassword={(id, username) => {
-                  setResetTarget({ id, username });
-                  setShowResetModal(true);
-                }}
-              />
+              <>
+                <SettingsUsersTab
+                  onAddUser={() => setShowAddUserModal(true)}
+                  onEditUser={(id) => navigate(`/profile/${id}`)}
+                  onResetPassword={(id, username) => {
+                    setResetTarget({ id, username });
+                    setShowResetModal(true);
+                  }}
+                />
+                {/* Modo só-ponto: o separador IA não existe — a supervisão
+                    dos tokens MCP (que leem o ponto) fica aqui. */}
+                {isPontoOnly && (
+                  <div className="mt-6">
+                    <SettingsMcpAdminSection />
+                  </div>
+                )}
+              </>
             )}
             {activeTab === "data" && !isDemo && <SettingsDataTab />}
           </div>
