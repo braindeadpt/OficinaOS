@@ -145,6 +145,13 @@ describe("shred-ponto-photos — limpeza das cópias do atualizador", () => {
     const locked = path.join(activePhotos, "foto.jpg");
     await fs.writeFile(locked, "jpeg");
 
+    // TEMP isolado e vazio: sem isto o scan apanha cópias oficinaos-keep-*
+    // REAIS do atualizador na máquina de dev e o shred apagava-as a sério.
+    const fakeTemp = path.join(root, "temp");
+    await fs.mkdir(fakeTemp, { recursive: true });
+    originalTemp = process.env.TEMP;
+    process.env.TEMP = fakeTemp;
+
     // Windows: um ficheiro aberto não pode ser apagado — simula a falha
     // de eliminação sem depender de permissões.
     const handle = await fs.open(locked, "r+");

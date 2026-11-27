@@ -151,9 +151,19 @@ export async function shredPontoPhotos(args: {
     }
   }
   const reportPath = path.resolve(args.uploadDir, SHRED_REPORT_NAME);
+  // A pasta de uploads pode ainda não existir numa instalação nova — sem
+  // ela a gravação do relatório falhava e travava a migração a zero fotos.
+  await fs.mkdir(args.uploadDir, { recursive: true });
+  // Nunca seguir um symlink/junction pré-existente no caminho do relatório:
+  // um utilizador local com escrita na pasta podia apontá-lo a um ficheiro
+  // protegido e esta escrita sobrescrevia-o. Remove-se a entrada (o rm
+  // apaga o link, nunca o alvo) e grava-se com wx — se algo reaparecer no
+  // caminho entretanto, a escrita falha ruidosamente em vez de sobrescrever.
+  await fs.rm(reportPath, { force: true });
   await fs.writeFile(
     reportPath,
-    JSON.stringify({ at: new Date().toISOString(), failures }, null, 2)
+    JSON.stringify({ at: new Date().toISOString(), failures }, null, 2),
+    { flag: "wx" }
   );
 
   const client = new pg.Client({ connectionString: args.databaseUrl });
@@ -196,9 +206,13 @@ async function main(): Promise<void> {
     `[ponto-photo-migration] deleted ${result.rowsDeleted} PontoPhoto rows, ${result.filesDeleted} files under the active ${PHOTO_SUBDIR}/ and ${result.backupFilesDeleted} files in updater/installer backup copies (app.prev, oficinaos-keep-*)`
   );
   if (result.failures.length > 0) {
-    console.warn(
-      `[ponto-photo-migration] WARNING: could not fully remove photos in: ${result.failures.join(", ")} — delete them manually (also shown in the ponto settings)`
+    // Falha fechada, como promete a descrição: o relatório já está gravado
+    // (as Definições do ponto mostram-no) e o dono apaga as pastas à mão;
+    // na próxima corrida a migração avança.
+    console.error(
+      `[ponto-photo-migration] failed; migration stopped: could not fully remove photos in: ${result.failures.join(", ")} — delete them manually and re-run`
     );
+    process.exitCode = 1;
   }
 }
 

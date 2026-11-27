@@ -139,8 +139,23 @@ export const pontoRoutes: FastifyPluginCallback = (app, _opts, done) => {
         const raw = await fs.readFile(reportPath, "utf-8");
         const parsed = JSON.parse(raw) as { failures?: unknown };
         if (Array.isArray(parsed.failures)) {
-          photoCleanupWarnings = parsed.failures.filter(
+          const listed = parsed.failures.filter(
             (f): f is string => typeof f === "string"
+          );
+          // Pastas já apagadas à mão saem do aviso — sem isto o relatório
+          // era lido para sempre e o aviso nunca desaparecia. Entradas com
+          // padrões (app.prev*) não são caminhos reais: ficam sempre.
+          const stillThere = await Promise.all(
+            listed.map(async (f) => {
+              if (f.includes("*")) {
+                return f;
+              }
+              const stat = await fs.stat(f).catch(() => null);
+              return stat ? f : null;
+            })
+          );
+          photoCleanupWarnings = stillThere.filter(
+            (f): f is string => f !== null
           );
         }
       } catch {
