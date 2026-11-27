@@ -96,6 +96,8 @@ export default function CommandPalette() {
   // /ponto é gated por entitlement — a paleta usa o mesmo estado que a
   // sidebar/bottom-nav para não oferecer uma página trancada.
   const pontoEnabled = usePontoStore((s) => s.enabled);
+  const pontoCleanup = usePontoStore((s) => s.photoCleanupWarnings);
+  const pontoCleanupPending = pontoCleanup.length > 0;
   const fetchPontoStatus = usePontoStore((s) => s.fetchStatus);
   const isPontoOnly = useShopModeStore((s) => s.shopMode === "ponto_only");
 
@@ -167,7 +169,7 @@ export default function CommandPalette() {
         logout,
         navigate,
         openIntakeModal,
-        pontoEnabled: pontoEnabled === true,
+        pontoEnabled: pontoEnabled === true || pontoCleanupPending,
         pontoOnly: isPontoOnly,
         role,
         signOut,
@@ -177,6 +179,7 @@ export default function CommandPalette() {
       navigate,
       openIntakeModal,
       pontoEnabled,
+      pontoCleanupPending,
       isPontoOnly,
       role,
       signOut,

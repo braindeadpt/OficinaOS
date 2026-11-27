@@ -113,8 +113,9 @@ sends, in the **first round** of each message:
   proofs) is **append-only**: the app blocks UPDATE/DELETE and a
   correction is always a new row (`correctsId`). **5-year** retention
   (Labour Code, art. 202 — legal retention, not profiling).
-- External workers' proof photos: kept in `UPLOAD_DIR/ponto-photos`
-  and **deleted at 90 days**; the record remains with "photo expired".
+- External workers' proof photos: **never downloaded or stored** by the
+  app. The record keeps only the temporal proof (`hasPhoto` /
+  `photoSentAt`); the image stays in the company phone's WhatsApp/SMS.
 
 **Leaves the shop (only with the module active and a Pro receiving
 channel):**

@@ -432,20 +432,12 @@ export default function PendingTab() {
                 </p>
               )}
 
-              {e.photos.length > 0 && (
-                <div className="mt-3 flex gap-2 overflow-x-auto">
-                  {e.photos.map((p) => (
-                    <a href={p.url} key={p.id} rel="noreferrer" target="_blank">
-                      <img
-                        alt={t("ponto.photo_alt")}
-                        className="h-20 w-20 rounded-lg border border-outline-variant object-cover"
-                        height={80}
-                        src={p.url}
-                        width={80}
-                      />
-                    </a>
-                  ))}
-                </div>
+              {typeof e.proofs.photoSentAt === "string" && (
+                <p className="mt-3 rounded-lg bg-surface-container p-3 text-on-surface-variant text-xs">
+                  {t("ponto.photo_sent_notice", {
+                    time: formatClock(e.proofs.photoSentAt, i18n.language, tz),
+                  })}
+                </p>
               )}
             </article>
           );

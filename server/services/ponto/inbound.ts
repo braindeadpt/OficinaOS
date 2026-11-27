@@ -55,21 +55,13 @@ function quotedFields(
   return typeof ctx?.id === "string" ? { quotedMessageId: ctx.id } : {};
 }
 
-function imageFields(
-  payload: Record<string, unknown> | null
-): Pick<InboundMessage, "imageRef"> {
-  // Imagem oficial: a Meta não retransmite a média na fila — se um dia
-  // o payload a trouxer, a app já sabe o que fazer com ela.
-  if (!payload) {
-    return {};
-  }
-  return {
-    imageRef: {
-      mimetype:
-        typeof payload.mime_type === "string" ? payload.mime_type : null,
-      url: typeof payload.url === "string" ? payload.url : null,
-    },
-  };
+function imageFields(): Pick<InboundMessage, "imageRef"> {
+  // Imagem oficial: interessa só o FACTO de ter sido enviada. Formato real
+  // confirmado na Cloud (oficinaos-cloud src/routes/whatsapp.ts): o webhook
+  // só constrói payload para location/interactive — imagens chegam SEMPRE
+  // com payload null, por isso a prova não pode depender dele. A app nunca
+  // descarrega bytes nem guarda referências da imagem.
+  return { imageRef: { mimetype: null } };
 }
 
 /**
@@ -91,7 +83,7 @@ export function pontoFieldsFromCloudRow(
   return {
     ...(isLocation ? locationFields(payload) : {}),
     ...(isInteractive ? interactiveFields(row, payload) : {}),
-    ...(isImage ? imageFields(payload) : {}),
+    ...(isImage ? imageFields() : {}),
     ...quotedFields(payload),
   };
 }

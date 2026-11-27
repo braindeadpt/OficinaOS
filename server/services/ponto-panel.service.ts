@@ -1,4 +1,3 @@
-import path from "node:path";
 import type {
   Prisma,
   TimeEntryDecision,
@@ -24,7 +23,7 @@ import { dayRange, localDayRange, todayRange } from "../utils/time-range.js";
 
 /**
  * Painel "Livro de Ponto" — leitura e escritas manuais sobre
- * time_entries/time_entry_validations/ponto_photos.
+ * time_entries/time_entry_validations.
  *
  * STATUS EFETIVO (append-only): entry.status é a avaliação da máquina e
  * nunca muda; a decisão da validação MAIS RECENTE sobrepõe-na. Uma entry
@@ -341,30 +340,7 @@ export async function listPending(
     [{ at: "asc" }, { id: "asc" }]
   );
 
-  const photos = rows.length
-    ? await prisma.pontoPhoto.findMany({
-        orderBy: { createdAt: "desc" },
-        select: { entryId: true, id: true },
-        where: { entryId: { in: rows.map((r) => r.id) } },
-      })
-    : [];
-  const photosByEntry = new Map<string, { id: string }[]>();
-  for (const p of photos) {
-    if (!p.entryId) {
-      continue;
-    }
-    const list = photosByEntry.get(p.entryId) ?? [];
-    list.push({ id: p.id });
-    photosByEntry.set(p.entryId, list);
-  }
-
-  return rows.map((e) => ({
-    ...toDTO(e),
-    photos: (photosByEntry.get(e.id) ?? []).map((p) => ({
-      id: p.id,
-      url: `/api/ponto/photos/${p.id}`,
-    })),
-  }));
+  return rows.map(toDTO);
 }
 
 // ── GET /decided ────────────────────────────────────────────────────────
@@ -400,30 +376,7 @@ export async function listRecentDecisions(
     )
     .slice(0, 50);
 
-  const photos = recent.length
-    ? await prisma.pontoPhoto.findMany({
-        orderBy: { createdAt: "desc" },
-        select: { entryId: true, id: true },
-        where: { entryId: { in: recent.map((r) => r.id) } },
-      })
-    : [];
-  const photosByEntry = new Map<string, { id: string }[]>();
-  for (const p of photos) {
-    if (!p.entryId) {
-      continue;
-    }
-    const list = photosByEntry.get(p.entryId) ?? [];
-    list.push({ id: p.id });
-    photosByEntry.set(p.entryId, list);
-  }
-
-  return recent.map((e) => ({
-    ...toDTO(e),
-    photos: (photosByEntry.get(e.id) ?? []).map((p) => ({
-      id: p.id,
-      url: `/api/ponto/photos/${p.id}`,
-    })),
-  }));
+  return recent.map(toDTO);
 }
 
 // ── POST /entries/:id/validate ──────────────────────────────────────────
@@ -794,6 +747,14 @@ function pushDayHours(
       hasCorrection: rawEntries.some(
         (e) => isSuperseded(e) || e.correctsId !== null
       ),
+      photoSentAts: rawEntries
+        .map((e) =>
+          typeof (e.proofs as Record<string, unknown> | null)?.photoSentAt ===
+          "string"
+            ? ((e.proofs as Record<string, unknown>).photoSentAt as string)
+            : null
+        )
+        .filter((v): v is string => v !== null),
       recusadoCount: rawEntries.filter(
         (e) => effectiveStatusOf(e) === "RECUSADO"
       ).length,
@@ -952,22 +913,4 @@ export async function getMissingExits(
     (a, b) =>
       b.date.localeCompare(a.date) || a.userName.localeCompare(b.userName)
   );
-}
-
-// ── GET /photos/:photoId — resolução do path (puro, testável) ───────────
-
-/**
- * photo.path é relativo a UPLOAD_DIR; devolve o caminho absoluto ou null
- * quando escapa da pasta (path traversal / path absoluto injectado).
- */
-export function resolvePontoPhotoPath(
-  uploadDir: string,
-  storedPath: string
-): string | null {
-  const base = path.resolve(uploadDir);
-  const full = path.resolve(base, storedPath);
-  if (full === base || !full.startsWith(base + path.sep)) {
-    return null;
-  }
-  return full;
 }

@@ -106,8 +106,8 @@ interface ParsedInbound {
   data: EvolutionUpsertData;
   fromPhone: string;
   id: string;
-  /** Foto recebida (imageMessage) — o livro de ponto baixa via
-   *  getBase64FromMediaMessage; o pipeline de clientes nunca a usa. */
+  /** Foto recebida (imageMessage) — o livro de ponto regista só o facto
+   *  e a hora; nunca descarrega a imagem. */
   imageRef?: InboundMessage["imageRef"];
   /** Id do botão/lista respondido (buttonsResponse/listResponse). */
   interactiveId?: string | null;
@@ -142,13 +142,7 @@ function messageFields(data: EvolutionUpsertData): {
       : undefined;
   const imageMessage = msg?.imageMessage;
   const imageRef = imageMessage
-    ? {
-        mimetype: imageMessage.mimetype ?? null,
-        // getBase64FromMediaMessage quer a mensagem completa
-        // (key+message+timestamp) — é o `data` do upsert.
-        raw: data,
-        url: typeof imageMessage.url === "string" ? imageMessage.url : null,
-      }
+    ? { mimetype: imageMessage.mimetype ?? null }
     : undefined;
   const interactiveId =
     msg?.buttonsResponseMessage?.selectedButtonId ??
@@ -579,7 +573,7 @@ function tryPontoForEvolution(
       send: async (text) => (await pontoSend(text)).success,
       sendWithId: pontoSend,
     },
-    { evolution: evoConfig, shopSettings: settings }
+    { shopSettings: settings }
   ).catch((err) => {
     log.warn({ err }, "evolution ponto handler falhou");
     return false;

@@ -56,6 +56,7 @@ vi.mock("@/stores/ponto", () => ({
     selector({
       enabled: true,
       fetchStatus: () => Promise.resolve(),
+      photoCleanupWarnings: [],
     }),
 }));
 
