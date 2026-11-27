@@ -77,6 +77,9 @@ const BLOCKED_MUTATIONS = [
   // Fleet edits + return stamps dirty the shared demo data; GETs stay
   // open so the loaners board renders.
   "/api/loaners",
+  // MCP personal tokens create/revoke read credentials — a shared demo
+  // must not hand out data-access tokens; GETs feed the settings list.
+  "/api/mcp/tokens",
 ] as const;
 
 // Better-auth exposes its whole surface under /api/auth/* — including the

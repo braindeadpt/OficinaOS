@@ -17,6 +17,7 @@ import { invoicingRoutes } from "./routes/invoicing.js";
 import { jobRoutes } from "./routes/jobs.js";
 import { loanersRoutes } from "./routes/loaners.js";
 import { marketPricesRoutes } from "./routes/market-prices.js";
+import { mcpTokenRoutes } from "./routes/mcp-tokens.js";
 import { notificationsRoutes } from "./routes/notifications.js";
 import { partRequestsRoutes } from "./routes/part-requests.js";
 import { partsRoutes } from "./routes/parts.js";
@@ -94,4 +95,5 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
   app.register(tasksRoutes, { prefix: "/api/tasks" });
   app.register(referralsRoutes, { prefix: "/api" });
   app.register(dataIoRoutes, { prefix: "/api" });
+  app.register(mcpTokenRoutes, { prefix: "/api/mcp/tokens" });
 }

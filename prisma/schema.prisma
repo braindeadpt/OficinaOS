@@ -158,6 +158,7 @@ enum AuditAction {
   LOANER_RETURNED
   INBOX_TOOL_CALL
   INBOX_MESSAGE_SENT
+  MCP_READ
 }
 
 enum QuoteStatus {
@@ -234,6 +235,7 @@ model User {
   salesCreated          Sale[]              @relation("SaleCreatedBy")
   tradeInsCreated       TradeIn[]           @relation("TradeInCreatedBy")
   auditLogs             AuditLog[]
+  mcpTokens             McpToken[]
   cashSessionsOpened    CashSession[]       @relation("CashSessionOpenedBy")
   cashSessionsClosed    CashSession[]       @relation("CashSessionClosedBy")
   conversations         AiConversation[]
@@ -1011,6 +1013,32 @@ model AuditLog {
   @@index([action])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// ─────────────────────────────────────────────
+// MCP TOKEN — personal read-only API tokens ("oos_*") for the local MCP
+// server. The plaintext is shown once at creation; only the SHA-256 hash is
+// stored. Permissions are inherited from the owning user's role at call
+// time. showPii (default false = personal data masked) is an explicit,
+// RGPD-warned opt-in per token.
+// ─────────────────────────────────────────────
+model McpToken {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String    @db.VarChar(80)
+  // First characters of the plaintext ("oos_ab12cd") for display in the
+  // token list — never enough to authenticate.
+  prefix     String    @db.VarChar(16)
+  tokenHash  String    @unique
+  showPii    Boolean   @default(false)
+  expiresAt  DateTime? @db.Timestamptz
+  lastUsedAt DateTime? @db.Timestamptz
+  revokedAt  DateTime? @db.Timestamptz
+  createdAt  DateTime  @default(now()) @db.Timestamptz
+
+  @@index([userId])
+  @@map("mcp_tokens")
 }
 
 // ─────────────────────────────────────────────
