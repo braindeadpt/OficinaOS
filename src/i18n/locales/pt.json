@@ -3252,5 +3252,10 @@
   "ponto.act_proof_screen_wifi": "QR do ecrã na rede da loja",
   "ponto.act_proof_location": "Localização no momento",
   "ponto.act_proof_external_photo": "Externo: localização + foto (não guardada)",
-  "ponto.act_proof_manual": "Validado manualmente por {{name}}"
+  "ponto.act_proof_manual": "Validado manualmente por {{name}}",
+  "ponto.act_proof_remote": "Teletrabalho — sem prova de local",
+  "ponto.team_telework_days": "Teletrabalho",
+  "ponto.team_telework_explain": "Em teletrabalho não pedimos a localização, para não revelar a sua morada.",
+  "ponto.settings_remote_autoapprove": "Aprovar automaticamente as picagens em teletrabalho",
+  "ponto.settings_remote_autoapprove_hint": "Desligado por omissão: os registos de teletrabalho ficam por validar. Nunca pedem a localização do trabalhador."
 }

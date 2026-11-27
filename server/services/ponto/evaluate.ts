@@ -44,6 +44,11 @@ export interface PontoEvaluateInput {
   /** Comando original (ENTRADA pode ter sido convertido em VOLTEI por
    *  pausa — o `type` enviado é o efetivo). */
   type: Exclude<PontoCommand, "ESTADO">;
+  /** Teletrabalho (R3 da AIPD): presente só em dias de teletrabalho do
+   *  funcionário — a Cloud nunca pede localização e aplica a regra da
+   *  empresa (autoaprovar ou validar). externalWork/smsAllowed são
+   *  exigidos pelo schema da Cloud quando user vai no corpo. */
+  user?: { externalWork: boolean; smsAllowed: boolean; telework: boolean };
 }
 
 export interface PontoEvaluateResult {

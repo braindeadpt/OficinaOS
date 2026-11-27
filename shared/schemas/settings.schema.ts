@@ -109,6 +109,7 @@ export const updateShopSettingsSchema = z
     pontoRadiusM: z.number().int().min(10).max(2000).optional(),
     pontoExternalAutoApprove: z.boolean().optional(),
     pontoAlwaysAskLocation: z.boolean().optional(),
+    pontoRemoteAutoApprove: z.boolean().optional(),
     pontoExternalPhotoRequired: z.boolean().optional(),
     // Hora do lembrete de saída (HH:MM) — null/vazio desliga.
     pontoExitReminderTime: z
@@ -188,6 +189,7 @@ export const updateShopSettingsSchema = z
       data.pontoRadiusM !== undefined ||
       data.pontoExternalAutoApprove !== undefined ||
       data.pontoAlwaysAskLocation !== undefined ||
+      data.pontoRemoteAutoApprove !== undefined ||
       data.pontoExternalPhotoRequired !== undefined ||
       data.pontoExitReminderTime !== undefined ||
       data.pontoPauseReminderMinutes !== undefined ||

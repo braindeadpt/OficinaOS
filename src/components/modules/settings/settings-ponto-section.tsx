@@ -33,6 +33,7 @@ type PontoShop = Pick<
   | "pontoInfoText"
   | "pontoPauseReminderMinutes"
   | "pontoRadiusM"
+  | "pontoRemoteAutoApprove"
   | "pontoSmsNumber"
   | "pontoWaNumber"
 >;
@@ -213,6 +214,7 @@ export default function SettingsPontoSection({
   const [autoApprove, setAutoApprove] = useState(true);
   const [photoRequired, setPhotoRequired] = useState(false);
   const [alwaysAskLocation, setAlwaysAskLocation] = useState(false);
+  const [remoteAutoApprove, setRemoteAutoApprove] = useState(false);
   const [exitTime, setExitTime] = useState("");
   const [pauseMinutes, setPauseMinutes] = useState("20");
   const [infoText, setInfoText] = useState("");
@@ -237,6 +239,7 @@ export default function SettingsPontoSection({
       setAutoApprove(s.pontoExternalAutoApprove ?? true);
       setPhotoRequired(s.pontoExternalPhotoRequired ?? false);
       setAlwaysAskLocation(s.pontoAlwaysAskLocation ?? false);
+      setRemoteAutoApprove(s.pontoRemoteAutoApprove ?? false);
       setExitTime(s.pontoExitReminderTime ?? "");
       setPauseMinutes(s.pontoPauseReminderMinutes?.toString() ?? "20");
       setInfoText(s.pontoInfoText ?? "");
@@ -286,6 +289,7 @@ export default function SettingsPontoSection({
         pontoExitReminderTime: exitTime || null,
         pontoExternalAutoApprove: autoApprove,
         pontoAlwaysAskLocation: alwaysAskLocation,
+        pontoRemoteAutoApprove: remoteAutoApprove,
         pontoExternalPhotoRequired: photoRequired,
         pontoGeoLat: values.geoLat,
         pontoGeoLng: values.geoLng,
@@ -458,6 +462,27 @@ export default function SettingsPontoSection({
             </div>
             <p className="mt-1 text-on-surface-variant text-xs">
               {t("ponto.always_ask_location_hint")}
+            </p>
+          </div>
+          <div>
+            <div className="flex items-center justify-between">
+              <p
+                className="font-medium text-on-surface text-sm"
+                id="ponto-remote-autoapprove-label"
+              >
+                {t("ponto.settings_remote_autoapprove")}
+              </p>
+              <Switch
+                ariaLabelledBy="ponto-remote-autoapprove-label"
+                checked={remoteAutoApprove}
+                onChange={(checked) => {
+                  setRemoteAutoApprove(checked);
+                  markDirty();
+                }}
+              />
+            </div>
+            <p className="mt-1 text-on-surface-variant text-xs">
+              {t("ponto.settings_remote_autoapprove_hint")}
             </p>
           </div>
         </div>
