@@ -39,6 +39,7 @@ const pontoUserFields = {
   externalWork: z.boolean().optional(),
   pontoSmsAllowed: z.boolean().optional(),
   pontoScheduleExempt: z.boolean().optional(),
+  pontoTeleworkDays: z.array(z.number().int().min(1).max(7)).max(7).optional(),
   pontoScheduleStart: pontoScheduleField,
   pontoScheduleEnd: pontoScheduleField,
 };

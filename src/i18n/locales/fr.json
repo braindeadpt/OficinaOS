@@ -3253,5 +3253,10 @@
   "ponto.act_proof_screen_wifi": "QR de l'écran sur le réseau de la boutique",
   "ponto.act_proof_location": "Localisation au moment de la pointeuse",
   "ponto.act_proof_external_photo": "Externe : localisation + photo (non conservée)",
-  "ponto.act_proof_manual": "Validé manuellement par {{name}}"
+  "ponto.act_proof_manual": "Validé manuellement par {{name}}",
+  "ponto.act_proof_remote": "Télétravail — sans preuve de lieu",
+  "ponto.team_telework_days": "Télétravail",
+  "ponto.team_telework_explain": "En télétravail nous ne demandons pas la localisation, pour ne pas révéler votre adresse.",
+  "ponto.settings_remote_autoapprove": "Approuver automatiquement les pointages en télétravail",
+  "ponto.settings_remote_autoapprove_hint": "Désactivé par défaut : les pointages en télétravail restent à valider. Ils ne demandent jamais la localisation du travailleur."
 }

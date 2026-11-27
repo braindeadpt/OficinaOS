@@ -138,6 +138,7 @@ export interface PontoUserFields {
   pontoScheduleExempt?: boolean;
   pontoScheduleStart?: string | null;
   pontoSmsAllowed?: boolean;
+  pontoTeleworkDays?: number[];
 }
 
 function pontoUpdateData(fields: PontoUserFields): Record<string, unknown> {
@@ -162,6 +163,9 @@ function pontoUpdateData(fields: PontoUserFields): Record<string, unknown> {
   }
   if (fields.pontoScheduleExempt !== undefined) {
     out.pontoScheduleExempt = fields.pontoScheduleExempt;
+  }
+  if (fields.pontoTeleworkDays !== undefined) {
+    out.pontoTeleworkDays = [...new Set(fields.pontoTeleworkDays)].sort();
   }
   if (fields.pontoScheduleStart !== undefined) {
     out.pontoScheduleStart = nullable(fields.pontoScheduleStart);

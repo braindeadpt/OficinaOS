@@ -3253,5 +3253,10 @@
   "ponto.act_proof_screen_wifi": "QR de la pantalla en la red de la tienda",
   "ponto.act_proof_location": "Ubicación en el momento",
   "ponto.act_proof_external_photo": "Externo: ubicación + foto (no guardada)",
-  "ponto.act_proof_manual": "Validado manualmente por {{name}}"
+  "ponto.act_proof_manual": "Validado manualmente por {{name}}",
+  "ponto.act_proof_remote": "Teletrabajo — sin prueba de ubicación",
+  "ponto.team_telework_days": "Teletrabajo",
+  "ponto.team_telework_explain": "En teletrabajo no pedimos la ubicación, para no revelar su domicilio.",
+  "ponto.settings_remote_autoapprove": "Aprobar automáticamente los fichajes en teletrabajo",
+  "ponto.settings_remote_autoapprove_hint": "Desactivado por defecto: los registros de teletrabajo quedan pendientes de validación. Nunca piden la ubicación del trabajador."
 }

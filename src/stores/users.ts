@@ -18,6 +18,7 @@ interface UserRow {
   pontoScheduleExempt: boolean;
   pontoScheduleStart: string | null;
   pontoSmsAllowed: boolean;
+  pontoTeleworkDays: number[];
   role: RoleType;
   username: string;
 }
@@ -32,6 +33,7 @@ export interface PontoUserPayload {
   pontoScheduleExempt?: boolean;
   pontoScheduleStart?: string | null;
   pontoSmsAllowed?: boolean;
+  pontoTeleworkDays?: number[];
 }
 
 interface UsersState {

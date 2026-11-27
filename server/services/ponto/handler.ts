@@ -47,6 +47,7 @@ import {
   setPendingPontoExit,
   takeExpiredPonto,
 } from "./state.js";
+import { isTeleworkDay } from "./telework.js";
 import {
   PONTO_EXIT_DATE_TERMS,
   PONTO_TEXT,
@@ -939,6 +940,34 @@ interface DispatchArgs {
   tz: string;
 }
 
+/** Ramo de teletrabalho: finalize direto, extraído do dispatchCommand
+ *  para o manter abaixo do limite de complexidade. */
+async function finalizeTelework(
+  ctx: BotReplyCtx,
+  say: Say,
+  sayInteractive: SayInteractive,
+  settings: Settings,
+  staff: PontoStaffMatch,
+  transport: NonNullable<InboundTransport["ponto"]>["transport"],
+  msg: InboundMessage,
+  effective: PontoMarkCommand,
+  code: string | undefined,
+  phoneDigits: string,
+  pauseSinceAt: string | undefined,
+  hasEntrada: boolean
+): Promise<void> {
+  await finalizePonto(ctx, say, sayInteractive, settings, staff, transport, {
+    at: new Date(msg.createdAt),
+    code: !staff.user.externalWork && code ? code : undefined,
+    command: effective,
+    hasPhoto: false,
+    messageAt: msg.sentAt ?? msg.createdAt,
+    pauseMinutes: pauseMinutesOf(pauseSinceAt, new Date(msg.createdAt)),
+    phoneDigits,
+    todayHasEntry: hasEntrada,
+  });
+}
+
 async function dispatchCommand(a: DispatchArgs): Promise<void> {
   const {
     channel,
@@ -998,6 +1027,27 @@ async function dispatchCommand(a: DispatchArgs): Promise<void> {
       phoneDigits,
       todayHasEntry: hasEntrada,
     });
+    return;
+  }
+
+  // Teletrabalho (R3): nestes dias a picagem nunca pede localização —
+  // avalia logo, sem sonda nem pending. A Cloud aplica a regra da empresa
+  // (autoaprovar ou por validar) e o registo fica proofs.kind = "remote".
+  if (isTeleworkDay(staff.user.pontoTeleworkDays, tz, new Date())) {
+    await finalizeTelework(
+      ctx,
+      say,
+      sayInteractive,
+      settings,
+      staff,
+      transport,
+      msg,
+      effective,
+      parsed.code,
+      phoneDigits,
+      pauseSinceAt,
+      hasEntrada
+    );
     return;
   }
 
@@ -1334,6 +1384,13 @@ async function finalizePonto(
   // esses campos deixaram de seguir no corpo do evaluate. O gate de geo
   // acima mantém-se lógica local: sem geo configurada a marcação nem
   // chega a ser avaliada.
+  // Teletrabalho (R3 da AIPD): a Cloud precisa de o saber mesmo quando o
+  // pedido vem do fluxo clássico — nunca pede localização nesse caso.
+  const telework = isTeleworkDay(
+    staff.user.pontoTeleworkDays,
+    tzOf(settings),
+    args.at
+  );
   const result = await evaluatePontoMark(ctx.prisma, ctx.log, {
     type: args.command,
     transport,
@@ -1342,6 +1399,17 @@ async function finalizePonto(
     messageAt: args.messageAt,
     ...(args.location ? { location: args.location } : {}),
     hasPhoto: args.hasPhoto,
+    // Teletrabalho é estado por dia que a Cloud não conhece da config —
+    // segue só quando presente, como o resto do contrato WP0.1.
+    ...(telework
+      ? {
+          user: {
+            externalWork: staff.user.externalWork,
+            smsAllowed: staff.user.pontoSmsAllowed,
+            telework,
+          },
+        }
+      : {}),
   });
 
   if (!result) {

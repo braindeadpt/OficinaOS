@@ -3253,5 +3253,10 @@
   "ponto.act_proof_screen_wifi": "Screen QR on the shop network",
   "ponto.act_proof_location": "Location at the time",
   "ponto.act_proof_external_photo": "External: location + photo (not stored)",
-  "ponto.act_proof_manual": "Manually validated by {{name}}"
+  "ponto.act_proof_manual": "Manually validated by {{name}}",
+  "ponto.act_proof_remote": "Telework — no proof of location",
+  "ponto.team_telework_days": "Telework",
+  "ponto.team_telework_explain": "On telework days we never ask for the location, so the worker's home address is never revealed.",
+  "ponto.settings_remote_autoapprove": "Approve telework clock-ins automatically",
+  "ponto.settings_remote_autoapprove_hint": "Off by default: telework records stay pending validation. They never ask for the worker's location."
 }

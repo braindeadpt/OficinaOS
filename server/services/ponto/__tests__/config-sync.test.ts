@@ -16,6 +16,7 @@ function settings(over: Record<string, unknown> = {}) {
     pontoGeoLat: 38.72,
     pontoGeoLng: -9.14,
     pontoRadiusM: 100,
+    pontoRemoteAutoApprove: false,
     pontoSmsNumber: "+351210000000",
     pontoWaNumber: "+351912345678",
     timezone: "Europe/Lisbon",
@@ -29,6 +30,7 @@ describe("buildPontoConfigPayload", () => {
     expect(payload).toEqual({
       alwaysAskLocation: false,
       externalAutoApprove: true,
+      remoteAutoApprove: false,
       photoRequired: false,
       pinSyncVersion: 1,
       shopGeo: { lat: 38.72, lng: -9.14, radiusM: 100 },
@@ -146,6 +148,7 @@ describe("pushPontoCloudConfig", () => {
           pontoGeoLat: 38.7,
           pontoGeoLng: -9.1,
           pontoRadiusM: 100,
+          pontoRemoteAutoApprove: false,
           pontoSmsNumber: null,
           pontoWaNumber: null,
           timezone: "Europe/Lisbon",

@@ -81,6 +81,9 @@ function proofLabel(
   if (entry.proofKind === "external_photo") {
     return t("ponto.act_proof_external_photo");
   }
+  if (entry.proofKind === "remote") {
+    return t("ponto.act_proof_remote");
+  }
   // Ficou por validar e uma pessoa decidiu: prova é a própria validação.
   const latest = entry.validations[0];
   if (latest?.decision === "APROVADO") {
