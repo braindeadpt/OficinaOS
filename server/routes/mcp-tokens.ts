@@ -80,8 +80,16 @@ export const mcpTokenRoutes: FastifyPluginAsync = async (app) => {
       throw new AppError("VALIDATION_ERROR");
     }
     const { name, expiresAt, showPii } = parsed.data;
-    const expiryDate = expiresAt ? new Date(expiresAt) : null;
-    if (expiryDate && expiryDate.getTime() <= Date.now()) {
+    // Validade máxima de 1 ano: tokens novos expiram sempre — por omissão
+    // ao fim de um ano, mais cedo se o utilizador pedir. Tokens antigos
+    // sem expiração ficam como estão (revogam-se à mão).
+    const ONE_YEAR_MS = 365 * 24 * 3600 * 1000;
+    const maxExpiry = Date.now() + ONE_YEAR_MS;
+    const expiryDate = expiresAt ? new Date(expiresAt) : new Date(maxExpiry);
+    if (
+      expiryDate.getTime() <= Date.now() ||
+      expiryDate.getTime() > maxExpiry
+    ) {
       throw new AppError("VALIDATION_ERROR");
     }
     const userId = requireUserId(req);

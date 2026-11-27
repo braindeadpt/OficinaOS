@@ -1,6 +1,12 @@
 import type { PrismaClient } from "@generated/client";
 import { roles } from "@shared/permissions";
-import { maskEmail, maskPhone, maskTaxId, stripSecrets } from "./mask.js";
+import {
+  maskEmail,
+  maskPhone,
+  maskTaxId,
+  redactDeep,
+  stripSecrets,
+} from "./mask.js";
 import type { McpAuth } from "./tokens.js";
 
 /**
@@ -372,11 +378,17 @@ async function getCustomer(
         orderBy: { createdAt: "desc" as const },
         take: 20,
       },
-      sales: {
-        select: { saleCode: true, total: true, createdAt: true },
-        orderBy: { createdAt: "desc" as const },
-        take: 20,
-      },
+      // Vendas só para quem as vê na app — customers:view não pode ser
+      // caminho indirecto para dados atrás de sales:view.
+      ...(can(ctx.auth.userRole, "sales", "view")
+        ? {
+            sales: {
+              select: { saleCode: true, total: true, createdAt: true },
+              orderBy: { createdAt: "desc" as const },
+              take: 20,
+            },
+          }
+        : {}),
     },
   });
   if (!c) {
@@ -813,20 +825,34 @@ async function dailySummary(
 ): Promise<ToolResult> {
   const tz = await shopTz(ctx.prisma);
   const { start, end } = dayBoundsInTz(undefined, tz);
+  // viewShop vê os agregados da loja; quem só tem viewSelf (técnicos) vê
+  // o mesmo recorte que a app lhe mostra — as suas reparações — e nunca
+  // os totais de vendas da loja.
+  const shopWide = can(ctx.auth.userRole, "reports", "viewShop");
+  const jobScope = shopWide ? {} : { technicianId: ctx.auth.userId };
   const [byStatus, jobsToday, salesToday, waitingParts] = await Promise.all([
     ctx.prisma.job.groupBy({
       by: ["status"],
       // Abertos = nem entregues, nem cancelados, nem devolvidos (métricas da app).
-      where: { status: { notIn: ["DELIVERED", "CANCELLED", "RETURNED"] } },
+      where: {
+        status: { notIn: ["DELIVERED", "CANCELLED", "RETURNED"] },
+        ...jobScope,
+      },
       _count: true,
     }),
-    ctx.prisma.job.count({ where: { createdAt: { gte: start, lte: end } } }),
-    ctx.prisma.sale.aggregate({
-      where: { createdAt: { gte: start, lte: end } },
-      _sum: { total: true },
-      _count: true,
+    ctx.prisma.job.count({
+      where: { createdAt: { gte: start, lte: end }, ...jobScope },
     }),
-    ctx.prisma.job.count({ where: { status: "WAITING_FOR_PARTS" } }),
+    shopWide
+      ? ctx.prisma.sale.aggregate({
+          where: { createdAt: { gte: start, lte: end } },
+          _sum: { total: true },
+          _count: true,
+        })
+      : Promise.resolve({ _sum: { total: null }, _count: null }),
+    ctx.prisma.job.count({
+      where: { status: "WAITING_FOR_PARTS", ...jobScope },
+    }),
   ]);
   return {
     data: {
@@ -834,14 +860,19 @@ async function dailySummary(
         .toISOString()
         .slice(0, 10),
       timeZone: tz,
+      scope: shopWide ? "shop" : "self",
       openJobsByStatus: byStatus.map((s) => ({
         status: s.status,
         count: s._count,
       })),
       jobsIntakeToday: jobsToday,
       waitingForParts: waitingParts,
-      salesTodayCount: salesToday._count,
-      salesTodayTotal: salesToday._sum.total,
+      ...(shopWide
+        ? {
+            salesTodayCount: salesToday._count,
+            salesTodayTotal: salesToday._sum.total,
+          }
+        : {}),
     },
     records: 1,
   };
@@ -1094,16 +1125,23 @@ export async function executeTool(
       return { isError: true, text: result.error, records: 0, toolFound: true };
     }
     const clean = stripSecrets(result.data);
+    // Texto livre (notas, descrições, observações) — o RGPD aplica-se ao
+    // conteúdo das frases, não só aos campos com nome. Com a máscara ligada,
+    // telefones/emails/NIFs escritos à mão saem redigidos em qualquer string.
+    const safe = auth.showPii ? clean : redactDeep(clean);
     return {
       isError: false,
-      text: wrapData(clean),
+      text: wrapData(safe),
       records: result.records,
       toolFound: true,
     };
   } catch (err) {
+    // O detalhe (SQL, esquema, caminhos) fica só no log do servidor — ao
+    // LLM vai texto genérico, sem argumentos nem dados do pedido.
+    console.error("mcp: erro interno na ferramenta", err);
     return {
       isError: true,
-      text: `Erro interno ao ler os dados: ${err instanceof Error ? err.message : "desconhecido"}`,
+      text: "Erro interno ao ler os dados — detalhe no registo do servidor.",
       records: 0,
       toolFound: true,
     };

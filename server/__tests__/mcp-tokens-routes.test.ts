@@ -163,3 +163,63 @@ describe("tokens MCP — supervisão do dono", () => {
     expect(res.statusCode).toBe(401);
   });
 });
+
+describe("F6 — validade máxima de 1 ano", () => {
+  function createAppWithCreate() {
+    const created: unknown[] = [];
+    prismaMocks.create = vi
+      .fn()
+      .mockImplementation(({ data }: { data: unknown }) => {
+        created.push(data);
+        return Promise.resolve({
+          ...baseToken,
+          ...(data as object),
+          id: "new-1",
+        });
+      });
+    return { created };
+  }
+
+  it("sem expiresAt o token nasce com validade de ~1 ano", async () => {
+    const { created } = createAppWithCreate();
+    const app = await buildApp(OWNER);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/mcp/tokens",
+      payload: { name: "Claude" },
+    });
+    expect(res.statusCode).toBe(201);
+    const data = created[0] as { expiresAt: Date };
+    const yearMs = 365 * 24 * 3600 * 1000;
+    const delta = data.expiresAt.getTime() - Date.now();
+    expect(delta).toBeGreaterThan(yearMs - 60_000);
+    expect(delta).toBeLessThanOrEqual(yearMs);
+  });
+
+  it("expiresAt além de 1 ano é rejeitado", async () => {
+    createAppWithCreate();
+    const app = await buildApp(OWNER);
+    const beyond = new Date(Date.now() + 400 * 24 * 3600 * 1000).toISOString();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/mcp/tokens",
+      payload: { name: "Claude", expiresAt: beyond },
+    });
+    expect(res.statusCode).not.toBe(201);
+  });
+
+  it("expiresAt dentro de 1 ano é aceite", async () => {
+    const { created } = createAppWithCreate();
+    const app = await buildApp(OWNER);
+    const within = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/mcp/tokens",
+      payload: { name: "Claude", expiresAt: within },
+    });
+    expect(res.statusCode).toBe(201);
+    expect((created[0] as { expiresAt: Date }).expiresAt.toISOString()).toBe(
+      new Date(within).toISOString()
+    );
+  });
+});

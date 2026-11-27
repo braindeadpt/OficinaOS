@@ -33,11 +33,16 @@ client — to your shop's data. **Read-only, free, no Cloud required.**
 
 ## Transports
 
-### stdio — `bunx oficinaos-mcp --token oos_…`
+### stdio — `bunx oficinaos-mcp` (token no ambiente)
 
 The recommended transport for desktop clients. It reads `DATABASE_URL` from
 the environment or the `.env` in the working directory and uses the exact
 same core as the HTTP server (permissions, masking, rate limit, audit).
+
+> **Prefer `MCP_TOKEN` in the environment over `--token` in argv.** Flags in
+> the command line are visible to every local user in `ps`/`top` while the
+> client runs; environment variables are not. `--token` still works for
+> compatibility, but use it only when the client can't set env vars.
 
 Native install (Windows service / Linux):
 
@@ -46,7 +51,8 @@ Native install (Windows service / Linux):
   "mcpServers": {
     "oficinaos": {
       "command": "bunx",
-      "args": ["oficinaos-mcp", "--token", "oos_<your-token>"]
+      "args": ["oficinaos-mcp"],
+      "env": { "MCP_TOKEN": "oos_<your-token>" }
     }
   }
 }
@@ -62,8 +68,8 @@ the binary through `docker compose exec` (adjust the compose file path):
       "command": "docker",
       "args": [
         "compose", "-f", "/path/to/docker-compose.yml",
-        "exec", "-T", "app",
-        "bunx", "oficinaos-mcp", "--token", "oos_<your-token>"
+        "exec", "-T", "-e", "MCP_TOKEN=oos_<your-token>",
+        "app", "bunx", "oficinaos-mcp"
       ]
     }
   }

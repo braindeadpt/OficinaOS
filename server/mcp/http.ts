@@ -81,6 +81,48 @@ function bearerToken(req: IncomingMessage): string | null {
   return header.slice("Bearer ".length).trim();
 }
 
+// ── Anti-DNS-rebinding ────────────────────────────────────────────────────
+// Um site malicioso pode reordenar o DNS do seu domínio para 127.0.0.1 e
+// fazer o browser da vítima falar com este servidor como "mesma origem" —
+// aí os limites da SOP deixam de proteger. A defesa é validar que o Host
+// é loopback e que um Origin presente também é. Clientes de desktop MCP
+// não enviam Origin; browsers enviam sempre.
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]", "::1"]);
+
+// "127.0.0.1:4100" | "localhost:4100" | "[::1]:4100" | sem porta
+const HOST_RE = /^(\[[0-9a-fA-F:]+\]|[^:]*)(?::\d+)?$/;
+
+function hostnameOf(hostHeader: string): string {
+  const m = HOST_RE.exec(hostHeader.trim());
+  return (m?.[1] ?? "").toLowerCase();
+}
+
+function isLoopbackHostHeader(hostHeader: string | undefined): boolean {
+  if (!hostHeader) {
+    return false;
+  }
+  return LOOPBACK_HOSTS.has(hostnameOf(hostHeader));
+}
+
+function isLoopbackOrigin(origin: string | undefined): boolean {
+  if (!origin) {
+    return true; // clientes não-browser não enviam Origin
+  }
+  try {
+    const u = new URL(origin);
+    return LOOPBACK_HOSTS.has(u.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
+export function hostOriginAllowed(req: IncomingMessage): boolean {
+  return (
+    isLoopbackHostHeader(req.headers.host) &&
+    isLoopbackOrigin(req.headers.origin as string | undefined)
+  );
+}
+
 type McpAuthResult = Awaited<ReturnType<typeof authenticateToken>>;
 
 /** Autentica o pedido e gere a quota de força bruta. Devolve null (e responde) em falha. */
@@ -113,6 +155,10 @@ export function createMcpHttpServer(prisma: PrismaClient): Server {
     const handle = async () => {
       const url = new URL(req.url ?? "/", `http://${MCP_BIND_HOST}`);
       const ip = req.socket.remoteAddress ?? "unknown";
+      if (!hostOriginAllowed(req)) {
+        sendJson(res, 403, { error: "forbidden_host" });
+        return;
+      }
       if (!ipRateLimitOk(ip)) {
         sendJson(res, 429, { error: "rate_limited", limit: "60/min" });
         return;
@@ -152,13 +198,12 @@ export function createMcpHttpServer(prisma: PrismaClient): Server {
       await transport.handleRequest(req, res);
     };
     handle().catch((err: unknown) => {
+      // O detalhe fica só no log do servidor — ao cliente vai texto genérico.
+      console.error("mcp: erro no pedido HTTP", err);
       if (res.headersSent) {
         res.end();
       } else {
-        sendJson(res, 500, {
-          error: "internal",
-          message: err instanceof Error ? err.message : "unknown",
-        });
+        sendJson(res, 500, { error: "internal" });
       }
     });
   });
