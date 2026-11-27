@@ -71,7 +71,7 @@ export default function SettingsDuplicatesSection() {
       });
       setPreview({ data: res.data, groupKey, keepId, mergedId });
     } catch (err) {
-      toast.error(getErrorMessage(err, "Erro"));
+      toast.error(getErrorMessage(err, t("duplicates.error")));
     } finally {
       setBusy(false);
     }
@@ -91,7 +91,7 @@ export default function SettingsDuplicatesSection() {
       setPreview(null);
       await refresh();
     } catch (err) {
-      toast.error(getErrorMessage(err, "Erro"));
+      toast.error(getErrorMessage(err, t("duplicates.error")));
     } finally {
       setBusy(false);
     }
@@ -149,22 +149,29 @@ export default function SettingsDuplicatesSection() {
                           {customer.taxId ? ` · ${customer.taxId}` : ""}
                         </span>
                       </div>
-                      {others.length === 1 && others[0] ? (
-                        <Button
-                          disabled={busy}
-                          onClick={() =>
-                            openPreview(
-                              group.normalizedPhone,
-                              customer.id,
-                              others[0].id
-                            )
-                          }
-                          size="sm"
-                          variant="secondary"
-                        >
-                          {t("duplicates.keep_this")}
-                        </Button>
-                      ) : null}
+                      <div className="flex flex-wrap gap-2">
+                        {others.map((other) => (
+                          <Button
+                            disabled={busy}
+                            key={other.id}
+                            onClick={() =>
+                              openPreview(
+                                group.normalizedPhone,
+                                customer.id,
+                                other.id
+                              )
+                            }
+                            size="sm"
+                            variant="secondary"
+                          >
+                            {others.length === 1
+                              ? t("duplicates.keep_this")
+                              : t("duplicates.keep_this_merge", {
+                                  name: other.name,
+                                })}
+                          </Button>
+                        ))}
+                      </div>
                     </div>
                   );
                 })}

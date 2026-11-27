@@ -45,6 +45,7 @@ export const customersRoutes: FastifyPluginAsync = async (app) => {
   app.post(
     "/merge/preview",
     {
+      preHandler: [requirePermission({ customers: ["edit"] })],
       schema: {
         tags: ["customers"],
         summary: "Preview a pairwise customer merge",
@@ -70,6 +71,7 @@ export const customersRoutes: FastifyPluginAsync = async (app) => {
   app.post(
     "/merge",
     {
+      preHandler: [requirePermission({ customers: ["edit"] })],
       schema: {
         tags: ["customers"],
         summary: "Merge a duplicate customer pair, with audit",

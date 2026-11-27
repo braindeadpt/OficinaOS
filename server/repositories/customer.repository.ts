@@ -48,10 +48,14 @@ export async function findByNormalizedPhone(
       CASE
         WHEN c.trimmed LIKE '+%' THEN '+' || c.digits
         WHEN c.digits LIKE '00%' THEN '+' || substr(c.digits, 3)
-        ELSE '+' || ${dialCode} || c.digits
+        ELSE '+' || ${dialCode} || regexp_replace(c.digits, '^0+', '')
       END
     ) = ${normalizedPhone}
-    ORDER BY id
+    -- Exact stored form first: in a duplicate pair ("+351912345678" vs
+    -- legacy "912345678") an import that carries the international form
+    -- belongs to the row already written that way, not to whichever id
+    -- sorts first.
+    ORDER BY CASE WHEN c.trimmed = ${normalizedPhone} THEN 0 ELSE 1 END, id
     LIMIT 1
   `;
   return rows[0] ?? null;

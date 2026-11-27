@@ -92,6 +92,10 @@ describe("mergeCustomers", () => {
       },
       inboxConversation: { updateMany: vi.fn().mockResolvedValue({}) },
       job: { updateMany: vi.fn().mockResolvedValue({}) },
+      notificationOutbox: { updateMany: vi.fn().mockResolvedValue({}) },
+      shopSettings: {
+        findUnique: vi.fn().mockResolvedValue({ countryCode: "PT" }),
+      },
       purchaseOrder: { updateMany: vi.fn().mockResolvedValue({}) },
       sale: { updateMany: vi.fn().mockResolvedValue({}) },
       supplier: {
@@ -147,20 +151,65 @@ describe("mergeCustomers", () => {
       mergeCustomers(prisma, "keep", "keep", "user-1")
     ).rejects.toThrow();
   });
-});
-
-describe("migração da auditoria", () => {
-  it("é apenas aditiva — nenhum dado de clientes é alterado", async () => {
-    const fs = await import("node:fs");
-    const sql = fs.readFileSync(
-      "prisma/migrations/20261231209000_customer_merged_audit_action/migration.sql",
-      "utf8"
+  it("recusa a junção se os telefones entretanto deixaram de coincidir", async () => {
+    const { prisma, tx } = txMock();
+    tx.customer.findUnique = vi.fn(({ where }: { where: { id: string } }) =>
+      Promise.resolve(
+        where.id === "keep"
+          ? customerRow({ id: "keep", phone: "+351912345678" })
+          : customerRow({ id: "gone", phone: "+351967654321" })
+      )
     );
-    expect(sql).toContain("ADD VALUE");
-    const upper = sql.toUpperCase();
-    expect(upper.includes("UPDATE ")).toBe(false);
-    expect(upper.includes("DELETE ")).toBe(false);
-    expect(upper.includes("DROP ")).toBe(false);
-    expect(upper.includes("ALTER TABLE")).toBe(false);
+    await expect(
+      mergeCustomers(prisma, "keep", "gone", "user-1")
+    ).rejects.toThrow();
+    expect(tx.customer.delete).not.toHaveBeenCalled();
+    expect(tx.job.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("mantém a data de campanha mais recente e repõe o telefone da fila", async () => {
+    const { prisma, tx } = txMock();
+    const newer = new Date("2026-06-01T00:00:00Z");
+    const older = new Date("2026-01-01T00:00:00Z");
+    tx.customer.findUnique = vi.fn(({ where }: { where: { id: string } }) =>
+      Promise.resolve(
+        where.id === "keep"
+          ? customerRow({
+              id: "keep",
+              lastRemarketingAt: older,
+              phone: "+351912345678",
+            })
+          : customerRow({
+              id: "gone",
+              lastRemarketingAt: newer,
+              phone: "912345678",
+            })
+      )
+    );
+    await mergeCustomers(prisma, "keep", "gone", "user-1");
+    const updateArgs = tx.customer.update.mock.calls[0][0] as {
+      data: Record<string, unknown>;
+    };
+    expect(updateArgs.data.lastRemarketingAt).toEqual(newer);
+    expect(tx.notificationOutbox.updateMany).toHaveBeenCalledWith({
+      data: { recipientPhone: "+351912345678" },
+      where: { recipientPhone: "912345678", status: "QUEUED" },
+    });
+  });
+
+  describe("migração da auditoria", () => {
+    it("é apenas aditiva — nenhum dado de clientes é alterado", async () => {
+      const fs = await import("node:fs");
+      const sql = fs.readFileSync(
+        "prisma/migrations/20261231209000_customer_merged_audit_action/migration.sql",
+        "utf8"
+      );
+      expect(sql).toContain("ADD VALUE");
+      const upper = sql.toUpperCase();
+      expect(upper.includes("UPDATE ")).toBe(false);
+      expect(upper.includes("DELETE ")).toBe(false);
+      expect(upper.includes("DROP ")).toBe(false);
+      expect(upper.includes("ALTER TABLE")).toBe(false);
+    });
   });
 });

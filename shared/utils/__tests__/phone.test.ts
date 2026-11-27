@@ -23,6 +23,9 @@ describe("normalizePhone", () => {
       normalizePhone("+351912345678")
     );
   });
+  it("número nacional francês perde o zero de trunk ao ganhar o +33", () => {
+    expect(normalizePhoneE164("06 12 34 56 78", "33")).toBe("+33612345678");
+  });
 });
 
 describe("isValidPhone", () => {

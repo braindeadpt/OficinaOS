@@ -491,20 +491,7 @@ export async function create(
     }
     customer = found;
   } else {
-    const email = input.customerEmail?.trim() || null;
-    customer = await customerUpsert(
-      prisma,
-      { phone: input.customerPhone },
-      {
-        name: input.customerName,
-        ...(email ? { email } : {}),
-      },
-      {
-        email,
-        name: input.customerName,
-        phone: input.customerPhone,
-      }
-    );
+    customer = await resolveCustomerByPhone(prisma, input);
   }
 
   let brandId = input.deviceBrandId;
@@ -609,6 +596,51 @@ export async function create(
   const fullJob = await jobFindUnique(prisma, job.id, JOB_INCLUDE);
 
   return { ...(fullJob ?? job), finalCost: computeFinalCost(fullJob ?? job) };
+}
+
+/**
+ * Customer resolution for the normal creation path: E.164 with the shop's
+ * dial code (issue #77). Quick-intake sends the national number as typed —
+ * without the normalized lookup a customer already registered with the
+ * country code would get a second record.
+ */
+async function resolveCustomerByPhone(
+  prisma: PrismaClient,
+  input: {
+    customerEmail?: string | undefined;
+    customerName: string;
+    customerPhone: string;
+  }
+) {
+  const settings = await prisma.shopSettings.findUnique({
+    select: { countryCode: true },
+    where: { id: "default" },
+  });
+  const dial = effectiveDialCode(settings?.countryCode);
+  const phone = normalizePhoneE164(input.customerPhone, dial);
+  const existing = await findByNormalizedPhone(prisma, phone, dial);
+  const email = input.customerEmail?.trim() || null;
+  if (existing) {
+    return {
+      email,
+      id: existing.id,
+      name: existing.name,
+      phone: existing.phone,
+    };
+  }
+  return await customerUpsert(
+    prisma,
+    { phone },
+    {
+      name: input.customerName,
+      ...(email ? { email } : {}),
+    },
+    {
+      email,
+      name: input.customerName,
+      phone,
+    }
+  );
 }
 
 const GENERIC_IMPORT_BRAND = "Outra";

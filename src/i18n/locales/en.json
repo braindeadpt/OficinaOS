@@ -3274,5 +3274,9 @@
   "duplicates.preview_consent_yes": "WhatsApp consent: yes",
   "duplicates.preview_consent_no": "WhatsApp consent: no",
   "duplicates.confirm_merge": "Merge now",
-  "duplicates.merged": "Customers merged. The removal is recorded in the audit log."
+  "duplicates.merged": "Customers merged. The removal is recorded in the audit log.",
+  "duplicates": {
+    "error": "Could not complete the operation",
+    "keep_this_merge": "Keep this one, merge {name}"
+  }
 }

@@ -3274,5 +3274,9 @@
   "duplicates.preview_consent_yes": "Consentimento WhatsApp: sim",
   "duplicates.preview_consent_no": "Consentimento WhatsApp: não",
   "duplicates.confirm_merge": "Juntar agora",
-  "duplicates.merged": "Clientes juntados. A junção ficou registada na auditoria."
+  "duplicates.merged": "Clientes juntados. A junção ficou registada na auditoria.",
+  "duplicates": {
+    "error": "Não foi possível concluir a operação",
+    "keep_this_merge": "Manter esta ficha, juntar «{name}»"
+  }
 }

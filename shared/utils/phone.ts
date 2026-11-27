@@ -57,8 +57,16 @@ export function normalizePhoneE164(raw: string, dialCode: string): string {
   if (canonical.startsWith("+")) {
     return canonical;
   }
-  return `+${dialCode}${canonical}`;
+  // Trunk prefix: France, the UK and the US write national numbers with a
+  // leading 0/1 that must NOT appear after the country code — "+3306…"
+  // is invalid E.164 and breaks delivery. Portugal has no trunk digit, so
+  // stripping leading zeros is a no-op there.
+  const national = canonical.replace(LEADING_ZEROS, "");
+  return `+${dialCode}${national}`;
 }
+
+/** Trunk-prefix zeros dropped when building E.164. */
+const LEADING_ZEROS = /^0+/;
 
 /** Portugal's country code, the one a search ignores. */
 const PT_COUNTRY_CODE = "351";

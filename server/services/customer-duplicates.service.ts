@@ -194,6 +194,24 @@ export function mergeCustomers(
       });
     }
 
+    // O relatório pode estar aberto há dias: se entretanto alguém corrigiu
+    // um dos telefones, o par já não é duplicado e juntar apagava uma ficha
+    // de outra pessoa. Verifica dentro da transação, nunca confia no painel.
+    const mergeSettings = await tx.shopSettings.findUnique({
+      select: { countryCode: true },
+      where: { id: "default" },
+    });
+    const mergeDial = effectiveDialCode(mergeSettings?.countryCode);
+    if (
+      normalizePhoneE164(keep.phone, mergeDial) !==
+      normalizePhoneE164(merged.phone, mergeDial)
+    ) {
+      throw new AppError("VALIDATION_ERROR", {
+        message:
+          "os telefones já não coincidem — recarrega o relatório de duplicados",
+      });
+    }
+
     const preview = buildPreview(keep, merged, {
       jobs: keep._count.jobs + merged._count.jobs,
       sales: keep._count.sales + merged._count.sales,
@@ -249,11 +267,25 @@ export function mergeCustomers(
     }
     await Promise.all(relink);
 
+    // Mensagens ainda na fila com o telefone literal do juntado passam a
+    // apontar para o número mantido — caso contrário a verificação de
+    // consentimento na próxima tentativa não encontrava a ficha.
+    await tx.notificationOutbox.updateMany({
+      data: { recipientPhone: keep.phone },
+      where: { recipientPhone: merged.phone, status: "QUEUED" },
+    });
+
     // Preenche o que falta no destino; consentimento une-se (qualquer
-    // opt-in vale, com a data mais antiga como prova).
+    // opt-in vale, com a data mais antiga como prova). A data da última
+    // campanha de remarketing é a MAIS RECENTE das duas — perdê-la faria o
+    // agendador voltar a contactar o número antes do prazo da loja.
+    const lastRemarketing = [keep.lastRemarketingAt, merged.lastRemarketingAt]
+      .filter((d): d is Date => Boolean(d))
+      .sort((a, b) => b.getTime() - a.getTime())[0];
     await tx.customer.update({
       data: {
         email: keep.email ?? merged.email,
+        ...(lastRemarketing ? { lastRemarketingAt: lastRemarketing } : {}),
         taxId: keep.taxId ?? merged.taxId,
         whatsappConsent: keep.whatsappConsent || merged.whatsappConsent,
         whatsappConsentAt:
