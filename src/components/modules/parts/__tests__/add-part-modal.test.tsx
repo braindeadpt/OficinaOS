@@ -15,7 +15,15 @@ vi.mock("@/lib/api", () => ({
   default: { get: vi.fn(async () => ({ data: { data: [] } })) },
 }));
 
+import { ShopCurrencyProvider } from "@/hooks/use-format-currency";
 import AddPartModal from "../add-part-modal";
+
+const CURRENCY_SYMBOL_CASES: [string, RegExp][] = [
+  ["GBP", /£/],
+  // "US$" in pt-PT, "$" in en — both contain "$"
+  ["USD", /\$/],
+  ["EUR", /€/],
+];
 
 describe("AddPartModal", () => {
   it("sends the opening stock and reorder level on create", () => {
@@ -74,5 +82,18 @@ describe("AddPartModal", () => {
     expect(screen.getByLabelText("add_part_modal.reorder_level")).toHaveValue(
       "1"
     );
+  });
+  it.each(
+    CURRENCY_SYMBOL_CASES
+  )("shows the %s currency symbol next to the price, not hardcoded euros", (currency, symbol) => {
+    render(
+      <ShopCurrencyProvider currency={currency as string}>
+        <AddPartModal onClose={vi.fn()} onSubmit={vi.fn()} />
+      </ShopCurrencyProvider>
+    );
+    // Regression for the intake mismatch: the label used to be a
+    // hardcoded t("currency_eur") while the signature seal recorded
+    // the shop's real currency.
+    expect(screen.getByText(symbol)).toBeInTheDocument();
   });
 });
