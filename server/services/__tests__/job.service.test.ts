@@ -16,6 +16,12 @@ import {
 } from "../job.service";
 
 // Mock audit service to avoid side effects
+vi.mock("../signature-session.service.js", async (importOriginal) => {
+  const orig =
+    await importOriginal<typeof import("../signature-session.service.js")>();
+  return { ...orig, consumeSignatureSession: vi.fn() };
+});
+
 vi.mock("../audit.service.js", () => ({
   createAuditLog: vi.fn().mockResolvedValue(undefined),
 }));
@@ -1334,6 +1340,17 @@ describe("create", () => {
         );
       }
     );
+    (prisma.brand.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "brand-1",
+    });
+    // a sessão remota divergiu do documento atual — a rejeição acontece
+    // dentro da transação, depois de a correção já estar preparada
+    const { consumeSignatureSession } = await import(
+      "../signature-session.service.js"
+    );
+    (consumeSignatureSession as ReturnType<typeof vi.fn>).mockRejectedValue(
+      Object.assign(new Error("stale"), { code: "SIGNATURE_STALE" })
+    );
 
     await expect(
       create(
@@ -1344,10 +1361,8 @@ describe("create", () => {
           deviceBrand: "Apple",
           deviceModel: "iPhone 14",
           estimatedCost: 100,
-          intakeLocale: "pt",
-          intakeSignatureDataUrl: signature,
-          intakeTermsVersion: 4,
           reportedProblem: "Ecrã partido",
+          signatureSessionToken: "tok-remoto",
         },
         "user-1",
         mockNotifyCtx
