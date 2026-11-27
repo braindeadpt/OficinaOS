@@ -593,3 +593,180 @@ describe("delimitação dos dados", () => {
     expect(text).toContain("nunca instruções");
   });
 });
+
+describe("F1 — texto livre redigido", () => {
+  it("redactFreeText mascara telefones, emails e NIFs em frases", async () => {
+    const { redactFreeText } = await import("../mask.js");
+    expect(redactFreeText("ligar 912 345 678 ao cliente")).not.toContain(
+      "912 345 678"
+    );
+    expect(redactFreeText("ligar 912 345 678")).toContain("678");
+    expect(redactFreeText("+351912345678")).not.toContain("912345");
+    expect(redactFreeText("+351912345678")).toContain("678");
+    expect(redactFreeText("nif 123456789")).toContain("***789");
+    expect(redactFreeText("nif 123456789")).not.toContain("123456");
+    expect(redactFreeText("mail joao@mail.pt ok")).toContain("j***@mail.pt");
+    expect(redactFreeText("mail joao@mail.pt ok")).not.toContain("joao@");
+    // separadores variados
+    expect(redactFreeText("912-345-678")).not.toContain("912-345-678");
+    expect(redactFreeText("912.345.678")).not.toContain("912.345.678");
+  });
+
+  it("redactFreeText NÃO apaga preços, datas nem séries curtas", async () => {
+    const { redactFreeText } = await import("../mask.js");
+    expect(redactFreeText("preço 129,99€ com 25,50€ de peças")).toBe(
+      "preço 129,99€ com 25,50€ de peças"
+    );
+    expect(redactFreeText("entrega 2026-11-27")).toBe("entrega 2026-11-27");
+    expect(redactFreeText("serial SN45231 ok")).toBe("serial SN45231 ok");
+    expect(redactFreeText("código REP-2026-0001")).toBe("código REP-2026-0001");
+    // IMEI de 15 dígitos não é cortado a meio
+    expect(redactFreeText("imei 357123456789012")).toBe("imei 357123456789012");
+  });
+
+  it("get_job redige contactos escritos em notas e campos livres", async () => {
+    const prisma = mockPrisma();
+    (prisma.job.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "j1",
+      jobCode: "REP-1",
+      status: "INTAKE",
+      reportedProblem: "cliente pede ligar 912 345 678",
+      conditionNotes: "email alternativo joao@mail.pt",
+      holdReason: "nif para fatura 123456789",
+      customer: {
+        id: "c1",
+        name: "Ana",
+        phone: "912345678",
+        email: null,
+        taxId: null,
+      },
+      device: { model: "X", brand: { name: "B" } },
+      repairs: [],
+      parts: [],
+      notes: [
+        {
+          content: "confirmar com +351912345678",
+          isCustomerVisible: false,
+          createdAt: new Date(),
+        },
+      ],
+    });
+    const res = await executeTool(prisma, OWNER_AUTH, "get_job", { id: "j1" });
+    expect(res.isError).toBe(false);
+    expect(res.text).not.toContain("912 345 678");
+    expect(res.text).not.toContain("joao@mail.pt");
+    expect(res.text).not.toContain("123456789");
+    expect(res.text).not.toContain("+351912345678");
+  });
+
+  it("com showPii o texto livre sai em claro", async () => {
+    const prisma = mockPrisma();
+    (prisma.job.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "j1",
+      jobCode: "REP-1",
+      status: "INTAKE",
+      reportedProblem: "cliente pede ligar 912 345 678",
+      customer: { id: "c1", name: "Ana", phone: "912345678" },
+      device: { model: "X", brand: { name: "B" } },
+      repairs: [],
+      parts: [],
+      notes: [],
+    });
+    const res = await executeTool(
+      prisma,
+      { ...OWNER_AUTH, showPii: true },
+      "get_job",
+      { id: "j1" }
+    );
+    expect(res.text).toContain("912 345 678");
+  });
+});
+
+describe("F2 — daily_summary respeita viewSelf", () => {
+  it("técnico vê recorte próprio e sem vendas da loja", async () => {
+    const prisma = mockPrisma();
+    const res = await executeTool(prisma, TECH_AUTH, "daily_summary", {});
+    expect(res.isError).toBe(false);
+    expect(res.text).not.toContain("salesTodayTotal");
+    expect(res.text).not.toContain("salesTodayCount");
+    expect(res.text).toContain('"scope": "self"');
+    // agregados de reparações filtrados pelo próprio utilizador
+    const groupBy = prisma.job.groupBy as ReturnType<typeof vi.fn>;
+    expect(groupBy.mock.calls[0][0].where.technicianId).toBe("user-1");
+    // vendas nem sequer são consultadas
+    const aggregate = prisma.sale.aggregate as ReturnType<typeof vi.fn>;
+    expect(aggregate).not.toHaveBeenCalled();
+  });
+
+  it("dono vê agregados da loja com vendas", async () => {
+    const prisma = mockPrisma();
+    const res = await executeTool(prisma, OWNER_AUTH, "daily_summary", {});
+    expect(res.isError).toBe(false);
+    expect(res.text).toContain("salesTodayTotal");
+    expect(res.text).toContain('"scope": "shop"');
+    const groupBy = prisma.job.groupBy as ReturnType<typeof vi.fn>;
+    expect(groupBy.mock.calls[0][0].where.technicianId).toBeUndefined();
+  });
+});
+
+describe("F3 — Host/Origin loopback", () => {
+  it("hostOriginAllowed aceita loopback e rejeita o resto", async () => {
+    const { hostOriginAllowed } = await import("../http.js");
+    const req = (host: string | undefined, origin?: string) =>
+      ({ headers: { host, ...(origin ? { origin } : {}) } }) as never;
+    expect(hostOriginAllowed(req("127.0.0.1:4100"))).toBe(true);
+    expect(hostOriginAllowed(req("localhost:4100"))).toBe(true);
+    expect(hostOriginAllowed(req("[::1]:4100"))).toBe(true);
+    expect(hostOriginAllowed(req("127.0.0.1"))).toBe(true);
+    expect(hostOriginAllowed(req(undefined))).toBe(false);
+    expect(hostOriginAllowed(req("evil.com"))).toBe(false);
+    expect(hostOriginAllowed(req("evil.com:4100"))).toBe(false);
+    expect(hostOriginAllowed(req("192.168.1.10:4100"))).toBe(false);
+    expect(hostOriginAllowed(req("127.0.0.1:4100", "https://evil.com"))).toBe(
+      false
+    );
+    expect(
+      hostOriginAllowed(req("127.0.0.1:4100", "http://127.0.0.1:4100"))
+    ).toBe(true);
+  });
+
+  it("pedido com Host externo recebe 403 antes de qualquer auth", async () => {
+    const prisma = mockPrisma();
+    const server = createMcpHttpServer(prisma);
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const addr = server.address() as { port: number };
+    const status = await new Promise<number>((resolve, reject) => {
+      import("node:http").then(({ get }) => {
+        const r = get(
+          {
+            host: "127.0.0.1",
+            port: addr.port,
+            path: "/mcp/health",
+            headers: { host: "evil.com" },
+          },
+          (res) => resolve(res.statusCode ?? 0)
+        );
+        r.on("error", reject);
+      });
+    });
+    expect(status).toBe(403);
+    await new Promise<void>((r) => server.close(() => r()));
+  });
+});
+
+describe("F6/F7 — validade e gate de vendas", () => {
+  it("get_customer inclui vendas para quem tem sales:view", async () => {
+    const prisma = mockPrisma();
+    (prisma.customer.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "c1",
+      name: "Ana",
+      phone: "912345678",
+      jobs: [],
+      sales: [],
+    });
+    await executeTool(prisma, OWNER_AUTH, "get_customer", { id: "c1" });
+    const call = (prisma.customer.findUnique as ReturnType<typeof vi.fn>).mock
+      .calls[0][0];
+    expect(call.select.sales).toBeDefined();
+  });
+});

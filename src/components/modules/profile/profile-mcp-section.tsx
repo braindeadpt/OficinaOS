@@ -29,9 +29,12 @@ interface LocalMcpToken {
 }
 
 function clientConfig(client: string): string {
+  // MCP_TOKEN no ambiente — flags em argv ficam visíveis a outros
+  // utilizadores locais em `ps` enquanto o cliente corre.
   const stdio = {
     command: "bunx",
-    args: ["oficinaos-mcp", "--token", "<TOKEN>"],
+    args: ["oficinaos-mcp"],
+    env: { MCP_TOKEN: "<TOKEN>" },
   };
   switch (client) {
     case "claude":
