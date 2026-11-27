@@ -21,6 +21,13 @@ const TRAILING_SLASH_RE = /\/+$/;
 
 // A cloud guarda só sha256(token): as listagens devolvem tokenHash e as
 // comparações são sempre contra o hash do accessCode local.
+// Tokens legítimos são hex (a app gera randomBytes(16) → 32 chars; páginas
+// legacy podem ter 8+). Sem correspondência não se envia pedido nenhum — um
+// undefined/null aqui viraria "undefined"/"null" na URL, o ruído exato que
+// se viu nos logs da cloud em produção.
+const PORTAL_TOKEN_RE = /^[a-f0-9]{8,64}$/;
+const TOKEN_HASH_RE = /^[a-f0-9]{64}$/;
+
 function tokenHash(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
@@ -98,10 +105,18 @@ export async function unpublishJobPortal(
     throw new AppError("JOB_NOT_FOUND");
   }
   const { apiUrl, token } = await cloudAuth(prisma);
-  const res = await cloudFetch(apiUrl, `/portal/pages/${job.accessCode}`, {
-    method: "DELETE",
-    token,
-  }).catch(() => null);
+  let res: Awaited<ReturnType<typeof cloudFetch>> | null = null;
+  if (PORTAL_TOKEN_RE.test(job.accessCode ?? "")) {
+    res = await cloudFetch(apiUrl, `/portal/pages/${job.accessCode}`, {
+      method: "DELETE",
+      token,
+    }).catch(() => null);
+  } else {
+    log.warn(
+      { jobId },
+      "portal unpublish skipped — accessCode ausente ou inválido"
+    );
+  }
   if (res && !res.ok && res.status !== 404) {
     log.warn({ status: res.status }, "portal unpublish failed");
   }
@@ -162,6 +177,10 @@ async function republishStalePages(ctx: SyncCtx): Promise<void> {
   // cru já não vem da cloud — apaga-se pelo hash.
   for (const page of cloudPages) {
     if (!liveHashes.has(page.tokenHash)) {
+      if (!TOKEN_HASH_RE.test(page.tokenHash ?? "")) {
+        ctx.log.warn("portal orphan cleanup skipped — tokenHash inválido");
+        continue;
+      }
       await cloudFetch(ctx.apiUrl, `/portal/pages/by-hash/${page.tokenHash}`, {
         method: "DELETE",
         token: ctx.token,
