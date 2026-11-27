@@ -621,12 +621,15 @@ async function resolveCustomerByPhone(
   const existing = await findByNormalizedPhone(prisma, phone, dial);
   const email = input.customerEmail?.trim() || null;
   if (existing) {
-    return {
-      email,
-      id: existing.id,
-      name: existing.name,
-      phone: existing.phone,
-    };
+    // Paridade com o upsert anterior: a admissão também serve para corrigir
+    // a ficha — o nome é sempre o da admissão e o email só se for indicado.
+    return await prisma.customer.update({
+      data: {
+        name: input.customerName,
+        ...(email ? { email } : {}),
+      },
+      where: { id: existing.id },
+    });
   }
   return await customerUpsert(
     prisma,

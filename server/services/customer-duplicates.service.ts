@@ -156,10 +156,39 @@ export async function previewMerge(
       message: "o cliente de destino e o juntado são o mesmo",
     });
   }
+  await assertPhonesStillMatch(prisma, keep.phone, merged.phone);
   return buildPreview(keep, merged, {
     jobs: keep._count.jobs + merged._count.jobs,
     sales: keep._count.sales + merged._count.sales,
   });
+}
+
+/**
+ * O par só é elegível enquanto os dois telefones normalizam para o mesmo
+ * E.164. Corre no merge (dentro da transação) e na pré-visualização, para
+ * o erro chegar antes da confirmação e não só depois dela.
+ */
+type DbLike = Pick<PrismaClient, "shopSettings">;
+
+async function assertPhonesStillMatch(
+  prisma: DbLike,
+  keepPhone: string,
+  mergedPhone: string
+): Promise<void> {
+  const settings = await prisma.shopSettings.findUnique({
+    select: { countryCode: true },
+    where: { id: "default" },
+  });
+  const dial = effectiveDialCode(settings?.countryCode);
+  if (
+    normalizePhoneE164(keepPhone, dial) !==
+    normalizePhoneE164(mergedPhone, dial)
+  ) {
+    throw new AppError("VALIDATION_ERROR", {
+      message:
+        "os telefones já não coincidem — recarrega o relatório de duplicados",
+    });
+  }
 }
 
 /**
@@ -197,20 +226,7 @@ export function mergeCustomers(
     // O relatório pode estar aberto há dias: se entretanto alguém corrigiu
     // um dos telefones, o par já não é duplicado e juntar apagava uma ficha
     // de outra pessoa. Verifica dentro da transação, nunca confia no painel.
-    const mergeSettings = await tx.shopSettings.findUnique({
-      select: { countryCode: true },
-      where: { id: "default" },
-    });
-    const mergeDial = effectiveDialCode(mergeSettings?.countryCode);
-    if (
-      normalizePhoneE164(keep.phone, mergeDial) !==
-      normalizePhoneE164(merged.phone, mergeDial)
-    ) {
-      throw new AppError("VALIDATION_ERROR", {
-        message:
-          "os telefones já não coincidem — recarrega o relatório de duplicados",
-      });
-    }
+    await assertPhonesStillMatch(tx, keep.phone, merged.phone);
 
     const preview = buildPreview(keep, merged, {
       jobs: keep._count.jobs + merged._count.jobs,

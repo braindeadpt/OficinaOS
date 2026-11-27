@@ -26,6 +26,24 @@ describe("normalizePhone", () => {
   it("número nacional francês perde o zero de trunk ao ganhar o +33", () => {
     expect(normalizePhoneE164("06 12 34 56 78", "33")).toBe("+33612345678");
   });
+  it("indicativo americano escrito sem + não duplica o 1", () => {
+    expect(normalizePhoneE164("1 555 123 4567", "1")).toBe("+15551234567");
+  });
+
+  it("indicativo português escrito sem + não duplica o 351", () => {
+    expect(normalizePhoneE164("351912345678", "351")).toBe("+351912345678");
+  });
+
+  it("número nacional curto que comece pelo indicativo mantém-o", () => {
+    // "351234567" é um nacional plausível em PT se existisse — os dígitos
+    // que sobram (6) não chegam para ser número nacional: não é indicativo.
+    expect(normalizePhoneE164("351234567", "351")).toBe("+351351234567");
+  });
+
+  it("zero de trunk francês não impede encontrar a ficha internacional", () => {
+    expect(phoneSearchDigits("0612345678", "33")).toBe("612345678");
+    expect(phoneSearchDigits("+33 6 12 34 56 78", "33")).toBe("612345678");
+  });
 });
 
 describe("isValidPhone", () => {

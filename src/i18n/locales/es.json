@@ -3275,8 +3275,6 @@
   "duplicates.preview_consent_no": "Consentimiento WhatsApp: no",
   "duplicates.confirm_merge": "Fusionar ahora",
   "duplicates.merged": "Clientes fusionados. La fusión quedó registrada en la auditoría.",
-  "duplicates": {
-    "error": "No se pudo completar la operación",
-    "keep_this_merge": "Conservar esta ficha y fusionar «{name}»"
-  }
+  "duplicates.error": "No se pudo completar la operación",
+  "duplicates.keep_this_merge": "Conservar esta ficha y fusionar «{{name}}»"
 }

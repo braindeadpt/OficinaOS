@@ -54,6 +54,7 @@ function mockPrisma(
     },
     customer: {
       findUnique: vi.fn(),
+      update: vi.fn(),
       upsert: vi.fn(),
       ...((overrides as Record<string, unknown>).customer || {}),
     },
@@ -1306,6 +1307,83 @@ describe("create", () => {
     });
   });
 
+  it("reutiliza a ficha encontrada pelo telefone e grava as correções", async () => {
+    (
+      prisma.shopSettings.findUnique as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      countryCode: "PT",
+      id: "default",
+    });
+    // a procura SQL encontra a ficha internacionalizada; a sequência do job
+    // continua a responder à outra query
+    (prisma.$queryRaw as ReturnType<typeof vi.fn>).mockImplementation(
+      (strings: TemplateStringsArray) => {
+        const sql = Array.isArray(strings)
+          ? strings.join(" ")
+          : String(strings);
+        return Promise.resolve(
+          sql.includes("customers")
+            ? [
+                {
+                  id: "cust-existing",
+                  name: "Maria Silva",
+                  phone: "+351912345678",
+                },
+              ]
+            : [{ lastSeq: 1 }]
+        );
+      }
+    );
+    (prisma.customer.update as ReturnType<typeof vi.fn>).mockResolvedValue({
+      email: "maria@x.pt",
+      id: "cust-existing",
+      name: "Maria Silva",
+      phone: "+351912345678",
+    });
+    (prisma.brand.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "brand-1",
+    });
+    (prisma.device.upsert as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "device-1",
+    });
+    (prisma.job.create as ReturnType<typeof vi.fn>).mockImplementation(
+      ({ data }) =>
+        Promise.resolve({ ...data, id: "job-1", partsUsed: [], repairs: [] })
+    );
+    (prisma.job.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "job-1",
+      partsUsed: [],
+      repairs: [],
+    });
+
+    await create(
+      prisma,
+      {
+        customerEmail: "maria@x.pt",
+        customerName: "Maria Silva",
+        customerPhone: "912 345 678",
+        deviceBrand: "Apple",
+        deviceModel: "iPhone 14",
+        estimatedCost: 100,
+        reportedProblem: "Ecrã partido",
+      },
+      "user-1",
+      mockNotifyCtx
+    );
+
+    // a ficha existente é corrigida — nome e email da admissão
+    expect(prisma.customer.update).toHaveBeenCalledWith({
+      data: { email: "maria@x.pt", name: "Maria Silva" },
+      where: { id: "cust-existing" },
+    });
+    // e nunca se abre segunda ficha
+    expect(prisma.customer.upsert).not.toHaveBeenCalled();
+    // a reparação liga à ficha existente
+    const data = (prisma.job.create as ReturnType<typeof vi.fn>).mock
+      .calls[0][0].data;
+    expect(JSON.stringify(data.customer ?? data)).toContain("cust-existing");
+  });
+
   it("ignores forged client terms and signs the server-resolved shop text", async () => {
     const signature =
       "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
@@ -1330,9 +1408,20 @@ describe("create", () => {
     (prisma.device.upsert as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "device-1",
     });
-    (prisma.$queryRaw as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { lastSeq: 1 },
-    ]);
+    // O SQL cru serve duas queries distintas: a procura de cliente por
+    // telefone (FROM customers) e a sequência do código da reparação.
+    // Devolver a sequência nas duas faria a admissão "encontrar" uma ficha
+    // fantasma — discrimina-se pelo texto da query.
+    (prisma.$queryRaw as ReturnType<typeof vi.fn>).mockImplementation(
+      (strings: TemplateStringsArray) => {
+        const sql = Array.isArray(strings)
+          ? strings.join(" ")
+          : String(strings);
+        return Promise.resolve(
+          sql.includes("customers") ? [] : [{ lastSeq: 1 }]
+        );
+      }
+    );
     (prisma.job.create as ReturnType<typeof vi.fn>).mockImplementation(
       ({ data }) =>
         Promise.resolve({

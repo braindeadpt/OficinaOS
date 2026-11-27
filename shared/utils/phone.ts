@@ -62,6 +62,12 @@ export function normalizePhoneE164(raw: string, dialCode: string): string {
   // is invalid E.164 and breaks delivery. Portugal has no trunk digit, so
   // stripping leading zeros is a no-op there.
   const national = canonical.replace(LEADING_ZEROS, "");
+  // Já traz o indicativo, sem o "+": "1 555 123 4567" nos EUA ou
+  // "351912345678" em PT. Se os dígitos que sobram depois do indicativo
+  // têm comprimento de número nacional, o indicativo não se repete.
+  if (national.startsWith(dialCode) && national.length - dialCode.length >= 8) {
+    return `+${national}`;
+  }
   return `+${dialCode}${national}`;
 }
 
@@ -96,7 +102,10 @@ export function phoneSearchDigits(
   ) {
     digits = digits.slice(dialCode.length);
   }
-  return digits;
+  // Trunk zero: quem pesquisa "0612345678" como escreveu no registo tem de
+  // encontrar a ficha gravada como "+33612345678" — os zeros à esquerda
+  // nunca são dígitos significativos em PT/FR/GB/US.
+  return digits.replace(LEADING_ZEROS, "");
 }
 
 /** Fewer digits than this match too many numbers to be a phone search. */
