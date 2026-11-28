@@ -111,9 +111,11 @@ describe("pairWithCloud", () => {
   it("redeems a code, stores the token encrypted and syncs entitlements", async () => {
     const { prisma, row } = fakePrisma();
     const calls: string[] = [];
-    vi.stubGlobal("fetch", (url: string) => {
+    const bodies: unknown[] = [];
+    vi.stubGlobal("fetch", (url: string, init?: RequestInit) => {
       calls.push(url);
       if (url.endsWith("/pairing/redeem")) {
+        bodies.push(JSON.parse(String(init?.body ?? "{}")));
         return okJson({
           shopToken: "tok-secret",
           shopId: "shop-1",
@@ -125,7 +127,11 @@ describe("pairWithCloud", () => {
 
     const status = await pairWithCloud(
       prisma as never,
-      { apiUrl: "https://cloud.example.com/", code: "ABCD-1234" },
+      {
+        apiUrl: "https://cloud.example.com/",
+        code: "ABCD-1234",
+        hostedSlug: "oficina-rio",
+      },
       log
     );
 
@@ -138,6 +144,12 @@ describe("pairWithCloud", () => {
     expect(decryptSecret(row.cloudShopTokenEncrypted ?? "")).toBe("tok-secret");
     // Trailing slash on the API URL must not produce "//path"
     expect(calls[0]).toBe("https://cloud.example.com/pairing/redeem");
+    // O slug da instância alojada segue no redeem — a Cloud grava-o em
+    // Shop.hostedSlug para o alerta de purga identificar o diretório no VPS.
+    expect(bodies[0]).toMatchObject({
+      code: "ABCD-1234",
+      hostedSlug: "oficina-rio",
+    });
   });
 
   it("maps a 400 from the cloud to CLOUD_INVALID_CODE", async () => {
