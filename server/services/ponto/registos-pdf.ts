@@ -9,31 +9,23 @@ import {
   type MonthSummary,
   type RegistosEntry,
 } from "./registos.js";
-import { PONTO_TEXT } from "./transport.js";
+import {
+  REGISTOS_I18N,
+  type RegistosLang,
+  registosIntlLocale,
+  registosT,
+} from "./registos-i18n.js";
 
-const ENTRY_TYPE_PT: Record<string, string> = {
-  ENTRADA: "Entrada",
-  PAUSA: "Pausa",
-  SAIDA: "Saída",
-  VOLTEI: "Regresso",
-};
-
-const STATUS_PT: Record<string, string> = {
-  APROVADO: "Aprovado",
-  POR_VALIDAR: "Por validar",
-  RECUSADO: "Recusado",
-};
-
-function hhmm(at: Date, tz: string): string {
-  return new Intl.DateTimeFormat("pt-PT", {
+function hhmm(at: Date, tz: string, intlLocale: string): string {
+  return new Intl.DateTimeFormat(intlLocale, {
     hour: "2-digit",
     minute: "2-digit",
     timeZone: tz,
   }).format(at);
 }
 
-function dayLabel(at: Date, tz: string): string {
-  return new Intl.DateTimeFormat("pt-PT", {
+function dayLabel(at: Date, tz: string, intlLocale: string): string {
+  return new Intl.DateTimeFormat(intlLocale, {
     day: "2-digit",
     month: "2-digit",
     timeZone: tz,
@@ -76,71 +68,77 @@ interface PdfPage {
 
 function buildPages(input: {
   entries: RegistosEntry[];
+  lang: RegistosLang;
   monthLabel: string;
   shopName: string;
   summary: MonthSummary;
   tz: string;
   workerName: string;
 }): PdfPage[] {
-  const { entries, monthLabel, shopName, summary, tz, workerName } = input;
+  const { entries, lang, monthLabel, shopName, summary, tz, workerName } =
+    input;
+  const text = REGISTOS_I18N[lang];
+  const intlLocale = registosIntlLocale(lang);
   const pages: PdfPage[] = [];
   let page: PdfPage = { lines: [] };
   let y = 800;
-  const push = (text: string, x: number, size: number, dy: number) => {
+  const push = (line: string, x: number, size: number, dy: number) => {
     if (y < 60) {
       pages.push(page);
       page = { lines: [] };
       y = 800;
     }
-    page.lines.push({ size, text, x, y });
+    page.lines.push({ size, text: line, x, y });
     y -= dy;
   };
 
-  push("Registo de ponto — os meus registos", 170, 15, 20);
+  push(text.pdfTitle, 170, 15, 20);
   // Mês em linha própria: com nomes compridos não há quebra de linha no
   // PDF e o período desaparecia para fora da página.
   push(`${shopName} — ${workerName}`, 130, 11, 15);
   push(monthLabel, 130, 11, 24);
   push(
-    `Dias com registos: ${summary.days}   Horas trabalhadas: ${fmtHoursMs(summary.workedMs)}   Pausas: ${fmtHoursMs(summary.pauseMs)}`,
+    registosT(text.pdfSummaryDays, {
+      days: String(summary.days),
+      pause: fmtHoursMs(summary.pauseMs),
+      worked: fmtHoursMs(summary.workedMs),
+    }),
     50,
     10,
     16
   );
   push(
-    `Correções: ${summary.correctionsCount}   Por validar: ${summary.pendingCount}`,
+    registosT(text.pdfSummaryCorrections, {
+      corrections: String(summary.correctionsCount),
+      pending: String(summary.pendingCount),
+    }),
     50,
     10,
     18
   );
   if (summary.hasOpenShift) {
-    push(PONTO_TEXT.registosEstimatedHours, 50, 8, 14);
+    push(text.estimatedHours, 50, 8, 14);
   }
-  push(
-    "Documento pedido pelo próprio trabalhador (art. 15.º RGPD). Gerado automaticamente pela aplicação da loja.",
-    50,
-    8,
-    24
-  );
+  push(text.pdfFooter, 50, 8, 24);
 
   let lastDay = "";
   for (const e of entries) {
-    const day = dayLabel(e.at, tz);
+    const day = dayLabel(e.at, tz, intlLocale);
     const showDay = day === lastDay ? "" : day;
     lastDay = day;
     // Direito de acesso: recusadas e substituídas fazem parte dos
     // registos do próprio — têm de se distinguir das que contam.
     let note = "";
     if (e.superseded) {
-      note = " (substituída por correção)";
+      note = text.pdfSupersededNote;
     } else if (e.validations[0]?.decision === "RECUSADO") {
-      note = " (recusada)";
+      note = text.pdfRefusedNote;
     }
-    const line = `${showDay.padEnd(14)}  ${(ENTRY_TYPE_PT[e.type] ?? e.type).padEnd(10)} ${hhmm(e.at, tz)}  ${STATUS_PT[e.status] ?? e.status}${note}`;
+    const line = `${showDay.padEnd(14)}  ${(text.entryTypes[e.type] ?? e.type).padEnd(10)} ${hhmm(e.at, tz, intlLocale)}  ${text.statuses[e.status] ?? e.status}${note}`;
     push(line, 50, 10, 14);
   }
   if (entries.length === 0) {
-    push("Sem registos neste mês.", 50, 10, 14);
+    push(text.pdfEmpty, 50, 10, 14);
   }
   pages.push(page);
   return pages;
@@ -196,6 +194,8 @@ export function buildRegistosPdf(input: {
   summary: MonthSummary;
   tz: string;
   workerName: string;
+  /** Língua documental da loja — omissa = pt, como sempre foi. */
+  lang?: RegistosLang;
 }): Buffer {
-  return serializePdf(buildPages(input));
+  return serializePdf(buildPages({ ...input, lang: input.lang ?? "pt" }));
 }

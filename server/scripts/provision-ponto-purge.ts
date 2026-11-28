@@ -34,6 +34,13 @@ BEGIN
     GRANT SELECT, DELETE ON time_entries TO oficinaos_ponto_purge;
     GRANT UPDATE ("correctsId") ON time_entries TO oficinaos_ponto_purge;
     GRANT SELECT, DELETE ON time_entry_validations TO oficinaos_ponto_purge;
+    -- Tokens REGISTOS mortos há 7+ dias entram na purga (migração
+    -- 20261231211000) — sem este grant o DELETE falha como papel da purga.
+    -- Guarda de existência: numa BD ainda não migrada o GRANT não pode
+    -- derrubar os grants dos 5 anos que vêm antes dele no mesmo bloco.
+    IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'ponto_registos_tokens') THEN
+      GRANT SELECT, DELETE ON ponto_registos_tokens TO oficinaos_ponto_purge;
+    END IF;
     REVOKE ALL ON FUNCTION ponto_purge_expired() FROM PUBLIC;
     EXECUTE format('GRANT EXECUTE ON FUNCTION ponto_purge_expired() TO %I', current_user);
   END IF;

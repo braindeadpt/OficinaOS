@@ -4,6 +4,7 @@ import { preCheckSubmitSchema } from "@shared/schemas/intake-request.schema";
 import { quoteRespondSchema } from "@shared/schemas/quote.schema";
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { loadEnv } from "../config/env.js";
+import { documentLocaleForCountry } from "../lib/document-locale.js";
 import { accessUrls } from "../lib/mdns.js";
 import { getOrCreateShopSettings } from "../repositories/settings.repository.js";
 import { isStopText, revokeConsentForPhone } from "../services/bot-intents.js";
@@ -17,6 +18,10 @@ import {
   registosMonthEntries,
   summarizeMonth,
 } from "../services/ponto/registos.js";
+import {
+  registosLang,
+  registosMonthLabel,
+} from "../services/ponto/registos-i18n.js";
 import { buildRegistosPdf } from "../services/ponto/registos-pdf.js";
 import {
   getPublicSignatureSession,
@@ -275,23 +280,11 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
       const { correctionsCount, effectiveEntries, entries } =
         await registosMonthEntries(app.prisma, consumed.userId, tz, spec);
       const summary = summarizeMonth(effectiveEntries, correctionsCount, tz);
-      const monthNames = [
-        "janeiro",
-        "fevereiro",
-        "março",
-        "abril",
-        "maio",
-        "junho",
-        "julho",
-        "agosto",
-        "setembro",
-        "outubro",
-        "novembro",
-        "dezembro",
-      ];
+      const lang = registosLang(documentLocaleForCountry(settings.countryCode));
       const pdf = buildRegistosPdf({
         entries,
-        monthLabel: `${monthNames[spec.month - 1]} de ${spec.year}`,
+        lang,
+        monthLabel: registosMonthLabel(spec, lang),
         shopName: settings.shopName ?? "OficinaOS",
         summary,
         tz,

@@ -47,6 +47,12 @@ import {
   registosRateOk,
   summarizeMonth,
 } from "./registos.js";
+import {
+  REGISTOS_I18N,
+  registosLang,
+  registosMonthLabel,
+  registosT,
+} from "./registos-i18n.js";
 import { findPontoStaff, type PontoStaffMatch } from "./staff.js";
 import {
   clearPendingPonto,
@@ -1608,56 +1614,55 @@ async function replyRegistos(
   rawText: string
 ): Promise<void> {
   const { normalizePontoText } = await import("./commands.js");
+  // Língua documental da loja — ctx.locale vem derivado do país na
+  // construção do contexto; omisso = pt, como sempre foi.
+  const lang = registosLang(ctx.locale);
+  const text = REGISTOS_I18N[lang];
   const parsed = parseMonthArg(normalizePontoText(rawText), tz);
   if (parsed === undefined) {
-    await say(PONTO_TEXT.registosInvalidMonth);
+    await say(text.invalidMonth);
     return;
   }
   if (!(await registosRateOk(ctx.prisma, userId))) {
-    await say(PONTO_TEXT.registosRateLimited);
+    await say(text.rateLimited);
     return;
   }
   const spec = parsed ?? currentMonthSpec(tz);
   const { correctionsCount, effectiveEntries, entries } =
     await registosMonthEntries(ctx.prisma, userId, tz, spec);
   const summary = summarizeMonth(effectiveEntries, correctionsCount, tz);
-  const monthNames = [
-    "janeiro",
-    "fevereiro",
-    "março",
-    "abril",
-    "maio",
-    "junho",
-    "julho",
-    "agosto",
-    "setembro",
-    "outubro",
-    "novembro",
-    "dezembro",
-  ];
-  const monthLabel = `${monthNames[spec.month - 1]} de ${spec.year}`;
+  const monthLabel = registosMonthLabel(spec, lang);
 
   if (entries.length === 0) {
-    await say(PONTO_TEXT.registosNoEntries.replace("{{month}}", monthLabel));
+    await say(registosT(text.noEntries, { month: monthLabel }));
     return;
   }
 
   const token = await createRegistosToken(ctx.prisma, userId, monthKey(spec));
   const base = await resolveRegistosBaseUrl(ctx.prisma);
   const lines = [
-    `Os seus registos de ${monthLabel}:`,
-    `${summary.days} dia(s) · ${fmtHoursMs(summary.workedMs)} trabalhadas · pausas ${fmtHoursMs(summary.pauseMs)}`,
-    `${summary.correctionsCount} correção(ões) · ${summary.pendingCount} por validar`,
+    registosT(text.summaryTitle, { month: monthLabel }),
+    registosT(text.summaryDays, {
+      days: String(summary.days),
+      pause: fmtHoursMs(summary.pauseMs),
+      worked: fmtHoursMs(summary.workedMs),
+    }),
+    registosT(text.summaryCorrections, {
+      corrections: String(summary.correctionsCount),
+      pending: String(summary.pendingCount),
+    }),
   ];
   if (summary.hasOpenShift) {
-    lines.push(PONTO_TEXT.registosEstimatedHours);
+    lines.push(text.estimatedHours);
   }
   if (base) {
     lines.push(
-      `PDF do mês (link de uso único, válido 24 h): ${base}/api/public/ponto-registos/${token}`
+      registosT(text.pdfLinkLine, {
+        url: `${base}/api/public/ponto-registos/${token}`,
+      })
     );
   } else {
-    lines.push(PONTO_TEXT.registosNoUrl);
+    lines.push(text.noUrl);
   }
   await say(lines.join("\n"));
 }
