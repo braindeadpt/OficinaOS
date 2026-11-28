@@ -152,6 +152,33 @@ describe("pairWithCloud", () => {
     });
   });
 
+  it("pairs without a hosted slug and omits the field in the redeem body", async () => {
+    const { prisma } = fakePrisma();
+    const bodies: Record<string, unknown>[] = [];
+    vi.stubGlobal("fetch", (url: string, init?: RequestInit) => {
+      if (url.endsWith("/pairing/redeem")) {
+        bodies.push(JSON.parse(String(init?.body ?? "{}")));
+        return okJson({
+          shopToken: "tok-secret",
+          shopId: "shop-1",
+          shopName: "Loja Cloud",
+        });
+      }
+      return okJson({ modules: [], shopName: "Loja Cloud" });
+    });
+
+    const status = await pairWithCloud(
+      prisma as never,
+      { apiUrl: "https://cloud.example.com", code: "ABCD-1234" },
+      log
+    );
+
+    expect(status.paired).toBe(true);
+    // Instalações normais (não alojadas) não enviam o campo — a Cloud só
+    // regista slug quando ele vem explicitamente no pedido.
+    expect(bodies[0]).not.toHaveProperty("hostedSlug");
+  });
+
   it("maps a 400 from the cloud to CLOUD_INVALID_CODE", async () => {
     const { prisma } = fakePrisma();
     vi.stubGlobal("fetch", () =>
