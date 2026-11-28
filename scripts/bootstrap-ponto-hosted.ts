@@ -11,6 +11,7 @@ const SET_COOKIE_SPLIT = /,(?=[^;,=]+=)/;
 export interface PontoHostedBootstrapOptions {
   baseUrl?: string;
   cloudApiUrl: string;
+  hostedSlug?: string;
   ownerLogin: string;
   ownerName: string;
   ownerPassword: string;
@@ -223,7 +224,11 @@ export async function bootstrapPontoHosted(
   }
 
   const pair = await api("/api/settings/cloud/pair", {
-    body: { apiUrl: options.cloudApiUrl, code: options.pairingCode },
+    body: {
+      apiUrl: options.cloudApiUrl,
+      code: options.pairingCode,
+      hostedSlug: options.hostedSlug,
+    },
     method: "POST",
   });
   if (!pair.ok) {
@@ -254,6 +259,9 @@ async function main(): Promise<void> {
     ownerLogin: decodeEnv("PONTO_OWNER_LOGIN"),
     ownerName: decodeEnv("PONTO_OWNER_NAME"),
     ownerPassword: decodeEnv("PONTO_OWNER_PASSWORD"),
+    hostedSlug: process.env.PONTO_CLIENT_SLUG_B64
+      ? decodeEnv("PONTO_CLIENT_SLUG")
+      : undefined,
     pairingCode: process.env.PONTO_PAIRING_CODE_B64
       ? decodeEnv("PONTO_PAIRING_CODE")
       : undefined,

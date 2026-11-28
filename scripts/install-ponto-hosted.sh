@@ -566,6 +566,7 @@ chmod 600 "$BOOTSTRAP_ENV"
   printf 'PONTO_PAIRING_CODE_B64=%s\n' "$(b64 "$CLOUD_PAIRING_CODE")"
   printf 'PONTO_SETUP_TOKEN_B64=%s\n' "$(b64 "$(env_value SETUP_TOKEN "$ENV_FILE")")"
   printf 'PONTO_CLOUD_API_URL_B64=%s\n' "$(b64 "$PONTO_CLOUD_API_URL")"
+  printf 'PONTO_CLIENT_SLUG_B64=%s\n' "$(b64 "$PONTO_CLIENT_SLUG")"
 } >"$BOOTSTRAP_ENV"
 if ! docker exec --env-file "$BOOTSTRAP_ENV" "$app_container" bun /tmp/ponto-bootstrap.ts; then
   die "bootstrap da instância falhou"
