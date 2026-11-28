@@ -34,7 +34,7 @@
 [List all v2](https://invoicexpress.com/api-v2/invoices/list-all/)).
 
 Consequência para o FX6: a sincronização tem **duas pernas**: (a) **descoberta** — varrimento paginado por janela de data de emissão, **sem filtro de `status`** (filtrar por `sent` excluiria anuladas e liquidadas), para apanhar documentos novos emitidos fora da app; (b) **refresco** — consulta por ID (`id[]`) dos documentos já associados, incluindo arquivados, porque uma fatura de outubro anulada em novembro **não entra** na janela de novembro (a data do documento não muda quando o estado muda). Comparação por `status`/`final_date`. Custo é baixo: uma loja emite poucos documentos por dia e o
-limite é generoso (ver §8).
+limite é generoso (ver §9).
 
 Exemplo de pedido (v3):
 
@@ -181,6 +181,7 @@ GET /api/v3/clients?api_key=KEY&term=501234567&status=active
   Alternativa sem migrar: a [listagem de clientes v2](https://docs.invoicexpress.com/v2/clients/listclients) devolve `fiscal_id` por cliente — dá para percorrer as páginas e comparar o NIF localmente, ao custo de um pedido por página (irrelevante para uma loja com centenas de clientes, dentro dos 780/min). **Com limitações:** o `term` da v3 é «contém», não igualdade — a
   correspondência exata do NIF tem de ser confirmada do nosso lado; e nada
   na API impõe unicidade de `fiscal_id` (a unicidade é regra nossa, FX5).
+- **Defeito atual da integração:** ao emitir, a resolução do cliente é por prioridade `id` → `code` → `name`; quando o `code` casa com um cliente existente, **os restantes campos enviados são ignorados** — alterações de email ou NIF não chegam às faturas seguintes ([Create v2 — resolução do cliente](https://invoicexpress.com/api-v2/invoices/create/)). Por isso o FX5 deve fazer **`PUT` do cliente antes de emitir** (sincronizar email/NIF/morada), em vez de confiar no payload do documento.
 - **Atualizar:** `PUT /clients/:client-id.json`
   ([Update v2](https://invoicexpress.com/api-v2/clients/update-4/)).
 - Criação implícita: ao emitir um documento com um cliente novo, a API cria
@@ -210,7 +211,7 @@ enquanto gera; repetir até `200` com `{"output": {"pdfUrl": "https://…"}}`
 
 - **Desconto por linha:** campo `discount` (percentagem 0–100) em cada item
   do pedido de criação — confirmado no schema v2/v3.
-- **Desconto global:** documentado no pedido de criação (v2 e v3): objeto `global_discount` com `value_type` (`percentage` ou `absolute`) e `value` ([Create v2](https://docs.invoicexpress.com/v2/invoices/createinvoice)). A sandbox serve para comparar totais e arredondamentos (global vs. por linha), não para descobrir o campo.
+- **Desconto global:** documentado no pedido de criação (v2 e v3): objeto `global_discount` com `value_type` (`percentage` ou `absolute`) e `value` ([Create v2](https://invoicexpress.com/api-v2/invoices/create/)). A sandbox serve para comparar totais e arredondamentos (global vs. por linha), não para descobrir o campo.
 - **Método de pagamento:** a fatura não tem campo de método; o mecanismo de
   pagamento (`payment_mechanism`: TB, MB, CC…) existe nos **pagamentos/
   recibos** (partial payments v3). Para fatura-recibo (paga à nascença) não
@@ -219,7 +220,15 @@ enquanto gera; repetir até `200` com `{"output": {"pdfUrl": "https://…"}}`
 - Existe ainda `mb_reference` na criação para gerar referência Multibanco
   (contas PT com a feature ativa).
 
-## 8. Limites de pedidos e sandbox
+## 8. Artigos: criação e atualização implícita pelo create
+
+O create **cria ou atualiza artigos** do catálogo do InvoiceXpress pelo `name` de cada linha: se não existir artigo com esse nome, é criado; **se já existir, o artigo é atualizado com os novos valores — incluindo o preço** ([Create v2 — criação de clientes/artigos](https://invoicexpress.com/api-v2/invoices/create/)).
+
+**Problema na integração atual:** as linhas levam nomes variáveis por reparação/venda (ex.: «Reparação ecrã iPhone 12» com o preço do momento). Resultado: o catálogo da loja no InvoiceXpress enche-se de artigos descartáveis, e quando um nome se repete o preço do artigo é reescrito — poluição e mutação silenciosa do catálogo.
+
+**Proposta para o FX3 — nomes estáveis:** o `name` da linha deve ser estável e genérico, saído de uma lista fechada (ex.: `Serviço de reparação`, `Peça`, `Equipamento recondicionado`, `Serviço de diagnóstico`), eventualmente com o nome do artigo do catálogo interno quando existir; o detalhe variável (modelo, IMEI, descrição da reparação) vai no campo `description` da linha, que é livre e não cria entradas novas no catálogo. Assim o catálogo do InvoiceXpress fica limitado a meia dúzia de artigos estáveis, e o preço por linha continua a ser o do documento.
+
+## 9. Limites de pedidos e sandbox
 
 - **Limite:** 780 pedidos/minuto por conta; excesso → `429` (recomendado
   retry com backoff) ([Request limits](https://invoicexpress.com/api-v2/documentation/request-limits/)).
@@ -236,7 +245,7 @@ enquanto gera; repetir até `200` com `{"output": {"pdfUrl": "https://…"}}`
   ([Create v2 — idempotency](https://docs.invoicexpress.com/v2/invoices)).
   Reforça a regra «nunca emitir em duplicado» do plano (a app pode usar `sale:<id>`/`job:<id>` como uid). A chave é por **emissão**: retries da mesma emissão reutilizam a mesma chave; documentos distintos da mesma venda — ex.: duas notas de crédito parciais — precisam de chaves distintas (`sale:<id>:cn:<n>`), senão a segunda recebe a primeira como resposta.
 
-## 9. Tabela por fase do plano
+## 10. Tabela por fase do plano
 
 | Fase | Veredito | Notas |
 |---|---|---|
@@ -244,12 +253,12 @@ enquanto gera; repetir até `200` com `{"output": {"pdfUrl": "https://…"}}`
 | FX2 — IVA por artigo + regime da margem | **Com limitações** | Taxa por linha por nome: suportado. Margem: IVA 0% + `tax_exemption` M13 com a menção legal impressa; a API **não calcula** o IVA da margem (é nosso, e legalmente o imposto não se discrimina no documento). Motivo de isenção é por documento, não por linha — fatura mista a validar em sandbox. Contabilista antes de ativar, como o plano manda. |
 | FX3 — Ecrã «Faturar» | **Possível** | Revisão, desconto por linha, FR vs FT, email com assunto/corpo próprios, PDF com polling 202→200. Ressalvas: desconto global documentado — validar arredondamentos em sandbox; método de pagamento sem campo próprio na fatura (existe nos recibos; observações como alternativa). |
 | FX4 — Nota de crédito e anulação | **Possível** | `credit_notes` com `owner_invoice_id` ligado ao original; anulação por change-state `canceled` com motivo obrigatório; documento final nunca se apaga (correto fiscalmente). Devolução ao stock é lógica nossa. |
-| FX5 — Clientes por NIF | **Com limitações** | Procura por NIF na v3 (`term` por contenção — validar igualdade do nosso lado) ou, sem migrar, varrimento da listagem v2 (que devolve `fiscal_id`) com comparação local, ao custo de um pedido por página. `code` próprio suportado; update existe. A unicidade do NIF é regra nossa — a API não a impõe; cuidado com a criação implícita de clientes ao emitir (casa por nome). |
+| FX5 — Clientes por NIF | **Com limitações** | Procura por NIF na v3 (`term` por contenção — validar igualdade do nosso lado) ou, sem migrar, varrimento da listagem v2 (que devolve `fiscal_id`) com comparação local, ao custo de um pedido por página. `code` próprio suportado; update existe. A unicidade do NIF é regra nossa — a API não a impõe; cuidado com a criação implícita de clientes ao emitir (casa por nome). E quando o cliente já existe pelo `code`, os campos do documento são ignorados — o FX5 tem de fazer `PUT` do cliente antes de emitir, senão alterações de email/NIF não chegam às faturas seguintes (defeito da integração atual). |
 | FX6 — Sentido inverso (sincronização) | **Com limitações** | Sem webhooks nem filtro «alterado desde»: polling paginado periódico com comparação de `status`/`final_date`. Exequível sem custo relevante ao volume de uma loja e dentro dos 780/min. Documentos emitidos fora da app aparecem na listagem por data — a lista «por associar» é viável. |
 | FX7 — Relatório de controlo | **Possível** | É construído sobre o FX6 (polling + comparação de totais/estados); a listagem já traz totais agregados (`totals`) por filtro, o que ajuda a detetar divergências de valor. |
 | FX8 — Fatura + recibo, parciais, adiantamentos | **Possível com limitações** | Fatura + recibos por pagamento: suportado na v3 (`partial_payments` gera `Receipt` fiscal ligado, com `payment_mechanism` e `Idempotency-Key`). Pagamentos parciais documentados nas duas versões; a idempotência por `Idempotency-Key` está documentada na v3 (confirmar a v2 em sandbox) — a migração v2→v3 continua recomendada mas não bloqueia. Adiantamentos: sem tipo próprio — desenho fiscal a validar com o contabilista. |
 
-## 10. Recomendações transversais para o FX1+
+## 11. Recomendações transversais para o FX1+
 
 1. **Planear a migração v2 → v3** (pelo menos nos endpoints novos): pagamentos
    parciais e pesquisa de clientes por texto só existem na v3; a v2 está em
