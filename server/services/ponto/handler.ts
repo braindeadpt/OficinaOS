@@ -9,7 +9,12 @@
 // funcionário nunca "cai" no pipeline de clientes.
 
 import type { TimeEntryTransport, TimeEntryType } from "@generated/client";
-import { getOrCreateShopSettings } from "../../repositories/settings.repository.js";
+import { loadEnv } from "../../config/env.js";
+import { accessUrls } from "../../lib/mdns.js";
+import {
+  findShopSettingsUnique,
+  getOrCreateShopSettings,
+} from "../../repositories/settings.repository.js";
 import { isModuleEnabled } from "../../utils/modules.js";
 import { dayRange, zonedDateTimeToUtc } from "../../utils/time-range.js";
 import type {
@@ -32,6 +37,16 @@ import {
 } from "./entries.js";
 import { evaluatePontoMark } from "./evaluate.js";
 import { parsePontoExitAnswer } from "./exit-answer.js";
+import {
+  createRegistosToken,
+  currentMonthSpec,
+  fmtHoursMs,
+  monthKey,
+  parseMonthArg,
+  registosMonthEntries,
+  registosRateOk,
+  summarizeMonth,
+} from "./registos.js";
 import { findPontoStaff, type PontoStaffMatch } from "./staff.js";
 import {
   clearPendingPonto,
@@ -60,7 +75,7 @@ import {
   pontoReplyButtonsInteractive,
 } from "./transport.js";
 
-type PontoMarkCommand = Exclude<PontoCommand, "ESTADO">;
+type PontoMarkCommand = Exclude<PontoCommand, "ESTADO" | "REGISTOS">;
 type Settings = Awaited<ReturnType<typeof getOrCreateShopSettings>>;
 type Say = (text: string) => Promise<boolean>;
 /** Como Say mas devolve o id da mensagem quando o canal o expõe — as
@@ -482,10 +497,14 @@ async function routeText(env: FlowEnv): Promise<void> {
     await onExitReminderAnswer(env, exitPending);
     return;
   }
-  // Qualquer comando ponto normal mata o pending de saída — a SAIDA
-  // seguinte corrige a presumida automaticamente no finalizePonto.
-  clearPendingPontoExit(env.staff.user.id);
-  clearPendingPonto(env.key);
+  // Comandos de MARCAÇÃO matam o pending de saída — a SAIDA seguinte
+  // corrige a presumida automaticamente no finalizePonto. Consultas
+  // (ESTADO, REGISTOS) não interrompem nada: o trabalhador pode consultar
+  // o mês e ainda assim responder ao lembrete de saída depois.
+  if (parsed.command !== "ESTADO" && parsed.command !== "REGISTOS") {
+    clearPendingPontoExit(env.staff.user.id);
+    clearPendingPonto(env.key);
+  }
   await dispatchCommand({
     channel: env.channel,
     ctx: env.ctx,
@@ -984,6 +1003,11 @@ async function dispatchCommand(a: DispatchArgs): Promise<void> {
     tz,
   } = a;
   let command = parsed.command;
+
+  if (command === "REGISTOS") {
+    await replyRegistos(ctx, say, staff.user.id, tz, msg.text ?? "");
+    return;
+  }
 
   if (command === "ESTADO") {
     await replyEstado(ctx, say, staff.user.id, tz);
@@ -1508,6 +1532,134 @@ async function recordPontoResult(
 
 function tzOf(settings: Settings): string {
   return settings.timezone ?? process.env.TZ ?? "UTC";
+}
+
+const TRAILING_SLASH_RE = /\/+$/;
+
+/** true se o URL é alcançável fora da rede da loja (host público). */
+function isDialablePublicUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    const host = u.hostname.toLowerCase();
+    if (
+      host === "localhost" ||
+      host.endsWith(".local") ||
+      host.endsWith(".localhost") ||
+      host === "0.0.0.0" ||
+      host === "::1"
+    ) {
+      return false;
+    }
+    const first = host.split(".")[0];
+    if (first === "10" || first === "192" || first === "127") {
+      return false;
+    }
+    // 172.16-31 — redes privadas
+    if (first === "172") {
+      const second = Number(host.split(".")[1]);
+      if (second >= 16 && second <= 31) {
+        return false;
+      }
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Base para o link do PDF: o endereço público da loja quando existe
+ * (trackingBaseUrl ou APP_URL), senão o endereço de rede local — chega
+ * para quem está no Wi-Fi da loja. Nunca a Cloud: o PDF é servido pela
+ * app, como manda a minimização de dados.
+ */
+async function resolveRegistosBaseUrl(
+  prisma: BotReplyCtx["prisma"]
+): Promise<string | null> {
+  const settings = await findShopSettingsUnique(prisma);
+  if (settings?.trackingBaseUrl) {
+    return settings.trackingBaseUrl.replace(TRAILING_SLASH_RE, "");
+  }
+  const env = loadEnv();
+  // Um APP_URL público vale mais que o .local/mdns, que não abre fora da
+  // rede da loja — accessUrls devolve o .local em primeiro lugar.
+  if (env.APP_URL && isDialablePublicUrl(env.APP_URL)) {
+    return env.APP_URL.replace(TRAILING_SLASH_RE, "");
+  }
+  const first = accessUrls({
+    appUrl: env.APP_URL,
+    mdnsHostname: env.MDNS_HOSTNAME,
+    port: env.PORT,
+  }).urls[0];
+  return first ? first.replace(TRAILING_SLASH_RE, "") : null;
+}
+
+/**
+ * REGISTOS — direito de acesso (art. 15.º RGPD). Resumo do mês por
+ * mensagem + link de uso único (24 h) para o PDF servido pela app. O PDF
+ * não passa pela Cloud: a mensagem leva só o endereço. Rate limit de 5
+ * pedidos por dia, contado nos tokens emitidos.
+ */
+async function replyRegistos(
+  ctx: BotReplyCtx,
+  say: Say,
+  userId: string,
+  tz: string,
+  rawText: string
+): Promise<void> {
+  const { normalizePontoText } = await import("./commands.js");
+  const parsed = parseMonthArg(normalizePontoText(rawText), tz);
+  if (parsed === undefined) {
+    await say(PONTO_TEXT.registosInvalidMonth);
+    return;
+  }
+  if (!(await registosRateOk(ctx.prisma, userId))) {
+    await say(PONTO_TEXT.registosRateLimited);
+    return;
+  }
+  const spec = parsed ?? currentMonthSpec(tz);
+  const { correctionsCount, effectiveEntries, entries } =
+    await registosMonthEntries(ctx.prisma, userId, tz, spec);
+  const summary = summarizeMonth(effectiveEntries, correctionsCount, tz);
+  const monthNames = [
+    "janeiro",
+    "fevereiro",
+    "março",
+    "abril",
+    "maio",
+    "junho",
+    "julho",
+    "agosto",
+    "setembro",
+    "outubro",
+    "novembro",
+    "dezembro",
+  ];
+  const monthLabel = `${monthNames[spec.month - 1]} de ${spec.year}`;
+
+  if (entries.length === 0) {
+    await say(PONTO_TEXT.registosNoEntries.replace("{{month}}", monthLabel));
+    return;
+  }
+
+  const token = await createRegistosToken(ctx.prisma, userId, monthKey(spec));
+  const base = await resolveRegistosBaseUrl(ctx.prisma);
+  const lines = [
+    `Os seus registos de ${monthLabel}:`,
+    `${summary.days} dia(s) · ${fmtHoursMs(summary.workedMs)} trabalhadas · pausas ${fmtHoursMs(summary.pauseMs)}`,
+    `${summary.correctionsCount} correção(ões) · ${summary.pendingCount} por validar`,
+  ];
+  if (summary.hasOpenShift) {
+    lines.push(PONTO_TEXT.registosEstimatedHours);
+  }
+  if (base) {
+    lines.push(
+      `PDF do mês (link de uso único, válido 24 h): ${base}/api/public/ponto-registos/${token}`
+    );
+  } else {
+    lines.push(PONTO_TEXT.registosNoUrl);
+  }
+  await say(lines.join("\n"));
 }
 
 /** ESTADO (§2.5): horas de hoje e da semana + registos por validar. */

@@ -28,7 +28,7 @@ export const PONTO_EXIT_DATE_TERMS = {
 
 export const PONTO_TEXT = {
   commands:
-    "Comandos do livro de ponto: ENTRADA (leia o QR), PAUSA, VOLTEI, SAIDA, ESTADO.",
+    "Comandos do livro de ponto: ENTRADA (leia o QR), PAUSA, VOLTEI, SAIDA, ESTADO, REGISTOS (os seus registos do mês).",
   configMissing: ptMessages["ponto.config_missing"],
   configMissingCompany: ptMessages["ponto.config_missing_company"],
   entradaNeedsCode:
@@ -42,6 +42,15 @@ export const PONTO_TEXT = {
   locationPromptText:
     "Para registar o ponto, partilhe a sua localização: toque em 📎 → Localização → localização atual.",
   noEntryToday: "Não tem entrada registada hoje — leia o QR para começar.",
+  registosInvalidMonth:
+    "Mês inválido — escreva REGISTOS ou REGISTOS MM/AAAA (ex.: REGISTOS 10/2026), sem meses futuros.",
+  registosNoEntries: "Sem registos em {{month}}.",
+  registosNoUrl:
+    "Não consigo gerar o link do PDF porque a loja não tem endereço configurado — peça o relatório ao responsável.",
+  registosRateLimited:
+    "Atingiu o limite de 5 pedidos de registos por dia — tente novamente amanhã.",
+  registosEstimatedHours:
+    "Inclui horas estimadas — há dias sem saída registada (contadas até agora no dia de hoje, até à meia-noite nos dias anteriores).",
   noPendingLocation:
     "Não tenho nenhum pedido de localização pendente — escreva ENTRADA, PAUSA, VOLTEI, SAIDA ou ESTADO.",
   noPendingPhoto:

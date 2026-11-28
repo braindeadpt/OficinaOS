@@ -20,7 +20,13 @@
 // - Negação: "não"/"nunca"/"jamais" antes do fim do último match →
 //   null ("não saí" nunca regista SAÍDA).
 
-export type PontoCommand = "ENTRADA" | "PAUSA" | "VOLTEI" | "SAIDA" | "ESTADO";
+export type PontoCommand =
+  | "ENTRADA"
+  | "PAUSA"
+  | "VOLTEI"
+  | "SAIDA"
+  | "ESTADO"
+  | "REGISTOS";
 
 export interface ParsedPontoCommand {
   code?: string;
@@ -30,6 +36,7 @@ export interface ParsedPontoCommand {
 const COMMAND_WORDS: Record<PontoCommand, string[]> = {
   ENTRADA: ["entrada", "entrei", "cheguei"],
   ESTADO: ["estado", "horas"],
+  REGISTOS: ["registos", "acesso"],
   PAUSA: ["almoco", "cafe", "intervalo", "pausa"],
   SAIDA: ["adeus", "fui", "sai", "saida", "saiu"],
   VOLTEI: ["fim", "regresso", "volta", "voltei"],

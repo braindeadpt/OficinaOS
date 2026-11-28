@@ -3253,6 +3253,7 @@
   "ponto.act_proof_location": "Location at the time",
   "ponto.act_proof_external_photo": "External: location + photo (not stored)",
   "ponto.act_proof_manual": "Manually validated by {{name}}",
+  "ponto.info_doc_rights_5": "You can ask for your own records at any time by messaging REGISTOS (or REGISTOS MM/YYYY for an earlier month) on the same channel you use to clock in: you receive a summary of the month and a single-use link, valid for 24 hours, to the PDF.",
   "ponto.act_proof_remote": "Telework — no proof of location",
   "ponto.team_telework_days": "Telework",
   "ponto.team_telework_explain": "On telework days we never ask for the location, so the worker's home address is never revealed.",

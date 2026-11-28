@@ -237,6 +237,7 @@ model User {
   tradeInsCreated       TradeIn[]           @relation("TradeInCreatedBy")
   auditLogs             AuditLog[]
   mcpTokens             McpToken[]
+  pontoRegistosTokens   PontoRegistosToken[]
   cashSessionsOpened    CashSession[]       @relation("CashSessionOpenedBy")
   cashSessionsClosed    CashSession[]       @relation("CashSessionClosedBy")
   conversations         AiConversation[]
@@ -1041,6 +1042,21 @@ model McpToken {
 
   @@index([userId])
   @@map("mcp_tokens")
+}
+
+model PontoRegistosToken {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Mês pedido no comando REGISTOS (yyyy-mm) — o PDF é gerado para este mês.
+  month      String    @db.VarChar(7)
+  tokenHash  String    @unique
+  expiresAt  DateTime  @db.Timestamptz
+  usedAt     DateTime? @db.Timestamptz
+  createdAt  DateTime  @default(now()) @db.Timestamptz
+
+  @@index([userId, createdAt])
+  @@map("ponto_registos_tokens")
 }
 
 // ─────────────────────────────────────────────
