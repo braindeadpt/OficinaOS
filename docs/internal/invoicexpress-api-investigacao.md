@@ -6,8 +6,7 @@
 > **v2** (`https://<conta>.app.invoicexpress.com/….json`, a que a integração
 > atual usa em `server/services/invoicing.service.ts`) e **v3**
 > (`https://api-v3.app.invoicexpress.com/api/v3/…`, mesma autenticação por
-> `api_key` na query string). Funcionalidades importantes (pagamentos
-> parciais, pesquisa de clientes por texto) **só existem na v3**. A migração
+> `api_key` na query string). A pesquisa de clientes por texto **só existe na v3**; os pagamentos parciais estão documentados nas duas — a v3 acrescenta a garantia de idempotência (`Idempotency-Key`). A migração
 > da v2 para a v3 está em curso do lado deles
 > ([changelog](https://invoicexpress.com/changelog-api/)).
 
@@ -116,7 +115,7 @@ Hoje a app emite **fatura-recibo** (paga à nascença). O modelo «fatura +
 recibo» existe e é por documento:
 
 1. Emite-se **fatura** (`invoices`) — fica `final` com valor em dívida.
-2. Cada pagamento regista-se com **`POST /api/v3/documents/{document_id}/partial_payments.json`** (só v3) — e cada pagamento **gera um recibo** (`Receipt`, documento fiscal próprio) ligado à fatura
+2. Cada pagamento regista-se com **`POST /documents/{document_id}/partial_payments.json`** — documentado na [v2](https://docs.invoicexpress.com/v2/invoices/generatepayment) (host `<conta>.app.invoicexpress.com`) e na [v3](https://docs.invoicexpress.com/v3/invoices/createv3documentpartialpayment) — e cada pagamento **gera um recibo** (`Receipt`, documento fiscal próprio) ligado à fatura
    ([Create partial payment](https://docs.invoicexpress.com/v3/invoices/createv3documentpartialpayment)).
 
 ```json
@@ -127,9 +126,7 @@ Idempotency-Key: 6f1c2a4e-1b7d-4c55-9a0e-3f2b8d7c9e10
 
 Resposta: objeto `receipt` com `sequence_number`, `total`, `atcud` etc.
 O campo `payment_mechanism` aceita códigos como `TB` (transferência), `MB`
-(multibanco), `CC` (cartão). O header **`Idempotency-Key`** torna retries
-seguros (replay da primeira resposta durante 24 h) — importante para a
-regra «nunca emitir documento em duplicado» do plano.
+(multibanco), `CC` (cartão). O header **`Idempotency-Key`** torna retries seguros (replay da primeira resposta durante 24 h) — está documentado na v3, confirmar em sandbox se a v2 o honra; importante para a regra «nunca emitir documento em duplicado» do plano.
 
 **Adiantamentos:** não existe tipo de documento «adiantamento». O desenho
 possível é: recibo/fatura-recibo do adiantamento no momento do pagamento e
@@ -258,7 +255,7 @@ enquanto gera; repetir até `200` com `{"output": {"pdfUrl": "https://…"}}`
 | FX5 — Clientes por NIF | **Com limitações** | Procura por NIF só na v3 (`term` por contenção — validar igualdade do nosso lado); v2 só procura exata por código/nome. `code` próprio suportado; update existe. A unicidade do NIF é regra nossa — a API não a impõe; cuidado com a criação implícita de clientes ao emitir (casa por nome). |
 | FX6 — Sentido inverso (sincronização) | **Com limitações** | Sem webhooks nem filtro «alterado desde»: polling paginado periódico com comparação de `status`/`final_date`. Exequível sem custo relevante ao volume de uma loja e dentro dos 780/min. Documentos emitidos fora da app aparecem na listagem por data — a lista «por associar» é viável. |
 | FX7 — Relatório de controlo | **Possível** | É construído sobre o FX6 (polling + comparação de totais/estados); a listagem já traz totais agregados (`totals`) por filtro, o que ajuda a detetar divergências de valor. |
-| FX8 — Fatura + recibo, parciais, adiantamentos | **Possível com limitações** | Fatura + recibos por pagamento: suportado na v3 (`partial_payments` gera `Receipt` fiscal ligado, com `payment_mechanism` e `Idempotency-Key`). **Depende da v3** — hoje a integração é v2 pura. Adiantamentos: sem tipo próprio — desenho fiscal a validar com o contabilista. |
+| FX8 — Fatura + recibo, parciais, adiantamentos | **Possível com limitações** | Fatura + recibos por pagamento: suportado na v3 (`partial_payments` gera `Receipt` fiscal ligado, com `payment_mechanism` e `Idempotency-Key`). Pagamentos parciais documentados nas duas versões; a idempotência por `Idempotency-Key` está documentada na v3 (confirmar a v2 em sandbox) — a migração v2→v3 continua recomendada mas não bloqueia. Adiantamentos: sem tipo próprio — desenho fiscal a validar com o contabilista. |
 
 ## 10. Recomendações transversais para o FX1+
 
