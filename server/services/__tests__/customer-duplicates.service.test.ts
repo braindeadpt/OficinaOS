@@ -549,7 +549,7 @@ describe("mergeCustomers", () => {
     it("é apenas aditiva — nenhum dado de clientes é alterado", async () => {
       const fs = await import("node:fs");
       const sql = fs.readFileSync(
-        "prisma/migrations/20261231209000_customer_merged_audit_action/migration.sql",
+        "prisma/migrations/20261231211000_customer_merged_audit_action/migration.sql",
         "utf8"
       );
       expect(sql).toContain("ADD VALUE");
