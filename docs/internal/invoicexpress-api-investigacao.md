@@ -92,14 +92,12 @@ faturas). Nota: em Portugal a nota de crédito tem de referenciar o documento
 original — a ligação `owner_invoice_id` cobre isso; linhas parciais são
 possíveis porque os itens são livres.
 
-**Anulação:** `PUT /:tipo/:id/change-state.json` com
+**Anulação (exemplo v2):** `PUT /:tipo/:id/change-state.json` com
 `{"invoice": {"state": "canceled", "message": "motivo"}}` — o motivo é
 **obrigatório** (sem ele a API responde 422)
 ([Change-state v2](https://invoicexpress.com/api-v2/invoices/change-state/),
 [Change document state v3](https://docs.invoicexpress.com/v3/invoices/changev3invoicedocumentstate)).
-Transições relevantes: `final → canceled` (todos os tipos),
-`draft → finalized`, `final → settled` (faturas), `settled → canceled` (só
-fatura-recibo). Um documento finalizado **nunca se apaga** — anula-se com
+Na **v3** o caminho é `/api/v3/{invoices-type}/{id}/change-state.json` e a **chave do corpo tem de ser o singular do tipo do documento** (`invoice` para invoices, `invoice_receipt` para invoice_receipts, `simplified_invoice`, `credit_note`, `debit_note`) — outra chave devolve 422. `finalized` é o **comando** enviado no corpo para finalizar um rascunho: o estado resultante é `final` (todos os tipos) ou `settled` (só fatura-recibo, paga à nascença). Transições: `final → canceled` (todos os tipos), `settled → canceled` (só fatura-recibo). Um documento finalizado **nunca se apaga** — anula-se com
 motivo, como manda a lei fiscal.
 
 ```json
