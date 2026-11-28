@@ -111,7 +111,7 @@ Hoje a app emite **fatura-recibo** (paga à nascença). O modelo «fatura +
 recibo» existe e é por documento:
 
 1. Emite-se **fatura** (`invoices`) — fica `final` com valor em dívida.
-2. Cada pagamento regista-se com **`POST /documents/{document_id}/partial_payments.json`** — documentado na [v2](https://docs.invoicexpress.com/v2/invoices/generatepayment) (host `<conta>.app.invoicexpress.com`) e na [v3](https://docs.invoicexpress.com/v3/invoices/createv3documentpartialpayment) — e cada pagamento **gera um recibo** (`Receipt`, documento fiscal próprio) ligado à fatura
+2. Cada pagamento regista-se com **`POST /documents/{document_id}/partial_payments.json`** na **v2** (host `https://<conta>.app.invoicexpress.com`, [doc](https://docs.invoicexpress.com/v2/invoices/generatepayment)) ou **`POST /api/v3/documents/{document_id}/partial_payments.json`** na **v3** (host `https://api-v3.app.invoicexpress.com`, [doc](https://docs.invoicexpress.com/v3/invoices/createv3documentpartialpayment)) — os caminhos não são intermutáveis entre hosts — e cada pagamento **gera um recibo** (`Receipt`, documento fiscal próprio) ligado à fatura
    ([Create partial payment](https://docs.invoicexpress.com/v3/invoices/createv3documentpartialpayment)).
 
 ```json
