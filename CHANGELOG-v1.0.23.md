@@ -11,7 +11,7 @@
 - **Localização só quando é preciso.** Quem regista com o QR do ecrã da loja, dentro da rede da loja, já não precisa de partilhar a localização. A localização só é pedida quando não há outra prova de presença.
 - **Teletrabalho sem localização.** Nos dias marcados como teletrabalho, o registo não pede localização nenhuma — a loja marca os dias e o trabalhador regista normalmente.
 - **Modo só-ponto.** Um computador ou tablet pode ficar dedicado ao livro de ponto, com textos neutros e sem acesso ao resto da gestão.
-- **Backups alojados, cifrados e verificados.** As cópias de segurança do livro de ponto são verificadas automaticamente — a loja sabe que o backup abre, antes de precisar dele.
+- **Backups alojados e cifrados, com teste de restauro.** As cópias do livro de ponto saem cifradas e assinadas, e há um teste de restauro automático (mensal, configurável numa máquina separada) que restaura a cópia mais recente e confirma que abre — a loja deixa de descobrir um backup estragado só quando precisa dele.
 - **Código em todos os registos.** O código do QR passa a valer também para pausa, regresso e saída, não só para a entrada.
 - **Imutabilidade reforçada.** Os registos de ponto só podem ser purgados ao fim de 5 anos e por rotinas controladas — reforço do cumprimento do prazo legal.
 
@@ -54,7 +54,7 @@ Esta versão precisa da Cloud atualizada para tudo funcionar — a OficinaOS Clo
 - **Location only when needed.** Staff checking in with the shop-screen QR code, on the shop network, no longer need to share their location. Location is only asked when there is no other proof of presence.
 - **Remote work without location.** On days marked as remote work, clocking never asks for any location — the shop marks the days and the worker clocks in as usual.
 - **Time-clock-only mode.** A computer or tablet can be dedicated to the time clock, with neutral texts and no access to the rest of the system.
-- **Hosted, encrypted, verified backups.** Time-clock backups are automatically verified — the shop knows the backup opens before it needs it.
+- **Hosted, encrypted backups with restore testing.** Time-clock backups are encrypted and signed, and an automated restore test (monthly, configurable on a separate machine) restores the latest copy and confirms it opens — the shop no longer finds out a backup is broken only when it needs it.
 - **Code for every event.** The QR code now works for breaks, returns and clock-outs too, not just clock-ins.
 - **Stronger immutability.** Time-clock entries can only be purged after 5 years and only by controlled routines — reinforcing the legal retention period.
 
