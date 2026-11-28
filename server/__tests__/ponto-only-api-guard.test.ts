@@ -26,6 +26,8 @@ function buildApp() {
   app.get("/api/reports/cash/session", async () => ({ ok: true }));
   app.get("/api/sales/abc", async () => ({ ok: true }));
   app.get("/api/ponto/status", async () => ({ ok: true }));
+  app.get("/api/uploads/job-photos/job-1/foto.jpg", async () => ({ ok: true }));
+  app.get("/api/uploads/avatars/u1.png", async () => ({ ok: true }));
   return app;
 }
 
@@ -44,6 +46,34 @@ describe("modo só ponto — guarda das APIs de oficina", () => {
     const res = await buildApp().inject({ method: "GET", url: path });
     expect(res.statusCode).toBe(404);
     expect(res.json()).toEqual({ code: "NOT_FOUND" });
+  });
+
+  it("uploads de fotos de reparações devolvem 403 — existem, mas são da oficina", async () => {
+    const res = await buildApp().inject({
+      method: "GET",
+      url: "/api/uploads/job-photos/job-1/foto.jpg",
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual({ code: "FORBIDDEN" });
+  });
+
+  it("avatars continuam disponíveis porque também servem a equipa do ponto", async () => {
+    const res = await buildApp().inject({
+      method: "GET",
+      url: "/api/uploads/avatars/u1.png",
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("o classificador separa uploads proibidos de avatars", () => {
+    expect(isPontoOnlyBlockedApiPath("/api/uploads/job-photos/a.jpg")).toBe(
+      true
+    );
+    expect(isPontoOnlyBlockedApiPath("/api/uploads/avatars/a.png")).toBe(false);
+    expect(
+      isPontoOnlyBlockedApiPath("/api/uploads/avatars/../job-photos/a.jpg")
+    ).toBe(true);
+    expect(isPontoOnlyBlockedApiPath("/api/uploads/avatars..a.jpg")).toBe(true);
   });
 
   it("não bloqueia o próprio ponto", async () => {

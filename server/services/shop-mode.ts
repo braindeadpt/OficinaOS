@@ -48,8 +48,35 @@ const BLOCKED_EXACT_OR_CHILD = [
   "/api/import",
 ] as const;
 
+function isBlockedUpload(pathname: string): boolean {
+  if (!sameOrChild(pathname, "/api/uploads")) {
+    return false;
+  }
+  // O prefixo `avatars` não pode ser usado como trampolim para outra pasta:
+  // em Windows `\` também é separador e `avatars/../job-photos` resolve
+  // fora da exceção antes de chegar ao static file server.
+  if (pathname.includes("\\")) {
+    return true;
+  }
+  const segments = pathname
+    .slice("/api/uploads".length)
+    .split("/")
+    .filter(Boolean);
+  if (segments.some((segment) => segment === "." || segment === "..")) {
+    return true;
+  }
+  return segments[0] !== "avatars";
+}
+
 export function isPontoOnlyBlockedApiPath(pathname: string): boolean {
-  return BLOCKED_EXACT_OR_CHILD.some((prefix) => sameOrChild(pathname, prefix));
+  return (
+    isBlockedUpload(pathname) ||
+    BLOCKED_EXACT_OR_CHILD.some((prefix) => sameOrChild(pathname, prefix))
+  );
+}
+
+export function isPontoOnlyForbiddenUploadPath(pathname: string): boolean {
+  return isBlockedUpload(pathname);
 }
 
 function pathnameOf(request: FastifyRequest): string {
@@ -79,7 +106,9 @@ export function registerPontoOnlyApiGuard(app: FastifyInstance): void {
       where: { id: "default" },
     });
     if (settings?.shopMode === SHOP_MODE_PONTO_ONLY) {
-      throw new AppError("NOT_FOUND");
+      throw new AppError(
+        isPontoOnlyForbiddenUploadPath(pathname) ? "FORBIDDEN" : "NOT_FOUND"
+      );
     }
   });
 }
