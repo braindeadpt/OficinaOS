@@ -33,16 +33,13 @@
 ([List Invoices v3](https://docs.invoicexpress.com/v3/invoices/listv3invoices),
 [List all v2](https://invoicexpress.com/api-v2/invoices/list-all/)).
 
-Consequência para o FX6: a sincronização de estado faz-se por varrimento
-paginado periódico (por janela de data ou varrimento completo dos documentos
-conhecidos), comparando `status` — o campo `final_date` permite saber quando
-foi finalizado. Custo é baixo: uma loja emite poucos documentos por dia e o
+Consequência para o FX6: a sincronização tem **duas pernas**: (a) **descoberta** — varrimento paginado por janela de data de emissão, **sem filtro de `status`** (filtrar por `sent` excluiria anuladas e liquidadas), para apanhar documentos novos emitidos fora da app; (b) **refresco** — consulta por ID (`id[]`) dos documentos já associados, incluindo arquivados, porque uma fatura de outubro anulada em novembro **não entra** na janela de novembro (a data do documento não muda quando o estado muda). Comparação por `status`/`final_date`. Custo é baixo: uma loja emite poucos documentos por dia e o
 limite é generoso (ver §8).
 
 Exemplo de pedido (v3):
 
 ```
-GET https://api-v3.app.invoicexpress.com/api/v3/invoices?api_key=KEY&type[]=Invoice&status[]=sent&date[from]=01/11/2026&date[to]=30/11/2026&page=1&per_page=30
+GET https://api-v3.app.invoicexpress.com/api/v3/invoices?api_key=KEY&type[]=Invoice&date[from]=01/11/2026&date[to]=30/11/2026&page=1&per_page=30
 ```
 
 Exemplo de resposta (v3 — a forma difere da v2: paginação em `totals.pages`, link público em `token` em vez de `permalink`, e estados como `sent`/`final`/`settled`/`canceled`; `final_date` está documentado nesta versão):
