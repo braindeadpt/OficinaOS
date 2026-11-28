@@ -3259,7 +3259,6 @@
   "ponto.team_telework_explain": "Em teletrabalho não pedimos a localização, para não revelar a sua morada.",
   "ponto.settings_remote_autoapprove": "Aprovar automaticamente as picagens em teletrabalho",
   "ponto.settings_remote_autoapprove_hint": "Desligado por omissão: os registos de teletrabalho ficam por validar. Nunca pedem a localização do trabalhador.",
-  "currency_eur": "EUR",
   "duplicates.section": "Qualidade dos dados",
   "duplicates.title": "Possíveis duplicados",
   "duplicates.hint": "Clientes cujo telefone normaliza para o mesmo número (com o indicativo da loja). Nada é juntado automaticamente — reveja cada par e escolha o que fica.",

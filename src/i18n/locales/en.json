@@ -3259,7 +3259,6 @@
   "ponto.team_telework_explain": "On telework days we never ask for the location, so the worker's home address is never revealed.",
   "ponto.settings_remote_autoapprove": "Approve telework clock-ins automatically",
   "ponto.settings_remote_autoapprove_hint": "Off by default: telework records stay pending validation. They never ask for the worker's location.",
-  "currency_eur": "EUR",
   "duplicates.section": "Data quality",
   "duplicates.title": "Possible duplicates",
   "duplicates.hint": "Customers whose phone normalizes to the same number (with the shop's country code). Nothing is merged automatically — review each pair and choose what to keep.",
