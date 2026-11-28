@@ -6,8 +6,10 @@ import {
   reportsQuerySchema,
 } from "@shared/schemas/reports.schema.js";
 import type { FastifyPluginAsync } from "fastify";
+import { resolveDocumentLocale } from "../lib/document-locale.js";
 import { dashboardScope } from "../middlewares/dashboard-scope.js";
 import { requirePermission } from "../middlewares/rbac.js";
+import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import { cashReport } from "../services/cash-report.service.js";
 import {
   closeCashSession,
@@ -147,12 +149,8 @@ export const reportsRoutes: FastifyPluginAsync = async (app) => {
         q.status as JobStatus | undefined,
         includeMargin
       );
-      const acceptLang = (req.headers["accept-language"] ?? "")
-        .split(",")[0]
-        .slice(0, 2);
-      const locale = ["en", "es", "fr"].includes(acceptLang)
-        ? acceptLang
-        : "pt";
+      const settings = await findShopSettingsUnique(app.prisma);
+      const locale = resolveDocumentLocale(q.locale, settings?.countryCode);
       const dateLocale =
         ({ fr: "fr-FR", en: "en-GB", es: "es-ES" } as Record<string, string>)[
           locale

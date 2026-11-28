@@ -9,6 +9,7 @@ import {
 } from "@shared/loaner-agreement-document.js";
 import type { OrdersReportDTO } from "@shared/types/reports";
 import QRCode from "qrcode";
+import { resolveDocumentLocale } from "../lib/document-locale.js";
 import { findShopSettingsUnique } from "../repositories/settings.repository.js";
 import type { DbClient } from "../repositories/types.js";
 import { bundledIntakeTermsText } from "./intake-terms.service.js";
@@ -638,7 +639,8 @@ export async function renderReceiptHtml(
     }),
   ]);
   const currency = settings?.currency ?? "EUR";
-  const s = receiptStrings(options?.locale);
+  const locale = resolveDocumentLocale(options?.locale, settings?.countryCode);
+  const s = receiptStrings(locale);
   const qrBuf = await generateTrackingQr(
     job.jobCode,
     settings?.trackingBaseUrl || baseUrl,
@@ -674,7 +676,7 @@ export async function renderReceiptHtml(
     hasPayments,
     hideCosts,
     job,
-    locale: options?.locale ?? "pt",
+    locale,
     methodLabel,
     partsUsed,
     payments,
@@ -1103,7 +1105,9 @@ export async function renderLoanerAgreementHtml(
   // A signed document is frozen in the language the customer saw — it is
   // reprinted in that language, never the browser's Accept-Language.
   const signedLocale = signedAgreementLocale(job);
-  const locale = signedLocale ?? options?.locale ?? "pt";
+  const locale =
+    signedLocale ??
+    resolveDocumentLocale(options?.locale, settings?.countryCode);
   const s = LOANER_AGREEMENT_STRINGS[locale] ?? LOANER_AGREEMENT_STRINGS.pt;
   const text = loanerAgreementText(locale);
   const date = new Date(job.createdAt).toLocaleString(s.dateLocale);
@@ -1253,7 +1257,8 @@ export async function renderSaleReceiptHtml(
 ): Promise<string> {
   const settings = await findShopSettingsUnique(prisma);
   const currency = settings?.currency ?? "EUR";
-  const s = receiptStrings(options?.locale);
+  const locale = resolveDocumentLocale(options?.locale, settings?.countryCode);
+  const s = receiptStrings(locale);
   const prefs = prefsFrom(settings);
 
   const date = new Date(sale.createdAt).toLocaleString(s.dateLocale);
@@ -1275,7 +1280,7 @@ export async function renderSaleReceiptHtml(
       )
       .join("");
     return `<!doctype html>
-<html lang="${options?.locale ?? "pt"}">
+<html lang="${locale}">
 <head>
 <meta charset="utf-8">
 <title>${s.sale} ${esc(sale.saleCode)}</title>
@@ -1323,7 +1328,7 @@ ${settings?.receiptFooter ? `<div class="foot"><div class="txt"><p>${escMultilin
     .join("");
 
   return `<!doctype html>
-<html lang="${options?.locale ?? "pt"}">
+<html lang="${locale}">
 <head>
 <meta charset="utf-8">
 <title>${s.sale} ${esc(sale.saleCode)}</title>
@@ -1478,7 +1483,8 @@ export async function renderTradeInReceiptHtml(
   const settings = await findShopSettingsUnique(prisma);
   const prefs = prefsFrom(settings);
   const currency = settings?.currency ?? "EUR";
-  const s = TRADE_IN_STRINGS[options?.locale ?? ""] ?? TRADE_IN_STRINGS.pt;
+  const locale = resolveDocumentLocale(options?.locale, settings?.countryCode);
+  const s = TRADE_IN_STRINGS[locale] ?? TRADE_IN_STRINGS.pt;
   const shopHeader = shopHeaderHtml(settings);
   const date = new Date(tradeIn.createdAt).toLocaleString(s.dateLocale);
   const signatureImg = tradeIn.signatureDataUrl
@@ -1489,7 +1495,7 @@ export async function renderTradeInReceiptHtml(
     : "";
 
   return `<!doctype html>
-<html lang="${options?.locale ?? "pt"}">
+<html lang="${locale}">
 <head>
 <meta charset="utf-8">
 <title>${s.title} ${esc(tradeIn.code)}</title>
@@ -1557,7 +1563,8 @@ export async function renderLabelHtml(
 ): Promise<string> {
   const settings = await findShopSettingsUnique(prisma);
   const currency = settings?.currency ?? "EUR";
-  const s = receiptStrings(options?.locale);
+  const locale = resolveDocumentLocale(options?.locale, settings?.countryCode);
+  const s = receiptStrings(locale);
   const prefs = prefsFrom(settings);
   const label = LABEL_PRESETS[prefs.labelSize];
   const shopName = esc(settings?.shopName || "OficinaOS");
@@ -1593,7 +1600,7 @@ export async function renderLabelHtml(
   const price = hideCosts ? "" : fmtMoney(displayCost, currency, s.dateLocale);
 
   return `<!doctype html>
-<html lang="${options?.locale ?? "pt"}">
+<html lang="${locale}">
 <head>
 <meta charset="utf-8">
 <title>${s.label}</title>
@@ -1816,14 +1823,15 @@ export async function renderOrdersReportHtml(
 ): Promise<string> {
   const settings = await findShopSettingsUnique(prisma);
   const reportCurrency = settings?.currency ?? "EUR";
-  const s = ordersReportLabels(opts.locale);
+  const locale = resolveDocumentLocale(opts.locale, settings?.countryCode);
+  const s = ordersReportLabels(locale);
   const shopName = esc(settings?.shopName || "OficinaOS");
   const statusLabel = opts.status
     ? (s.statusLabels[opts.status] ?? opts.status)
     : s.allStatuses;
   const dateLocale =
     ({ fr: "fr-FR", en: "en-GB", es: "es-ES" } as Record<string, string>)[
-      opts.locale ?? "pt"
+      locale
     ] ?? "pt-PT";
   const fmtDate = (iso?: string) =>
     iso ? new Date(iso).toLocaleDateString(dateLocale) : "—";
@@ -1844,7 +1852,7 @@ export async function renderOrdersReportHtml(
     .join("\n");
 
   return `<!doctype html>
-<html lang="${opts.locale ?? "pt"}">
+<html lang="${locale}">
 <head>
 <meta charset="utf-8">
 <title>${esc(s.title)}</title>

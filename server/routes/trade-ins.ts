@@ -190,9 +190,7 @@ export const tradeInsRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       const { id } = req.params as { id: string };
       const tradeIn = await getTradeIn(app.prisma, id);
-      const html = await renderTradeInReceiptHtml(app.prisma, tradeIn, {
-        locale: req.locale,
-      });
+      const html = await renderTradeInReceiptHtml(app.prisma, tradeIn, {});
       return reply.type("text/html").send(html);
     }
   );

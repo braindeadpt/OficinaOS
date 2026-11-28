@@ -476,3 +476,22 @@ describe("termsProvenanceLine", () => {
     expect(line).toBe("");
   });
 });
+
+describe("documentos — língua do país da loja", () => {
+  it("loja ES sem locale explícito imprime o recibo em espanhol", async () => {
+    const prisma = mockPrisma({ ...FULL_SETTINGS, countryCode: "ES" });
+    const html = await renderReceiptHtml(prisma, BASE_JOB, "", {});
+    expect(html).toContain('<html lang="es">');
+    expect(html).toContain("Dispositivo");
+    expect(html).not.toContain('<html lang="pt">');
+  });
+
+  it("locale explícito continua a ter prioridade sobre o país da loja", async () => {
+    const prisma = mockPrisma({ ...FULL_SETTINGS, countryCode: "ES" });
+    const html = await renderReceiptHtml(prisma, BASE_JOB, "", {
+      locale: "fr",
+    });
+    expect(html).toContain('<html lang="fr">');
+    expect(html).toContain("Appareil");
+  });
+});
