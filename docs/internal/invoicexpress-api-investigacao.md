@@ -234,8 +234,7 @@ enquanto gera; repetir até `200` com `{"output": {"pdfUrl": "https://…"}}`
 - **Idempotência nativa:** `proprietary_uid` no create — um valor repetido
   devolve o documento já criado em vez de duplicar
   ([Create v2 — idempotency](https://docs.invoicexpress.com/v2/invoices)).
-  Reforça a regra «nunca emitir em duplicado» do plano (a app pode usar
-  `sale:<id>`/`job:<id>` como uid).
+  Reforça a regra «nunca emitir em duplicado» do plano (a app pode usar `sale:<id>`/`job:<id>` como uid). A chave é por **emissão**: retries da mesma emissão reutilizam a mesma chave; documentos distintos da mesma venda — ex.: duas notas de crédito parciais — precisam de chaves distintas (`sale:<id>:cn:<n>`), senão a segunda recebe a primeira como resposta.
 
 ## 9. Tabela por fase do plano
 
@@ -256,8 +255,7 @@ enquanto gera; repetir até `200` com `{"output": {"pdfUrl": "https://…"}}`
    parciais e pesquisa de clientes por texto só existem na v3; a v2 está em
    manutenção/migração pela equipa deles.
 2. **Usar `proprietary_uid`** (`sale:<id>`/`job:<id>`) em todos os creates e
-   `Idempotency-Key` nos pagamentos — proteção nativa contra duplicados que
-   complementa o claim em memória já existente.
+   `Idempotency-Key` nos pagamentos — proteção nativa contra duplicados que complementa o claim em memória já existente. Uma chave por emissão, reutilizada apenas nos retries dessa emissão.
 3. **Pedir conta sandbox** ao suporte antes do FX3 — todos os testes manuais
    de emissão/email/PDF devem correr lá, nunca na conta real (regra do plano).
 4. O tratamento do **PDF é assíncrono** — o FX3 precisa de retry com backoff
