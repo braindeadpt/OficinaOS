@@ -212,10 +212,7 @@ enquanto gera; repetir até `200` com `{"output": {"pdfUrl": "https://…"}}`
 
 - **Desconto por linha:** campo `discount` (percentagem 0–100) em cada item
   do pedido de criação — confirmado no schema v2/v3.
-- **Desconto global:** o campo `global_discount` existe no documento (v3),
-  mas **não está documentado no corpo de criação da v2** — **com limitações /
-  a confirmar** em sandbox; alternativa garantida é distribuir o desconto
-  pelas linhas.
+- **Desconto global:** documentado no pedido de criação (v2 e v3): objeto `global_discount` com `value_type` (`percentage` ou `absolute`) e `value` ([Create v2](https://docs.invoicexpress.com/v2/invoices/createinvoice)). A sandbox serve para comparar totais e arredondamentos (global vs. por linha), não para descobrir o campo.
 - **Método de pagamento:** a fatura não tem campo de método; o mecanismo de
   pagamento (`payment_mechanism`: TB, MB, CC…) existe nos **pagamentos/
   recibos** (partial payments v3). Para fatura-recibo (paga à nascença) não
@@ -248,7 +245,7 @@ enquanto gera; repetir até `200` com `{"output": {"pdfUrl": "https://…"}}`
 |---|---|---|
 | FX1 — Custo e margem internos | **Possível** | Não depende da API — é todo do lado da app. |
 | FX2 — IVA por artigo + regime da margem | **Com limitações** | Taxa por linha por nome: suportado. Margem: IVA 0% + `tax_exemption` M13 com a menção legal impressa; a API **não calcula** o IVA da margem (é nosso, e legalmente o imposto não se discrimina no documento). Motivo de isenção é por documento, não por linha — fatura mista a validar em sandbox. Contabilista antes de ativar, como o plano manda. |
-| FX3 — Ecrã «Faturar» | **Possível** | Revisão, desconto por linha, FR vs FT, email com assunto/corpo próprios, PDF com polling 202→200. Ressalvas: desconto global não documentado no create (distribuir por linhas ou confirmar), método de pagamento sem campo próprio na fatura (existe nos recibos; observações como alternativa). |
+| FX3 — Ecrã «Faturar» | **Possível** | Revisão, desconto por linha, FR vs FT, email com assunto/corpo próprios, PDF com polling 202→200. Ressalvas: desconto global documentado — validar arredondamentos em sandbox; método de pagamento sem campo próprio na fatura (existe nos recibos; observações como alternativa). |
 | FX4 — Nota de crédito e anulação | **Possível** | `credit_notes` com `owner_invoice_id` ligado ao original; anulação por change-state `canceled` com motivo obrigatório; documento final nunca se apaga (correto fiscalmente). Devolução ao stock é lógica nossa. |
 | FX5 — Clientes por NIF | **Com limitações** | Procura por NIF só na v3 (`term` por contenção — validar igualdade do nosso lado); v2 só procura exata por código/nome. `code` próprio suportado; update existe. A unicidade do NIF é regra nossa — a API não a impõe; cuidado com a criação implícita de clientes ao emitir (casa por nome). |
 | FX6 — Sentido inverso (sincronização) | **Com limitações** | Sem webhooks nem filtro «alterado desde»: polling paginado periódico com comparação de `status`/`final_date`. Exequível sem custo relevante ao volume de uma loja e dentro dos 780/min. Documentos emitidos fora da app aparecem na listagem por data — a lista «por associar» é viável. |
