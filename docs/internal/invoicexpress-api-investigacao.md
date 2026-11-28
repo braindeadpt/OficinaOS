@@ -42,7 +42,7 @@ Exemplo de pedido (v3):
 GET https://api-v3.app.invoicexpress.com/api/v3/invoices?api_key=KEY&type[]=Invoice&date[from]=01/11/2026&date[to]=30/11/2026&page=1&per_page=30
 ```
 
-Exemplo de resposta (v3 — a forma difere da v2: paginação em `totals.pages`, link público em `token` em vez de `permalink`, e estados como `sent`/`final`/`settled`/`canceled`; `final_date` está documentado nesta versão):
+Exemplo de resposta (v3 — a forma difere da v2: paginação em `totals.pages`, link público em `token` em vez de `permalink`, e estados como `sent`/`final`/`settled`/`canceled`; `final_date` é um timestamp com offset, ou `null` enquanto não finalizado):
 
 ```json
 {
@@ -51,10 +51,10 @@ Exemplo de resposta (v3 — a forma difere da v2: paginação em `totals.pages`,
       "id": 541793,
       "status": "sent",
       "type": "Invoice",
-      "sequence_number": "28/A",
+      "sequence_number": "FT 2026/28",
       "reference": "fb30",
-      "date": "27/06/2017",
-      "final_date": "27/06/2017",
+      "date": "12/11/2026",
+      "final_date": "2026-11-12T10:32:00+00:00",
       "total": 1.07,
       "token": "541793e1ab"
     }
