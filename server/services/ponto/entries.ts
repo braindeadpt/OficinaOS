@@ -98,33 +98,61 @@ export async function todayPontoEntries(
   return rows.filter((r) => !latestValidationIsRejection(r));
 }
 
-/** SAIDA presumida do dia ainda por corrigir (item 5): proofs
- *  .exitReminderPresumed=true e nenhuma correction a apontar. É a
- *  "pergunta pendente" do fluxo Esquecimentos — a resposta do
- *  trabalhador, uma SAIDA normal ou a correção do painel fecham-na.
- *  Presumida recusada pela gerência NÃO é oferecida: a recusa passa
- *  a decisão para o painel e uma SAIDA normal do trabalhador nunca
- *  a pode substituir por cima da recusa — fica registo novo, e a
- *  presumida recusada continua à espera de decisão do gestor. */
+const OPEN_PRESUMED_EXIT_WINDOW_MS = 24 * 3_600_000;
+
+/** SAIDA presumida ainda por corrigir nas últimas 24 horas reais (não no
+ *  dia civil): proofs.exitReminderPresumed=true, nenhuma correction a
+ *  apontar e nenhuma ENTRADA efetiva posterior. Uma SAIDA presumida às
+ *  23:55 continua pendente às 00:10; já uma presumida de um turno anterior
+ *  não pode ser corrigida pela saída de um turno noturno que entretanto
+ *  começou com ENTRADA real. A janela é medida em milissegundos absolutos,
+ *  não em dias civis — nos fusos com mudança de hora o dia civil pode ter
+ *  23 ou 25 horas.
+ *
+ *  Presumida recusada pela gerência NÃO é oferecida: a recusa passa a
+ *  decisão para o painel e uma SAIDA normal do trabalhador nunca a pode
+ *  substituir por cima da recusa — fica registo novo, e a presumida
+ *  recusada continua à espera de decisão do gestor. */
 export async function findOpenPresumedExit(
   prisma: DbClient,
   userId: string,
-  tz: string,
+  _tz: string,
   now = new Date()
 ): Promise<{ at: Date; id: string } | null> {
-  const { start, end } = todayRange(tz, now);
-  const rows = await prisma.timeEntry.findMany({
-    orderBy: { at: "desc" },
-    select: { at: true, id: true, validations: LATEST_VALIDATION_SELECT },
-    where: {
-      at: { gte: start, lt: end },
-      corrections: { none: {} },
-      proofs: { equals: true, path: ["exitReminderPresumed"] },
-      type: "SAIDA",
-      userId,
-    },
-  });
-  const open = rows.find((r) => !latestValidationIsRejection(r));
+  const since = new Date(now.getTime() - OPEN_PRESUMED_EXIT_WINDOW_MS);
+  const range = { gte: since, lte: now };
+  const [presumedRows, entryRows] = await Promise.all([
+    prisma.timeEntry.findMany({
+      orderBy: { at: "desc" },
+      select: { at: true, id: true, validations: LATEST_VALIDATION_SELECT },
+      where: {
+        at: range,
+        corrections: { none: {} },
+        proofs: { equals: true, path: ["exitReminderPresumed"] },
+        type: "SAIDA",
+        userId,
+      },
+    }),
+    prisma.timeEntry.findMany({
+      select: { at: true, validations: LATEST_VALIDATION_SELECT },
+      where: {
+        at: range,
+        corrections: { none: {} },
+        type: "ENTRADA",
+        userId,
+      },
+    }),
+  ]);
+  const effectiveReentries = entryRows.filter(
+    (r) => !latestValidationIsRejection(r)
+  );
+  const open = presumedRows.find(
+    (r) =>
+      !(
+        latestValidationIsRejection(r) ||
+        effectiveReentries.some((entry) => entry.at > r.at)
+      )
+  );
   return open ? { at: open.at, id: open.id } : null;
 }
 
