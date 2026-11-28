@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import type { Job, PrismaClient } from "@generated/client";
 import { AuditAction, Prisma, type RepairCategory } from "@generated/client";
+import { effectiveDialCode } from "@shared/constants/countries.js";
 import { isImeiCategory } from "@shared/constants/device-categories";
 import type { JobStatusType } from "@shared/constants/job-statuses";
 import {
@@ -23,7 +24,7 @@ import type {
   UpdateJobInput,
 } from "@shared/schemas/job.schema";
 import { isValidImei, normalizeImei } from "@shared/utils/imei";
-import { normalizePhone } from "@shared/utils/phone";
+import { normalizePhoneE164 } from "@shared/utils/phone";
 import {
   findMany as auditFindMany,
   findManyWithInclude as auditFindManyWithInclude,
@@ -482,6 +483,8 @@ export async function create(
     phone: string;
     email: string | null;
   };
+  let customerCorrections: { email?: string; id: string; name: string } | null =
+    null;
 
   if (input.customerId) {
     const found = await customerFindUnique(prisma, input.customerId);
@@ -490,20 +493,9 @@ export async function create(
     }
     customer = found;
   } else {
-    const email = input.customerEmail?.trim() || null;
-    customer = await customerUpsert(
-      prisma,
-      { phone: input.customerPhone },
-      {
-        name: input.customerName,
-        ...(email ? { email } : {}),
-      },
-      {
-        email,
-        name: input.customerName,
-        phone: input.customerPhone,
-      }
-    );
+    const resolution = await resolveCustomerByPhone(prisma, input);
+    customer = resolution.customer;
+    customerCorrections = resolution.corrections;
   }
 
   let brandId = input.deviceBrandId;
@@ -533,6 +525,11 @@ export async function create(
     // Throws SIGNATURE_STALE when the ficha drifted since the link was
     // created — the customer must sign a fresh document.
     const remoteData = await remoteSignatureData(tx, input);
+
+    // Só dentro da transação, depois de todas as validações (IMEI,
+    // assinatura e afins): se a criação falhar, o rollback desfaz também a
+    // correção — uma admissão rejeitada nunca altera a ficha.
+    customer = await applyIntakeCorrections(tx, customer, customerCorrections);
 
     // Fleet unit checkout — the row lock serializes simultaneous intakes so
     // the same unit can never be handed out twice at once.
@@ -610,6 +607,89 @@ export async function create(
   return { ...(fullJob ?? job), finalCost: computeFinalCost(fullJob ?? job) };
 }
 
+/**
+ * Customer resolution for the normal creation path: E.164 with the shop's
+ * dial code (issue #77). Quick-intake sends the national number as typed —
+ * without the normalized lookup a customer already registered with the
+ * country code would get a second record.
+ */
+type IntakeCorrections = { email?: string; id: string; name: string } | null;
+
+async function applyIntakeCorrections(
+  tx: Prisma.TransactionClient,
+  customer: { email: string | null; id: string; name: string; phone: string },
+  corrections: IntakeCorrections
+) {
+  if (!corrections) {
+    return customer;
+  }
+  return await tx.customer.update({
+    data: {
+      name: corrections.name,
+      ...(corrections.email ? { email: corrections.email } : {}),
+    },
+    where: { id: corrections.id },
+  });
+}
+
+async function resolveCustomerByPhone(
+  prisma: PrismaClient,
+  input: {
+    customerEmail?: string | undefined;
+    customerName: string;
+    customerPhone: string;
+  }
+) {
+  const settings = await prisma.shopSettings.findUnique({
+    select: { countryCode: true },
+    where: { id: "default" },
+  });
+  const dial = effectiveDialCode(settings?.countryCode);
+  const phone = normalizePhoneE164(input.customerPhone, dial);
+  const existing = await findByNormalizedPhone(
+    prisma,
+    phone,
+    dial,
+    input.customerPhone.replace(/\D/g, "")
+  );
+  const email = input.customerEmail?.trim() || null;
+  if (existing) {
+    // A correção não se grava aqui: a admissão ainda pode ser rejeitada
+    // (IMEI inválido e afins) e uma ficha alterada por uma reparação que
+    // não entrou é efeito lateral indevido. O chamador aplica-a depois das
+    // validações, já com a criação garantida.
+    return {
+      corrections: {
+        email: email ?? undefined,
+        id: existing.id,
+        name: input.customerName,
+      },
+      customer: {
+        email,
+        id: existing.id,
+        name: existing.name,
+        phone: existing.phone,
+      },
+    };
+  }
+  return {
+    corrections: null,
+    customer: await customerUpsert(
+      prisma,
+      { phone },
+      {
+        name: input.customerName,
+        ...(email ? { email } : {}),
+      },
+      {
+        email,
+        name: input.customerName,
+        phone,
+      }
+    ),
+  };
+}
+
 const GENERIC_IMPORT_BRAND = "Outra";
 
 export interface ImportedJobInput {
@@ -644,12 +724,25 @@ export function createImportedJob(
   const deliveredAt = input.deliveredAt ? new Date(input.deliveredAt) : null;
 
   return prisma.$transaction(async (tx) => {
+    // E.164 com o indicativo da loja (issue #77) — o lookup deduz o mesmo
+    // indicativo nas linhas legadas escritas sem ele.
+    const importSettings = await tx.shopSettings.findUnique({
+      select: { countryCode: true },
+      where: { id: "default" },
+    });
+    const importDial = effectiveDialCode(importSettings?.countryCode);
+    const importPhone = normalizePhoneE164(input.customerPhone, importDial);
     const customer =
-      (await findByNormalizedPhone(tx, normalizePhone(input.customerPhone))) ??
+      (await findByNormalizedPhone(
+        tx,
+        importPhone,
+        importDial,
+        input.customerPhone.replace(/\D/g, "")
+      )) ??
       (await tx.customer.create({
         data: {
           name: input.customerName.trim(),
-          phone: input.customerPhone.trim(),
+          phone: importPhone,
           email: input.customerEmail?.trim() || null,
         },
       }));

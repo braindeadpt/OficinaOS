@@ -16,6 +16,12 @@ import {
 } from "../job.service";
 
 // Mock audit service to avoid side effects
+vi.mock("../signature-session.service.js", async (importOriginal) => {
+  const orig =
+    await importOriginal<typeof import("../signature-session.service.js")>();
+  return { ...orig, consumeSignatureSession: vi.fn() };
+});
+
 vi.mock("../audit.service.js", () => ({
   createAuditLog: vi.fn().mockResolvedValue(undefined),
 }));
@@ -54,6 +60,7 @@ function mockPrisma(
     },
     customer: {
       findUnique: vi.fn(),
+      update: vi.fn(),
       upsert: vi.fn(),
       ...((overrides as Record<string, unknown>).customer || {}),
     },
@@ -1306,6 +1313,139 @@ describe("create", () => {
     });
   });
 
+  it("assinatura desatualizada com ficha existente não grava a correção", async () => {
+    // A ficha é encontrada e a correção preparada, mas a rejeição da
+    // assinatura (dentro da transação) tem de a impedir de chegar à BD —
+    // em produção o rollback desfaz qualquer escrita da transação.
+    (
+      prisma.shopSettings.findUnique as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      countryCode: "PT",
+      id: "default",
+      intakeTerms: "Termos legais da loja",
+      intakeTermsUpdatedAt: new Date("2026-11-20T10:00:00Z"),
+      intakeTermsVersion: 5,
+    });
+    (prisma.$queryRaw as ReturnType<typeof vi.fn>).mockImplementation(
+      (strings: TemplateStringsArray) => {
+        const sql = Array.isArray(strings)
+          ? strings.join(" ")
+          : String(strings);
+        return Promise.resolve(
+          sql.includes("customers")
+            ? [{ id: "cust-existing", name: "Maria", phone: "+351912345678" }]
+            : [{ lastSeq: 1 }]
+        );
+      }
+    );
+    (prisma.brand.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "brand-1",
+    });
+    // a sessão remota divergiu do documento atual — a rejeição acontece
+    // dentro da transação, depois de a correção já estar preparada
+    const { consumeSignatureSession } = await import(
+      "../signature-session.service.js"
+    );
+    (consumeSignatureSession as ReturnType<typeof vi.fn>).mockRejectedValue(
+      Object.assign(new Error("stale"), { code: "SIGNATURE_STALE" })
+    );
+
+    await expect(
+      create(
+        prisma,
+        {
+          customerName: "Maria Silva",
+          customerPhone: "912345678",
+          deviceBrand: "Apple",
+          deviceModel: "iPhone 14",
+          estimatedCost: 100,
+          reportedProblem: "Ecrã partido",
+          signatureSessionToken: "tok-remoto",
+        },
+        "user-1",
+        mockNotifyCtx
+      )
+    ).rejects.toMatchObject({ code: "SIGNATURE_STALE" });
+    expect(prisma.customer.update).not.toHaveBeenCalled();
+  });
+
+  it("reutiliza a ficha encontrada pelo telefone e grava as correções", async () => {
+    (
+      prisma.shopSettings.findUnique as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      countryCode: "PT",
+      id: "default",
+    });
+    // a procura SQL encontra a ficha internacionalizada; a sequência do job
+    // continua a responder à outra query
+    (prisma.$queryRaw as ReturnType<typeof vi.fn>).mockImplementation(
+      (strings: TemplateStringsArray) => {
+        const sql = Array.isArray(strings)
+          ? strings.join(" ")
+          : String(strings);
+        return Promise.resolve(
+          sql.includes("customers")
+            ? [
+                {
+                  id: "cust-existing",
+                  name: "Maria Silva",
+                  phone: "+351912345678",
+                },
+              ]
+            : [{ lastSeq: 1 }]
+        );
+      }
+    );
+    (prisma.customer.update as ReturnType<typeof vi.fn>).mockResolvedValue({
+      email: "maria@x.pt",
+      id: "cust-existing",
+      name: "Maria Silva",
+      phone: "+351912345678",
+    });
+    (prisma.brand.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "brand-1",
+    });
+    (prisma.device.upsert as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "device-1",
+    });
+    (prisma.job.create as ReturnType<typeof vi.fn>).mockImplementation(
+      ({ data }) =>
+        Promise.resolve({ ...data, id: "job-1", partsUsed: [], repairs: [] })
+    );
+    (prisma.job.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "job-1",
+      partsUsed: [],
+      repairs: [],
+    });
+
+    await create(
+      prisma,
+      {
+        customerEmail: "maria@x.pt",
+        customerName: "Maria Silva",
+        customerPhone: "912 345 678",
+        deviceBrand: "Apple",
+        deviceModel: "iPhone 14",
+        estimatedCost: 100,
+        reportedProblem: "Ecrã partido",
+      },
+      "user-1",
+      mockNotifyCtx
+    );
+
+    // a ficha existente é corrigida — nome e email da admissão
+    expect(prisma.customer.update).toHaveBeenCalledWith({
+      data: { email: "maria@x.pt", name: "Maria Silva" },
+      where: { id: "cust-existing" },
+    });
+    // e nunca se abre segunda ficha
+    expect(prisma.customer.upsert).not.toHaveBeenCalled();
+    // a reparação liga à ficha existente
+    const data = (prisma.job.create as ReturnType<typeof vi.fn>).mock
+      .calls[0][0].data;
+    expect(JSON.stringify(data.customer ?? data)).toContain("cust-existing");
+  });
+
   it("ignores forged client terms and signs the server-resolved shop text", async () => {
     const signature =
       "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
@@ -1330,9 +1470,20 @@ describe("create", () => {
     (prisma.device.upsert as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "device-1",
     });
-    (prisma.$queryRaw as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { lastSeq: 1 },
-    ]);
+    // O SQL cru serve duas queries distintas: a procura de cliente por
+    // telefone (FROM customers) e a sequência do código da reparação.
+    // Devolver a sequência nas duas faria a admissão "encontrar" uma ficha
+    // fantasma — discrimina-se pelo texto da query.
+    (prisma.$queryRaw as ReturnType<typeof vi.fn>).mockImplementation(
+      (strings: TemplateStringsArray) => {
+        const sql = Array.isArray(strings)
+          ? strings.join(" ")
+          : String(strings);
+        return Promise.resolve(
+          sql.includes("customers") ? [] : [{ lastSeq: 1 }]
+        );
+      }
+    );
     (prisma.job.create as ReturnType<typeof vi.fn>).mockImplementation(
       ({ data }) =>
         Promise.resolve({
@@ -1417,6 +1568,7 @@ describe("create", () => {
     // cliente novo, sem marca/dispositivo criados pela ficha rejeitada.
     expect(prisma.job.create).not.toHaveBeenCalled();
     expect(prisma.customer.upsert).not.toHaveBeenCalled();
+    expect(prisma.customer.update).not.toHaveBeenCalled();
     expect(prisma.device.upsert).not.toHaveBeenCalled();
     expect(prisma.brand.create).not.toHaveBeenCalled();
   });

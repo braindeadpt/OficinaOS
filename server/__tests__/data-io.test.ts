@@ -462,6 +462,9 @@ describe("parts import", () => {
 describe("jobs import", () => {
   function prismaForJobs(opts: { dupe?: { id: string } | null } = {}) {
     const tx = {
+      shopSettings: {
+        findUnique: vi.fn(async () => ({ countryCode: "PT" })),
+      },
       customer: {
         create: vi.fn(async (a: { data: Record<string, unknown> }) => ({
           id: "c-new",

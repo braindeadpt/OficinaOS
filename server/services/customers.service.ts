@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from "@generated/client";
+import { effectiveDialCode } from "@shared/constants/countries.js";
 import { AppError } from "@shared/errors/app-error.js";
 import type {
   CreateCustomerInput,
@@ -8,7 +9,7 @@ import type {
 } from "@shared/schemas/customer.schema";
 import {
   MIN_PHONE_SEARCH_DIGITS,
-  normalizePhone,
+  normalizePhoneE164,
   phoneSearchDigits,
 } from "@shared/utils/phone";
 import {
@@ -27,6 +28,15 @@ import {
 /** Upper bound on phone matches folded into a search; plenty for a shop. */
 const PHONE_MATCH_LIMIT = 200;
 
+/** Indicativo da loja para normalização E.164 e pesquisa (fallback +351). */
+async function shopDialCode(prisma: PrismaClient): Promise<string> {
+  const settings = await prisma.shopSettings.findUnique({
+    select: { countryCode: true },
+    where: { id: "default" },
+  });
+  return effectiveDialCode(settings?.countryCode);
+}
+
 /**
  * Customers whose phone matches `term` ignoring spaces and a +351/00351
  * prefix, as an extra OR branch. null when the term is not phone-like.
@@ -35,7 +45,8 @@ async function phoneMatchClause(
   prisma: PrismaClient,
   term: string
 ): Promise<Prisma.CustomerWhereInput | null> {
-  const digits = phoneSearchDigits(term);
+  const dial = await shopDialCode(prisma);
+  const digits = phoneSearchDigits(term, dial);
   if (digits.length < MIN_PHONE_SEARCH_DIGITS) {
     return null;
   }
@@ -44,7 +55,12 @@ async function phoneMatchClause(
   if (letters > 0) {
     return null;
   }
-  const ids = await findIdsByPhoneDigits(prisma, digits, PHONE_MATCH_LIMIT);
+  const ids = await findIdsByPhoneDigits(
+    prisma,
+    digits,
+    PHONE_MATCH_LIMIT,
+    dial
+  );
   return ids.length > 0 ? { id: { in: ids } } : null;
 }
 
@@ -53,10 +69,16 @@ export async function create(prisma: PrismaClient, input: CreateCustomerInput) {
 
   // Same phone in another format ("912 345 678" vs "912345678") would slip
   // past the unique index and create a duplicate customer. Surface the
-  // existing one instead; the caller can explicitly opt to reuse it.
+  // existing one instead; the caller can explicitly opt to reuse it. Numbers
+  // are stored in E.164 (issue #77): national input gets the shop's dial
+  // code, and the dedupe lookup matches legacy rows written without it.
+  const dial = await shopDialCode(prisma);
+  const e164 = normalizePhoneE164(input.phone, dial);
   const existing = await findByNormalizedPhone(
     prisma,
-    normalizePhone(input.phone)
+    e164,
+    dial,
+    input.phone.replace(/\D/g, "")
   );
   if (existing && !input.useExisting) {
     throw new AppError("DUPLICATE_CUSTOMER_PHONE", {
@@ -83,7 +105,7 @@ export async function create(prisma: PrismaClient, input: CreateCustomerInput) {
     updateData.taxId = taxId;
   }
 
-  const phone = existing?.phone ?? input.phone.trim();
+  const phone = existing?.phone ?? e164;
   return await customerUpsert(prisma, { phone }, updateData, {
     email,
     name: input.name,
@@ -109,7 +131,10 @@ export async function update(
     updateData.name = data.name;
   }
   if (data.phone !== undefined) {
-    updateData.phone = data.phone;
+    updateData.phone = normalizePhoneE164(
+      data.phone,
+      await shopDialCode(prisma)
+    );
   }
   if (data.email !== undefined) {
     updateData.email = data.email?.trim() || null;

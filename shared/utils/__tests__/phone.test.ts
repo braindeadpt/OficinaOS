@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { isValidPhone, normalizePhone, phoneSearchDigits } from "../phone";
+import {
+  isValidPhone,
+  normalizePhone,
+  normalizePhoneE164,
+  phoneSearchDigits,
+} from "../phone";
 
 describe("normalizePhone", () => {
   it("drops spaces, dashes, dots and parentheses", () => {
@@ -17,6 +22,27 @@ describe("normalizePhone", () => {
     expect(normalizePhone("912345678")).not.toBe(
       normalizePhone("+351912345678")
     );
+  });
+  it("número nacional francês perde o zero de trunk ao ganhar o +33", () => {
+    expect(normalizePhoneE164("06 12 34 56 78", "33")).toBe("+33612345678");
+  });
+  it("indicativo americano escrito sem + não duplica o 1", () => {
+    expect(normalizePhoneE164("1 555 123 4567", "1")).toBe("+15551234567");
+  });
+
+  it("indicativo português escrito sem + não duplica o 351", () => {
+    expect(normalizePhoneE164("351912345678", "351")).toBe("+351912345678");
+  });
+
+  it("número nacional curto que comece pelo indicativo mantém-o", () => {
+    // "351234567" é um nacional plausível em PT se existisse — os dígitos
+    // que sobram (6) não chegam para ser número nacional: não é indicativo.
+    expect(normalizePhoneE164("351234567", "351")).toBe("+351351234567");
+  });
+
+  it("zero de trunk francês não impede encontrar a ficha internacional", () => {
+    expect(phoneSearchDigits("0612345678", "33")).toBe("612345678");
+    expect(phoneSearchDigits("+33 6 12 34 56 78", "33")).toBe("612345678");
   });
 });
 
@@ -51,5 +77,22 @@ describe("phoneSearchDigits", () => {
     expect(phoneSearchDigits("+44 7911 123456")).toBe("447911123456");
     expect(phoneSearchDigits("351")).toBe("351");
     expect(phoneSearchDigits("abc")).toBe("");
+  });
+});
+
+describe("normalizePhoneE164", () => {
+  it("912 345 678 / +351 912 345 678 / 00351912345678 → o mesmo valor", () => {
+    for (const raw of ["912 345 678", "+351 912 345 678", "00351912345678"]) {
+      expect(normalizePhoneE164(raw, "351")).toBe("+351912345678");
+    }
+  });
+
+  it("número estrangeiro fica intacto", () => {
+    expect(normalizePhoneE164("+44 7700 900123", "351")).toBe("+447700900123");
+    expect(normalizePhoneE164("0044 7700 900123", "351")).toBe("+447700900123");
+  });
+
+  it("nacional noutro país usa o indicativo desse país", () => {
+    expect(normalizePhoneE164("612345678", "33")).toBe("+33612345678");
   });
 });

@@ -80,6 +80,9 @@ const BLOCKED_MUTATIONS = [
   // MCP personal tokens create/revoke read credentials — a shared demo
   // must not hand out data-access tokens; GETs feed the settings list.
   "/api/mcp/tokens",
+  // Juntar clientes apaga uma ficha e reatribui histórico — irreversível
+  // e sujaria os dados partilhados da demo; o relatório GET fica aberto.
+  "/api/customers/merge",
 ] as const;
 
 // Better-auth exposes its whole surface under /api/auth/* — including the
