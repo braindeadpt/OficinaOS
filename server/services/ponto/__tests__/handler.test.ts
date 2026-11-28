@@ -1376,3 +1376,62 @@ describe("sonda de scan (Cloud nova, Fase 2)", () => {
     });
   });
 });
+
+describe("teletrabalho — privacidade das coordenadas nos proofs", () => {
+  async function runCrossMidnight(opts: {
+    commandCreatedAt: string;
+    commandNow: string;
+    locationNow: string;
+  }) {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(opts.commandNow));
+    const { ctx, phone, t } = setup({
+      staffOver: { pontoTeleworkDays: [7] },
+    });
+    await tryHandlePontoStaff(
+      ctx,
+      msg({
+        createdAt: opts.commandCreatedAt,
+        fromPhone: phone,
+        text: "ENTRADA loja-x 4821",
+      }),
+      t
+    );
+    vi.setSystemTime(new Date(opts.locationNow));
+    await tryHandlePontoStaff(
+      ctx,
+      msg({
+        createdAt: opts.locationNow,
+        fromPhone: phone,
+        location: { lat: 41.111_111, lng: -8.111_111 },
+        messageType: "location",
+      }),
+      t
+    );
+    return mocks.recordPontoEntry.mock.calls.at(-1)?.[1] as
+      | { proofs?: Record<string, unknown> }
+      | undefined;
+  }
+
+  it("marcação finalizada já em dia de teletrabalho não grava lat/lng", async () => {
+    const entry = await runCrossMidnight({
+      commandCreatedAt: "2026-01-10T23:59:20.000Z",
+      commandNow: "2026-01-10T23:59:20.000Z",
+      locationNow: "2026-01-11T00:00:20.000Z",
+    });
+
+    expect(entry?.proofs).not.toHaveProperty("lat");
+    expect(entry?.proofs).not.toHaveProperty("lng");
+  });
+
+  it("pedido aberto em dia de teletrabalho não grava lat/lng mesmo que a resposta chegue no dia seguinte", async () => {
+    const entry = await runCrossMidnight({
+      commandCreatedAt: "2026-01-11T23:59:20.000Z",
+      commandNow: "2026-01-12T00:00:20.000Z",
+      locationNow: "2026-01-12T00:00:40.000Z",
+    });
+
+    expect(entry?.proofs).not.toHaveProperty("lat");
+    expect(entry?.proofs).not.toHaveProperty("lng");
+  });
+});
