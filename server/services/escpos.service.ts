@@ -3,6 +3,7 @@ import type { ShopSettings } from "@generated/client";
 import { AppError } from "@shared/errors/app-error.js";
 import iconv from "iconv-lite";
 import { assertNotDemoMode } from "../lib/demo.js";
+import { resolveDocumentLocale } from "../lib/document-locale.js";
 import {
   fmtMoneyPlain,
   phone4Of,
@@ -258,7 +259,9 @@ export async function buildJobReceiptEscPos(
   baseUrl: string,
   options?: { deliveredAt?: Date | null; hideCosts?: boolean; locale?: string }
 ): Promise<Buffer> {
-  const s = receiptStrings(options?.locale);
+  const s = receiptStrings(
+    resolveDocumentLocale(options?.locale, settings?.countryCode)
+  );
   const currency = settings?.currency ?? "EUR";
   const prefs = {
     showImei: settings?.receiptShowImei ?? true,
@@ -333,7 +336,9 @@ export function buildSaleReceiptEscPos(
   sale: SaleReceiptData,
   options?: { locale?: string }
 ): Buffer {
-  const s = receiptStrings(options?.locale);
+  const s = receiptStrings(
+    resolveDocumentLocale(options?.locale, settings?.countryCode)
+  );
   const currency = settings?.currency ?? "EUR";
   const t = new Ticket(
     thermalWidth(settings?.receiptPaper),

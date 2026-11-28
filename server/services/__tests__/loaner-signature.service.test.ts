@@ -51,6 +51,9 @@ function mockPrisma(session: Record<string, unknown> | null = null) {
       update: vi.fn().mockResolvedValue({}),
     },
     auditLog: { create: vi.fn().mockResolvedValue({}) },
+    shopSettings: {
+      findUnique: vi.fn().mockResolvedValue({ countryCode: "PT" }),
+    },
     $transaction: vi.fn((fn: (t: unknown) => unknown) => fn(tx)),
   };
   return tx as unknown as PrismaClient & typeof tx;

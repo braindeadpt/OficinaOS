@@ -31,6 +31,7 @@ export type ReportsQueryInput = z.infer<typeof reportsQuerySchema>;
 
 export const ordersReportQuerySchema = reportsQuerySchema.and(
   z.object({
+    locale: z.enum(["pt", "en", "es", "fr"]).optional(),
     status: z
       .enum([
         "INTAKE",

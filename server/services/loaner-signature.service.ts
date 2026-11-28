@@ -8,6 +8,7 @@ import {
 } from "@shared/loaner-agreement-document.js";
 import { SIGNATURE_DATA_URL_RE } from "@shared/schemas/signature.schema.js";
 import type { FastifyBaseLogger } from "fastify";
+import { resolveDocumentLocale } from "../lib/document-locale.js";
 import { resolveRemoteSignUrl } from "../lib/remote-sign-url.js";
 import { createAuditLog } from "./audit.service.js";
 import {
@@ -42,7 +43,7 @@ const LOANER_SIGN_INCLUDE = {
 export async function createLoanerSignatureSession(
   prisma: PrismaClient,
   jobId: string,
-  locale: string,
+  locale: string | null,
   log: FastifyBaseLogger
 ) {
   const job = await prisma.job.findUnique({
@@ -52,7 +53,14 @@ export async function createLoanerSignatureSession(
   if (!(job?.hasLoanerDevice && job.status !== "CANCELLED")) {
     throw new AppError("JOB_NOT_FOUND");
   }
-  const document = buildLoanerAgreementDocument(job, locale);
+  const settings = await prisma.shopSettings.findUnique({
+    select: { countryCode: true },
+    where: { id: "default" },
+  });
+  const document = buildLoanerAgreementDocument(
+    job,
+    resolveDocumentLocale(locale, settings?.countryCode)
+  );
   const session = await createSignatureSession(prisma, document);
 
   // Same pairing rules as the intake session: LAN 15 min by default, 30 min
@@ -91,7 +99,7 @@ export async function createLoanerSignatureSession(
 export async function getLoanerAgreementPreview(
   prisma: PrismaClient,
   jobId: string,
-  locale: string
+  locale: string | null
 ) {
   const job = await prisma.job.findUnique({
     where: { id: jobId },
@@ -100,7 +108,16 @@ export async function getLoanerAgreementPreview(
   if (!(job?.hasLoanerDevice && job.status !== "CANCELLED")) {
     throw new AppError("JOB_NOT_FOUND");
   }
-  return publicLoanerAgreementView(buildLoanerAgreementDocument(job, locale));
+  const settings = await prisma.shopSettings.findUnique({
+    select: { countryCode: true },
+    where: { id: "default" },
+  });
+  return publicLoanerAgreementView(
+    buildLoanerAgreementDocument(
+      job,
+      resolveDocumentLocale(locale, settings?.countryCode)
+    )
+  );
 }
 
 export interface AttachLoanerSignatureInput {
@@ -132,7 +149,7 @@ export async function attachLoanerSignature(
   prisma: PrismaClient,
   jobId: string,
   input: AttachLoanerSignatureInput,
-  locale: string,
+  locale: string | null,
   userId: string
 ) {
   const signatureDataUrl =
@@ -149,6 +166,12 @@ export async function attachLoanerSignature(
     throw new AppError("VALIDATION_ERROR");
   }
 
+  const settings = await prisma.shopSettings.findUnique({
+    select: { countryCode: true },
+    where: { id: "default" },
+  });
+  const documentLocale = resolveDocumentLocale(locale, settings?.countryCode);
+
   return await prisma.$transaction(async (tx) => {
     const job = await tx.job.findUnique({
       where: { id: jobId },
@@ -160,7 +183,7 @@ export async function attachLoanerSignature(
 
     const fields: AttachedSignatureFields = signatureDataUrl
       ? (() => {
-          const document = buildLoanerAgreementDocument(job, locale);
+          const document = buildLoanerAgreementDocument(job, documentLocale);
           return {
             dataUrl: signatureDataUrl,
             document,

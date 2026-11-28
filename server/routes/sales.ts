@@ -135,7 +135,7 @@ export const saleRoutes: FastifyPluginAsync = async (app) => {
         app.prisma,
         sale as unknown as Parameters<typeof renderSaleReceiptHtml>[1],
         baseUrl,
-        { locale: req.locale }
+        {}
       );
 
       return reply
@@ -189,7 +189,7 @@ export const saleRoutes: FastifyPluginAsync = async (app) => {
       const data = buildSaleReceiptEscPos(
         settings,
         sale as unknown as Parameters<typeof buildSaleReceiptEscPos>[1],
-        { locale: req.locale }
+        {}
       );
       await sendEscPos(settings, data);
       return reply.send({ ok: true });

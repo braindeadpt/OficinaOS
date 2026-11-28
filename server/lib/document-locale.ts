@@ -30,3 +30,17 @@ export function normalizeDocumentLocale(
   const lang = (locale ?? "pt").split("-")[0].trim().toLowerCase();
   return SUPPORTED.has(lang) ? lang : "pt";
 }
+
+/** Resolve a língua de documentos impressos/gerados: escolha explícita
+ * válida primeiro, depois o país da loja, nunca o Accept-Language do
+ * browser que por acaso abriu a página de impressão. */
+export function resolveDocumentLocale(
+  explicitLocale: string | null | undefined,
+  countryCode: string | null | undefined
+): string {
+  const explicit = (explicitLocale ?? "").split("-")[0].trim().toLowerCase();
+  if (SUPPORTED.has(explicit)) {
+    return explicit;
+  }
+  return documentLocaleForCountry(countryCode);
+}

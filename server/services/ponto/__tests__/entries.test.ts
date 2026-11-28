@@ -9,11 +9,13 @@ import { describe, expect, it, vi } from "vitest";
 // `none` na query excluía a linha mesmo depois de re-aprovada).
 
 import type { DbClient } from "../../../repositories/types.js";
+import { zonedDateTimeToUtc } from "../../../utils/time-range.js";
 import {
   findOpenPresumedExit,
   pontoEntriesSince,
   todayPontoEntries,
 } from "../entries.js";
+import { workedMs } from "../handler.js";
 
 function entry(over: Record<string, unknown>) {
   return {
@@ -150,5 +152,108 @@ describe("findOpenPresumedExit — gate de rejeição", () => {
     const out = await findOpenPresumedExit(prisma, "user-1", "Europe/Lisbon");
 
     expect(out).toMatchObject({ id: "presumida-1" });
+  });
+});
+
+describe("findOpenPresumedExit — janela rolling de 24 h (R2-A)", () => {
+  function prismaFor(
+    presumedRows: {
+      at: Date;
+      id: string;
+      validations: { decision: string }[];
+    }[],
+    entryRows: {
+      at: Date;
+      id: string;
+      validations: { decision: string }[];
+    }[] = []
+  ) {
+    let call = 0;
+    const findMany = vi.fn((args: unknown) => {
+      call += 1;
+      const rows = call === 1 ? presumedRows : entryRows;
+      const at = (args as { where?: { at?: Record<string, Date> } }).where?.at;
+      return Promise.resolve(
+        rows.filter(
+          (r) =>
+            (!at?.gte || r.at >= at.gte) &&
+            (!at?.gt || r.at > at.gt) &&
+            (!at?.lte || r.at <= at.lte) &&
+            (!at?.lt || r.at < at.lt)
+        )
+      );
+    });
+    return {
+      findMany,
+      prisma: { timeEntry: { findMany } } as unknown as DbClient,
+    };
+  }
+
+  it.each([
+    "Europe/Lisbon",
+    "Atlantic/Azores",
+  ])("presumida às 23:55 é encontrada pela SAIDA real às 00:10 em %s — corrige e não duplica horas", async (tz) => {
+    const zoned = (ymd: string, hhmm: string) => {
+      const date = zonedDateTimeToUtc(tz, ymd, hhmm);
+      if (!date) {
+        throw new Error("data inválida no teste");
+      }
+      return date;
+    };
+    const presumedAt = zoned("2026-01-10", "23:55");
+    const now = zoned("2026-01-11", "00:10");
+    const { prisma } = prismaFor([
+      { at: presumedAt, id: "presumida-vespera", validations: [] },
+    ]);
+
+    const open = await findOpenPresumedExit(prisma, "user-1", tz, now);
+
+    expect(open).toMatchObject({ id: "presumida-vespera" });
+    // A correção fica ligada à presumida; nos cálculos entra só a saída
+    // efetiva. Pela regra sem overnight, 20:00→meia-noite são 4h00 —
+    // nunca 8h00 por duplicar a presumida nem 4h10 por atravessar o dia.
+    const effective = [
+      { at: zoned("2026-01-10", "20:00"), type: "ENTRADA" },
+      { at: now, correctsId: open?.id, type: "SAIDA" },
+    ];
+    expect(effective.filter((e) => e.type === "SAIDA")).toHaveLength(1);
+    expect(workedMs(effective, tz, now)).toBe(4 * 3_600_000);
+  });
+
+  it("turno noturno real com ENTRADA depois da presumida não é corrigido", async () => {
+    const now = new Date("2026-01-11T00:10:00.000Z");
+    const { prisma } = prismaFor(
+      [
+        {
+          at: new Date("2026-01-10T18:00:00.000Z"),
+          id: "presumida-turno-anterior",
+          validations: [],
+        },
+      ],
+      [
+        {
+          at: new Date("2026-01-10T22:00:00.000Z"),
+          id: "entrada-turno-noturno",
+          validations: [],
+        },
+      ]
+    );
+
+    await expect(
+      findOpenPresumedExit(prisma, "user-1", "Europe/Lisbon", now)
+    ).resolves.toBeNull();
+  });
+
+  it("a janela é de 24 h reais mesmo na mudança de hora de fim de outubro", async () => {
+    const now = new Date("2026-10-25T12:00:00.000Z");
+    const { findMany, prisma } = prismaFor([]);
+
+    await findOpenPresumedExit(prisma, "user-1", "Europe/Lisbon", now);
+
+    const args = findMany.mock.calls[0]?.[0] as {
+      where: { at: Record<string, Date> };
+    };
+    expect(args.where.at.gte?.toISOString()).toBe("2026-10-24T12:00:00.000Z");
+    expect(args.where.at.lte).toBe(now);
   });
 });

@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   findOpenPresumedExit: vi.fn(
     (): Promise<{ at: Date; id: string } | null> => Promise.resolve(null)
   ),
+  findShopSettingsUnique: vi.fn(),
   getOrCreateShopSettings: vi.fn(),
   pontoEntriesSince: vi.fn(
     (): Promise<Record<string, unknown>[]> => Promise.resolve([])
@@ -25,6 +26,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../../../repositories/settings.repository.js", () => ({
+  findShopSettingsUnique: mocks.findShopSettingsUnique,
   getOrCreateShopSettings: mocks.getOrCreateShopSettings,
 }));
 vi.mock("../../cloud.service.js", () => ({ cloudFetch: mocks.cloudFetch }));
@@ -33,6 +35,13 @@ vi.mock("../config-sync.js", async (importOriginal) => {
   return {
     ...orig,
     cloudSupportsEvaluateProbe: () => mocks.probeSupported(),
+  };
+});
+vi.mock("../../../lib/mdns.js", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("../../../lib/mdns.js")>();
+  return {
+    ...orig,
+    accessUrls: () => ({ needsAppUrl: true, urls: [] }),
   };
 });
 vi.mock("../../../lib/crypto.js", async (importOriginal) => {
@@ -111,6 +120,11 @@ function makePrisma(staffUsers: unknown[] = [], customers: unknown[] = []) {
       update: vi.fn(() => Promise.resolve({})),
     },
     job: { findMany: vi.fn(() => Promise.resolve([])) },
+    pontoRegistosToken: {
+      count: vi.fn(() => Promise.resolve(0)),
+      create: vi.fn(() => Promise.resolve({})),
+    },
+    timeEntry: { findMany: vi.fn(() => Promise.resolve([])) },
     shopSettings: {
       findUnique: vi.fn(() => Promise.resolve({ countryCode: "PT" })),
     },
@@ -222,6 +236,7 @@ beforeEach(() => {
   mocks.getOrCreateShopSettings.mockImplementation(() =>
     Promise.resolve(makeSettings())
   );
+  mocks.findShopSettingsUnique.mockResolvedValue({ trackingBaseUrl: null });
   mocks.probeSupported.mockReturnValue(false);
   cloudOk();
 });
@@ -1374,5 +1389,87 @@ describe("sonda de scan (Cloud nova, Fase 2)", () => {
       action: { name: "send_location" },
       type: "location_request_message",
     });
+  });
+});
+
+describe("teletrabalho — privacidade das coordenadas nos proofs", () => {
+  async function runCrossMidnight(opts: {
+    commandCreatedAt: string;
+    commandNow: string;
+    locationNow: string;
+  }) {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(opts.commandNow));
+    const { ctx, phone, t } = setup({
+      staffOver: { pontoTeleworkDays: [7] },
+    });
+    await tryHandlePontoStaff(
+      ctx,
+      msg({
+        createdAt: opts.commandCreatedAt,
+        fromPhone: phone,
+        text: "ENTRADA loja-x 4821",
+      }),
+      t
+    );
+    vi.setSystemTime(new Date(opts.locationNow));
+    await tryHandlePontoStaff(
+      ctx,
+      msg({
+        createdAt: opts.locationNow,
+        fromPhone: phone,
+        location: { lat: 41.111_111, lng: -8.111_111 },
+        messageType: "location",
+      }),
+      t
+    );
+    return mocks.recordPontoEntry.mock.calls.at(-1)?.[1] as
+      | { proofs?: Record<string, unknown> }
+      | undefined;
+  }
+
+  it("marcação finalizada já em dia de teletrabalho não grava lat/lng", async () => {
+    const entry = await runCrossMidnight({
+      commandCreatedAt: "2026-01-10T23:59:20.000Z",
+      commandNow: "2026-01-10T23:59:20.000Z",
+      locationNow: "2026-01-11T00:00:20.000Z",
+    });
+
+    expect(entry?.proofs).not.toHaveProperty("lat");
+    expect(entry?.proofs).not.toHaveProperty("lng");
+  });
+
+  it("pedido aberto em dia de teletrabalho não grava lat/lng mesmo que a resposta chegue no dia seguinte", async () => {
+    const entry = await runCrossMidnight({
+      commandCreatedAt: "2026-01-11T23:59:20.000Z",
+      commandNow: "2026-01-12T00:00:20.000Z",
+      locationNow: "2026-01-12T00:00:40.000Z",
+    });
+
+    expect(entry?.proofs).not.toHaveProperty("lat");
+    expect(entry?.proofs).not.toHaveProperty("lng");
+  });
+});
+
+describe("REGISTOS — URL obrigatório antes do token", () => {
+  it("sem endereço acessível não cria nem consome token diário", async () => {
+    const { ctx, phone, prisma, sent, t } = setup();
+    prisma.timeEntry.findMany.mockResolvedValueOnce([
+      {
+        at: new Date(),
+        corrections: [],
+        status: "APROVADO",
+        type: "ENTRADA",
+        validations: [],
+      } as never,
+    ]);
+    await tryHandlePontoStaff(
+      ctx,
+      msg({ fromPhone: phone, text: "REGISTOS" }),
+      t
+    );
+
+    expect(sent.at(-1)).toContain("não tem endereço configurado");
+    expect(prisma.pontoRegistosToken.create).not.toHaveBeenCalled();
   });
 });

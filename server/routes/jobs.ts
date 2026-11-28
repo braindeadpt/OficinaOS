@@ -218,7 +218,7 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
         app.prisma,
         result.job as Parameters<typeof renderReceiptHtml>[1],
         baseUrl,
-        { locale: req.locale }
+        {}
       );
       return reply
         .header("Content-Type", "text/html; charset=utf-8")
@@ -1075,7 +1075,7 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
       const { id } = req.params as { id: string };
       // The app language wins over the browser's Accept-Language — staff
       // serve customers in the shop's language, not their own.
-      const locale = requestedLocale(req.body) ?? req.locale;
+      const locale = requestedLocale(req.body);
       const result = await createLoanerSignatureSession(
         app.prisma,
         id,
@@ -1104,7 +1104,7 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
     },
     async (req, reply) => {
       const { id } = req.params as { id: string };
-      const locale = requestedLocale(req.query) ?? req.locale;
+      const locale = requestedLocale(req.query);
       const preview = await getLoanerAgreementPreview(app.prisma, id, locale);
       return reply.send(preview);
     }
@@ -1139,7 +1139,7 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
               : undefined,
           token: typeof body?.token === "string" ? body.token : undefined,
         },
-        requestedLocale(req.body) ?? req.locale,
+        requestedLocale(req.body),
         getUserId(req)
       );
       return reply.send(result);

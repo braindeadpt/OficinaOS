@@ -62,7 +62,6 @@ export const receiptRoutes: FastifyPluginAsync = async (app) => {
         baseUrl,
         {
           hideCosts: !costPerm.success,
-          locale: req.locale,
         }
       );
 
@@ -124,7 +123,6 @@ export const receiptRoutes: FastifyPluginAsync = async (app) => {
         {
           deliveredAt: deliveredLog?.createdAt ?? null,
           hideCosts: !costPerm.success,
-          locale: req.locale,
         }
       );
       await sendEscPos(settings, data);
@@ -162,7 +160,7 @@ export const receiptRoutes: FastifyPluginAsync = async (app) => {
       const html = await renderLoanerAgreementHtml(
         app.prisma,
         job as unknown as Parameters<typeof renderLoanerAgreementHtml>[1],
-        { locale: req.locale }
+        {}
       );
       return reply
         .header("Content-Type", "text/html; charset=utf-8")
@@ -221,7 +219,6 @@ export const receiptRoutes: FastifyPluginAsync = async (app) => {
         baseUrl,
         {
           hideCosts: !costPerm.success,
-          locale: req.locale,
           noAutoPrint: isPreview,
         }
       );

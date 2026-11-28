@@ -402,6 +402,7 @@ async function finalizeExpiredPhoto(
       // só aparecer horas depois (o atraso real preserva-se).
       messageAt: new Date(expired.expiresAt).toISOString(),
       pauseMinutes: pauseMinutesOf(expired.pauseSinceAt, at),
+      pendingCommandAt: expired.commandAt,
       phoneDigits: env.phoneDigits,
       todayHasEntry: expired.todayHasEntry,
     }
@@ -1124,6 +1125,7 @@ interface FinalizeArgs {
   location?: PendingPonto["location"];
   messageAt: string;
   pauseMinutes?: number | null;
+  pendingCommandAt?: string;
   phoneDigits: string;
   photoSentAt?: string;
   todayHasEntry: boolean;
@@ -1200,6 +1202,7 @@ async function onLocation(env: FlowEnv, pending: PendingPonto): Promise<void> {
       pending.pauseSinceAt,
       new Date(pending.locationAt)
     ),
+    pendingCommandAt: pending.commandAt,
     phoneDigits,
     todayHasEntry: pending.todayHasEntry,
   });
@@ -1243,6 +1246,7 @@ async function onPhoto(env: FlowEnv, pending: PendingPonto): Promise<void> {
       pending.pauseSinceAt,
       new Date(pending.locationAt ?? pending.commandAt)
     ),
+    pendingCommandAt: pending.commandAt,
     phoneDigits,
     photoSentAt,
     todayHasEntry: pending.todayHasEntry,
@@ -1381,6 +1385,23 @@ async function tryProbeFinalize(
   return true;
 }
 
+function teleworkApplies(
+  settings: Settings,
+  staff: PontoStaffMatch,
+  args: FinalizeArgs
+): boolean {
+  const tz = tzOf(settings);
+  return (
+    isTeleworkDay(staff.user.pontoTeleworkDays, tz, args.at) ||
+    (args.pendingCommandAt !== undefined &&
+      isTeleworkDay(
+        staff.user.pontoTeleworkDays,
+        tz,
+        new Date(args.pendingCommandAt)
+      ))
+  );
+}
+
 async function finalizePonto(
   ctx: BotReplyCtx,
   say: Say,
@@ -1395,11 +1416,7 @@ async function finalizePonto(
   // localização tenha começado num dia presencial e a resposta chegue
   // depois da meia-noite. E a geo da loja é irrelevante quando não há
   // localização em jogo: sem ela o teletrabalho avalia na mesma.
-  const telework = isTeleworkDay(
-    staff.user.pontoTeleworkDays,
-    tzOf(settings),
-    args.at
-  );
+  const telework = teleworkApplies(settings, staff, args);
   const geoLat = settings.pontoGeoLat;
   const geoLng = settings.pontoGeoLng;
   if (
@@ -1485,11 +1502,12 @@ async function recordPontoResult(
       entryReason = "saída registada pelo trabalhador";
     }
   }
+  const telework = teleworkApplies(settings, staff, args);
   const proofs: Record<string, unknown> = {
     ...result.proofs,
     ...entryRecordedAtProof(result.entryRecordedAt),
     hasPhoto: args.hasPhoto,
-    ...(args.location
+    ...(args.location && !telework
       ? {
           accuracy: args.location.accuracy ?? null,
           lat: args.location.lat,
@@ -1642,7 +1660,9 @@ async function replyRegistos(
     return;
   }
 
-  const token = await createRegistosToken(ctx.prisma, userId, monthKey(spec));
+  // Resolver primeiro o endereço: sem URL o trabalhador recebe só o
+  // resumo e o aviso, e não se consome um dos 5 tokens diários num link
+  // que nunca poderia ser enviado.
   const base = await resolveRegistosBaseUrl(ctx.prisma);
   const lines = [
     `Os seus registos de ${monthLabel}:`,
@@ -1653,6 +1673,7 @@ async function replyRegistos(
     lines.push(PONTO_TEXT.registosEstimatedHours);
   }
   if (base) {
+    const token = await createRegistosToken(ctx.prisma, userId, monthKey(spec));
     lines.push(
       `PDF do mês (link de uso único, válido 24 h): ${base}/api/public/ponto-registos/${token}`
     );
