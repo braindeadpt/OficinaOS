@@ -385,6 +385,12 @@ export const pairCloudSchema = z.object({
     .string()
     .trim()
     .min(4, { error: "validations.pairing_code_required" }),
+  // Slug da instância alojada de ponto (PONTO_CLIENT_SLUG do instalador) —
+  // segue no redeem para a Cloud registar onde vive a instância no VPS.
+  hostedSlug: z
+    .string()
+    .regex(/^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])$/)
+    .optional(),
 });
 
 export type UpdateAiSettingsInput = z.infer<typeof updateAiSettingsSchema>;

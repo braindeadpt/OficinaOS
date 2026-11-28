@@ -16,6 +16,7 @@ function jsonResponse(
 function options() {
   return {
     cloudApiUrl: "https://cloud.example",
+    hostedSlug: "empresa-teste",
     ownerLogin: "dono@example.com",
     ownerName: "Dono",
     ownerPassword: "palavra-passe-forte",
@@ -86,6 +87,7 @@ describe("bootstrapPontoHosted", () => {
     expect(JSON.parse(pairCall?.body ?? "{}")).toEqual({
       apiUrl: "https://cloud.example",
       code: "ABCD-1234",
+      hostedSlug: "empresa-teste",
     });
   });
 

@@ -113,14 +113,18 @@ function toStatus(settings: {
  */
 export async function pairWithCloud(
   prisma: PrismaClient,
-  input: { apiUrl: string; code: string },
+  input: { apiUrl: string; code: string; hostedSlug?: string },
   log: FastifyBaseLogger
 ): Promise<CloudStatus> {
   const settings = await getOrCreateShopSettings(prisma);
 
   const res = await cloudFetch(input.apiUrl, "/pairing/redeem", {
     method: "POST",
-    body: { code: input.code, label: settings.shopName || "OficinaOS" },
+    body: {
+      code: input.code,
+      hostedSlug: input.hostedSlug,
+      label: settings.shopName || "OficinaOS",
+    },
   }).catch(() => null);
 
   if (!res) {
