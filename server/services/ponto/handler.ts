@@ -1660,7 +1660,9 @@ async function replyRegistos(
     return;
   }
 
-  const token = await createRegistosToken(ctx.prisma, userId, monthKey(spec));
+  // Resolver primeiro o endereço: sem URL o trabalhador recebe só o
+  // resumo e o aviso, e não se consome um dos 5 tokens diários num link
+  // que nunca poderia ser enviado.
   const base = await resolveRegistosBaseUrl(ctx.prisma);
   const lines = [
     `Os seus registos de ${monthLabel}:`,
@@ -1671,6 +1673,7 @@ async function replyRegistos(
     lines.push(PONTO_TEXT.registosEstimatedHours);
   }
   if (base) {
+    const token = await createRegistosToken(ctx.prisma, userId, monthKey(spec));
     lines.push(
       `PDF do mês (link de uso único, válido 24 h): ${base}/api/public/ponto-registos/${token}`
     );
